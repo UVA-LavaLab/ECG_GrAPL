@@ -102,6 +102,7 @@ struct EdgeList *newEdgeList( uint32_t num_edges)
     struct EdgeList *newEdgeList = (struct EdgeList *) my_malloc(sizeof(struct EdgeList));
     newEdgeList->edges_array_src = (uint32_t *) my_malloc(num_edges * sizeof(uint32_t));
     newEdgeList->edges_array_dest = (uint32_t *) my_malloc(num_edges * sizeof(uint32_t));
+    newEdgeList->edges_array_ecg = (uint32_t *) my_malloc(num_edges * sizeof(uint32_t));
 
 #if WEIGHTED
     newEdgeList->edges_array_weight = (float *) my_malloc(num_edges * sizeof(float));
@@ -112,7 +113,8 @@ struct EdgeList *newEdgeList( uint32_t num_edges)
     for(i = 0; i < num_edges; i++)
     {
         newEdgeList->edges_array_dest[i] = 0;
-        newEdgeList->edges_array_src[i] = 0;
+        newEdgeList->edges_array_src[i]  = 0;
+        newEdgeList->edges_array_ecg[i]  = 0;
 #if WEIGHTED
         newEdgeList->edges_array_weight[i] = 0;
 #endif
@@ -220,6 +222,8 @@ void freeEdgeList( struct EdgeList *edgeList)
             free(edgeList->edges_array_src);
         if(edgeList->edges_array_dest)
             free(edgeList->edges_array_dest);
+        if(edgeList->edges_array_ecg)
+            free(edgeList->edges_array_ecg);
         if(edgeList->mask_array)
             free(edgeList->mask_array);
         if(edgeList->label_array)
