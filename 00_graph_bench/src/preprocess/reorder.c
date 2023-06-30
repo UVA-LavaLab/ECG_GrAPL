@@ -1148,23 +1148,23 @@ struct EdgeList *maskGraphProcessGenerateMaskArray(struct EdgeList *edgeList, ui
 
     if(diff < (2 * (int)cache_size))
     {
-        cache_regions[0] = edgeList->num_vertices / 3; // VERTEX_VALUE_HOT_U32
-        cache_regions[1] = edgeList->num_vertices / 3; // VERTEX_CACHE_WARM_U32
-        cache_regions[2] = edgeList->num_vertices / 3; // VERTEX_VALUE_LUKEWARM_U32
+        cache_regions[0] = edgeList->num_vertices / 3; // VERTEX_VALUE_HOT
+        cache_regions[1] = edgeList->num_vertices / 3; // VERTEX_CACHE_WARM
+        cache_regions[2] = edgeList->num_vertices / 3; // VERTEX_VALUE_LUKEWARM
     }
     else
     {
-        cache_regions[0] = cache_size * 8; // VERTEX_VALUE_HOT_U32
-        cache_regions[1] = cache_regions[0] * 4; // VERTEX_CACHE_WARM_U32
-        cache_regions[2] = cache_regions[1] * 4; // VERTEX_VALUE_LUKEWARM_U32
+        cache_regions[0] = cache_size * 8; // VERTEX_VALUE_HOT
+        cache_regions[1] = cache_regions[0] * 4; // VERTEX_CACHE_WARM
+        cache_regions[2] = cache_regions[1] * 4; // VERTEX_VALUE_LUKEWARM
     }
 
-    cache_regions[3] = UINT32_MAX; // VERTEX_CACHE_COLD_U32
+    cache_regions[3] = UINT32_MAX; // VERTEX_CACHE_COLD
 
     #pragma omp parallel for
     for (i = 0; i < edgeList->num_vertices; ++i)
     {
-        mask_array[i] = VERTEX_CACHE_COLD_U32;
+        mask_array[i] = VERTEX_CACHE_COLD;
     }
 
     Start(timer);
@@ -1233,19 +1233,19 @@ struct EdgeList *maskGraphProcessGenerateMaskArray(struct EdgeList *edgeList, ui
             {
                 if(RegionAtomicDecrement(&(cache_regions[0])))
                 {
-                    mask_array[(*(uint32_t *)iter)] = VERTEX_VALUE_HOT_U32;
+                    mask_array[(*(uint32_t *)iter)] = VERTEX_VALUE_HOT;
                 }
                 else if(RegionAtomicDecrement(&(cache_regions[1])))
                 {
-                    mask_array[(*(uint32_t *)iter)] = VERTEX_CACHE_WARM_U32;
+                    mask_array[(*(uint32_t *)iter)] = VERTEX_CACHE_WARM;
                 }
                 else if(RegionAtomicDecrement(&(cache_regions[2])))
                 {
-                    mask_array[(*(uint32_t *)iter)] = VERTEX_VALUE_LUKEWARM_U32;
+                    mask_array[(*(uint32_t *)iter)] = VERTEX_VALUE_LUKEWARM;
                 }
                 else
                 {
-                    mask_array[(*(uint32_t *)iter)] = VERTEX_CACHE_COLD_U32;
+                    mask_array[(*(uint32_t *)iter)] = VERTEX_CACHE_COLD;
                 }
             }
         }

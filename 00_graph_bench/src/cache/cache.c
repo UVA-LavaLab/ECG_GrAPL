@@ -699,11 +699,11 @@ void updateInsertGRASP(struct Cache *cache, struct CacheLine *line)
 
 void updateInsertMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask)
 {
-    if(mask == VERTEX_VALUE_HOT_U32)
+    if(mask == VERTEX_VALUE_HOT)
     {
         setRRPV(line, HOT_INSERT_RRPV);
     }
-    else if (mask == VERTEX_CACHE_WARM_U32)
+    else if (mask == VERTEX_CACHE_WARM)
     {
         setRRPV(line, WARM_INSERT_RRPV);
     }
@@ -898,7 +898,7 @@ void updatePromoteGRASP(struct Cache *cache, struct CacheLine *line)
 
 void updatePromoteMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask)
 {
-    if(mask == VERTEX_VALUE_HOT_U32)
+    if(mask == VERTEX_VALUE_HOT)
     {
         setRRPV(line, HOT_HIT_RRPV);
     }
@@ -1795,7 +1795,7 @@ void AccessAccelGraphExpress(struct AccelGraphCache *accel_graph, uint64_t addr,
 
     if(checkInCache(accel_graph->warm_cache, addr) && checkInCache(accel_graph->hot_cache, addr))
     {
-        if(mask == VERTEX_VALUE_HOT_U32)
+        if(mask == VERTEX_VALUE_HOT)
         {
             Access(accel_graph->cold_cache, addr, op, node, mask);
             Access(accel_graph->hot_cache, addr, op, node, mask);
@@ -1806,7 +1806,7 @@ void AccessAccelGraphExpress(struct AccelGraphCache *accel_graph, uint64_t addr,
             //     Access(accel_graph->warm_cache, victim->addr, 'd', victim->idx);
             // }
         }
-        // else if(mask == VERTEX_CACHE_WARM_U32)
+        // else if(mask == VERTEX_CACHE_WARM)
         // {
         //     Access(accel_graph->cold_cache, addr, op, node, mask);
         //     Access(accel_graph->warm_cache, addr, op, node, mask);

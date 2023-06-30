@@ -76,7 +76,7 @@ struct GraphCSR *mapVertices (struct GraphCSR *graph, uint8_t inverse)
 #endif
 
 
-    vertex_id = VERTEX_CACHE_MASK_U32 & sorted_edges_array->edges_array_src[0];
+    vertex_id = VERTEX_CACHE_MASK & sorted_edges_array->edges_array_src[0];
     vertices->edges_idx[vertex_id] = 0;
 
     for(i = 1; i < graph->num_edges; i++)
@@ -85,7 +85,7 @@ struct GraphCSR *mapVertices (struct GraphCSR *graph, uint8_t inverse)
         if(sorted_edges_array->edges_array_src[i] != sorted_edges_array->edges_array_src[i - 1])
         {
 
-            vertex_id = VERTEX_CACHE_MASK_U32 & sorted_edges_array->edges_array_src[i];
+            vertex_id = VERTEX_CACHE_MASK & sorted_edges_array->edges_array_src[i];
             vertices->edges_idx[vertex_id] = i;
 
         }
@@ -272,13 +272,13 @@ struct GraphCSR *mapVerticesWithInOutDegree (struct GraphCSR *graph, uint8_t inv
         if(offset_start < graph->num_edges)
         {
 
-            vertex_id = VERTEX_CACHE_MASK_U32 & sorted_edges_array->edges_array_src[offset_start];
+            vertex_id = VERTEX_CACHE_MASK & sorted_edges_array->edges_array_src[offset_start];
             vertices->edges_idx[vertex_id] = offset_start;
             vertices->out_degree[vertex_id]++;
 
             for(i = offset_start + 1; i < offset_end; i++)
             {
-                vertex_id = VERTEX_CACHE_MASK_U32 & sorted_edges_array->edges_array_src[i];
+                vertex_id = VERTEX_CACHE_MASK & sorted_edges_array->edges_array_src[i];
                 vertices->out_degree[vertex_id]++;
                 if(sorted_edges_array->edges_array_src[i] != sorted_edges_array->edges_array_src[i - 1])
                 {
