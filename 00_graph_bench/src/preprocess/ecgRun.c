@@ -34,11 +34,16 @@
 
 
 // ********************************************************************************************
-// ***************                  ECG Generate                                 **************
+// ***************                  ECG Generate  (P-OPT based)                  **************
 // ********************************************************************************************
 uint32_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *arguments)
 {
-
+    uint32_t j;
+    uint32_t v;
+    uint32_t u;
+    uint32_t cl;
+    uint32_t degree;
+    uint32_t edge_idx;
     struct Timer *timer      = (struct Timer *) malloc(sizeof(struct Timer));
     uint32_t vertexPerCacheLine    = 64 / sizeof(uint32_t);
     uint32_t numCacheLines = (graph->num_vertices + vertexPerCacheLine - 1) / vertexPerCacheLine;
@@ -48,16 +53,55 @@ uint32_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *argu
         chunkSize = 1;
 
     uint32_t *last_references = (uint32_t *) my_malloc((numCacheLines * numEpochs) * sizeof(uint32_t));
+    uint32_t *offset_matrix   = (uint32_t *) my_malloc((numCacheLines * numEpochs) * sizeof(uint32_t));
 
-    #pragma omp parallel for schedule(dynamic, chunkSize)
-    for (uint32_t cl = 0; cl < numCacheLines; ++cl)
-    {
+    struct Vertex *vertices = NULL;
+    uint32_t *sorted_edges_array = NULL;
     
+#if DIRECTED
+    vertices = graph->inverse_vertices;
+    sorted_edges_array = graph->inverse_sorted_edges_array->edges_array_dest;
+#else
+    vertices = graph->vertices;
+    sorted_edges_array = graph->sorted_edges_array->edges_array_dest;
+#endif
+
+    /* Step I: Collect quantized edges & Compact vertices into "super vertices" */
+    Start(timer);
+    #pragma omp parallel for schedule(dynamic, chunkSize)
+    for (cl = 0; cl < numCacheLines; ++cl)
+    {
+
+        uint32_t start_vertex = cl * vertexPerCacheLine;
+        uint32_t end_vertex   = (cl + 1) * vertexPerCacheLine;
+        if (cl == numCacheLines - 1)
+            end_vertex = graph->num_vertices;
+
+        for (uint32_t v = start_vertex; v < end_vertex; ++v)
+        {
+            degree = vertices->out_degree[v];
+            edge_idx = vertices->edges_idx[v];
+            for(j = edge_idx ; j < (edge_idx + degree) ; j++)
+            {
+                u = EXTRACT_VALUE(sorted_edges_array[j]);
+            }
+        }
 
     }
+    Stop(timer);
 
+    printf(" -----------------------------------------------------\n");
+    printf("| %-51s | \n", "Quantize Graph Complete");
+    printf(" -----------------------------------------------------\n");
+    printf("| %-51f | \n", Seconds(timer));
+    printf(" -----------------------------------------------------\n");
+
+    /* Step II: Converting adjacency matrix into offsets */
+
+
+    free(timer);
     free(last_references);
-    return NULL;
+    return offset_matrix;
 }
 uint32_t *makeRerefrenceMaskProcess(struct GraphCSR *graph,  struct Arguments *arguments)
 {
