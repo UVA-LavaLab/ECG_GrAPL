@@ -36,8 +36,9 @@
 // ********************************************************************************************
 // ***************                  ECG Generate  (P-OPT based)                  **************
 // ********************************************************************************************
-uint32_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *arguments)
+uint8_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *arguments)
 {
+    uint32_t i;
     uint32_t j;
     uint32_t v;
     uint32_t u;
@@ -53,8 +54,14 @@ uint32_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *argu
     if (chunkSize == 0)
         chunkSize = 1;
 
-    uint32_t *last_references = (uint32_t *) my_malloc((numCacheLines * numEpochs) * sizeof(uint32_t));
+    int *last_references = (int *) my_malloc((numCacheLines * numEpochs) * sizeof(int));
     uint8_t  *offset_matrix   = (uint8_t *) my_malloc((numCacheLines * numEpochs) * sizeof(uint8_t));
+
+    #pragma omp parallel for 
+    for (i = 0; i < (numCacheLines * numEpochs); ++i)
+    {
+        last_references[i] = -1; 
+    }
 
     struct Vertex *vertices = NULL;
     uint32_t *sorted_edges_array = NULL;
@@ -89,7 +96,7 @@ uint32_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *argu
             {
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 uint32_t u_epoch = u / epochSize;
-                last_references[(cl * numEpochs) + u_epoch] = maxTwoIntegers(u, last_references[(cl * numEpochs) + u_epoch]);
+                last_references[(cl * numEpochs) + u_epoch] = maxTwoIntegersSigned(u, last_references[(cl * numEpochs) + u_epoch]);
             }
         }
 
@@ -111,15 +118,21 @@ uint32_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *argu
 
     uint8_t *compressedOffsets = (uint8_t *) my_malloc((numCacheLines * numEpochs) * sizeof(uint8_t));
 
+    #pragma omp parallel for 
+    for (i = 0; i < (numCacheLines * numEpochs); ++i)
+    {
+        compressedOffsets[i] = 0; 
+    }
+
     printf(" -----------------------------------------------------\n");
-    printf("| %-51s | \n", "P-OPT Converting adjacency matrix into offsets START");
+    printf("| %-51s | \n", "P-OPT Convert adjacency matrix -> offsets START");
     printf(" -----------------------------------------------------\n");
     Start(timer);
     #pragma omp parallel for schedule (static)
     for (uint32_t cl = 0; cl < numCacheLines; ++cl)
     {
-        {
-            // first set values for the last epoch
+        {// first set values for the last epoch
+            
             uint32_t epoch = numEpochs - 1;
             if (last_references[(cl * numEpochs) + epoch] != -1)
             {
@@ -134,17 +147,16 @@ uint32_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *argu
         }
 
         //Now back track and set values for all epochs
-        uint32_t epoch;
+        int epoch;
         for (epoch = numEpochs - 2; epoch >= 0; --epoch)
         {
+            // printf("last_references cl %u numEpochs %u epoch %u index %u value %d \n",cl, numEpochs, epoch, ((cl * numEpochs) + epoch), last_references[(cl * numEpochs) + epoch] );
             if (last_references[(cl * numEpochs) + epoch] != -1)
             {
                 // There was a ref this epoch - store the quantized val of the last_references
                 uint32_t subEpochDist = last_references[(cl * numEpochs) + epoch] - (epoch * epochSize);
-                assert(subEpochDist >= 0);
                 uint32_t lastRefQ = (subEpochDist / subEpochSz);
-                assert(lastRefQ <= maxReref);
-                compressedOffsets[(cl * numEpochs) + epoch] = static_cast<uint8_t>(lastRefQ);
+                compressedOffsets[(cl * numEpochs) + epoch] = (uint8_t)lastRefQ;
                 compressedOffsets[(cl * numEpochs) + epoch] &= andMask;
             }
             else
@@ -169,7 +181,7 @@ uint32_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *argu
     }
     Stop(timer);
     printf(" -----------------------------------------------------\n");
-    printf("| %-51s | \n", "P-OPT Converting adjacency matrix into offsets Complete");
+    printf("| %-51s | \n", "P-OPT Convert adjacency matrix -> offsets Complete");
     printf(" -----------------------------------------------------\n");
     printf("| %-51f | \n", Seconds(timer));
     printf(" -----------------------------------------------------\n");

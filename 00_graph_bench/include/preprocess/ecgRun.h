@@ -11,7 +11,7 @@
 // ********************************************************************************************
 // ***************                  ECG Generate                                 **************
 // ********************************************************************************************
-uint32_t * makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *arguments);
+uint8_t  * makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *arguments);
 uint32_t * makeRerefrenceMaskProcess(struct GraphCSR *graph,  struct Arguments *arguments);
 uint32_t * makePrefetchMaskProcess(struct GraphCSR *graph, struct Arguments *arguments);
 

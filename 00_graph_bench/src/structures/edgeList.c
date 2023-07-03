@@ -44,6 +44,16 @@ uint32_t maxTwoIntegers(uint32_t num1, uint32_t num2)
 
 }
 
+int maxTwoIntegersSigned(int num1, int num2)
+{
+
+    if(num1 >= num2)
+        return num1;
+    else
+        return num2;
+
+}
+
 float maxTwoFloats(float num1, float num2)
 {
 
