@@ -129,7 +129,7 @@ uint8_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *argum
     printf(" -----------------------------------------------------\n");
     Start(timer);
     #pragma omp parallel for schedule (static)
-    for (uint32_t cl = 0; cl < numCacheLines; ++cl)
+    for (cl = 0; cl < numCacheLines; ++cl)
     {
         {// first set values for the last epoch
             
