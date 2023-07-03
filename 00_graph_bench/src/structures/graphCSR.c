@@ -29,6 +29,7 @@
 
 #include "graphCSR.h"
 #include "reorder.h"
+#include "ecgRun.h"
 
 //edgelist prerpcessing
 // #include "countsort.h"
@@ -236,6 +237,11 @@ struct GraphCSR *graphCSRPreProcessingStep (struct Arguments *arguments)
 
 #endif
 
+
+    Start(timer);
+    makeOffsetMatrixProcess(graphCSR, arguments);
+    Stop(timer);
+    graphCSRPrintMessageWithtime("Process Offset MatrixProcess", Seconds(timer));
 
     graphCSRPrint(graphCSR);
 
