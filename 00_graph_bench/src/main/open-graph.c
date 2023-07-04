@@ -304,8 +304,12 @@ main (int argc, char **argv)
 #ifdef CACHE_HARNESS_META
     arguments->l1_size   = L1_SIZE;
     arguments->l1_assoc  = L1_ASSOC;
+    arguments->l2_size   = L2_SIZE;
+    arguments->l2_assoc  = L2_ASSOC;
+    arguments->llc_size  = L3_SIZE;
+    arguments->llc_assoc = L3_ASSOC;
     arguments->blocksize = BLOCKSIZE;
-    arguments->policey   = POLICY;
+    arguments->policy    = POLICY;
 #endif
 
     void *graph = NULL;

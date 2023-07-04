@@ -218,7 +218,7 @@ main (int argc, char **argv)
     arguments.l1_size   = L1_SIZE;
     arguments.l1_assoc  = L1_ASSOC;
     arguments.blocksize = BLOCKSIZE;
-    arguments.policey   = LRU_POLICY;
+    arguments.policy   = LRU_POLICY;
 
     void *graph = NULL;
 
@@ -244,7 +244,7 @@ main (int argc, char **argv)
             // sprintf(express_perf_file, "%s/%s_algo%u_cache%u.express.%s", "./cache-results", benchmarks_graphs[i], arguments.algorithm, arguments.l1_size, "perf");
             // sprintf(grasp_perf_file, "%s/%s_algo%u_cache%u.grasp.%s", "./cache-results", benchmarks_graphs[i], arguments.algorithm, arguments.l1_size, "perf");
 
-            arguments.policey   = policy[0];
+            arguments.policy   = policy[0];
             for (j = 0; j < ORDER_CONFIG; ++j)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -272,7 +272,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.policey   = policy[1];
+            arguments.policy   = policy[1];
             for (j = 0; j < ORDER_CONFIG; ++j)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -300,7 +300,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.policey   = policy[2];
+            arguments.policy   = policy[2];
             for (kk = 0, j = ORDER_CONFIG; j < ORDER_CONFIG + MODE_NUM; ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -328,7 +328,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.policey   = policy[3];
+            arguments.policy   = policy[3];
             for (kk = 0, j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -356,7 +356,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.policey   = policy[4];
+            arguments.policy   = policy[4];
             for (kk = 0, j = ORDER_CONFIG; j < ORDER_CONFIG + MODE_NUM; ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -384,7 +384,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.policey   = policy[5];
+            arguments.policy   = policy[5];
             for (kk = 0, j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");

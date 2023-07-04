@@ -49,9 +49,9 @@
 #define POLICY MASK_CAPI_POLICY
 // #define POLICY GRASP_CAPI_POLICY
 
-#define BLOCKSIZE   64
-#define L1_SIZE     1048576
-#define L1_ASSOC    16
+// #define BLOCKSIZE   64
+// #define L1_SIZE     1048576
+// #define L1_ASSOC    16
 
 // #define BLOCKSIZE   64
 // #define L1_SIZE     1048576
@@ -69,9 +69,15 @@
 // #define L1_SIZE     262144 + 32768 + 32768
 // #define L1_ASSOC    8
 
-// #define BLOCKSIZE   64
-// #define L1_SIZE     32768
-// #define L1_ASSOC    8
+#define BLOCKSIZE   64
+#define L1_SIZE     32768
+#define L1_ASSOC    8
+
+#define L2_SIZE     262144
+#define L2_ASSOC    8
+
+#define L3_SIZE     2097152
+#define L3_ASSOC    16
 
 // Cache states Constants
 #define INVALID 0
@@ -180,6 +186,10 @@ struct Cache
     uint64_t *thresholds_totalDegrees;
     uint64_t *thresholds_avgDegrees;
     uint64_t **regions_avgDegrees;
+
+    struct Cache *cacheL1;
+    struct Cache *cacheL2;
+    struct Cache *cacheLLC;
 };
 
 
