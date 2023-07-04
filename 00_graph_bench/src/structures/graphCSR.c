@@ -57,6 +57,8 @@ void graphCSRFree (struct GraphCSR *graphCSR)
             freeEdgeList(graphCSR->inverse_sorted_edges_array);
 #endif
 
+        if(graphCSR->offset_matrix)
+            free(graphCSR->offset_matrix);
 
         free(graphCSR);
 

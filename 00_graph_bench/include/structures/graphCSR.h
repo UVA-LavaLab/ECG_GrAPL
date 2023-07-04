@@ -26,6 +26,8 @@ struct GraphCSR
     struct Vertex *inverse_vertices;
     struct EdgeList *inverse_sorted_edges_array; // sorted edge array
 #endif
+
+    uint8_t  *offset_matrix;
 };
 
 void graphCSRFree (struct GraphCSR *graphCSR);
