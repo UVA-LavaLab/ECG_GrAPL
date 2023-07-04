@@ -133,7 +133,7 @@ uint8_t *makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *argum
     {
         {// first set values for the last epoch
             
-            uint32_t epoch = numEpochs - 1;
+            int epoch = numEpochs - 1;
             if (last_references[(cl * numEpochs) + epoch] != -1)
             {
                 compressedOffsets[(cl * numEpochs) + epoch] = maxReref;
