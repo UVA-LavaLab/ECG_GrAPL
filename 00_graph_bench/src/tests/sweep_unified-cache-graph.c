@@ -79,10 +79,10 @@ main (int argc, char **argv)
     uint32_t Block_size[CACHE_CONFIGS]    = {128};
 
     uint32_t policy[CACHE_POLICY]         = {PLRU_POLICY, SRRIP_POLICY, GRASP_POLICY, MASK_POLICY};
-    float PLRU_stats[GRAPH_NUM][ORDER_CONFIG]       = {0};
-    float SSRIP_stats[GRAPH_NUM][ORDER_CONFIG]      = {0};
-    float GRASP_stats[GRAPH_NUM][MODE_NUM]          = {0};
-    float EXPRESS_stats[GRAPH_NUM][MODE_NUM]        = {0};
+    float PLRU_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0}};
+    float SSRIP_stats[GRAPH_NUM][ORDER_CONFIG]      = {{0}};
+    float GRASP_stats[GRAPH_NUM][MODE_NUM]          = {{0}};
+    float EXPRESS_stats[GRAPH_NUM][MODE_NUM]        = {{0}};
     uint32_t lmode_l2[TOTAL_CONFIG] = {0, 4, 11, 11, 11, 11, 0, 11, 11, 0, 11, 11};
     uint32_t lmode_l3[TOTAL_CONFIG] = {0, 0, 0, 4, 0, 4, 4, 4, 4, 0, 0, 0 };
     uint32_t mmode[TOTAL_CONFIG]    = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1 };
@@ -213,10 +213,18 @@ main (int argc, char **argv)
     arguments.lmode_l3 = 0;
     arguments.mmode = 0;
 
-    arguments.l1_size   = L1_SIZE;
-    arguments.l1_assoc  = L1_ASSOC;
-    arguments.blocksize = BLOCKSIZE;
-    arguments.policy   = LRU_POLICY;
+    arguments.l1_size       = L1_SIZE;
+    arguments.l1_assoc      = L1_ASSOC;
+    arguments.l1_blocksize  = BLOCKSIZE;
+    arguments.l1_policy     = LRU_POLICY;
+    arguments.l2_size       = L2_SIZE;
+    arguments.l2_assoc      = L2_ASSOC;
+    arguments.l2_blocksize  = BLOCKSIZE;
+    arguments.l2_policy     = LRU_POLICY;
+    arguments.llc_size      = L3_SIZE;
+    arguments.llc_assoc     = L3_ASSOC;
+    arguments.llc_blocksize = BLOCKSIZE;
+    arguments.llc_policy    = POLICY;
 
     void *graph = NULL;
 
@@ -231,10 +239,17 @@ main (int argc, char **argv)
 
     for( k = 0; k < CACHE_CONFIGS ; k++)
     {
-        arguments.l1_size   = cache_size[k];
-        arguments.l1_assoc  = Associativity[k];
-        arguments.blocksize = Block_size[k];
-
+        arguments.l1_size       = L1_SIZE;
+        arguments.l1_assoc      = L1_ASSOC;
+        arguments.l1_blocksize  = BLOCKSIZE;
+        arguments.l1_policy     = LRU_POLICY;
+        arguments.l2_size       = L2_SIZE;
+        arguments.l2_assoc      = L2_ASSOC;
+        arguments.l2_blocksize  = BLOCKSIZE;
+        arguments.l2_policy     = LRU_POLICY;
+        arguments.llc_size      = L3_SIZE;
+        arguments.llc_assoc     = L3_ASSOC;
+        arguments.llc_blocksize = BLOCKSIZE;
         for ( i = 0; i < GRAPH_NUM; ++i)
         {
             printf("graph %s\n", benchmarks_dir[i]);
@@ -242,7 +257,7 @@ main (int argc, char **argv)
             // sprintf(express_perf_file, "%s/%s_algo%u_cache%u.express.%s", "./cache-results", benchmarks_graphs[i], arguments.algorithm, arguments.l1_size, "perf");
             // sprintf(grasp_perf_file, "%s/%s_algo%u_cache%u.grasp.%s", "./cache-results", benchmarks_graphs[i], arguments.algorithm, arguments.l1_size, "perf");
 
-            arguments.policy   = policy[0];
+            arguments.llc_policy    = policy[0];
             for (j = 0; j < ORDER_CONFIG; ++j)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -253,7 +268,7 @@ main (int argc, char **argv)
                 arguments.mmode = mmode[j];
                 arguments.fnameb = graph_dir;
                 arguments.fnamel = label_dir;
-                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.l1_size / 1024, config_labels[j]);
+                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.llc_size / 1024, config_labels[j]);
 
                 graph = generateGraphDataStructure(&arguments);
 
@@ -270,7 +285,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.policy   = policy[1];
+            arguments.llc_policy    = policy[1];
             for (j = 0; j < ORDER_CONFIG; ++j)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -281,7 +296,7 @@ main (int argc, char **argv)
                 arguments.mmode = mmode[j];
                 arguments.fnameb = graph_dir;
                 arguments.fnamel = label_dir;
-                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.l1_size / 1024, config_labels[j]);
+                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.llc_size / 1024, config_labels[j]);
 
                 graph = generateGraphDataStructure(&arguments);
 
@@ -298,7 +313,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.policy   = policy[2];
+            arguments.llc_policy    = policy[2];
             for (kk = 0, j = ORDER_CONFIG; j < ORDER_CONFIG + MODE_NUM; ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -309,7 +324,7 @@ main (int argc, char **argv)
                 arguments.mmode = mmode[j];
                 arguments.fnameb = graph_dir;
                 arguments.fnamel = label_dir;
-                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.l1_size / 1024, config_labels[j]);
+                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.llc_size / 1024, config_labels[j]);
 
                 graph = generateGraphDataStructure(&arguments);
 
@@ -326,7 +341,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.policy   = policy[3];
+            arguments.llc_policy    = policy[3];
             for (kk = 0, j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -337,7 +352,7 @@ main (int argc, char **argv)
                 arguments.mmode = mmode[j];
                 arguments.fnameb = graph_dir;
                 arguments.fnamel = label_dir;
-                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.l1_size / 1024, config_labels[j]);
+                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.llc_size / 1024, config_labels[j]);
 
                 graph = generateGraphDataStructure(&arguments);
 
