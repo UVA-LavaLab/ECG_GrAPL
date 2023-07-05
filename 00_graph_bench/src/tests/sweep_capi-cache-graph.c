@@ -232,7 +232,7 @@ main (int argc, char **argv)
 
                 GRASP_stats[i][kk] = getCAPIMissRate(ref_stats_tmp->cache->capi_cache);
 
-                // printStatsDoubleTaggedCacheToFile(ref_stats_tmp->cache, capi_perf_file);
+                // printStatsCacheStructureToFile(ref_stats_tmp->cache, capi_perf_file);
 
                 freeGraphStatsGeneral(ref_stats_tmp, arguments.algorithm);
                 freeGraphDataStructure(graph, arguments.datastructure);
@@ -257,7 +257,7 @@ main (int argc, char **argv)
 
                 EXPRESS_stats[i][kk] = getCAPIMissRate(ref_stats_tmp->cache->capi_cache);
 
-                // printStatsDoubleTaggedCacheToFile(ref_stats_tmp->cache, capi_perf_file);
+                // printStatsCacheStructureToFile(ref_stats_tmp->cache, capi_perf_file);
 
                 freeGraphStatsGeneral(ref_stats_tmp, arguments.algorithm);
                 freeGraphDataStructure(graph, arguments.datastructure);

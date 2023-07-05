@@ -169,7 +169,7 @@ void freeBetweennessCentralityStats(struct BetweennessCentralityStats *stats)
         }
 
 #ifdef CACHE_HARNESS_META
-        freeDoubleTaggedCache(stats->cache);
+        freeCacheStructure(stats->cache);
         if(stats->propertyMetaData)
             free(stats->propertyMetaData);
 #endif
@@ -338,21 +338,21 @@ uint32_t betweennessCentralityBottomUpStepGraphCSR(struct GraphCSR *graph, struc
             {
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
                 if(getBit(bitmapCurr, u))
                 {
                     // stats->parents[v] = u;
                     stats->distances[v] = stats->distances[u] + 1;
 #ifdef CACHE_HARNESS
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->distances[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->distances[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
                     if(stats->distances[v] == stats->distances[u] + 1)
                     {
 
 #ifdef CACHE_HARNESS
-                        AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
-                        AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'w', u, EXTRACT_MASK(sorted_edges_array[j]));
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'w', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
                         stats->sigma[v] += stats->sigma[u];
                         stats->predecessors[v].nodes[stats->predecessors[v].degree] = u;
@@ -414,7 +414,7 @@ struct BetweennessCentralityStats *betweennessCentralityBrandesGraphCSR(struct A
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->sigma[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
@@ -424,8 +424,8 @@ struct BetweennessCentralityStats *betweennessCentralityBrandesGraphCSR(struct A
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     Start(timer);
@@ -487,7 +487,7 @@ struct BetweennessCentralityStats *betweennessCentralityBrandesGraphCSR(struct A
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);

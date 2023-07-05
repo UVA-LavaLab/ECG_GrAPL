@@ -16,7 +16,8 @@ float getGraphAlgorithmsTestTime(void *ref_stats, uint32_t algorithm);
 
 #ifdef CACHE_HARNESS
 float getGraphAlgorithmsTestMissRateRef(void *ref_stats, uint32_t algorithm);
-float getGraphAlgorithmsTestMissRateCAPI(void *ref_stats, uint32_t algorithm);
+float getGraphAlgorithmsTestMissRateRefL2(void *ref_stats, uint32_t algorithm);
+float getGraphAlgorithmsTestMissRateRefLLC(void *ref_stats, uint32_t algorithm);
 #endif
 
 #endif

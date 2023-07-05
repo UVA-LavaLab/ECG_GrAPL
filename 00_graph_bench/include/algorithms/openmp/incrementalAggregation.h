@@ -61,7 +61,8 @@ struct IncrementalAggregationStats
 #ifdef CACHE_HARNESS_META
     uint32_t numPropertyRegions;
     struct PropertyMetaData *propertyMetaData;
-    struct DoubleTaggedCache *cache;
+    struct CacheStructure *cache;
+    struct CacheStructureArguments *cacheStructureArguments;
 #endif
 };
 

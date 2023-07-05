@@ -27,7 +27,8 @@ struct BellmanFordStats
 #ifdef CACHE_HARNESS_META
     uint32_t numPropertyRegions;
     struct PropertyMetaData *propertyMetaData;
-    struct DoubleTaggedCache *cache;
+    struct CacheStructure *cache;
+    struct CacheStructureArguments *cacheStructureArguments;
 #endif
 };
 
@@ -40,7 +41,7 @@ void freeBellmanFordStats(struct BellmanFordStats *stats);
 
 
 // ********************************************************************************************
-// ***************					Auxiliary functions  	  					 **************
+// ***************                  Auxiliary functions                          **************
 // ********************************************************************************************
 uint32_t bellmanFordAtomicMin(uint32_t *dist, uint32_t new);
 uint32_t bellmanFordCompareDistanceArrays(struct BellmanFordStats *stats1, struct BellmanFordStats *stats2);
@@ -49,7 +50,7 @@ int bellmanFordRelax(uint32_t src, uint32_t dest, float weight, struct BellmanFo
 void durstenfeldShuffle(mt19937state *mt19937var, uint32_t *vertices, uint32_t size);
 
 // ********************************************************************************************
-// ***************					GRID DataStructure							 **************
+// ***************                  GRID DataStructure                           **************
 // ********************************************************************************************
 
 struct BellmanFordStats *bellmanFordGraphGrid(struct Arguments *arguments, struct GraphGrid *graph);
@@ -60,7 +61,7 @@ struct BellmanFordStats *bellmanFordPushColumnGraphGrid(struct Arguments *argume
 
 
 // ********************************************************************************************
-// ***************					CSR DataStructure							 **************
+// ***************                  CSR DataStructure                            **************
 // ********************************************************************************************
 
 struct BellmanFordStats *bellmanFordGraphCSR(struct Arguments *arguments, struct GraphCSR *graph);
@@ -71,7 +72,7 @@ struct BellmanFordStats *bellmanFordRandomizedDataDrivenPushGraphCSR(struct Argu
 void bellmanFordSpiltGraphCSR(struct GraphCSR *graph, struct GraphCSR **graphPlus, struct GraphCSR **graphMinus);
 
 // ********************************************************************************************
-// ***************					ArrayList DataStructure					     **************
+// ***************                  ArrayList DataStructure                      **************
 // ********************************************************************************************
 
 struct BellmanFordStats *bellmanFordGraphAdjArrayList(struct Arguments *arguments, struct GraphAdjArrayList *graph);
@@ -80,7 +81,7 @@ struct BellmanFordStats *bellmanFordDataDrivenPullGraphAdjArrayList(struct Argum
 struct BellmanFordStats *bellmanFordDataDrivenPushGraphAdjArrayList(struct Arguments *arguments, struct GraphAdjArrayList *graph);
 
 // ********************************************************************************************
-// ***************					LinkedList DataStructure					 **************
+// ***************                  LinkedList DataStructure                     **************
 // ********************************************************************************************
 
 struct BellmanFordStats *bellmanFordGraphAdjLinkedList(struct Arguments *arguments, struct GraphAdjLinkedList *graph);

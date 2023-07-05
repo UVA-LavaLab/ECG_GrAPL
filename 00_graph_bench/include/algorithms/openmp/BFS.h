@@ -17,7 +17,7 @@
 #endif
 
 // ********************************************************************************************
-// ***************					Stats DataStructure							 **************
+// ***************                  Stats DataStructure                          **************
 // ********************************************************************************************
 
 struct BFSStats
@@ -34,7 +34,8 @@ struct BFSStats
 #ifdef CACHE_HARNESS_META
     uint32_t numPropertyRegions;
     struct PropertyMetaData *propertyMetaData;
-    struct DoubleTaggedCache *cache;
+    struct CacheStructure *cache;
+    struct CacheStructureArguments *cacheStructureArguments;
 #endif
 
 };
@@ -47,7 +48,7 @@ struct BFSStats *newBFSStatsGraphAdjLinkedList(struct GraphAdjLinkedList *graph)
 void freeBFSStats(struct BFSStats *stats);
 
 // ********************************************************************************************
-// ***************					CSR DataStructure							 **************
+// ***************                  CSR DataStructure                            **************
 // ********************************************************************************************
 
 struct BFSStats *breadthFirstSearchGraphCSR(struct Arguments *arguments, struct GraphCSR *graph);
@@ -60,7 +61,7 @@ uint32_t topDownStepGraphCSR(struct GraphCSR *graph, struct ArrayQueue *sharedFr
 uint32_t bottomUpStepGraphCSR(struct GraphCSR *graph, struct Bitmap *bitmapCurr, struct Bitmap *bitmapNext, struct BFSStats *stats);
 
 // ********************************************************************************************
-// ***************		CSR DataStructure/Bitmap Frontiers						 **************
+// ***************      CSR DataStructure/Bitmap Frontiers                       **************
 // ********************************************************************************************
 
 struct BFSStats *breadthFirstSearchPushBitmapGraphCSR(struct Arguments *arguments, struct GraphCSR *graph);
@@ -68,7 +69,7 @@ struct BFSStats *breadthFirstSearchPushDirectionOptimizedBitmapGraphCSR(struct A
 uint32_t topDownStepUsingBitmapsGraphCSR(struct GraphCSR *graph, struct ArrayQueue *sharedFrontierQueue, struct BFSStats *stats);
 
 // ********************************************************************************************
-// ***************					CSR DataStructure DualOrder				     **************
+// ***************                  CSR DataStructure DualOrder                  **************
 // ********************************************************************************************
 
 struct BFSStats *breadthFirstSearchGraphCSRDualOrder(struct Arguments *arguments, struct GraphCSR *graph);
@@ -81,7 +82,7 @@ uint32_t topDownStepGraphCSRDualOrder(struct GraphCSR *graph, struct ArrayQueue 
 uint32_t bottomUpStepGraphCSRDualOrder(struct GraphCSR *graph, struct Bitmap *bitmapCurr, struct Bitmap *bitmapNext, struct BFSStats *stats);
 
 // ********************************************************************************************
-// ***************					GRID DataStructure							 **************
+// ***************                  GRID DataStructure                           **************
 // ********************************************************************************************
 
 struct BFSStats *breadthFirstSearchGraphGrid(struct Arguments *arguments, struct GraphGrid *graph);
@@ -96,7 +97,7 @@ void breadthFirstSearchSetActivePartitions(struct GraphGrid *graph, struct Array
 
 
 // ********************************************************************************************
-// ***************					GRID DataStructure/Bitmap Frontiers			 **************
+// ***************                  GRID DataStructure/Bitmap Frontiers          **************
 // ********************************************************************************************
 
 struct BFSStats *breadthFirstSearchRowGraphGridBitmap(struct Arguments *arguments, struct GraphGrid *graph);
@@ -109,7 +110,7 @@ void breadthFirstSearchSetActivePartitionsBitmap(struct GraphGrid *graph, struct
 
 
 // ********************************************************************************************
-// ***************					ArrayList DataStructure					     **************
+// ***************                  ArrayList DataStructure                      **************
 // ********************************************************************************************
 
 
@@ -124,7 +125,7 @@ uint32_t topDownStepGraphAdjArrayList(struct GraphAdjArrayList *graph, struct Ar
 
 
 // ********************************************************************************************
-// ***************					LinkedList DataStructure					 **************
+// ***************                  LinkedList DataStructure                     **************
 // ********************************************************************************************
 
 struct BFSStats *breadthFirstSearchGraphAdjLinkedList(struct Arguments *arguments, struct GraphAdjLinkedList *graph);

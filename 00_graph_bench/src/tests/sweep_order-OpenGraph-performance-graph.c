@@ -432,7 +432,7 @@ void sweepBFS(struct Arguments arguments, void *graph, float PLRU_stats[THREAD_P
             arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
             ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
             PLRU_stats[k] += getGraphAlgorithmsTestTime(ref_data, arguments.algorithm);
-            // printStatsDoubleTaggedCacheToFile(ref_stats_tmp->cache, unified_perf_file);
+            // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
             freeGraphStatsGeneral(ref_data, arguments.algorithm);
         }
     }
@@ -454,7 +454,7 @@ void sweepSSSP(struct Arguments arguments, void *graph, float PLRU_stats[THREAD_
             arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
             ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
             PLRU_stats[k] += getGraphAlgorithmsTestTime(ref_data, arguments.algorithm);
-            // printStatsDoubleTaggedCacheToFile(ref_stats_tmp->cache, unified_perf_file);
+            // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
             freeGraphStatsGeneral(ref_data, arguments.algorithm);
         }
     }
@@ -471,7 +471,7 @@ void sweepPR(struct Arguments arguments, void *graph, float PLRU_stats[THREAD_PO
         arguments.ker_numThreads = arguments.algo_numThreads ;
         ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
         PLRU_stats[k] += getGraphAlgorithmsTestTime(ref_data, arguments.algorithm);
-        // printStatsDoubleTaggedCacheToFile(ref_stats_tmp->cache, unified_perf_file);
+        // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
         freeGraphStatsGeneral(ref_data, arguments.algorithm);
     }
 
@@ -491,7 +491,7 @@ void sweepTC(struct Arguments arguments, void *graph, float PLRU_stats[THREAD_PO
         arguments.ker_numThreads = arguments.algo_numThreads ;
         ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
         PLRU_stats[k] += getGraphAlgorithmsTestTime(ref_data, arguments.algorithm);
-        // printStatsDoubleTaggedCacheToFile(ref_stats_tmp->cache, unified_perf_file);
+        // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
         freeGraphStatsGeneral(ref_data, arguments.algorithm);
     }
 
@@ -509,7 +509,7 @@ void sweepSPMV(struct Arguments arguments, void *graph, float PLRU_stats[THREAD_
         arguments.ker_numThreads = arguments.algo_numThreads ;
         ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
         PLRU_stats[k] += getGraphAlgorithmsTestTime(ref_data, arguments.algorithm);
-        // printStatsDoubleTaggedCacheToFile(ref_stats_tmp->cache, unified_perf_file);
+        // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
         freeGraphStatsGeneral(ref_data, arguments.algorithm);
     }
 
@@ -526,7 +526,7 @@ void sweepCC(struct Arguments arguments, void *graph, float PLRU_stats[THREAD_PO
         arguments.ker_numThreads = arguments.algo_numThreads ;
         ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
         PLRU_stats[k] += getGraphAlgorithmsTestTime(ref_data, arguments.algorithm);
-        // printStatsDoubleTaggedCacheToFile(ref_stats_tmp->cache, unified_perf_file);
+        // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
         freeGraphStatsGeneral(ref_data, arguments.algorithm);
     }
 

@@ -93,7 +93,7 @@ int main(int argc, char *argv[])
 
         numPropertyRegions = (numPropertyRegions - 2) / 4;
         struct PropertyMetaData *propertyMetaData = (struct PropertyMetaData *) my_malloc(numPropertyRegions * sizeof(struct PropertyMetaData));
-        struct DoubleTaggedCache *cache = newDoubleTaggedCache(L1_SIZE,  L1_ASSOC,  BLOCKSIZE, 0, POLICY, numPropertyRegions);
+        struct CacheStructure *cache = newCacheStructure(L1_SIZE,  L1_ASSOC,  BLOCKSIZE, 0, POLICY, numPropertyRegions);
 
 
         printf("%35s %20lu\n", "numPropertyRegions", numPropertyRegions);
@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
             printf("<--%u %35s %20lu\n", i, key, val);
             propertyMetaData[i].size = val - propertyMetaData[i].base_address;
         }
-        initDoubleTaggedCacheRegion(cache, propertyMetaData);
+        initCacheStructureRegion(cache, propertyMetaData);
         res = fread(&total_addresses, 8, 1, fp);
 
         if(res == 0)
@@ -145,15 +145,15 @@ int main(int argc, char *argv[])
         {
             uint64_t address = trace[j];
             // printf("0x%lx \n", address );
-            AccessDoubleTaggedCacheFloat(cache, address, 'r', 0, 0);
+            AccessCacheStructureFloat(cache, address, 'r', 0, 0);
         }
 
         Stop(timer);
         printf("Finished tests for %s\n Time (%-9f)\n", fnameb, Seconds(timer));
         fclose(fp);
 
-        printStatsDoubleTaggedCache(cache, in_degree, out_degree);
-        freeDoubleTaggedCache(cache);
+        printStatsCacheStructure(cache, in_degree, out_degree);
+        freeCacheStructure(cache);
         if(propertyMetaData)
             free(propertyMetaData);
         free(trace);

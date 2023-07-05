@@ -168,7 +168,7 @@ void freeCCStats(struct CCStats *stats)
         free(stats);
 
 #ifdef CACHE_HARNESS_META
-        freeDoubleTaggedCache(stats->cache);
+        freeCacheStructure(stats->cache);
         if(stats->propertyMetaData)
             free(stats->propertyMetaData);
 #endif
@@ -392,7 +392,7 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->components[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
@@ -402,8 +402,8 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
 
@@ -436,8 +436,8 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
             degree = graph->vertices->out_degree[src];
             edge_idx = graph->vertices->edges_idx[src];
             // #ifdef CACHE_HARNESS
-            //                 AccessDoubleTaggedCacheFloat(stats->cache, (uint64_t) & (graph->vertices->out_degree[src]), 'r', src, graph->vertices->out_degree[src]);
-            //                 AccessDoubleTaggedCacheFloat(stats->cache, (uint64_t) & (graph->vertices->edges_idx[src]), 'r', src, graph->vertices->edges_idx[src]);
+            //                 AccessCacheStructureFloat(stats->cache, (uint64_t) & (graph->vertices->out_degree[src]), 'r', src, graph->vertices->out_degree[src]);
+            //                 AccessCacheStructureFloat(stats->cache, (uint64_t) & (graph->vertices->edges_idx[src]), 'r', src, graph->vertices->edges_idx[src]);
             // #endif
             for(j = edge_idx ; j < (edge_idx + degree) ; j++)
             {
@@ -445,8 +445,8 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
                 uint32_t comp_src = stats->components[src];
                 uint32_t comp_dest = stats->components[dest];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->components[src]), 'r', src, graph->sorted_edges_array->mask_array[src]);
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->components[dest]), 'r', dest, EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[src]), 'r', src, graph->sorted_edges_array->mask_array[src]);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[dest]), 'r', dest, EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                 if(comp_src == comp_dest)
                     continue;
@@ -454,14 +454,14 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
                 uint32_t comp_high = comp_src > comp_dest ? comp_src : comp_dest;
                 uint32_t comp_low = comp_src + (comp_dest - comp_high);
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'r', comp_high,  graph->sorted_edges_array->mask_array[comp_high]);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'r', comp_high,  graph->sorted_edges_array->mask_array[comp_high]);
 #endif
                 if(comp_high == stats->components[comp_high])
                 {
                     change = 1;
                     stats->components[comp_high] = comp_low;
 #ifdef CACHE_HARNESS
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'w', comp_high,  graph->sorted_edges_array->mask_array[comp_high]);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'w', comp_high,  graph->sorted_edges_array->mask_array[comp_high]);
 #endif
                 }
             }
@@ -496,7 +496,7 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
     printCCStats(stats);
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     JSLFA(Bytes, JArray);

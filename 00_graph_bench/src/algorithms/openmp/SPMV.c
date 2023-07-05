@@ -154,7 +154,7 @@ void freeSPMVStats(struct SPMVStats *stats)
             free(stats->vector_input);
 
 #ifdef CACHE_HARNESS_META
-        freeDoubleTaggedCache(stats->cache);
+        freeCacheStructure(stats->cache);
         if(stats->propertyMetaData)
             free(stats->propertyMetaData);
 #endif
@@ -661,7 +661,7 @@ struct SPMVStats *SPMVPullGraphCSR( struct Arguments *arguments, struct GraphCSR
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->vector_input[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -671,8 +671,8 @@ struct SPMVStats *SPMVPullGraphCSR( struct Arguments *arguments, struct GraphCSR
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -723,13 +723,13 @@ struct SPMVStats *SPMVPullGraphCSR( struct Arguments *arguments, struct GraphCSR
 #endif
 
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
                 stats->vector_output[dest] +=  (weight * stats->vector_input[src]);
             }
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest]);
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest]);
 #endif
         }
 
@@ -762,7 +762,7 @@ struct SPMVStats *SPMVPullGraphCSR( struct Arguments *arguments, struct GraphCSR
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -926,7 +926,7 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->vector_input[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
@@ -936,8 +936,8 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     #pragma omp parallel for
@@ -1008,13 +1008,13 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
 #endif
 
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
                 vector_output[dest] += MULFixed32V1(weight, vector_input[src]); // stats->pageRanks[v]/graph->vertices[v].out_degree;
             }
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest]);
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest]);
 #endif
         }
 
@@ -1055,7 +1055,7 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);

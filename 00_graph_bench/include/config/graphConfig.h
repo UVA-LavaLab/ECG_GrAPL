@@ -87,12 +87,18 @@ struct Arguments
 #ifdef CACHE_HARNESS_META
     uint32_t l1_size;
     uint32_t l1_assoc;
+    uint32_t l1_blocksize;
+    uint32_t l1_policy;
+
     uint32_t l2_size;
     uint32_t l2_assoc;
+    uint32_t l2_blocksize;
+    uint32_t l2_policy;
+
     uint32_t llc_size;
     uint32_t llc_assoc;
-    uint32_t blocksize;
-    uint32_t policy;
+    uint32_t llc_blocksize;
+    uint32_t llc_policy;
 #endif
 
 };

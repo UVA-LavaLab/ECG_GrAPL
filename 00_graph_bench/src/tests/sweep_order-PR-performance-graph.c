@@ -226,7 +226,7 @@ main (int argc, char **argv)
                 arguments.ker_numThreads = arguments.algo_numThreads ;
                 ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
                 PLRU_stats[i][j][k] = getGraphAlgorithmsTestTime(ref_data, arguments.algorithm);
-                // printStatsDoubleTaggedCacheToFile(ref_stats_tmp->cache, unified_perf_file);
+                // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                 freeGraphStatsGeneral(ref_data, arguments.algorithm);
             }
 

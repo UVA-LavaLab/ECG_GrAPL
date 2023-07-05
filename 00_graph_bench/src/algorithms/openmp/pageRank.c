@@ -182,7 +182,7 @@ void freePageRankStats(struct PageRankStats *stats)
             free(stats->pageRanks);
 
 #ifdef CACHE_HARNESS_META
-        freeDoubleTaggedCache(stats->cache);
+        freeCacheStructure(stats->cache);
         if(stats->propertyMetaData)
             free(stats->propertyMetaData);
 #endif
@@ -974,7 +974,7 @@ struct PageRankStats *pageRankPullGraphCSR(struct Arguments *arguments, struct G
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments,arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -984,8 +984,8 @@ struct PageRankStats *pageRankPullGraphCSR(struct Arguments *arguments, struct G
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
 #if DIRECTED
@@ -1047,12 +1047,12 @@ struct PageRankStats *pageRankPullGraphCSR(struct Arguments *arguments, struct G
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 nodeIncomingPR += riDividedOnDiClause[u]; // stats->pageRanks[v]/graph->vertices[v].out_degree;
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
             }
             pageRanksNext[v] = nodeIncomingPR;
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
 #endif
         }
 
@@ -1106,7 +1106,7 @@ struct PageRankStats *pageRankPullGraphCSR(struct Arguments *arguments, struct G
 
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -1141,7 +1141,7 @@ struct PageRankStats *pageRankPushGraphCSR(struct Arguments *arguments, struct G
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -1151,8 +1151,8 @@ struct PageRankStats *pageRankPushGraphCSR(struct Arguments *arguments, struct G
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -1214,8 +1214,8 @@ struct PageRankStats *pageRankPushGraphCSR(struct Arguments *arguments, struct G
                 pageRanksNext[u] += riDividedOnDiClause[v];
 
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
 
             }
@@ -1273,7 +1273,7 @@ struct PageRankStats *pageRankPushGraphCSR(struct Arguments *arguments, struct G
     // pageRankPrint(pageRanks, graph->num_vertices);
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -1328,7 +1328,7 @@ struct PageRankStats *pageRankPullFixedPoint64BitGraphCSR(struct Arguments *argu
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint64_t);
@@ -1338,8 +1338,8 @@ struct PageRankStats *pageRankPullFixedPoint64BitGraphCSR(struct Arguments *argu
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
 
@@ -1394,11 +1394,11 @@ struct PageRankStats *pageRankPullFixedPoint64BitGraphCSR(struct Arguments *argu
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 pageRanksNext[v] += riDividedOnDiClause[u];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
             }
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
 #endif
         }
 
@@ -1453,7 +1453,7 @@ struct PageRankStats *pageRankPullFixedPoint64BitGraphCSR(struct Arguments *argu
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     // pageRankPrint(pageRanks, graph->num_vertices);
@@ -1508,7 +1508,7 @@ struct PageRankStats *pageRankPullFixedPoint32BitGraphCSR(struct Arguments *argu
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
@@ -1518,8 +1518,8 @@ struct PageRankStats *pageRankPullFixedPoint32BitGraphCSR(struct Arguments *argu
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -1573,11 +1573,11 @@ struct PageRankStats *pageRankPullFixedPoint32BitGraphCSR(struct Arguments *argu
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 pageRanksNext[v] += riDividedOnDiClause[u];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
             }
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
 #endif
         }
 
@@ -1632,7 +1632,7 @@ struct PageRankStats *pageRankPullFixedPoint32BitGraphCSR(struct Arguments *argu
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -1684,7 +1684,7 @@ struct PageRankStats *pageRankPullFixedPoint16BitGraphCSR(struct Arguments *argu
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint16_t);
@@ -1694,8 +1694,8 @@ struct PageRankStats *pageRankPullFixedPoint16BitGraphCSR(struct Arguments *argu
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -1749,11 +1749,11 @@ struct PageRankStats *pageRankPullFixedPoint16BitGraphCSR(struct Arguments *argu
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 pageRanksNext[v] += riDividedOnDiClause[u];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
             }
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
 #endif
         }
 
@@ -1807,7 +1807,7 @@ struct PageRankStats *pageRankPullFixedPoint16BitGraphCSR(struct Arguments *argu
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
     // pageRankPrint(pageRanks, graph->num_vertices);
     free(timer);
@@ -1861,7 +1861,7 @@ struct PageRankStats *pageRankPullFixedPoint8BitGraphCSR(struct Arguments *argum
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint8_t);
@@ -1871,8 +1871,8 @@ struct PageRankStats *pageRankPullFixedPoint8BitGraphCSR(struct Arguments *argum
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -1926,11 +1926,11 @@ struct PageRankStats *pageRankPullFixedPoint8BitGraphCSR(struct Arguments *argum
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 pageRanksNext[v] += riDividedOnDiClause[u];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
             }
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
 #endif
         }
 
@@ -1984,7 +1984,7 @@ struct PageRankStats *pageRankPullFixedPoint8BitGraphCSR(struct Arguments *argum
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -2022,7 +2022,7 @@ struct PageRankStats *pageRankPushFixedPointGraphCSR(struct Arguments *arguments
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint64_t);
@@ -2032,8 +2032,8 @@ struct PageRankStats *pageRankPushFixedPointGraphCSR(struct Arguments *arguments
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -2096,8 +2096,8 @@ struct PageRankStats *pageRankPushFixedPointGraphCSR(struct Arguments *arguments
                 #pragma omp atomic update
                 pageRanksNext[u] += riDividedOnDiClause[v];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
             }
         }
@@ -2152,7 +2152,7 @@ struct PageRankStats *pageRankPushFixedPointGraphCSR(struct Arguments *arguments
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -2197,7 +2197,7 @@ struct PageRankStats *pageRankPullQuant32BitGraphCSR(struct Arguments *arguments
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause_quant[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
@@ -2207,8 +2207,8 @@ struct PageRankStats *pageRankPullQuant32BitGraphCSR(struct Arguments *arguments
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -2276,12 +2276,12 @@ struct PageRankStats *pageRankPullQuant32BitGraphCSR(struct Arguments *arguments
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 nodeIncomingPR += riDividedOnDiClause_quant[u];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
             }
             pageRanksNext[v] = rDivD_params.scale * nodeIncomingPR;
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
 #endif
         }
 
@@ -2335,7 +2335,7 @@ struct PageRankStats *pageRankPullQuant32BitGraphCSR(struct Arguments *arguments
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -2379,7 +2379,7 @@ struct PageRankStats *pageRankPullQuant16BitGraphCSR(struct Arguments *arguments
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause_quant[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint16_t);
@@ -2389,8 +2389,8 @@ struct PageRankStats *pageRankPullQuant16BitGraphCSR(struct Arguments *arguments
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -2459,12 +2459,12 @@ struct PageRankStats *pageRankPullQuant16BitGraphCSR(struct Arguments *arguments
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 nodeIncomingPR += riDividedOnDiClause_quant[u];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
             }
             pageRanksNext[v] = rDivD_params.scale * nodeIncomingPR;
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
 #endif
         }
 
@@ -2518,7 +2518,7 @@ struct PageRankStats *pageRankPullQuant16BitGraphCSR(struct Arguments *arguments
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -2562,7 +2562,7 @@ struct PageRankStats *pageRankPullQuant8BitGraphCSR(struct Arguments *arguments,
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause_quant[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint8_t);
@@ -2572,8 +2572,8 @@ struct PageRankStats *pageRankPullQuant8BitGraphCSR(struct Arguments *arguments,
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -2641,13 +2641,13 @@ struct PageRankStats *pageRankPullQuant8BitGraphCSR(struct Arguments *arguments,
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 nodeIncomingPR += riDividedOnDiClause_quant[u];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
             }
             //nodeIncomingPR -= (degree * rDivD_params.zero);
             pageRanksNext[v] = rDivD_params.scale * nodeIncomingPR;
 #ifdef CACHE_HARNESS
-            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
 #endif
         }
 
@@ -2702,7 +2702,7 @@ struct PageRankStats *pageRankPullQuant8BitGraphCSR(struct Arguments *arguments,
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -2736,7 +2736,7 @@ struct PageRankStats *pageRankPushQuantGraphCSR(struct Arguments *arguments, str
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause_quant[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
@@ -2746,8 +2746,8 @@ struct PageRankStats *pageRankPushQuantGraphCSR(struct Arguments *arguments, str
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -2819,8 +2819,8 @@ struct PageRankStats *pageRankPushQuantGraphCSR(struct Arguments *arguments, str
                 #pragma omp atomic update
                 pageRanksNext[u] += rDivD_params.scale * (riDividedOnDiClause_quant[v] - rDivD_params.zero);
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
             }
         }
@@ -2875,7 +2875,7 @@ struct PageRankStats *pageRankPushQuantGraphCSR(struct Arguments *arguments, str
     printf(" -----------------------------------------------------\n");
     // pageRankPrint(pageRanks, graph->num_vertices);
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     free(timer);
@@ -2934,7 +2934,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -2944,8 +2944,8 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint8_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint8_t);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
 
@@ -3015,7 +3015,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
                     u = EXTRACT_VALUE(sorted_edges_array[j]);
                     nodeIncomingPR += riDividedOnDiClause[u]; // sum (PRi/outDegree(i))
 #ifdef CACHE_HARNESS
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
                 }
                 float oldPageRank =  stats->pageRanks[v];
@@ -3026,7 +3026,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
                 {
                     stats->pageRanks[v] = newPageRank;
 #ifdef CACHE_HARNESS
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->pageRanks[v]), 'w', v, stats->pageRanks[v]);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->pageRanks[v]), 'w', v, stats->pageRanks[v]);
 #endif
                     degree = graph->vertices->out_degree[v];
                     edge_idx = graph->vertices->edges_idx[v];
@@ -3038,7 +3038,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
                         workListNext[u] = 1;
 
 #ifdef CACHE_HARNESS
-                        AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
 
                         // uint8_t old_val = workListNext[u];
@@ -3087,7 +3087,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
     // pageRankPrint(pageRanks, graph->num_vertices);
     free(workListCurr);
@@ -3142,7 +3142,7 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -3152,8 +3152,8 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint8_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint8_t);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
 
@@ -3232,21 +3232,21 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
                     #pragma omp atomic update
                     aResiduals[u] += delta;
 #ifdef CACHE_HARNESS
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                     if ((fabs(prevResidual + delta) >= arguments->epsilon) && (prevResidual <= arguments->epsilon))
                     {
                         activeVertices++;
 #ifdef CACHE_HARNESS
-                        AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                         if(!workListNext[u])
                         {
                             // #pragma omp atomic write
                             workListNext[u] = 1;
 #ifdef CACHE_HARNESS
-                            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                         }
                     }
@@ -3292,7 +3292,7 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
     // pageRankPrint(pageRanks, graph->num_vertices);
     free(workListCurr);
@@ -3353,7 +3353,7 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 3;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -3367,8 +3367,8 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
     stats->propertyMetaData[2].size = graph->num_vertices * sizeof(float);
     stats->propertyMetaData[2].data_type_size = sizeof(float);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     printf(" -----------------------------------------------------\n");
@@ -3434,8 +3434,8 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
                     u = EXTRACT_VALUE(sorted_edges_array[j]);
                     nodeIncomingPR += stats->pageRanks[u] / graph->vertices->out_degree[u];
 #ifdef CACHE_HARNESS
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->pageRanks[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (graph->vertices->out_degree[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->pageRanks[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (graph->vertices->out_degree[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
                 }
 
@@ -3460,21 +3460,21 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
                     #pragma omp atomic update
                     aResiduals[u] += delta;
 #ifdef CACHE_HARNESS
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                     if ((fabs(prevResidual + delta) >= arguments->epsilon) && (prevResidual <= arguments->epsilon))
                     {
                         activeVertices++;
                         aResiduals[u] += delta;
 #ifdef CACHE_HARNESS
-                        AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                         if(!workListNext[u])
                         {
                             workListNext[u] = 1;
 #ifdef CACHE_HARNESS
-                            AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                         }
                     }
@@ -3520,7 +3520,7 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
     // pageRankPrint(pageRanks, graph->num_vertices);
     free(workListCurr);

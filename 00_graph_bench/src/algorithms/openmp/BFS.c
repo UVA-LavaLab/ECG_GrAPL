@@ -179,7 +179,7 @@ void freeBFSStats(struct BFSStats *stats)
             free(stats->parents_DualOrder);
 
 #ifdef CACHE_HARNESS_META
-        freeDoubleTaggedCache(stats->cache);
+        freeCacheStructure(stats->cache);
         if(stats->propertyMetaData)
             free(stats->propertyMetaData);
 #endif
@@ -335,7 +335,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSR(struct Arguments *arguments, str
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
@@ -345,8 +345,8 @@ struct BFSStats *breadthFirstSearchPullGraphCSR(struct Arguments *arguments, str
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     Start(timer_inner);
@@ -407,7 +407,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSR(struct Arguments *arguments, str
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     freeArrayQueue(sharedFrontierQueue);
@@ -454,14 +454,14 @@ struct BFSStats *breadthFirstSearchPushGraphCSR(struct Arguments *arguments, str
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
@@ -535,7 +535,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSR(struct Arguments *arguments, str
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     for(i = 0 ; i < P ; i++)
@@ -607,7 +607,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
@@ -617,8 +617,8 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     struct ArrayQueue **localFrontierQueues = (struct ArrayQueue **) my_malloc( P * sizeof(struct ArrayQueue *));
@@ -750,7 +750,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
     free(timer_inner);
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     return stats;
@@ -802,12 +802,12 @@ uint32_t topDownStepGraphCSR(struct GraphCSR *graph, struct ArrayQueue *sharedFr
                 u = EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]);
                 int u_parent = stats->parents[u];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                 if(u_parent < 0 )
                 {
 #ifdef CACHE_HARNESS
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                     if(__sync_bool_compare_and_swap(&stats->parents[u], u_parent, v))
                     {
@@ -880,7 +880,7 @@ uint32_t bottomUpStepGraphCSR(struct GraphCSR *graph, struct Bitmap *bitmapCurr,
             {
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
                 if(getBit(bitmapCurr, u))
                 {
@@ -889,8 +889,8 @@ uint32_t bottomUpStepGraphCSR(struct GraphCSR *graph, struct Bitmap *bitmapCurr,
                     stats->distances[v] = stats->distances[u] + 1;
                     setBitAtomic(bitmapNext, v);
                     // #ifdef CACHE_HARNESS
-                    //                     AccessDoubleTaggedCacheFloat(stats->cache, (uint64_t) & (stats->parents[v]), 'w', v, stats->parents[v]);
-                    //                     AccessDoubleTaggedCacheFloat(stats->cache, (uint64_t) & (bitmapNext->bitarray[word_offset(v)]), 'w', v, (bitmapNext->bitarray[word_offset(v)]));
+                    //                     AccessCacheStructureFloat(stats->cache, (uint64_t) & (stats->parents[v]), 'w', v, stats->parents[v]);
+                    //                     AccessCacheStructureFloat(stats->cache, (uint64_t) & (bitmapNext->bitarray[word_offset(v)]), 'w', v, (bitmapNext->bitarray[word_offset(v)]));
                     // #endif
                     nf++;
                     break;
@@ -1266,7 +1266,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSRDualOrder(struct Arguments *argum
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
@@ -1276,8 +1276,8 @@ struct BFSStats *breadthFirstSearchPullGraphCSRDualOrder(struct Arguments *argum
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     Start(timer_inner);
@@ -1338,7 +1338,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSRDualOrder(struct Arguments *argum
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     freeArrayQueue(sharedFrontierQueue);
@@ -1385,14 +1385,14 @@ struct BFSStats *breadthFirstSearchPushGraphCSRDualOrder(struct Arguments *argum
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
@@ -1466,7 +1466,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSRDualOrder(struct Arguments *argum
     printf(" -----------------------------------------------------\n");
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     for(i = 0 ; i < P ; i++)
@@ -1538,7 +1538,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newDoubleTaggedCache(arguments->l1_size,  arguments->l1_assoc,  arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
@@ -1548,8 +1548,8 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initDoubleTaggedCacheRegion(stats->cache, stats->propertyMetaData);
-    setDoubleTaggedCacheThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
     struct ArrayQueue **localFrontierQueues = (struct ArrayQueue **) my_malloc( P * sizeof(struct ArrayQueue *));
@@ -1685,7 +1685,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
     free(timer_inner);
 
 #ifdef CACHE_HARNESS
-    printStatsDoubleTaggedCache(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
+    printStatsCacheStructure(stats->cache, graph->vertices->in_degree, graph->vertices->out_degree);
 #endif
 
     return stats;
@@ -1733,12 +1733,12 @@ uint32_t topDownStepGraphCSRDualOrder(struct GraphCSR *graph, struct ArrayQueue 
                 u = EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]);
                 int u_parent = stats->parents[u];
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                 if(u_parent < 0 )
                 {
 #ifdef CACHE_HARNESS
-                    AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
 #endif
                     if(__sync_bool_compare_and_swap(&stats->parents[u], u_parent, v))
                     {
@@ -1809,7 +1809,7 @@ uint32_t bottomUpStepGraphCSRDualOrder(struct GraphCSR *graph, struct Bitmap *bi
 
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
 #ifdef CACHE_HARNESS
-                AccessDoubleTaggedCacheUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
 #endif
                 if(getBit(bitmapCurr, u))
                 {
@@ -1818,8 +1818,8 @@ uint32_t bottomUpStepGraphCSRDualOrder(struct GraphCSR *graph, struct Bitmap *bi
                     stats->distances[v] = stats->distances[u] + 1;
                     setBitAtomic(bitmapNext, v);
                     // #ifdef CACHE_HARNESS
-                    //                     AccessDoubleTaggedCacheFloat(stats->cache, (uint64_t) & (stats->parents[v]), 'w', v, stats->parents[v]);
-                    //                     AccessDoubleTaggedCacheFloat(stats->cache, (uint64_t) & (bitmapNext->bitarray[word_offset(v)]), 'w', v, (bitmapNext->bitarray[word_offset(v)]));
+                    //                     AccessCacheStructureFloat(stats->cache, (uint64_t) & (stats->parents[v]), 'w', v, stats->parents[v]);
+                    //                     AccessCacheStructureFloat(stats->cache, (uint64_t) & (bitmapNext->bitarray[word_offset(v)]), 'w', v, (bitmapNext->bitarray[word_offset(v)]));
                     // #endif
                     nf++;
                     break;

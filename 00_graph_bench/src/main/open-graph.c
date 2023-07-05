@@ -283,7 +283,7 @@ main (int argc, char **argv)
     arguments->pushpull = 0;
     arguments->sort = 0;
     arguments->mmode = 0;
-    
+
     arguments->lmode = 0;
     arguments->lmode_l2 = 0;
     arguments->lmode_l3 = 0;
@@ -300,16 +300,20 @@ main (int argc, char **argv)
     arguments->convert_format = 1;
     initializeMersenneState (&(arguments->mt19937var), 27491095);
     omp_set_nested(1);
-    
+
 #ifdef CACHE_HARNESS_META
-    arguments->l1_size   = L1_SIZE;
-    arguments->l1_assoc  = L1_ASSOC;
-    arguments->l2_size   = L2_SIZE;
-    arguments->l2_assoc  = L2_ASSOC;
-    arguments->llc_size  = L3_SIZE;
-    arguments->llc_assoc = L3_ASSOC;
-    arguments->blocksize = BLOCKSIZE;
-    arguments->policy    = POLICY;
+    arguments->l1_size       = L1_SIZE;
+    arguments->l1_assoc      = L1_ASSOC;
+    arguments->l1_blocksize  = BLOCKSIZE;
+    arguments->l1_policy     = LRU_POLICY;
+    arguments->l2_size       = L1_SIZE;
+    arguments->l2_assoc      = L1_ASSOC;
+    arguments->l2_blocksize  = BLOCKSIZE;
+    arguments->l2_policy     = LRU_POLICY;
+    arguments->llc_size      = L1_SIZE;
+    arguments->llc_assoc     = L1_ASSOC;
+    arguments->llc_blocksize = BLOCKSIZE;
+    arguments->llc_policy    = SRRIP_POLICY;
 #endif
 
     void *graph = NULL;

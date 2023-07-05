@@ -23,7 +23,8 @@ struct TCStats
 #ifdef CACHE_HARNESS_META
     uint32_t numPropertyRegions;
     struct PropertyMetaData *propertyMetaData;
-    struct DoubleTaggedCache *cache;
+    struct CacheStructure *cache;
+    struct CacheStructureArguments *cacheStructureArguments;
 #endif
 };
 
@@ -42,7 +43,7 @@ uint32_t maxTwoNodes(uint32_t node_v, uint32_t node_u, uint32_t degree_v, uint32
 uint32_t countIntersectionsBinarySearch(uint32_t u, uint32_t v, struct GraphCSR *graph);
 
 // ********************************************************************************************
-// ***************					CSR DataStructure							 **************
+// ***************                  CSR DataStructure                            **************
 // ********************************************************************************************
 
 struct TCStats *triangleCountGraphCSR(struct Arguments *arguments, struct GraphCSR *graph);
@@ -52,7 +53,7 @@ struct TCStats *triangleCountPushGraphCSR(struct GraphCSR *graph);
 struct TCStats *triangleCountBinaryIntersectionGraphCSR(struct GraphCSR *graph);
 
 // ********************************************************************************************
-// ***************					GRID DataStructure							 **************
+// ***************                  GRID DataStructure                           **************
 // ********************************************************************************************
 
 struct TCStats *triangleCountGraphGrid(struct Arguments *arguments, struct GraphGrid *graph);
@@ -60,7 +61,7 @@ struct TCStats *triangleCountRowGraphGrid(struct GraphGrid *graph);
 struct TCStats *triangleCountColumnGraphGrid(struct GraphGrid *graph);
 
 // ********************************************************************************************
-// ***************					ArrayList DataStructure					     **************
+// ***************                  ArrayList DataStructure                      **************
 // ********************************************************************************************
 
 struct TCStats *triangleCountGraphAdjArrayList(struct Arguments *arguments, struct GraphAdjArrayList *graph);
@@ -68,7 +69,7 @@ struct TCStats *triangleCountPullGraphAdjArrayList(struct GraphAdjArrayList *gra
 struct TCStats *triangleCountPushGraphAdjArrayList(struct GraphAdjArrayList *graph);
 
 // ********************************************************************************************
-// ***************					LinkedList DataStructure					 **************
+// ***************                  LinkedList DataStructure                     **************
 // ********************************************************************************************
 
 struct TCStats *triangleCountGraphAdjLinkedList(struct Arguments *arguments, struct GraphAdjLinkedList *graph);
