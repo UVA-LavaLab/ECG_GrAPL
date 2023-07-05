@@ -1822,7 +1822,7 @@ void AccessMultiLevel(struct Cache *cache, uint64_t addr, unsigned char op, uint
 // ********************************************************************************************
 void AccessCacheStructureUInt32(struct CacheStructure *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t value)
 {
-    AccessMultiLevel(cache->ref_cache, addr, op, node, value);
+    Access(cache->ref_cache, addr, op, node, value);
 }
 
 // ********************************************************************************************

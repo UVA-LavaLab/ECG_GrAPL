@@ -49,7 +49,7 @@
 #include "graphTest.h"
 #define GRAPH_NUM 4
 
-#define CACHE_CONFIGS 1
+#define CACHE_CONFIGS 12
 #define CACHE_POLICY 4
 #define MODE_NUM 3
 #define ORDER_CONFIG 6
@@ -66,17 +66,17 @@ main (int argc, char **argv)
     // char express_perf_file[1024];
     // char grasp_perf_file[1024];
 
-    // uint32_t cache_size[CACHE_CONFIGS] = {32768, 65536, 131072, 262144, 524288,  1048576, 2097152, 4194304, 8388608, 16777216,  33554432,   67108864};
-    // uint32_t Associativity[CACHE_CONFIGS] = {4,  4, 4, 8,  8,  16, 16, 16, 16, 32, 32, 32};
+    uint32_t cache_size[CACHE_CONFIGS] = {32768, 65536, 131072, 262144, 524288,  1048576, 2097152, 4194304, 8388608, 16777216,  33554432,   67108864};
+    uint32_t Associativity[CACHE_CONFIGS] = {4,  4, 4, 8,  8,  16, 16, 16, 16, 32, 32, 32};
     // uint32_t Block_size[CACHE_CONFIGS] = {128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128};
 
     // uint32_t cache_size[CACHE_CONFIGS]    = {262144, 524288,  1048576, 2097152, 4194304};
     // uint32_t Associativity[CACHE_CONFIGS] = {8,  8,  16, 16, 16};
     // uint32_t Block_size[CACHE_CONFIGS]    = {128, 128, 128, 128, 128};
 
-    uint32_t cache_size[CACHE_CONFIGS]    = {524288};
-    uint32_t Associativity[CACHE_CONFIGS] = {8};
-    uint32_t Block_size[CACHE_CONFIGS]    = {128};
+    // uint32_t cache_size[CACHE_CONFIGS]    = {524288};
+    // uint32_t Associativity[CACHE_CONFIGS] = {8};
+    // uint32_t Block_size[CACHE_CONFIGS]    = {128};
 
     uint32_t policy[CACHE_POLICY]         = {PLRU_POLICY, SRRIP_POLICY, GRASP_POLICY, MASK_POLICY};
     float PLRU_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0}};
@@ -202,7 +202,7 @@ main (int argc, char **argv)
     arguments.fnameb_format = 1;
     arguments.convert_format = 1;
 
-    arguments.algorithm = 0;
+    arguments.algorithm = 1;
     arguments.iterations = 1;
     arguments.trials = 1; // random number of trials
 
@@ -239,8 +239,8 @@ main (int argc, char **argv)
 
     for( k = 0; k < CACHE_CONFIGS ; k++)
     {
-        arguments.l1_size       = L1_SIZE;
-        arguments.l1_assoc      = L1_ASSOC;
+        arguments.l1_size       = cache_size[k];
+        arguments.l1_assoc      = Associativity[k];
         arguments.l1_blocksize  = BLOCKSIZE;
         arguments.l1_policy     = LRU_POLICY;
         arguments.l2_size       = L2_SIZE;
@@ -268,7 +268,7 @@ main (int argc, char **argv)
                 arguments.mmode = mmode[j];
                 arguments.fnameb = graph_dir;
                 arguments.fnamel = label_dir;
-                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.llc_size / 1024, config_labels[j]);
+                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.l1_size / 1024, config_labels[j]);
 
                 graph = generateGraphDataStructure(&arguments);
 
@@ -277,7 +277,7 @@ main (int argc, char **argv)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
                     ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
-                    PLRU_stats[i][j] += getGraphAlgorithmsTestMissRateRefLLC(ref_data, arguments.algorithm);
+                    PLRU_stats[i][j] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
                 }
@@ -285,7 +285,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.llc_policy    = policy[1];
+            arguments.l1_policy    = policy[1];
             for (j = 0; j < ORDER_CONFIG; ++j)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -296,7 +296,7 @@ main (int argc, char **argv)
                 arguments.mmode = mmode[j];
                 arguments.fnameb = graph_dir;
                 arguments.fnamel = label_dir;
-                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.llc_size / 1024, config_labels[j]);
+                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.l1_size / 1024, config_labels[j]);
 
                 graph = generateGraphDataStructure(&arguments);
 
@@ -305,7 +305,7 @@ main (int argc, char **argv)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
                     ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
-                    SSRIP_stats[i][j] += getGraphAlgorithmsTestMissRateRefLLC(ref_data, arguments.algorithm);
+                    SSRIP_stats[i][j] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
                 }
@@ -313,7 +313,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.llc_policy    = policy[2];
+            arguments.l1_policy    = policy[2];
             for (kk = 0, j = ORDER_CONFIG; j < ORDER_CONFIG + MODE_NUM; ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -324,7 +324,7 @@ main (int argc, char **argv)
                 arguments.mmode = mmode[j];
                 arguments.fnameb = graph_dir;
                 arguments.fnamel = label_dir;
-                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.llc_size / 1024, config_labels[j]);
+                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.l1_size / 1024, config_labels[j]);
 
                 graph = generateGraphDataStructure(&arguments);
 
@@ -333,7 +333,7 @@ main (int argc, char **argv)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
                     ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
-                    GRASP_stats[i][kk] += getGraphAlgorithmsTestMissRateRefLLC(ref_data, arguments.algorithm);
+                    GRASP_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
                 }
@@ -341,7 +341,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.llc_policy    = policy[3];
+            arguments.l1_policy    = policy[3];
             for (kk = 0, j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -352,7 +352,7 @@ main (int argc, char **argv)
                 arguments.mmode = mmode[j];
                 arguments.fnameb = graph_dir;
                 arguments.fnamel = label_dir;
-                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.llc_size / 1024, config_labels[j]);
+                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.l1_size / 1024, config_labels[j]);
 
                 graph = generateGraphDataStructure(&arguments);
 
@@ -361,7 +361,7 @@ main (int argc, char **argv)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
                     ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
-                    EXPRESS_stats[i][kk] += getGraphAlgorithmsTestMissRateRefLLC(ref_data, arguments.algorithm);
+                    EXPRESS_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
                 }
@@ -374,7 +374,7 @@ main (int argc, char **argv)
         FILE *fptr1;
         fptr1 = fopen(unified_perf_file, "a+");
         fprintf(fptr1, " -----------------------------------------------------\n");
-        fprintf(fptr1, " CacheSize : %u KB \n", cache_size[k] / 1024 );
+        fprintf(fptr1, " CacheSize : %u KB \n", arguments.l1_size / 1024 );
         fprintf(fptr1, " -----------------------------------------------------\n");
 
         fprintf(fptr1, "%-25s, ",  " ");
