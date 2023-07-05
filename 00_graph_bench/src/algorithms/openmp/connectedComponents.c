@@ -171,9 +171,38 @@ void freeCCStats(struct CCStats *stats)
         freeCacheStructure(stats->cache);
         if(stats->propertyMetaData)
             free(stats->propertyMetaData);
+        if(stats->cacheStructureArguments)
+            free(stats->cacheStructureArguments);
 #endif
     }
 }
+
+#ifdef CACHE_HARNESS_META
+
+struct CacheStructureArguments *createCCCacheStructureArguments(struct Arguments *arguments)
+{
+
+    struct CacheStructureArguments *cacheStructureArguments = (struct CacheStructureArguments *) my_malloc(sizeof(struct CacheStructureArguments));
+
+    cacheStructureArguments->l1_size = arguments->l1_size;
+    cacheStructureArguments->l1_assoc = arguments->l1_assoc;
+    cacheStructureArguments->l1_blocksize = arguments->l1_blocksize;
+    cacheStructureArguments->l1_policy = arguments->l1_policy;
+
+    cacheStructureArguments->l2_size = arguments->l2_size;
+    cacheStructureArguments->l2_assoc = arguments->l2_assoc;
+    cacheStructureArguments->l2_blocksize = arguments->l2_blocksize;
+    cacheStructureArguments->l2_policy = arguments->l2_policy;
+
+    cacheStructureArguments->llc_size = arguments->llc_size;
+    cacheStructureArguments->llc_assoc = arguments->llc_assoc;
+    cacheStructureArguments->llc_blocksize = arguments->llc_blocksize;
+    cacheStructureArguments->llc_policy = arguments->llc_policy;
+
+    return cacheStructureArguments;
+}
+
+#endif
 
 void printCCStats(struct CCStats *stats)
 {

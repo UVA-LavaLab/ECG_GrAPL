@@ -2971,6 +2971,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
+    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -3179,6 +3180,7 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
+    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -3390,6 +3392,7 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 3;
+    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 

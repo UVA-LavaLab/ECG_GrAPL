@@ -363,7 +363,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSR(struct Arguments *arguments, str
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
-    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
+    stats->cacheStructureArguments = createBFSCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -483,7 +483,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSR(struct Arguments *arguments, str
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
-    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
+    stats->cacheStructureArguments = createBFSCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -637,7 +637,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
-    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
+    stats->cacheStructureArguments = createBFSCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -1297,7 +1297,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSRDualOrder(struct Arguments *argum
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
-    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
+    stats->cacheStructureArguments = createBFSCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -1417,7 +1417,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSRDualOrder(struct Arguments *argum
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
-    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
+    stats->cacheStructureArguments = createBFSCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -1571,7 +1571,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
-    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
+    stats->cacheStructureArguments = createBFSCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
