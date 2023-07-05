@@ -38,7 +38,7 @@
 //GRASP/Ref_cache default configs
 // GRASP EXPRESS (GRASP-XP)
 // CHOOSE global Policys
-// #define POLICY LRU_POLICY
+#define POLICY LRU_POLICY
 // #define POLICY SRRIP_POLICY
 // #define POLICY LFU_POLICY
 // #define POLICY GRASP_POLICY
@@ -46,7 +46,7 @@
 // #define POLICY PLRU_POLICY
 // #define POLICY GRASPXP_POLICY
 // #define POLICY MASK_POLICY
-#define POLICY MASK_CAPI_POLICY
+// #define POLICY MASK_CAPI_POLICY
 // #define POLICY GRASP_CAPI_POLICY
 
 // #define BLOCKSIZE   64

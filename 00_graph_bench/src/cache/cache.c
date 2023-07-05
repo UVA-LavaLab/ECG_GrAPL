@@ -2264,35 +2264,20 @@ void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
     // collect stats perbucket
     for (v = 0; v < num_vertices; ++v)
     {
-        if(degrees[v] > 0 && degrees[v] <= thresholds[0])
+        for ( i = 0; i < num_buckets; ++i)
         {
-            if(cache->vertices_accesses[v])
+            if(degrees[v] <= thresholds[i])
             {
-                thresholds_count[i] += 1;
-                thresholds_totalDegrees[i]  += degrees[v];
-            }
-            thresholds_totalReuses[i]   += cache->vertices_total_reuse[v];
-            thresholds_totalReuses_region[i]   += cache->vertices_total_reuse_region[v];
-            thresholds_totalMisses[i]   += cache->verticesMiss[v];
-            thresholds_totalAccesses[i] += cache->vertices_accesses[v];
-        }
-        else
-        {
-            for ( i = 1; i < num_buckets; ++i)
-            {
-                if(degrees[v] > thresholds[i - 1] && degrees[v] <= thresholds[i])
+                if(cache->vertices_accesses[v])
                 {
-                    if(cache->vertices_accesses[v])
-                    {
-                        thresholds_count[i] += 1;
-                        thresholds_totalDegrees[i]  += degrees[v];
-                    }
-                    thresholds_totalReuses[i]   += cache->vertices_total_reuse[v];
-                    thresholds_totalReuses_region[i]   += cache->vertices_total_reuse_region[v];
-                    thresholds_totalMisses[i]   += cache->verticesMiss[v];
-                    thresholds_totalAccesses[i] += cache->vertices_accesses[v];
-                    break;
+                    thresholds_count[i] += 1;
+                    thresholds_totalDegrees[i]  += degrees[v];
                 }
+                thresholds_totalReuses[i]   += cache->vertices_total_reuse[v];
+                thresholds_totalReuses_region[i]   += cache->vertices_total_reuse_region[v];
+                thresholds_totalMisses[i]   += cache->verticesMiss[v];
+                thresholds_totalAccesses[i] += cache->vertices_accesses[v];
+                break;
             }
         }
     }
