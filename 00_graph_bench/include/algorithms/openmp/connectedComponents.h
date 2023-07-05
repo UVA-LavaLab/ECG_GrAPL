@@ -44,6 +44,9 @@ struct CCStats *newCCStatsGraphAdjLinkedList(struct GraphAdjLinkedList *graph);
 void printCCStats(struct CCStats *stats);
 void freeCCStats(struct CCStats *stats);
 
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createCCCacheStructureArguments(struct Arguments *arguments);
+#endif
 
 void printComponents(struct CCStats *stats);
 // ********************************************************************************************

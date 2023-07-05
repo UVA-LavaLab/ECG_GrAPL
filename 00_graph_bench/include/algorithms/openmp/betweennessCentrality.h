@@ -49,6 +49,10 @@ struct BetweennessCentralityStats
 
 };
 
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createBetweennessCentralityCacheStructureArguments(struct Arguments *arguments);
+#endif
+
 struct BetweennessCentralityStats *newBetweennessCentralityStatsGraphCSR(struct GraphCSR *graph);
 
 //TODO:

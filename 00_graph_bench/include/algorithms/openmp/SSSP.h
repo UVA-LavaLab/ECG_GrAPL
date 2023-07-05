@@ -44,6 +44,10 @@ struct SSSPStats *newSSSPStatsGraphAdjLinkedList(struct GraphAdjLinkedList *grap
 
 void freeSSSPStats(struct SSSPStats *stats);
 
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createSSSPCacheStructureArguments(struct Arguments *arguments);
+#endif
+
 // ********************************************************************************************
 // ***************                  Auxiliary functions                          **************
 // ********************************************************************************************

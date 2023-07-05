@@ -32,6 +32,10 @@ struct BellmanFordStats
 #endif
 };
 
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createBellmanFordCacheStructureArguments(struct Arguments *arguments);
+#endif
+
 struct BellmanFordStats *newBellmanFordStatsGraphCSR(struct GraphCSR *graph);
 struct BellmanFordStats *newBellmanFordStatsGraphGrid(struct GraphGrid *graph);
 struct BellmanFordStats *newBellmanFordStatsGraphAdjArrayList(struct GraphAdjArrayList *graph);

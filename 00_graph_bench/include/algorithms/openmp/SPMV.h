@@ -42,6 +42,9 @@ struct SPMVStats *newSPMVStatsGraphAdjLinkedList(struct GraphAdjLinkedList *grap
 
 void freeSPMVStats(struct SPMVStats *stats);
 
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createSPMVCacheStructureArguments(struct Arguments *arguments);
+#endif
 // ********************************************************************************************
 // ***************					GRID DataStructure							 **************
 // ********************************************************************************************

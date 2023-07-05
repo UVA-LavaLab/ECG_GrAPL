@@ -73,6 +73,10 @@ struct IncrementalAggregationStats *newIncrementalAggregationStatsGraphAdjLinked
 
 void freeIncrementalAggregationStats(struct IncrementalAggregationStats *stats);
 
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createIncrementalAggregationCacheStructureArguments(struct Arguments *arguments);
+#endif
+
 // ********************************************************************************************
 // ***************                  CSR DataStructure                            **************
 // ********************************************************************************************

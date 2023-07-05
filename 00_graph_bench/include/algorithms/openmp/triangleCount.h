@@ -34,6 +34,9 @@ struct TCStats *newTCStatsGraphAdjArrayList(struct GraphAdjArrayList *graph);
 struct TCStats *newTCStatsGraphAdjLinkedList(struct GraphAdjLinkedList *graph);
 void freeTCStats(struct TCStats *stats);
 
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createTCCacheStructureArguments(struct Arguments *arguments);
+#endif
 // ********************************************************************************************
 // ***************                  Helper Functions                             **************
 // ********************************************************************************************

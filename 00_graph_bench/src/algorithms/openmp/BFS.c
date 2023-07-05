@@ -182,12 +182,41 @@ void freeBFSStats(struct BFSStats *stats)
         freeCacheStructure(stats->cache);
         if(stats->propertyMetaData)
             free(stats->propertyMetaData);
+        if(stats->cacheStructureArguments)
+            free(stats->cacheStructureArguments);
 #endif
 
         free(stats);
     }
 
 }
+
+#ifdef CACHE_HARNESS_META
+
+struct CacheStructureArguments *createBFSCacheStructureArguments(struct Arguments *arguments)
+{
+
+    struct CacheStructureArguments *cacheStructureArguments = (struct CacheStructureArguments *) my_malloc(sizeof(struct CacheStructureArguments));
+
+    cacheStructureArguments->l1_size = arguments->l1_size;
+    cacheStructureArguments->l1_assoc = arguments->l1_assoc;
+    cacheStructureArguments->l1_blocksize = arguments->l1_blocksize;
+    cacheStructureArguments->l1_policy = arguments->l1_policy;
+
+    cacheStructureArguments->l2_size = arguments->l2_size;
+    cacheStructureArguments->l2_assoc = arguments->l2_assoc;
+    cacheStructureArguments->l2_blocksize = arguments->l2_blocksize;
+    cacheStructureArguments->l2_policy = arguments->l2_policy;
+
+    cacheStructureArguments->llc_size = arguments->llc_size;
+    cacheStructureArguments->llc_assoc = arguments->llc_assoc;
+    cacheStructureArguments->llc_blocksize = arguments->llc_blocksize;
+    cacheStructureArguments->llc_policy = arguments->llc_policy;
+
+    return cacheStructureArguments;
+}
+
+#endif
 
 void syncDualOrderParentArrays(int **parents, int **parents_DualOrder, uint32_t *labels, uint32_t num_vertices)
 {
@@ -250,19 +279,19 @@ struct BFSStats *breadthFirstSearchGraphCSR(struct Arguments *arguments, struct 
 
     struct BFSStats *stats = NULL;
 
-// #ifdef SNIPER_HARNESS
-//     SimSetGraphARGS((uint64_t)graph);
+    // #ifdef SNIPER_HARNESS
+    //     SimSetGraphARGS((uint64_t)graph);
 
-//     printf("Set GraphCSR Base Address           : %p\n", graph);
-//     printf("GraphCSR num_edges                  : %u\n", graph->num_edges);
-//     printf("GraphCSR num_vertices               : %u\n", graph->num_vertices);
-//     printf("GraphCSR avg_degree                 : %u\n", graph->avg_degree);
-//     printf("GraphCSR vertices                   : %p\n", graph->vertices);
-//     printf("GraphCSR sorted_edges_array         : %p\n", graph->sorted_edges_array);
-//     printf("GraphCSR inverse_vertices           : %p\n", graph->inverse_vertices);
-//     printf("GraphCSR inverse_sorted_edges_array : %p\n\n", graph->inverse_sorted_edges_array);
+    //     printf("Set GraphCSR Base Address           : %p\n", graph);
+    //     printf("GraphCSR num_edges                  : %u\n", graph->num_edges);
+    //     printf("GraphCSR num_vertices               : %u\n", graph->num_vertices);
+    //     printf("GraphCSR avg_degree                 : %u\n", graph->avg_degree);
+    //     printf("GraphCSR vertices                   : %p\n", graph->vertices);
+    //     printf("GraphCSR sorted_edges_array         : %p\n", graph->sorted_edges_array);
+    //     printf("GraphCSR inverse_vertices           : %p\n", graph->inverse_vertices);
+    //     printf("GraphCSR inverse_sorted_edges_array : %p\n\n", graph->inverse_sorted_edges_array);
 
-// #endif
+    // #endif
 
     switch (arguments->pushpull)
     {
@@ -334,6 +363,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSR(struct Arguments *arguments, str
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
+    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -453,6 +483,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSR(struct Arguments *arguments, str
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
+    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -606,6 +637,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
+    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -1265,6 +1297,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSRDualOrder(struct Arguments *argum
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
+    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -1384,6 +1417,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSRDualOrder(struct Arguments *argum
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
+    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 
@@ -1537,6 +1571,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
+    stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
 

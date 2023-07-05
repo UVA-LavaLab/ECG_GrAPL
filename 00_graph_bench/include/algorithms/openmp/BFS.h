@@ -47,6 +47,10 @@ struct BFSStats *newBFSStatsGraphAdjLinkedList(struct GraphAdjLinkedList *graph)
 
 void freeBFSStats(struct BFSStats *stats);
 
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createBFSCacheStructureArguments(struct Arguments *arguments);
+#endif
+
 // ********************************************************************************************
 // ***************                  CSR DataStructure                            **************
 // ********************************************************************************************

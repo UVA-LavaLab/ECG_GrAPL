@@ -40,6 +40,9 @@ struct DFSStats *newDFSStatsGraphAdjLinkedList(struct GraphAdjLinkedList *graph)
 
 void freeDFSStats(struct DFSStats *stats);
 
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createDFSCacheStructureArguments(struct Arguments *arguments);
+#endif
 
 // ********************************************************************************************
 // ***************					CSR DataStructure							 **************

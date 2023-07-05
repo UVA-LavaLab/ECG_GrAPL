@@ -47,7 +47,9 @@ struct PageRankStats *newPageRankStatsGraphAdjLinkedList(struct GraphAdjLinkedLi
 
 void freePageRankStats(struct PageRankStats *stats);
 
-
+#ifdef CACHE_HARNESS_META
+struct CacheStructureArguments *createPageRankCacheStructureArguments(struct Arguments *arguments);
+#endif
 // ********************************************************************************************
 // ***************                  Auxiliary functions                          **************
 // ********************************************************************************************
