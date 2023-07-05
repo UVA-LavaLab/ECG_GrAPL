@@ -46,7 +46,7 @@ void freeSPMVStats(struct SPMVStats *stats);
 struct CacheStructureArguments *createSPMVCacheStructureArguments(struct Arguments *arguments);
 #endif
 // ********************************************************************************************
-// ***************					GRID DataStructure							 **************
+// ***************                  GRID DataStructure                           **************
 // ********************************************************************************************
 
 struct SPMVStats *SPMVGraphGrid(struct Arguments *arguments, struct GraphGrid *graph);
@@ -56,7 +56,7 @@ struct SPMVStats *SPMVPullRowFixedPointGraphGrid(struct Arguments *arguments, st
 struct SPMVStats *SPMVPushColumnFixedPointGraphGrid(struct Arguments *arguments, struct GraphGrid *graph);
 
 // ********************************************************************************************
-// ***************					CSR DataStructure							 **************
+// ***************                  CSR DataStructure                            **************
 // ********************************************************************************************
 
 struct SPMVStats *SPMVGraphCSR(struct Arguments *arguments, struct GraphCSR *graph);
@@ -68,7 +68,7 @@ struct SPMVStats *SPMVPushFixedPointGraphCSR(struct Arguments *arguments, struct
 
 
 // ********************************************************************************************
-// ***************					ArrayList DataStructure					     **************
+// ***************                  ArrayList DataStructure                      **************
 // ********************************************************************************************
 
 struct SPMVStats *SPMVGraphAdjArrayList(struct Arguments *arguments, struct GraphAdjArrayList *graph);
@@ -79,7 +79,7 @@ struct SPMVStats *SPMVPullFixedPointGraphAdjArrayList(struct Arguments *argument
 struct SPMVStats *SPMVPushFixedPointGraphAdjArrayList(struct Arguments *arguments, struct GraphAdjArrayList *graph);
 
 // ********************************************************************************************
-// ***************					LinkedList DataStructure					 **************
+// ***************                  LinkedList DataStructure                     **************
 // ********************************************************************************************
 
 struct SPMVStats *SPMVGraphAdjLinkedList(struct Arguments *arguments, struct GraphAdjLinkedList *graph);

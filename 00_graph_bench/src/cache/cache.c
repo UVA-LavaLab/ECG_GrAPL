@@ -192,7 +192,7 @@ void writeBack(struct Cache *cache, uint64_t addr)
 // ***************               Cache comparison                                **************
 // ********************************************************************************************
 
-struct CacheStructure *newCacheStructure(CacheStructureArguments arguments, uint32_t num_vertices, uint32_t numPropertyRegions)
+struct CacheStructure *newCacheStructure(struct CacheStructureArguments *arguments, uint32_t num_vertices, uint32_t numPropertyRegions)
 {
     struct CacheStructure *cache = (struct CacheStructure *) my_malloc(sizeof(struct CacheStructure));
 

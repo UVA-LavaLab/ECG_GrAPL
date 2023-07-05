@@ -345,7 +345,7 @@ void updateAgeGRASPXP(struct Cache *cache);
 // ********************************************************************************************
 // ***************               Cache Orignzation                                **************
 // ********************************************************************************************
-struct CacheStructure *newCacheStructure(CacheStructureArguments arguments, uint32_t num_vertices, uint32_t numPropertyRegions);
+struct CacheStructure *newCacheStructure(struct CacheStructureArguments *arguments, uint32_t num_vertices, uint32_t numPropertyRegions);
 void initCacheStructureRegion(struct CacheStructure *cache, struct PropertyMetaData *propertyMetaData);
 void freeCacheStructure(struct CacheStructure *cache);
 

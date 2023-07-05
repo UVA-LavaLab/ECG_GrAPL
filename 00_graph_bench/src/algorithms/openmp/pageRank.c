@@ -1002,7 +1002,7 @@ struct PageRankStats *pageRankPullGraphCSR(struct Arguments *arguments, struct G
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -1170,7 +1170,7 @@ struct PageRankStats *pageRankPushGraphCSR(struct Arguments *arguments, struct G
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -1358,7 +1358,7 @@ struct PageRankStats *pageRankPullFixedPoint64BitGraphCSR(struct Arguments *argu
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint64_t);
@@ -1539,7 +1539,7 @@ struct PageRankStats *pageRankPullFixedPoint32BitGraphCSR(struct Arguments *argu
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
@@ -1716,7 +1716,7 @@ struct PageRankStats *pageRankPullFixedPoint16BitGraphCSR(struct Arguments *argu
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint16_t);
@@ -1894,7 +1894,7 @@ struct PageRankStats *pageRankPullFixedPoint8BitGraphCSR(struct Arguments *argum
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint8_t);
@@ -2056,7 +2056,7 @@ struct PageRankStats *pageRankPushFixedPointGraphCSR(struct Arguments *arguments
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint64_t);
@@ -2232,7 +2232,7 @@ struct PageRankStats *pageRankPullQuant32BitGraphCSR(struct Arguments *arguments
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause_quant[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
@@ -2415,7 +2415,7 @@ struct PageRankStats *pageRankPullQuant16BitGraphCSR(struct Arguments *arguments
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause_quant[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint16_t);
@@ -2599,7 +2599,7 @@ struct PageRankStats *pageRankPullQuant8BitGraphCSR(struct Arguments *arguments,
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause_quant[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint8_t);
@@ -2774,7 +2774,7 @@ struct PageRankStats *pageRankPushQuantGraphCSR(struct Arguments *arguments, str
     stats->numPropertyRegions = 1;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause_quant[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
@@ -2973,7 +2973,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
     stats->numPropertyRegions = 2;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -3182,7 +3182,7 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
     stats->numPropertyRegions = 2;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
@@ -3394,7 +3394,7 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
     stats->numPropertyRegions = 3;
     stats->cacheStructureArguments = createPageRankCacheStructureArguments(arguments);
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
-    stats->cache = newCacheStructure(stats->cacheStructureArguments, arguments->blocksize, graph->num_vertices, arguments->policy, stats->numPropertyRegions);
+    stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
     stats->propertyMetaData[0].base_address = (uint64_t)&riDividedOnDiClause[0];
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
