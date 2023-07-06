@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <assert.h>
 
+#include "graphConfig.h"
 #include "myMalloc.h"
 
 extern int errno ;

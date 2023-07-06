@@ -3,8 +3,7 @@
 
 // extern int errno ;
 
-#define ALIGNED 1
-#define CACHELINE_BYTES 128
+#include "graphConfig.h"
 
 char *strerror(int errnum);
 void *aligned_malloc( size_t size );

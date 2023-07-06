@@ -57,8 +57,8 @@ void graphCSRFree (struct GraphCSR *graphCSR)
             freeEdgeList(graphCSR->inverse_sorted_edges_array);
 #endif
 
-        // if(graphCSR->offset_matrix)
-        //     free(graphCSR->offset_matrix);
+        if(graphCSR->offset_matrix)
+            free(graphCSR->offset_matrix);
 
         free(graphCSR);
 
@@ -115,6 +115,7 @@ struct GraphCSR *graphCSRNew(uint32_t V, uint32_t E, uint8_t inverse)
     graphCSR->num_edges = E;
     graphCSR->avg_degree = E / V;
     graphCSR->sorted_edges_array = NULL; // sorted edge array
+    graphCSR->offset_matrix = NULL; // sorted edge array
 
 #if DIRECTED
     graphCSR->inverse_sorted_edges_array = NULL; // sorted edge array
@@ -159,8 +160,6 @@ struct GraphCSR *graphCSRAssignEdgeList (struct GraphCSR *graphCSR, struct EdgeL
 #endif
 
     return mapVerticesWithInOutDegree (graphCSR, inverse);
-
-
 }
 
 

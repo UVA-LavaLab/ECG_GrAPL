@@ -87,6 +87,8 @@
 #define FREQ_BITS 8
 #define FREQ_MAX (uint8_t)((uint32_t)(1 << FREQ_BITS) - 1)
 
+#define POPT_BITS POPT_CACHE_BITS
+
 // GRASP Policy Constants RRIP (re-refernece insertion prediction)
 #define NUM_BITS_RRIP 3
 

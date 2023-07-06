@@ -8,9 +8,15 @@
 #define WEIGHTED 0
 #define DIRECTED 1
 
+// MYMALLOC_H
+#define CACHELINE_BYTES 64
+#define ALIGNED 1
 
 #define VERTEX_T_SIZE 4
 // #define VERTEX_T_SIZE 8
+
+#define POPT_CACHE_U32 0xFFFFFFFF
+#define POPT_CACHE_BITS 8
 
 #define VERTEX_VALUE_MASK_U64 0xFFFFFFFF00000000
 #define VERTEX_CACHE_MASK_U64 0x00000000FFFFFFFF
@@ -99,6 +105,7 @@ struct Arguments
     uint32_t llc_assoc;
     uint32_t llc_blocksize;
     uint32_t llc_policy;
+    uint32_t popt_bits;
 // #endif
 
 };
