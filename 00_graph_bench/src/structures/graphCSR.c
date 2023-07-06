@@ -240,7 +240,7 @@ struct GraphCSR *graphCSRPreProcessingStep (struct Arguments *arguments)
 
 
     Start(timer);
-    makeOffsetMatrixProcess(graphCSR, arguments);
+    makeOffsetMatrixProcessParameterized(graphCSR, arguments);
     Stop(timer);
     graphCSRPrintMessageWithtime("Process Offset MatrixProcess", Seconds(timer));
 

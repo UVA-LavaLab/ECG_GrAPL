@@ -706,6 +706,18 @@ void updateInsertionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint
 /*upgrade LRU line to be MRU line*/
 void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
+    if(inHotRegion(cache, line))
+    {
+        setRRPV(line, HOT_INSERT_RRPV);
+    }
+    else if (inWarmRegion(cache, line))
+    {
+        setRRPV(line, WARM_INSERT_RRPV);
+    }
+    else
+    {
+        setRRPV(line, DEFAULT_INSERT_RRPV);
+    }
     setPOPT(line, mask);
     setSeq(line, cache->currentCycle);
 }
@@ -913,15 +925,29 @@ void updatePromotionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint
     switch(cache->policy)
     {
     case POPT_POLICY:
-        updatePromotePOPT(cache, line, vSrc, vDst);
+        updatePromotePOPT(cache, line, mask, vSrc, vDst);
         break;
     default :
-        updatePromotePOPT(cache, line, vSrc, vDst);
+        updatePromotePOPT(cache, line, mask, vSrc, vDst);
     }
 }
 
-void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t vSrc, uint32_t vDst)
+void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
+
+    if(inHotRegion(cache, line))
+    {
+        setRRPV(line, HOT_HIT_RRPV);
+    }
+    else
+    {
+        uint8_t RRPV = getRRPV(line);
+        if(RRPV > 0)
+            RRPV--;
+        setRRPV(line, RRPV);
+    }
+
+   setPOPT(line, mask);
    setSeq(line, cache->currentCycle);
 }
 
@@ -1162,11 +1188,24 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
         int diff = POPT_MAX_REREF - min;
         for(j = 0; j < cache->assoc; j++)
         {
-            uint8_t POPT = getPOPT(&(cache->cacheLines[i][j])) + diff;
+            uint32_t POPT = getPOPT(&(cache->cacheLines[i][j])) + diff;
             setPOPT(&(cache->cacheLines[i][j]), POPT);
             assert(POPT <= POPT_MAX_REREF);
         }
     }
+
+    // // not in the GRASP paper optimizaiton
+    // if (min < DEFAULT_INSERT_RRPV)
+    // {
+    //     int diff = DEFAULT_INSERT_RRPV - min;
+    //     for(j = 0; j < cache->assoc; j++)
+    //     {
+    //         uint8_t RRPV = getRRPV(&(cache->cacheLines[i][j])) + diff;
+    //         setRRPV(&(cache->cacheLines[i][j]), RRPV);
+    //         assert(RRPV <= DEFAULT_INSERT_RRPV);
+    //     }
+    // }
+
 
     cache->evictions++;
     cache->cacheLines[i][victim].addr = addr;
@@ -1869,7 +1908,7 @@ uint32_t minTwoIntegers(uint32_t num1, uint32_t num2)
 
 }
 
-uint8_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd)
+uint32_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd)
 {
   
   int vertexPerCacheLine = cache->lineSize / sizeof(uint32_t);
@@ -1881,22 +1920,22 @@ uint8_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd)
   // get vertex/cache line number
   int cacheLineID = irregInd / vertexPerCacheLine;
   int currEpoch   = regInd / epochSz;
-  uint8_t mask    = 1;
-  uint8_t orMask  = (mask << 7);
-  uint8_t andMask = (~orMask);
+  uint32_t mask    = 1;
+  uint32_t orMask  = (mask << (POPT_BITS-1));
+  uint32_t andMask = (~orMask);
     
   if ((cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & orMask) != 0)
   {
     //We dont have a reference this epoch - Find next Epoch access
-    uint8_t reref = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
+    uint32_t reref = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
     return reref;
   }
   else
   {
     //We have a reference this epoch
-    uint8_t lastRefQ = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
+    uint32_t lastRefQ = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
     int delta = regInd - (currEpoch * epochSz);
-    uint8_t subEpochDistQ = delta / subEpochSz;
+    uint32_t subEpochDistQ = delta / subEpochSz;
     if (subEpochDistQ <= lastRefQ)
     {
       //We are yet to be accessed within this epoch
@@ -1905,11 +1944,11 @@ uint8_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd)
     else
     {
       //No further accesses this epoch; Look beyond to the next Epoch
-      uint8_t nextRef = cache->offset_matrix[((currEpoch + 1) * numCacheLines) + cacheLineID]; //this is why we store current & next Epoch information
+      uint32_t nextRef = cache->offset_matrix[((currEpoch + 1) * numCacheLines) + cacheLineID]; //this is why we store current & next Epoch information
       if ((nextRef & orMask) != 0)
       {
-        uint8_t reref = nextRef & andMask; 
-        return (uint8_t)(minTwoIntegers(++reref, POPT_MAX_REREF)); 
+        uint32_t reref = nextRef & andMask; 
+        return (uint32_t)(minTwoIntegers(++reref, POPT_MAX_REREF)); 
       }
       else
       {
@@ -1973,7 +2012,7 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
         }
         else
         {
-            if(cache->policy == POPT_POLICY)
+            if(cache->policy == POPT_POLICY && (vSrc != vDst))
             {
                         newline = fillLinePOPT(cache, addr, popt_mask, vSrc, vDst);
             }else{
@@ -1991,7 +2030,7 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
     else
     {
         /**since it's a hit, update LRU and update dirty flag**/
-        if(cache->policy == POPT_POLICY)
+        if(cache->policy == POPT_POLICY && (vSrc != vDst))
         {
                     updatePromotionPolicyPOPT(cache, line, popt_mask, vSrc, vDst);
         }else{

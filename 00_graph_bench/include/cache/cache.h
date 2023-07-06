@@ -331,7 +331,7 @@ void updatePromotePLRU(struct Cache *cache, struct CacheLine *line);
 void updatePromoteGRASPXP(struct Cache *cache, struct CacheLine *line);
 void updatePromoteMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask);
 void updatePromotionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
-void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t vSrc, uint32_t vDst);
+void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 // ********************************************************************************************
 // ***************         AGING POLICIES                                        **************
 // ********************************************************************************************
@@ -346,7 +346,7 @@ void updateAgePLRU(struct Cache *cache);
 void updateAgeGRASPXP(struct Cache *cache);
 
 
-uint8_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd);
+uint32_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd);
 
 // ********************************************************************************************
 // ***************               Cache Orignzation                                **************

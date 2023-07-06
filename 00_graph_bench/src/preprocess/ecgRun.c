@@ -291,13 +291,13 @@ void makeOffsetMatrixProcessParameterized(struct GraphCSR *graph, struct Argumen
     printf(" -----------------------------------------------------\n");
 
      /* Step II: Converting adjacency matrix into offsets */
-    uint8_t maxReref = (uint8_t)((1 << (arguments->popt_bits -1))-1) ; //because MSB is reserved for identifying between reref val (1) & switch point (0)
-    uint32_t subEpochSz = (epochSize + ((1 << (arguments->popt_bits -1))-1)) / (1 << (arguments->popt_bits -1)); //Using remaining 7 bits to identify intra-epoch information
-    uint8_t mask    = 1;
-    uint8_t orMask  = mask << (arguments->popt_bits -1);
-    uint8_t andMask = ~(orMask);
+    uint32_t maxReref = (uint32_t)((1 << (arguments->popt_bits -1))-1) ; //because MSB is reserved for identifying between reref val (1) & switch point (0)
+    uint32_t subEpochSz = (epochSize + maxReref) / (maxReref +1); //Using remaining 7 bits to identify intra-epoch information
+    uint32_t mask    = 1;
+    uint32_t orMask  = mask << (arguments->popt_bits -1);
+    uint32_t andMask = ~(orMask);
 
-    uint8_t *compressedOffsets = (uint8_t *) my_malloc((numCacheLines * numEpochs) * sizeof(uint8_t));
+    uint32_t *compressedOffsets = (uint32_t *) my_malloc((numCacheLines * numEpochs) * sizeof(uint32_t));
 
     #pragma omp parallel for
     for (i = 0; i < (numCacheLines * numEpochs); ++i)
@@ -338,7 +338,7 @@ void makeOffsetMatrixProcessParameterized(struct GraphCSR *graph, struct Argumen
                 // There was a ref this epoch - store the quantized val of the last_references
                 uint32_t subEpochDist = last_references[(cl * numEpochs) + epoch] - (epoch * epochSize);
                 uint32_t lastRefQ = (subEpochDist / subEpochSz);
-                compressedOffsets[(cl * numEpochs) + epoch] = (uint8_t)lastRefQ;
+                compressedOffsets[(cl * numEpochs) + epoch] = (uint32_t)lastRefQ;
                 compressedOffsets[(cl * numEpochs) + epoch] &= andMask;
             }
             else
