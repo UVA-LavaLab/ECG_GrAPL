@@ -22,6 +22,7 @@ struct  GraphGrid
 
     struct Grid *grid;
 
+    uint32_t *offset_matrix;
 
 };
 

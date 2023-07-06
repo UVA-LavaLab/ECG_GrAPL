@@ -23,6 +23,8 @@ struct  GraphAdjArrayList
 #endif
 
     struct AdjArrayList *vertices;
+
+     uint32_t *offset_matrix;
 };
 
 

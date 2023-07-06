@@ -213,7 +213,7 @@ void makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *arguments
     free(last_references);
     free(compressedOffsets);
 
-    printOffsetMatrixProcessParameterized(graph,arguments);
+    // printOffsetMatrixProcessParameterized(graph,arguments);
 }
 
 
@@ -291,7 +291,7 @@ void makeOffsetMatrixProcessParameterized(struct GraphCSR *graph, struct Argumen
     printf(" -----------------------------------------------------\n");
 
      /* Step II: Converting adjacency matrix into offsets */
-    uint8_t maxReref = (uint8_t)(1 << (arguments->popt_bits -1)) ; //because MSB is reserved for identifying between reref val (1) & switch point (0)
+    uint8_t maxReref = (uint8_t)((1 << (arguments->popt_bits -1))-1) ; //because MSB is reserved for identifying between reref val (1) & switch point (0)
     uint32_t subEpochSz = (epochSize + ((1 << (arguments->popt_bits -1))-1)) / (1 << (arguments->popt_bits -1)); //Using remaining 7 bits to identify intra-epoch information
     uint8_t mask    = 1;
     uint8_t orMask  = mask << (arguments->popt_bits -1);
@@ -394,7 +394,7 @@ void makeOffsetMatrixProcessParameterized(struct GraphCSR *graph, struct Argumen
     free(last_references);
     free(compressedOffsets);
 
-    printOffsetMatrixProcessParameterized(graph,arguments);
+    // printOffsetMatrixProcessParameterized(graph,arguments);
 }
 
 void printOffsetMatrixProcessParameterized(struct GraphCSR *graph, struct Arguments *arguments){

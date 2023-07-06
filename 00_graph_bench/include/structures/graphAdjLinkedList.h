@@ -23,6 +23,8 @@ struct  GraphAdjLinkedList
 
     struct AdjLinkedList *vertices;
 
+     uint32_t *offset_matrix;
+
 };
 
 

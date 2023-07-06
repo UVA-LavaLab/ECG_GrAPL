@@ -305,11 +305,11 @@ main (int argc, char **argv)
     arguments->l1_size       = L1_SIZE;
     arguments->l1_assoc      = L1_ASSOC;
     arguments->l1_blocksize  = BLOCKSIZE;
-    arguments->l1_policy     = LRU_POLICY;
+    arguments->l1_policy     = POLICY;
     arguments->l2_size       = L2_SIZE;
     arguments->l2_assoc      = L2_ASSOC;
     arguments->l2_blocksize  = BLOCKSIZE;
-    arguments->l2_policy     = LRU_POLICY;
+    arguments->l2_policy     = POLICY;
     arguments->llc_size      = L3_SIZE;
     arguments->llc_assoc     = L3_ASSOC;
     arguments->llc_blocksize = BLOCKSIZE;

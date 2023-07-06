@@ -12,7 +12,7 @@
 #define PLRU_POLICY    5
 #define GRASPXP_POLICY 6
 #define MASK_POLICY    7
-#define POPT_POLICE    8
+#define POPT_POLICY    8
 
 
 //CAPI PSL CACHE default CONFIGS
@@ -38,7 +38,7 @@
 //GRASP/Ref_cache default configs
 // GRASP EXPRESS (GRASP-XP)
 // CHOOSE global Policys
-#define POLICY LRU_POLICY
+// #define POLICY LRU_POLICY
 // #define POLICY SRRIP_POLICY
 // #define POLICY LFU_POLICY
 // #define POLICY GRASP_POLICY
@@ -46,27 +46,7 @@
 // #define POLICY PLRU_POLICY
 // #define POLICY GRASPXP_POLICY
 // #define POLICY MASK_POLICY
-// #define POLICY POPT_POLICE
-
-// #define BLOCKSIZE   64
-// #define L1_SIZE     1048576
-// #define L1_ASSOC    16
-
-// #define BLOCKSIZE   64
-// #define L1_SIZE     1048576
-// #define L1_ASSOC    16
-
-// #define BLOCKSIZE   128
-// #define L1_SIZE     262144
-// #define L1_ASSOC    8
-
-// #define BLOCKSIZE   128
-// #define L1_SIZE     524288
-// #define L1_ASSOC    8
-
-// #define BLOCKSIZE   128
-// #define L1_SIZE     262144 + 32768 + 32768
-// #define L1_ASSOC    8
+#define POLICY POPT_POLICY
 
 #define BLOCKSIZE   64
 #define L1_SIZE     32768
@@ -88,6 +68,7 @@
 #define FREQ_MAX (uint8_t)((uint32_t)(1 << FREQ_BITS) - 1)
 
 #define POPT_BITS POPT_CACHE_BITS
+#define POPT_MAX_REREF (uint8_t)((uint32_t)(1 << (POPT_BITS-1)) - 1)
 
 // GRASP Policy Constants RRIP (re-refernece insertion prediction)
 #define NUM_BITS_RRIP 3
@@ -147,6 +128,7 @@ struct CacheLine
     uint8_t PIN;   // PIN   POLICY 4
     uint8_t PLRU;  // PLRU  POLICY 5
     uint8_t XPRRPV;// GRASP POLICY 6
+    uint32_t POPT; // POPT  POLICY 8
 };
 
 struct Cache
@@ -194,6 +176,7 @@ struct Cache
     uint64_t *thresholds_totalDegrees;
     uint64_t *thresholds_avgDegrees;
     uint64_t **regions_avgDegrees;
+    uint32_t *offset_matrix;
 
     struct Cache *cacheNext; // next level cache pointer
 };
@@ -239,6 +222,7 @@ uint8_t getSRRPV(struct CacheLine *cacheLine);
 uint8_t getPIN(struct CacheLine *cacheLine);
 uint8_t getPLRU(struct CacheLine *cacheLine);
 uint8_t getXPRRPV(struct CacheLine *cacheLine);
+uint32_t getPOPT(struct CacheLine *cacheLine);
 
 void setFlags(struct CacheLine *cacheLine, uint8_t flags);
 void setTag(struct CacheLine *cacheLine, uint64_t a);
@@ -250,6 +234,7 @@ void setSRRPV(struct CacheLine *cacheLine, uint8_t SRRPV);
 void setPIN(struct CacheLine *cacheLine, uint8_t PIN);
 void setPLRU(struct CacheLine *cacheLine, uint8_t PLRU);
 void setXPRRPV(struct CacheLine *cacheLine, uint8_t XPRRPV);
+void setPOPT(struct CacheLine *cacheLine, uint32_t POPT);
 
 void invalidate(struct CacheLine *cacheLine);
 uint32_t isValid(struct CacheLine *cacheLine);
@@ -275,10 +260,12 @@ uint32_t checkInCache(struct Cache *cache, uint64_t addr);
 // ********************************************************************************************
 
 void writeBack(struct Cache *cache, uint64_t addr);
-void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask);
+void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 struct CacheLine *findLine(struct Cache *cache, uint64_t addr);
 struct CacheLine *fillLine(struct Cache *cache, uint64_t addr, uint32_t mask);
+struct CacheLine *fillLinePOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 struct CacheLine *findLineToReplace(struct Cache *cache, uint64_t addr, uint32_t mask);
+struct CacheLine *findLineToReplacePOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************         VICTIM EVICTION POLICIES                              **************
@@ -307,6 +294,8 @@ struct CacheLine *peekVictimPIN(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimPLRU(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimGRASPXP(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimMASK(struct Cache *cache, uint64_t addr);
+struct CacheLine *getVictimPolicyPOPT(struct Cache *cache, uint64_t addr, uint32_t vSrc, uint32_t vDst);
+struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************         INSERTION POLICIES                                    **************
@@ -321,6 +310,8 @@ void updateInsertPIN(struct Cache *cache, struct CacheLine *line);
 void updateInsertPLRU(struct Cache *cache, struct CacheLine *line);
 void updateInsertGRASPXP(struct Cache *cache, struct CacheLine *line);
 void updateInsertMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask);
+void updateInsertionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
+void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************         PROMOTION POLICIES                                    **************
@@ -335,7 +326,8 @@ void updatePromotePIN(struct Cache *cache, struct CacheLine *line);
 void updatePromotePLRU(struct Cache *cache, struct CacheLine *line);
 void updatePromoteGRASPXP(struct Cache *cache, struct CacheLine *line);
 void updatePromoteMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask);
-
+void updatePromotionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
+void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t vSrc, uint32_t vDst);
 // ********************************************************************************************
 // ***************         AGING POLICIES                                        **************
 // ********************************************************************************************
@@ -353,13 +345,13 @@ void updateAgeGRASPXP(struct Cache *cache);
 // ***************               Cache Orignzation                                **************
 // ********************************************************************************************
 struct CacheStructure *newCacheStructure(struct CacheStructureArguments *arguments, uint32_t num_vertices, uint32_t numPropertyRegions);
-void initCacheStructureRegion(struct CacheStructure *cache, struct PropertyMetaData *propertyMetaData);
+void initCacheStructureRegion(struct CacheStructure *cache, struct PropertyMetaData *propertyMetaData, uint32_t *offset_matrix);
 void freeCacheStructure(struct CacheStructure *cache);
 
 // ********************************************************************************************
 // ***************               ACCElGraph Policy                               **************
 // ********************************************************************************************
-void AccessCacheStructureUInt32(struct CacheStructure *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask);
+void AccessCacheStructureUInt32(struct CacheStructure *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************               MUltilevel Policy                               **************

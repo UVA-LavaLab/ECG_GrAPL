@@ -367,21 +367,21 @@ uint32_t betweennessCentralityBottomUpStepGraphCSR(struct GraphCSR *graph, struc
             {
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                 if(getBit(bitmapCurr, u))
                 {
                     // stats->parents[v] = u;
                     stats->distances[v] = stats->distances[u] + 1;
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->distances[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->distances[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                     if(stats->distances[v] == stats->distances[u] + 1)
                     {
 
 #ifdef CACHE_HARNESS
-                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
-                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'w', u, EXTRACT_MASK(sorted_edges_array[j]));
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'w', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                         stats->sigma[v] += stats->sigma[u];
                         stats->predecessors[v].nodes[stats->predecessors[v].degree] = u;
@@ -454,7 +454,7 @@ struct BetweennessCentralityStats *betweennessCentralityBrandesGraphCSR(struct A
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 

@@ -71,8 +71,10 @@ uint8_t getXPRRPV(struct CacheLine *cacheLine)
 {
     return cacheLine->XPRRPV;
 }
-
-
+uint32_t getPOPT(struct CacheLine *cacheLine)
+{
+    return cacheLine->POPT;
+}
 
 void setSeq(struct CacheLine *cacheLine, uint64_t Seq)
 {
@@ -103,7 +105,9 @@ void setXPRRPV(struct CacheLine *cacheLine, uint8_t XPRRPV)
     cacheLine->XPRRPV = XPRRPV;
 }
 
-
+void setPOPT(struct CacheLine *cacheLine, uint32_t POPT){
+      cacheLine->POPT = POPT;
+}
 
 void setFlags(struct CacheLine *cacheLine, uint8_t flags)
 {
@@ -129,6 +133,7 @@ void invalidate(struct CacheLine *cacheLine)
     cacheLine->PLRU   = 0;
     cacheLine->freq   = 0;
     cacheLine->XPRRPV = XPRRPV_INIT;
+    cacheLine->POPT   = 0;
 }
 uint32_t isValid(struct CacheLine *cacheLine)
 {
@@ -207,8 +212,11 @@ struct CacheStructure *newCacheStructure(struct CacheStructureArguments *argumen
     return cache;
 }
 
-void initCacheStructureRegion(struct CacheStructure *cache, struct PropertyMetaData *propertyMetaData)
+void initCacheStructureRegion(struct CacheStructure *cache, struct PropertyMetaData *propertyMetaData, uint32_t *offset_matrix)
 {
+    cache->ref_cache->offset_matrix = offset_matrix;
+    cache->ref_cache_l2->offset_matrix = offset_matrix;
+    cache->ref_cache_llc->offset_matrix = offset_matrix;
     initialzeCachePropertyRegions (cache->ref_cache, propertyMetaData, cache->ref_cache->size);
     initialzeCachePropertyRegions (cache->ref_cache_l2, propertyMetaData, cache->ref_cache_l2->size);
     initialzeCachePropertyRegions (cache->ref_cache_llc, propertyMetaData, cache->ref_cache_llc->size);
@@ -262,6 +270,7 @@ struct Cache *newCache(uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, 
     cache->vertices_base_reuse_region_cl  = NULL;
     cache->vertices_total_reuse_region_cl = NULL;
 
+    cache->offset_matrix = NULL;
 
     cache->threshold_accesses_region   = (uint64_t *)my_malloc(sizeof(uint64_t) * cache->num_buckets);
 
@@ -682,6 +691,24 @@ void updateInsertionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t
     }
 }
 
+void updateInsertionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
+{
+    switch(cache->policy)
+    {
+    case POPT_POLICY:
+        updateInsertPOPT(cache, line, vSrc, vDst);
+        break;
+    default :
+        updateInsertPOPT(cache, line, vSrc, vDst);
+    }
+}
+
+/*upgrade LRU line to be MRU line*/
+void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t vSrc, uint32_t vDst)
+{
+    setSeq(line, cache->currentCycle);
+}
+
 /*upgrade LRU line to be MRU line*/
 void updateInsertLRU(struct Cache *cache, struct CacheLine *line)
 {
@@ -880,6 +907,23 @@ void updatePromotionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t
     }
 }
 
+void updatePromotionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
+{
+    switch(cache->policy)
+    {
+    case POPT_POLICY:
+        updatePromotePOPT(cache, line, vSrc, vDst);
+        break;
+    default :
+        updatePromotePOPT(cache, line, vSrc, vDst);
+    }
+}
+
+void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t vSrc, uint32_t vDst)
+{
+   setSeq(line, cache->currentCycle);
+}
+
 /*upgrade LRU line to be MRU line*/
 void updatePromoteLRU(struct Cache *cache, struct CacheLine *line)
 {
@@ -893,6 +937,8 @@ void updatePromoteLFU(struct Cache *cache, struct CacheLine *line)
         freq++;
     setFreq(line, freq);
 }
+
+
 
 void updatePromoteGRASP(struct Cache *cache, struct CacheLine *line)
 {
@@ -1030,8 +1076,56 @@ struct CacheLine *getVictimPolicy(struct Cache *cache, uint64_t addr)
     return victim;
 }
 
+struct CacheLine *getVictimPolicyPOPT(struct Cache *cache, uint64_t addr, uint32_t vSrc, uint32_t vDst)
+{
+    struct CacheLine *victim = NULL;
+
+    switch(cache->policy)
+    {
+    case POPT_POLICY:
+        victim = getVictimPOPT(cache, addr, vSrc, vDst);
+        break;
+    default :
+        victim = getVictimPOPT(cache, addr, vSrc, vDst);
+    }
+
+    return victim;
+}
+
+
 /*return an invalid line as LRU, if any, otherwise return LRU line*/
 struct CacheLine *getVictimLRU(struct Cache *cache, uint64_t addr)
+{
+    uint64_t i, j, victim, min;
+
+    victim = cache->assoc;
+    min    = cache->currentCycle;
+    i      = calcIndex(cache, addr);
+
+    for(j = 0; j < cache->assoc; j++)
+    {
+        if(isValid(&(cache->cacheLines[i][j])) == 0)
+        {
+            cache->cacheLines[i][j].addr = addr;
+            return &(cache->cacheLines[i][j]);
+        }
+    }
+    for(j = 0; j < cache->assoc; j++)
+    {
+        if(getSeq(&(cache->cacheLines[i][j])) <= min)
+        {
+            victim = j;
+            min = getSeq(&(cache->cacheLines[i][j]));
+        }
+    }
+    assert(victim != cache->assoc);
+
+    cache->evictions++;
+    cache->cacheLines[i][victim].addr = addr;
+    return &(cache->cacheLines[i][victim]);
+}
+
+struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t vSrc, uint32_t vDst)
 {
     uint64_t i, j, victim, min;
 
@@ -1693,6 +1787,15 @@ struct CacheLine *findLineToReplace(struct Cache *cache, uint64_t addr, uint32_t
     return (victim);
 }
 
+/*find a victim*/
+struct CacheLine *findLineToReplacePOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
+{
+    struct CacheLine  *victim = getVictimPolicyPOPT(cache, addr, vSrc, vDst);
+    updateInsertionPolicyPOPT(cache, victim, mask, vSrc, vDst);
+
+    return (victim);
+}
+
 /*allocate a new line*/
 struct CacheLine *fillLine(struct Cache *cache, uint64_t addr, uint32_t mask)
 {
@@ -1716,7 +1819,30 @@ struct CacheLine *fillLine(struct Cache *cache, uint64_t addr, uint32_t mask)
     return victim;
 }
 
-void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask)
+/*allocate a new line*/
+struct CacheLine *fillLinePOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
+{
+    uint64_t tag;
+
+    struct CacheLine *victim = findLineToReplacePOPT(cache, addr, mask, vSrc, vDst);
+    assert(victim != 0);
+    if(getFlags(victim) == DIRTY)
+    {
+        writeBack(cache, addr);
+    }
+
+    tag = calcTag(cache, addr);
+    setTag(victim, tag);
+    setAddr(victim, addr);
+    setFlags(victim, VALID);
+
+    /**note that this cache line has been already
+       upgraded to MRU in the previous function (findLineToReplace)**/
+
+    return victim;
+}
+
+void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
 
     if(node < cache->numVertices)
@@ -1762,7 +1888,13 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
         }
         else
         {
-            newline = fillLine(cache, addr, mask);
+            if(cache->policy == POPT_POLICY)
+            {
+                        newline = fillLinePOPT(cache, addr, mask,vSrc, vDst);
+            }else{
+                        newline = fillLine(cache, addr, mask);
+            }
+            
             newline->idx = node;
             if(op == 'w')
                 setFlags(newline, DIRTY);
@@ -1774,7 +1906,13 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
     else
     {
         /**since it's a hit, update LRU and update dirty flag**/
-        updatePromotionPolicy(cache, line, mask);
+        if(cache->policy == POPT_POLICY)
+        {
+                    updatePromotionPolicyPOPT(cache, line, mask, vSrc, vDst);
+        }else{
+                    updatePromotionPolicy(cache, line, mask);
+        }
+
         if(op == 'w')
             setFlags(line, DIRTY);
 
@@ -1864,9 +2002,9 @@ void AccessMultiLevel(struct Cache *cache, uint64_t addr, unsigned char op, uint
 // ********************************************************************************************
 // ***************               ACCElGraph Policy                               **************
 // ********************************************************************************************
-void AccessCacheStructureUInt32(struct CacheStructure *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t value)
+void AccessCacheStructureUInt32(struct CacheStructure *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t value, uint32_t vSrc, uint32_t vDst)
 {
-    Access(cache->ref_cache, addr, op, node, value);
+    Access(cache->ref_cache, addr, op, node, value, vSrc, vDst);
 }
 
 // ********************************************************************************************
@@ -2120,6 +2258,9 @@ void printStatsCache(struct Cache *cache)
     case MASK_POLICY:
         printf("| %-51s | \n", "MASK_POLICY");
         break;
+    case POPT_POLICY:
+        printf("| %-51s | \n", "POPT_POLICY");
+        break;
     default :
         printf("| %-51s | \n", "LRU_POLICY");
     }
@@ -2191,6 +2332,9 @@ void printStatsCacheToFile(struct Cache *cache, char *fname_perf)
         break;
     case MASK_POLICY:
         fprintf(fptr1, "| %-51s | \n", "MASK_POLICY");
+        break;
+    case POPT_POLICY:
+        fprintf(fptr1, "| %-51s | \n", "POPT_POLICY");
         break;
     default :
         fprintf(fptr1, "| %-51s | \n", "LRU_POLICY");

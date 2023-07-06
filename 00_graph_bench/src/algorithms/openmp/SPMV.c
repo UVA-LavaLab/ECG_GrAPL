@@ -703,7 +703,7 @@ struct SPMVStats *SPMVPullGraphCSR( struct Arguments *arguments, struct GraphCSR
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -755,13 +755,13 @@ struct SPMVStats *SPMVPullGraphCSR( struct Arguments *arguments, struct GraphCSR
 #endif
 
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]), dest,src);
 #endif
                 stats->vector_output[dest] +=  (weight * stats->vector_input[src]);
             }
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest]);
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
 #endif
         }
 
@@ -969,7 +969,7 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1041,13 +1041,13 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
 #endif
 
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]), src,dest);
 #endif
                 vector_output[dest] += MULFixed32V1(weight, vector_input[src]); // stats->pageRanks[v]/graph->vertices[v].out_degree;
             }
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest]);
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
 #endif
         }
 

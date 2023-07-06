@@ -1012,7 +1012,7 @@ struct PageRankStats *pageRankPullGraphCSR(struct Arguments *arguments, struct G
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1075,12 +1075,12 @@ struct PageRankStats *pageRankPullGraphCSR(struct Arguments *arguments, struct G
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 nodeIncomingPR += riDividedOnDiClause[u]; // stats->pageRanks[v]/graph->vertices[v].out_degree;
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
             }
             pageRanksNext[v] = nodeIncomingPR;
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v],v,v);
 #endif
         }
 
@@ -1180,7 +1180,7 @@ struct PageRankStats *pageRankPushGraphCSR(struct Arguments *arguments, struct G
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1243,8 +1243,8 @@ struct PageRankStats *pageRankPushGraphCSR(struct Arguments *arguments, struct G
                 pageRanksNext[u] += riDividedOnDiClause[v];
 
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
 
             }
@@ -1368,7 +1368,7 @@ struct PageRankStats *pageRankPullFixedPoint64BitGraphCSR(struct Arguments *argu
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1424,11 +1424,11 @@ struct PageRankStats *pageRankPullFixedPoint64BitGraphCSR(struct Arguments *argu
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 pageRanksNext[v] += riDividedOnDiClause[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
             }
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v], v,v);
 #endif
         }
 
@@ -1549,7 +1549,7 @@ struct PageRankStats *pageRankPullFixedPoint32BitGraphCSR(struct Arguments *argu
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1604,11 +1604,11 @@ struct PageRankStats *pageRankPullFixedPoint32BitGraphCSR(struct Arguments *argu
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 pageRanksNext[v] += riDividedOnDiClause[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
             }
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v], v,v);
 #endif
         }
 
@@ -1726,7 +1726,7 @@ struct PageRankStats *pageRankPullFixedPoint16BitGraphCSR(struct Arguments *argu
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1781,11 +1781,11 @@ struct PageRankStats *pageRankPullFixedPoint16BitGraphCSR(struct Arguments *argu
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 pageRanksNext[v] += riDividedOnDiClause[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
             }
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v], v,v);
 #endif
         }
 
@@ -1904,7 +1904,7 @@ struct PageRankStats *pageRankPullFixedPoint8BitGraphCSR(struct Arguments *argum
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1959,11 +1959,11 @@ struct PageRankStats *pageRankPullFixedPoint8BitGraphCSR(struct Arguments *argum
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 pageRanksNext[v] += riDividedOnDiClause[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
             }
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v], v,v);
 #endif
         }
 
@@ -2066,7 +2066,7 @@ struct PageRankStats *pageRankPushFixedPointGraphCSR(struct Arguments *arguments
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2130,8 +2130,8 @@ struct PageRankStats *pageRankPushFixedPointGraphCSR(struct Arguments *arguments
                 #pragma omp atomic update
                 pageRanksNext[u] += riDividedOnDiClause[v];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
             }
         }
@@ -2242,7 +2242,7 @@ struct PageRankStats *pageRankPullQuant32BitGraphCSR(struct Arguments *arguments
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2311,12 +2311,12 @@ struct PageRankStats *pageRankPullQuant32BitGraphCSR(struct Arguments *arguments
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 nodeIncomingPR += riDividedOnDiClause_quant[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
             }
             pageRanksNext[v] = rDivD_params.scale * nodeIncomingPR;
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v], v,v);
 #endif
         }
 
@@ -2425,7 +2425,7 @@ struct PageRankStats *pageRankPullQuant16BitGraphCSR(struct Arguments *arguments
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2495,12 +2495,12 @@ struct PageRankStats *pageRankPullQuant16BitGraphCSR(struct Arguments *arguments
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 nodeIncomingPR += riDividedOnDiClause_quant[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
             }
             pageRanksNext[v] = rDivD_params.scale * nodeIncomingPR;
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v], v,v);
 #endif
         }
 
@@ -2609,7 +2609,7 @@ struct PageRankStats *pageRankPullQuant8BitGraphCSR(struct Arguments *arguments,
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2678,13 +2678,13 @@ struct PageRankStats *pageRankPullQuant8BitGraphCSR(struct Arguments *arguments,
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
                 nodeIncomingPR += riDividedOnDiClause_quant[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause_quant[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
             }
             //nodeIncomingPR -= (degree * rDivD_params.zero);
             pageRanksNext[v] = rDivD_params.scale * nodeIncomingPR;
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v]);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[v]), 'w', v, pageRanksNext[v], v,v);
 #endif
         }
 
@@ -2784,7 +2784,7 @@ struct PageRankStats *pageRankPushQuantGraphCSR(struct Arguments *arguments, str
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2857,8 +2857,8 @@ struct PageRankStats *pageRankPushQuantGraphCSR(struct Arguments *arguments, str
                 #pragma omp atomic update
                 pageRanksNext[u] += rDivD_params.scale * (riDividedOnDiClause_quant[v] - rDivD_params.zero);
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (pageRanksNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
             }
         }
@@ -2983,7 +2983,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint8_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint8_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -3054,7 +3054,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
                     u = EXTRACT_VALUE(sorted_edges_array[j]);
                     nodeIncomingPR += riDividedOnDiClause[u]; // sum (PRi/outDegree(i))
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (riDividedOnDiClause[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                 }
                 float oldPageRank =  stats->pageRanks[v];
@@ -3065,7 +3065,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
                 {
                     stats->pageRanks[v] = newPageRank;
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->pageRanks[v]), 'w', v, stats->pageRanks[v]);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->pageRanks[v]), 'w', v, stats->pageRanks[v], v,v);
 #endif
                     degree = graph->vertices->out_degree[v];
                     edge_idx = graph->vertices->edges_idx[v];
@@ -3077,7 +3077,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
                         workListNext[u] = 1;
 
 #ifdef CACHE_HARNESS
-                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
 
                         // uint8_t old_val = workListNext[u];
@@ -3192,7 +3192,7 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint8_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint8_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -3272,21 +3272,21 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
                     #pragma omp atomic update
                     aResiduals[u] += delta;
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                     if ((fabs(prevResidual + delta) >= arguments->epsilon) && (prevResidual <= arguments->epsilon))
                     {
                         activeVertices++;
 #ifdef CACHE_HARNESS
-                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                         if(!workListNext[u])
                         {
                             // #pragma omp atomic write
                             workListNext[u] = 1;
 #ifdef CACHE_HARNESS
-                            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                         }
                     }
@@ -3408,7 +3408,7 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
     stats->propertyMetaData[2].size = graph->num_vertices * sizeof(float);
     stats->propertyMetaData[2].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -3475,8 +3475,8 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
                     u = EXTRACT_VALUE(sorted_edges_array[j]);
                     nodeIncomingPR += stats->pageRanks[u] / graph->vertices->out_degree[u];
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->pageRanks[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (graph->vertices->out_degree[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->pageRanks[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (graph->vertices->out_degree[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                 }
 
@@ -3501,21 +3501,21 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
                     #pragma omp atomic update
                     aResiduals[u] += delta;
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (aResiduals[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                     if ((fabs(prevResidual + delta) >= arguments->epsilon) && (prevResidual <= arguments->epsilon))
                     {
                         activeVertices++;
                         aResiduals[u] += delta;
 #ifdef CACHE_HARNESS
-                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                         if(!workListNext[u])
                         {
                             workListNext[u] = 1;
 #ifdef CACHE_HARNESS
-                            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (workListNext[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                         }
                     }

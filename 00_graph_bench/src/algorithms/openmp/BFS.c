@@ -375,7 +375,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSR(struct Arguments *arguments, str
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -491,7 +491,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSR(struct Arguments *arguments, str
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -649,7 +649,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -834,12 +834,12 @@ uint32_t topDownStepGraphCSR(struct GraphCSR *graph, struct ArrayQueue *sharedFr
                 u = EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]);
                 int u_parent = stats->parents[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                 if(u_parent < 0 )
                 {
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                     if(__sync_bool_compare_and_swap(&stats->parents[u], u_parent, v))
                     {
@@ -912,7 +912,7 @@ uint32_t bottomUpStepGraphCSR(struct GraphCSR *graph, struct Bitmap *bitmapCurr,
             {
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                 if(getBit(bitmapCurr, u))
                 {
@@ -1309,7 +1309,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSRDualOrder(struct Arguments *argum
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1425,7 +1425,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSRDualOrder(struct Arguments *argum
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1583,7 +1583,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1768,12 +1768,12 @@ uint32_t topDownStepGraphCSRDualOrder(struct GraphCSR *graph, struct ArrayQueue 
                 u = EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]);
                 int u_parent = stats->parents[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                 if(u_parent < 0 )
                 {
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]));
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                     if(__sync_bool_compare_and_swap(&stats->parents[u], u_parent, v))
                     {
@@ -1844,7 +1844,7 @@ uint32_t bottomUpStepGraphCSRDualOrder(struct GraphCSR *graph, struct Bitmap *bi
 
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                 if(getBit(bitmapCurr, u))
                 {

@@ -431,7 +431,7 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -474,8 +474,8 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
                 uint32_t comp_src = stats->components[src];
                 uint32_t comp_dest = stats->components[dest];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[src]), 'r', src, graph->sorted_edges_array->mask_array[src]);
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[dest]), 'r', dest, EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]));
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[src]), 'r', src, graph->sorted_edges_array->mask_array[src], src,dest);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[dest]), 'r', dest, EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]), src,dest);
 #endif
                 if(comp_src == comp_dest)
                     continue;
@@ -483,14 +483,14 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
                 uint32_t comp_high = comp_src > comp_dest ? comp_src : comp_dest;
                 uint32_t comp_low = comp_src + (comp_dest - comp_high);
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'r', comp_high,  graph->sorted_edges_array->mask_array[comp_high]);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'r', comp_high,  graph->sorted_edges_array->mask_array[comp_high], src,dest);
 #endif
                 if(comp_high == stats->components[comp_high])
                 {
                     change = 1;
                     stats->components[comp_high] = comp_low;
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'w', comp_high,  graph->sorted_edges_array->mask_array[comp_high]);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'w', comp_high,  graph->sorted_edges_array->mask_array[comp_high], src,dest);
 #endif
                 }
             }
