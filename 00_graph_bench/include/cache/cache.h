@@ -14,31 +14,13 @@
 #define MASK_POLICY    7
 #define POPT_POLICY    8
 
-
-//CAPI PSL CACHE default CONFIGS
-
-// #define PSL_L1_SIZE   262144
-#define PSL_L1_SIZE    262144
-#define PSL_L1_ASSOC  8
-#define PSL_POLICY    PLRU_POLICY
-#define PSL_BLOCKSIZE 128
-
-#define WARM_L1_SIZE   131072
-#define WARM_L1_ASSOC  16
-#define WARM_POLICY    PLRU_POLICY
-#define WARM_BLOCKSIZE 8
-
-#define HOT_L1_SIZE   131072
-#define HOT_L1_ASSOC  8
-#define HOT_POLICY    PLRU_POLICY
-#define HOT_BLOCKSIZE 4
-
+#define ENABLE_PREFETCH    1
 
 // General cache configuration
 //GRASP/Ref_cache default configs
 // GRASP EXPRESS (GRASP-XP)
 // CHOOSE global Policys
-// #define POLICY LRU_POLICY/
+// #define POLICY LRU_POLICY
 // #define POLICY SRRIP_POLICY
 // #define POLICY LFU_POLICY
 // #define POLICY GRASP_POLICY
@@ -259,6 +241,7 @@ uint64_t getRMPrefetch(struct Cache *cache);
 uint64_t getReadsPrefetch(struct Cache *cache);
 
 void Prefetch(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask);
+void PrefetchPOPT(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 uint32_t checkInCache(struct Cache *cache, uint64_t addr);
 
 // ********************************************************************************************

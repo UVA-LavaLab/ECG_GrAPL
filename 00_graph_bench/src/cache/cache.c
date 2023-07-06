@@ -582,6 +582,25 @@ void Prefetch(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t nod
     }
 }
 
+void PrefetchPOPT(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst)
+{
+    cache->currentCycle++;/*per cache global counter to maintain LRU order
+      among cache ways, updated on every cache access*/
+    cache->currentCycle_preftcher++;
+    cache->readsPrefetch++;
+    struct CacheLine *line = findLine(cache, addr);
+    if(line == NULL)/*miss*/
+    {
+        cache->readMissesPrefetch++;
+        fillLinePOPT(cache, addr, mask, vSrc, vDst);
+    }
+    else
+    {
+        /**since it's a hit, update LRU and update dirty flag**/
+        updatePromotionPolicyPOPT(cache, line, mask, vSrc, vDst);
+    }
+}
+
 // ********************************************************************************************
 // ***************         AGING POLICIES                                        **************
 // ********************************************************************************************
@@ -1965,7 +1984,6 @@ uint32_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd)
 
 void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
-
     if(node < cache->numVertices)
         online_cache_graph_stats(cache, node);
     cache->currentCycle++;
@@ -1986,6 +2004,19 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
     uint32_t popt_mask = POPT_MAX_REREF;
 
     popt_mask = findRereferenceValPOPT(cache, vDst, vSrc);
+
+    if(checkInCache(cache,  addr) && ENABLE_PREFETCH){
+
+    uint32_t node_prefetch = cache->prefetch_matrix[node];
+
+    if(cache->policy == POPT_POLICY && (vSrc != vDst))
+    {
+     PrefetchPOPT(cache,  addr, 'r', node_prefetch, popt_mask, vSrc, vDst);
+    } else
+    {
+     Prefetch(cache,  addr, 'r', node_prefetch, mask);   
+    }
+  }
 
     // if(popt_mask)
     //     printf("%u \n", popt_mask);
