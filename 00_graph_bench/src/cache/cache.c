@@ -2366,7 +2366,7 @@ void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
             thresholds_avgReuses_region_cl[i]    = (float)thresholds_totalReuses_region_cl[i]   / thresholds_totalAccesses[i];
 
 
-            printf("| %-15lu , %-15.2f , %-15lu , %-15lu |\n", thresholds[i], thresholds_avgReuses_region[i], thresholds_totalReuses_region[i], thresholds_totalAccesses[i]);
+            // printf("| %-15lu , %-15.2f , %-15lu , %-15lu |\n", thresholds[i], thresholds_avgReuses_region[i], thresholds_totalReuses_region[i], thresholds_totalAccesses[i]);
 
         }
 
