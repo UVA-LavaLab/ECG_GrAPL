@@ -68,7 +68,9 @@
 #define FREQ_MAX (uint8_t)((uint32_t)(1 << FREQ_BITS) - 1)
 
 #define POPT_BITS POPT_CACHE_BITS
-#define POPT_MAX_REREF (uint8_t)((uint32_t)(1 << (POPT_BITS-1)) - 1)
+#define POPT_MAX_REREF ((uint32_t)(1 << (POPT_BITS-1)) - 1)
+#define POPT_INIT POPT_MAX_REREF
+#define POPT_NUM_EPOCH (uint32_t)(1 << (POPT_BITS))
 
 // GRASP Policy Constants RRIP (re-refernece insertion prediction)
 #define NUM_BITS_RRIP 3
@@ -294,8 +296,8 @@ struct CacheLine *peekVictimPIN(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimPLRU(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimGRASPXP(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimMASK(struct Cache *cache, uint64_t addr);
-struct CacheLine *getVictimPolicyPOPT(struct Cache *cache, uint64_t addr, uint32_t vSrc, uint32_t vDst);
-struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t vSrc, uint32_t vDst);
+struct CacheLine *getVictimPolicyPOPT(struct Cache *cache, uint64_t addr, uint32_t mask,uint32_t vSrc, uint32_t vDst);
+struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************         INSERTION POLICIES                                    **************
@@ -311,7 +313,7 @@ void updateInsertPLRU(struct Cache *cache, struct CacheLine *line);
 void updateInsertGRASPXP(struct Cache *cache, struct CacheLine *line);
 void updateInsertMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask);
 void updateInsertionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
-void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t vSrc, uint32_t vDst);
+void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************         PROMOTION POLICIES                                    **************

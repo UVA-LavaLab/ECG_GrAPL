@@ -29,9 +29,9 @@
 #include "graphStats.h"
 #include "edgeList.h"
 
-#ifdef CACHE_HARNESS
+// #ifdef CACHE_HARNESS
 #include "cache.h"
-#endif
+// #endif
 
 const char *argp_program_version =
     "OpenGraphSim v4.0";
@@ -301,7 +301,7 @@ main (int argc, char **argv)
     initializeMersenneState (&(arguments->mt19937var), 27491095);
     omp_set_nested(1);
 
-#ifdef CACHE_HARNESS_META
+// #ifdef CACHE_HARNESS_META
     arguments->l1_size       = L1_SIZE;
     arguments->l1_assoc      = L1_ASSOC;
     arguments->l1_blocksize  = BLOCKSIZE;
@@ -314,8 +314,7 @@ main (int argc, char **argv)
     arguments->llc_assoc     = L3_ASSOC;
     arguments->llc_blocksize = BLOCKSIZE;
     arguments->llc_policy    = POLICY;
-
-#endif
+// #endif
 
     arguments->popt_bits     = POPT_CACHE_BITS;
 
