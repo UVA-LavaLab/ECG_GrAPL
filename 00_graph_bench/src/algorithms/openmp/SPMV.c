@@ -190,6 +190,10 @@ struct CacheStructureArguments *createSPMVCacheStructureArguments(struct Argumen
     cacheStructureArguments->llc_blocksize = arguments->llc_blocksize;
     cacheStructureArguments->llc_policy = arguments->llc_policy;
 
+    cacheStructureArguments->l1_prefetch_enable = arguments->l1_prefetch_enable;
+    cacheStructureArguments->l2_prefetch_enable = arguments->l2_prefetch_enable;
+    cacheStructureArguments->llc_prefetch_enable = arguments->llc_prefetch_enable;
+
     return cacheStructureArguments;
 }
 

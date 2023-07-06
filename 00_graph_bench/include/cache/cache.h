@@ -15,12 +15,13 @@
 #define POPT_POLICY    8
 
 #define ENABLE_PREFETCH    1
+// #define ENABLE_PREFETCH    0
 
 // General cache configuration
 //GRASP/Ref_cache default configs
 // GRASP EXPRESS (GRASP-XP)
 // CHOOSE global Policys
-// #define POLICY LRU_POLICY
+#define POLICY LRU_POLICY
 // #define POLICY SRRIP_POLICY
 // #define POLICY LFU_POLICY
 // #define POLICY GRASP_POLICY
@@ -28,7 +29,7 @@
 // #define POLICY PLRU_POLICY
 // #define POLICY GRASPXP_POLICY
 // #define POLICY MASK_POLICY
-#define POLICY POPT_POLICY
+// #define POLICY POPT_POLICY
 
 #define BLOCKSIZE   64
 #define L1_SIZE     32768
@@ -163,6 +164,7 @@ struct Cache
 
     uint32_t *offset_matrix;
     uint32_t *prefetch_matrix;
+    uint32_t  prefetch_enable;
 
     struct Cache *cacheNext; // next level cache pointer
 };
@@ -183,6 +185,10 @@ struct CacheStructureArguments
     uint32_t llc_assoc;
     uint32_t llc_blocksize;
     uint32_t llc_policy;
+
+    uint32_t l1_prefetch_enable;
+    uint32_t l2_prefetch_enable;
+    uint32_t llc_prefetch_enable;
 };
 
 struct CacheStructure
@@ -381,7 +387,7 @@ void printStatsGraphCache(struct Cache *cache, uint32_t *in_degree, uint32_t *ou
 void printStatsCacheStructure(struct CacheStructure *cache, uint32_t *in_degree, uint32_t *out_degree);
 void printStatsCacheStructureToFile(struct CacheStructure *cache, char *fname_perf);
 
-struct Cache *newCache( uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, uint32_t num_vertices, uint32_t policy, uint32_t numPropertyRegions);
+struct Cache *newCache( uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, uint32_t prefetch_matrix, uint32_t num_vertices, uint32_t policy, uint32_t numPropertyRegions);
 void freeCache(struct Cache *cache);
 
 

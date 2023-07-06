@@ -105,6 +105,9 @@ struct Arguments
     uint32_t llc_assoc;
     uint32_t llc_blocksize;
     uint32_t llc_policy;
+    uint32_t l1_prefetch_enable;
+    uint32_t l2_prefetch_enable;
+    uint32_t llc_prefetch_enable;
     uint32_t popt_bits;
 // #endif
 

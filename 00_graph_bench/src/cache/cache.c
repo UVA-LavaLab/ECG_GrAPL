@@ -201,9 +201,9 @@ struct CacheStructure *newCacheStructure(struct CacheStructureArguments *argumen
 {
     struct CacheStructure *cache = (struct CacheStructure *) my_malloc(sizeof(struct CacheStructure));
 
-    cache->ref_cache      = newCache( arguments->l1_size, arguments->l1_assoc, arguments->l1_blocksize, num_vertices, arguments->l1_policy, numPropertyRegions);
-    cache->ref_cache_l2   = newCache( arguments->l2_size, arguments->l2_assoc, arguments->l2_blocksize, num_vertices, arguments->l2_policy, numPropertyRegions);
-    cache->ref_cache_llc  = newCache( arguments->llc_size, arguments->llc_assoc, arguments->llc_blocksize, num_vertices, arguments->llc_policy, numPropertyRegions);
+    cache->ref_cache      = newCache( arguments->l1_size, arguments->l1_assoc, arguments->l1_blocksize, arguments->l1_prefetch_enable, num_vertices, arguments->l1_policy, numPropertyRegions);
+    cache->ref_cache_l2   = newCache( arguments->l2_size, arguments->l2_assoc, arguments->l2_blocksize, arguments->l2_prefetch_enable, num_vertices, arguments->l2_policy, numPropertyRegions);
+    cache->ref_cache_llc  = newCache( arguments->llc_size, arguments->llc_assoc, arguments->llc_blocksize, arguments->llc_prefetch_enable, num_vertices, arguments->llc_policy, numPropertyRegions);
 
     cache->ref_cache->cacheNext = cache->ref_cache_l2;
     cache->ref_cache_l2->cacheNext = cache->ref_cache_llc;
@@ -241,7 +241,7 @@ void freeCacheStructure(struct CacheStructure *cache)
 // ***************              general Cache functions                          **************
 // ********************************************************************************************
 
-struct Cache *newCache(uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, uint32_t num_vertices, uint32_t policy, uint32_t numPropertyRegions)
+struct Cache *newCache(uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, uint32_t prefetch_enable, uint32_t num_vertices, uint32_t policy, uint32_t numPropertyRegions)
 {
     uint64_t i;
     uint64_t j;
@@ -258,6 +258,7 @@ struct Cache *newCache(uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, 
     cache->thresholds_totalDegrees = (uint64_t *)my_malloc(sizeof(uint64_t) * cache->num_buckets );
     cache->thresholds_avgDegrees   = (uint64_t *)my_malloc(sizeof(uint64_t) * cache->num_buckets );
     cache->regions_avgDegrees      = (uint64_t **)my_malloc(sizeof(uint64_t *) * numPropertyRegions);
+    cache->prefetch_enable         = prefetch_enable;
 
     cache->verticesMiss = NULL;
     cache->verticesHit  = NULL;
@@ -2387,6 +2388,9 @@ void printStatsCache(struct Cache *cache)
     float missRateWrite = (double)((getWM(cache)) * 100) / (getWrites(cache)); //calculate miss rate
     missRateWrite       = roundf(missRateWrite * 100) / 100;                   //rounding miss rate
 
+    float missRatePrefetch = (double)(( getRMPrefetch(cache)) * 100) / (cache->currentCycle_preftcher); //calculate miss rate
+    missRatePrefetch = roundf(missRatePrefetch * 100) / 100;
+
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Simulation results (Cache)");
     printf(" -----------------------------------------------------\n");
@@ -2440,6 +2444,10 @@ void printStatsCache(struct Cache *cache)
     printf("| %-21s | %'-27lu | \n", "Writes", getWrites(cache) );
     printf("| %-21s | %'-27lu | \n", "Write misses", getWM(cache) );
     printf("| %-21s | %-27.2f | \n", "Wrt Miss rate(%)", missRateWrite);
+    printf(" -----------------------------------------------------\n");
+    printf("| %-21s | %'-27lu | \n", "Prefetch", getReadsPrefetch(cache) );
+    printf("| %-21s | %'-27lu | \n", "Prefetch misses", getRMPrefetch(cache) );
+    printf("| %-21s | %-27.2f | \n", "Prefetch Miss rate(%)", missRatePrefetch);
     printf(" -----------------------------------------------------\n");
     printf("| %-21s | %'-27lu | \n", "Writebacks", getWB(cache) );
     printf(" -----------------------------------------------------\n");
