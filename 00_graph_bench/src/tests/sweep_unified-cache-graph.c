@@ -81,9 +81,10 @@ main (int argc, char **argv)
     uint32_t policy[CACHE_POLICY]         = {PLRU_POLICY, SRRIP_POLICY, GRASP_POLICY, MASK_POLICY, POPT_POLICY};
     float PLRU_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0}};
     float SSRIP_stats[GRAPH_NUM][ORDER_CONFIG]      = {{0}};
+    float POPT_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0}};
     float GRASP_stats[GRAPH_NUM][MODE_NUM]          = {{0}};
     float EXPRESS_stats[GRAPH_NUM][MODE_NUM]        = {{0}};
-    float POPT_stats[GRAPH_NUM][MODE_NUM]           = {{0}};
+
     uint32_t lmode_l2[TOTAL_CONFIG] = {0, 4, 11, 11, 11, 11, 0, 11, 11, 0, 11, 11};
     uint32_t lmode_l3[TOTAL_CONFIG] = {0, 0, 0, 4, 0, 4, 4, 4, 4, 0, 0, 0 };
     uint32_t mmode[TOTAL_CONFIG]    = {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1 };
@@ -372,7 +373,7 @@ main (int argc, char **argv)
             }
 
             arguments.l1_policy    = policy[4];
-            for (kk = 0, j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j, ++kk)
+            for (j = 0; j < ORDER_CONFIG; ++j)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
                 sprintf (label_dir, "%s/%s", benchmarks_dir[i], reorder_labels[j]);
@@ -391,7 +392,7 @@ main (int argc, char **argv)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
                     ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
-                    POPT_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
+                    POPT_stats[i][j] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
                 }
@@ -472,24 +473,6 @@ main (int argc, char **argv)
             for (j = 0; j < MODE_NUM; ++j)
             {
                 fprintf(fptr1, "%-14f, ",  EXPRESS_stats[i][j] / arguments.trials);
-            }
-            fprintf(fptr1, " \n");
-        }
-        fprintf(fptr1, " -----------------------------------------------------\n");
-
-        fprintf(fptr1, "%-25s, ",  "POPT");
-        for (j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j)
-        {
-            fprintf(fptr1, "%-14s, ",  config_labels[j]);
-        }
-        fprintf(fptr1, " \n");
-
-        for ( i = 0; i < GRAPH_NUM; ++i)
-        {
-            fprintf(fptr1, "%-25s, ",  benchmarks_graphs[i]);
-            for (j = 0; j < MODE_NUM; ++j)
-            {
-                fprintf(fptr1, "%-14f, ",  POPT_stats[i][j] / arguments.trials);
             }
             fprintf(fptr1, " \n");
         }
