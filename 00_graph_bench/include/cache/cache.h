@@ -38,7 +38,7 @@
 //GRASP/Ref_cache default configs
 // GRASP EXPRESS (GRASP-XP)
 // CHOOSE global Policys
-// #define POLICY LRU_POLICY
+// #define POLICY LRU_POLICY/
 // #define POLICY SRRIP_POLICY
 // #define POLICY LFU_POLICY
 // #define POLICY GRASP_POLICY
@@ -208,6 +208,8 @@ struct CacheStructure
     struct Cache *ref_cache_llc; // PLRU
 };
 
+uint32_t minTwoIntegers(uint32_t num1, uint32_t num2);
+
 ///cacheline helper functions
 void initCache(struct Cache *cache, int s, int a, int b, int p);
 void initCacheLine(struct CacheLine *cacheLine);
@@ -342,6 +344,9 @@ void updateAgeSRRIP(struct Cache *cache);
 void updateAgePIN(struct Cache *cache);
 void updateAgePLRU(struct Cache *cache);
 void updateAgeGRASPXP(struct Cache *cache);
+
+
+uint8_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd);
 
 // ********************************************************************************************
 // ***************               Cache Orignzation                                **************

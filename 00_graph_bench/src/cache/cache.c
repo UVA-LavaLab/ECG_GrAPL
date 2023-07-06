@@ -1131,7 +1131,7 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
     uint64_t i, j, victim, min;
 
     victim = cache->assoc;
-    min    = cache->currentCycle;
+    min    = POPT_MAX_REREF;
     i      = calcIndex(cache, addr);
 
     for(j = 0; j < cache->assoc; j++)
@@ -1142,15 +1142,31 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
             return &(cache->cacheLines[i][j]);
         }
     }
-    for(j = 0; j < cache->assoc; j++)
+
+    victim = 0;
+    min = getPOPT(&(cache->cacheLines[i][0]));
+
+    for(j = 1; j < cache->assoc; j++)
     {
-        if(getSeq(&(cache->cacheLines[i][j])) <= min)
+        if(getPOPT(&(cache->cacheLines[i][j])) >= min)
         {
             victim = j;
-            min = getSeq(&(cache->cacheLines[i][j]));
+            min = getPOPT(&(cache->cacheLines[i][j]));
         }
     }
     assert(victim != cache->assoc);
+
+    // not in the POPT paper optimizaiton
+    if (min < POPT_MAX_REREF)
+    {
+        int diff = POPT_MAX_REREF - min;
+        for(j = 0; j < cache->assoc; j++)
+        {
+            uint8_t POPT = getPOPT(&(cache->cacheLines[i][j])) + diff;
+            setPOPT(&(cache->cacheLines[i][j]), POPT);
+            assert(POPT <= POPT_MAX_REREF);
+        }
+    }
 
     cache->evictions++;
     cache->cacheLines[i][victim].addr = addr;
@@ -1843,6 +1859,67 @@ struct CacheLine *fillLinePOPT(struct Cache *cache, uint64_t addr, uint32_t mask
     return victim;
 }
 
+uint32_t minTwoIntegers(uint32_t num1, uint32_t num2)
+{
+
+    if(num1 < num2)
+        return num1;
+    else
+        return num2;
+
+}
+
+uint8_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd)
+{
+  
+  int vertexPerCacheLine = cache->lineSize / sizeof(uint32_t);
+  int numCacheLines = (cache->numVertices + vertexPerCacheLine - 1) / vertexPerCacheLine;
+  int epochSz = (cache->numVertices + POPT_NUM_EPOCH - 1) / POPT_NUM_EPOCH;
+  int numSubEpochs = POPT_NUM_EPOCH / 2; 
+  int subEpochSz = (epochSz + numSubEpochs - 1) / numSubEpochs;
+ 
+  // get vertex/cache line number
+  int cacheLineID = irregInd / vertexPerCacheLine;
+  int currEpoch   = regInd / epochSz;
+  uint8_t mask    = 1;
+  uint8_t orMask  = (mask << 7);
+  uint8_t andMask = (~orMask);
+    
+  if ((cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & orMask) != 0)
+  {
+    //We dont have a reference this epoch - Find next Epoch access
+    uint8_t reref = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
+    return reref;
+  }
+  else
+  {
+    //We have a reference this epoch
+    uint8_t lastRefQ = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
+    int delta = regInd - (currEpoch * epochSz);
+    uint8_t subEpochDistQ = delta / subEpochSz;
+    if (subEpochDistQ <= lastRefQ)
+    {
+      //We are yet to be accessed within this epoch
+      return 0;
+    }
+    else
+    {
+      //No further accesses this epoch; Look beyond to the next Epoch
+      uint8_t nextRef = cache->offset_matrix[((currEpoch + 1) * numCacheLines) + cacheLineID]; //this is why we store current & next Epoch information
+      if ((nextRef & orMask) != 0)
+      {
+        uint8_t reref = nextRef & andMask; 
+        return (uint8_t)(minTwoIntegers(++reref, POPT_MAX_REREF)); 
+      }
+      else
+      {
+        //Going to be accessed next epoch
+        return 1;
+      }
+    }
+  }
+}
+
 void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
 
@@ -1864,6 +1941,11 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
     }
 
     uint32_t popt_mask = POPT_MAX_REREF;
+
+    popt_mask = findRereferenceValPOPT(cache, vDst, vSrc);
+
+    // if(popt_mask)
+    //     printf("%u \n", popt_mask);
 
     struct CacheLine *line = findLine(cache, addr);
     if(line == NULL)/*miss*/
