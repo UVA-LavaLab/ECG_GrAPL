@@ -84,7 +84,7 @@ struct Arguments
     uint32_t convert_format;
     mt19937state mt19937var;
 
-#ifdef CACHE_HARNESS_META
+// #ifdef CACHE_HARNESS_META
     uint32_t l1_size;
     uint32_t l1_assoc;
     uint32_t l1_blocksize;
@@ -99,7 +99,7 @@ struct Arguments
     uint32_t llc_assoc;
     uint32_t llc_blocksize;
     uint32_t llc_policy;
-#endif
+// #endif
 
 };
 

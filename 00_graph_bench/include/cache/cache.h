@@ -12,8 +12,8 @@
 #define PLRU_POLICY    5
 #define GRASPXP_POLICY 6
 #define MASK_POLICY    7
-#define MASK_CAPI_POLICY     8
-#define GRASP_CAPI_POLICY    9
+#define POPT_POLICE    8
+
 
 //CAPI PSL CACHE default CONFIGS
 
@@ -46,8 +46,7 @@
 // #define POLICY PLRU_POLICY
 // #define POLICY GRASPXP_POLICY
 // #define POLICY MASK_POLICY
-// #define POLICY MASK_CAPI_POLICY
-// #define POLICY GRASP_CAPI_POLICY
+// #define POLICY POPT_POLICE
 
 // #define BLOCKSIZE   64
 // #define L1_SIZE     1048576
