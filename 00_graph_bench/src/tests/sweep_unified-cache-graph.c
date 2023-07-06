@@ -195,8 +195,8 @@ main (int argc, char **argv)
     arguments.weighted = 0;
     arguments.delta = 1;
 
-    arguments.pre_numThreads  = omp_get_max_threads();
-    arguments.algo_numThreads = omp_get_max_threads();
+    arguments.pre_numThreads  = omp_get_max_threads()/2;
+    arguments.algo_numThreads = omp_get_max_threads()/2;
     arguments.ker_numThreads = 1;
 
     arguments.fnameb = "../01_test_graphs/LAW/LAW-enron/graph.rand.bin";
