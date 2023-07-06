@@ -28,6 +28,7 @@ struct GraphCSR
 #endif
 
     uint32_t *offset_matrix;
+    uint32_t *prefetch_matrix;
 };
 
 void graphCSRFree (struct GraphCSR *graphCSR);

@@ -60,6 +60,9 @@ void graphCSRFree (struct GraphCSR *graphCSR)
         if(graphCSR->offset_matrix)
             free(graphCSR->offset_matrix);
 
+        if(graphCSR->prefetch_matrix)
+            free(graphCSR->prefetch_matrix);
+
         free(graphCSR);
 
     }
@@ -243,6 +246,11 @@ struct GraphCSR *graphCSRPreProcessingStep (struct Arguments *arguments)
     makeOffsetMatrixProcessParameterized(graphCSR, arguments);
     Stop(timer);
     graphCSRPrintMessageWithtime("Process Offset MatrixProcess", Seconds(timer));
+
+    Start(timer);
+    makePrefetchMaskProcess(graphCSR, arguments);
+    Stop(timer);
+    graphCSRPrintMessageWithtime("Process Prefetch MatrixProcess", Seconds(timer));
 
     graphCSRPrint(graphCSR);
 

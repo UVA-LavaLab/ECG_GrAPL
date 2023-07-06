@@ -454,7 +454,7 @@ struct BetweennessCentralityStats *betweennessCentralityBrandesGraphCSR(struct A
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 

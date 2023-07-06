@@ -1012,7 +1012,7 @@ struct PageRankStats *pageRankPullGraphCSR(struct Arguments *arguments, struct G
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1180,7 +1180,7 @@ struct PageRankStats *pageRankPushGraphCSR(struct Arguments *arguments, struct G
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1368,7 +1368,7 @@ struct PageRankStats *pageRankPullFixedPoint64BitGraphCSR(struct Arguments *argu
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1549,7 +1549,7 @@ struct PageRankStats *pageRankPullFixedPoint32BitGraphCSR(struct Arguments *argu
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1726,7 +1726,7 @@ struct PageRankStats *pageRankPullFixedPoint16BitGraphCSR(struct Arguments *argu
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1904,7 +1904,7 @@ struct PageRankStats *pageRankPullFixedPoint8BitGraphCSR(struct Arguments *argum
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2066,7 +2066,7 @@ struct PageRankStats *pageRankPushFixedPointGraphCSR(struct Arguments *arguments
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2242,7 +2242,7 @@ struct PageRankStats *pageRankPullQuant32BitGraphCSR(struct Arguments *arguments
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2425,7 +2425,7 @@ struct PageRankStats *pageRankPullQuant16BitGraphCSR(struct Arguments *arguments
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2609,7 +2609,7 @@ struct PageRankStats *pageRankPullQuant8BitGraphCSR(struct Arguments *arguments,
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2784,7 +2784,7 @@ struct PageRankStats *pageRankPushQuantGraphCSR(struct Arguments *arguments, str
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -2983,7 +2983,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint8_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint8_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -3192,7 +3192,7 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint8_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint8_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -3408,7 +3408,7 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
     stats->propertyMetaData[2].size = graph->num_vertices * sizeof(float);
     stats->propertyMetaData[2].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 

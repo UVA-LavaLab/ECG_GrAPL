@@ -431,6 +431,13 @@ main (int argc, char **argv)
                 fprintf(fptr1, "%-14f, ",  SSRIP_stats[i][j] / arguments.trials);
             }
             fprintf(fptr1, " \n");
+            fprintf(fptr1, "%-25s, ",  " ");
+            fprintf(fptr1, "%-25s, ",  "POPT");
+            for (j = 0; j < ORDER_CONFIG; ++j)
+            {
+                fprintf(fptr1, "%-14f, ",  POPT_stats[i][j] / arguments.trials);
+            }
+            fprintf(fptr1, " \n");
         }
         fprintf(fptr1, " -----------------------------------------------------\n");
 

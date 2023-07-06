@@ -212,11 +212,15 @@ struct CacheStructure *newCacheStructure(struct CacheStructureArguments *argumen
     return cache;
 }
 
-void initCacheStructureRegion(struct CacheStructure *cache, struct PropertyMetaData *propertyMetaData, uint32_t *offset_matrix)
+void initCacheStructureRegion(struct CacheStructure *cache, struct PropertyMetaData *propertyMetaData, uint32_t *offset_matrix, uint32_t *prefetch_matrix)
 {
     cache->ref_cache->offset_matrix = offset_matrix;
     cache->ref_cache_l2->offset_matrix = offset_matrix;
     cache->ref_cache_llc->offset_matrix = offset_matrix;
+
+    cache->ref_cache->prefetch_matrix = prefetch_matrix;
+    cache->ref_cache_l2->prefetch_matrix = prefetch_matrix;
+    cache->ref_cache_llc->prefetch_matrix = prefetch_matrix;
     initialzeCachePropertyRegions (cache->ref_cache, propertyMetaData, cache->ref_cache->size);
     initialzeCachePropertyRegions (cache->ref_cache_l2, propertyMetaData, cache->ref_cache_l2->size);
     initialzeCachePropertyRegions (cache->ref_cache_llc, propertyMetaData, cache->ref_cache_llc->size);

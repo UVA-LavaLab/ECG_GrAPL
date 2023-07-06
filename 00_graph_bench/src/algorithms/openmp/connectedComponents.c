@@ -431,7 +431,7 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
     // stats->propertyMetaData[1].size = graph->num_vertices * sizeof(float);
     // stats->propertyMetaData[1].data_type_size = sizeof(float);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 

@@ -178,7 +178,9 @@ struct Cache
     uint64_t *thresholds_totalDegrees;
     uint64_t *thresholds_avgDegrees;
     uint64_t **regions_avgDegrees;
+
     uint32_t *offset_matrix;
+    uint32_t *prefetch_matrix;
 
     struct Cache *cacheNext; // next level cache pointer
 };
@@ -352,7 +354,7 @@ uint32_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd);
 // ***************               Cache Orignzation                                **************
 // ********************************************************************************************
 struct CacheStructure *newCacheStructure(struct CacheStructureArguments *arguments, uint32_t num_vertices, uint32_t numPropertyRegions);
-void initCacheStructureRegion(struct CacheStructure *cache, struct PropertyMetaData *propertyMetaData, uint32_t *offset_matrix);
+void initCacheStructureRegion(struct CacheStructure *cache, struct PropertyMetaData *propertyMetaData, uint32_t *offset_matrix, uint32_t *prefetch_matrix);
 void freeCacheStructure(struct CacheStructure *cache);
 
 // ********************************************************************************************

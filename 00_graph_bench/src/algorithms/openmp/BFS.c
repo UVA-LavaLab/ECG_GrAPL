@@ -375,7 +375,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSR(struct Arguments *arguments, str
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -491,7 +491,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSR(struct Arguments *arguments, str
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -649,7 +649,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1309,7 +1309,7 @@ struct BFSStats *breadthFirstSearchPullGraphCSRDualOrder(struct Arguments *argum
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1425,7 +1425,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSRDualOrder(struct Arguments *argum
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 
@@ -1583,7 +1583,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
-    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix);
+    initCacheStructureRegion(stats->cache, stats->propertyMetaData, graph->offset_matrix, graph->prefetch_matrix);
     setCacheStructureThresholdDegreeAvg(stats->cache, graph->vertices->out_degree);
 #endif
 

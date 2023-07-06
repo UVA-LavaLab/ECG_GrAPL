@@ -425,17 +425,77 @@ void printOffsetMatrixProcessParameterized(struct GraphCSR *graph, struct Argume
 
 }
 
-uint32_t *makeRerefrenceMaskProcess(struct GraphCSR *graph,  struct Arguments *arguments)
-{
+void printOffsetMatrixPreftechParameterized(struct GraphCSR *graph, struct Arguments *arguments){
+
+    uint32_t i;
+    struct Vertex *vertices = NULL;
+
+#if DIRECTED
+    vertices = graph->inverse_vertices;
+#else
+    vertices = graph->vertices;
+#endif
+    printf(" -----------------------------------------------------\n");
+    printf("| %-15s | %-15s | %-15s | \n", "v", "degree", "prefetch_matrix");
+    printf(" -----------------------------------------------------\n");
+        for (i = 0; i < graph->num_vertices; ++i)
+    {
+           printf("| %-15u , %-15u , %-15u |\n", i, vertices->out_degree[graph->prefetch_matrix[i]], graph->prefetch_matrix[i]);
+    }
+    printf(" -----------------------------------------------------\n");
 
 
-    return NULL;
 }
-uint32_t *makePrefetchMaskProcess(struct GraphCSR *graph, struct Arguments *arguments)
+
+void makePrefetchMaskProcess(struct GraphCSR *graph, struct Arguments *arguments)
 {
+ 
+    uint32_t i;
+    uint32_t j;
+    uint32_t v;
+    uint32_t u;
+    uint32_t degree;
+    uint32_t max_degree;
+    uint32_t max_degree_id;
+    uint32_t edge_idx;
+    struct Vertex *vertices = NULL;
+    uint32_t *sorted_edges_array = NULL;
+
+    graph->prefetch_matrix   = (uint32_t *) my_malloc((graph->num_vertices+1) * sizeof(uint32_t));
 
 
-    return NULL;
+    #pragma omp parallel for
+    for (i = 0; i < graph->num_vertices; ++i)
+    {
+        graph->prefetch_matrix[i] = 0;
+    }
+
+#if DIRECTED
+    vertices = graph->inverse_vertices;
+    sorted_edges_array = graph->inverse_sorted_edges_array->edges_array_dest;
+#else
+    vertices = graph->vertices;
+    sorted_edges_array = graph->sorted_edges_array->edges_array_dest;
+#endif
+
+    #pragma omp parallel for private(v,j,u,degree,max_degree,max_degree_id,edge_idx) schedule(dynamic, 1024) num_threads(arguments->ker_numThreads)
+    for(v = 0; v < graph->num_vertices; v++)
+    {
+        degree = vertices->out_degree[v];
+        edge_idx = vertices->edges_idx[v];
+        max_degree = 0;
+        max_degree_id = 0;
+        for(j = edge_idx ; j < (edge_idx + degree) ; j++)
+        {
+            u = EXTRACT_VALUE(sorted_edges_array[j]);
+            if(vertices->out_degree[u] > max_degree){
+                max_degree = vertices->out_degree[u];
+                max_degree_id = u;
+            }
+        }
+        graph->prefetch_matrix[v] = max_degree_id;
+    }
+    // printOffsetMatrixPreftechParameterized(graph,arguments);
 }
 
 
