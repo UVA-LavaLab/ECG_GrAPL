@@ -249,10 +249,18 @@ struct Cache *newCache(uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, 
 
     cache->verticesMiss = NULL;
     cache->verticesHit  = NULL;
-
     cache->vertices_base_reuse  = NULL;
     cache->vertices_total_reuse = NULL;
     cache->vertices_accesses    = NULL;
+
+    cache->vertices_base_reuse_region  = NULL;
+    cache->vertices_total_reuse_region = NULL;
+    cache->vertices_accesses_region    = NULL;
+
+    cache->vertices_base_reuse_cl         = NULL;
+    cache->vertices_total_reuse_cl        = NULL;
+    cache->vertices_base_reuse_region_cl  = NULL;
+    cache->vertices_total_reuse_region_cl = NULL;
 
 
     cache->threshold_accesses_region   = (uint64_t *)my_malloc(sizeof(uint64_t) * cache->num_buckets);
@@ -287,8 +295,11 @@ struct Cache *newCache(uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, 
 
     cache->numVertices  = num_vertices;
 
+    uint32_t size_cl = 0;
+
     if(cache->numVertices)
     {
+        size_cl = (num_vertices / (cache->lineSize / 4)) + 1;
         cache->verticesMiss = (uint64_t *)my_malloc(sizeof(uint64_t) * num_vertices);
         cache->verticesHit  = (uint64_t *)my_malloc(sizeof(uint64_t) * num_vertices);
         cache->vertices_base_reuse  = (uint64_t *)my_malloc(sizeof(uint64_t) * num_vertices);
@@ -298,6 +309,11 @@ struct Cache *newCache(uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, 
         cache->vertices_base_reuse_region  = (uint64_t *)my_malloc(sizeof(uint64_t) * num_vertices);
         cache->vertices_total_reuse_region = (uint64_t *)my_malloc(sizeof(uint64_t) * num_vertices);
         cache->vertices_accesses_region    = (uint64_t *)my_malloc(sizeof(uint64_t) * num_vertices);
+
+        cache->vertices_base_reuse_cl         = (uint64_t *)my_malloc(sizeof(uint64_t) * size_cl);
+        cache->vertices_total_reuse_cl        = (uint64_t *)my_malloc(sizeof(uint64_t) * size_cl);
+        cache->vertices_base_reuse_region_cl  = (uint64_t *)my_malloc(sizeof(uint64_t) * size_cl);
+        cache->vertices_total_reuse_region_cl = (uint64_t *)my_malloc(sizeof(uint64_t) * size_cl);
     }
 
     for(i = 0; i < num_vertices; i++)
@@ -312,6 +328,14 @@ struct Cache *newCache(uint32_t l1_size, uint32_t l1_assoc, uint32_t blocksize, 
         cache->vertices_base_reuse_region[i]  = 0;
         cache->vertices_total_reuse_region[i] = 0;
         cache->vertices_accesses_region[i]    = 0;
+    }
+
+    for(i = 0; i < size_cl; i++)
+    {
+        cache->vertices_base_reuse_cl[i]   = 0;
+        cache->vertices_total_reuse_cl[i]  = 0;
+        cache->vertices_base_reuse_region_cl[i]     = 0;
+        cache->vertices_total_reuse_region_cl[i]    = 0;
     }
 
     return cache;
@@ -351,6 +375,15 @@ void freeCache(struct Cache *cache)
             free(cache->thresholds_totalDegrees);
         if(cache->thresholds_avgDegrees)
             free(cache->thresholds_avgDegrees);
+
+        if(cache->vertices_base_reuse_cl)
+            free(cache->vertices_base_reuse_cl);
+        if(cache->vertices_total_reuse_cl)
+            free(cache->vertices_total_reuse_cl);
+        if(cache->vertices_base_reuse_region_cl)
+            free(cache->vertices_base_reuse_region_cl);
+        if(cache->vertices_total_reuse_region_cl)
+            free(cache->vertices_total_reuse_region_cl);
 
         for(i = 0; i < cache->numPropertyRegions; i++)
         {
@@ -418,23 +451,15 @@ void online_cache_graph_stats(struct Cache *cache, uint32_t node)
 {
     uint32_t first_Access = 0;
     uint32_t first_Access_region = 0;
-
+    uint32_t first_Access_cl = 0;
+    uint32_t first_Access_region_cl = 0;
+    uint32_t node_cl = 0;
     uint32_t i;
-    uint32_t v;
     uint32_t threshold_idx = 0;
 
     cache->vertices_accesses[node]++;
     cache->access_counter++;
-
-    // if(cache->access_counter % 1000 == 0)
-    // {
-    //     #pragma omp parallel for
-    //     for ( i = 0; i < cache->numVertices; ++i)
-    //     {
-    //         if(cache->vertices_base_reuse[i] != 0)
-    //             cache->vertices_base_reuse[i] = cache->access_counter;
-    //     }
-    // }
+    node_cl = (node / (cache->lineSize / 4));
 
     // find threshhold index perbucket
     for ( i = 0; i < cache->num_buckets; ++i)
@@ -445,6 +470,7 @@ void online_cache_graph_stats(struct Cache *cache, uint32_t node)
             break;
         }
     }
+
     cache->threshold_accesses_region[threshold_idx]++;
 
     if(cache->vertices_base_reuse[node] == 0)
@@ -453,6 +479,12 @@ void online_cache_graph_stats(struct Cache *cache, uint32_t node)
     if(cache->vertices_base_reuse_region[node] == 0)
         first_Access_region = 1;
 
+    if(cache->vertices_base_reuse_cl[node_cl] == 0)
+        first_Access_cl = 1;
+
+    if(cache->vertices_base_reuse_region_cl[node_cl] == 0)
+        first_Access_region_cl = 1;
+
     if(first_Access)
     {
         cache->vertices_total_reuse[node] = 1;
@@ -460,7 +492,6 @@ void online_cache_graph_stats(struct Cache *cache, uint32_t node)
     else
     {
         cache->vertices_total_reuse[node] += (cache->access_counter - cache->vertices_base_reuse[node]);
-        // printf("%s\n", );
     }
 
     if(first_Access_region)
@@ -470,19 +501,32 @@ void online_cache_graph_stats(struct Cache *cache, uint32_t node)
     else
     {
         cache->vertices_total_reuse_region[node] += (cache->threshold_accesses_region[threshold_idx] - cache->vertices_base_reuse_region[node]);
-        // printf("%s\n", );
     }
 
-    cache->vertices_base_reuse[node]   = cache->access_counter;
-    v = node;
-    for (i = 0; i < (cache->lineSize / 4); ++i)
+    if(first_Access_cl)
     {
-        cache->vertices_base_reuse[(node / (cache->lineSize / 4)) + i]   = cache->access_counter;
-        cache->vertices_base_reuse_region[(node / (cache->lineSize / 4)) + i]   = cache->threshold_accesses_region[threshold_idx];
-        v++;
-        if(v >= cache->numVertices )
-            break;
+        cache->vertices_total_reuse_cl[node_cl] = 1;
     }
+    else
+    {
+        cache->vertices_total_reuse_cl[node_cl] += (cache->access_counter - cache->vertices_base_reuse_cl[node_cl]);
+    }
+
+    if(first_Access_region_cl)
+    {
+        cache->vertices_total_reuse_region_cl[node_cl] = 1;
+    }
+    else
+    {
+        cache->vertices_total_reuse_region_cl[node_cl] += (cache->threshold_accesses_region[threshold_idx] - cache->vertices_base_reuse_region_cl[node_cl]);
+    }
+
+    cache->vertices_base_reuse[node]          = cache->access_counter;
+    cache->vertices_base_reuse_region[node]   = cache->threshold_accesses_region[threshold_idx];
+
+    cache->vertices_base_reuse_cl[node_cl]          = cache->access_counter;
+    cache->vertices_base_reuse_region_cl[node_cl]   = cache->threshold_accesses_region[threshold_idx];
+
 }
 
 
@@ -2205,12 +2249,19 @@ void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
     float  Access_percentage;
     float  Count_percentage;
 
+    float *thresholds_avgReuses_cl;
+    float *thresholds_avgReuses_region_cl;
+    uint64_t *thresholds_totalReuses_cl;
+    uint64_t *thresholds_totalReuses_region_cl;
+
     uint64_t thresholds_totalAccess  = 0;
     uint64_t thresholds_totalCount   = 0;
     uint64_t thresholds_totalDegree  = 0;
     uint64_t thresholds_totalReuse   = 0;
-    uint64_t thresholds_totalReuse_region   = 0;
-    uint64_t thresholds_totalMiss    = 0;
+    uint64_t thresholds_totalReuse_region = 0;
+    uint64_t thresholds_totalReuse_cl   = 0;
+    uint64_t thresholds_totalReuse_region_cl = 0;
+    uint64_t thresholds_totalMiss         = 0;
 
     thresholds               = (uint64_t *) my_malloc(num_buckets * sizeof(uint64_t));
     thresholds_count         = (uint64_t *) my_malloc(num_buckets * sizeof(uint64_t));
@@ -2224,6 +2275,13 @@ void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
     thresholds_avgReuses     = (float *) my_malloc(num_buckets * sizeof(float));
     thresholds_avgReuses_region     = (float *) my_malloc(num_buckets * sizeof(float));
     thresholds_avgMisses     = (float *) my_malloc(num_buckets * sizeof(float));
+
+    thresholds_avgReuses_cl            = (float *) my_malloc(num_buckets * sizeof(float));
+    thresholds_avgReuses_region_cl     = (float *) my_malloc(num_buckets * sizeof(float));
+
+    thresholds_totalReuses_cl          = (uint64_t *) my_malloc(num_buckets * sizeof(uint64_t));
+    thresholds_totalReuses_region_cl   = (uint64_t *) my_malloc(num_buckets * sizeof(uint64_t));
+
 
     for (i = 0; i < num_buckets; ++i)
     {
@@ -2239,6 +2297,10 @@ void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
         thresholds_avgMisses[i]     = 0.0f;
         thresholds_totalAccesses[i] = 0;
         thresholds_avgAccesses[i]   = 0.0f;
+        thresholds_avgReuses_cl[i]  = 0.0f;
+        thresholds_avgReuses_region_cl[i]   = 0.0f;
+        thresholds_totalReuses_cl[i]  = 0;
+        thresholds_totalReuses_region_cl[i]  = 0;
     }
 
     for (v = 0; v < num_vertices; ++v)
@@ -2270,13 +2332,15 @@ void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
             {
                 if(cache->vertices_accesses[v])
                 {
-                    thresholds_count[i] += 1;
-                    thresholds_totalDegrees[i]  += degrees[v];
+                    thresholds_count[i]            += 1;
+                    thresholds_totalDegrees[i]     += degrees[v];
                 }
-                thresholds_totalReuses[i]   += cache->vertices_total_reuse[v];
-                thresholds_totalReuses_region[i]   += cache->vertices_total_reuse_region[v];
-                thresholds_totalMisses[i]   += cache->verticesMiss[v];
-                thresholds_totalAccesses[i] += cache->vertices_accesses[v];
+                thresholds_totalReuses[i]           += cache->vertices_total_reuse[v];
+                thresholds_totalReuses_region[i]    += cache->vertices_total_reuse_region[v];
+                thresholds_totalReuses_cl[i]        += cache->vertices_total_reuse_cl[(v / (cache->lineSize / 4))];
+                thresholds_totalReuses_region_cl[i] += cache->vertices_total_reuse_region_cl[(v / (cache->lineSize / 4))];
+                thresholds_totalMisses[i]           += cache->verticesMiss[v];
+                thresholds_totalAccesses[i]         += cache->vertices_accesses[v];
                 break;
             }
         }
@@ -2295,32 +2359,41 @@ void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
 
         if(thresholds_totalAccesses[i])
         {
-            thresholds_avgReuses[i]    = (float)thresholds_totalReuses[i]   / thresholds_totalAccesses[i];
+            thresholds_avgReuses[i]           = (float)thresholds_totalReuses[i]          / thresholds_totalAccesses[i];
             thresholds_avgReuses_region[i]    = (float)thresholds_totalReuses_region[i]   / thresholds_totalAccesses[i];
+
+            thresholds_avgReuses_cl[i]           = (float)thresholds_totalReuses_cl[i]          / thresholds_totalAccesses[i];
+            thresholds_avgReuses_region_cl[i]    = (float)thresholds_totalReuses_region_cl[i]   / thresholds_totalAccesses[i];
+
+
+            printf("| %-15lu , %-15.2f , %-15lu , %-15lu |\n", thresholds[i], thresholds_avgReuses_region[i], thresholds_totalReuses_region[i], thresholds_totalAccesses[i]);
+
         }
 
         thresholds_totalAccess += thresholds_totalAccesses[i];
         thresholds_totalCount  += thresholds_count[i];
         thresholds_totalDegree += thresholds_totalDegrees[i];
         thresholds_totalReuse  += thresholds_totalReuses[i];
-        thresholds_totalReuse_region  += thresholds_totalReuses_region[i];
-        thresholds_totalMiss   += thresholds_totalMisses[i];
+        thresholds_totalReuse_region     += thresholds_totalReuses_region[i];
+        thresholds_totalReuse_cl         += thresholds_totalReuses_cl[i];
+        thresholds_totalReuse_region_cl  += thresholds_totalReuses_region_cl[i];
+        thresholds_totalMiss             += thresholds_totalMisses[i];
     }
 
-    printf(" -----------------------------------------------------------------------------------------------------------------------------\n");
-    printf("| %-15s | %-15s | %-15s | %-15s | %-15s | %-15s | %-15s | %-15s | \n", "<= Threshold", "Nodes(%)", "totalAccess(E)", "(%)Accesses", "avgDegrees", "avgReuse CL/Axs", "avgReuse_region CL/Axs", "avgMisses");
-    printf(" -----------------------------------------------------------------------------------------------------------------------------\n");
+    printf(" ----------------------------------------------------------------------------------------------------------------------------------------------------\n");
+    printf("| %-15s | %-15s | %-15s | %-15s | %-15s | %-15s | %-20s | %-15s | \n", "<= Threshold", "Nodes(%)", "totalAccess(E)", "(%)Accesses", "avgDegrees", "avgReuse V/Axs", "avgReuse CL/Axs", "avgMisses");
+    printf(" ----------------------------------------------------------------------------------------------------------------------------------------------------\n");
     for ( i = 0; i < num_buckets; ++i)
     {
         Access_percentage = 100 * (float)(thresholds_totalAccesses[i] / (float)thresholds_totalAccess);
         Count_percentage  = 100 * (float)(thresholds_count[i] / (float)num_vertices);
-        printf("| %-15lu , %-15.2f , %-15lu , %-15.2f , %-15.2f , %-15.2f , %-15.2f , %-15.2f |\n", thresholds[i], Count_percentage, thresholds_totalAccesses[i], Access_percentage, thresholds_avgDegrees[i], thresholds_avgReuses[i], thresholds_avgReuses_region[i], thresholds_avgMisses[i]);
+        printf("| %-15lu , %-15.2f , %-15lu , %-15.2f , %-15.2f , %-15.2f , %-20.2f , %-15.2f |\n", thresholds[i], Count_percentage, thresholds_totalAccesses[i], Access_percentage, thresholds_avgDegrees[i], thresholds_avgReuses[i], thresholds_avgReuses_cl[i], thresholds_avgMisses[i]);
     }
-    printf(" -----------------------------------------------------------------------------------------------------------------------------\n");
-    printf("| %-15s | %-15s | %-15s | %-15s | %-15s |  %-15s | %-15s | %-15s | \n", "avgDegrees", "Total Count(V)", "totalAccess", "totalDegrees",  "avgDegrees", "totalReuse", "totalReuse_region", "totalMisses");
-    printf(" -----------------------------------------------------------------------------------------------------------------------------\n");
-    printf("| %-15lu , %-15lu , %-15lu , %-15lu , %-15lu ,  %-15lu , %-15lu , %-15lu |\n", avgDegrees, thresholds_totalCount, thresholds_totalAccess, thresholds_totalDegree, avgDegrees, thresholds_totalReuse, thresholds_totalReuse_region, thresholds_totalMiss);
-    printf(" -----------------------------------------------------------------------------------------------------------------------------\n");
+    printf(" ----------------------------------------------------------------------------------------------------------------------------------------------------\n");
+    printf("| %-15s | %-15s | %-15s | %-15s | %-15s | %-15s | %-20s | %-15s | \n", "avgDegrees", "Total Count(V)", "totalAccess", "totalDegrees",  "avgDegrees", "totalReuse", "totalReuse_cl", "totalMisses");
+    printf(" ----------------------------------------------------------------------------------------------------------------------------------------------------\n");
+    printf("| %-15lu , %-15lu , %-15lu , %-15lu , %-15lu , %-15lu , %-20lu , %-15lu |\n", avgDegrees, thresholds_totalCount, thresholds_totalAccess, thresholds_totalDegree, avgDegrees, thresholds_totalReuse, thresholds_totalReuse_cl, thresholds_totalMiss);
+    printf(" ----------------------------------------------------------------------------------------------------------------------------------------------------\n");
 
     free(thresholds);
     free(thresholds_count);
@@ -2333,6 +2406,10 @@ void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
     free(thresholds_avgMisses);
     free(thresholds_totalAccesses);
     free(thresholds_avgAccesses);
+    free(thresholds_avgReuses_cl);
+    free(thresholds_avgReuses_region_cl);
+    free(thresholds_totalReuses_cl);
+    free(thresholds_totalReuses_region_cl);
 }
 
 void printStatsGraphCache(struct Cache *cache, uint32_t *in_degree, uint32_t *out_degree)
@@ -2377,15 +2454,15 @@ void printStatsCacheStructure(struct CacheStructure *cache, uint32_t *in_degree,
 
     printf("\n======================================================================\n");
 
-    if(cache->ref_cache_l2)
-        printStatsGraphCache(cache->ref_cache_l2, in_degree, out_degree);
+    // if(cache->ref_cache_l2)
+    //     printStatsGraphCache(cache->ref_cache_l2, in_degree, out_degree);
 
-    printf("\n======================================================================\n");
+    // printf("\n======================================================================\n");
 
-    if(cache->ref_cache_llc)
-        printStatsGraphCache(cache->ref_cache_llc, in_degree, out_degree);
+    // if(cache->ref_cache_llc)
+    //     printStatsGraphCache(cache->ref_cache_llc, in_degree, out_degree);
 
-    printf("\n======================================================================\n");
+    // printf("\n======================================================================\n");
 
 }
 
@@ -2394,11 +2471,11 @@ void printStatsCacheStructureToFile(struct CacheStructure *cache, char *fname_pe
     if(cache->ref_cache)
         printStatsCacheToFile(cache->ref_cache, fname_perf);
 
-    if(cache->ref_cache_l2)
-        printStatsCacheToFile(cache->ref_cache_l2, fname_perf);
+    // if(cache->ref_cache_l2)
+    //     printStatsCacheToFile(cache->ref_cache_l2, fname_perf);
 
-    if(cache->ref_cache_llc)
-        printStatsCacheToFile(cache->ref_cache_llc, fname_perf);
+    // if(cache->ref_cache_llc)
+    //     printStatsCacheToFile(cache->ref_cache_llc, fname_perf);
 }
 
 void printStats(struct Cache *cache)

@@ -54,15 +54,15 @@ struct BetweennessCentralityStats *newBetweennessCentralityStatsGraphCSR(struct 
     uint32_t vertex_id;
 
     struct BetweennessCentralityStats *stats = (struct BetweennessCentralityStats *) my_malloc(sizeof(struct BetweennessCentralityStats));
-    stats->betweennessCentrality = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    stats->stack  = (struct Predecessor *) my_malloc(graph->num_vertices * sizeof(struct Predecessor));
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->realRanks  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->stack->nodes  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->betweennessCentrality = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    stats->stack  = (struct Predecessor *)my_malloc((graph->num_vertices + 1) * sizeof(struct Predecessor));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->realRanks  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->stack->nodes  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
     stats->stack->degree  = 0;
-    stats->parents = (int *) my_malloc(graph->num_vertices * sizeof(int));
-    stats->sigma = (int *) my_malloc(graph->num_vertices * sizeof(int));
-    stats->dependency  = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    stats->parents = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
+    stats->sigma = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
+    stats->dependency  = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
     stats->processed_nodes = 0;
     stats->iteration = 0;
     stats->num_vertices = graph->num_vertices;

@@ -52,8 +52,8 @@ struct DFSStats *newDFSStatsGraphCSR(struct GraphCSR *graph)
 
     struct DFSStats *stats = (struct DFSStats *) my_malloc(sizeof(struct DFSStats));
 
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (int *) my_malloc(graph->num_vertices * sizeof(int));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
     stats->processed_nodes = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
@@ -77,8 +77,8 @@ struct DFSStats *newDFSStatsGraphGrid(struct GraphGrid *graph)
 
     struct DFSStats *stats = (struct DFSStats *) my_malloc(sizeof(struct DFSStats));
 
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (int *) my_malloc(graph->num_vertices * sizeof(int));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
     stats->processed_nodes = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
@@ -100,8 +100,8 @@ struct DFSStats *newDFSStatsGraphAdjArrayList(struct GraphAdjArrayList *graph)
 
     struct DFSStats *stats = (struct DFSStats *) my_malloc(sizeof(struct DFSStats));
 
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (int *) my_malloc(graph->num_vertices * sizeof(int));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
     stats->processed_nodes = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
@@ -124,8 +124,8 @@ struct DFSStats *newDFSStatsGraphAdjLinkedList(struct GraphAdjLinkedList *graph)
 
     struct DFSStats *stats = (struct DFSStats *) my_malloc(sizeof(struct DFSStats));
 
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (int *) my_malloc(graph->num_vertices * sizeof(int));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
     stats->processed_nodes = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;

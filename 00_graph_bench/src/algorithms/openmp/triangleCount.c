@@ -50,7 +50,7 @@ struct TCStats *newTCStatsGraphCSR(struct GraphCSR *graph)
     stats->total_counts = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->counts = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    stats->counts = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -69,7 +69,7 @@ struct TCStats *newTCStatsGraphGrid(struct GraphGrid *graph)
     stats->total_counts = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->counts = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    stats->counts = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -86,7 +86,7 @@ struct TCStats *newTCStatsGraphAdjArrayList(struct GraphAdjArrayList *graph)
     stats->total_counts = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->counts = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    stats->counts = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -104,7 +104,7 @@ struct TCStats *newTCStatsGraphAdjLinkedList(struct GraphAdjLinkedList *graph)
     stats->total_counts = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->counts = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    stats->counts = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)

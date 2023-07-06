@@ -95,9 +95,9 @@ struct SSSPStats *newSSSPStatsGraphCSR(struct GraphCSR *graph, uint32_t delta)
     stats->time_total = 0.0;
     stats->num_vertices = graph->num_vertices;
 
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->buckets_map = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->buckets_map = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
     #pragma omp parallel for
     for(v = 0; v < graph->num_vertices; v++)
@@ -126,9 +126,9 @@ struct SSSPStats *newSSSPStatsGraphGrid(struct GraphGrid *graph, uint32_t delta)
     stats->time_total = 0.0;
     stats->num_vertices = graph->num_vertices;
 
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->buckets_map = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->buckets_map = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
     #pragma omp parallel for
     for(v = 0; v < graph->num_vertices; v++)
@@ -156,9 +156,9 @@ struct SSSPStats *newSSSPStatsGraphAdjArrayList(struct GraphAdjArrayList *graph,
     stats->time_total = 0.0;
     stats->num_vertices = graph->num_vertices;
 
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->buckets_map = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->buckets_map = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
     #pragma omp parallel for
     for(v = 0; v < graph->num_vertices; v++)
@@ -186,9 +186,9 @@ struct SSSPStats *newSSSPStatsGraphAdjLinkedList(struct GraphAdjLinkedList *grap
     stats->time_total = 0.0;
     stats->num_vertices = graph->num_vertices;
 
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->buckets_map = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->buckets_map = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
     #pragma omp parallel for
     for(v = 0; v < graph->num_vertices; v++)

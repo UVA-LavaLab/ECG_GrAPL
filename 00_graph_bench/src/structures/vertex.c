@@ -29,9 +29,9 @@ struct Vertex *newVertexArray(uint32_t num_vertices)
 
     struct Vertex *vertex_array = (struct Vertex *) my_malloc(sizeof(struct Vertex));
 
-    vertex_array->out_degree = (uint32_t *) my_malloc( num_vertices * sizeof(uint32_t));
-    vertex_array->in_degree = (uint32_t *) my_malloc( num_vertices * sizeof(uint32_t));
-    vertex_array->edges_idx = (uint32_t *) my_malloc( num_vertices * sizeof(uint32_t));
+    vertex_array->out_degree = (uint32_t *) my_malloc( (num_vertices + 1) * sizeof(uint32_t));
+    vertex_array->in_degree = (uint32_t *) my_malloc( (num_vertices + 1) * sizeof(uint32_t));
+    vertex_array->edges_idx = (uint32_t *) my_malloc( (num_vertices + 1) * sizeof(uint32_t));
 
     uint32_t i;
 

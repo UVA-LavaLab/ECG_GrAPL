@@ -277,7 +277,7 @@ struct EdgeList *reorderGraphProcessDegree( uint32_t sort, struct EdgeList *edge
     uint32_t i;
     uint32_t *degrees;
 
-    degrees = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    degrees = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
 
     #pragma omp parallel
     for (i = 0; i < edgeList->num_vertices; ++i)
@@ -302,8 +302,8 @@ struct EdgeList *reorderGraphListDegree(struct EdgeList *edgeList, uint32_t *deg
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
 
 
-    labels = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
-    labelsInverse = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    labels = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
+    labelsInverse = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
 
 
     printf(" -----------------------------------------------------\n");
@@ -393,7 +393,7 @@ struct EdgeList *reorderGraphProcessDBG( uint32_t sort, struct EdgeList *edgeLis
     uint32_t *thresholds;
     uint32_t  num_buckets = 11;
 
-    degrees = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    degrees = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
     thresholds = (uint32_t *) my_malloc(num_buckets * sizeof(uint32_t));
 
     #pragma omp parallel
@@ -453,7 +453,7 @@ struct EdgeList *reorderGraphListDBG(struct EdgeList *edgeList, uint32_t *degree
 
     uint32_t *start_idx = NULL;
     vc_vector **buckets = NULL;
-    uint32_t *labels = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    uint32_t *labels = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
 
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
 
@@ -580,7 +580,7 @@ struct EdgeList *reorderGraphProcessHUBSort( uint32_t sort, struct EdgeList *edg
     uint32_t *thresholds;
     uint32_t  num_buckets = 2;
 
-    degrees = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    degrees = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
     thresholds = (uint32_t *) my_malloc(num_buckets * sizeof(uint32_t));
 
     #pragma omp parallel for
@@ -640,7 +640,7 @@ struct EdgeList *reorderGraphListHUBSort(struct EdgeList *edgeList, uint32_t *de
 
     uint32_t *start_idx = NULL;
     vc_vector **buckets = NULL;
-    uint32_t *labels = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    uint32_t *labels = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
 
     uint32_t *sizeHot = (uint32_t *) my_malloc(num_buckets * sizeof(uint32_t));
@@ -803,7 +803,7 @@ struct EdgeList *reorderGraphProcessHUBCluster( uint32_t sort, struct EdgeList *
     uint32_t *thresholds;
     uint32_t  num_buckets = 2;
 
-    degrees = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    degrees = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
     thresholds = (uint32_t *) my_malloc(num_buckets * sizeof(uint32_t));
 
     #pragma omp parallel for
@@ -857,7 +857,7 @@ struct EdgeList *reorderGraphListHUBCluster(struct EdgeList *edgeList, uint32_t 
     uint32_t *start_idx = NULL;
     vc_vector **buckets = NULL;
 
-    uint32_t *labels = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    uint32_t *labels = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
 
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
 
@@ -1025,7 +1025,7 @@ struct EdgeList *maskGraphProcessDegree( struct EdgeList *edgeList, uint32_t mmo
     uint32_t *thresholds;
     uint32_t  num_buckets = 11;
 
-    degrees = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    degrees = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
     thresholds = (uint32_t *) my_malloc(num_buckets * sizeof(uint32_t));
     #pragma omp parallel
     for (i = 0; i < edgeList->num_vertices; ++i)
@@ -1139,8 +1139,8 @@ struct EdgeList *maskGraphProcessGenerateMaskArray(struct EdgeList *edgeList, ui
     uint32_t *start_idx      = NULL;
     vc_vector **buckets      = NULL;
 
-    uint32_t *labels         = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
-    uint32_t *mask_array     = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    uint32_t *labels         = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
+    uint32_t *mask_array     = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
     struct Timer *timer      = (struct Timer *) malloc(sizeof(struct Timer));
     uint32_t *cache_regions  = (uint32_t *) my_malloc(num_masks * sizeof(uint32_t));
 
@@ -1481,7 +1481,7 @@ struct EdgeList *relabelEdgeListFromFile(struct EdgeList *edgeList, const char *
     uint32_t v = 0;
     uint32_t dest = 0;
     uint32_t x = 0;
-    uint32_t *labels = (uint32_t *) my_malloc(edgeList->num_vertices * sizeof(uint32_t));
+    uint32_t *labels = (uint32_t *) my_malloc((edgeList->num_vertices + 1) * sizeof(uint32_t));
 
     // char *fname_txt = (char *) malloc((strlen(fnameb) + 10) * sizeof(char));
 

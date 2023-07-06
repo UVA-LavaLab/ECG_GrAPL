@@ -59,8 +59,8 @@ struct SPMVStats *newSPMVStatsGraphCSR(struct GraphCSR *graph)
     stats->iterations = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->vector_output = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    stats->vector_input = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    stats->vector_output = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    stats->vector_input = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -82,8 +82,8 @@ struct SPMVStats *newSPMVStatsGraphGrid(struct GraphGrid *graph)
     stats->iterations = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->vector_output = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    stats->vector_input = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    stats->vector_output = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    stats->vector_input = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -105,8 +105,8 @@ struct SPMVStats *newSPMVStatsGraphAdjArrayList(struct GraphAdjArrayList *graph)
     stats->iterations = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->vector_output = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    stats->vector_input = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    stats->vector_output = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    stats->vector_input = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
     #pragma omp parallel for default(none) private(v) shared(stats)
@@ -129,8 +129,8 @@ struct SPMVStats *newSPMVStatsGraphAdjLinkedList(struct GraphAdjLinkedList *grap
     stats->iterations = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->vector_output = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    stats->vector_input = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    stats->vector_output = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    stats->vector_input = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -418,8 +418,8 @@ struct SPMVStats *SPMVPullRowFixedPointGraphGrid( struct Arguments *arguments, s
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    uint64_t *vector_input = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *vector_output = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *vector_input = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *vector_output = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting SPMV-Row Fixed-Point");
@@ -527,8 +527,8 @@ struct SPMVStats *SPMVPushColumnFixedPointGraphGrid( struct Arguments *arguments
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    uint64_t *vector_input = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *vector_output = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *vector_input = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *vector_output = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting SPMV-Column Fixed-Point");
@@ -929,8 +929,8 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    uint32_t *vector_input = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    uint64_t *vector_output = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint32_t *vector_input = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    uint64_t *vector_output = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     uint32_t *edges_array_weight_fixedPoint = (uint32_t *) my_malloc(graph->num_edges * sizeof(uint32_t));
 
@@ -1112,8 +1112,8 @@ struct SPMVStats *SPMVPushFixedPointGraphCSR( struct Arguments *arguments, struc
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    uint64_t *vector_input = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *vector_output = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *vector_input = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *vector_output = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
 
     struct Vertex *vertices = NULL;
@@ -1453,8 +1453,8 @@ struct SPMVStats *SPMVPullFixedPointGraphAdjArrayList( struct Arguments *argumen
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    uint64_t *vector_input = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *vector_output = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *vector_input = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *vector_output = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting SPMV-PULL Fixed-Point");
@@ -1567,8 +1567,8 @@ struct SPMVStats *SPMVPushFixedPointGraphAdjArrayList( struct Arguments *argumen
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    uint64_t *vector_input = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *vector_output = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *vector_input = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *vector_output = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting SPMV-PUSH Fixed-Point");
@@ -1878,8 +1878,8 @@ struct SPMVStats *SPMVPullFixedPointGraphAdjLinkedList( struct Arguments *argume
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    uint64_t *vector_input = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *vector_output = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *vector_input = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *vector_output = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting SPMV-PULL Fixed-Point");
@@ -1987,8 +1987,8 @@ struct SPMVStats *SPMVPushFixedPointGraphAdjLinkedList( struct Arguments *argume
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    uint64_t *vector_input = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *vector_output = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *vector_input = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *vector_output = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting SPMV-PUSH Fixed-Point");

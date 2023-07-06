@@ -49,10 +49,10 @@ struct BFSStats *newBFSStatsGraphCSR(struct GraphCSR *graph)
 
     struct BFSStats *stats = (struct BFSStats *) my_malloc(sizeof(struct BFSStats));
 
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->distances_DualOrder  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (int *) my_malloc(graph->num_vertices * sizeof(int));
-    stats->parents_DualOrder = (int *) my_malloc(graph->num_vertices * sizeof(int));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->distances_DualOrder  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
+    stats->parents_DualOrder = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
     stats->processed_nodes = 0;
     stats->iteration = 0;
     stats->num_vertices = graph->num_vertices;
@@ -88,8 +88,8 @@ struct BFSStats *newBFSStatsGraphGrid(struct GraphGrid *graph)
     struct BFSStats *stats = (struct BFSStats *) my_malloc(sizeof(struct BFSStats));
     stats->distances_DualOrder = NULL;
     stats->parents_DualOrder = NULL;
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (int *) my_malloc(graph->num_vertices * sizeof(int));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
     stats->processed_nodes = 0;
     stats->iteration = 0;
     stats->num_vertices = graph->num_vertices;
@@ -113,8 +113,8 @@ struct BFSStats *newBFSStatsGraphAdjArrayList(struct GraphAdjArrayList *graph)
     struct BFSStats *stats = (struct BFSStats *) my_malloc(sizeof(struct BFSStats));
     stats->distances_DualOrder = NULL;
     stats->parents_DualOrder = NULL;
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (int *) my_malloc(graph->num_vertices * sizeof(int));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
     stats->processed_nodes = 0;
     stats->iteration = 0;
     stats->num_vertices = graph->num_vertices;
@@ -142,8 +142,8 @@ struct BFSStats *newBFSStatsGraphAdjLinkedList(struct GraphAdjLinkedList *graph)
     struct BFSStats *stats = (struct BFSStats *) my_malloc(sizeof(struct BFSStats));
     stats->distances_DualOrder = NULL;
     stats->parents_DualOrder = NULL;
-    stats->distances  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->parents = (int *) my_malloc(graph->num_vertices * sizeof(int));
+    stats->distances  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->parents = (int *)my_malloc((graph->num_vertices + 1) * sizeof(int));
     stats->processed_nodes = 0;
     stats->iteration = 0;
     stats->num_vertices = graph->num_vertices;

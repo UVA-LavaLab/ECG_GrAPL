@@ -64,9 +64,9 @@ struct CCStats *newCCStatsGraphCSR(struct GraphCSR *graph)
     stats->neighbor_rounds = 2;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->components = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->counts = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->labels = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->components = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->counts = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->labels = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -90,9 +90,9 @@ struct CCStats *newCCStatsGraphGrid(struct GraphGrid *graph)
     stats->iterations = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->components = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->counts = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->labels = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->components = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->counts = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->labels = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -115,9 +115,9 @@ struct CCStats *newCCStatsGraphAdjArrayList(struct GraphAdjArrayList *graph)
     stats->iterations = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->components = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->counts = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->labels = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->components = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->counts = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->labels = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -139,9 +139,9 @@ struct CCStats *newCCStatsGraphAdjLinkedList(struct GraphAdjLinkedList *graph)
     stats->iterations = 0;
     stats->num_vertices = graph->num_vertices;
     stats->time_total = 0.0f;
-    stats->components = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->counts = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->labels = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->components = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->counts = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->labels = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
     #pragma omp parallel for default(none) private(v) shared(stats)
     for(v = 0; v < stats->num_vertices; v++)
@@ -797,7 +797,7 @@ uint32_t connectedComponentsVerifyGraphCSR(struct CCStats *stats, struct GraphCS
 
     uint32_t pass = 1;
     struct ArrayQueue *frontier = newArrayQueue(graph->num_vertices);
-    uint32_t *inverselabels = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    uint32_t *inverselabels = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
     uint32_t iter;
     uint32_t j;
     uint32_t i;
@@ -1024,7 +1024,7 @@ struct CCStats *connectedComponentsAfforestGraphGrid( struct Arguments *argument
     struct CCStats *stats = newCCStatsGraphGrid(graph);
     struct Timer *timer = (struct Timer *) my_malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) my_malloc(sizeof(struct Timer));
-    uint32_t *neighbor = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    uint32_t *neighbor = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
     struct Bitmap *linked = newBitmap(graph->num_vertices);
 
     stats->neighbor_rounds = 2;

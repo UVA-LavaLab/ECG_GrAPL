@@ -48,20 +48,20 @@ struct IncrementalAggregationStats *newIncrementalAggregationStatsGraphCSR(struc
 
     stats->totalQ = 0.0;
     stats->num_clusters = 0;
-    stats->atom = (union Atom *) my_malloc(graph->num_vertices * sizeof(union Atom));;
+    stats->atom = (union Atom *)my_malloc((graph->num_vertices + 1) * sizeof(union Atom));;
 
-    stats->vertices = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->degrees = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->vertices = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->degrees = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    stats->weightSum  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->weightSum  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    stats->atomDegree = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->atomChild = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->atomDegree = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->atomChild = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    // union Atom *atom = (union Atom *) my_malloc(graph->num_vertices * sizeof(union Atom));
+    // union Atom *atom = (union Atom *)my_malloc((graph->num_vertices + 1) * sizeof(union Atom));
 
-    stats->sibling = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->dest = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->sibling = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->dest = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
     #pragma omp parallel for
     for(v = 0; v < graph->num_vertices; v++)
     {
@@ -81,18 +81,18 @@ struct IncrementalAggregationStats *newIncrementalAggregationStatsGraphGrid(stru
     stats->totalQ = 0.0;
     stats->num_clusters = 0;
 
-    stats->vertices = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->degrees = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->vertices = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->degrees = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    stats->weightSum  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->weightSum  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    stats->atomDegree = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->atomChild = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->atomDegree = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->atomChild = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    // union Atom *atom = (union Atom *) my_malloc(graph->num_vertices * sizeof(union Atom));
+    // union Atom *atom = (union Atom *)my_malloc((graph->num_vertices + 1) * sizeof(union Atom));
 
-    stats->sibling = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->dest = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->sibling = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->dest = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
     #pragma omp parallel for
     for(v = 0; v < graph->num_vertices; v++)
     {
@@ -114,18 +114,18 @@ struct IncrementalAggregationStats *newIncrementalAggregationStatsGraphAdjArrayL
     stats->totalQ = 0.0;
     stats->num_clusters = 0;
 
-    stats->vertices = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->degrees = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->vertices = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->degrees = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    stats->weightSum  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->weightSum  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    stats->atomDegree = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->atomChild = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->atomDegree = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->atomChild = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    // union Atom *atom = (union Atom *) my_malloc(graph->num_vertices * sizeof(union Atom));
+    // union Atom *atom = (union Atom *)my_malloc((graph->num_vertices + 1) * sizeof(union Atom));
 
-    stats->sibling = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->dest = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->sibling = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->dest = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
     #pragma omp parallel for
     for(v = 0; v < graph->num_vertices; v++)
     {
@@ -147,18 +147,18 @@ struct IncrementalAggregationStats *newIncrementalAggregationStatsGraphAdjLinked
     stats->totalQ = 0.0;
     stats->num_clusters = 0;
 
-    stats->vertices = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->degrees = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->vertices = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->degrees = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    stats->weightSum  = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->weightSum  = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    stats->atomDegree = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->atomChild = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->atomDegree = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->atomChild = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
 
-    // union Atom *atom = (union Atom *) my_malloc(graph->num_vertices * sizeof(union Atom));
+    // union Atom *atom = (union Atom *)my_malloc((graph->num_vertices + 1) * sizeof(union Atom));
 
-    stats->sibling = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    stats->dest = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
+    stats->sibling = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    stats->dest = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
     #pragma omp parallel for
     for(v = 0; v < graph->num_vertices; v++)
     {

@@ -173,6 +173,12 @@ struct Cache
     uint64_t *vertices_total_reuse;
     uint64_t *vertices_accesses;
 
+    // cacheline granualrity
+    uint64_t *vertices_base_reuse_cl;
+    uint64_t *vertices_total_reuse_cl;
+    uint64_t *vertices_base_reuse_region_cl;
+    uint64_t *vertices_total_reuse_region_cl;
+
     uint64_t *vertices_base_reuse_region;
     uint64_t *vertices_total_reuse_region;
     uint64_t *vertices_accesses_region;

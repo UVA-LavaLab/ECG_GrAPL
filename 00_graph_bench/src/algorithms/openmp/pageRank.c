@@ -66,8 +66,8 @@ struct PageRankStats *newPageRankStatsGraphCSR(struct GraphCSR *graph)
     stats->time_total = 0.0;
     stats->error_total = 0.0;
 
-    stats->realRanks = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));;
-    stats->pageRanks = (float *) my_malloc(graph->num_vertices * sizeof(float));;
+    stats->realRanks = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));;
+    stats->pageRanks = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));;
 
 
     #pragma omp parallel for default(none) private(v) shared(stats)
@@ -95,8 +95,8 @@ struct PageRankStats *newPageRankStatsGraphGrid(struct GraphGrid *graph)
     stats->time_total = 0.0;
     stats->error_total = 0.0;
 
-    stats->realRanks = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));;
-    stats->pageRanks = (float *) my_malloc(graph->num_vertices * sizeof(float));;
+    stats->realRanks = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));;
+    stats->pageRanks = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));;
 
 
     #pragma omp parallel for default(none) private(v) shared(stats)
@@ -125,8 +125,8 @@ struct PageRankStats *newPageRankStatsGraphAdjArrayList(struct GraphAdjArrayList
     stats->time_total = 0.0;
     stats->error_total = 0.0;
 
-    stats->realRanks = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));;
-    stats->pageRanks = (float *) my_malloc(graph->num_vertices * sizeof(float));;
+    stats->realRanks = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));;
+    stats->pageRanks = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));;
 
 
     #pragma omp parallel for default(none) private(v) shared(stats)
@@ -155,8 +155,8 @@ struct PageRankStats *newPageRankStatsGraphAdjLinkedList(struct GraphAdjLinkedLi
     stats->time_total = 0.0;
     stats->error_total = 0.0;
 
-    stats->realRanks = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));;
-    stats->pageRanks = (float *) my_malloc(graph->num_vertices * sizeof(float));;
+    stats->realRanks = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));;
+    stats->pageRanks = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));;
 
 
     #pragma omp parallel for default(none) private(v) shared(stats)
@@ -369,8 +369,8 @@ struct PageRankStats *pageRankPullRowGraphGrid(struct Arguments *arguments, stru
     struct PageRankStats *stats = newPageRankStatsGraphGrid(graph);
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
     printf(" -----------------------------------------------------\n");
@@ -506,8 +506,8 @@ struct PageRankStats *pageRankPullRowFixedPointGraphGrid(struct Arguments *argum
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *riDividedOnDiClause = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *riDividedOnDiClause = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
 
     printf(" -----------------------------------------------------\n");
@@ -645,8 +645,8 @@ struct PageRankStats *pageRankPushColumnGraphGrid(struct Arguments *arguments, s
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
     printf(" -----------------------------------------------------\n");
@@ -782,8 +782,8 @@ struct PageRankStats *pageRankPushColumnFixedPointGraphGrid(struct Arguments *ar
 
 
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *riDividedOnDiClause = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *riDividedOnDiClause = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting Page Rank Col FP (tolerance/epsilon)");
@@ -995,8 +995,8 @@ struct PageRankStats *pageRankPullGraphCSR(struct Arguments *arguments, struct G
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
@@ -1163,8 +1163,8 @@ struct PageRankStats *pageRankPushGraphCSR(struct Arguments *arguments, struct G
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
@@ -1349,10 +1349,10 @@ struct PageRankStats *pageRankPullFixedPoint64BitGraphCSR(struct Arguments *argu
 
 
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *riDividedOnDiClause = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    // uint64_t* outDegreesFP = (uint64_t*) my_malloc(graph->num_vertices*sizeof(uint64_t));
-    // uint64_t* pageRanksFP = (uint64_t*) my_malloc(graph->num_vertices*sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *riDividedOnDiClause = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    // uint64_t* outDegreesFP = (uint64_t*)my_malloc((graph->num_vertices + 1)*sizeof(uint64_t));
+    // uint64_t* pageRanksFP = (uint64_t*)my_malloc((graph->num_vertices + 1)*sizeof(uint64_t));
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
@@ -1530,10 +1530,10 @@ struct PageRankStats *pageRankPullFixedPoint32BitGraphCSR(struct Arguments *argu
 
 
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint32_t *riDividedOnDiClause = (uint32_t *) my_malloc(graph->num_vertices * sizeof(uint32_t));
-    // uint64_t* outDegreesFP = (uint64_t*) my_malloc(graph->num_vertices*sizeof(uint64_t));
-    // uint64_t* pageRanksFP = (uint64_t*) my_malloc(graph->num_vertices*sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint32_t *riDividedOnDiClause = (uint32_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint32_t));
+    // uint64_t* outDegreesFP = (uint64_t*)my_malloc((graph->num_vertices + 1)*sizeof(uint64_t));
+    // uint64_t* pageRanksFP = (uint64_t*)my_malloc((graph->num_vertices + 1)*sizeof(uint64_t));
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
@@ -1707,10 +1707,10 @@ struct PageRankStats *pageRankPullFixedPoint16BitGraphCSR(struct Arguments *argu
     sorted_edges_array = graph->sorted_edges_array->edges_array_dest;
 #endif
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint16_t *riDividedOnDiClause = (uint16_t *) my_malloc(graph->num_vertices * sizeof(uint16_t));
-    // uint64_t* outDegreesFP = (uint64_t*) my_malloc(graph->num_vertices*sizeof(uint64_t));
-    // uint64_t* pageRanksFP = (uint64_t*) my_malloc(graph->num_vertices*sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint16_t *riDividedOnDiClause = (uint16_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint16_t));
+    // uint64_t* outDegreesFP = (uint64_t*)my_malloc((graph->num_vertices + 1)*sizeof(uint64_t));
+    // uint64_t* pageRanksFP = (uint64_t*)my_malloc((graph->num_vertices + 1)*sizeof(uint64_t));
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
@@ -1885,10 +1885,10 @@ struct PageRankStats *pageRankPullFixedPoint8BitGraphCSR(struct Arguments *argum
 
 
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint8_t *riDividedOnDiClause = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    // uint64_t* outDegreesFP = (uint64_t*) my_malloc(graph->num_vertices*sizeof(uint64_t));
-    // uint64_t* pageRanksFP = (uint64_t*) my_malloc(graph->num_vertices*sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint8_t *riDividedOnDiClause = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    // uint64_t* outDegreesFP = (uint64_t*)my_malloc((graph->num_vertices + 1)*sizeof(uint64_t));
+    // uint64_t* pageRanksFP = (uint64_t*)my_malloc((graph->num_vertices + 1)*sizeof(uint64_t));
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
@@ -2048,9 +2048,9 @@ struct PageRankStats *pageRankPushFixedPointGraphCSR(struct Arguments *arguments
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
 
-    // uint32_t* pageRanksFP = (uint32_t*) my_malloc(graph->num_vertices*sizeof(uint32_t));
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *riDividedOnDiClause = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    // uint32_t* pageRanksFP = (uint32_t*)my_malloc((graph->num_vertices + 1)*sizeof(uint32_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *riDividedOnDiClause = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 1;
@@ -2224,8 +2224,8 @@ struct PageRankStats *pageRankPullQuant32BitGraphCSR(struct Arguments *arguments
     sorted_edges_array = graph->sorted_edges_array->edges_array_dest;
 #endif
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
     uint32_t *riDividedOnDiClause_quant = (uint32_t *)my_malloc(graph->num_vertices * sizeof(uint32_t));
 
 #ifdef CACHE_HARNESS_META
@@ -2407,8 +2407,8 @@ struct PageRankStats *pageRankPullQuant16BitGraphCSR(struct Arguments *arguments
     sorted_edges_array = graph->sorted_edges_array->edges_array_dest;
 #endif
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
     uint16_t *riDividedOnDiClause_quant = (uint16_t *)my_malloc(graph->num_vertices * sizeof(uint16_t));
 
 #ifdef CACHE_HARNESS_META
@@ -2591,8 +2591,8 @@ struct PageRankStats *pageRankPullQuant8BitGraphCSR(struct Arguments *arguments,
     sorted_edges_array = graph->sorted_edges_array->edges_array_dest;
 #endif
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
     uint8_t *riDividedOnDiClause_quant = (uint8_t *)my_malloc(graph->num_vertices * sizeof(uint8_t));
 
 #ifdef CACHE_HARNESS_META
@@ -2765,8 +2765,8 @@ struct PageRankStats *pageRankPushQuantGraphCSR(struct Arguments *arguments, str
     struct Timer *timer = (struct Timer *) malloc(sizeof(struct Timer));
     struct Timer *timer_inner = (struct Timer *) malloc(sizeof(struct Timer));
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
     uint32_t *riDividedOnDiClause_quant = (uint32_t *)my_malloc(graph->num_vertices * sizeof(uint32_t));
 
 
@@ -2950,8 +2950,8 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
     int activeVertices = 0;
 
 
-    workListCurr  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    workListNext  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
+    workListCurr  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    workListNext  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
 
 
     resetWorkList(workListNext, graph->num_vertices);
@@ -2967,7 +2967,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphCSR(struct Arguments *arguments
 
 
 
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 2;
@@ -3159,8 +3159,8 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
     uint8_t *workListNext = NULL;
     int activeVertices = 0;
 
-    workListCurr  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    workListNext  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
+    workListCurr  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    workListNext  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
 
     resetWorkList(workListNext, graph->num_vertices);
     resetWorkList(workListCurr, graph->num_vertices);
@@ -3173,8 +3173,8 @@ struct PageRankStats *pageRankDataDrivenPushGraphCSR(struct Arguments *arguments
     sorted_edges_array = graph->sorted_edges_array->edges_array_dest;
 #endif
 
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *aResiduals = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *aResiduals = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
 
@@ -3370,8 +3370,8 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
     int activeVertices = 0;
 
 
-    workListCurr  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    workListNext  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
+    workListCurr  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    workListNext  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
 
 
     resetWorkList(workListNext, graph->num_vertices);
@@ -3387,8 +3387,8 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphCSR(struct Arguments *argum
 
 
 
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *aResiduals = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *aResiduals = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 #ifdef CACHE_HARNESS_META
     stats->numPropertyRegions = 3;
@@ -3658,8 +3658,8 @@ struct PageRankStats *pageRankPullGraphAdjArrayList(struct Arguments *arguments,
 
 
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
     printf(" -----------------------------------------------------\n");
@@ -3800,8 +3800,8 @@ struct PageRankStats *pageRankPushGraphAdjArrayList(struct Arguments *arguments,
 
 
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
     printf(" -----------------------------------------------------\n");
@@ -3949,8 +3949,8 @@ struct PageRankStats *pageRankPullFixedPointGraphAdjArrayList(struct Arguments *
 
 
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *riDividedOnDiClause = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *riDividedOnDiClause = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
 
     printf(" -----------------------------------------------------\n");
@@ -4090,8 +4090,8 @@ struct PageRankStats *pageRankPushFixedPointGraphAdjArrayList(struct Arguments *
 
 
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *riDividedOnDiClause = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *riDividedOnDiClause = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
 
     printf(" -----------------------------------------------------\n");
@@ -4238,14 +4238,14 @@ struct PageRankStats *pageRankDataDrivenPullGraphAdjArrayList(struct Arguments *
     struct EdgeList *Nodes;
 
 
-    workListCurr  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    workListNext  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
+    workListCurr  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    workListNext  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
 
 
     resetWorkList(workListNext, graph->num_vertices);
     resetWorkList(workListCurr, graph->num_vertices);
 
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting Page Rank Pull DD (tolerance/epsilon)");
@@ -4393,15 +4393,15 @@ struct PageRankStats *pageRankDataDrivenPushGraphAdjArrayList(struct Arguments *
     int activeVertices = 0;
     struct EdgeList *Nodes;
 
-    workListCurr  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    workListNext  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
+    workListCurr  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    workListNext  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
 
 
     resetWorkList(workListNext, graph->num_vertices);
     resetWorkList(workListCurr, graph->num_vertices);
 
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *aResiduals = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *aResiduals = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting Page Rank Push DD (tolerance/epsilon)");
@@ -4553,8 +4553,8 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphAdjArrayList(struct Argumen
     uint8_t *workListNext = NULL;
     int activeVertices = 0;
 
-    workListCurr  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    workListNext  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
+    workListCurr  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    workListNext  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
 
 
     resetWorkList(workListNext, graph->num_vertices);
@@ -4563,8 +4563,8 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphAdjArrayList(struct Argumen
 
 
 
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *aResiduals = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *aResiduals = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
     printf(" -----------------------------------------------------\n");
@@ -4781,8 +4781,8 @@ struct PageRankStats *pageRankPullGraphAdjLinkedList(struct Arguments *arguments
 
 
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
     printf(" -----------------------------------------------------\n");
@@ -4925,8 +4925,8 @@ struct PageRankStats *pageRankPushGraphAdjLinkedList(struct Arguments *arguments
 
 
 
-    float *pageRanksNext = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *pageRanksNext = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
     printf(" -----------------------------------------------------\n");
@@ -5075,8 +5075,8 @@ struct PageRankStats *pageRankPullFixedPointGraphAdjLinkedList(struct Arguments 
 
 
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *riDividedOnDiClause = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *riDividedOnDiClause = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
 
     printf(" -----------------------------------------------------\n");
@@ -5219,8 +5219,8 @@ struct PageRankStats *pageRankPushFixedPointGraphAdjLinkedList(struct Arguments 
 
 
 
-    uint64_t *pageRanksNext = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
-    uint64_t *riDividedOnDiClause = (uint64_t *) my_malloc(graph->num_vertices * sizeof(uint64_t));
+    uint64_t *pageRanksNext = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
+    uint64_t *riDividedOnDiClause = (uint64_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint64_t));
 
 
     printf(" -----------------------------------------------------\n");
@@ -5365,8 +5365,8 @@ struct PageRankStats *pageRankDataDrivenPullGraphAdjLinkedList(struct Arguments 
     struct AdjLinkedListNode *Nodes;
 
 
-    workListCurr  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    workListNext  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
+    workListCurr  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    workListNext  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
 
 
     resetWorkList(workListNext, graph->num_vertices);
@@ -5376,7 +5376,7 @@ struct PageRankStats *pageRankDataDrivenPullGraphAdjLinkedList(struct Arguments 
 
 
 
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
     printf(" -----------------------------------------------------\n");
@@ -5530,8 +5530,8 @@ struct PageRankStats *pageRankDataDrivenPushGraphAdjLinkedList(struct Arguments 
 
 
 
-    workListCurr  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    workListNext  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
+    workListCurr  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    workListNext  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
 
 
     resetWorkList(workListNext, graph->num_vertices);
@@ -5540,8 +5540,8 @@ struct PageRankStats *pageRankDataDrivenPushGraphAdjLinkedList(struct Arguments 
 
 
 
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *aResiduals = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *aResiduals = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
 
 
@@ -5702,8 +5702,8 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphAdjLinkedList(struct Argume
     int activeVertices = 0;
 
 
-    workListCurr  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
-    workListNext  = (uint8_t *) my_malloc(graph->num_vertices * sizeof(uint8_t));
+    workListCurr  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
+    workListNext  = (uint8_t *)my_malloc((graph->num_vertices + 1) * sizeof(uint8_t));
 
 
     resetWorkList(workListNext, graph->num_vertices);
@@ -5712,8 +5712,8 @@ struct PageRankStats *pageRankDataDrivenPullPushGraphAdjLinkedList(struct Argume
 
 
 
-    float *riDividedOnDiClause = (float *) my_malloc(graph->num_vertices * sizeof(float));
-    float *aResiduals = (float *) my_malloc(graph->num_vertices * sizeof(float));
+    float *riDividedOnDiClause = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
+    float *aResiduals = (float *)my_malloc((graph->num_vertices + 1) * sizeof(float));
 
     printf(" -----------------------------------------------------\n");
     printf("| %-51s | \n", "Starting Page Rank Pull-Push DD (tolerance/epsilon)");
