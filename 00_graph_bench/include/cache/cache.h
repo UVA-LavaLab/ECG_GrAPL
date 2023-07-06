@@ -14,7 +14,7 @@
 #define MASK_POLICY    7
 #define POPT_POLICY    8
 
-#define ENABLE_PREFETCH    1
+#define ENABLE_PREFETCH    0
 // #define ENABLE_PREFETCH    0
 
 // General cache configuration

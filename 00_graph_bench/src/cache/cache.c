@@ -2003,19 +2003,17 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
     }
 
     uint32_t popt_mask = POPT_MAX_REREF;
-
     popt_mask = findRereferenceValPOPT(cache, vDst, vSrc);
-
-    if(checkInCache(cache,  addr) && ENABLE_PREFETCH){
-
     uint32_t node_prefetch = cache->prefetch_matrix[node];
+    uint64_t node_address = (addr-(node*4))+(node_prefetch*4);
+    if(checkInCache(cache,  node_address) && ENABLE_PREFETCH){
 
     if(cache->policy == POPT_POLICY && (vSrc != vDst))
     {
-     PrefetchPOPT(cache,  addr, 'r', node_prefetch, popt_mask, vSrc, vDst);
+     PrefetchPOPT(cache,  node_address, 'r', node_prefetch, popt_mask, node_prefetch, vDst);
     } else
     {
-     Prefetch(cache,  addr, 'r', node_prefetch, mask);   
+     Prefetch(cache,  node_address, 'r', node_prefetch, mask);   
     }
   }
 
