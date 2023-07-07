@@ -565,7 +565,7 @@ uint32_t checkInCache(struct Cache *cache, uint64_t addr)
     return 0;
 }
 
-void Prefetch(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask)
+void Prefetch(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
     cache->currentCycle++;/*per cache global counter to maintain LRU order
       among cache ways, updated on every cache access*/
@@ -575,31 +575,12 @@ void Prefetch(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t nod
     if(line == NULL)/*miss*/
     {
         cache->readMissesPrefetch++;
-        fillLine(cache, addr, mask);
+        fillLine(cache, addr, mask, vSrc, vDst);
     }
     else
     {
         /**since it's a hit, update LRU and update dirty flag**/
-        updatePromotionPolicy(cache, line, mask);
-    }
-}
-
-void PrefetchPOPT(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst)
-{
-    cache->currentCycle++;/*per cache global counter to maintain LRU order
-      among cache ways, updated on every cache access*/
-    cache->currentCycle_preftcher++;
-    cache->readsPrefetch++;
-    struct CacheLine *line = findLine(cache, addr);
-    if(line == NULL)/*miss*/
-    {
-        cache->readMissesPrefetch++;
-        fillLinePOPT(cache, addr, mask, vSrc, vDst);
-    }
-    else
-    {
-        /**since it's a hit, update LRU and update dirty flag**/
-        updatePromotionPolicyPOPT(cache, line, mask, vSrc, vDst);
+        updatePromotionPolicy(cache, line, mask, vSrc, vDst);
     }
 }
 
@@ -683,7 +664,7 @@ void updateAgeGRASP(struct Cache *cache)
 // ***************         INSERTION POLICIES                                    **************
 // ********************************************************************************************
 
-void updateInsertionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t mask)
+void updateInsertionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
     switch(cache->policy)
     {
@@ -711,20 +692,11 @@ void updateInsertionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t
     case MASK_POLICY:
         updateInsertMASK(cache, line, mask);
         break;
-    default :
-        updateInsertLRU(cache, line);
-    }
-}
-
-void updateInsertionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
-{
-    switch(cache->policy)
-    {
     case POPT_POLICY:
         updateInsertPOPT(cache, line, mask, vSrc, vDst);
         break;
     default :
-        updateInsertPOPT(cache, line, mask, vSrc, vDst);
+        updateInsertLRU(cache, line);
     }
 }
 
@@ -743,9 +715,13 @@ void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask
     {
         setRRPV(line, DEFAULT_INSERT_RRPV);
     }
+
     uint8_t SRRPV = DEFAULT_INSERT_SRRPV;
     setSRRPV(line, SRRPV);
-    setPOPT(line, mask);
+
+    if(vSrc != vDst)
+        setPOPT(line, mask);
+
     setSeq(line, cache->currentCycle);
 }
 
@@ -914,7 +890,7 @@ uint32_t inWarmRegionAddrGRASP(struct Cache *cache, uint64_t addr)
 // ***************         PROMOTION POLICIES                                    **************
 // ********************************************************************************************
 
-void updatePromotionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t mask)
+void updatePromotionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
     switch(cache->policy)
     {
@@ -942,20 +918,11 @@ void updatePromotionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t
     case MASK_POLICY:
         updatePromoteMASK(cache, line, mask);
         break;
-    default :
-        updatePromoteLRU(cache, line);
-    }
-}
-
-void updatePromotionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
-{
-    switch(cache->policy)
-    {
     case POPT_POLICY:
         updatePromotePOPT(cache, line, mask, vSrc, vDst);
         break;
     default :
-        updatePromotePOPT(cache, line, mask, vSrc, vDst);
+        updatePromoteLRU(cache, line);
     }
 }
 
@@ -974,7 +941,9 @@ void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t mas
         setRRPV(line, RRPV);
     }
     setSRRPV(line, HIT_SRRPV);
-    setPOPT(line, mask);
+
+    if(vSrc != vDst)
+        setPOPT(line, mask);
     setSeq(line, cache->currentCycle);
 }
 
@@ -1093,7 +1062,7 @@ void updatePromoteGRASPXP(struct Cache *cache, struct CacheLine *line)
 // ***************         VICTIM EVICTION POLICIES                              **************
 // ********************************************************************************************
 
-struct CacheLine *getVictimPolicy(struct Cache *cache, uint64_t addr)
+struct CacheLine *getVictimPolicy(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
     struct CacheLine *victim = NULL;
 
@@ -1123,29 +1092,15 @@ struct CacheLine *getVictimPolicy(struct Cache *cache, uint64_t addr)
     case MASK_POLICY:
         victim = getVictimMASK(cache, addr);
         break;
+    case POPT_POLICY:
+        victim = getVictimPOPT(cache, addr, mask, vSrc, vDst);
+        break;
     default :
         victim = getVictimLRU(cache, addr);
     }
 
     return victim;
 }
-
-struct CacheLine *getVictimPolicyPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
-{
-    struct CacheLine *victim = NULL;
-
-    switch(cache->policy)
-    {
-    case POPT_POLICY:
-        victim = getVictimPOPT(cache, addr, mask, vSrc, vDst);
-        break;
-    default :
-        victim = getVictimPOPT(cache, addr, mask, vSrc, vDst);
-    }
-
-    return victim;
-}
-
 
 /*return an invalid line as LRU, if any, otherwise return LRU line*/
 struct CacheLine *getVictimLRU(struct Cache *cache, uint64_t addr)
@@ -1188,8 +1143,15 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
     min    = POPT_MAX_REREF;
     i      = calcIndex(cache, addr);
 
+    uint32_t *victim_cacheLines = (uint32_t *) my_malloc((cache->assoc + 1) * sizeof(uint32_t));
+
     for(j = 0; j < cache->assoc; j++)
     {
+        if(vSrc != vDst)
+            victim_cacheLines[j] = 0;
+        else
+            victim_cacheLines[j] = 1;
+
         if(isValid(&(cache->cacheLines[i][j])) == 0)
         {
             cache->cacheLines[i][j].addr = addr;
@@ -1206,6 +1168,11 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
         if(getPOPT(&(cache->cacheLines[i][j])) == min)
         {
             victim_multi++;
+            victim_cacheLines[j] = 1;
+            if(j == 1)
+            {
+                victim_cacheLines[j - 1] = 1;
+            }
         }
         if(getPOPT(&(cache->cacheLines[i][j])) > min)
         {
@@ -1216,7 +1183,7 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
     }
     assert(victim != cache->assoc);
 
-    if(victim_multi)
+    if(victim_multi || (vSrc == vDst))
     {
         victim = 0;
         min = getSRRPV(&(cache->cacheLines[i][0]));
@@ -1224,7 +1191,7 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
 
         for(j = 1; j < cache->assoc; j++)
         {
-            if(getSRRPV(&(cache->cacheLines[i][j])) > min)
+            if(getSRRPV(&(cache->cacheLines[i][j])) > min && victim_cacheLines[j] == 1)
             {
                 victim = j;
                 min = getSRRPV(&(cache->cacheLines[i][j]));
@@ -1237,9 +1204,12 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
             int diff = SRRPV_INIT - min;
             for(j = 0; j < cache->assoc; j++)
             {
-                uint8_t SRRPV = getSRRPV(&(cache->cacheLines[i][j])) + (diff);
-                setSRRPV(&(cache->cacheLines[i][j]), SRRPV);
-                assert(SRRPV <= SRRPV_INIT);
+                if(victim_cacheLines[j] == 1)
+                {
+                    uint8_t SRRPV = getSRRPV(&(cache->cacheLines[i][j])) + (diff);
+                    setSRRPV(&(cache->cacheLines[i][j]), SRRPV);
+                    assert(SRRPV <= SRRPV_INIT);
+                }
             }
         }
 
@@ -1247,18 +1217,7 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
         assert(victim != cache->assoc);
     }
 
-    // not in the POPT paper optimizaiton
-    // if (min < POPT_MAX_REREF)
-    // {
-    //     int diff = POPT_MAX_REREF - min;
-    //     for(j = 0; j < cache->assoc; j++)
-    //     {
-    //         uint32_t POPT = getPOPT(&(cache->cacheLines[i][j])) + diff;
-    //         setPOPT(&(cache->cacheLines[i][j]), POPT);
-    //         assert(POPT <= POPT_MAX_REREF);
-    //     }
-    // }
-
+    free(victim_cacheLines);
     cache->evictions++;
     cache->cacheLines[i][victim].addr = addr;
     return &(cache->cacheLines[i][victim]);
@@ -1887,29 +1846,20 @@ struct CacheLine *findLine(struct Cache *cache, uint64_t addr)
 
 
 /*find a victim*/
-struct CacheLine *findLineToReplace(struct Cache *cache, uint64_t addr, uint32_t mask)
+struct CacheLine *findLineToReplace(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
-    struct CacheLine  *victim = getVictimPolicy(cache, addr);
-    updateInsertionPolicy(cache, victim, mask);
-
-    return (victim);
-}
-
-/*find a victim*/
-struct CacheLine *findLineToReplacePOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
-{
-    struct CacheLine  *victim = getVictimPolicyPOPT(cache, addr, mask, vSrc, vDst);
-    updateInsertionPolicyPOPT(cache, victim, mask, vSrc, vDst);
+    struct CacheLine  *victim = getVictimPolicy(cache, addr, mask, vSrc, vDst);
+    updateInsertionPolicy(cache, victim, mask, vSrc, vDst);
 
     return (victim);
 }
 
 /*allocate a new line*/
-struct CacheLine *fillLine(struct Cache *cache, uint64_t addr, uint32_t mask)
+struct CacheLine *fillLine(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
     uint64_t tag;
 
-    struct CacheLine *victim = findLineToReplace(cache, addr, mask);
+    struct CacheLine *victim = findLineToReplace(cache, addr, mask, vSrc, vDst);
     assert(victim != 0);
     if(getFlags(victim) == DIRTY)
     {
@@ -1927,28 +1877,6 @@ struct CacheLine *fillLine(struct Cache *cache, uint64_t addr, uint32_t mask)
     return victim;
 }
 
-/*allocate a new line*/
-struct CacheLine *fillLinePOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
-{
-    uint64_t tag;
-
-    struct CacheLine *victim = findLineToReplacePOPT(cache, addr, mask, vSrc, vDst);
-    assert(victim != 0);
-    if(getFlags(victim) == DIRTY)
-    {
-        writeBack(cache, addr);
-    }
-
-    tag = calcTag(cache, addr);
-    setTag(victim, tag);
-    setAddr(victim, addr);
-    setFlags(victim, VALID);
-
-    /**note that this cache line has been already
-       upgraded to MRU in the previous function (findLineToReplace)**/
-
-    return victim;
-}
 
 uint32_t minTwoIntegers(uint32_t num1, uint32_t num2)
 {
@@ -2031,20 +1959,18 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
     }
 
     uint32_t popt_mask = POPT_MAX_REREF;
+
+    if(cache->policy == POPT_POLICY)
+    {
+        mask = popt_mask;
+    }
+
     popt_mask = findRereferenceValPOPT(cache, vDst, vSrc);
     uint32_t node_prefetch = cache->prefetch_matrix[node];
     uint64_t node_address = (addr - (node * 4)) + (node_prefetch * 4);
     if(checkInCache(cache,  node_address) && ENABLE_PREFETCH)
     {
-
-        if(cache->policy == POPT_POLICY && (vSrc != vDst))
-        {
-            PrefetchPOPT(cache,  node_address, 'r', node_prefetch, popt_mask, node_prefetch, vDst);
-        }
-        else
-        {
-            Prefetch(cache,  node_address, 'r', node_prefetch, mask);
-        }
+        Prefetch(cache,  node_address, 'r', node_prefetch, mask, vSrc, vDst);
     }
 
     // if(popt_mask)
@@ -2068,7 +1994,7 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
         {
             if(!getVictimPINBypass(cache, addr))
             {
-                newline = fillLine(cache, addr, mask);
+                newline = fillLine(cache, addr, mask, vSrc, vDst);
                 newline->idx = node;
                 if(op == 'w')
                     setFlags(newline, DIRTY);
@@ -2076,15 +2002,8 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
         }
         else
         {
-            if(cache->policy == POPT_POLICY && (vSrc != vDst))
-            {
-                newline = fillLinePOPT(cache, addr, popt_mask, vSrc, vDst);
-            }
-            else
-            {
-                newline = fillLine(cache, addr, mask);
-            }
 
+            newline = fillLine(cache, addr, mask, vSrc, vDst);
             newline->idx = node;
             if(op == 'w')
                 setFlags(newline, DIRTY);
@@ -2095,99 +2014,13 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
     }
     else
     {
-        /**since it's a hit, update LRU and update dirty flag**/
-        if(cache->policy == POPT_POLICY && (vSrc != vDst))
-        {
-            updatePromotionPolicyPOPT(cache, line, popt_mask, vSrc, vDst);
-        }
-        else
-        {
-            updatePromotionPolicy(cache, line, mask);
-        }
 
+        updatePromotionPolicy(cache, line, mask, vSrc, vDst);
         if(op == 'w')
             setFlags(line, DIRTY);
 
         if(node < cache->numVertices)
             cache->verticesHit[node]++;
-    }
-}
-
-void AccessMultiLevel(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask)
-{
-
-    struct Cache *cache_current;
-
-    cache_current = cache;
-
-
-    if(node < cache_current->numVertices)
-        online_cache_graph_stats(cache_current, node);
-    cache_current->currentCycle++;
-    /*per cache global counter to maintain LRU order among cache ways, updated on every cache access*/
-
-    cache_current->currentCycle_cache++;
-
-    if(op == 'w')
-    {
-        cache_current->writes++;
-    }
-    else if(op == 'r')
-    {
-        cache_current->reads++;
-
-    }
-
-    struct CacheLine *line = findLine(cache_current, addr);
-    if(line == NULL)/*miss*/
-    {
-        if(op == 'w')
-        {
-            cache_current->writeMisses++;
-        }
-        else if(op == 'r')
-        {
-            cache_current->readMisses++;
-        }
-
-        struct CacheLine *newline = NULL;
-
-        if(cache_current->policy == PIN_POLICY)
-        {
-            if(!getVictimPINBypass(cache_current, addr))
-            {
-                newline = fillLine(cache_current, addr, mask);
-                newline->idx = node;
-                if(op == 'w')
-                    setFlags(newline, DIRTY);
-            }
-        }
-        else
-        {
-            newline = fillLine(cache_current, addr, mask);
-            newline->idx = node;
-            if(op == 'w')
-                setFlags(newline, DIRTY);
-        }
-
-        if(node < cache_current->numVertices)
-            cache_current->verticesMiss[node]++;
-
-
-        if(cache_current->cacheNext)
-        {
-            AccessMultiLevel(cache_current->cacheNext, addr, op,  node, mask);
-        }
-    }
-    else
-    {
-        /**since it's a hit, update LRU and update dirty flag**/
-        updatePromotionPolicy(cache_current, line, mask);
-        if(op == 'w')
-            setFlags(line, DIRTY);
-
-        if(node < cache_current->numVertices)
-            cache_current->verticesHit[node]++;
     }
 }
 

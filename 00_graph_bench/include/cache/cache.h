@@ -14,14 +14,14 @@
 #define MASK_POLICY    7
 #define POPT_POLICY    8
 
-#define ENABLE_PREFETCH    1
-// #define ENABLE_PREFETCH    0
+// #define ENABLE_PREFETCH    1
+#define ENABLE_PREFETCH    0
 
 // General cache configuration
 //GRASP/Ref_cache default configs
 // GRASP EXPRESS (GRASP-XP)
 // CHOOSE global Policys
-// #define POLICY LRU_POLICY
+#define POLICY LRU_POLICY
 // #define POLICY SRRIP_POLICY
 // #define POLICY LFU_POLICY
 // #define POLICY GRASP_POLICY
@@ -29,7 +29,7 @@
 // #define POLICY PLRU_POLICY
 // #define POLICY GRASPXP_POLICY
 // #define POLICY MASK_POLICY
-#define POLICY POPT_POLICY
+// #define POLICY POPT_POLICY
 
 #define BLOCKSIZE   64
 #define L1_SIZE     32768
@@ -246,8 +246,7 @@ uint64_t getEVC(struct Cache *cache);
 uint64_t getRMPrefetch(struct Cache *cache);
 uint64_t getReadsPrefetch(struct Cache *cache);
 
-void Prefetch(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask);
-void PrefetchPOPT(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst);
+void Prefetch(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 uint32_t checkInCache(struct Cache *cache, uint64_t addr);
 
 // ********************************************************************************************
@@ -257,16 +256,14 @@ uint32_t checkInCache(struct Cache *cache, uint64_t addr);
 void writeBack(struct Cache *cache, uint64_t addr);
 void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 struct CacheLine *findLine(struct Cache *cache, uint64_t addr);
-struct CacheLine *fillLine(struct Cache *cache, uint64_t addr, uint32_t mask);
-struct CacheLine *fillLinePOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
-struct CacheLine *findLineToReplace(struct Cache *cache, uint64_t addr, uint32_t mask);
-struct CacheLine *findLineToReplacePOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
+struct CacheLine *fillLine(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
+struct CacheLine *findLineToReplace(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************         VICTIM EVICTION POLICIES                              **************
 // ********************************************************************************************
 
-struct CacheLine *getVictimPolicy(struct Cache *cache, uint64_t addr);
+struct CacheLine *getVictimPolicy(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 struct CacheLine *getVictimLRU(struct Cache *cache, uint64_t addr);
 struct CacheLine *getVictimLFU(struct Cache *cache, uint64_t addr);
 struct CacheLine *getVictimGRASP(struct Cache *cache, uint64_t addr);
@@ -289,14 +286,13 @@ struct CacheLine *peekVictimPIN(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimPLRU(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimGRASPXP(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimMASK(struct Cache *cache, uint64_t addr);
-struct CacheLine *getVictimPolicyPOPT(struct Cache *cache, uint64_t addr, uint32_t mask,uint32_t vSrc, uint32_t vDst);
 struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************         INSERTION POLICIES                                    **************
 // ********************************************************************************************
 
-void updateInsertionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t mask);
+void updateInsertionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 void updateInsertLRU(struct Cache *cache, struct CacheLine *line);
 void updateInsertLFU(struct Cache *cache, struct CacheLine *line);
 void updateInsertGRASP(struct Cache *cache, struct CacheLine *line);
@@ -305,14 +301,13 @@ void updateInsertPIN(struct Cache *cache, struct CacheLine *line);
 void updateInsertPLRU(struct Cache *cache, struct CacheLine *line);
 void updateInsertGRASPXP(struct Cache *cache, struct CacheLine *line);
 void updateInsertMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask);
-void updateInsertionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************         PROMOTION POLICIES                                    **************
 // ********************************************************************************************
 
-void updatePromotionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t mask);
+void updatePromotionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 void updatePromoteLRU(struct Cache *cache, struct CacheLine *line);
 void updatePromoteLFU(struct Cache *cache, struct CacheLine *line);
 void updatePromoteGRASP(struct Cache *cache, struct CacheLine *line);
@@ -321,7 +316,6 @@ void updatePromotePIN(struct Cache *cache, struct CacheLine *line);
 void updatePromotePLRU(struct Cache *cache, struct CacheLine *line);
 void updatePromoteGRASPXP(struct Cache *cache, struct CacheLine *line);
 void updatePromoteMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask);
-void updatePromotionPolicyPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 // ********************************************************************************************
 // ***************         AGING POLICIES                                        **************
@@ -350,11 +344,6 @@ void freeCacheStructure(struct CacheStructure *cache);
 // ***************               ACCElGraph Policy                               **************
 // ********************************************************************************************
 void AccessCacheStructureUInt32(struct CacheStructure *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst);
-
-// ********************************************************************************************
-// ***************               MUltilevel Policy                               **************
-// ********************************************************************************************
-void AccessMultiLevel(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask);
 
 // ********************************************************************************************
 // ***************               GRASP-XP Policy                                 **************
