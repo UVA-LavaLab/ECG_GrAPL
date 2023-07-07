@@ -49,7 +49,7 @@
 #include "graphTest.h"
 #define GRAPH_NUM 4
 
-#define CACHE_CONFIGS 6
+#define CACHE_CONFIGS 2
 #define CACHE_POLICY 6
 #define MODE_NUM 3
 #define ORDER_CONFIG 6
@@ -66,25 +66,29 @@ main (int argc, char **argv)
     // char express_perf_file[1024];
     // char grasp_perf_file[1024];
 
-    uint32_t cache_size[CACHE_CONFIGS] = {32768, 65536, 131072, 262144, 524288,  1048576} ;//, 2097152, 4194304, 8388608, 16777216,  33554432,   67108864};
-    uint32_t Associativity[CACHE_CONFIGS] = {4,  4, 4, 8,  8,  16}; // , 16, 16, 16, 32, 32, 32};
-    uint32_t Block_size[CACHE_CONFIGS] = {64, 64, 64, 64, 64, 64}; //, 128, 128, 128, 128, 128, 128};
+    // uint32_t cache_size[CACHE_CONFIGS] = {32768, 65536, 131072, 262144, 524288,  1048576} ;//, 2097152, 4194304, 8388608, 16777216,  33554432,   67108864};
+    // uint32_t Associativity[CACHE_CONFIGS] = {4,  4, 4, 8,  8,  16}; // , 16, 16, 16, 32, 32, 32};
+    // uint32_t Block_size[CACHE_CONFIGS] = {64, 64, 64, 64, 64, 64}; //, 128, 128, 128, 128, 128, 128};
 
     // uint32_t cache_size[CACHE_CONFIGS]    = {262144, 524288,  1048576, 2097152, 4194304};
     // uint32_t Associativity[CACHE_CONFIGS] = {8,  8,  16, 16, 16};
     // uint32_t Block_size[CACHE_CONFIGS]    = {128, 128, 128, 128, 128};
+
+    uint32_t cache_size[CACHE_CONFIGS]    = {32768, 65536};
+    uint32_t Associativity[CACHE_CONFIGS] = {8, 8};
+    uint32_t Block_size[CACHE_CONFIGS]    = {64, 64};
 
     // uint32_t cache_size[CACHE_CONFIGS]    = {32768};
     // uint32_t Associativity[CACHE_CONFIGS] = {8};
     // uint32_t Block_size[CACHE_CONFIGS]    = {64};
 
     uint32_t policy[CACHE_POLICY]         = {PLRU_POLICY, SRRIP_POLICY, POPT_POLICY, GRASP_POLICY, MASK_POLICY, GRASP_OPT_POLICY};
-    float PLRU_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0}};
-    float SSRIP_stats[GRAPH_NUM][ORDER_CONFIG]      = {{0}};
-    float POPT_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0}};
-    float GRASP_stats[GRAPH_NUM][MODE_NUM]          = {{0}};
-    float MASK_stats[GRAPH_NUM][MODE_NUM]           = {{0}};
-    float GRASP_OPT_stats[GRAPH_NUM][MODE_NUM]      = {{0}};
+    float PLRU_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0.0f}};
+    float SSRIP_stats[GRAPH_NUM][ORDER_CONFIG]      = {{0.0f}};
+    float POPT_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0.0f}};
+    float GRASP_stats[GRAPH_NUM][MODE_NUM]          = {{0.0f}};
+    float MASK_stats[GRAPH_NUM][MODE_NUM]           = {{0.0f}};
+    float GRASP_OPT_stats[GRAPH_NUM][MODE_NUM]      = {{0.0f}};
 
     uint32_t lmode_l2[TOTAL_CONFIG] = {0, 4, 11, 11, 11, 11, 0, 11, 11, 0, 11, 11};
     uint32_t lmode_l3[TOTAL_CONFIG] = {0, 0, 0, 4, 0, 4, 4, 4, 4, 0, 0, 0 };
@@ -228,7 +232,7 @@ main (int argc, char **argv)
     arguments.llc_assoc     = L3_ASSOC;
     arguments.llc_blocksize = BLOCKSIZE;
     arguments.llc_policy    = POLICY;
-    arguments.popt_bits      = POPT_CACHE_BITS;
+    arguments.popt_bits     = POPT_CACHE_BITS;
 
     void *graph = NULL;
 
@@ -280,7 +284,7 @@ main (int argc, char **argv)
                 for(jj = 0 ; jj < arguments.trials; jj++)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
-                    ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
+                    ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should match other algo
                     PLRU_stats[i][j] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
@@ -308,7 +312,7 @@ main (int argc, char **argv)
                 for(jj = 0 ; jj < arguments.trials; jj++)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
-                    ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
+                    ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should match other algo
                     SSRIP_stats[i][j] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
@@ -428,7 +432,6 @@ main (int argc, char **argv)
 
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
-
         }
         // print out stats to file each graph processed
         FILE *fptr1;
@@ -452,6 +455,7 @@ main (int argc, char **argv)
             for (j = 0; j < ORDER_CONFIG; ++j)
             {
                 fprintf(fptr1, "%-14f, ",  PLRU_stats[i][j] / arguments.trials);
+                PLRU_stats[i][j] = 0.0f;
             }
             fprintf(fptr1, " \n");
             fprintf(fptr1, "%-25s, ",  " ");
@@ -459,6 +463,7 @@ main (int argc, char **argv)
             for (j = 0; j < ORDER_CONFIG; ++j)
             {
                 fprintf(fptr1, "%-14f, ",  SSRIP_stats[i][j] / arguments.trials);
+                SSRIP_stats[i][j] =  0.0f;
             }
             fprintf(fptr1, " \n");
             fprintf(fptr1, "%-25s, ",  " ");
@@ -466,6 +471,7 @@ main (int argc, char **argv)
             for (j = 0; j < ORDER_CONFIG; ++j)
             {
                 fprintf(fptr1, "%-14f, ",  POPT_stats[i][j] / arguments.trials);
+                POPT_stats[i][j] =  0.0f;
             }
             fprintf(fptr1, " \n");
         }
@@ -484,6 +490,7 @@ main (int argc, char **argv)
             for (j = 0; j < MODE_NUM; ++j)
             {
                 fprintf(fptr1, "%-14f, ",  GRASP_stats[i][j] / arguments.trials);
+                GRASP_stats[i][j] =  0.0f;
             }
             fprintf(fptr1, " \n");
         }
@@ -502,6 +509,7 @@ main (int argc, char **argv)
             for (j = 0; j < MODE_NUM; ++j)
             {
                 fprintf(fptr1, "%-14f, ",  MASK_stats[i][j] / arguments.trials);
+                MASK_stats[i][j] =  0.0f;
             }
             fprintf(fptr1, " \n");
         }
@@ -520,12 +528,15 @@ main (int argc, char **argv)
             for (j = 0; j < MODE_NUM; ++j)
             {
                 fprintf(fptr1, "%-14f, ",  GRASP_OPT_stats[i][j] / arguments.trials);
+                GRASP_OPT_stats[i][j] =  0.0f;
             }
             fprintf(fptr1, " \n");
         }
         fprintf(fptr1, " -----------------------------------------------------\n");
 
         fclose(fptr1);
+
+
     }
     exit (0);
 }
