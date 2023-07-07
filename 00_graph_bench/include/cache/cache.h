@@ -13,6 +13,7 @@
 #define GRASPXP_POLICY 6
 #define MASK_POLICY    7
 #define POPT_POLICY    8
+#define GRASP_OPT_POLICY    9
 
 // #define ENABLE_PREFETCH    1
 #define ENABLE_PREFETCH    0
@@ -21,7 +22,7 @@
 //GRASP/Ref_cache default configs
 // GRASP EXPRESS (GRASP-XP)
 // CHOOSE global Policys
-#define POLICY LRU_POLICY
+// #define POLICY LRU_POLICY
 // #define POLICY SRRIP_POLICY
 // #define POLICY LFU_POLICY
 // #define POLICY GRASP_POLICY
@@ -29,7 +30,8 @@
 // #define POLICY PLRU_POLICY
 // #define POLICY GRASPXP_POLICY
 // #define POLICY MASK_POLICY
-// #define POLICY POPT_POLICY
+#define POLICY POPT_POLICY
+// #define POLICY GRASP_OPT_POLICY
 
 #define BLOCKSIZE   64
 #define L1_SIZE     32768
@@ -273,6 +275,8 @@ uint8_t getVictimPINBypass(struct Cache *cache, uint64_t addr);
 struct CacheLine *getVictimPLRU(struct Cache *cache, uint64_t addr);
 struct CacheLine *getVictimGRASPXP(struct Cache *cache, uint64_t addr);
 struct CacheLine *getVictimMASK(struct Cache *cache, uint64_t addr);
+struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
+struct CacheLine *getVictimGRASPPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 
 // ********************************************************************************************
 // ***************         VICTIM PEEK POLICIES                                  **************
@@ -286,7 +290,7 @@ struct CacheLine *peekVictimPIN(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimPLRU(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimGRASPXP(struct Cache *cache, uint64_t addr);
 struct CacheLine *peekVictimMASK(struct Cache *cache, uint64_t addr);
-struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst);
+
 
 // ********************************************************************************************
 // ***************         INSERTION POLICIES                                    **************
@@ -302,7 +306,7 @@ void updateInsertPLRU(struct Cache *cache, struct CacheLine *line);
 void updateInsertGRASPXP(struct Cache *cache, struct CacheLine *line);
 void updateInsertMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask);
 void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
-
+void updateInsertGRASPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 // ********************************************************************************************
 // ***************         PROMOTION POLICIES                                    **************
 // ********************************************************************************************
@@ -317,6 +321,7 @@ void updatePromotePLRU(struct Cache *cache, struct CacheLine *line);
 void updatePromoteGRASPXP(struct Cache *cache, struct CacheLine *line);
 void updatePromoteMASK(struct Cache *cache, struct CacheLine *line, uint32_t mask);
 void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
+void updatePromoteGRASPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst);
 // ********************************************************************************************
 // ***************         AGING POLICIES                                        **************
 // ********************************************************************************************

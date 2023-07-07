@@ -695,6 +695,9 @@ void updateInsertionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t
     case POPT_POLICY:
         updateInsertPOPT(cache, line, mask, vSrc, vDst);
         break;
+    case GRASP_OPT_POLICY:
+        updateInsertGRASPOPT(cache, line, mask, vSrc, vDst);
+        break;
     default :
         updateInsertLRU(cache, line);
     }
@@ -724,6 +727,32 @@ void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask
 
     setSeq(line, cache->currentCycle);
 }
+
+/*upgrade LRU line to be MRU line*/
+void updateInsertGRASPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
+{
+    if(inHotRegion(cache, line))
+    {
+        setRRPV(line, HOT_INSERT_RRPV);
+    }
+    else if (inWarmRegion(cache, line))
+    {
+        setRRPV(line, WARM_INSERT_RRPV);
+    }
+    else
+    {
+        setRRPV(line, DEFAULT_INSERT_RRPV);
+    }
+
+    uint8_t SRRPV = DEFAULT_INSERT_SRRPV;
+    setSRRPV(line, SRRPV);
+
+    if(vSrc != vDst)
+        setPOPT(line, mask);
+
+    setSeq(line, cache->currentCycle);
+}
+
 
 /*upgrade LRU line to be MRU line*/
 void updateInsertLRU(struct Cache *cache, struct CacheLine *line)
@@ -921,6 +950,9 @@ void updatePromotionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t
     case POPT_POLICY:
         updatePromotePOPT(cache, line, mask, vSrc, vDst);
         break;
+    case GRASP_OPT_POLICY:
+        updatePromotePOPT(cache, line, mask, vSrc, vDst);
+        break;
     default :
         updatePromoteLRU(cache, line);
     }
@@ -940,6 +972,29 @@ void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t mas
             RRPV--;
         setRRPV(line, RRPV);
     }
+
+    setSRRPV(line, HIT_SRRPV);
+
+    if(vSrc != vDst)
+        setPOPT(line, mask);
+    setSeq(line, cache->currentCycle);
+}
+
+void updatePromoteGRASPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask, uint32_t vSrc, uint32_t vDst)
+{
+
+    if(inHotRegion(cache, line))
+    {
+        setRRPV(line, HOT_HIT_RRPV);
+    }
+    else
+    {
+        uint8_t RRPV = getRRPV(line);
+        if(RRPV > 0)
+            RRPV--;
+        setRRPV(line, RRPV);
+    }
+
     setSRRPV(line, HIT_SRRPV);
 
     if(vSrc != vDst)
@@ -1095,6 +1150,9 @@ struct CacheLine *getVictimPolicy(struct Cache *cache, uint64_t addr, uint32_t m
     case POPT_POLICY:
         victim = getVictimPOPT(cache, addr, mask, vSrc, vDst);
         break;
+    case GRASP_OPT_POLICY:
+        victim = getVictimGRASPPOPT(cache, addr, mask, vSrc, vDst);
+        break;
     default :
         victim = getVictimLRU(cache, addr);
     }
@@ -1214,6 +1272,95 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
         }
 
         assert(min != SRRPV_INIT || min != 0);
+        assert(victim != cache->assoc);
+    }
+
+    free(victim_cacheLines);
+    cache->evictions++;
+    cache->cacheLines[i][victim].addr = addr;
+    return &(cache->cacheLines[i][victim]);
+}
+
+struct CacheLine *getVictimGRASPPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
+{
+    uint64_t i, j, victim, min;
+    uint64_t victim_multi;
+
+    victim = cache->assoc;
+    min    = POPT_MAX_REREF;
+    i      = calcIndex(cache, addr);
+
+    uint32_t *victim_cacheLines = (uint32_t *) my_malloc((cache->assoc + 1) * sizeof(uint32_t));
+
+    for(j = 0; j < cache->assoc; j++)
+    {
+        if(vSrc != vDst)
+            victim_cacheLines[j] = 0;
+        else
+            victim_cacheLines[j] = 1;
+
+        if(isValid(&(cache->cacheLines[i][j])) == 0)
+        {
+            cache->cacheLines[i][j].addr = addr;
+            return &(cache->cacheLines[i][j]);
+        }
+    }
+
+    victim = 0;
+    min = getPOPT(&(cache->cacheLines[i][0]));
+    victim_multi = 0;
+
+    for(j = 1; j < cache->assoc; j++)
+    {
+        if(getPOPT(&(cache->cacheLines[i][j])) == min)
+        {
+            victim_multi++;
+            victim_cacheLines[j] = 1;
+            if(j == 1)
+            {
+                victim_cacheLines[j - 1] = 1;
+            }
+        }
+        if(getPOPT(&(cache->cacheLines[i][j])) > min)
+        {
+            victim = j;
+            min = getPOPT(&(cache->cacheLines[i][j]));
+        }
+
+    }
+    assert(victim != cache->assoc);
+
+    if(victim_multi || (vSrc == vDst))
+    {
+        victim = 0;
+        min = getRRPV(&(cache->cacheLines[i][0]));
+        victim_multi = 0;
+
+        for(j = 1; j < cache->assoc; j++)
+        {
+            if(getRRPV(&(cache->cacheLines[i][j])) > min && victim_cacheLines[j] == 1)
+            {
+                victim = j;
+                min = getRRPV(&(cache->cacheLines[i][j]));
+            }
+        }
+        assert(victim != cache->assoc);
+
+        if (min < DEFAULT_INSERT_RRPV)
+        {
+            int diff = DEFAULT_INSERT_RRPV - min;
+            for(j = 0; j < cache->assoc; j++)
+            {
+                if(victim_cacheLines[j] == 1)
+                {
+                    uint8_t RRPV = getRRPV(&(cache->cacheLines[i][j])) + (diff);
+                    setRRPV(&(cache->cacheLines[i][j]), RRPV);
+                    assert(RRPV <= DEFAULT_INSERT_RRPV);
+                }
+            }
+        }
+
+        assert(min != DEFAULT_INSERT_RRPV || min != 0);
         assert(victim != cache->assoc);
     }
 
@@ -1960,7 +2107,7 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
 
     uint32_t popt_mask = POPT_MAX_REREF;
 
-    if(cache->policy == POPT_POLICY)
+    if(cache->policy == POPT_POLICY || cache->policy == GRASP_OPT_POLICY)
     {
         mask = popt_mask;
     }
@@ -2289,6 +2436,9 @@ void printStatsCache(struct Cache *cache)
     case POPT_POLICY:
         printf("| %-51s | \n", "POPT_POLICY");
         break;
+    case GRASP_OPT_POLICY:
+        printf("| %-51s | \n", "GRASP_OPT_POLICY");
+        break;
     default :
         printf("| %-51s | \n", "LRU_POLICY");
     }
@@ -2367,6 +2517,9 @@ void printStatsCacheToFile(struct Cache *cache, char *fname_perf)
         break;
     case POPT_POLICY:
         fprintf(fptr1, "| %-51s | \n", "POPT_POLICY");
+        break;
+    case GRASP_OPT_POLICY:
+        fprintf(fptr1, "| %-51s | \n", "GRASP_OPT_POLICY");
         break;
     default :
         fprintf(fptr1, "| %-51s | \n", "LRU_POLICY");
