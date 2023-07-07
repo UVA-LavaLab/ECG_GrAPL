@@ -49,7 +49,7 @@
 #include "graphTest.h"
 #define GRAPH_NUM 4
 
-#define CACHE_CONFIGS 2
+#define CACHE_CONFIGS 6
 #define CACHE_POLICY 6
 #define MODE_NUM 3
 #define ORDER_CONFIG 6
@@ -66,17 +66,17 @@ main (int argc, char **argv)
     // char express_perf_file[1024];
     // char grasp_perf_file[1024];
 
-    // uint32_t cache_size[CACHE_CONFIGS] = {32768, 65536, 131072, 262144, 524288,  1048576} ;//, 2097152, 4194304, 8388608, 16777216,  33554432,   67108864};
-    // uint32_t Associativity[CACHE_CONFIGS] = {4,  4, 4, 8,  8,  16}; // , 16, 16, 16, 32, 32, 32};
-    // uint32_t Block_size[CACHE_CONFIGS] = {64, 64, 64, 64, 64, 64}; //, 128, 128, 128, 128, 128, 128};
+    uint32_t cache_size[CACHE_CONFIGS] = {32768, 65536, 131072, 262144, 524288,  1048576} ;//, 2097152, 4194304, 8388608, 16777216,  33554432,   67108864};
+    uint32_t Associativity[CACHE_CONFIGS] = {4,  4, 4, 8,  8,  16}; // , 16, 16, 16, 32, 32, 32};
+    uint32_t Block_size[CACHE_CONFIGS] = {64, 64, 64, 64, 64, 64}; //, 128, 128, 128, 128, 128, 128};
 
     // uint32_t cache_size[CACHE_CONFIGS]    = {262144, 524288,  1048576, 2097152, 4194304};
     // uint32_t Associativity[CACHE_CONFIGS] = {8,  8,  16, 16, 16};
     // uint32_t Block_size[CACHE_CONFIGS]    = {128, 128, 128, 128, 128};
 
-    uint32_t cache_size[CACHE_CONFIGS]    = {32768, 65536};
-    uint32_t Associativity[CACHE_CONFIGS] = {8, 8};
-    uint32_t Block_size[CACHE_CONFIGS]    = {64, 64};
+    // uint32_t cache_size[CACHE_CONFIGS]    = {32768, 65536};
+    // uint32_t Associativity[CACHE_CONFIGS] = {8, 8};
+    // uint32_t Block_size[CACHE_CONFIGS]    = {64, 64};
 
     // uint32_t cache_size[CACHE_CONFIGS]    = {32768};
     // uint32_t Associativity[CACHE_CONFIGS] = {8};
@@ -233,6 +233,10 @@ main (int argc, char **argv)
     arguments.llc_blocksize = BLOCKSIZE;
     arguments.llc_policy    = POLICY;
     arguments.popt_bits     = POPT_CACHE_BITS;
+
+    arguments->l1_prefetch_enable    = ENABLE_PREFETCH;
+    arguments->l2_prefetch_enable    = ENABLE_PREFETCH;
+    arguments->llc_prefetch_enable   = ENABLE_PREFETCH;
 
     void *graph = NULL;
 
