@@ -105,8 +105,9 @@ void setXPRRPV(struct CacheLine *cacheLine, uint8_t XPRRPV)
     cacheLine->XPRRPV = XPRRPV;
 }
 
-void setPOPT(struct CacheLine *cacheLine, uint32_t POPT){
-      cacheLine->POPT = POPT;
+void setPOPT(struct CacheLine *cacheLine, uint32_t POPT)
+{
+    cacheLine->POPT = POPT;
 }
 
 void setFlags(struct CacheLine *cacheLine, uint8_t flags)
@@ -742,6 +743,8 @@ void updateInsertPOPT(struct Cache *cache, struct CacheLine *line, uint32_t mask
     {
         setRRPV(line, DEFAULT_INSERT_RRPV);
     }
+    uint8_t SRRPV = DEFAULT_INSERT_SRRPV;
+    setSRRPV(line, SRRPV);
     setPOPT(line, mask);
     setSeq(line, cache->currentCycle);
 }
@@ -970,9 +973,9 @@ void updatePromotePOPT(struct Cache *cache, struct CacheLine *line, uint32_t mas
             RRPV--;
         setRRPV(line, RRPV);
     }
-
-   setPOPT(line, mask);
-   setSeq(line, cache->currentCycle);
+    setSRRPV(line, HIT_SRRPV);
+    setPOPT(line, mask);
+    setSeq(line, cache->currentCycle);
 }
 
 /*upgrade LRU line to be MRU line*/
@@ -1179,6 +1182,7 @@ struct CacheLine *getVictimLRU(struct Cache *cache, uint64_t addr)
 struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
     uint64_t i, j, victim, min;
+    uint64_t victim_multi;
 
     victim = cache->assoc;
     min    = POPT_MAX_REREF;
@@ -1195,41 +1199,65 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
 
     victim = 0;
     min = getPOPT(&(cache->cacheLines[i][0]));
+    victim_multi = 0;
 
     for(j = 1; j < cache->assoc; j++)
     {
-        if(getPOPT(&(cache->cacheLines[i][j])) >= min)
+        if(getPOPT(&(cache->cacheLines[i][j])) == min)
+        {
+            victim_multi++;
+        }
+        if(getPOPT(&(cache->cacheLines[i][j])) > min)
         {
             victim = j;
             min = getPOPT(&(cache->cacheLines[i][j]));
         }
+
     }
     assert(victim != cache->assoc);
 
-    // not in the POPT paper optimizaiton
-    if (min < POPT_MAX_REREF)
+    if(victim_multi)
     {
-        int diff = POPT_MAX_REREF - min;
-        for(j = 0; j < cache->assoc; j++)
+        victim = 0;
+        min = getSRRPV(&(cache->cacheLines[i][0]));
+        victim_multi = 0;
+
+        for(j = 1; j < cache->assoc; j++)
         {
-            uint32_t POPT = getPOPT(&(cache->cacheLines[i][j])) + diff;
-            setPOPT(&(cache->cacheLines[i][j]), POPT);
-            assert(POPT <= POPT_MAX_REREF);
+            if(getSRRPV(&(cache->cacheLines[i][j])) > min)
+            {
+                victim = j;
+                min = getSRRPV(&(cache->cacheLines[i][j]));
+            }
         }
+        assert(victim != cache->assoc);
+
+        if (min < SRRPV_INIT)
+        {
+            int diff = SRRPV_INIT - min;
+            for(j = 0; j < cache->assoc; j++)
+            {
+                uint8_t SRRPV = getSRRPV(&(cache->cacheLines[i][j])) + (diff);
+                setSRRPV(&(cache->cacheLines[i][j]), SRRPV);
+                assert(SRRPV <= SRRPV_INIT);
+            }
+        }
+
+        assert(min != SRRPV_INIT || min != 0);
+        assert(victim != cache->assoc);
     }
 
-    // // not in the GRASP paper optimizaiton
-    // if (min < DEFAULT_INSERT_RRPV)
+    // not in the POPT paper optimizaiton
+    // if (min < POPT_MAX_REREF)
     // {
-    //     int diff = DEFAULT_INSERT_RRPV - min;
+    //     int diff = POPT_MAX_REREF - min;
     //     for(j = 0; j < cache->assoc; j++)
     //     {
-    //         uint8_t RRPV = getRRPV(&(cache->cacheLines[i][j])) + diff;
-    //         setRRPV(&(cache->cacheLines[i][j]), RRPV);
-    //         assert(RRPV <= DEFAULT_INSERT_RRPV);
+    //         uint32_t POPT = getPOPT(&(cache->cacheLines[i][j])) + diff;
+    //         setPOPT(&(cache->cacheLines[i][j]), POPT);
+    //         assert(POPT <= POPT_MAX_REREF);
     //     }
     // }
-
 
     cache->evictions++;
     cache->cacheLines[i][victim].addr = addr;
@@ -1934,53 +1962,53 @@ uint32_t minTwoIntegers(uint32_t num1, uint32_t num2)
 
 uint32_t findRereferenceValPOPT(struct Cache *cache, int irregInd, int regInd)
 {
-  
-  int vertexPerCacheLine = cache->lineSize / sizeof(uint32_t);
-  int numCacheLines = (cache->numVertices + vertexPerCacheLine - 1) / vertexPerCacheLine;
-  int epochSz = (cache->numVertices + POPT_NUM_EPOCH - 1) / POPT_NUM_EPOCH;
-  int numSubEpochs = POPT_NUM_EPOCH / 2; 
-  int subEpochSz = (epochSz + numSubEpochs - 1) / numSubEpochs;
- 
-  // get vertex/cache line number
-  int cacheLineID = irregInd / vertexPerCacheLine;
-  int currEpoch   = regInd / epochSz;
-  uint32_t mask    = 1;
-  uint32_t orMask  = (mask << (POPT_BITS-1));
-  uint32_t andMask = (~orMask);
-    
-  if ((cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & orMask) != 0)
-  {
-    //We dont have a reference this epoch - Find next Epoch access
-    uint32_t reref = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
-    return reref;
-  }
-  else
-  {
-    //We have a reference this epoch
-    uint32_t lastRefQ = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
-    int delta = regInd - (currEpoch * epochSz);
-    uint32_t subEpochDistQ = delta / subEpochSz;
-    if (subEpochDistQ <= lastRefQ)
+
+    int vertexPerCacheLine = cache->lineSize / sizeof(uint32_t);
+    int numCacheLines = (cache->numVertices + vertexPerCacheLine - 1) / vertexPerCacheLine;
+    int epochSz = (cache->numVertices + POPT_NUM_EPOCH - 1) / POPT_NUM_EPOCH;
+    int numSubEpochs = POPT_NUM_EPOCH / 2;
+    int subEpochSz = (epochSz + numSubEpochs - 1) / numSubEpochs;
+
+    // get vertex/cache line number
+    int cacheLineID = irregInd / vertexPerCacheLine;
+    int currEpoch   = regInd / epochSz;
+    uint32_t mask    = 1;
+    uint32_t orMask  = (mask << (POPT_BITS - 1));
+    uint32_t andMask = (~orMask);
+
+    if ((cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & orMask) != 0)
     {
-      //We are yet to be accessed within this epoch
-      return 0;
+        //We dont have a reference this epoch - Find next Epoch access
+        uint32_t reref = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
+        return reref;
     }
     else
     {
-      //No further accesses this epoch; Look beyond to the next Epoch
-      uint32_t nextRef = cache->offset_matrix[((currEpoch + 1) * numCacheLines) + cacheLineID]; //this is why we store current & next Epoch information
-      if ((nextRef & orMask) != 0)
-      {
-        uint32_t reref = nextRef & andMask; 
-        return (uint32_t)(minTwoIntegers(++reref, POPT_MAX_REREF)); 
-      }
-      else
-      {
-        //Going to be accessed next epoch
-        return 1;
-      }
+        //We have a reference this epoch
+        uint32_t lastRefQ = cache->offset_matrix[(currEpoch * numCacheLines) + cacheLineID] & andMask;
+        int delta = regInd - (currEpoch * epochSz);
+        uint32_t subEpochDistQ = delta / subEpochSz;
+        if (subEpochDistQ <= lastRefQ)
+        {
+            //We are yet to be accessed within this epoch
+            return 0;
+        }
+        else
+        {
+            //No further accesses this epoch; Look beyond to the next Epoch
+            uint32_t nextRef = cache->offset_matrix[((currEpoch + 1) * numCacheLines) + cacheLineID]; //this is why we store current & next Epoch information
+            if ((nextRef & orMask) != 0)
+            {
+                uint32_t reref = nextRef & andMask;
+                return (uint32_t)(minTwoIntegers(++reref, POPT_MAX_REREF));
+            }
+            else
+            {
+                //Going to be accessed next epoch
+                return 1;
+            }
+        }
     }
-  }
 }
 
 void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst)
@@ -2005,17 +2033,19 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
     uint32_t popt_mask = POPT_MAX_REREF;
     popt_mask = findRereferenceValPOPT(cache, vDst, vSrc);
     uint32_t node_prefetch = cache->prefetch_matrix[node];
-    uint64_t node_address = (addr-(node*4))+(node_prefetch*4);
-    if(checkInCache(cache,  node_address) && ENABLE_PREFETCH){
+    uint64_t node_address = (addr - (node * 4)) + (node_prefetch * 4);
+    if(checkInCache(cache,  node_address) && ENABLE_PREFETCH)
+    {
 
-    if(cache->policy == POPT_POLICY && (vSrc != vDst))
-    {
-     PrefetchPOPT(cache,  node_address, 'r', node_prefetch, popt_mask, node_prefetch, vDst);
-    } else
-    {
-     Prefetch(cache,  node_address, 'r', node_prefetch, mask);   
+        if(cache->policy == POPT_POLICY && (vSrc != vDst))
+        {
+            PrefetchPOPT(cache,  node_address, 'r', node_prefetch, popt_mask, node_prefetch, vDst);
+        }
+        else
+        {
+            Prefetch(cache,  node_address, 'r', node_prefetch, mask);
+        }
     }
-  }
 
     // if(popt_mask)
     //     printf("%u \n", popt_mask);
@@ -2048,11 +2078,13 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
         {
             if(cache->policy == POPT_POLICY && (vSrc != vDst))
             {
-                        newline = fillLinePOPT(cache, addr, popt_mask, vSrc, vDst);
-            }else{
-                        newline = fillLine(cache, addr, mask);
+                newline = fillLinePOPT(cache, addr, popt_mask, vSrc, vDst);
             }
-            
+            else
+            {
+                newline = fillLine(cache, addr, mask);
+            }
+
             newline->idx = node;
             if(op == 'w')
                 setFlags(newline, DIRTY);
@@ -2066,9 +2098,11 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
         /**since it's a hit, update LRU and update dirty flag**/
         if(cache->policy == POPT_POLICY && (vSrc != vDst))
         {
-                    updatePromotionPolicyPOPT(cache, line, popt_mask, vSrc, vDst);
-        }else{
-                    updatePromotionPolicy(cache, line, mask);
+            updatePromotionPolicyPOPT(cache, line, popt_mask, vSrc, vDst);
+        }
+        else
+        {
+            updatePromotionPolicy(cache, line, mask);
         }
 
         if(op == 'w')

@@ -14,14 +14,14 @@
 #define MASK_POLICY    7
 #define POPT_POLICY    8
 
-#define ENABLE_PREFETCH    0
+#define ENABLE_PREFETCH    1
 // #define ENABLE_PREFETCH    0
 
 // General cache configuration
 //GRASP/Ref_cache default configs
 // GRASP EXPRESS (GRASP-XP)
 // CHOOSE global Policys
-#define POLICY LRU_POLICY
+// #define POLICY LRU_POLICY
 // #define POLICY SRRIP_POLICY
 // #define POLICY LFU_POLICY
 // #define POLICY GRASP_POLICY
@@ -29,7 +29,7 @@
 // #define POLICY PLRU_POLICY
 // #define POLICY GRASPXP_POLICY
 // #define POLICY MASK_POLICY
-// #define POLICY POPT_POLICY
+#define POLICY POPT_POLICY
 
 #define BLOCKSIZE   64
 #define L1_SIZE     32768
