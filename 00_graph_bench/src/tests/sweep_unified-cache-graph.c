@@ -243,8 +243,10 @@ main (int argc, char **argv)
     uint32_t jj = 0;
     void *ref_data;
 
-    sprintf(unified_perf_file, "%s/results_algo%u_cache.unified.%s", "./cache-results", arguments.algorithm, "perf");
+    // sprintf(unified_perf_file, "%s/results_algo%u_cache.unified.%s", "./cache-results", arguments.algorithm, "perf");
+    sprintf(unified_perf_file, "%s/results_algo%u_cache.unified.%s.config%u_%u_%u_%u", "./cache-results", arguments.algorithm, "perf",GRAPH_NUM, CACHE_CONFIGS, CACHE_POLICY,TOTAL_CONFIG);
 
+    
     for( k = 0; k < CACHE_CONFIGS ; k++)
     {
         arguments.l1_size       = cache_size[k];
