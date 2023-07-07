@@ -1194,8 +1194,8 @@ struct CacheLine *getVictimLRU(struct Cache *cache, uint64_t addr)
 
 struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
-    uint64_t i, j, victim, min;
-    uint64_t victim_multi;
+    uint64_t i, j, victim, min, min2;
+    uint64_t victim_multi, victim_multi_2;
 
     victim = cache->assoc;
     min    = POPT_MAX_REREF;
@@ -1219,8 +1219,12 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
 
     victim = 0;
     min = getPOPT(&(cache->cacheLines[i][0]));
+    // min = 0;
     victim_multi = 0;
+    victim_multi_2 = 0;
 
+    // all ways contain irregData & frontier
+    // find the line that is going to be accessed farthest into the future
     for(j = 1; j < cache->assoc; j++)
     {
         if(getPOPT(&(cache->cacheLines[i][j])) == min)
@@ -1240,44 +1244,49 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
 
     }
     assert(victim != cache->assoc);
+    //To handle ties in reref dist we also factor in DRRIP information
 
-    if(victim_multi || (vSrc == vDst))
+    for(j = 0; j < cache->assoc; j++)
+    {
+        if(getPOPT(&(cache->cacheLines[i][j])) == POPT_MAX_REREF && getSRRPV(&(cache->cacheLines[i][j])) == SRRPV_INIT)
+        {
+            victim = j;
+            victim_multi_2++;
+            min = getPOPT(&(cache->cacheLines[i][j]));
+        }
+    }
+
+    if(victim_multi_2 == cache->assoc)
     {
         victim = 0;
-        min = getSRRPV(&(cache->cacheLines[i][0]));
-        victim_multi = 0;
+        min2 = getSRRPV(&(cache->cacheLines[i][0]));
 
         for(j = 1; j < cache->assoc; j++)
         {
-            if(getSRRPV(&(cache->cacheLines[i][j])) > min && victim_cacheLines[j] == 1)
+            if(getSRRPV(&(cache->cacheLines[i][j])) > min2)
             {
                 victim = j;
-                min = getSRRPV(&(cache->cacheLines[i][j]));
+                min2 = getSRRPV(&(cache->cacheLines[i][j]));
             }
         }
-        assert(victim != cache->assoc);
 
-        if (min < SRRPV_INIT)
+        int diff = SRRPV_INIT - min2;
+        for(j = 0; j < cache->assoc; j++)
         {
-            int diff = SRRPV_INIT - min;
-            for(j = 0; j < cache->assoc; j++)
+            if(victim_cacheLines[j] == 1)
             {
-                if(victim_cacheLines[j] == 1)
-                {
-                    uint8_t SRRPV = getSRRPV(&(cache->cacheLines[i][j])) + (diff);
-                    setSRRPV(&(cache->cacheLines[i][j]), SRRPV);
-                    assert(SRRPV <= SRRPV_INIT);
-                }
+                uint8_t SRRPV = getSRRPV(&(cache->cacheLines[i][j])) + (diff);
+                setSRRPV(&(cache->cacheLines[i][j]), SRRPV);
+                assert(SRRPV <= SRRPV_INIT);
             }
         }
 
-        assert(min != SRRPV_INIT || min != 0);
+        assert(min2 != SRRPV_INIT || min2 != 0);
         assert(victim != cache->assoc);
 
-    } 
+    }
     else {
-
-         if (min < POPT_MAX_REREF)
+        if (min < POPT_MAX_REREF)
         {
             int diff = POPT_MAX_REREF - min;
             for(j = 0; j < cache->assoc; j++)
@@ -1303,8 +1312,8 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
 
 struct CacheLine *getVictimGRASPPOPT(struct Cache *cache, uint64_t addr, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
-    uint64_t i, j, victim, min;
-    uint64_t victim_multi;
+    uint64_t i, j, victim, min, min2;
+    uint64_t victim_multi, victim_multi_2;
 
     victim = cache->assoc;
     min    = POPT_MAX_REREF;
@@ -1328,8 +1337,12 @@ struct CacheLine *getVictimGRASPPOPT(struct Cache *cache, uint64_t addr, uint32_
 
     victim = 0;
     min = getPOPT(&(cache->cacheLines[i][0]));
+    // min = 0;
     victim_multi = 0;
+    victim_multi_2 = 0;
 
+    // all ways contain irregData & frontier
+    // find the line that is going to be accessed farthest into the future
     for(j = 1; j < cache->assoc; j++)
     {
         if(getPOPT(&(cache->cacheLines[i][j])) == min)
@@ -1349,38 +1362,63 @@ struct CacheLine *getVictimGRASPPOPT(struct Cache *cache, uint64_t addr, uint32_
 
     }
     assert(victim != cache->assoc);
+    //To handle ties in reref dist we also factor in DRRIP information
 
-    if(victim_multi || (vSrc == vDst))
+    for(j = 0; j < cache->assoc; j++)
+    {
+        if(getPOPT(&(cache->cacheLines[i][j])) == POPT_MAX_REREF && getRRPV(&(cache->cacheLines[i][j])) == DEFAULT_INSERT_RRPV)
+        {
+            victim = j;
+            victim_multi_2++;
+            min = getPOPT(&(cache->cacheLines[i][j]));
+        }
+    }
+
+    if(victim_multi_2 == cache->assoc)
     {
         victim = 0;
-        min = getRRPV(&(cache->cacheLines[i][0]));
-        victim_multi = 0;
+        min2 = getRRPV(&(cache->cacheLines[i][0]));
 
         for(j = 1; j < cache->assoc; j++)
         {
-            if(getRRPV(&(cache->cacheLines[i][j])) > min && victim_cacheLines[j] == 1)
+            if(getRRPV(&(cache->cacheLines[i][j])) > min2)
             {
                 victim = j;
-                min = getRRPV(&(cache->cacheLines[i][j]));
+                min2 = getRRPV(&(cache->cacheLines[i][j]));
             }
         }
+
+        int diff = DEFAULT_INSERT_RRPV - min2;
+        for(j = 0; j < cache->assoc; j++)
+        {
+            if(victim_cacheLines[j] == 1)
+            {
+                uint8_t RRPV = getRRPV(&(cache->cacheLines[i][j])) + (diff);
+                setRRPV(&(cache->cacheLines[i][j]), RRPV);
+                assert(RRPV <= DEFAULT_INSERT_RRPV);
+            }
+        }
+
+        assert(min2 != DEFAULT_INSERT_RRPV || min2 != 0);
         assert(victim != cache->assoc);
 
-        if (min < DEFAULT_INSERT_RRPV)
+    }
+    else {
+        if (min < POPT_MAX_REREF)
         {
-            int diff = DEFAULT_INSERT_RRPV - min;
+            int diff = POPT_MAX_REREF - min;
             for(j = 0; j < cache->assoc; j++)
             {
-                if(victim_cacheLines[j] == 1)
+                if(victim_cacheLines[j] == 0)
                 {
-                    uint8_t RRPV = getRRPV(&(cache->cacheLines[i][j])) + (diff);
-                    setRRPV(&(cache->cacheLines[i][j]), RRPV);
-                    assert(RRPV <= DEFAULT_INSERT_RRPV);
+                    uint8_t POPT = getPOPT(&(cache->cacheLines[i][j])) + (diff);
+                    setPOPT(&(cache->cacheLines[i][j]), POPT);
+                    assert(POPT <= POPT_MAX_REREF);
                 }
             }
         }
 
-        assert(min != DEFAULT_INSERT_RRPV || min != 0);
+        assert(min != POPT_MAX_REREF || min != 0);
         assert(victim != cache->assoc);
     }
 
