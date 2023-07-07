@@ -82,7 +82,7 @@ main (int argc, char **argv)
     // uint32_t Associativity[CACHE_CONFIGS] = {8};
     // uint32_t Block_size[CACHE_CONFIGS]    = {64};
 
-    uint32_t policy[CACHE_POLICY]         = {PLRU_POLICY, SRRIP_POLICY, POPT_POLICY, GRASP_POLICY, MASK_POLICY, GRASP_OPT_POLICY};
+    uint32_t policy[CACHE_POLICY]         = {PLRU_POLICY, SRRIP_POLICY, POPT_POLICY, GRASP_POLICY, GRASP_OPT_POLICY, MASK_POLICY};
     float PLRU_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0.0f}};
     float SSRIP_stats[GRAPH_NUM][ORDER_CONFIG]      = {{0.0f}};
     float POPT_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0.0f}};
@@ -380,7 +380,7 @@ main (int argc, char **argv)
             }
 
             arguments.l1_policy    = policy[4];
-            for (kk = 0, j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j, ++kk)
+            for (kk = 0, j = ORDER_CONFIG; j < ORDER_CONFIG + MODE_NUM; ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
                 sprintf (label_dir, "%s/%s", benchmarks_dir[i], reorder_labels[j]);
@@ -399,7 +399,7 @@ main (int argc, char **argv)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
                     ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
-                    MASK_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
+                    GRASP_OPT_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
                 }
@@ -427,7 +427,7 @@ main (int argc, char **argv)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
                     ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
-                    GRASP_OPT_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
+                    MASK_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
                 }
@@ -498,6 +498,25 @@ main (int argc, char **argv)
         }
         fprintf(fptr1, " -----------------------------------------------------\n");
 
+        fprintf(fptr1, "%-25s, ",  "GRASP_OPT");
+        for (j = (ORDER_CONFIG); j < (ORDER_CONFIG + MODE_NUM); ++j)
+        {
+            fprintf(fptr1, "%-14s, ",  config_labels[j]);
+        }
+        fprintf(fptr1, " \n");
+
+        for ( i = 0; i < GRAPH_NUM; ++i)
+        {
+            fprintf(fptr1, "%-25s, ",  benchmarks_graphs[i]);
+            for (j = 0; j < MODE_NUM; ++j)
+            {
+                fprintf(fptr1, "%-14f, ",  GRASP_OPT_stats[i][j] / arguments.trials);
+                GRASP_OPT_stats[i][j] =  0.0f;
+            }
+            fprintf(fptr1, " \n");
+        }
+        fprintf(fptr1, " -----------------------------------------------------\n");
+
         fprintf(fptr1, "%-25s, ",  "MASK");
         for (j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j)
         {
@@ -516,26 +535,6 @@ main (int argc, char **argv)
             fprintf(fptr1, " \n");
         }
         fprintf(fptr1, " -----------------------------------------------------\n");
-
-        fprintf(fptr1, "%-25s, ",  "GRASP_OPT");
-        for (j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j)
-        {
-            fprintf(fptr1, "%-14s, ",  config_labels[j]);
-        }
-        fprintf(fptr1, " \n");
-
-        for ( i = 0; i < GRAPH_NUM; ++i)
-        {
-            fprintf(fptr1, "%-25s, ",  benchmarks_graphs[i]);
-            for (j = 0; j < MODE_NUM; ++j)
-            {
-                fprintf(fptr1, "%-14f, ",  GRASP_OPT_stats[i][j] / arguments.trials);
-                GRASP_OPT_stats[i][j] =  0.0f;
-            }
-            fprintf(fptr1, " \n");
-        }
-        fprintf(fptr1, " -----------------------------------------------------\n");
-
         fclose(fptr1);
 
 
