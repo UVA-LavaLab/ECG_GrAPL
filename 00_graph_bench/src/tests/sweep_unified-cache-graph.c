@@ -248,7 +248,7 @@ main (int argc, char **argv)
     void *ref_data;
 
     // sprintf(unified_perf_file, "%s/results_algo%u_cache.unified.%s", "./cache-results", arguments.algorithm, "perf");
-    sprintf(unified_perf_file, "%s/results_algo%u_cache.unified.%s.config%u_%u_%u_%u", "./cache-results", arguments.algorithm, "perf",GRAPH_NUM, CACHE_CONFIGS, CACHE_POLICY,TOTAL_CONFIG);
+    sprintf(unified_perf_file, "%s/results_algo%u_cache.unified.%s.config%u_%u_%u_%u_%u", "./cache-results", arguments.algorithm, "perf",GRAPH_NUM, CACHE_CONFIGS, CACHE_POLICY,TOTAL_CONFIG, arguments->l1_prefetch_enable);
 
 
     for( k = 0; k < CACHE_CONFIGS ; k++)
