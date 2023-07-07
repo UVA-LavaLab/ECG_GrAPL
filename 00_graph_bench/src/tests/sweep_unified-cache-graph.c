@@ -50,7 +50,7 @@
 #define GRAPH_NUM 4
 
 #define CACHE_CONFIGS 6
-#define CACHE_POLICY 5
+#define CACHE_POLICY 6
 #define MODE_NUM 3
 #define ORDER_CONFIG 6
 #define TOTAL_CONFIG (MODE_NUM+MODE_NUM+ORDER_CONFIG)
@@ -78,12 +78,13 @@ main (int argc, char **argv)
     // uint32_t Associativity[CACHE_CONFIGS] = {8};
     // uint32_t Block_size[CACHE_CONFIGS]    = {64};
 
-    uint32_t policy[CACHE_POLICY]         = {PLRU_POLICY, SRRIP_POLICY, GRASP_POLICY, MASK_POLICY, POPT_POLICY};
+    uint32_t policy[CACHE_POLICY]         = {PLRU_POLICY, SRRIP_POLICY, POPT_POLICY, GRASP_POLICY, MASK_POLICY, GRASP_OPT_POLICY};
     float PLRU_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0}};
     float SSRIP_stats[GRAPH_NUM][ORDER_CONFIG]      = {{0}};
     float POPT_stats[GRAPH_NUM][ORDER_CONFIG]       = {{0}};
     float GRASP_stats[GRAPH_NUM][MODE_NUM]          = {{0}};
-    float EXPRESS_stats[GRAPH_NUM][MODE_NUM]        = {{0}};
+    float MASK_stats[GRAPH_NUM][MODE_NUM]           = {{0}};
+    float GRASP_OPT_stats[GRAPH_NUM][MODE_NUM]      = {{0}};
 
     uint32_t lmode_l2[TOTAL_CONFIG] = {0, 4, 11, 11, 11, 11, 0, 11, 11, 0, 11, 11};
     uint32_t lmode_l3[TOTAL_CONFIG] = {0, 0, 0, 4, 0, 4, 4, 4, 4, 0, 0, 0 };
@@ -195,8 +196,8 @@ main (int argc, char **argv)
     arguments.weighted = 0;
     arguments.delta = 1;
 
-    arguments.pre_numThreads  = omp_get_max_threads()/2;
-    arguments.algo_numThreads = omp_get_max_threads()/2;
+    arguments.pre_numThreads  = omp_get_max_threads() / 2;
+    arguments.algo_numThreads = omp_get_max_threads() / 2;
     arguments.ker_numThreads = 1;
 
     arguments.fnameb = "../01_test_graphs/LAW/LAW-enron/graph.rand.bin";
@@ -228,7 +229,7 @@ main (int argc, char **argv)
     arguments.llc_blocksize = BLOCKSIZE;
     arguments.llc_policy    = POLICY;
     arguments.popt_bits      = POPT_CACHE_BITS;
-    
+
     void *graph = NULL;
 
     uint32_t i = 0;
@@ -317,6 +318,34 @@ main (int argc, char **argv)
             }
 
             arguments.l1_policy    = policy[2];
+            for (j = 0; j < ORDER_CONFIG; ++j)
+            {
+                sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
+                sprintf (label_dir, "%s/%s", benchmarks_dir[i], reorder_labels[j]);
+                arguments.lmode = 0; // base is random order
+                arguments.lmode_l2 =  lmode_l2[j];
+                arguments.lmode_l3 = lmode_l3[j];
+                arguments.mmode = mmode[j];
+                arguments.fnameb = graph_dir;
+                arguments.fnamel = label_dir;
+                printf("graph config %5u - %u %u %u - %u %s\n", j, arguments.lmode_l2, arguments.lmode_l3, arguments.mmode, arguments.l1_size / 1024, config_labels[j]);
+
+                graph = generateGraphDataStructure(&arguments);
+
+                initializeMersenneState (&(arguments.mt19937var), 27491095);
+                for(jj = 0 ; jj < arguments.trials; jj++)
+                {
+                    arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
+                    ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
+                    POPT_stats[i][j] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
+                    // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
+                    freeGraphStatsGeneral(ref_data, arguments.algorithm);
+                }
+
+                freeGraphDataStructure(graph, arguments.datastructure);
+            }
+
+            arguments.l1_policy    = policy[3];
             for (kk = 0, j = ORDER_CONFIG; j < ORDER_CONFIG + MODE_NUM; ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -344,7 +373,7 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.l1_policy    = policy[3];
+            arguments.l1_policy    = policy[4];
             for (kk = 0, j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
@@ -364,7 +393,7 @@ main (int argc, char **argv)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
                     ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
-                    EXPRESS_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
+                    MASK_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
                 }
@@ -372,8 +401,8 @@ main (int argc, char **argv)
                 freeGraphDataStructure(graph, arguments.datastructure);
             }
 
-            arguments.l1_policy    = policy[4];
-            for (j = 0; j < ORDER_CONFIG; ++j)
+            arguments.l1_policy    = policy[5];
+            for (kk = 0, j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j, ++kk)
             {
                 sprintf (graph_dir, "%s/%s", benchmarks_dir[i], "graph.rand.bin");
                 sprintf (label_dir, "%s/%s", benchmarks_dir[i], reorder_labels[j]);
@@ -392,7 +421,7 @@ main (int argc, char **argv)
                 {
                     arguments.source = generateRandomRootGeneral(&arguments, graph); // random root each trial
                     ref_data = runGraphAlgorithmsTest(&arguments, graph); // ref stats should mach oother algo
-                    POPT_stats[i][j] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
+                    GRASP_OPT_stats[i][kk] += getGraphAlgorithmsTestMissRateRef(ref_data, arguments.algorithm);
                     // printStatsCacheStructureToFile(ref_stats_tmp->cache, unified_perf_file);
                     freeGraphStatsGeneral(ref_data, arguments.algorithm);
                 }
@@ -460,7 +489,7 @@ main (int argc, char **argv)
         }
         fprintf(fptr1, " -----------------------------------------------------\n");
 
-        fprintf(fptr1, "%-25s, ",  "EXPRESS");
+        fprintf(fptr1, "%-25s, ",  "MASK");
         for (j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j)
         {
             fprintf(fptr1, "%-14s, ",  config_labels[j]);
@@ -472,11 +501,30 @@ main (int argc, char **argv)
             fprintf(fptr1, "%-25s, ",  benchmarks_graphs[i]);
             for (j = 0; j < MODE_NUM; ++j)
             {
-                fprintf(fptr1, "%-14f, ",  EXPRESS_stats[i][j] / arguments.trials);
+                fprintf(fptr1, "%-14f, ",  MASK_stats[i][j] / arguments.trials);
             }
             fprintf(fptr1, " \n");
         }
         fprintf(fptr1, " -----------------------------------------------------\n");
+
+        fprintf(fptr1, "%-25s, ",  "GRASP_OPT");
+        for (j = (ORDER_CONFIG + MODE_NUM); j < (ORDER_CONFIG + MODE_NUM + MODE_NUM); ++j)
+        {
+            fprintf(fptr1, "%-14s, ",  config_labels[j]);
+        }
+        fprintf(fptr1, " \n");
+
+        for ( i = 0; i < GRAPH_NUM; ++i)
+        {
+            fprintf(fptr1, "%-25s, ",  benchmarks_graphs[i]);
+            for (j = 0; j < MODE_NUM; ++j)
+            {
+                fprintf(fptr1, "%-14f, ",  GRASP_OPT_stats[i][j] / arguments.trials);
+            }
+            fprintf(fptr1, " \n");
+        }
+        fprintf(fptr1, " -----------------------------------------------------\n");
+
         fclose(fptr1);
     }
     exit (0);
