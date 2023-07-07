@@ -1273,6 +1273,26 @@ struct CacheLine *getVictimPOPT(struct Cache *cache, uint64_t addr, uint32_t mas
 
         assert(min != SRRPV_INIT || min != 0);
         assert(victim != cache->assoc);
+
+    } 
+    else {
+
+         if (min < POPT_MAX_REREF)
+        {
+            int diff = POPT_MAX_REREF - min;
+            for(j = 0; j < cache->assoc; j++)
+            {
+                if(victim_cacheLines[j] == 0)
+                {
+                    uint8_t POPT = getPOPT(&(cache->cacheLines[i][j])) + (diff);
+                    setPOPT(&(cache->cacheLines[i][j]), POPT);
+                    assert(POPT <= POPT_MAX_REREF);
+                }
+            }
+        }
+
+        assert(min != POPT_MAX_REREF || min != 0);
+        assert(victim != cache->assoc);
     }
 
     free(victim_cacheLines);
@@ -2106,13 +2126,16 @@ void Access(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node,
     }
 
     uint32_t popt_mask = POPT_MAX_REREF;
+    popt_mask = findRereferenceValPOPT(cache, vDst, vSrc);
 
     if(cache->policy == POPT_POLICY || cache->policy == GRASP_OPT_POLICY)
     {
         mask = popt_mask;
+        // if(mask != POPT_MAX_REREF)
+        // printf("%u\n", mask);
     }
 
-    popt_mask = findRereferenceValPOPT(cache, vDst, vSrc);
+
     uint32_t node_prefetch = cache->prefetch_matrix[node];
     uint64_t node_address = (addr - (node * 4)) + (node_prefetch * 4);
     if(checkInCache(cache,  node_address) && ENABLE_PREFETCH)
