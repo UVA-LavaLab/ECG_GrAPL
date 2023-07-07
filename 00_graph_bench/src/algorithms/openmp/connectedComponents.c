@@ -212,7 +212,7 @@ void printCCStats(struct CCStats *stats)
 {
 
     Word_t *PValue;
-    Word_t   Index;
+    Word_t Index;
     uint32_t k = 5;
     uint32_t numComp = 0;
     uint32_t i;
@@ -229,7 +229,7 @@ void printCCStats(struct CCStats *stats)
     {
         // printf("--> %lu %lu\n", Index, *PValue);
         stats->counts[Index] = *PValue;
-        * PValue = 0;
+        *PValue = 0;
         JLN(PValue, JArray, Index);
 
     }
@@ -301,7 +301,7 @@ void linkNodes(uint32_t u, uint32_t v, uint32_t *components)
         uint32_t phigh = components[high];
 
         if ((phigh == low) ||
-                (phigh == high && __sync_bool_compare_and_swap(&(components[high]), high, low)))
+            (phigh == high && __sync_bool_compare_and_swap(&(components[high]), high, low)))
             break;
         p1 = components[components[high]];
         p2 = components[low];
@@ -337,7 +337,7 @@ uint32_t sampleFrequentNode(mt19937state *mt19937var, uint32_t num_vertices, uin
 {
 
     Word_t *PValue;
-    Word_t   Index;
+    Word_t Index;
     uint32_t i;
     for (i = 0; i < num_samples; i++)
     {
@@ -410,7 +410,7 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
     uint32_t edge_idx;
     uint32_t componentsCount = 0;
     uint32_t change = 0;
-    Word_t    Bytes;
+    Word_t Bytes;
 
     struct CCStats *stats = newCCStatsGraphCSR(graph);
     struct Timer *timer = (struct Timer *) my_malloc(sizeof(struct Timer));
@@ -427,7 +427,7 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->components[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->components[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
     stats->propertyMetaData[0].data_type_size = sizeof(uint32_t);
 
@@ -459,7 +459,7 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
         SimMarker(1, iter);
 #endif
 
-        #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 512)
+    #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 512)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -478,8 +478,8 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
                 uint32_t comp_src = stats->components[src];
                 uint32_t comp_dest = stats->components[dest];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[src]), 'r', src, graph->sorted_edges_array->mask_array[src], src,dest);
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[dest]), 'r', dest, EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]), src,dest);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->components[src]), 'r', src, graph->sorted_edges_array->mask_array[src], src,dest);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->components[dest]), 'r', dest, EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]), src,dest);
 #endif
                 if(comp_src == comp_dest)
                     continue;
@@ -487,14 +487,14 @@ struct CCStats *connectedComponentsShiloachVishkinGraphCSR( struct Arguments *ar
                 uint32_t comp_high = comp_src > comp_dest ? comp_src : comp_dest;
                 uint32_t comp_low = comp_src + (comp_dest - comp_high);
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'r', comp_high,  graph->sorted_edges_array->mask_array[comp_high], src,dest);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->components[comp_high]), 'r', comp_high,  graph->sorted_edges_array->mask_array[comp_high], src,dest);
 #endif
                 if(comp_high == stats->components[comp_high])
                 {
                     change = 1;
                     stats->components[comp_high] = comp_low;
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->components[comp_high]), 'w', comp_high,  graph->sorted_edges_array->mask_array[comp_high], src,dest);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->components[comp_high]), 'w', comp_high,  graph->sorted_edges_array->mask_array[comp_high], src,dest);
 #endif
                 }
             }
@@ -542,7 +542,7 @@ struct CCStats *connectedComponentsAfforestGraphCSR( struct Arguments *arguments
 
     uint32_t u;
     uint32_t componentsCount = 0;
-    Word_t    Bytes;
+    Word_t Bytes;
     uint32_t num_samples = 1024;
 
     if(num_samples > graph->num_vertices)
@@ -568,7 +568,7 @@ struct CCStats *connectedComponentsAfforestGraphCSR( struct Arguments *arguments
     for(r = 0; r < stats->neighbor_rounds; r++)
     {
         Start(timer_inner);
-        #pragma omp parallel for schedule(dynamic, 2048)
+    #pragma omp parallel for schedule(dynamic, 2048)
         for(u = 0; u < graph->num_vertices; u++)
         {
             uint32_t j;
@@ -728,7 +728,7 @@ struct CCStats *connectedComponentsWeaklyGraphCSR( struct Arguments *arguments, 
         change = 0;
         stats->iterations++;
 
-        #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 512)
+    #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 512)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -757,7 +757,7 @@ struct CCStats *connectedComponentsWeaklyGraphCSR( struct Arguments *arguments, 
 
         // compressNodes( stats->num_vertices, stats->components);
 
-        #pragma omp parallel for reduction (+:change)
+    #pragma omp parallel for reduction (+:change)
         for(v = 0 ; v < ((bitmapNext->size + kBitsPerWord - 1) / kBitsPerWord); v++)
         {
             change += bitmapNext->bitarray[v];
@@ -954,12 +954,12 @@ struct CCStats *connectedComponentsShiloachVishkinGraphGrid( struct Arguments *a
         change = 0;
         stats->iterations++;
 
-        #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
+    #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
         for (i = 0; i < totalPartitions; ++i)
         {
             uint32_t j;
             // #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
-            for (j = 0; j < totalPartitions; ++j)  // iterate over partitions colwise
+            for (j = 0; j < totalPartitions; ++j) // iterate over partitions colwise
             {
                 uint32_t k;
                 struct Partition *partition = &graph->grid->partitions[(i * totalPartitions) + j];
@@ -1018,7 +1018,7 @@ struct CCStats *connectedComponentsAfforestGraphGrid( struct Arguments *argument
     uint32_t i;
     uint32_t v;
     uint32_t componentsCount = 0;
-    Word_t    Bytes;
+    Word_t Bytes;
     uint32_t num_samples = 1024;
     uint32_t totalPartitions  = graph->grid->num_partitions;
 
@@ -1051,12 +1051,12 @@ struct CCStats *connectedComponentsAfforestGraphGrid( struct Arguments *argument
     for(r = 0; r < stats->neighbor_rounds; r++)
     {
         Start(timer_inner);
-        #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
+    #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
         for (i = 0; i < totalPartitions; ++i)
         {
             uint32_t j;
             // #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
-            for (j = 0; j < totalPartitions; ++j)  // iterate over partitions colwise
+            for (j = 0; j < totalPartitions; ++j) // iterate over partitions colwise
             {
                 uint32_t k;
                 struct Partition *partition = &graph->grid->partitions[(i * totalPartitions) + j];
@@ -1080,7 +1080,7 @@ struct CCStats *connectedComponentsAfforestGraphGrid( struct Arguments *argument
         Stop(timer_inner);
         printf("| %-21u | %-27f | \n", r, Seconds(timer_inner));
 
-        #pragma omp parallel for default(none) private(v) shared(stats,neighbor)
+    #pragma omp parallel for default(none) private(v) shared(stats,neighbor)
         for(v = 0; v < stats->num_vertices; v++)
         {
             neighbor[v] = 0;
@@ -1117,7 +1117,7 @@ struct CCStats *connectedComponentsAfforestGraphGrid( struct Arguments *argument
     {
         uint32_t j;
         // #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
-        for (j = 0; j < totalPartitions; ++j)  // iterate over partitions colwise
+        for (j = 0; j < totalPartitions; ++j) // iterate over partitions colwise
         {
             uint32_t k;
             struct Partition *partition = &graph->grid->partitions[(i * totalPartitions) + j];
@@ -1154,7 +1154,7 @@ struct CCStats *connectedComponentsAfforestGraphGrid( struct Arguments *argument
     {
         uint32_t j;
         // #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
-        for (j = 0; j < totalPartitions; ++j)  // iterate over partitions colwise
+        for (j = 0; j < totalPartitions; ++j) // iterate over partitions colwise
         {
             uint32_t k;
             struct Partition *partition = &graph->grid->partitions[(i * totalPartitions) + j];
@@ -1241,12 +1241,12 @@ struct CCStats *connectedComponentsWeaklyGraphGrid(struct Arguments *arguments, 
         stats->iterations++;
 
         uint32_t i;
-        #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
+    #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
         for (i = 0; i < totalPartitions; ++i)
         {
             uint32_t j;
             // #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
-            for (j = 0; j < totalPartitions; ++j)  // iterate over partitions colwise
+            for (j = 0; j < totalPartitions; ++j) // iterate over partitions colwise
             {
                 uint32_t k;
                 struct Partition *partition = &graph->grid->partitions[(i * totalPartitions) + j];
@@ -1272,7 +1272,7 @@ struct CCStats *connectedComponentsWeaklyGraphGrid(struct Arguments *arguments, 
 
 
         // compressNodes( stats->num_vertices, stats->components);
-        #pragma omp parallel for reduction (+:change)
+    #pragma omp parallel for reduction (+:change)
         for(v = 0 ; v < ((bitmapNext->size + kBitsPerWord - 1) / kBitsPerWord); v++)
         {
             change += bitmapNext->bitarray[v];
@@ -1362,7 +1362,7 @@ struct CCStats *connectedComponentsShiloachVishkinGraphAdjArrayList(struct Argum
         change = 0;
         stats->iterations++;
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 512)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 512)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1422,7 +1422,7 @@ struct CCStats *connectedComponentsAfforestGraphAdjArrayList(struct Arguments *a
 
     uint32_t u;
     uint32_t componentsCount = 0;
-    Word_t    Bytes;
+    Word_t Bytes;
     uint32_t num_samples = 1024;
 
     if(num_samples > graph->num_vertices)
@@ -1448,7 +1448,7 @@ struct CCStats *connectedComponentsAfforestGraphAdjArrayList(struct Arguments *a
     for(r = 0; r < stats->neighbor_rounds; r++)
     {
         Start(timer_inner);
-        #pragma omp parallel for schedule(dynamic, 2048)
+    #pragma omp parallel for schedule(dynamic, 2048)
         for(u = 0; u < graph->num_vertices; u++)
         {
             uint32_t j;
@@ -1601,7 +1601,7 @@ struct CCStats *connectedComponentsWeaklyGraphAdjArrayList( struct Arguments *ar
         change = 0;
         stats->iterations++;
 
-        #pragma omp parallel for private(v) schedule(dynamic, 512)
+    #pragma omp parallel for private(v) schedule(dynamic, 512)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1630,7 +1630,7 @@ struct CCStats *connectedComponentsWeaklyGraphAdjArrayList( struct Arguments *ar
 
         // compressNodes( stats->num_vertices, stats->components);
 
-        #pragma omp parallel for reduction (+:change)
+    #pragma omp parallel for reduction (+:change)
         for(v = 0 ; v < ((bitmapNext->size + kBitsPerWord - 1) / kBitsPerWord); v++)
         {
             change += bitmapNext->bitarray[v];
@@ -1720,7 +1720,7 @@ struct CCStats *connectedComponentsShiloachVishkinGraphAdjLinkedList(struct Argu
         change = 0;
         stats->iterations++;
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 512)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 512)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1781,7 +1781,7 @@ struct CCStats *connectedComponentsAfforestGraphAdjLinkedList(struct Arguments *
 
     uint32_t u;
     uint32_t componentsCount = 0;
-    Word_t    Bytes;
+    Word_t Bytes;
     uint32_t num_samples = 1024;
 
     if(num_samples > graph->num_vertices)
@@ -1807,7 +1807,7 @@ struct CCStats *connectedComponentsAfforestGraphAdjLinkedList(struct Arguments *
     for(r = 0; r < stats->neighbor_rounds; r++)
     {
         Start(timer_inner);
-        #pragma omp parallel for schedule(dynamic, 2048)
+    #pragma omp parallel for schedule(dynamic, 2048)
         for(u = 0; u < graph->num_vertices; u++)
         {
             uint32_t j;
@@ -1969,7 +1969,7 @@ struct CCStats *connectedComponentsWeaklyGraphAdjLinkedList( struct Arguments *a
         change = 0;
         stats->iterations++;
 
-        #pragma omp parallel for private(v) schedule(dynamic, 512)
+    #pragma omp parallel for private(v) schedule(dynamic, 512)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1999,7 +1999,7 @@ struct CCStats *connectedComponentsWeaklyGraphAdjLinkedList( struct Arguments *a
 
         // compressNodes( stats->num_vertices, stats->components);
 
-        #pragma omp parallel for reduction (+:change)
+    #pragma omp parallel for reduction (+:change)
         for(v = 0 ; v < ((bitmapNext->size + kBitsPerWord - 1) / kBitsPerWord); v++)
         {
             change += bitmapNext->bitarray[v];

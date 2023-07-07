@@ -265,10 +265,10 @@ struct SPMVStats *SPMVPullRowGraphGrid( struct Arguments *arguments, struct Grap
 
         uint32_t i;
         // #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
-        for (i = 0; i < totalPartitions; ++i)  // iterate over partitions rowwise
+        for (i = 0; i < totalPartitions; ++i) // iterate over partitions rowwise
         {
             uint32_t j;
-            #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
+        #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
             for (j = 0; j < totalPartitions; ++j)
             {
                 uint32_t k;
@@ -356,8 +356,8 @@ struct SPMVStats *SPMVPushColumnGraphGrid( struct Arguments *arguments, struct G
         Start(timer_inner);
 
         uint32_t j;
-        #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
-        for (j = 0; j < totalPartitions; ++j)  // iterate over partitions colwise
+    #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
+        for (j = 0; j < totalPartitions; ++j) // iterate over partitions colwise
         {
             uint32_t i;
             // #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
@@ -456,10 +456,10 @@ struct SPMVStats *SPMVPullRowFixedPointGraphGrid( struct Arguments *arguments, s
 
         uint32_t i;
         // #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
-        for (i = 0; i < totalPartitions; ++i)  // iterate over partitions rowwise
+        for (i = 0; i < totalPartitions; ++i) // iterate over partitions rowwise
         {
             uint32_t j;
-            #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
+        #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
             for (j = 0; j < totalPartitions; ++j)
             {
                 uint32_t k;
@@ -564,8 +564,8 @@ struct SPMVStats *SPMVPushColumnFixedPointGraphGrid( struct Arguments *arguments
         Start(timer_inner);
 
         uint32_t j;
-        #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
-        for (j = 0; j < totalPartitions; ++j)  // iterate over partitions colwise
+    #pragma omp parallel for private(j) schedule (dynamic,arguments->algo_numThreads)
+        for (j = 0; j < totalPartitions; ++j) // iterate over partitions colwise
         {
             uint32_t i;
             // #pragma omp parallel for private(i) schedule (dynamic,arguments->algo_numThreads)
@@ -699,7 +699,7 @@ struct SPMVStats *SPMVPullGraphCSR( struct Arguments *arguments, struct GraphCSR
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->vector_input[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->vector_input[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(float);
     stats->propertyMetaData[0].data_type_size = sizeof(float);
 
@@ -741,11 +741,11 @@ struct SPMVStats *SPMVPullGraphCSR( struct Arguments *arguments, struct GraphCSR
         int iter = stats->iterations;
         SimMarker(1, iter);
 #endif
-        #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
-            uint32_t src ;
+            uint32_t src;
             uint32_t dest = v;
             float weight = 0.0001f;
             degree = vertices->out_degree[dest];
@@ -759,13 +759,13 @@ struct SPMVStats *SPMVPullGraphCSR( struct Arguments *arguments, struct GraphCSR
 #endif
 
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]), dest,src);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]), dest,src);
 #endif
                 stats->vector_output[dest] +=  (weight * stats->vector_input[src]);
             }
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
 #endif
         }
 
@@ -860,7 +860,7 @@ struct SPMVStats *SPMVPushGraphCSR( struct Arguments *arguments, struct GraphCSR
         SimMarker(1, iter);
 #endif
 
-        #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -877,7 +877,7 @@ struct SPMVStats *SPMVPushGraphCSR( struct Arguments *arguments, struct GraphCSR
                 weight = edges_array_weight[j];
 #endif
 
-                #pragma omp atomic update
+        #pragma omp atomic update
                 stats->vector_output[dest] += (weight * stats->vector_input[src]);
             }
 
@@ -965,7 +965,7 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->vector_input[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->vector_input[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(uint32_t);
     stats->propertyMetaData[0].data_type_size = sizeof(uint32_t);
 
@@ -1027,7 +1027,7 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
         int iter = stats->iterations;
         SimMarker(1, iter);
 #endif
-        #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1045,13 +1045,13 @@ struct SPMVStats *SPMVPullFixedPointGraphCSR( struct Arguments *arguments, struc
 #endif
 
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]), src,dest);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->vector_input[src]), 'r', src, EXTRACT_MASK(sorted_edges_array[j]), src,dest);
 #endif
                 vector_output[dest] += MULFixed32V1(weight, vector_input[src]); // stats->pageRanks[v]/graph->vertices[v].out_degree;
             }
 #ifdef CACHE_HARNESS
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
-            AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->vector_output[dest]), 'r', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
+            AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->vector_output[dest]), 'w', dest, graph->sorted_edges_array->mask_array[dest], dest,dest);
 #endif
         }
 
@@ -1170,7 +1170,7 @@ struct SPMVStats *SPMVPushFixedPointGraphCSR( struct Arguments *arguments, struc
         SimMarker(1, iter);
 #endif
 
-        #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,edge_idx) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1187,7 +1187,7 @@ struct SPMVStats *SPMVPushFixedPointGraphCSR( struct Arguments *arguments, struc
                 weight = DoubleToFixed64(edges_array_weight[j]);
 #endif
 
-                #pragma omp atomic update
+        #pragma omp atomic update
                 vector_output[dest] += MULFixed64V1(weight, vector_input[src]);
             }
 
@@ -1304,7 +1304,7 @@ struct SPMVStats *SPMVPullGraphAdjArrayList( struct Arguments *arguments, struct
     {
         Start(timer_inner);
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1326,7 +1326,7 @@ struct SPMVStats *SPMVPullGraphAdjArrayList( struct Arguments *arguments, struct
 #if WEIGHTED
                 weight = Nodes->edges_array_weight[j];
 #endif
-                stats->vector_output[dest] +=  (weight * stats->vector_input[src]); // stats->pageRanks[v]/graph->vertices[v].out_degree;
+                stats->vector_output[dest] +=  (weight * stats->vector_input[src]);// stats->pageRanks[v]/graph->vertices[v].out_degree;
             }
 
         }
@@ -1393,7 +1393,7 @@ struct SPMVStats *SPMVPushGraphAdjArrayList( struct Arguments *arguments, struct
     {
         Start(timer_inner);
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1411,7 +1411,7 @@ struct SPMVStats *SPMVPushGraphAdjArrayList( struct Arguments *arguments, struct
                 weight = Nodes->edges_array_weight[j];
 #endif
 
-                #pragma omp atomic update
+        #pragma omp atomic update
                 stats->vector_output[dest] += (weight * stats->vector_input[src]);
             }
 
@@ -1488,7 +1488,7 @@ struct SPMVStats *SPMVPullFixedPointGraphAdjArrayList( struct Arguments *argumen
     {
         Start(timer_inner);
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1513,7 +1513,7 @@ struct SPMVStats *SPMVPullFixedPointGraphAdjArrayList( struct Arguments *argumen
                 weight = DoubleToFixed64(Nodes->edges_array_weight[j]);
 #endif
 
-                vector_output[dest] +=  MULFixed64V1(weight, vector_input[src]); // stats->pageRanks[v]/graph->vertices[v].out_degree;
+                vector_output[dest] +=  MULFixed64V1(weight, vector_input[src]);// stats->pageRanks[v]/graph->vertices[v].out_degree;
 
             }
 
@@ -1602,7 +1602,7 @@ struct SPMVStats *SPMVPushFixedPointGraphAdjArrayList( struct Arguments *argumen
     {
         Start(timer_inner);
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1619,7 +1619,7 @@ struct SPMVStats *SPMVPushFixedPointGraphAdjArrayList( struct Arguments *argumen
 #if WEIGHTED
                 weight = DoubleToFixed64(Nodes->edges_array_weight[j]);
 #endif
-                #pragma omp atomic update
+        #pragma omp atomic update
                 vector_output[dest] += MULFixed64V1(weight, vector_input[src]);
             }
 
@@ -1730,7 +1730,7 @@ struct SPMVStats *SPMVPullGraphAdjLinkedList( struct Arguments *arguments, struc
     {
         Start(timer_inner);
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1753,7 +1753,7 @@ struct SPMVStats *SPMVPullGraphAdjLinkedList( struct Arguments *arguments, struc
 #endif
                 Nodes = Nodes->next;
 
-                stats->vector_output[dest] +=  (weight * stats->vector_input[src]); // stats->pageRanks[v]/graph->vertices[v].out_degree;
+                stats->vector_output[dest] +=  (weight * stats->vector_input[src]);// stats->pageRanks[v]/graph->vertices[v].out_degree;
             }
 
 
@@ -1818,7 +1818,7 @@ struct SPMVStats *SPMVPushGraphAdjLinkedList( struct Arguments *arguments, struc
     {
         Start(timer_inner);
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1838,7 +1838,7 @@ struct SPMVStats *SPMVPushGraphAdjLinkedList( struct Arguments *arguments, struc
 #endif
                 Nodes = Nodes->next;
 
-                #pragma omp atomic update
+        #pragma omp atomic update
                 stats->vector_output[dest] += (weight * stats->vector_input[src]);
             }
 
@@ -1913,7 +1913,7 @@ struct SPMVStats *SPMVPullFixedPointGraphAdjLinkedList( struct Arguments *argume
     {
         Start(timer_inner);
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -1936,7 +1936,7 @@ struct SPMVStats *SPMVPullFixedPointGraphAdjLinkedList( struct Arguments *argume
 #endif
                 Nodes = Nodes->next;
 
-                vector_output[dest] +=  MULFixed64V1(weight, vector_input[src]); // stats->pageRanks[v]/graph->vertices[v].out_degree;
+                vector_output[dest] +=  MULFixed64V1(weight, vector_input[src]);// stats->pageRanks[v]/graph->vertices[v].out_degree;
 
             }
 
@@ -2022,7 +2022,7 @@ struct SPMVStats *SPMVPushFixedPointGraphAdjLinkedList( struct Arguments *argume
     {
         Start(timer_inner);
 
-        #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
+    #pragma omp parallel for private(v,degree,Nodes) schedule(dynamic, 1024)
         for(v = 0; v < graph->num_vertices; v++)
         {
             uint32_t j;
@@ -2042,7 +2042,7 @@ struct SPMVStats *SPMVPushFixedPointGraphAdjLinkedList( struct Arguments *argume
 #endif
                 Nodes = Nodes->next;
 
-                #pragma omp atomic update
+        #pragma omp atomic update
                 vector_output[dest] += MULFixed64V1(weight, vector_input[src]);
             }
 

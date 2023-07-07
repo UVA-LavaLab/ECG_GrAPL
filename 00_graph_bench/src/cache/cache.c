@@ -126,7 +126,7 @@ void invalidate(struct CacheLine *cacheLine)
 {
     cacheLine->idx    = 0;
     cacheLine->seq    = 0;
-    cacheLine->tag    = 0;    //useful function
+    cacheLine->tag    = 0;//useful function
     cacheLine->Flags  = INVALID;
     cacheLine->RRPV   = RRPV_INIT;
     cacheLine->SRRPV  = SRRPV_INIT;
@@ -568,7 +568,7 @@ uint32_t checkInCache(struct Cache *cache, uint64_t addr)
 void Prefetch(struct Cache *cache, uint64_t addr, unsigned char op, uint32_t node, uint32_t mask, uint32_t vSrc, uint32_t vDst)
 {
     cache->currentCycle++;/*per cache global counter to maintain LRU order
-      among cache ways, updated on every cache access*/
+                             among cache ways, updated on every cache access*/
     cache->currentCycle_preftcher++;
     cache->readsPrefetch++;
     struct CacheLine *line = findLine(cache, addr);
@@ -604,7 +604,7 @@ void updateAgingPolicy(struct Cache *cache)
     case GRASPXP_POLICY:
         updateAgeGRASPXP(cache);
         break;
-    default :
+    default:
         updateAgeLRU(cache);
     }
 }
@@ -698,7 +698,7 @@ void updateInsertionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t
     case GRASP_OPT_POLICY:
         updateInsertGRASPOPT(cache, line, mask, vSrc, vDst);
         break;
-    default :
+    default:
         updateInsertLRU(cache, line);
     }
 }
@@ -953,7 +953,7 @@ void updatePromotionPolicy(struct Cache *cache, struct CacheLine *line, uint32_t
     case GRASP_OPT_POLICY:
         updatePromotePOPT(cache, line, mask, vSrc, vDst);
         break;
-    default :
+    default:
         updatePromoteLRU(cache, line);
     }
 }
@@ -1153,7 +1153,7 @@ struct CacheLine *getVictimPolicy(struct Cache *cache, uint64_t addr, uint32_t m
     case GRASP_OPT_POLICY:
         victim = getVictimGRASPPOPT(cache, addr, mask, vSrc, vDst);
         break;
-    default :
+    default:
         victim = getVictimLRU(cache, addr);
     }
 
@@ -1719,7 +1719,7 @@ struct CacheLine *peekVictimPolicy(struct Cache *cache, uint64_t addr)
     case MASK_POLICY:
         victim = peekVictimMASK(cache, addr);
         break;
-    default :
+    default:
         victim = peekVictimLRU(cache, addr);
     }
 
@@ -2262,8 +2262,8 @@ void setCacheThresholdDegreeAvg(struct Cache *cache, uint32_t  *degrees)
 {
     uint32_t v;
     uint32_t i;
-    uint64_t  avgDegrees = 0;
-    uint64_t  totalDegrees = 0;
+    uint64_t avgDegrees = 0;
+    uint64_t totalDegrees = 0;
     float *thresholds_avgDegrees;
     cache->degrees_pointer = degrees;
     thresholds_avgDegrees    = (float *) my_malloc(cache->num_buckets * sizeof(float));
@@ -2358,7 +2358,7 @@ void initialzeCachePropertyRegions (struct Cache *cache, struct PropertyMetaData
 
     for (v = 0; v < cache->numPropertyRegions; ++v)
     {
-        cache->propertyRegions[v].fraction    = property_fraction; // classical vs ratio of array size in bytes
+        cache->propertyRegions[v].fraction    = property_fraction;// classical vs ratio of array size in bytes
         // cache->propertyRegions[v].fraction    = (uint64_t)(((uint64_t)(propertyMetaData[v].size) * 100) / total_properties_size );
         cache->propertyRegions[v].lower_bound = propertyMetaData[v].base_address;
         cache->propertyRegions[v].upper_bound = propertyMetaData[v].base_address + (uint64_t)(propertyMetaData[v].size);
@@ -2392,13 +2392,13 @@ float getMissRate(struct Cache *cache)
 void printStatsCache(struct Cache *cache)
 {
     float missRate = (double)((getWM(cache) + getRM(cache)) * 100) / (getReads(cache) + getWrites(cache)); //calculate miss rate
-    missRate       = roundf(missRate * 100) / 100;                                                //rounding miss rate
+    missRate       = roundf(missRate * 100) / 100;//rounding miss rate
 
-    float missRateRead = (double)((getRM(cache)) * 100) / (getReads(cache));   //calculate miss rate
-    missRateRead       = roundf(missRateRead * 100) / 100;                     //rounding miss rate
+    float missRateRead = (double)((getRM(cache)) * 100) / (getReads(cache)); //calculate miss rate
+    missRateRead       = roundf(missRateRead * 100) / 100;//rounding miss rate
 
     float missRateWrite = (double)((getWM(cache)) * 100) / (getWrites(cache)); //calculate miss rate
-    missRateWrite       = roundf(missRateWrite * 100) / 100;                   //rounding miss rate
+    missRateWrite       = roundf(missRateWrite * 100) / 100;//rounding miss rate
 
     float missRatePrefetch = (double)(( getRMPrefetch(cache)) * 100) / (cache->currentCycle_preftcher); //calculate miss rate
     missRatePrefetch = roundf(missRatePrefetch * 100) / 100;
@@ -2439,7 +2439,7 @@ void printStatsCache(struct Cache *cache)
     case GRASP_OPT_POLICY:
         printf("| %-51s | \n", "GRASP_OPT_POLICY");
         break;
-    default :
+    default:
         printf("| %-51s | \n", "LRU_POLICY");
     }
 
@@ -2477,13 +2477,13 @@ void printStatsCacheToFile(struct Cache *cache, char *fname_perf)
     fptr1 = fopen(fname_perf, "a+");
 
     float missRate = (double)((getWM(cache) + getRM(cache)) * 100) / (getReads(cache) + getWrites(cache)); //calculate miss rate
-    missRate       = roundf(missRate * 100) / 100;                                                //rounding miss rate
+    missRate       = roundf(missRate * 100) / 100;//rounding miss rate
 
-    float missRateRead = (double)((getRM(cache)) * 100) / (getReads(cache));   //calculate miss rate
-    missRateRead       = roundf(missRateRead * 100) / 100;                     //rounding miss rate
+    float missRateRead = (double)((getRM(cache)) * 100) / (getReads(cache)); //calculate miss rate
+    missRateRead       = roundf(missRateRead * 100) / 100;//rounding miss rate
 
     float missRateWrite = (double)((getWM(cache)) * 100) / (getWrites(cache)); //calculate miss rate
-    missRateWrite       = roundf(missRateWrite * 100) / 100;                   //rounding miss rate
+    missRateWrite       = roundf(missRateWrite * 100) / 100;//rounding miss rate
 
     fprintf(fptr1, " -----------------------------------------------------\n");
     fprintf(fptr1, "| %-51s | \n", "Simulation results (Cache)");
@@ -2521,7 +2521,7 @@ void printStatsCacheToFile(struct Cache *cache, char *fname_perf)
     case GRASP_OPT_POLICY:
         fprintf(fptr1, "| %-51s | \n", "GRASP_OPT_POLICY");
         break;
-    default :
+    default:
         fprintf(fptr1, "| %-51s | \n", "LRU_POLICY");
     }
 
@@ -2553,11 +2553,11 @@ void printStatsCacheToFile(struct Cache *cache, char *fname_perf)
 
 void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
 {
-    uint32_t  i = 0;
-    uint32_t  v = 0;
-    uint64_t  avgDegrees = 0;
-    uint32_t  num_buckets = cache->num_buckets;
-    uint32_t  num_vertices = cache->numVertices;
+    uint32_t i = 0;
+    uint32_t v = 0;
+    uint64_t avgDegrees = 0;
+    uint32_t num_buckets = cache->num_buckets;
+    uint32_t num_vertices = cache->numVertices;
 
     if(!num_vertices)
         return;
@@ -2575,8 +2575,8 @@ void printStatsGraphReuse(struct Cache *cache, uint32_t *degrees)
     float *thresholds_avgReuses;
     float *thresholds_avgReuses_region;
     float *thresholds_avgMisses;
-    float  Access_percentage;
-    float  Count_percentage;
+    float Access_percentage;
+    float Count_percentage;
 
     float *thresholds_avgReuses_cl;
     float *thresholds_avgReuses_region_cl;
@@ -2810,7 +2810,7 @@ void printStatsCacheStructureToFile(struct CacheStructure *cache, char *fname_pe
 void printStats(struct Cache *cache)
 {
     float missRate = (double)((getWM(cache) + getRM(cache)) * 100) / (cache->currentCycle_cache); //calculate miss rate
-    missRate = roundf(missRate * 100) / 100;                            //rounding miss rate
+    missRate = roundf(missRate * 100) / 100; //rounding miss rate
 
     float missRatePrefetch = (double)(( getRMPrefetch(cache)) * 100) / (cache->currentCycle_preftcher); //calculate miss rate
     missRatePrefetch = roundf(missRatePrefetch * 100) / 100;
@@ -2858,10 +2858,10 @@ void printStats(struct Cache *cache)
         }
     }
 
-    double    avgVerticesreuse  = 0;
-    uint64_t  numVerticesMiss   = 0;
-    uint64_t  totalVerticesMiss = 0;
-    uint64_t  accVerticesAccess = 0;
+    double avgVerticesreuse  = 0;
+    uint64_t numVerticesMiss   = 0;
+    uint64_t totalVerticesMiss = 0;
+    uint64_t accVerticesAccess = 0;
     // uint64_t   minReuse = 0;
     // uint32_t  maxVerticesMiss = 0;
     // uint32_t  maxNode = 0;

@@ -371,11 +371,11 @@ struct BFSStats *breadthFirstSearchPullGraphCSR(struct Arguments *arguments, str
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    stats->propertyMetaData[1].base_address = (uint64_t) & (sharedFrontierQueue->q_bitmap->bitarray[0]);
+    stats->propertyMetaData[1].base_address = (uint64_t) &(sharedFrontierQueue->q_bitmap->bitarray[0]);
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
@@ -491,7 +491,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSR(struct Arguments *arguments, str
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
@@ -533,7 +533,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSR(struct Arguments *arguments, str
 #endif
 
     Start(timer);
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         Start(timer_inner);
@@ -645,11 +645,11 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    stats->propertyMetaData[1].base_address = (uint64_t) & (bitmapNext->bitarray[0]);
+    stats->propertyMetaData[1].base_address = (uint64_t) &(bitmapNext->bitarray[0]);
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
@@ -686,7 +686,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
     SimRoiStart();
 #endif
 
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         if(mf > (mu / alpha))
@@ -721,8 +721,8 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSR(struct Arguments *
                 printf("| BU %-12u | %-15u | %-15f | \n", stats->iteration++, nf, Seconds(timer_inner));
 
             }
-            while(( nf > nf_prev) ||  // growing;
-                    ( nf > (n / beta)));
+            while(( nf > nf_prev) || // growing;
+                  ( nf > (n / beta)));
 
             Start(timer_inner);
             bitmapToArrayQueue(bitmapCurr, sharedFrontierQueue, localFrontierQueues);
@@ -826,7 +826,7 @@ uint32_t topDownStepGraphCSR(struct GraphCSR *graph, struct ArrayQueue *sharedFr
         struct ArrayQueue *localFrontierQueue = localFrontierQueues[t_id];
 
 
-        #pragma omp for reduction(+:mf) schedule(auto)
+    #pragma omp for reduction(+:mf) schedule(auto)
         for(i = sharedFrontierQueue->head ; i < sharedFrontierQueue->tail; i++)
         {
             v = sharedFrontierQueue->queue[i];
@@ -838,12 +838,12 @@ uint32_t topDownStepGraphCSR(struct GraphCSR *graph, struct ArrayQueue *sharedFr
                 u = EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]);
                 int u_parent = stats->parents[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                 if(u_parent < 0 )
                 {
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                     if(__sync_bool_compare_and_swap(&stats->parents[u], u_parent, v))
                     {
@@ -908,7 +908,7 @@ uint32_t bottomUpStepGraphCSR(struct GraphCSR *graph, struct Bitmap *bitmapCurr,
     for(v = 0 ; v < graph->num_vertices ; v++)
     {
         out_degree = vertices->out_degree[v];
-        if(stats->parents[v] < 0)  // optmization
+        if(stats->parents[v] < 0) // optmization
         {
             edge_idx = vertices->edges_idx[v];
 
@@ -916,7 +916,7 @@ uint32_t bottomUpStepGraphCSR(struct GraphCSR *graph, struct Bitmap *bitmapCurr,
             {
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                 if(getBit(bitmapCurr, u))
                 {
@@ -1125,8 +1125,8 @@ struct BFSStats *breadthFirstSearchPushDirectionOptimizedBitmapGraphCSR(struct A
                 printf("| BU %-12u | %-15u | %-15f | \n", stats->iteration++, nf, Seconds(timer_inner));
 
             }
-            while(( nf > nf_prev) ||  // growing;
-                    ( nf > (n / beta)));
+            while(( nf > nf_prev) || // growing;
+                  ( nf > (n / beta)));
 
             printf("| C  %-12s | %-15s | %-15f | \n", " ", " ", Seconds(timer_inner));
 
@@ -1192,7 +1192,7 @@ uint32_t topDownStepUsingBitmapsGraphCSR(struct GraphCSR *graph, struct ArrayQue
     {
 
 
-        #pragma omp for reduction(+:mf)
+    #pragma omp for reduction(+:mf)
         for(i = 0 ; i < (sharedFrontierQueue->q_bitmap->size); i++)
         {
             if(getBit(sharedFrontierQueue->q_bitmap, i))
@@ -1305,11 +1305,11 @@ struct BFSStats *breadthFirstSearchPullGraphCSRDualOrder(struct Arguments *argum
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    stats->propertyMetaData[1].base_address = (uint64_t) & (sharedFrontierQueue->q_bitmap->bitarray[0]);
+    stats->propertyMetaData[1].base_address = (uint64_t) &(sharedFrontierQueue->q_bitmap->bitarray[0]);
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
@@ -1425,7 +1425,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSRDualOrder(struct Arguments *argum
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
@@ -1467,7 +1467,7 @@ struct BFSStats *breadthFirstSearchPushGraphCSRDualOrder(struct Arguments *argum
 #endif
 
     Start(timer);
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         Start(timer_inner);
@@ -1579,11 +1579,11 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->parents[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->parents[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    stats->propertyMetaData[1].base_address = (uint64_t) & (bitmapNext->bitarray[0]);
+    stats->propertyMetaData[1].base_address = (uint64_t) &(bitmapNext->bitarray[0]);
     stats->propertyMetaData[1].size = sharedFrontierQueue->q_bitmap->real_size * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
@@ -1620,7 +1620,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
     SimRoiStart();
 #endif
 
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         if(mf > (mu / alpha))
@@ -1657,8 +1657,8 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphCSRDualOrder(struct Ar
                 printf("| BU %-12u | %-15u | %-15f | \n", stats->iteration++, nf, Seconds(timer_inner));
 
             }
-            while(( nf > nf_prev) ||  // growing;
-                    ( nf > (n / beta)));
+            while(( nf > nf_prev) || // growing;
+                  ( nf > (n / beta)));
 
             Start(timer_inner);
             syncDualOrderParentArrays(&(stats->parents), &(stats->parents_DualOrder), graph->inverse_sorted_edges_array->inverse_label_array, graph->num_vertices);
@@ -1760,7 +1760,7 @@ uint32_t topDownStepGraphCSRDualOrder(struct GraphCSR *graph, struct ArrayQueue 
         struct ArrayQueue *localFrontierQueue = localFrontierQueues[t_id];
 
 
-        #pragma omp for reduction(+:mf) schedule(auto)
+    #pragma omp for reduction(+:mf) schedule(auto)
         for(i = sharedFrontierQueue->head ; i < sharedFrontierQueue->tail; i++)
         {
             v = sharedFrontierQueue->queue[i];
@@ -1772,12 +1772,12 @@ uint32_t topDownStepGraphCSRDualOrder(struct GraphCSR *graph, struct ArrayQueue 
                 u = EXTRACT_VALUE(graph->sorted_edges_array->edges_array_dest[j]);
                 int u_parent = stats->parents[u];
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->parents[u]), 'r', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                 if(u_parent < 0 )
                 {
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->parents[u]), 'w', u, EXTRACT_MASK(graph->sorted_edges_array->edges_array_dest[j]), v,u);
 #endif
                     if(__sync_bool_compare_and_swap(&stats->parents[u], u_parent, v))
                     {
@@ -1838,7 +1838,7 @@ uint32_t bottomUpStepGraphCSRDualOrder(struct GraphCSR *graph, struct Bitmap *bi
     for(v = 0 ; v < graph->num_vertices ; v++)
     {
         out_degree = vertices->out_degree[v];
-        if(stats->parents[v] < 0)  // optmization
+        if(stats->parents[v] < 0) // optmization
         {
 
             edge_idx = vertices->edges_idx[v];
@@ -1848,7 +1848,7 @@ uint32_t bottomUpStepGraphCSRDualOrder(struct GraphCSR *graph, struct Bitmap *bi
 
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                 if(getBit(bitmapCurr, u))
                 {
@@ -1983,7 +1983,7 @@ struct BFSStats *breadthFirstSearchRowGraphGrid(struct Arguments *arguments, str
 
     stats->time_total += Seconds(timer_iteration);
     Start(timer);
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         Start(timer_iteration);
@@ -2086,7 +2086,7 @@ struct BFSStats *breadthFirstSearchColumnGraphGrid(struct Arguments *arguments, 
 
     stats->time_total += Seconds(timer_iteration);
     Start(timer);
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         Start(timer_iteration);
@@ -2158,7 +2158,7 @@ void breadthFirstSearchStreamEdgesRowGraphGrid(struct GraphGrid *graph, struct A
     for (i = 0; i < totalPartitions; ++i)
     {
         uint32_t j;
-        #pragma omp parallel for default(none) shared(i,stats,totalPartitions,localFrontierQueues ,sharedFrontierQueue, graph)
+    #pragma omp parallel for default(none) shared(i,stats,totalPartitions,localFrontierQueues ,sharedFrontierQueue, graph)
         for (j = 0; j < totalPartitions; ++j)
         {
             uint32_t t_id = omp_get_thread_num();
@@ -2200,7 +2200,7 @@ void breadthFirstSearchStreamEdgesColumnGraphGrid(struct GraphGrid *graph, struc
 
 
         uint32_t j;
-        #pragma omp for
+    #pragma omp for
         for (j = 0; j < totalPartitions; ++j)
         {
             uint32_t i;
@@ -2365,7 +2365,7 @@ struct BFSStats *breadthFirstSearchRowGraphGridBitmap(struct Arguments *argument
     stats->time_total += Seconds(timer_iteration);
     Start(timer);
 
-    while(processed_nodes)  // start while
+    while(processed_nodes) // start while
     {
 
         Start(timer_iteration);
@@ -2451,7 +2451,7 @@ struct BFSStats *breadthFirstSearchColumnGraphGridBitmap(struct Arguments *argum
     stats->time_total += Seconds(timer_iteration);
     Start(timer);
 
-    while(processed_nodes)  // start while
+    while(processed_nodes) // start while
     {
 
         Start(timer_iteration);
@@ -2508,7 +2508,7 @@ void breadthFirstSearchStreamEdgesRowGraphGridBitmap(struct GraphGrid *graph, st
     for (i = 0; i < totalPartitions; ++i)
     {
         uint32_t j;
-        #pragma omp parallel for default(none) shared(i,stats,totalPartitions,FrontierBitmapCurr ,FrontierBitmapNext, graph)
+    #pragma omp parallel for default(none) shared(i,stats,totalPartitions,FrontierBitmapCurr ,FrontierBitmapNext, graph)
         for (j = 0; j < totalPartitions; ++j)
         {
 
@@ -2534,7 +2534,7 @@ void breadthFirstSearchStreamEdgesColumnGraphGridBitmap(struct GraphGrid *graph,
         uint32_t j;
 
         // #pragma omp for schedule(dynamic, 256)
-        #pragma omp for
+    #pragma omp for
         for (j = 0; j < totalPartitions; ++j)
         {
             uint32_t i;
@@ -2780,7 +2780,7 @@ struct BFSStats *breadthFirstSearchPushGraphAdjArrayList(struct Arguments *argum
     printf("| TD %-12u | %-15u | %-15f | \n", stats->iteration++, ++stats->processed_nodes, Seconds(timer_inner));
 
     Start(timer);
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         Start(timer_inner);
@@ -2890,7 +2890,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphAdjArrayList(struct Ar
     printf("| TD %-12u | %-15u | %-15f | \n", stats->iteration++, ++stats->processed_nodes, Seconds(timer_inner));
 
     Start(timer);
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         if(mf > (mu / alpha))
@@ -2917,8 +2917,8 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphAdjArrayList(struct Ar
                 printf("| BU %-12u | %-15u | %-15f | \n", stats->iteration++, nf, Seconds(timer_inner));
 
             }
-            while(( nf > nf_prev) ||  // growing;
-                    ( nf > (n / beta)));
+            while(( nf > nf_prev) || // growing;
+                  ( nf > (n / beta)));
 
             Start(timer_inner);
             bitmapToArrayQueue(bitmapCurr, sharedFrontierQueue, localFrontierQueues);
@@ -3003,7 +3003,7 @@ uint32_t topDownStepGraphAdjArrayList(struct GraphAdjArrayList *graph, struct Ar
         struct ArrayQueue *localFrontierQueue = localFrontierQueues[t_id];
 
 
-        #pragma omp for reduction(+:mf) schedule(auto)
+    #pragma omp for reduction(+:mf) schedule(auto)
         for(i = sharedFrontierQueue->head ; i < sharedFrontierQueue->tail; i++)
         {
             v = sharedFrontierQueue->queue[i];
@@ -3068,7 +3068,7 @@ uint32_t bottomUpStepGraphAdjArrayList(struct GraphAdjArrayList *graph, struct B
     #pragma omp parallel for default(none) private(Nodes,j,u,v,degree) shared(stats,bitmapCurr,bitmapNext,graph) reduction(+:nf) schedule(dynamic, 1024)
     for(v = 0 ; v < graph->num_vertices ; v++)
     {
-        if(stats->parents[v] < 0)  // optmization
+        if(stats->parents[v] < 0) // optmization
         {
 
 #if DIRECTED // will look at the other neighbours if directed by using inverese edge list
@@ -3282,7 +3282,7 @@ struct BFSStats *breadthFirstSearchPushGraphAdjLinkedList(struct Arguments *argu
     printf("| TD %-12u | %-15u | %-15f | \n", stats->iteration++, ++stats->processed_nodes, Seconds(timer_inner));
 
     Start(timer);
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         Start(timer_inner);
@@ -3394,7 +3394,7 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphAdjLinkedList(struct A
     printf("| TD %-12u | %-15u | %-15f | \n", stats->iteration++, ++stats->processed_nodes, Seconds(timer_inner));
 
     Start(timer);
-    while(!isEmptyArrayQueue(sharedFrontierQueue))  // start while
+    while(!isEmptyArrayQueue(sharedFrontierQueue)) // start while
     {
 
         if(mf > (mu / alpha))
@@ -3421,8 +3421,8 @@ struct BFSStats *breadthFirstSearchDirectionOptimizedGraphAdjLinkedList(struct A
                 printf("| BU %-12u | %-15u | %-15f | \n", stats->iteration++, nf, Seconds(timer_inner));
 
             }
-            while(( nf > nf_prev) ||  // growing;
-                    ( nf > (n / beta)));
+            while(( nf > nf_prev) || // growing;
+                  ( nf > (n / beta)));
 
             Start(timer_inner);
             bitmapToArrayQueue(bitmapCurr, sharedFrontierQueue, localFrontierQueues);
@@ -3507,7 +3507,7 @@ uint32_t topDownStepGraphAdjLinkedList(struct GraphAdjLinkedList *graph, struct 
         struct ArrayQueue *localFrontierQueue = localFrontierQueues[t_id];
 
 
-        #pragma omp for reduction(+:mf) schedule(auto)
+    #pragma omp for reduction(+:mf) schedule(auto)
         for(i = sharedFrontierQueue->head ; i < sharedFrontierQueue->tail; i++)
         {
             v = sharedFrontierQueue->queue[i];
@@ -3574,7 +3574,7 @@ uint32_t bottomUpStepGraphAdjLinkedList(struct GraphAdjLinkedList *graph, struct
     #pragma omp parallel for default(none) private(Nodes,j,u,v,degree) shared(stats,bitmapCurr,bitmapNext,graph) reduction(+:nf) schedule(dynamic, 1024)
     for(v = 0 ; v < graph->num_vertices ; v++)
     {
-        if(stats->parents[v] < 0)  // optmization
+        if(stats->parents[v] < 0) // optmization
         {
 
 #if DIRECTED // will look at the other neighbours if directed by using inverese edge list

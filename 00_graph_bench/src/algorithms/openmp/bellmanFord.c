@@ -511,8 +511,8 @@ struct BellmanFordStats *bellmanFordPullRowGraphGrid(struct Arguments *arguments
         activeVertices = 0;
 
         uint32_t i;
-        #pragma omp parallel for private(i) reduction(+ : activeVertices) schedule (dynamic,arguments->algo_numThreads)
-        for (i = 0; i < totalPartitions; ++i)  // iterate over partitions rowwise
+    #pragma omp parallel for private(i) reduction(+ : activeVertices) schedule (dynamic,arguments->algo_numThreads)
+        for (i = 0; i < totalPartitions; ++i) // iterate over partitions rowwise
         {
             uint32_t j;
             // #pragma omp parallel for private(j) reduction(+ : activeVertices) schedule (dynamic,8)
@@ -634,8 +634,8 @@ struct BellmanFordStats *bellmanFordPushColumnGraphGrid(struct Arguments *argume
         activeVertices = 0;
 
         uint32_t j;
-        #pragma omp parallel for private(j) reduction(+ : activeVertices) schedule (dynamic,arguments->algo_numThreads)
-        for (j = 0; j < totalPartitions; ++j)  // iterate over partitions colwise
+    #pragma omp parallel for private(j) reduction(+ : activeVertices) schedule (dynamic,arguments->algo_numThreads)
+        for (j = 0; j < totalPartitions; ++j) // iterate over partitions colwise
         {
             uint32_t i;
             // #pragma omp parallel for private(i) reduction(+ : activeVertices) schedule (dynamic,arguments->algo_numThreads)
@@ -922,7 +922,7 @@ struct BellmanFordStats *bellmanFordDataDrivenPullGraphCSR(struct Arguments *arg
         SimMarker(1, iteration);
 #endif
 
-        #pragma omp parallel for private(v) shared(vertices,sorted_edges_array,graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
+    #pragma omp parallel for private(v) shared(vertices,sorted_edges_array,graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
         for(v = 0; v < graph->num_vertices; v++)
         {
 
@@ -1078,7 +1078,7 @@ struct BellmanFordStats *bellmanFordDataDrivenPushGraphCSR(struct Arguments *arg
         SimMarker(1, iteration);
 #endif
 
-        #pragma omp parallel for private(v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
+    #pragma omp parallel for private(v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
         for(v = 0; v < graph->num_vertices; v++)
         {
 
@@ -1263,7 +1263,7 @@ struct BellmanFordStats *bellmanFordRandomizedDataDrivenPushGraphCSR(struct Argu
         SimMarker(1, iteration);
 #endif
 
-        #pragma omp parallel for private(v,n) shared(vertices,graphPlus,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
+    #pragma omp parallel for private(v,n) shared(vertices,graphPlus,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
         for(n = 0; n < graphPlus->num_vertices; n++)
         {
 
@@ -1298,7 +1298,7 @@ struct BellmanFordStats *bellmanFordRandomizedDataDrivenPushGraphCSR(struct Argu
         SimMarker(3, iteration);
 #endif
 
-        #pragma omp parallel for private(v,n) shared(vertices,graphMinus,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
+    #pragma omp parallel for private(v,n) shared(vertices,graphMinus,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
         for(n = 0; n < graphMinus->num_vertices; n++)
         {
 
@@ -1475,7 +1475,7 @@ struct BellmanFordStats *bellmanFordDataDrivenPullGraphAdjArrayList(struct Argum
         stats->processed_nodes += activeVertices;
         activeVertices = 0;
 
-        #pragma omp parallel for private(nodes,v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
+    #pragma omp parallel for private(nodes,v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
         for(v = 0; v < graph->num_vertices; v++)
         {
 
@@ -1630,7 +1630,7 @@ struct BellmanFordStats *bellmanFordDataDrivenPushGraphAdjArrayList(struct Argum
         activeVertices = 0;
 
 
-        #pragma omp parallel for private(nodes,degree,v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
+    #pragma omp parallel for private(nodes,degree,v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
         for(v = 0; v < graph->num_vertices; v++)
         {
 
@@ -1792,7 +1792,7 @@ struct BellmanFordStats *bellmanFordPullGraphAdjLinkedList(struct Arguments *arg
         activeVertices = 0;
 
 
-        #pragma omp parallel for private(nodes,v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
+    #pragma omp parallel for private(nodes,v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
         for(v = 0; v < graph->num_vertices; v++)
         {
 
@@ -1952,7 +1952,7 @@ struct BellmanFordStats *bellmanFordPushGraphAdjLinkedList(struct Arguments *arg
         activeVertices = 0;
 
 
-        #pragma omp parallel for private(nodes,degree,v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
+    #pragma omp parallel for private(nodes,degree,v) shared(graph,stats,bitmapNext,bitmapCurr) reduction(+ : activeVertices) schedule (dynamic,128)
         for(v = 0; v < graph->num_vertices; v++)
         {
 
@@ -1964,7 +1964,7 @@ struct BellmanFordStats *bellmanFordPushGraphAdjLinkedList(struct Arguments *arg
                 uint32_t j;
                 for(j = 0 ; j < (degree) ; j++)
                 {
-                    uint32_t   u = nodes->dest;
+                    uint32_t u = nodes->dest;
                     uint32_t w = 1;
 #if WEIGHTED
                     w = nodes->weight;

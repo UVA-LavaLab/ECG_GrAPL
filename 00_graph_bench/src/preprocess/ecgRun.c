@@ -48,7 +48,7 @@ void makeOffsetMatrixProcess(struct GraphCSR *graph, struct Arguments *arguments
     struct Timer *timer      = (struct Timer *) malloc(sizeof(struct Timer));
     uint32_t vertexPerCacheLine    = 64 / sizeof(uint32_t);
     uint32_t numCacheLines = (graph->num_vertices + vertexPerCacheLine - 1) / vertexPerCacheLine;
-    uint32_t numEpochs     = (uint32_t)(1 << POPT_CACHE_BITS) ;
+    uint32_t numEpochs     = (uint32_t)(1 << POPT_CACHE_BITS);
     uint32_t epochSize     = (graph->num_vertices + numEpochs - 1) / numEpochs;
     uint32_t chunkSize     = 64 / vertexPerCacheLine;
     if (chunkSize == 0)
@@ -229,7 +229,7 @@ void makeOffsetMatrixProcessParameterized(struct GraphCSR *graph, struct Argumen
     struct Timer *timer      = (struct Timer *) malloc(sizeof(struct Timer));
     uint32_t vertexPerCacheLine    = CACHELINE_BYTES / sizeof(uint32_t);
     uint32_t numCacheLines = (graph->num_vertices + vertexPerCacheLine - 1) / vertexPerCacheLine;
-    uint32_t numEpochs     = (uint32_t)(1 << arguments->popt_bits) ;
+    uint32_t numEpochs     = (uint32_t)(1 << arguments->popt_bits);
     uint32_t epochSize     = (graph->num_vertices + numEpochs - 1) / numEpochs;
     uint32_t chunkSize     = CACHELINE_BYTES / vertexPerCacheLine;
     if (chunkSize == 0)
@@ -290,8 +290,8 @@ void makeOffsetMatrixProcessParameterized(struct GraphCSR *graph, struct Argumen
     printf("| %-51f | \n", Seconds(timer));
     printf(" -----------------------------------------------------\n");
 
-     /* Step II: Converting adjacency matrix into offsets */
-    uint32_t maxReref = (uint32_t)((1 << (arguments->popt_bits -1))-1) ; //because MSB is reserved for identifying between reref val (1) & switch point (0)
+    /* Step II: Converting adjacency matrix into offsets */
+    uint32_t maxReref = (uint32_t)((1 << (arguments->popt_bits -1))-1); //because MSB is reserved for identifying between reref val (1) & switch point (0)
     uint32_t subEpochSz = (epochSize + maxReref) / (maxReref +1); //Using remaining 7 bits to identify intra-epoch information
     uint32_t mask    = 1;
     uint32_t orMask  = mask << (arguments->popt_bits -1);
@@ -402,18 +402,18 @@ void printOffsetMatrixProcessParameterized(struct GraphCSR *graph, struct Argume
     uint32_t cl;
     uint32_t vertexPerCacheLine    = CACHELINE_BYTES / sizeof(uint32_t);
     uint32_t numCacheLines = (graph->num_vertices + vertexPerCacheLine - 1) / vertexPerCacheLine;
-    uint32_t numEpochs     = (uint32_t)(1 << arguments->popt_bits) ;
+    uint32_t numEpochs     = (uint32_t)(1 << arguments->popt_bits);
 
 
     printf(" -----------------------------------------------------\n");
     printf("| %-15s | %-15s | %-15s | \n", "CLID", "Epoch", "offset_matrix");
     printf(" -----------------------------------------------------\n");
-     for (cl = 0; cl < numCacheLines; ++cl)
+    for (cl = 0; cl < numCacheLines; ++cl)
     {
         uint32_t epoch;
         for (epoch = 0; epoch < numEpochs; ++epoch)
         {
-           printf("| %-15u , %-15u , %-15u |\n", cl, epoch, graph->offset_matrix[(epoch * numCacheLines) + cl]);
+            printf("| %-15u , %-15u , %-15u |\n", cl, epoch, graph->offset_matrix[(epoch * numCacheLines) + cl]);
         }
     }
     printf(" -----------------------------------------------------\n");
@@ -438,9 +438,9 @@ void printOffsetMatrixPreftechParameterized(struct GraphCSR *graph, struct Argum
     printf(" -----------------------------------------------------\n");
     printf("| %-15s | %-15s | %-15s | \n", "v", "degree", "prefetch_matrix");
     printf(" -----------------------------------------------------\n");
-        for (i = 0; i < graph->num_vertices; ++i)
+    for (i = 0; i < graph->num_vertices; ++i)
     {
-           printf("| %-15u , %-15u , %-15u |\n", i, vertices->out_degree[graph->prefetch_matrix[i]], graph->prefetch_matrix[i]);
+        printf("| %-15u , %-15u , %-15u |\n", i, vertices->out_degree[graph->prefetch_matrix[i]], graph->prefetch_matrix[i]);
     }
     printf(" -----------------------------------------------------\n");
 
@@ -449,7 +449,7 @@ void printOffsetMatrixPreftechParameterized(struct GraphCSR *graph, struct Argum
 
 void makePrefetchMaskProcess(struct GraphCSR *graph, struct Arguments *arguments)
 {
- 
+
     uint32_t i;
     uint32_t j;
     uint32_t v;

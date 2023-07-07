@@ -363,7 +363,7 @@ uint32_t betweennessCentralityBottomUpStepGraphCSR(struct GraphCSR *graph, struc
     for(v = 0 ; v < graph->num_vertices ; v++)
     {
         out_degree = vertices->out_degree[v];
-        if(stats->distances[v] == UINT32_MAX)  // optmization
+        if(stats->distances[v] == UINT32_MAX) // optmization
         {
             edge_idx = vertices->edges_idx[v];
 
@@ -371,21 +371,21 @@ uint32_t betweennessCentralityBottomUpStepGraphCSR(struct GraphCSR *graph, struc
             {
                 u = EXTRACT_VALUE(sorted_edges_array[j]);
 #ifdef CACHE_HARNESS
-                AccessCacheStructureUInt32(stats->cache, (uint64_t) & (bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
+                AccessCacheStructureUInt32(stats->cache, (uint64_t) &(bitmapCurr->bitarray[word_offset(u)]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                 if(getBit(bitmapCurr, u))
                 {
                     // stats->parents[v] = u;
                     stats->distances[v] = stats->distances[u] + 1;
 #ifdef CACHE_HARNESS
-                    AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->distances[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
+                    AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->distances[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                     if(stats->distances[v] == stats->distances[u] + 1)
                     {
 
 #ifdef CACHE_HARNESS
-                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
-                        AccessCacheStructureUInt32(stats->cache, (uint64_t) & (stats->sigma[u]), 'w', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->sigma[u]), 'r', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
+                        AccessCacheStructureUInt32(stats->cache, (uint64_t) &(stats->sigma[u]), 'w', u, EXTRACT_MASK(sorted_edges_array[j]), v,u);
 #endif
                         stats->sigma[v] += stats->sigma[u];
                         stats->predecessors[v].nodes[stats->predecessors[v].degree] = u;
@@ -450,11 +450,11 @@ struct BetweennessCentralityStats *betweennessCentralityBrandesGraphCSR(struct A
     stats->propertyMetaData = (struct PropertyMetaData *) my_malloc(stats->numPropertyRegions * sizeof(struct PropertyMetaData));
     stats->cache = newCacheStructure(stats->cacheStructureArguments, graph->num_vertices, stats->numPropertyRegions);
 
-    stats->propertyMetaData[0].base_address = (uint64_t) & (stats->sigma[0]);
+    stats->propertyMetaData[0].base_address = (uint64_t) &(stats->sigma[0]);
     stats->propertyMetaData[0].size = graph->num_vertices * sizeof(int);
     stats->propertyMetaData[0].data_type_size = sizeof(int);
 
-    stats->propertyMetaData[1].base_address = (uint64_t) & (stats->distances[0]);
+    stats->propertyMetaData[1].base_address = (uint64_t) &(stats->distances[0]);
     stats->propertyMetaData[1].size = graph->num_vertices * sizeof(uint32_t);
     stats->propertyMetaData[1].data_type_size = sizeof(uint32_t);
 
@@ -475,7 +475,7 @@ struct BetweennessCentralityStats *betweennessCentralityBrandesGraphCSR(struct A
         clearBetweennessCentralityStats(stats);
 
 #ifdef SNIPER_HARNESS
-        int iteration = stats->iteration ;
+        int iteration = stats->iteration;
         SimMarker(1, iteration);
 #endif
         stats = betweennessCentralityBFSPullGraphCSR(s, graph, stats);

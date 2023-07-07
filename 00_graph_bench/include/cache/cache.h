@@ -108,12 +108,12 @@ struct CacheLine
     uint64_t addr;
     uint64_t tag;
     uint8_t Flags; // 0:invalid, 1:valid, 2:dirty
-    uint64_t seq;  // LRU   POLICY 0
-    uint8_t freq;  // LFU   POLICY 1
-    uint8_t RRPV;  // GRASP POLICY 2
+    uint64_t seq; // LRU   POLICY 0
+    uint8_t freq; // LFU   POLICY 1
+    uint8_t RRPV; // GRASP POLICY 2
     uint8_t SRRPV; // SRRPV POLICY 3
-    uint8_t PIN;   // PIN   POLICY 4
-    uint8_t PLRU;  // PLRU  POLICY 5
+    uint8_t PIN; // PIN   POLICY 4
+    uint8_t PLRU; // PLRU  POLICY 5
     uint8_t XPRRPV;// GRASP POLICY 6
     uint32_t POPT; // POPT  POLICY 8
 };
@@ -155,9 +155,9 @@ struct Cache
     uint64_t *threshold_accesses_region;
     uint32_t *degrees_pointer;
 
-    uint32_t  numVertices;
+    uint32_t numVertices;
 
-    uint32_t  num_buckets;
+    uint32_t num_buckets;
     uint64_t *thresholds;
     uint64_t *thresholds_count;
     uint64_t *thresholds_totalDegrees;
@@ -166,7 +166,7 @@ struct Cache
 
     uint32_t *offset_matrix;
     uint32_t *prefetch_matrix;
-    uint32_t  prefetch_enable;
+    uint32_t prefetch_enable;
 
     struct Cache *cacheNext; // next level cache pointer
 };
