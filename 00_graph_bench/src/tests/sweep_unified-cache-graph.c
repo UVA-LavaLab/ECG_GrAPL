@@ -234,9 +234,9 @@ main (int argc, char **argv)
     arguments.llc_policy    = POLICY;
     arguments.popt_bits     = POPT_CACHE_BITS;
 
-    arguments->l1_prefetch_enable    = ENABLE_PREFETCH;
-    arguments->l2_prefetch_enable    = ENABLE_PREFETCH;
-    arguments->llc_prefetch_enable   = ENABLE_PREFETCH;
+    arguments.l1_prefetch_enable    = ENABLE_PREFETCH;
+    arguments.l2_prefetch_enable    = ENABLE_PREFETCH;
+    arguments.llc_prefetch_enable   = ENABLE_PREFETCH;
 
     void *graph = NULL;
 
