@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.com/atmughrabi/ECG.svg?branch=main)](https://travis-ci.com/atmughrabi/ECG)
-[<p align="center"><img src="./02_slides/fig/logo.svg" width="650" ></p>](#ECG-benchmark-suite)
+[<p align="center"><img src="./02_slides/fig/logo.svg" width="200" ></p>](#ECG-benchmark-suite)
 
 # ECG Benchmark Suite
 
