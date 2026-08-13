@@ -1,0 +1,14 @@
+diff --git a/src/mem/request.hh b/src/mem/request.hh
+index 80bd4c8..ea62436 100644
+--- a/src/mem/request.hh
++++ b/src/mem/request.hh
+@@ -181,6 +181,9 @@ class Request : public Extensible<Request>
+           * launch or completion.
+           */
+         KERNEL                      = 0x00001000,
++        /** GraphBrew StreamShield: preserve private-cache fills but suppress
++         * shared-LLC allocation for this request. */
++        ECG_STREAM_BYPASS           = 0x00002000,
+ 
+         /** The request targets the secure memory space. */
+         SECURE                      = 0x10000000,

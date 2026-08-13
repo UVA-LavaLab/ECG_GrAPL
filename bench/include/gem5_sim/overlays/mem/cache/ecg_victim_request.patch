@@ -1,0 +1,67 @@
+diff --git a/src/mem/cache/replacement_policies/base.hh b/src/mem/cache/replacement_policies/base.hh
+index af6c4a2..0ad8b06 100644
+--- a/src/mem/cache/replacement_policies/base.hh
++++ b/src/mem/cache/replacement_policies/base.hh
+@@ -94,6 +94,13 @@ class Base : public SimObject
+     virtual void reset(const std::shared_ptr<ReplacementData>&
+         replacement_data) const = 0;
+ 
++    /**
++     * Provide the request that is about to trigger victim selection.
++     * Policies that do not consume request-carried replacement metadata ignore it.
++     */
++    virtual void setVictimRequest(const PacketPtr pkt)
++    {}
++
+     /**
+      * Find replacement victim among candidates.
+      *
+diff --git a/src/mem/cache/tags/base.hh b/src/mem/cache/tags/base.hh
+index 5f2a5fb..d8cb6ea 100644
+--- a/src/mem/cache/tags/base.hh
++++ b/src/mem/cache/tags/base.hh
+@@ -266,6 +266,12 @@ class BaseTags : public ClockedObject
+         blk->invalidate();
+     }
+ 
++    /**
++     * Provide request context to a replacement policy before findVictim().
++     */
++    virtual void setVictimRequest(const PacketPtr pkt)
++    {}
++
+     /**
+      * Find replacement victim based on address. If the address requires
+      * blocks to be evicted, their locations are listed for eviction. If a
+diff --git a/src/mem/cache/tags/base_set_assoc.hh b/src/mem/cache/tags/base_set_assoc.hh
+index aa43f7d..2d9a1bb 100644
+--- a/src/mem/cache/tags/base_set_assoc.hh
++++ b/src/mem/cache/tags/base_set_assoc.hh
+@@ -156,6 +156,11 @@ class BaseSetAssoc : public BaseTags
+         return blk;
+     }
+ 
++    void setVictimRequest(const PacketPtr pkt) override
++    {
++        replacementPolicy->setVictimRequest(pkt);
++    }
++
+     /**
+      * Find replacement victim based on address. The list of evicted blocks
+      * only contains the victim.
+diff --git a/src/mem/cache/base.cc b/src/mem/cache/base.cc
+index c1685c2..2baa877 100644
+--- a/src/mem/cache/base.cc
++++ b/src/mem/cache/base.cc
+@@ -1712,9 +1712,11 @@ BaseCache::allocateBlock(const PacketPtr pkt, PacketList &writebacks)
+     const auto partition_id = partitionManager ?
+         partitionManager->readPacketPartitionID(pkt) : 0;
+     // Find replacement victim
++    tags->setVictimRequest(pkt);
+     std::vector<CacheBlk*> evict_blks;
+     CacheBlk *victim = tags->findVictim(addr, is_secure, blk_size_bits,
+                                         evict_blks, partition_id);
++    tags->setVictimRequest(nullptr);
+ 
+     // It is valid to return nullptr if there is no victim
+     if (!victim)

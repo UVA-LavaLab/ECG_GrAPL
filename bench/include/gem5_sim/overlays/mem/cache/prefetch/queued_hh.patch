@@ -1,0 +1,30 @@
+diff --git a/src/mem/cache/prefetch/queued.hh b/src/mem/cache/prefetch/queued.hh
+index f3620bd..650e8bd 100644
+--- a/src/mem/cache/prefetch/queued.hh
++++ b/src/mem/cache/prefetch/queued.hh
+@@ -45,6 +45,7 @@
+ #include "arch/generic/mmu.hh"
+ #include "base/statistics.hh"
+ #include "base/types.hh"
++#include "sim/cur_tick.hh"
+ #include "mem/cache/prefetch/base.hh"
+ #include "mem/packet.hh"
+ 
+@@ -207,7 +208,16 @@ class Queued : public Base
+ 
+     Tick nextPrefetchReadyTime() const override
+     {
+-        return pfq.empty() ? MaxTick : pfq.front().tick;
++        // GRAPHBREW-QUEUE-SERVICING-PATCH:
++        // If pfq is empty but pfqMissingTranslation has pending
++        // entries, wake the cache up immediately so getPacket()
++        // runs and processMissingTranslations() drains the queue.
++        // Without this, prefetchers that produce ONLY cross-page
++        // candidates (e.g., ECG_PFX targeting property[random_v])
++        // never get serviced and pf_issued stays 0.
++        if (!pfq.empty()) return pfq.front().tick;
++        if (!pfqMissingTranslation.empty()) return curTick();
++        return MaxTick;
+     }
+ 
+     void printQueue(const std::list<DeferredPacket> &queue) const;

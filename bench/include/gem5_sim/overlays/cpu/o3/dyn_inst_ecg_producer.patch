@@ -1,0 +1,81 @@
+diff --git a/src/cpu/o3/dyn_inst.hh b/src/cpu/o3/dyn_inst.hh
+index 63bf5ac..92003c4 100644
+--- a/src/cpu/o3/dyn_inst.hh
++++ b/src/cpu/o3/dyn_inst.hh
+@@ -982,6 +982,76 @@ class DynInst : public ExecContext, public RefCounted
+     uint64_t htmUid = -1;
+     uint64_t htmDepth = 0;
+ 
++    // GraphBrew ECG ecg.load producer sideband (per-dynamic-instruction, O3-safe): ea_code
++    // stashes {dest,epoch} here via setEcgLoadHint; LSQRequest::addReq binds it to THIS
++    // instruction's demand Request. NOT a StaticInst member (that is shared across dynamic
++    // executions and would recreate the mailbox race).
++    uint32_t _ecgDest = 0;
++    uint16_t _ecgEpoch = 0;
++    uint16_t _ecgEpoch2 = 0;
++    uint16_t _ecgCurrentEpoch = 0;
++    uint16_t _ecgContextId = 0;
++    uint32_t _ecgSequence = 0;
++    uint8_t _ecgTier = 0;
++    uint8_t _ecgPopt = 0;
++    uint8_t _ecgEpochCount = 0;
++    bool _ecgValid = false;
++
++  public:
++    void setEcgLoadHint(uint32_t dest, uint16_t epoch,
++                        uint8_t dbg, uint8_t popt,
++                        uint16_t current_epoch,
++                        uint16_t context_id) override
++    {
++        _ecgDest = dest;
++        _ecgEpoch = epoch;
++        _ecgEpoch2 = epoch;
++        _ecgCurrentEpoch = current_epoch;
++        _ecgContextId = context_id;
++        _ecgSequence = static_cast<uint32_t>(seqNum);
++        _ecgTier = dbg;
++        _ecgPopt = popt;
++        _ecgEpochCount = 1;
++        _ecgValid = true;
++    }
++    void setEcgLoadHint2(uint32_t dest, uint8_t tier,
++                         uint16_t epoch1, uint16_t epoch2,
++                         uint16_t current_epoch,
++                         uint16_t context_id) override
++    {
++        _ecgDest = dest;
++        _ecgEpoch = epoch1;
++        _ecgEpoch2 = epoch2;
++        _ecgCurrentEpoch = current_epoch;
++        _ecgContextId = context_id;
++        _ecgSequence = static_cast<uint32_t>(seqNum);
++        _ecgTier = tier;
++        _ecgPopt = 0;
++        _ecgEpochCount = 2;
++        _ecgValid = true;
++    }
++    bool ecgLoadHint(uint32_t &dest, uint16_t &epoch) const
++    { dest = _ecgDest; epoch = _ecgEpoch; return _ecgValid; }
++    bool ecgLoadHint2(uint32_t &dest, uint8_t &tier,
++                      uint16_t &epoch1, uint16_t &epoch2,
++                      uint8_t &epoch_count,
++                      uint8_t &popt,
++                      uint16_t &current_epoch,
++                      uint16_t &context_id,
++                      uint32_t &sequence) const
++    {
++        dest = _ecgDest;
++        tier = _ecgTier;
++        epoch1 = _ecgEpoch;
++        epoch2 = _ecgEpoch2;
++        epoch_count = _ecgEpochCount;
++        popt = _ecgPopt;
++        current_epoch = _ecgCurrentEpoch;
++        context_id = _ecgContextId;
++        sequence = _ecgSequence;
++        return _ecgValid;
++    }
++
+   public:
+ #if TRACING_ON
+     // Value -1 indicates that particular phase

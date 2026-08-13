@@ -1,0 +1,60 @@
+diff --git a/src/cpu/o3/lsq.cc b/src/cpu/o3/lsq.cc
+index d30a399..540d088 100644
+--- a/src/cpu/o3/lsq.cc
++++ b/src/cpu/o3/lsq.cc
+@@ -42,6 +42,7 @@
+ #include "cpu/o3/lsq.hh"
+ 
+ #include <algorithm>
++#include <cstdlib>
+ #include <list>
+ #include <string>
+ 
+@@ -52,6 +53,7 @@
+ #include "cpu/o3/iew.hh"
+ #include "cpu/o3/limits.hh"
+ #include "debug/Drain.hh"
++#include "mem/cache/replacement_policies/ecg_epoch_request_ext.hh"
+ #include "debug/Fetch.hh"
+ #include "debug/HtmCpu.hh"
+ #include "debug/LSQ.hh"
+@@ -1112,6 +1114,39 @@ LSQ::LSQRequest::addReq(Addr addr, unsigned size,
+                 std::move(_amo_op));
+         req->setByteEnable(byte_enable);
+ 
++        // GraphBrew ECG producer (env GEM5_ECG_PRODUCER=1): bind the ecg.load's per-dynamic
++        // graph mask to its OWN demand Request as an EcgEpochExtension — the race-free
++        // O3/multicore delivery that replaces the single-slot mailbox. Gated so the SAME
++        // binary A/Bs mailbox-only (off) vs extension (on).
++        {
++            static const bool ecg_producer =
++                (std::getenv("GEM5_ECG_PRODUCER") != nullptr);
++            if (ecg_producer && _inst && _inst->isLoad()) {
++                uint32_t ecg_dest;
++                uint8_t ecg_tier;
++                uint16_t ecg_epoch1, ecg_epoch2;
++                uint8_t ecg_epoch_count, ecg_popt;
++                uint16_t ecg_current_epoch, ecg_context_id;
++                uint32_t ecg_sequence;
++                if (_inst->ecgLoadHint2(
++                        ecg_dest, ecg_tier,
++                        ecg_epoch1, ecg_epoch2, ecg_epoch_count,
++                        ecg_popt, ecg_current_epoch,
++                        ecg_context_id, ecg_sequence)) {
++                    if (ecg_epoch_count == 2) {
++                        gem5::replacement_policy::graph::attachEcgEpochPair(
++                            req, ecg_dest, ecg_tier,
++                            ecg_epoch1, ecg_epoch2,
++                            ecg_current_epoch, ecg_context_id, ecg_sequence);
++                    } else {
++                        gem5::replacement_policy::graph::attachEcgEpoch(
++                            req, ecg_dest, ecg_epoch1, ecg_tier, ecg_popt,
++                            ecg_current_epoch, ecg_context_id, ecg_sequence);
++                    }
++                }
++            }
++        }
++
+         /* If the request is marked as NO_ACCESS, setup a local access */
+         if (_flags.isSet(Request::NO_ACCESS)) {
+             req->setLocalAccessor(

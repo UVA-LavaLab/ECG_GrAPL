@@ -1,0 +1,9 @@
+# Append to gem5/src/mem/cache/replacement_policies/SConscript
+# Registers GraphBrew graph-aware replacement policy SimObjects
+
+SimObject('GraphReplacementPolicies.py', sim_objects=[
+    'GraphHawkeyeRP', 'GraphGraspRP', 'GraphPoptRP', 'GraphEcgRP'])
+Source('hawkeye_rp.cc')
+Source('grasp_rp.cc')
+Source('popt_rp.cc')
+Source('ecg_rp.cc')

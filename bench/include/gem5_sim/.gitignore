@@ -1,0 +1,4 @@
+# Cloned gem5 repository (large, not tracked)
+gem5/
+.gem5_version
+.gem5_patch_state.json

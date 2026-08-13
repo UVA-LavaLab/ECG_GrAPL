@@ -1,0 +1,56 @@
+--- a/src/mem/cache/prefetch/base.cc
++++ b/src/mem/cache/prefetch/base.cc
+@@ -62,7 +62,8 @@
+   : address(addr), pc(pkt->req->hasPC() ? pkt->req->getPC() : 0),
+     requestorId(pkt->req->requestorId()), validPC(pkt->req->hasPC()),
+     secure(pkt->isSecure()), size(pkt->req->getSize()), write(pkt->isWrite()),
+-    paddress(pkt->req->getPaddr()), cacheMiss(miss)
++    paddress(pkt->req->getPaddr()), cacheMiss(miss),
++    streamBypass(pkt->req->getFlags().isSet(Request::ECG_STREAM_BYPASS))
+ {
+     unsigned int req_size = pkt->req->getSize();
+     if ((!write && miss) || !pkt->hasData()) {
+@@ -78,7 +79,7 @@
+   : address(addr), pc(pfi.pc), requestorId(pfi.requestorId),
+     validPC(pfi.validPC), secure(pfi.secure), size(pfi.size),
+     write(pfi.write), paddress(pfi.paddress), cacheMiss(pfi.cacheMiss),
+-    data(nullptr)
++    streamBypass(pfi.streamBypass), data(nullptr)
+ {
+ }
+ 
+--- a/src/mem/cache/prefetch/base.hh
++++ b/src/mem/cache/prefetch/base.hh
+@@ -127,6 +127,8 @@
+         Addr paddress;
+         /** Whether this event comes from a cache miss */
+         bool cacheMiss;
++        /** Preserve GraphBrew StreamShield on derived prefetch requests. */
++        bool streamBypass;
+         /** Pointer to the associated request data */
+         uint8_t *data;
+ 
+@@ -149,6 +151,11 @@
+             return secure;
+         }
+ 
++        bool isStreamBypass() const
++        {
++            return streamBypass;
++        }
++
+         /**
+          * Returns the program counter that generated this request.
+          * @return the pc value
+--- a/src/mem/cache/prefetch/queued.cc
++++ b/src/mem/cache/prefetch/queued.cc
+@@ -66,6 +66,9 @@
+     if (pfInfo.isSecure()) {
+         req->setFlags(Request::SECURE);
+     }
++    if (pfInfo.isStreamBypass()) {
++        req->setFlags(Request::ECG_STREAM_BYPASS);
++    }
+     req->taskId(context_switch_task_id::Prefetcher);
+     pkt = new Packet(req, MemCmd::HardPFReq);
+     pkt->allocate();

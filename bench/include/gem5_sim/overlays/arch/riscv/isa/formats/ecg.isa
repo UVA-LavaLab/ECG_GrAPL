@@ -1,0 +1,19 @@
+// -*- mode:c++ -*-
+
+// GraphBrew ECG custom RISC-V instruction formats.
+
+// FUNCT7 sub-fields for the consolidated ecg.load op (custom-0, FUNCT3=0x2):
+//   ECG_MODE  = funct7[31:27] -> caching mode (EVICT / EVICT+PFX / EMBEDDED)
+//   ECG_WIDTH = funct7[26:25] -> dest-field width class (0=8b,1=16b,2=24b,3=32b);
+//               read in ea_code -> W = 8*(ECG_WIDTH+1). Lets ONE instruction scale
+//               the dest field from 256 to 4.29B vertices without a wider register.
+def bitfield ECG_MODE  <31:27>;
+def bitfield ECG_WIDTH <26:25>;
+
+def format EcgExtractOp(code, *opt_flags) {{
+    iop = InstObjParams(name, Name, 'RegOp', code, opt_flags)
+    header_output = BasicDeclare.subst(iop)
+    decoder_output = BasicConstructor.subst(iop)
+    decode_block = BasicDecode.subst(iop)
+    exec_output = BasicExecute.subst(iop)
+}};

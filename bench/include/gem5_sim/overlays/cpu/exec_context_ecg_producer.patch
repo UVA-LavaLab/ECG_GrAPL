@@ -1,0 +1,23 @@
+diff --git a/src/cpu/exec_context.hh b/src/cpu/exec_context.hh
+index 92448e2..ba86ca6 100644
+--- a/src/cpu/exec_context.hh
++++ b/src/cpu/exec_context.hh
+@@ -227,6 +227,18 @@ class ExecContext
+     virtual void mwaitAtomic(ThreadContext *tc) = 0;
+     virtual AddressMonitor *getAddrMonitor() = 0;
+ 
++    // GraphBrew ECG ecg.load producer sideband (default no-op; overridden by O3 DynInst).
++    // ea_code calls this so the LSQ can bind the epoch to THIS inst's demand Request
++    // (race-free O3/multicore delivery, replacing the single-slot mailbox).
++    virtual void setEcgLoadHint(uint32_t /*dest*/, uint16_t /*epoch*/,
++                                uint8_t /*dbg*/, uint8_t /*popt*/,
++                                uint16_t /*current_epoch*/,
++                                uint16_t /*context_id*/) {}
++    virtual void setEcgLoadHint2(uint32_t /*dest*/, uint8_t /*tier*/,
++                                 uint16_t /*epoch1*/, uint16_t /*epoch2*/,
++                                 uint16_t /*current_epoch*/,
++                                 uint16_t /*context_id*/) {}
++
+     /** @} */
+ };
+ 

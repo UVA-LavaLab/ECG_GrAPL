@@ -1,0 +1,4 @@
+# ECG Next experiment and visualization dependencies
+
+pytest>=7.0
+matplotlib>=3.4.0

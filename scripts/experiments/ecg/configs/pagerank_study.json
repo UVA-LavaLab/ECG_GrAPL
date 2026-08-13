@@ -1,0 +1,258 @@
+{
+  "version": 2,
+  "id": "pagerank_study",
+  "scope": "Deterministic sampled PageRank evaluation of static RRIP-first K2-M with StreamShield.",
+  "simulator": "gem5",
+  "cpu_type": "O3",
+  "isa_variant": "mask",
+  "k2_timing_mode": "compact_trace_free",
+  "k2_epochs": 32,
+  "compact_tier_bits": 2,
+  "benchmark": "pr",
+  "prefetcher": "none",
+  "iterations": [
+    1,
+    2,
+    4,
+    8
+  ],
+  "options_template": "-f {graph_path} -o 5 -n 1 -i {iterations} -t 0",
+  "graphs": [
+    {
+      "name": "web-Google-n16",
+      "path": "results/graphs/web-Google-n16/web-Google-n16.sg",
+      "vertices": 65536,
+      "directed_edges": 502529,
+      "l1d_size": "16kB",
+      "l2_size": "64kB",
+      "l3_size": "128kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 16,
+      "compact_epoch_bits": 5,
+      "semantic_receipts": {
+        "1": {
+          "edges": 502529,
+          "checksum": "13f2efd3598bba0e"
+        },
+        "2": {
+          "edges": 1005058,
+          "checksum": "d0f56ddda978cfac"
+        },
+        "4": {
+          "edges": 2010116,
+          "checksum": "c197d206cb5a7e2e"
+        },
+        "8": {
+          "edges": 4020232,
+          "checksum": "ae4d057dd8acac05"
+        }
+      }
+    },
+    {
+      "name": "soc-pokec-n16",
+      "path": "results/graphs/soc-pokec-n16/soc-pokec-n16.sg",
+      "vertices": 65536,
+      "directed_edges": 1089520,
+      "l1d_size": "16kB",
+      "l2_size": "64kB",
+      "l3_size": "128kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 16,
+      "compact_epoch_bits": 5,
+      "semantic_receipts": {
+        "1": {
+          "edges": 1089520,
+          "checksum": "1a3cd9e836da1c30"
+        },
+        "2": {
+          "edges": 2179040,
+          "checksum": "fe8ff034562730d4"
+        },
+        "4": {
+          "edges": 4358080,
+          "checksum": "55be5805d0c0903c"
+        },
+        "8": {
+          "edges": 8716160,
+          "checksum": "4e31bae2feac6fa0"
+        }
+      }
+    },
+    {
+      "name": "cit-Patents-n18-sym",
+      "path": "results/graphs/cit-Patents-n18/cit-Patents-n18-sym.sg",
+      "vertices": 262144,
+      "directed_edges": 680108,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 5,
+      "semantic_receipts": {
+        "1": {
+          "edges": 680108,
+          "checksum": "d1d54daa18c33f3f"
+        },
+        "2": {
+          "edges": 1360216,
+          "checksum": "e685182553701308"
+        },
+        "4": {
+          "edges": 2720432,
+          "checksum": "b8965e770464ff9e"
+        },
+        "8": {
+          "edges": 5440864,
+          "checksum": "8f4adefe50c0faae"
+        }
+      }
+    }
+  ],
+  "semantic_receipt_provenance": {
+    "command": "setarch x86_64 -R bench/bin_gem5/pr -f {graph_path} -o 5 -n 1 -i {iterations} -t 0",
+    "reason_for_t0": "Disable convergence-based early exit so requested and executed iteration counts match.",
+    "cross_isa_check": "The three i=1 host receipts independently match retained RISC-V gem5 rows."
+  },
+  "policies": {
+    "all": [
+      "LRU",
+      "GRASP",
+      "POPT",
+      "POPT:UNCHARGED",
+      "ECG:K2_LRU_STREAMSHIELD",
+      "ECG:K2_RRIP_STREAMSHIELD",
+      "ECG:K2_ONLINE_STREAMSHIELD"
+    ],
+    "sanity_baseline": "LRU",
+    "serious_baselines": [
+      "GRASP",
+      "POPT"
+    ],
+    "charged_popt_baseline": "POPT",
+    "oracle_control": "POPT:UNCHARGED",
+    "transport_control": "ECG:K2_LRU_STREAMSHIELD",
+    "primary_candidate": "ECG:K2_RRIP_STREAMSHIELD",
+    "characterization_only": [
+      "ECG:K2_ONLINE_STREAMSHIELD"
+    ]
+  },
+  "popt_model": {
+    "epochs": 256,
+    "property_bytes": 4,
+    "reserved_column_slots": 3,
+    "expected_reserved_ways_in_screen": 2,
+    "expected_effective_data_ways_in_screen": 14,
+    "minimum_data_ways": 1,
+    "reload_each_iteration": true,
+    "charge_initial_columns_in_roi": true,
+    "screen_stream_charge": "analytic_cumulative_offchip",
+    "timing_treatment": "optimistic_no_stream_latency",
+    "note": "The screen simulates P-OPT replacement with the computed reserved LLC capacity and charges every matrix byte for every PageRank iteration as off-chip traffic. Matrix-stream latency is omitted, which favors P-OPT. Triple buffering costs one additional LLC way versus a two-slot design; target-time and two-slot serialized sensitivities remain mandatory before a P-OPT performance claim."
+  },
+  "metrics": {
+    "primary": [
+      "sim_ticks",
+      "dram_offchip_bytes"
+    ],
+    "secondary": [
+      "l3_misses",
+      "roi_insts",
+      "ipc",
+      "dram_bus_util_pct"
+    ],
+    "aggregation": "geometric_mean_of_per_cell_ratios",
+    "tie_band": 0.02
+  },
+  "decision": {
+    "max_time_ratio_vs_lru": 0.97,
+    "max_traffic_ratio_vs_lru": 1.02,
+    "max_time_ratio_vs_serious_baselines": 0.97,
+    "max_traffic_ratio_vs_serious_baselines": 1.02,
+    "max_time_ratio_per_cell": 1.02,
+    "max_traffic_ratio_per_cell": 1.02,
+    "max_time_ratio_per_graph": 1.02,
+    "max_time_ratio_i8": 0.97,
+    "max_time_ratio_leave_one_graph_out": 0.97,
+    "max_traffic_ratio_leave_one_graph_out": 1.02,
+    "max_time_ratio_vs_transport_control_for_policy_claim": 0.98,
+    "max_time_ratio_vs_transport_control_leave_one_graph_out": 0.98,
+    "replacement_claim_requires_exact_roi_instruction_parity": true,
+    "max_ratio_vs_oracle_for_robustness": 1.02,
+    "max_oracle_ratio_vs_charged": 1.02,
+    "baseline_sanity_time_range": [
+      0.5,
+      1.5
+    ],
+    "charged_popt_sanity_time_range": [
+      0.5,
+      4.0
+    ],
+    "baseline_sanity_traffic_range": [
+      0.1,
+      4.0
+    ],
+    "stop_if_primary_fails": true
+  },
+  "variant_receipts": {
+    "ECG_K2_LRU_STREAMSHIELD": {
+      "requested": "lru_only",
+      "effective": 6,
+      "dueling": 0
+    },
+    "ECG_K2_RRIP_STREAMSHIELD": {
+      "requested": "rrip_first",
+      "effective": 2,
+      "dueling": 0
+    },
+    "ECG_K2_ONLINE_STREAMSHIELD": {
+      "requested": "rrip_first",
+      "effective": 2,
+      "dueling": 1
+    }
+  },
+  "blockers": [],
+  "execution": {
+    "ready": true,
+    "policy_sharding_allowed": false,
+    "maximum_policy_runtime_seconds": 86400,
+    "note": "Run all 12 whole cells without policy sharding so each comparison retains its matching baseline. The local sequential run is resumable."
+  },
+  "resource_scope": {
+    "screen": "K2 uses equal data capacity; charged P-OPT loses reserved LLC ways for its matrix.",
+    "k2_data_ways": 16,
+    "k2_metadata_bits_per_line": 49,
+    "lower_hardware_cost_claim_allowed": false,
+    "charged_in_roi": {
+      "grasp": "common DBG-ordered traversal",
+      "popt": "reserved LLC capacity plus cumulative analytic matrix-stream traffic; stream latency omitted",
+      "k2": "4-byte replacement records and StreamShield placement"
+    },
+    "declared_outside_roi": {
+      "grasp": "DBG preprocessing and degree-sorted layout",
+      "popt": "rereference-matrix construction",
+      "k2": "record construction"
+    },
+    "disclosed_hardware": {
+      "grasp": "region registers and comparators",
+      "k2": "49 metadata bits/line, request sideband, CSRs, StreamShield flag, and online dueling state"
+    },
+    "required_post_screen_sensitivities": [
+      "target-time P-OPT matrix-stream latency",
+      "two-slot serialized P-OPT",
+      "15-way K2 versus 16-way baselines",
+      "14-way K2 versus 16-way baselines"
+    ]
+  },
+  "sampling_caveat": "The samples charge more P-OPT stream bytes per edge than the available full graphs, while their smaller vertex IDs also allow K2's 4-byte compact record to fit. Full-graph evaluation must re-check both effects and may require a wider K2 encoding.",
+  "compact_record_feasibility": "Every sampled graph must satisfy id_bits + 2 tier bits + 2*epoch_bits <= 32. Full-graph expansion must re-check the encoding."
+}

@@ -1,0 +1,55 @@
+diff --git a/src/arch/riscv/regs/misc.hh b/src/arch/riscv/regs/misc.hh
+index ebd3e11..690b57c 100644
+--- a/src/arch/riscv/regs/misc.hh
++++ b/src/arch/riscv/regs/misc.hh
+@@ -200,6 +200,10 @@ enum MiscRegIndex
+     MISCREG_VTYPE,
+     MISCREG_VLENB,
+ 
++    MISCREG_ECG_CUR_EPOCH,
++    MISCREG_ECG_CONTEXT,
++    MISCREG_ECG_RECORD_FORMAT,
++
+     // These registers are not in the standard, hence does not exist in the
+     // CSRData map. These are mainly used to provide a minimal implementation
+     // for non-maskable-interrupt in our simple cpu.
+@@ -280,5 +284,9 @@ enum CSRIndex
+     CSR_FFLAGS = 0x001,
+     CSR_FRM = 0x002,
+     CSR_FCSR = 0x003,
++    CSR_ECG_CUR_EPOCH = 0x800,
++    CSR_ECG_CONTEXT = 0x801,
++    CSR_ECG_RECORD_FORMAT = 0x802,
++
+     CSR_CYCLE = 0xC00,
+     CSR_TIME = 0xC01,
+@@ -560,5 +568,14 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
+     {CSR_FCSR,
+         {"fcsr", MISCREG_FCSR, rvTypeFlags(RV64, RV32), isaExtsFlags('f')}},
++    {CSR_ECG_CUR_EPOCH,
++        {"ecg.cur_epoch", MISCREG_ECG_CUR_EPOCH,
++         rvTypeFlags(RV64, RV32), isaExtsFlags()}},
++    {CSR_ECG_CONTEXT,
++        {"ecg.context", MISCREG_ECG_CONTEXT,
++         rvTypeFlags(RV64, RV32), isaExtsFlags()}},
++    {CSR_ECG_RECORD_FORMAT,
++        {"ecg.record_format", MISCREG_ECG_RECORD_FORMAT,
++         rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+     {CSR_CYCLE,
+         {"cycle", MISCREG_CYCLE, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+     {CSR_TIME,
+diff --git a/src/arch/riscv/isa.cc b/src/arch/riscv/isa.cc
+index 069faba..6e450f5 100644
+--- a/src/arch/riscv/isa.cc
++++ b/src/arch/riscv/isa.cc
+@@ -200,6 +200,10 @@ namespace RiscvISA
+     [MISCREG_VTYPE]         = "VTYPE",
+     [MISCREG_VLENB]         = "VLENB",
+ 
++    [MISCREG_ECG_CUR_EPOCH] = "ECG_CUR_EPOCH",
++    [MISCREG_ECG_CONTEXT]   = "ECG_CONTEXT",
++    [MISCREG_ECG_RECORD_FORMAT] = "ECG_RECORD_FORMAT",
++
+     [MISCREG_NMIVEC]        = "NMIVEC",
+     [MISCREG_NMIE]          = "NMIE",
+     [MISCREG_NMIP]          = "NMIP",

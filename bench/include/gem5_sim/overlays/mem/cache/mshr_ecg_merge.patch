@@ -1,0 +1,114 @@
+diff --git a/src/mem/cache/mshr.hh b/src/mem/cache/mshr.hh
+index 1a762c9..2da4af2 100644
+--- a/src/mem/cache/mshr.hh
++++ b/src/mem/cache/mshr.hh
+@@ -57,6 +57,7 @@
+ #include "base/types.hh"
+ #include "debug/MSHR.hh"
+ #include "mem/cache/queue_entry.hh"
++#include "mem/cache/replacement_policies/ecg_epoch_request_ext.hh"
+ #include "mem/packet.hh"
+ #include "mem/request.hh"
+ #include "sim/cur_tick.hh"
+@@ -394,5 +395,8 @@ class MSHR : public QueueEntry, public Printable
+     TargetList targets;
+ 
+     TargetList deferredTargets;
++    replacement_policy::graph::EcgMshrState ecgState;
++
++    void rebuildEcgState();
+ 
+   public:
+@@ -427,6 +431,11 @@ class MSHR : public QueueEntry, public Printable
+      */
+     void deallocate();
+ 
++    void applyEcgMetadata(const RequestPtr& req) const
++    {
++        ecgState.apply(req);
++    }
++
+     /**
+      * Add a request to the list of targets.
+      * @param target The target.
+diff --git a/src/mem/cache/mshr.cc b/src/mem/cache/mshr.cc
+index 30123a0..0822b44 100644
+--- a/src/mem/cache/mshr.cc
++++ b/src/mem/cache/mshr.cc
+@@ -300,6 +300,17 @@ MSHR::TargetList::print(std::ostream &os, int verbosity,
+ }
+ 
+ 
++void
++MSHR::rebuildEcgState()
++{
++    ecgState.reset();
++    for (const auto& target : targets) {
++        if (target.source != Target::FromSnoop)
++            ecgState.merge(target.pkt->req);
++    }
++}
++
++
+ void
+ MSHR::allocate(Addr blk_addr, unsigned blk_size, PacketPtr target,
+                Tick when_ready, Counter _order, bool alloc_on_fill)
+@@ -324,6 +336,7 @@ MSHR::allocate(Addr blk_addr, unsigned blk_size, PacketPtr target,
+     Target::Source source = (target->cmd == MemCmd::HardPFReq) ?
+         Target::FromPrefetcher : Target::FromCPU;
+     targets.add(target, when_ready, _order, source, true, alloc_on_fill);
++    rebuildEcgState();
+ 
+     // All targets must refer to the same block
+     assert(target->matchBlockAddr(targets.front().pkt, blkSize));
+@@ -367,6 +380,7 @@ MSHR::deallocate()
+     targets.resetFlags();
+     assert(deferredTargets.isReset());
+     inService = false;
++    ecgState.reset();
+ }
+ 
+ /*
+@@ -414,6 +428,7 @@ MSHR::allocateTarget(PacketPtr pkt, Tick whenReady, Counter _order,
+         // (isn't in service).
+         targets.add(pkt, whenReady, _order, Target::FromCPU, !inService,
+                     alloc_on_fill);
++        rebuildEcgState();
+     }
+ 
+     DPRINTF(MSHR, "After target allocation: %s", print());
+@@ -589,6 +604,7 @@ MSHR::extractServiceableTargets(PacketPtr pkt)
+         ready_targets.populateFlags();
+     }
+     targets.populateFlags();
++    rebuildEcgState();
+ 
+     return ready_targets;
+ }
+@@ -626,6 +642,7 @@ MSHR::promoteDeferredTargets()
+ 
+     deferredTargets.populateFlags();
+     targets.populateFlags();
++    rebuildEcgState();
+     order = targets.front().order;
+     readyTime = std::max(curTick(), targets.front().readyTime);
+ 
+@@ -653,5 +670,6 @@ MSHR::promoteIf(const std::function<bool (Target &)>& pred)
+     // modifications
+     deferredTargets.populateFlags();
++    rebuildEcgState();
+ }
+ 
+ void
+diff --git a/src/mem/cache/base.cc b/src/mem/cache/base.cc
+index c1685c2..a91f129 100644
+--- a/src/mem/cache/base.cc
++++ b/src/mem/cache/base.cc
+@@ -618,6 +618,7 @@ BaseCache::recvTimingResp(PacketPtr pkt)
+ 
+     CacheBlk *blk = tags->findBlock(pkt->getAddr(), pkt->isSecure());
+ 
++    mshr->applyEcgMetadata(pkt->req);
+     if (is_fill && !is_error) {
+         DPRINTF(Cache, "Block for addr %#llx being updated in Cache\n",
+                 pkt->getAddr());

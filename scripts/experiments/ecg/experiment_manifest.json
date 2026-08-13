@@ -1,0 +1,2151 @@
+{
+  "version": 2,
+  "description": "K2 and StreamShield experiment manifest.",
+  "defaults": {
+    "l1d_size": "32kB",
+    "l2_size": "256kB",
+    "l1d_ways": "8",
+    "l2_ways": "8",
+    "l3_sizes": [
+      "2MB"
+    ],
+    "l3_ways": "16",
+    "line_size": "64",
+    "timeout_cache": 1800,
+    "timeout_gem5": 7200,
+    "timeout_sniper": 21600,
+    "sniper_root": "bench/include/sniper_sim/snipersim",
+    "sniper_frontend": "sift",
+    "sniper_omp_wait_policy": "passive",
+    "sniper_memory_limit_gb": 12,
+    "sniper_base_config": "graphbrew/graph_sniper",
+    "sniper_mimicos_memory_mb": 4096,
+    "sniper_mimicos_kernel_mb": 128,
+    "popt_reserve_model": "size_correct",
+    "ecg_epoch_pack_bits": 64,
+    "require_cache_sim_aslr_disable": true,
+    "no_build": true
+  },
+  "profiles": {
+    "ecg_smoke": "Fast cache_sim smoke for the complete ECG policy set.",
+    "ecg_3sim_allalg_smoke": "Bounded 3-simulator x 5-algorithm x 8-policy smoke matrix for final row/metric coverage.",
+    "ecg_3sim_realgraph_allalg": "Three-simulator x three-real-graph x five-algorithm x eight-policy no-prefetch comparison.",
+    "ecg_3sim_realgraph_allalg_1b": "Full-work cache_sim plus 1-billion-instruction detailed-ROI gem5/Sniper diagnostic on three real graphs.",
+    "ecg_3sim_sampled_allalg": "Full-work three-simulator comparison on deterministic topology-derived samples of the three real graphs.",
+    "ecg_sniper_sampled_pr_streamengine": "Equal-work sampled PageRank timing for GRASP, charged P-OPT, and K2-online+StreamShield with fused Sniper record delivery.",
+    "ecg_sniper_realgraph_warm_probe": "Full web-Google warm-SIFT LRU/K2 probe with a 100-thousand-instruction detailed ROI.",
+    "ecg_sniper_realgraph_semantic_probe": "Full web-Google warm-SIFT LRU/K2-M probe bounded at 100 thousand identical static edge visits.",
+    "ecg_sniper_realgraph_600m": "Reference-compatible full-real-graph Sniper matrix with a detailed ROI capped at 600 million instructions.",
+    "ecg_sniper_semantic_gate": "Five-kernel Sniper gate bounded by policy-independent static edge visits rather than committed instructions.",
+    "ecg_preliminary_5alg_3sim": "Bounded five-algorithm, six-policy diagnostic matrix on a common synthetic graph across cache_sim, gem5, and Sniper.",
+    "ecg_preliminary_5alg_stride": "Matched STRIDE8 sensitivity for the bounded five-algorithm, six-policy three-simulator diagnostic matrix.",
+    "ecg_gem5_hawkeye_gate": "Five-algorithm gem5 real-instruction-PC Hawkeye comparison against the conventional baselines and K2.",
+    "ecg_replacement_baseline": "Equal-capacity PR/BFS/SSSP/BC/CC replacement study with charged and uncharged P-OPT plus every static K2 arm.",
+    "ecg_equal_capacity_16": "Fresh full-graph 16-way K2 counterpart for direct comparison against 14/15-way sensitivities.",
+    "ecg_equal_area_15": "Full-graph 15-way K2 sensitivity against 16-way baselines; intentionally undercharges the contextual metadata bit budget.",
+    "ecg_equal_area_14": "Full-graph conservative integral equal-silicon sensitivity with 14-way K2 against 16-way baselines.",
+    "ecg_online_dueling": "Online K2 set-dueling regret study against every static K2 arm.",
+    "ecg_streamshield_generality": "Real-graph all-kernel comparison of always-allocate, static StreamShield, and adaptive placement with the full baseline set.",
+    "ecg_cache_sim_factorial": "Real-graph K1/K2 x StreamShield cache_sim factorial with the full baseline set.",
+    "gem5_streamshield_mechanism": "Synthetic gem5 mechanism cell for fused K2 versus K2+StreamShield.",
+    "sniper_streamshield_mechanism": "Synthetic Sniper mechanism cell for fused K2 versus K2+StreamShield.",
+    "streamshield_sniper_realgraph": "Pending-calibration full-iteration web-Google PR Sniper matrix; do not freeze results with the rejected generic STRIDE8 configuration.",
+    "ecg_uniform_8mb_16": "Uniform 8 MiB/16-way full-real-graph cache_sim matrix so every graph x kernel cell is directly comparable; supersedes the mixed 2 MiB/8 MiB factorial sizing.",
+    "ecg_uniform_8mb_16_stride8": "Matched STRIDE8 twin of the uniform 8 MiB matrix. Every policy gets the same structure prefetcher, so demand-miss reduction (latency hiding) can be separated from total memory traffic (bandwidth), which prefetching cannot reduce.",
+    "ecg_record_width_timing": "gem5 timing and bandwidth for the two-stamp record at the width gem5 actually streams; the width contrast itself lives in cache_sim.",
+    "ecg_isa_decode_matrix": "Decode-cost matrix. Separates record WIDTH from the cost of DECODING it, with a per-stage LRU denominator so no comparison crosses runs.",
+    "ecg_fused_compact_matrix": "Fused compact K2 TimingSimple matrix: hardware-decoded 4B, software-widened 4B, and wide 8B controls in one build with per-stage LRU and K2-LRU; O3 request binding is a separate mechanism gate.",
+    "ecg_proposal_k2m_o3_gate": "Exact O3 request-bound correctness gate for the proposal's compact StreamShield record load plus one-for-one computed-address K2-M property load.",
+    "k2_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+StreamShield as the primary design.",
+    "k2_final_campaign": "Role-separated final evaluation: mechanism preflight, gem5 O3 PageRank timing, full-graph cache_sim traffic, and full-graph Sniper semantic-work corroboration."
+  },
+  "benchmark_options": {
+    "synthetic_pr": {
+      "pr": "-g 12 -k 16 -o 5 -n 1 -i 1"
+    },
+    "synthetic_kron12_all": {
+      "pr": "-g 12 -k 4 -o 5 -n 1 -i 1",
+      "bfs": "-g 12 -k 4 -o 5 -n 1 -r 0",
+      "sssp": "-g 12 -k 4 -o 5 -n 1 -r 0",
+      "bc": "-g 12 -k 4 -o 5 -n 1 -i 1",
+      "cc": "-g 12 -k 4 -o 5 -n 1"
+    },
+    "synthetic_kron4_pr": {
+      "pr": "-g 16 -k 4 -o 5 -n 1 -i 1"
+    },
+    "synthetic_kron16_pr": {
+      "pr": "-g 16 -k 16 -o 5 -n 1 -i 1"
+    },
+    "synthetic_kron15_all": {
+      "pr": "-g 15 -k 4 -o 5 -n 1 -i 1",
+      "bfs": "-g 15 -k 4 -o 5 -n 1 -r 212",
+      "sssp": "-g 15 -k 4 -o 5 -n 1 -r 212",
+      "bc": "-g 15 -k 4 -o 5 -n 1 -i 1",
+      "cc": "-g 15 -k 4 -o 5 -n 1"
+    },
+    "file_pr_i1_dbg": {
+      "pr": "-f {graph_path} -o 5 -n 1 -i 1"
+    },
+    "file_all_kernels_dbg": {
+      "pr": "-f {graph_path} -o 5 -n 1 -i 1",
+      "bfs": "-f {graph_path} -o 5 -n 1 -r 212",
+      "sssp": "-f {graph_path} -o 5 -n 1 -r 212",
+      "bc": "-f {graph_path} -o 5 -n 1 -i 1",
+      "cc": "-f {graph_path} -o 5 -n 1"
+    },
+    "file_all_kernels_root0": {
+      "pr": "-f {graph_path} -o 5 -n 1 -i 1",
+      "bfs": "-f {graph_path} -o 5 -n 1 -r 0",
+      "sssp": "-f {graph_path} -o 5 -n 1 -r 0",
+      "bc": "-f {graph_path} -o 5 -n 1 -i 1",
+      "cc": "-f {graph_path} -o 5 -n 1"
+    }
+  },
+  "graph_sets": {
+    "synthetic_smoke": [
+      {
+        "name": "synthetic_g12",
+        "options_key": "synthetic_pr",
+        "l1d_size": "1kB",
+        "l2_size": "2kB",
+        "l3_ways": "4",
+        "l3_sizes": [
+          "4kB"
+        ],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "synthetic_kron12_all": [
+      {
+        "name": "kron_s12_k4",
+        "options_key": "synthetic_kron12_all",
+        "l1d_size": "4kB",
+        "l2_size": "8kB",
+        "l3_ways": "8",
+        "l3_sizes": [
+          "32kB"
+        ],
+        "structure_prefetch_degree": 0
+      }
+    ],
+    "synthetic_kron4": [
+      {
+        "name": "kron_s16_k4",
+        "options_key": "synthetic_kron4_pr",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "synthetic_kron16": [
+      {
+        "name": "kron_s16_k16",
+        "options_key": "synthetic_kron16_pr",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "synthetic_kron15_all": [
+      {
+        "name": "kron_s15_k4",
+        "options_key": "synthetic_kron15_all",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 0
+      }
+    ],
+    "synthetic_kron15_all_stride": [
+      {
+        "name": "kron_s15_k4",
+        "options_key": "synthetic_kron15_all",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "web_google_streamshield": [
+      {
+        "name": "web-Google",
+        "path": "results/graphs/web-Google/web-Google.sg",
+        "options_key": "file_all_kernels_dbg",
+        "l1d_size": "32kB",
+        "l2_size": "256kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "2MB"
+        ],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "factorial_graphs": [
+      {
+        "name": "web-Google",
+        "path": "results/graphs/web-Google/web-Google.sg",
+        "options_key": "file_all_kernels_dbg",
+        "l3_sizes": [
+          "2MB"
+        ],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "soc-pokec",
+        "path": "results/graphs/soc-pokec/soc-pokec.sg",
+        "options_key": "file_all_kernels_dbg",
+        "l3_sizes": [
+          "2MB"
+        ],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "cit-Patents",
+        "path": "results/graphs/cit-Patents/cit-Patents.sg",
+        "options_key": "file_all_kernels_dbg",
+        "l3_sizes": [
+          "8MB"
+        ],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "realgraph_samples": [
+      {
+        "name": "web-Google-n16",
+        "path": "results/graphs/web-Google-n16/web-Google-n16.sg",
+        "options_key": "file_all_kernels_root0",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 0
+      },
+      {
+        "name": "soc-pokec-n16",
+        "path": "results/graphs/soc-pokec-n16/soc-pokec-n16.sg",
+        "options_key": "file_all_kernels_root0",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 0
+      },
+      {
+        "name": "cit-Patents-n18-sym",
+        "path": "results/graphs/cit-Patents-n18/cit-Patents-n18-sym.sg",
+        "options_key": "file_all_kernels_root0",
+        "l1d_size": "32kB",
+        "l2_size": "128kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "512kB"
+        ],
+        "structure_prefetch_degree": 0
+      }
+    ],
+    "factorial_graphs_uniform_8mb": [
+      {
+        "name": "web-Google",
+        "path": "results/graphs/web-Google/web-Google.sg",
+        "options_key": "file_all_kernels_dbg",
+        "compact_id_bits": 20,
+        "compact_epoch_bits": 4,
+        "compact_total_bits": 30,
+        "sniper_semantic_edge_limit": 8644102,
+        "sniper_semantic_edge_source": "symmetrized .sg serialized edge count",
+        "l3_sizes": [
+          "8MB"
+        ],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "soc-pokec",
+        "path": "results/graphs/soc-pokec/soc-pokec.sg",
+        "options_key": "file_all_kernels_dbg",
+        "compact_id_bits": 21,
+        "compact_epoch_bits": 4,
+        "compact_total_bits": 31,
+        "sniper_semantic_edge_limit": 44603928,
+        "sniper_semantic_edge_source": "symmetrized .sg serialized edge count",
+        "l3_sizes": [
+          "8MB"
+        ],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "cit-Patents",
+        "path": "results/graphs/cit-Patents/cit-Patents.sg",
+        "options_key": "file_all_kernels_dbg",
+        "compact_id_bits": 22,
+        "compact_epoch_bits": 4,
+        "compact_total_bits": 32,
+        "sniper_semantic_edge_limit": 33037894,
+        "sniper_semantic_edge_source": "symmetrized .sg serialized edge count",
+        "l3_sizes": [
+          "8MB"
+        ],
+        "structure_prefetch_degree": 8
+      }
+    ]
+  },
+  "stages": [
+    {
+      "name": "01_ecg_cache_sim_smoke",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_smoke"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "synthetic_smoke",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "STRIDE",
+      "out_subdir": "01_ecg_cache_sim_smoke",
+      "timeout_cache": 600
+    },
+    {
+      "name": "02_cache_sim_3sim_allalg_smoke",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_allalg_smoke"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "synthetic_kron12_all",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "02_cache_sim_3sim_allalg_smoke",
+      "timeout_cache": 1200
+    },
+    {
+      "name": "03_gem5_3sim_allalg_smoke",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_allalg_smoke"
+      ],
+      "suite": "gem5",
+      "graph_set": "synthetic_kron12_all",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "03_gem5_3sim_allalg_smoke",
+      "timeout_gem5": 3600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "04_sniper_3sim_allalg_smoke",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_allalg_smoke"
+      ],
+      "suite": "sniper",
+      "graph_set": "synthetic_kron12_all",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "out_subdir": "04_sniper_3sim_allalg_smoke",
+      "timeout_sniper": 3600,
+      "env": {
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "10_cache_sim_preliminary_5alg",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_preliminary_5alg_3sim"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "synthetic_kron15_all",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "10_cache_sim_preliminary_5alg",
+      "timeout_cache": 3600
+    },
+    {
+      "name": "11_gem5_preliminary_5alg",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_preliminary_5alg_3sim"
+      ],
+      "suite": "gem5",
+      "graph_set": "synthetic_kron15_all",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "11_gem5_preliminary_5alg",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "11b_gem5_hawkeye_gate",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_gem5_hawkeye_gate"
+      ],
+      "suite": "gem5",
+      "graph_set": "synthetic_kron12_all",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "HAWKEYE",
+        "POPT",
+        "ECG:K2"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "11b_gem5_hawkeye_gate",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "12_sniper_preliminary_5alg",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_preliminary_5alg_3sim"
+      ],
+      "suite": "sniper",
+      "graph_set": "synthetic_kron15_all",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_cores": 1,
+      "out_subdir": "12_sniper_preliminary_5alg",
+      "timeout_sniper": 21600
+    },
+    {
+      "name": "12b_sniper_semantic_gate",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_sniper_semantic_gate"
+      ],
+      "suite": "sniper",
+      "graph_set": "synthetic_kron12_all",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "ecg_isa_variant": "mask",
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_semantic_edge_limit": 4096,
+      "sniper_memory_limit_gb": 12,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_cores": 1,
+      "out_subdir": "12b_sniper_semantic_gate",
+      "timeout_sniper": 21600
+    },
+    {
+      "name": "13_cache_sim_preliminary_5alg_stride",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_preliminary_5alg_stride"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "synthetic_kron15_all_stride",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "STRIDE",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "13_cache_sim_preliminary_5alg_stride",
+      "timeout_cache": 3600
+    },
+    {
+      "name": "14_gem5_preliminary_5alg_stride",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_preliminary_5alg_stride"
+      ],
+      "suite": "gem5",
+      "graph_set": "synthetic_kron15_all_stride",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "STRIDE",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "14_gem5_preliminary_5alg_stride",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "15_sniper_preliminary_5alg_stride",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_preliminary_5alg_stride"
+      ],
+      "suite": "sniper",
+      "graph_set": "synthetic_kron15_all_stride",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "STRIDE",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_cores": 1,
+      "out_subdir": "15_sniper_preliminary_5alg_stride",
+      "timeout_sniper": 21600
+    },
+    {
+      "name": "19_cache_sim_replacement_baseline",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_replacement_baseline",
+        "ecg_online_dueling"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT:UNCHARGED",
+        "POPT",
+        "ECG:K1",
+        "ECG:K2_GRASP",
+        "ECG:K2_EPOCH",
+        "ECG:K2_RRIP",
+        "ECG:K2_DEGREE",
+        "ECG:K2_LRU",
+        "ECG:K2_ONLINE"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 0,
+      "ecg_epochs": 65535,
+      "out_subdir": "19_cache_sim_replacement_baseline",
+      "timeout_cache": 86400
+    },
+    {
+      "name": "19a_cache_sim_equal_capacity_16",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_equal_capacity_16"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "HAWKEYE:PROXY",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "19a_cache_sim_equal_capacity_16",
+      "timeout_cache": 86400
+    },
+    {
+      "name": "19d_cache_sim_uniform_8mb_16",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_uniform_8mb_16"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs_uniform_8mb",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "HAWKEYE:PROXY",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "19d_cache_sim_uniform_8mb_16",
+      "timeout_cache": 86400
+    },
+    {
+      "name": "19e_cache_sim_uniform_8mb_16_stride8",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_uniform_8mb_16_stride8"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs_uniform_8mb",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "HAWKEYE:PROXY",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "STRIDE",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "19e_cache_sim_uniform_8mb_16_stride8",
+      "timeout_cache": 86400
+    },
+    {
+      "name": "19b_cache_sim_equal_area_15",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_equal_area_15"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "HAWKEYE:PROXY",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "k2_l3_ways": 15,
+      "out_subdir": "19b_cache_sim_equal_area_15",
+      "timeout_cache": 86400
+    },
+    {
+      "name": "19c_cache_sim_equal_area_14",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_equal_area_14"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "HAWKEYE:PROXY",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "k2_l3_ways": 14,
+      "out_subdir": "19c_cache_sim_equal_area_14",
+      "timeout_cache": 86400
+    },
+    {
+      "name": "20_cache_sim_streamshield_factorial",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_cache_sim_factorial"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT:UNCHARGED",
+        "POPT",
+        "ECG:K1",
+        "ECG:K1_STREAMSHIELD",
+        "ECG:K2",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE",
+        "ECG:K2_ONLINE_STREAMSHIELD",
+        "ECG:K2_ONLINE_ADAPTIVE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "STRIDE",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "20_cache_sim_streamshield_factorial",
+      "timeout_cache": 86400
+    },
+    {
+      "name": "21_cache_sim_streamshield_generality",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_streamshield_generality"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT:UNCHARGED",
+        "POPT",
+        "ECG:K2_ONLINE",
+        "ECG:K2_ONLINE_STREAMSHIELD",
+        "ECG:K2_ONLINE_ADAPTIVE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "21_cache_sim_streamshield_generality",
+      "timeout_cache": 86400
+    },
+    {
+      "name": "22_cache_sim_3sim_realgraph_allalg",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_realgraph_allalg",
+        "ecg_3sim_realgraph_allalg_1b"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "22_cache_sim_3sim_realgraph_allalg",
+      "timeout_cache": 86400
+    },
+    {
+      "name": "23_gem5_3sim_realgraph_allalg",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_realgraph_allalg"
+      ],
+      "suite": "gem5",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "blocked_reason": "Legacy non-O3 indexed-delivery configuration; not valid for final architectural timing. Use k2_final_campaign.",
+      "out_subdir": "23_gem5_3sim_realgraph_allalg",
+      "timeout_gem5": 172800,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "24_sniper_3sim_realgraph_allalg",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_realgraph_allalg"
+      ],
+      "suite": "sniper",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "out_subdir": "24_sniper_3sim_realgraph_allalg",
+      "timeout_sniper": 86400,
+      "env": {
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "25_gem5_3sim_realgraph_allalg_1b",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_realgraph_allalg_1b"
+      ],
+      "suite": "gem5",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "gem5_max_insts": 1000000000,
+      "out_subdir": "25_gem5_3sim_realgraph_allalg_1b",
+      "timeout_gem5": 86400,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "26_sniper_3sim_realgraph_allalg_1b",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_realgraph_allalg_1b"
+      ],
+      "suite": "sniper",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "sniper_roi_icount": 1000000000,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "out_subdir": "26_sniper_3sim_realgraph_allalg_1b",
+      "timeout_sniper": 43200,
+      "env": {
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "27_cache_sim_3sim_sampled_allalg",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_sampled_allalg"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "out_subdir": "27_cache_sim_3sim_sampled_allalg",
+      "timeout_cache": 7200
+    },
+    {
+      "name": "28_gem5_3sim_sampled_allalg",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_sampled_allalg"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "blocked_reason": "Legacy non-O3 indexed-delivery configuration; not valid for final architectural timing. Use k2_final_campaign.",
+      "out_subdir": "28_gem5_3sim_sampled_allalg",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "29_sniper_3sim_sampled_allalg",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_3sim_sampled_allalg"
+      ],
+      "suite": "sniper",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "out_subdir": "29_sniper_3sim_sampled_allalg",
+      "timeout_sniper": 43200,
+      "env": {
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "30_gem5_streamshield_mechanism",
+      "kind": "roi_matrix",
+      "profiles": [
+        "gem5_streamshield_mechanism"
+      ],
+      "suite": "gem5",
+      "graph_set": "synthetic_kron4",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "STRIDE",
+      "out_subdir": "30_gem5_streamshield_mechanism",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "31_sniper_streamshield_mechanism",
+      "kind": "roi_matrix",
+      "profiles": [
+        "sniper_streamshield_mechanism"
+      ],
+      "suite": "sniper",
+      "graph_set": "synthetic_kron16",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "STRIDE",
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 12,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "out_subdir": "31_sniper_streamshield_mechanism",
+      "timeout_sniper": 21600
+    },
+    {
+      "name": "32_sniper_realgraph_600m",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_sniper_realgraph_600m"
+      ],
+      "prerequisite_profile": "ecg_sniper_realgraph_warm_probe",
+      "suite": "sniper",
+      "graph_set": "factorial_graphs",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "sniper_roi_icount": 600000000,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_cores": 1,
+      "out_subdir": "32_sniper_realgraph_600m",
+      "timeout_sniper": 86400,
+      "env": {
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "33_sniper_sampled_pr_streamengine",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_sniper_sampled_pr_streamengine"
+      ],
+      "suite": "sniper",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "GRASP",
+        "POPT",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "out_subdir": "33_sniper_sampled_pr_streamengine",
+      "timeout_sniper": 21600,
+      "env": {
+        "ECG_STREAM_BYPASS_TRACE": "8"
+      }
+    },
+    {
+      "name": "34_sniper_realgraph_warm_probe",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_sniper_realgraph_warm_probe"
+      ],
+      "suite": "sniper",
+      "graph_set": "web_google_streamshield",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:K2"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "sniper_roi_icount": 100000,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_cores": 1,
+      "out_subdir": "34_sniper_realgraph_warm_probe",
+      "timeout_sniper": 21600
+    },
+    {
+      "name": "34b_sniper_realgraph_semantic_probe",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_sniper_realgraph_semantic_probe"
+      ],
+      "suite": "sniper",
+      "graph_set": "web_google_streamshield",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:K2"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 65535,
+      "ecg_isa_variant": "mask",
+      "sniper_semantic_edge_limit": 100000,
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_cores": 1,
+      "out_subdir": "34b_sniper_realgraph_semantic_probe",
+      "timeout_sniper": 21600
+    },
+    {
+      "name": "40_sniper_streamshield_realgraph",
+      "kind": "roi_matrix",
+      "profiles": [
+        "streamshield_sniper_realgraph"
+      ],
+      "blocked_reason": "The bounded matched-STRIDE diagnostic rejects Sniper's generic simple prefetcher; calibrate a traffic-bounded configuration before launching the full matrix.",
+      "suite": "sniper",
+      "graph_set": "web_google_streamshield",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_ONLINE",
+        "ECG:K2_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "STRIDE",
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 12,
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_cores": 1,
+      "out_subdir": "40_sniper_streamshield_realgraph",
+      "timeout_sniper": 21600
+    },
+    {
+      "name": "31_gem5_record_width_4b",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_record_width_timing"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "POPT",
+        "ECG:K2"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "out_subdir": "31_gem5_record_width_4b",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_STREAM_BYPASS_TRACE": "8",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      },
+      "notes": "Compact 4-byte two-stamp record that substitutes for the CSR edge. Reports execution time, dram_offchip_bytes and dram_bus_util_pct. Expected behavior: with low DRAM utilization, reduced exposed misses should help both widths; with high utilization, the 8-byte arm should lose in proportion to traffic. Scope: gem5 PageRank only; the other kernels use 8-byte records. StreamShield variants are excluded because their stream-load instruction is 8-byte only. ECG_EXPECT_BYTES_PER_EDGE aborts before the ROI on a width mismatch."
+    },
+    {
+      "name": "31_gem5_record_width_8b",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_record_width_timing"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "POPT",
+        "ECG:K2"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "out_subdir": "31_gem5_record_width_8b",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_STREAM_BYPASS_TRACE": "8",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8"
+      },
+      "notes": "Matched 8-byte arm that differs only in forced record width. Reports execution time, dram_offchip_bytes and dram_bus_util_pct. Expected behavior: with low DRAM utilization, reduced exposed misses should help both widths; with high utilization, the 8-byte arm should lose in proportion to traffic. Scope: gem5 PageRank only; the other kernels use 8-byte records. StreamShield variants are excluded because their stream-load instruction is 8-byte only. ECG_EXPECT_BYTES_PER_EDGE aborts before the ROI on a width mismatch."
+    },
+    {
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_isa_decode_matrix"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "timeout_gem5": 21600,
+      "name": "40_isa_fused_4b",
+      "policies": [
+        "LRU",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_LRU"
+      ],
+      "out_subdir": "40_isa_fused_4b",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      },
+      "notes": "Fused K2-I delivery, compact 4-byte record. Includes ECG:K2_LRU so the replacement rule and the transport can be separated within the run. Every stage carries its OWN LRU cell so no ratio needs a denominator from another run: two nominally identical LRU cells were measured 1.74% apart in time purely because the guest's property arrays landed one page apart, which is the noise floor for cross-run ratios. Enforcement is live here (ECG_EXPECT_BYTES_PER_EDGE reaches the guest and aborts pre-ROI), unlike the earlier width matrix."
+    },
+    {
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_isa_decode_matrix"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "timeout_gem5": 21600,
+      "name": "41_isa_fused_8b",
+      "policies": [
+        "LRU",
+        "GRASP",
+        "POPT",
+        "ECG:K2",
+        "ECG:K2_LRU"
+      ],
+      "out_subdir": "41_isa_fused_8b",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8"
+      },
+      "notes": "Matched 8-byte arm under the same fused delivery: the width contrast. Every stage carries its OWN LRU cell so no ratio needs a denominator from another run: two nominally identical LRU cells were measured 1.74% apart in time purely because the guest's property arrays landed one page apart, which is the noise floor for cross-run ratios. Enforcement is live here (ECG_EXPECT_BYTES_PER_EDGE reaches the guest and aborts pre-ROI), unlike the earlier width matrix."
+    },
+    {
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_isa_decode_matrix"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "timeout_gem5": 21600,
+      "name": "42_isa_plain_4b_software",
+      "policies": [
+        "LRU",
+        "ECG:K2"
+      ],
+      "out_subdir": "42_isa_plain_4b_software",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "GRAPHBREW_K2_FUSED_LOAD": "0"
+      },
+      "notes": "Non-fused packed+ecg.extract2 delivery, compact record widened in software. Baseline for the decode contrast. Every stage carries its OWN LRU cell so no ratio needs a denominator from another run: two nominally identical LRU cells were measured 1.74% apart in time purely because the guest's property arrays landed one page apart, which is the noise floor for cross-run ratios. Enforcement is live here (ECG_EXPECT_BYTES_PER_EDGE reaches the guest and aborts pre-ROI), unlike the earlier width matrix."
+    },
+    {
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_isa_decode_matrix"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "timeout_gem5": 21600,
+      "name": "43_isa_plain_4b_hardware",
+      "policies": [
+        "LRU",
+        "ECG:K2"
+      ],
+      "out_subdir": "43_isa_plain_4b_hardware",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "GRAPHBREW_K2_FUSED_LOAD": "0",
+        "GEM5_ECG_COMPACT_ISA": "1"
+      },
+      "notes": "Same, but the record is widened by ecg_extract2c in the decoder. Differs from 42 by the decode alone. Every stage carries its OWN LRU cell so no ratio needs a denominator from another run: two nominally identical LRU cells were measured 1.74% apart in time purely because the guest's property arrays landed one page apart, which is the noise floor for cross-run ratios. Enforcement is live here (ECG_EXPECT_BYTES_PER_EDGE reaches the guest and aborts pre-ROI), unlike the earlier width matrix."
+    },
+    {
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_isa_decode_matrix"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "timeout_gem5": 21600,
+      "name": "44_isa_plain_8b",
+      "policies": [
+        "LRU",
+        "ECG:K2"
+      ],
+      "out_subdir": "44_isa_plain_8b",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8",
+        "GRAPHBREW_K2_FUSED_LOAD": "0"
+      },
+      "notes": "Non-fused 8-byte arm: the width reference for 42 and 43. Every stage carries its OWN LRU cell so no ratio needs a denominator from another run: two nominally identical LRU cells were measured 1.74% apart in time purely because the guest's property arrays landed one page apart, which is the noise floor for cross-run ratios. Enforcement is live here (ECG_EXPECT_BYTES_PER_EDGE reaches the guest and aborts pre-ROI), unlike the earlier width matrix."
+    },
+    {
+      "name": "50_fused_compact_4b",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_fused_compact_matrix"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:K2",
+        "ECG:K2_LRU"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "gem5_compact_fused": true,
+      "out_subdir": "50_fused_compact_4b",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      },
+      "notes": "Serialized single-core TimingSimple compact K2-I arm; exact request binding is proven separately by the O3 mechanism probe. Runtime activation is attested by ECG_K2_ILOAD_C; the runner fails if the guest does not emit it. Every stage carries its own LRU and K2-LRU, and all stages use one build."
+    },
+    {
+      "name": "51_fused_software_4b",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_fused_compact_matrix"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:K2",
+        "ECG:K2_LRU"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "out_subdir": "51_fused_software_4b",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      },
+      "notes": "Matched serialized TimingSimple compact arm using the existing 64-bit fused K2-I load after guest software widening. Decode control for stage 50."
+    },
+    {
+      "name": "52_fused_wide_8b",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_fused_compact_matrix"
+      ],
+      "suite": "gem5",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:K2",
+        "ECG:K2_LRU"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "out_subdir": "52_fused_wide_8b",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8"
+      },
+      "notes": "Matched serialized TimingSimple wide K2-I arm. Implementation-width control for stage 50; every stage carries its own LRU and K2-LRU and all stages use one build."
+    },
+    {
+      "name": "60_gem5_proposal_k2m_o3",
+      "kind": "roi_matrix",
+      "profiles": [
+        "ecg_proposal_k2m_o3_gate",
+        "k2_final_campaign"
+      ],
+      "suite": "gem5",
+      "graph_set": "synthetic_kron12_all",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "ECG:K2",
+        "ECG:K2_LRU_STREAMSHIELD",
+        "ECG:K2_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "ecg_isa_variant": "mask",
+      "gem5_cpu_type": "O3",
+      "gem5_compact_k2m_streamshield": true,
+      "policy_sharding_allowed": false,
+      "out_subdir": "60_gem5_proposal_k2m_o3",
+      "timeout_gem5": 21600,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      },
+      "notes": "Mechanism-only proposal gate with a width-unmatched 8-byte non-StreamShield K2 semantic anchor plus transport-matched 4-byte StreamShield lru_only and epoch_first arms. roi_matrix forces capped 2048-event request/bypass traces; every StreamShield row must attest only 4-byte request-flag record loads, exact same-line O3 K2-M Request acceptance, and multiple nonzero record-derived epoch pairs. All three rows must match PageRank semantics. The anchor is not a StreamShield control, and this proves existence and binding rather than request-count or performance coverage."
+    },
+    {
+      "name": "70_gem5_pagerank_i1",
+      "kind": "roi_matrix",
+      "suite": "gem5",
+      "profiles": ["k2_pagerank_study", "k2_final_campaign"],
+      "screen_config": "scripts/experiments/ecg/configs/pagerank_study.json",
+      "screen_iteration": 1,
+      "out_subdir": "70_gem5_pagerank_i1",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "71_gem5_pagerank_i2",
+      "kind": "roi_matrix",
+      "suite": "gem5",
+      "profiles": ["k2_pagerank_study", "k2_final_campaign"],
+      "screen_config": "scripts/experiments/ecg/configs/pagerank_study.json",
+      "screen_iteration": 2,
+      "out_subdir": "71_gem5_pagerank_i2",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "72_gem5_pagerank_i4",
+      "kind": "roi_matrix",
+      "suite": "gem5",
+      "profiles": ["k2_pagerank_study", "k2_final_campaign"],
+      "screen_config": "scripts/experiments/ecg/configs/pagerank_study.json",
+      "screen_iteration": 4,
+      "out_subdir": "72_gem5_pagerank_i4",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "73_gem5_pagerank_i8",
+      "kind": "roi_matrix",
+      "suite": "gem5",
+      "profiles": ["k2_pagerank_study", "k2_final_campaign"],
+      "screen_config": "scripts/experiments/ecg/configs/pagerank_study.json",
+      "screen_iteration": 8,
+      "out_subdir": "73_gem5_pagerank_i8",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "80_cache_sim_final_fullgraph",
+      "kind": "roi_matrix",
+      "profiles": [
+        "k2_final_campaign"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs_uniform_8mb",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "ECG:K2_LRU_STREAMSHIELD",
+        "ECG:K2_RRIP_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "mask",
+      "policy_sharding_allowed": false,
+      "out_subdir": "80_cache_sim_final_fullgraph",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      }
+    },
+    {
+      "name": "81_sniper_final_semantic",
+      "kind": "roi_matrix",
+      "profiles": [
+        "k2_final_campaign"
+      ],
+      "suite": "sniper",
+      "graph_set": "factorial_graphs_uniform_8mb",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "ECG:K2_LRU_STREAMSHIELD",
+        "ECG:K2_RRIP_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "mask",
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_queue_model": "windowed_mg1",
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "policy_sharding_allowed": false,
+      "out_subdir": "81_sniper_final_semantic",
+      "timeout_sniper": 86400,
+      "env": {
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "ECG_K2_DELIVERY_TRACE": "32"
+      }
+    },
+    {
+      "name": "82_cache_sim_final_wide16",
+      "kind": "roi_matrix",
+      "profiles": [
+        "k2_final_campaign"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs_uniform_8mb",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:K2_LRU_STREAMSHIELD",
+        "ECG:K2_RRIP_STREAMSHIELD"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "mask",
+      "policy_sharding_allowed": false,
+      "out_subdir": "82_cache_sim_final_wide16",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8"
+      }
+    },
+    {
+      "name": "83_cache_sim_final_wide256",
+      "kind": "roi_matrix",
+      "profiles": [
+        "k2_final_campaign"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs_uniform_8mb",
+      "benchmarks": [
+        "pr",
+        "bfs",
+        "sssp",
+        "bc",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:K2_LRU_STREAMSHIELD",
+        "ECG:K2_RRIP_STREAMSHIELD"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 256,
+      "ecg_isa_variant": "mask",
+      "policy_sharding_allowed": false,
+      "out_subdir": "83_cache_sim_final_wide256",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8"
+      }
+    },
+    {
+      "name": "84_cache_sim_final_popt",
+      "kind": "roi_matrix",
+      "profiles": [
+        "k2_final_campaign"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "factorial_graphs_uniform_8mb",
+      "benchmarks": [
+        "pr",
+        "cc"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "POPT",
+        "POPT:UNCHARGED",
+        "ECG:K2_LRU_STREAMSHIELD",
+        "ECG:K2_RRIP_STREAMSHIELD"
+      ],
+      "popt_reserve_model": "size_correct",
+      "popt_property_bytes": 4,
+      "popt_active_columns": 2,
+      "popt_num_epochs": 256,
+      "popt_min_data_ways": 1,
+      "popt_matrix_stream": "simulated",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "mask",
+      "policy_sharding_allowed": false,
+      "out_subdir": "84_cache_sim_final_popt",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      }
+    },
+    {
+      "name": "85_sniper_final_sssp_wide",
+      "kind": "roi_matrix",
+      "profiles": [
+        "k2_final_campaign"
+      ],
+      "suite": "sniper",
+      "graph_set": "factorial_graphs_uniform_8mb",
+      "benchmarks": [
+        "sssp"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "ECG:K2_LRU_STREAMSHIELD",
+        "ECG:K2_RRIP_STREAMSHIELD",
+        "ECG:K2_ONLINE_STREAMSHIELD"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "mask",
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 20,
+      "sniper_queue_model": "windowed_mg1",
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "policy_sharding_allowed": false,
+      "out_subdir": "85_sniper_final_sssp_wide",
+      "timeout_sniper": 86400,
+      "env": {
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8",
+        "ECG_K2_DELIVERY_TRACE": "32"
+      }
+    }
+  ]
+}

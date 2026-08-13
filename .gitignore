@@ -1,0 +1,46 @@
+bench/bin
+bench/bin_sim
+bench/bin_gem5
+bench/bin_sniper
+bench/lib
+bench/results
+bench/backups
+*.csv
+results
+00_Graph_Datasets/
+nohup.out
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+__pycache__/
+graphs/
+*.log
+cache_results
+results/models/
+results/data/
+research/
+/test/
+docs/
+plans/
+# gem5 cloned repository (large, managed by scripts/setup_gem5.py)
+bench/include/gem5_sim/gem5/
+# Pinned local proot/FUSE binaries used by provenance-bound guest builds.
+bench/include/gem5_sim/.tools/
+# accidental root-level gem5/scons build output
+build/
+# Sniper cloned repository (large, managed by scripts/setup_sniper.py)
+bench/include/sniper_sim/snipersim/
+bench/include/sniper_sim/.sniper_version
+bench/include/sniper_sim/.sniper_overlays.json
+# gem5 simulation output
+m5out/
+# Sniper simulation output
+sim.out/
+sniper.out/
+# Graph data files (edge lists, weighted edge lists, serialized graphs)
+*.el
+*.wel
+*.sg
+*.mtx
+.wiki_publish

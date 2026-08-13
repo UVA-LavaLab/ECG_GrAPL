@@ -1,0 +1,60 @@
+diff --git a/src/mem/cache/base.cc b/src/mem/cache/base.cc
+--- a/src/mem/cache/base.cc
++++ b/src/mem/cache/base.cc
+@@ -78,21 +78,52 @@
+         return false;
+     const Addr stream_addr = pkt->req->hasVaddr()
+         ? pkt->req->getVaddr() : pkt->getAddr();
+-    const bool bypass =
++    const bool flag_bypass =
++        pkt->req->getFlags().isSet(Request::ECG_STREAM_BYPASS);
++    static const bool request_bound_only = []() {
++        const char *value =
++            std::getenv("GEM5_ECG_STREAM_REQUEST_BOUND");
++        return value && std::strcmp(value, "0") != 0;
++    }();
++    const bool range_bypass =
++        !request_bound_only &&
+         replacement_policy::graph::isEcgStreamBypassAddress(stream_addr);
++    const bool stream_eligible = flag_bypass || range_bypass;
++    static const bool adaptive = []() {
++        const char *value = std::getenv("ECG_STREAM_BYPASS_ADAPTIVE");
++        return value && std::strcmp(value, "0") != 0;
++    }();
++    if (adaptive) {
++        static bool announced = false;
++        if (!announced) {
++            announced = true;
++            std::fprintf(stderr,
++                "[ECG-STREAM-ADAPTIVE sim=gem5 active=1]\n");
++        }
++    }
++    const size_t set_index =
++        static_cast<size_t>(pkt->getAddr() / cache.getBlockSize());
++    auto &placement = ecg_policy::globalOnlinePlacementSelector();
++    if (adaptive) {
++        placement.recordMiss(set_index);
++    }
++    const bool bypass = stream_eligible &&
++        (!adaptive || placement.shouldBypass(set_index));
+     if (bypass) {
+         static uint64_t traced = 0;
+         static const uint64_t limit = []() {
+             const char *value = std::getenv("ECG_STREAM_BYPASS_TRACE");
+             return value ? std::strtoull(value, nullptr, 10) : 0;
+         }();
+-        if (traced++ < limit) {
++        if (limit > 0 && traced++ < limit) {
+             std::fprintf(stderr,
+                 "[ECG-STREAM-BYPASS sim=gem5 cache=%s addr=%#llx "
+-                "vaddr=%#llx allocate=0]\n",
++                "vaddr=%#llx size=%u source=%s allocate=0]\n",
+                 cache.name().c_str(),
+                 static_cast<unsigned long long>(pkt->getAddr()),
+-                static_cast<unsigned long long>(stream_addr));
++                static_cast<unsigned long long>(stream_addr),
++                static_cast<unsigned>(pkt->req->getSize()),
++                flag_bypass ? "request-flag" : "range");
+         }
+     }
+     return bypass;

@@ -1,0 +1,23 @@
+diff --git a/src/mem/cache/prefetch/queued.cc b/src/mem/cache/prefetch/queued.cc
+index c16e6ce..6980d3c 100644
+--- a/src/mem/cache/prefetch/queued.cc
++++ b/src/mem/cache/prefetch/queued.cc
+@@ -251,6 +251,18 @@ Queued::getPacket()
+         return nullptr;
+     }
+ 
++    // GRAPHBREW-PREFETCH-LATENCY-GUARD: preserve prefetcher latency contract.
++    // After processMissingTranslations() above, a freshly translated
++    // packet may have pf_time == curTick() + latency, i.e. NOT ready
++    // yet. Without this guard, getPacket() would issue it on the same
++    // tick the translation completed, skipping the latency cycle.
++    // This is critical for M6 cycle-accurate parity comparisons.
++    if (pfq.front().tick > curTick()) {
++        DPRINTF(HWPrefetch, "Prefetch front not yet ready (tick=%llu > curTick=%llu).\n",
++                pfq.front().tick, curTick());
++        return nullptr;
++    }
++
+     PacketPtr pkt = pfq.front().pkt;
+     pfq.pop_front();
+ 
