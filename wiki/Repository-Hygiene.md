@@ -34,7 +34,7 @@ make setup-gem5-guest-tools
 make setup-sniper
 ```
 
-The build and experiment commands are in [Reproduction](Reproduction.md).
+The build and experiment commands are in [Reproduction](Reproduction).
 
 ## Before pushing
 

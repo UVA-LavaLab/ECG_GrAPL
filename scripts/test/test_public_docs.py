@@ -48,6 +48,11 @@ def test_public_links_resolve():
             if not target or "://" in target or target.startswith("mailto:"):
                 continue
             resolved = (page.parent / target).resolve()
+            if (
+                    not resolved.exists() and
+                    page.parent == ROOT / "wiki" and
+                    not Path(target).suffix):
+                resolved = resolved.with_suffix(".md")
             if not resolved.exists():
                 missing.append((str(page), target))
                 continue
@@ -56,6 +61,19 @@ def test_public_links_resolve():
                 untracked.append((str(page), target))
     assert missing == []
     assert untracked == []
+
+
+def test_wiki_page_links_use_rendered_slugs():
+    for page in (ROOT / "wiki").glob("*.md"):
+        text = page.read_text(errors="ignore")
+        for target in re.findall(
+                r"!?(?:\[[^\]]*\])\(([^)]+)\)", text):
+            target = target.split("#", 1)[0]
+            if not target or "://" in target or target.startswith("mailto:"):
+                continue
+            if (page.parent / target).suffix == ".md":
+                assert not (page.parent / target).exists(), (
+                    f"{page} links to raw wiki source {target!r}")
 
 
 def test_svg_figures_are_valid_and_use_straight_connectors():

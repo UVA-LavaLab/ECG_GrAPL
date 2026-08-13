@@ -199,6 +199,6 @@ bound, not a realistic P-OPT timing implementation.
 
 ## 10. Continue reading
 
-- [Evaluation methodology](Evaluation-Methodology.md)
-- [Build and reproduction guide](Reproduction.md)
+- [Evaluation methodology](Evaluation-Methodology)
+- [Build and reproduction guide](Reproduction)
 - [Exact PageRank experiment specification](https://github.com/UVA-LavaLab/ECG_GrAPL/blob/main/scripts/experiments/ecg/configs/pagerank_study.json)
