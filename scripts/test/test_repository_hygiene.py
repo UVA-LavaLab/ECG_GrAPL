@@ -70,6 +70,7 @@ def test_public_documentation_and_figures_are_tracked():
         "wiki/Evaluation-Methodology.md",
         "wiki/Reproduction.md",
         "wiki/Repository-Hygiene.md",
+        "wiki/assets/ecg-logo.png",
         "scripts/experiments/ecg/configs/pagerank_study.json",
     }
     required.update(

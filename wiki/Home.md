@@ -1,15 +1,21 @@
+<p align="center">
+  <img src="assets/ecg-logo.png" alt="ECG graph logo" width="180">
+</p>
+
 # ECG Next Documentation
 
-Start with the
-[illustrated K2 and StreamShield design guide](K2-StreamShield.md).
+ECG Next combines compact K2 reuse records, exact K2-M request binding, and
+StreamShield placement for irregular graph analytics.
 
-Additional pages:
+## Start here
 
-- [Evaluation methodology](Evaluation-Methodology.md)
-- [Build and reproduction](Reproduction.md)
-- [Repository hygiene](Repository-Hygiene.md)
-
-The guide explains the architecture with worked examples and links to the
-methodology and reproduction pages.
+- [K2 and StreamShield](K2-StreamShield.md) — architecture, record layout,
+  request path, and worked examples.
+- [Evaluation methodology](Evaluation-Methodology.md) — workloads, baselines,
+  simulator roles, and reporting rules.
+- [Build and reproduction](Reproduction.md) — graph preparation, builds,
+  tests, and experiment commands.
+- [Repository hygiene](Repository-Hygiene.md) — tracked source and local-only
+  artifacts.
 
 Performance tables will be added after the final evaluation.

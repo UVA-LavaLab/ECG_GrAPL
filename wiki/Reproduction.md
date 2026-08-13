@@ -104,7 +104,8 @@ python3 -m pytest -q scripts/test
 python3 scripts/experiments/ecg/flows/experiment_run.py \
   --profile k2_pagerank_study \
   --run-dir results/ecg_experiments/runs/pagerank_dryrun \
-  --list --dry-run --no-build --allow-missing-graphs
+  --list --dry-run --no-build \
+  --allow-missing-graphs --allow-missing-runtime-inputs
 ```
 
 The profile expands to 12 whole cells: three graphs and four iteration counts.
