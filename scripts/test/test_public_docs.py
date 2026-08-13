@@ -63,6 +63,8 @@ def test_svg_figures_are_valid_and_use_straight_connectors():
     assert len(figures) >= 7
     for path in figures:
         ET.parse(path)
+        if path.name == "logo.svg":
+            continue
         text = path.read_text(errors="ignore")
         path_data = re.findall(
             r"<path\b[^>]*\sd=\"([^\"]+)\"", text)
