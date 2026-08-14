@@ -11,6 +11,8 @@ and FlowThrough placement for irregular graph analytics.
 
 - [ReusePlan and FlowThrough](ReusePlan-FlowThrough) — architecture, record layout,
   request path, and worked examples.
+- [RISC-V instruction path](RISC-V-Instruction-Path) — instruction family,
+  operands, pipeline stages, request construction, and cache behavior.
 - [Evaluation methodology](Evaluation-Methodology) — workloads, baselines,
   simulator roles, and reporting rules.
 - [Build and reproduction](Reproduction) — graph preparation, builds,

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="560" viewBox="0 0 1400 560" role="img" aria-labelledby="title desc">
+  <title id="title">ECG Next experimental RISC-V instruction family</title>
+  <desc id="desc">Four cards separate ReusePlan record acquisition, FlowThrough record placement, computed-address ReuseBind property loads, and indexed ReuseBind property loads.</desc>
+  <style>
+    .title{font:700 30px Arial,sans-serif;fill:#17324d}
+    .subtitle{font:400 15px Arial,sans-serif;fill:#607487}
+    .group{font:700 18px Arial,sans-serif;fill:#17324d}
+    .mnemonic{font:700 17px 'Courier New',monospace;fill:#17324d}
+    .box-title{font:700 15px Arial,sans-serif;fill:#17324d}
+    .body{font:400 12px Arial,sans-serif;fill:#405568}
+    .note{font:400 12px Arial,sans-serif;fill:#506679}
+  </style>
+
+  <rect width="1400" height="560" fill="#ffffff"/>
+  <text x="42" y="45" class="title">Experimental RISC-V custom-0 instruction family</text>
+  <text x="42" y="72" class="subtitle">The instruction names describe request roles; the implementation uses raw .insn encodings in gem5 RISC-V guest code.</text>
+
+  <rect x="35" y="105" width="650" height="365" rx="18" fill="#f5f8fb" stroke="#b9c8d4"/>
+  <rect x="715" y="105" width="650" height="365" rx="18" fill="#f5f8fb" stroke="#b9c8d4"/>
+  <text x="60" y="137" class="group">ReusePlan record acquisition</text>
+  <text x="740" y="137" class="group">ReuseBind property access</text>
+
+  <rect x="60" y="165" width="285" height="270" rx="14" fill="#eef4fa" stroke="#7f9fbb"/>
+  <text x="82" y="198" class="mnemonic">ecg.plan.load*</text>
+  <text x="82" y="227" class="box-title">Ordinary record placement</text>
+  <text x="82" y="256" class="body">Input: rs1 = record address</text>
+  <text x="82" y="280" class="body">Output: rd = packed ReusePlan</text>
+  <text x="82" y="304" class="body">Address: rs1 + immediate</text>
+  <text x="82" y="328" class="body">Request: normal cacheable load</text>
+  <text x="82" y="352" class="body">Compact form widens to canonical fields</text>
+  <text x="82" y="390" class="note">Use for ordinary cache placement.</text>
+
+  <rect x="375" y="165" width="285" height="270" rx="14" fill="#fff0eb" stroke="#df8b75"/>
+  <text x="397" y="198" class="mnemonic">ecg.flow.load*</text>
+  <text x="397" y="227" class="box-title">FlowThrough record placement</text>
+  <text x="397" y="256" class="body">Input: rs1 = record address</text>
+  <text x="397" y="280" class="body">Output: rd = packed ReusePlan</text>
+  <text x="397" y="304" class="body">Address: rs1 + immediate</text>
+  <text x="397" y="328" class="body">Request: sets ECG_FLOWTHROUGH</text>
+  <text x="397" y="352" class="body">Private fills and LLC hits remain normal</text>
+  <text x="397" y="390" class="note">On an LLC miss, the returning record skips LLC insertion.</text>
+
+  <rect x="740" y="165" width="285" height="270" rx="14" fill="#e8f6f3" stroke="#5aaea2"/>
+  <text x="762" y="198" class="mnemonic">ecg.bind.load.*</text>
+  <text x="762" y="227" class="box-title">Computed-address ReuseBind</text>
+  <text x="762" y="256" class="body">Input: rs1 = property address</text>
+  <text x="762" y="280" class="body">Input: rs2 = ReusePlan fields</text>
+  <text x="762" y="304" class="body">Address: EA = rs1</text>
+  <text x="762" y="328" class="body">Output: typed property value</text>
+  <text x="762" y="352" class="body">Request: attaches ReuseBind extension</text>
+  <text x="762" y="390" class="note">Works with U32, S32, U64, F32, and weighted forms.</text>
+
+  <rect x="1055" y="165" width="285" height="270" rx="14" fill="#fff7e8" stroke="#d0a443"/>
+  <text x="1077" y="198" class="mnemonic">ecg.bind.iload.*</text>
+  <text x="1077" y="227" class="box-title">Indexed ReuseBind</text>
+  <text x="1077" y="256" class="body">Input: rs1 = property-array base</text>
+  <text x="1077" y="280" class="body">Input: rs2 = ReusePlan fields</text>
+  <text x="1077" y="304" class="body">Address: base + destination x size</text>
+  <text x="1077" y="328" class="body">Output: typed property value</text>
+  <text x="1077" y="352" class="body">Request: attaches ReuseBind extension</text>
+  <text x="1077" y="390" class="note">Fuses address generation with metadata binding.</text>
+
+  <rect x="35" y="493" width="1330" height="42" rx="10" fill="#eef2f5"/>
+  <text x="700" y="519" text-anchor="middle" class="note">Research implementation: custom-0 encoding in gem5 RISC-V, not a ratified RISC-V extension or a fabricated processor.</text>
+</svg>

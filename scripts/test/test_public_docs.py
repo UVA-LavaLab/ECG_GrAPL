@@ -12,6 +12,7 @@ PUBLIC_PAGES = (
     ROOT / "CONTRIBUTING.md",
     ROOT / "wiki/Home.md",
     ROOT / "wiki/ReusePlan-FlowThrough.md",
+    ROOT / "wiki/RISC-V-Instruction-Path.md",
     ROOT / "wiki/Evaluation-Methodology.md",
     ROOT / "wiki/Reproduction.md",
     ROOT / "wiki/Repository-Hygiene.md",
@@ -84,6 +85,14 @@ def test_design_guide_uses_aligned_instruction_family():
             "ecg.bind.load",
             "ecg.bind.iload"):
         assert mnemonic in guide
+
+
+def test_readme_documents_experimental_riscv_support():
+    readme = (ROOT / "README.md").read_text()
+    flat = " ".join(readme.split())
+    assert "experimental RISC-V custom-0 implementation" in flat
+    assert "wiki/RISC-V-Instruction-Path.md" in readme
+    assert "not a ratified RISC-V extension" in flat
 
 
 def test_svg_figures_are_valid_and_use_straight_connectors():

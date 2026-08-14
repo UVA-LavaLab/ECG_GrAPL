@@ -18,6 +18,22 @@ last-level-cache replacement and placement.
 The shared implementation covers PageRank, BFS, SSSP, Betweenness Centrality,
 and Connected Components.
 
+## RISC-V instruction support
+
+ECG Next includes an experimental RISC-V custom-0 implementation in gem5 and
+build support for matching RISC-V graph-kernel binaries:
+
+| Instruction family | Role |
+|---|---|
+| `ecg.plan.load*` | Load a ReusePlan record with ordinary placement |
+| `ecg.flow.load*` | Load a ReusePlan record with FlowThrough placement |
+| `ecg.bind.load.*` | Bind metadata to a computed-address property load |
+| `ecg.bind.iload.*` | Fuse indexed address generation with ReuseBind |
+
+The implementation is a research ISA extension, not a ratified RISC-V
+extension or a fabricated processor. See the
+[stage-by-stage instruction path](wiki/RISC-V-Instruction-Path.md).
+
 ## Evaluation backends
 
 | Backend | Role |
@@ -35,6 +51,8 @@ simulators.
 
 - [Illustrated design guide](wiki/ReusePlan-FlowThrough.md) explains ReusePlan,
   ReuseBind, FlowThrough, and the request path.
+- [RISC-V instruction path](wiki/RISC-V-Instruction-Path.md) follows each
+  custom load through decode, rename, issue, the LSQ, caches, and completion.
 - [Evaluation methodology](wiki/Evaluation-Methodology.md) defines workloads,
   baselines, metrics, and simulator roles.
 - [Build and reproduction](wiki/Reproduction.md) covers datasets, simulator

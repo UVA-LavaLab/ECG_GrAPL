@@ -112,28 +112,27 @@ fused indexed address.
 | `ecg.bind.load.*` | Load from a software-computed property address and bind the plan |
 | `ecg.bind.iload.*` | Form the indexed property address and bind the plan in one instruction |
 
-![ReusePlan custom RISC-V instructions through the O3 pipeline](assets/reuse-plan-cpu-pipeline.svg)
+![ECG Next experimental RISC-V instruction family](assets/riscv-instruction-family.svg)
 
-**Figure 4A.** Conventional horizontal O3 pipeline view.
+**Figure 4A.** Record acquisition and property-binding instructions have
+separate request roles.
 
-Two alternate layouts emphasize different levels of detail:
+![ReuseBind and FlowThrough through the O3 pipeline](assets/reuse-plan-cpu-pipeline.svg)
 
-![Grouped ReusePlan core and memory pipeline](assets/reuse-plan-cpu-pipeline-regions.svg)
+**Figure 4B.** Separate lanes follow the property request and record request
+through every processor stage without crossing connectors.
 
-**Figure 4B.** Grouped frontend, out-of-order backend, and load/store regions.
-
-![ReusePlan load-store unit request path](assets/reuse-plan-cpu-pipeline-lsu.svg)
-
-**Figure 4C.** LSU-focused view of request construction, cache consumption,
-and response flow.
+The [detailed RISC-V instruction path](RISC-V-Instruction-Path) explains the
+operand dependencies, address generation, LSQ state, request extensions,
+cache actions, and completion rules shown in these figures.
 
 The canonical computed-address path has separate record and property loads:
 
 1. `ecg.flow.load` reads the ReusePlan record and carries the FlowThrough
    no-allocate bit.
 2. Software computes the property address from the destination.
-3. `ecg.bind.load.*` waits for both the address and ReusePlan mask, then enters the
-   load/store unit.
+3. `ecg.bind.load.*` waits for both the address and ReusePlan metadata, then
+   enters the load/store unit.
 4. The load/store unit creates a normal load request and attaches the ReuseBind
    extension before the request enters the data-cache hierarchy.
 5. The property data returns through normal completion and writeback.

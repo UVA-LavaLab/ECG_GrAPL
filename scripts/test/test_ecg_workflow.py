@@ -481,7 +481,7 @@ def test_public_documents_use_the_expected_reading_flow():
     assert "optimistic P-OPT bound" in methodology
 
     # README is concise; the wiki owns the illustrated explanation.
-    assert len(root_readme.splitlines()) < 60
+    assert len(root_readme.splitlines()) < 90
     assert "Illustrated design guide" in root_readme
     assert "wiki/ReusePlan-FlowThrough.md" in root_readme
     assert "wiki/Evaluation-Methodology.md" in root_readme
@@ -492,8 +492,7 @@ def test_public_documents_use_the_expected_reading_flow():
             "assets/reuse-plan-record.svg",
             "assets/reuse-plan-example.svg",
             "assets/reuse-plan-cpu-pipeline.svg",
-            "assets/reuse-plan-cpu-pipeline-regions.svg",
-            "assets/reuse-plan-cpu-pipeline-lsu.svg",
+            "assets/riscv-instruction-family.svg",
             "assets/flowthrough-path.svg"):
         assert figure in wiki
         assert (ROOT / "wiki" / figure).is_file()

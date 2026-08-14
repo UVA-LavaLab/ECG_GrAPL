@@ -67,6 +67,7 @@ def test_public_documentation_and_figures_are_tracked():
         "README.md",
         "wiki/Home.md",
         "wiki/ReusePlan-FlowThrough.md",
+        "wiki/RISC-V-Instruction-Path.md",
         "wiki/Evaluation-Methodology.md",
         "wiki/Reproduction.md",
         "wiki/Repository-Hygiene.md",
