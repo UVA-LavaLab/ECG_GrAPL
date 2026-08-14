@@ -1,4 +1,5 @@
 import json
+import hashlib
 import struct
 from pathlib import Path
 
@@ -44,6 +45,48 @@ def test_final_gate_discovers_nested_run_directories(tmp_path):
         [direct, tmp_path / "root"]) == [direct.resolve(), nested.resolve()]
 
 
+def test_final_gate_annotates_selected_timing_matrix(tmp_path):
+    run_dir = tmp_path / "run"
+    matrix_dir = (
+        run_dir / "matrices" / "70_gem5_pagerank_i1" /
+        "web-Google-n16" / "pr")
+    matrix_dir.mkdir(parents=True)
+    (run_dir / "resolved_manifest.json").write_text("{}")
+    matrix = matrix_dir / "roi_matrix.csv"
+    matrix.write_text("status,policy_label\nok,LRU\n")
+    marker = {
+        "complete": True,
+        "all_rows_ok": True,
+        "rows": 1,
+        "matrix_id": "70_gem5_pagerank_i1_web-Google-n16_pr",
+        "matrix_config_hash": "matrix-hash",
+        "comparison_config_hash": "comparison-hash",
+        "expected_policy_labels": ["LRU"],
+        "shard_group": "timing-repair",
+        "outputs": {
+            "roi_matrix.csv": {
+                "rows": 1,
+                "sha256": hashlib.sha256(
+                    matrix.read_bytes()).hexdigest(),
+                "size": matrix.stat().st_size,
+            },
+        },
+    }
+    (matrix_dir / "roi_matrix.complete.json").write_text(
+        json.dumps(marker))
+    rows = [{
+        "status": "ok",
+        "policy_label": "LRU",
+        "pipeline_source_csv": str(matrix),
+    }]
+    assert final_campaign_gate.annotate_selected_timing_rows(
+        rows, [matrix]) == [run_dir.resolve()]
+    assert rows[0]["final_stage"] == "70_gem5_pagerank_i1"
+    assert rows[0]["final_graph"] == "web-Google-n16"
+    assert rows[0]["final_job_id"] == marker["matrix_id"]
+    assert rows[0]["final_matrix_config_hash"] == "matrix-hash"
+
+
 def test_final_gate_rejects_missing_policy():
     expected = {
         ("stage", "graph", "pr"): ("LRU", "ECG_REUSE_PLAN"),
@@ -69,6 +112,42 @@ def test_final_gate_detects_cache_baseline_drift():
     assert final_campaign_gate.validate_cache_baselines(groups) == [
         "('graph', 'pr') baseline drift across width/epoch controls"
     ]
+
+
+def test_final_gate_accepts_natural_sniper_completion():
+    manifest = {
+        "graph_sets": {
+            "factorial_graphs_uniform_8mb": [{
+                "name": "graph",
+                "sniper_semantic_edge_limit": 100,
+            }],
+        },
+    }
+    row = {
+        "status": "ok",
+        "policy_label": "LRU",
+        "final_matrix_config_hash": "hash",
+        "simulator": "sniper",
+        "timing_valid_for_speedup": "0",
+        "sniper_queue_model": "windowed_mg1",
+        "sniper_transport_record_bytes": "4",
+        "edge_stream_bytes_per_edge": "4",
+        "sniper_semantic_edge_limit": "100",
+        "sniper_semantic_edge_visits": "60",
+        "sniper_semantic_truncated": "0",
+        "semantic_work_matched": "1",
+        "l3_accesses": "1",
+        "l3_misses": "1",
+    }
+    groups = {
+        ("81_sniper_final_semantic", "graph", "bfs"): [row],
+    }
+    assert final_campaign_gate.validate_role_rows(
+        groups, manifest) == []
+    row["sniper_semantic_truncated"] = "1"
+    assert "semantic work mismatch" in (
+        final_campaign_gate.validate_role_rows(
+            groups, manifest)[0])
 
 
 def test_final_gate_allows_only_documented_untracked_checkouts(tmp_path):

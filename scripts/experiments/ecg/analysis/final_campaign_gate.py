@@ -93,6 +93,99 @@ def discover_run_dirs(paths: list[Path]) -> list[Path]:
     return sorted(discovered)
 
 
+def annotate_selected_timing_rows(
+        rows: list[dict[str, Any]],
+        paths: list[Path],
+) -> list[Path]:
+    by_source: dict[Path, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        source = row.get("pipeline_source_csv")
+        if source:
+            by_source[Path(str(source)).resolve()].append(row)
+
+    run_dirs = set()
+    for path in paths:
+        path = path.resolve()
+        if path.name != "roi_matrix.csv" or path.parents[3].name != "matrices":
+            raise ValueError(
+                f"selected timing input is not a matrix CSV: {path}")
+        stage = path.parents[2].name
+        graph = path.parents[1].name
+        benchmark = path.parent.name
+        if stage not in {
+                *TIMING_STAGES, "60_gem5_proposal_reuse_bind_o3"}:
+            raise ValueError(
+                f"selected matrix is not a timing/mechanism stage: {path}")
+
+        marker_path = path.parent / "roi_matrix.complete.json"
+        try:
+            marker = json.loads(marker_path.read_text())
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(
+                f"selected timing marker is missing or invalid: "
+                f"{marker_path}") from error
+        if (
+                marker.get("complete") is not True or
+                marker.get("all_rows_ok") is not True or
+                not aggregate_results.marker_outputs_valid(
+                    marker, path.parent)):
+            raise ValueError(
+                f"selected timing matrix is not complete: {path}")
+
+        selected = by_source.get(path, [])
+        if len(selected) != integer(marker, "rows"):
+            raise ValueError(
+                f"selected timing rows were not collected: "
+                f"{path} expected={marker.get('rows')} "
+                f"actual={len(selected)}")
+        expected_labels = tuple(
+            str(label)
+            for label in marker.get("expected_policy_labels", []))
+        actual_labels = tuple(
+            str(row.get("policy_label", "")) for row in selected)
+        if not expected_labels or actual_labels != expected_labels:
+            raise ValueError(
+                f"selected timing policy roster mismatch: {path} "
+                f"expected={expected_labels} actual={actual_labels}")
+
+        matrix_id = str(marker.get("matrix_id", ""))
+        expected_matrix_id = f"{stage}_{graph}_{benchmark}"
+        if matrix_id != expected_matrix_id:
+            raise ValueError(
+                f"selected timing matrix id mismatch: {path} "
+                f"expected={expected_matrix_id} actual={matrix_id}")
+
+        for row in selected:
+            row.update({
+                "final_stage": stage,
+                "final_graph": graph,
+                "final_job_id": matrix_id,
+                "final_kind": "roi_matrix",
+                "final_output_csv": str(path),
+                "final_output_detail": f"{len(selected)} ok rows",
+                "final_output_status": "ok",
+                "final_matrix_id": matrix_id,
+                "final_matrix_config_hash": str(
+                    marker.get("matrix_config_hash", "")),
+                "final_comparison_config_hash": str(
+                    marker.get("comparison_config_hash", "")),
+                "final_expected_policy_labels": json.dumps(
+                    list(expected_labels), separators=(",", ":")),
+                "final_scaling_series_id": matrix_id,
+                "final_shard_group": str(
+                    marker.get("shard_group", path.parent.name)),
+            })
+
+        for parent in path.parents:
+            if (parent / "resolved_manifest.json").is_file():
+                run_dirs.add(parent.resolve())
+                break
+        else:
+            raise ValueError(
+                f"selected timing matrix has no run manifest: {path}")
+    return sorted(run_dirs)
+
+
 def final_stages(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     stages = {
         str(stage["name"]): experiment_run.merged_defaults(manifest, stage)
@@ -231,6 +324,12 @@ def validate_role_rows(
                     continue
                 expected_limit = integer(
                     final_graphs[graph], "sniper_semantic_edge_limit")
+                semantic_limit = integer(
+                    row, "sniper_semantic_edge_limit")
+                semantic_visits = integer(
+                    row, "sniper_semantic_edge_visits")
+                semantic_truncated = integer(
+                    row, "sniper_semantic_truncated")
                 if (
                         row.get("simulator") != "sniper" or
                         str(row.get("timing_valid_for_speedup")) != "0" or
@@ -243,8 +342,14 @@ def validate_role_rows(
                         expected_width):
                     errors.append(f"{key}/{policy} Sniper width mismatch")
                 if (
-                        integer(row, "sniper_semantic_edge_visits") !=
-                        expected_limit or
+                        semantic_limit != expected_limit or
+                        semantic_visits <= 0 or
+                        semantic_visits > expected_limit or
+                        semantic_truncated not in {0, 1} or
+                        (
+                            semantic_visits < expected_limit and
+                            semantic_truncated != 0
+                        ) or
                         str(row.get("semantic_work_matched")) != "1"):
                     errors.append(f"{key}/{policy} semantic work mismatch")
                 if not positive(row, "l3_accesses") or not positive(
@@ -388,6 +493,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--input-run-dirs", nargs="+", required=True,
         help="Run directories or roots containing per-cell run directories.")
+    parser.add_argument(
+        "--timing-csv", nargs="*", default=[],
+        help=(
+            "Explicit completed timing/mechanism matrix CSVs. Each input must "
+            "have a valid adjacent roi_matrix.complete.json marker."))
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--screen-config", default=str(DEFAULT_SCREEN))
     parser.add_argument("--output", default="")
@@ -395,13 +505,18 @@ def main(argv: list[str] | None = None) -> int:
 
     run_dirs = discover_run_dirs(
         [experiment_run.resolve_path(path) for path in args.input_run_dirs])
+    timing_csvs = [
+        experiment_run.resolve_path(path) for path in args.timing_csv]
     with redirect_stdout(sys.stderr):
-        rows, _ = aggregate_results.collect_csvs(run_dirs, [])
+        rows, _ = aggregate_results.collect_csvs(run_dirs, timing_csvs)
+    selected_run_dirs = annotate_selected_timing_rows(
+        rows, timing_csvs)
+    validation_run_dirs = sorted(set(run_dirs) | set(selected_run_dirs))
     result = evaluate(
         rows,
         json.loads(Path(args.manifest).read_text()),
         json.loads(Path(args.screen_config).read_text()),
-        run_dirs,
+        validation_run_dirs,
     )
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
