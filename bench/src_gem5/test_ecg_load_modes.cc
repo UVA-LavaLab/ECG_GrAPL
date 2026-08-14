@@ -16,8 +16,8 @@
 #include <cstring>
 
 static int g_fail = 0;
-alignas(64) static uint64_t g_k2_record =
-    ecg_epoch::packEpochPairRecord(
+alignas(64) static uint64_t g_reuse_plan_record =
+    ecg_reuse_plan::packReusePlanRecord(
         0x12345678u, 2, 0x2468u, 0x6CE0u);
 
 static constexpr uint32_t kProposalIdBits = 7;
@@ -80,8 +80,8 @@ static bool write_proposal_context() {
         "  \"num_vertices\": 128,\n"
         "  \"num_edges\": 1,\n"
         "  \"edge_epoch_count\": 32,\n"
-        "  \"stream_bypass_base\": %llu,\n"
-        "  \"stream_bypass_size\": %zu,\n"
+        "  \"flowthrough_base\": %llu,\n"
+        "  \"flowthrough_size\": %zu,\n"
         "  \"property_regions\": [\n"
         "    {\"name\": \"proposal_property\", \"base\": %llu, "
         "\"size\": %zu, \"count\": 128, \"elem_size\": 4, "
@@ -123,10 +123,10 @@ static void run_proposal_probe(
     gem5_ecg_write_context_csr(kProposalContext);
 
     const uint64_t canonical =
-        gem5_ecg_stream_load2_compact_instruction(
+        gem5_ecg_flow_load_compact_instruction(
             &g_proposal_compact_record,
             kProposalIdBits, kProposalEpochBits);
-    const float value = gem5_ecg_mload_k2_f32(
+    const float value = gem5_ecg_bind_load_f32(
         &g_proposal_property[kProposalDest], canonical);
     uint32_t value_bits = 0;
     std::memcpy(&value_bits, &value, sizeof(value_bits));
@@ -134,7 +134,7 @@ static void run_proposal_probe(
         canonical == kProposalCanonicalRecord &&
         value_bits == kProposalValueBits;
     std::printf(
-        "[test_ecg_load_modes] K2-C-SS-MLOAD compact=%#x "
+        "[test_ecg_load_modes] ReuseBind-Compact-Flow compact=%#x "
         "canonical=%#llx dest=%u tier=%u epoch1=%u epoch2=%u "
         "current=%u context=%u value_bits=%#x [%s]\n",
         g_proposal_compact_record,
@@ -195,12 +195,12 @@ int main(int argc, char** argv) {
         check("EMBEDDED", 24, dest, gem5_ecg_load_embedded(prop, rec));
     }
     {
-        const uint64_t record = ecg_epoch::packEpochPairRecord(
+        const uint64_t record = ecg_reuse_plan::packReusePlanRecord(
             0x12345678u, 2, 0x2468u, 0x6CE0u);
-        uint64_t rd_stream = gem5_ecg_stream_load2_instruction(&g_k2_record);
-        uint64_t rd = gem5_ecg_load2_instruction(&g_k2_record);
+        uint64_t rd_stream = gem5_ecg_flow_load_instruction(&g_reuse_plan_record);
+        uint64_t rd = gem5_ecg_plan_load_instruction(&g_reuse_plan_record);
         bool ok = rd == record && rd_stream == record;
-        printf("[test_ecg_load_modes] LOAD2/K2 record=%#llx rd=%#llx "
+        printf("[test_ecg_load_modes] PLAN/FLOW record=%#llx rd=%#llx "
                "stream=%#llx [%s]\n",
                (unsigned long long)record, (unsigned long long)rd,
                (unsigned long long)rd_stream,
@@ -210,24 +210,24 @@ int main(int argc, char** argv) {
     run_proposal_probe(false);
     {
         const uint32_t dest = 0x003ABCDEu;
-        const uint64_t record = ecg_epoch::packEpochPairRecord(
+        const uint64_t record = ecg_reuse_plan::packReusePlanRecord(
             dest, 2, 0x2468u, 0x6CE0u);
         prop[dest] = dest;
-        check("K2-PLOAD", 32, dest, gem5_ecg_load_k2(prop, record));
-        check("K2-M-U32", 32, dest,
-              gem5_ecg_mload_k2_u32(&prop[dest], record));
+        check("ReuseBind-Indexed-U32", 32, dest, gem5_ecg_bind_iload_u32(prop, record));
+        check("ReuseBind-U32", 32, dest,
+              gem5_ecg_bind_load_u32(&prop[dest], record));
     }
     {
         uint32_t unsigned_prop[16] = {};
         const uint32_t dest = 9u;
         const uint32_t value = 0xF1234567u;
-        const uint64_t record = ecg_epoch::packEpochPairRecord(
+        const uint64_t record = ecg_reuse_plan::packReusePlanRecord(
             dest, 2, 0x0102u, 0x0304u);
         unsigned_prop[dest] = value;
         const uint32_t rd =
-            gem5_ecg_mload_k2_u32(&unsigned_prop[dest], record);
+            gem5_ecg_bind_load_u32(&unsigned_prop[dest], record);
         const bool ok = rd == value;
-        printf("[test_ecg_load_modes] K2-M-U32-HIGH dest=%u rd=%#x [%s]\n",
+        printf("[test_ecg_load_modes] ReuseBind-U32-HIGH dest=%u rd=%#x [%s]\n",
                dest, rd, ok ? "OK" : "FAIL");
         if (!ok) g_fail++;
     }
@@ -235,13 +235,13 @@ int main(int argc, char** argv) {
         int32_t signed_prop[16] = {};
         const uint32_t dest = 7u;
         const int32_t value = -1234567;
-        const uint64_t record = ecg_epoch::packEpochPairRecord(
+        const uint64_t record = ecg_reuse_plan::packReusePlanRecord(
             dest, 3, 0x1234u, 0x2345u);
         signed_prop[dest] = value;
         const int32_t rd =
-            gem5_ecg_mload_k2_s32(&signed_prop[dest], record);
+            gem5_ecg_bind_load_s32(&signed_prop[dest], record);
         const bool ok = rd == value;
-        printf("[test_ecg_load_modes] K2-M-S32 dest=%u rd=%d [%s]\n",
+        printf("[test_ecg_load_modes] ReuseBind-S32 dest=%u rd=%d [%s]\n",
                dest, rd, ok ? "OK" : "FAIL");
         if (!ok) g_fail++;
     }
@@ -251,15 +251,15 @@ int main(int argc, char** argv) {
         const uint32_t value_bits = 0x7FC12345u;
         float value;
         std::memcpy(&value, &value_bits, sizeof(value));
-        const uint64_t record = ecg_epoch::packEpochPairRecord(
+        const uint64_t record = ecg_reuse_plan::packReusePlanRecord(
             dest, 1, 0x1111u, 0x2222u);
         float_prop[dest] = value;
         const float rd =
-            gem5_ecg_mload_k2_f32(&float_prop[dest], record);
+            gem5_ecg_bind_load_f32(&float_prop[dest], record);
         uint32_t rd_bits = 0;
         std::memcpy(&rd_bits, &rd, sizeof(rd_bits));
         const bool ok = rd_bits == value_bits;
-        printf("[test_ecg_load_modes] K2-M-F32 dest=%u bits=%#x [%s]\n",
+        printf("[test_ecg_load_modes] ReuseBind-F32 dest=%u bits=%#x [%s]\n",
                dest, rd_bits, ok ? "OK" : "FAIL");
         if (!ok) g_fail++;
     }
@@ -267,14 +267,14 @@ int main(int argc, char** argv) {
         uint64_t prop64[1024] = {};
         const uint32_t dest = 777u;
         const uint64_t value = 0x123456789ABCDEF0ULL;
-        const uint64_t record = ecg_epoch::packEpochPairRecord(
+        const uint64_t record = ecg_reuse_plan::packReusePlanRecord(
             dest, 2, 0x1357u, 0x2468u);
         prop64[dest] = value;
-        const uint64_t rd = gem5_ecg_load_k2_u64(prop64, record);
+        const uint64_t rd = gem5_ecg_bind_iload_u64(prop64, record);
         const uint64_t mrd =
-            gem5_ecg_mload_k2_u64(&prop64[dest], record);
+            gem5_ecg_bind_load_u64(&prop64[dest], record);
         const bool ok = rd == value && mrd == value;
-        printf("[test_ecg_load_modes] K2-PLOAD64 dest=%u rd=%#llx "
+        printf("[test_ecg_load_modes] ReuseBind-Indexed-U64 dest=%u rd=%#llx "
                "mrd=%#llx [%s]\n",
                dest, (unsigned long long)rd, (unsigned long long)mrd,
                ok ? "OK" : "FAIL");
@@ -285,43 +285,43 @@ int main(int argc, char** argv) {
         const uint32_t dest = 511u;
         const uint32_t value = 0x76543210u;
         const uint64_t record =
-            ecg_epoch::packCompactWeightedEpochPairRecord(
+            ecg_reuse_plan::packCompactWeightedReusePlanRecord(
                 dest, 255u, 2u, 0x1234u, 0x5678u);
         dist[dest] = value;
         const uint32_t rd =
-            gem5_ecg_load_k2_weighted64(dist, record);
+            gem5_ecg_bind_iload_cw24(dist, record);
         const uint32_t mrd =
-            gem5_ecg_mload_k2_compact_u32(&dist[dest], record);
+            gem5_ecg_bind_load_cw24(&dist[dest], record);
         const bool ok =
             rd == value && mrd == value &&
-            ecg_epoch::extractCompactWeightedWeight(record) == 255;
-        printf("[test_ecg_load_modes] K2-WEIGHTED64 dest=%u weight=%d "
+            ecg_reuse_plan::extractCompactWeightedWeight(record) == 255;
+        printf("[test_ecg_load_modes] ReusePlan-WEIGHTED64 dest=%u weight=%d "
                "rd=%#x mrd=%#x [%s]\n",
-               dest, ecg_epoch::extractCompactWeightedWeight(record),
+               dest, ecg_reuse_plan::extractCompactWeightedWeight(record),
                rd, mrd, ok ? "OK" : "FAIL");
         if (!ok) g_fail++;
     }
     {
         const uint32_t dest = 0x00300001u;
         const uint32_t sidecar =
-            ecg_epoch::packWeightedEpochPairSidecar(1u, 321u, 654u);
+            ecg_reuse_plan::packWeightedReusePlanSidecar(1u, 321u, 654u);
         const uint32_t rd_stream =
-            gem5_ecg_stream_weighted_load2_instruction(&sidecar);
+            gem5_ecg_flow_weighted_load_instruction(&sidecar);
         const uint32_t rd =
-            gem5_ecg_weighted_load2_instruction(&sidecar, dest);
+            gem5_ecg_plan_weighted_load_instruction(&sidecar, dest);
         const uint64_t combined =
-            ecg_epoch::combineWeightedEpochPairRecord(dest, sidecar);
-        const uint64_t canonical = ecg_epoch::packEpochPairRecord(
+            ecg_reuse_plan::combineWeightedReusePlanRecord(dest, sidecar);
+        const uint64_t canonical = ecg_reuse_plan::packReusePlanRecord(
             dest, 1u, 321u, 654u);
         const bool ok =
             rd == sidecar && rd_stream == sidecar && combined == canonical;
-        printf("[test_ecg_load_modes] WLOAD2/K2 sidecar=%#x rd=%#x "
+        printf("[test_ecg_load_modes] PLAN/FLOW weighted sidecar=%#x rd=%#x "
                "stream=%#x [%s]\n",
                sidecar, rd, rd_stream, ok ? "OK" : "FAIL");
         if (!ok) g_fail++;
         prop[dest] = dest;
-        check("K2-WPLOAD", 32, dest, gem5_ecg_load_k2(
-            prop, ecg_epoch::combineWeightedEpochPairRecord(dest, sidecar)));
+        check("ReuseBind-Indexed-CW24", 32, dest, gem5_ecg_bind_iload_u32(
+            prop, ecg_reuse_plan::combineWeightedReusePlanRecord(dest, sidecar)));
     }
 
     printf("[test_ecg_load_modes] RESULT: %s (%d fail)\n",

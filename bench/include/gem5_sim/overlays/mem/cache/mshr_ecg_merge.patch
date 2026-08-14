@@ -6,7 +6,7 @@ index 1a762c9..2da4af2 100644
  #include "base/types.hh"
  #include "debug/MSHR.hh"
  #include "mem/cache/queue_entry.hh"
-+#include "mem/cache/replacement_policies/ecg_epoch_request_ext.hh"
++#include "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh"
  #include "mem/packet.hh"
  #include "mem/request.hh"
  #include "sim/cur_tick.hh"
@@ -14,7 +14,7 @@ index 1a762c9..2da4af2 100644
      TargetList targets;
  
      TargetList deferredTargets;
-+    replacement_policy::graph::EcgMshrState ecgState;
++    replacement_policy::graph::EcgReuseBindMshrState ecgState;
 +
 +    void rebuildEcgState();
  

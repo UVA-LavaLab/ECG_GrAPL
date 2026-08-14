@@ -218,7 +218,7 @@ def test_online_dueling_has_roi_activity_statistics():
     assert "++onlineDuelingStats.requestBoundVictims" in policy
     assert "++onlineDuelingStats.leaderSamples" in policy
     assert "++onlineDuelingStats.followerSelections" in policy
-    assert "gem5_k2_dueling_completed_windows" in runner
+    assert "gem5_reuse_plan_dueling_completed_windows" in runner
     assert "ONLINE_DUELING_WINDOW_MISSES" in runner
 
 
@@ -255,7 +255,7 @@ def test_sniper_online_dueling_has_roi_activity_statistics():
 
     Sniper has no gem5-style statistics::Group, so the counters are exposed
     via registerStatsMetric under the "ecg-online-dueling" namespace, the
-    SAME mechanism nuca-cache's stream-bypass-reads/writes already relies
+    SAME mechanism nuca-cache's flowthrough-reads/writes already relies
     on. Sniper's --roi wrapper does NOT reset registered stats at ROI start
     (StatsManager::recordStats() only snapshots current values under a named
     prefix); each counter is monotonic, registered no later than its first
@@ -299,7 +299,7 @@ def test_sniper_online_dueling_has_roi_activity_statistics():
             f"OnlineDuelingEvidence.{field} is incremented with a plain "
             "'++' -- this races across Sniper's per-core OS threads; use "
             "incrementEvidenceCounter() instead")
-    assert "sniper_k2_dueling_completed_windows" in runner
+    assert "sniper_reuse_plan_dueling_completed_windows" in runner
     assert "SNIPER_ONLINE_DUELING_REQUIRED_POSITIVE_FIELDS" in runner
 
 

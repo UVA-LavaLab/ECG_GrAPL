@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manifest-driven K2 experiment orchestrator.
+"""Manifest-driven ReusePlan experiment orchestrator.
 
 This script does not replace ``roi_matrix.py`` or ``proof_matrix.py``. It wraps
 them with the pieces needed for long-running experiments:
@@ -394,9 +394,9 @@ def apply_screen_config(
     if iteration not in [int(value) for value in screen["iterations"]]:
         raise SystemExit(
             f"screen iteration {iteration} is not declared by {path_text}")
-    if screen["k2_timing_mode"] != "compact_trace_free":
+    if screen["reuse_plan_timing_mode"] != "compact_trace_free":
         raise SystemExit(
-            f"unsupported K2 timing mode {screen['k2_timing_mode']!r}")
+            f"unsupported ReusePlan timing mode {screen['reuse_plan_timing_mode']!r}")
 
     merged = dict(settings)
     screen_env = dict(settings.get("env", {}))
@@ -411,8 +411,8 @@ def apply_screen_config(
         "prefetcher": screen["prefetcher"],
         "gem5_cpu_type": screen["cpu_type"],
         "ecg_isa_variant": screen["isa_variant"],
-        "ecg_epochs": int(screen["k2_epochs"]),
-        "gem5_compact_k2m_performance": True,
+        "ecg_epochs": int(screen["reuse_plan_epochs"]),
+        "gem5_compact_reuse_bind_performance": True,
         "popt_reserve_model": "size_correct",
         "popt_property_bytes": int(screen["popt_model"]["property_bytes"]),
         "popt_active_columns": int(
@@ -699,9 +699,9 @@ def make_roi_job(
         "--cache-sim-omp-threads",
         str(settings.get("cache_sim_omp_threads", 1)),
     ]
-    if int(settings.get("k2_l3_ways", 0)) > 0:
+    if int(settings.get("reuse_plan_l3_ways", 0)) > 0:
         command.extend([
-            "--k2-l3-ways", str(settings["k2_l3_ways"]),
+            "--reuse-plan-l3-ways", str(settings["reuse_plan_l3_ways"]),
         ])
     for setting, option in (
             ("popt_property_bytes", "--popt-property-bytes"),
@@ -713,10 +713,10 @@ def make_roi_job(
             command.extend([option, str(settings[setting])])
     if settings.get("gem5_compact_fused"):
         command.append("--gem5-compact-fused")
-    if settings.get("gem5_compact_k2m_streamshield"):
-        command.append("--gem5-compact-k2m-streamshield")
-    if settings.get("gem5_compact_k2m_performance"):
-        command.append("--gem5-compact-k2m-performance")
+    if settings.get("gem5_compact_reuse_bind_flowthrough"):
+        command.append("--gem5-compact-reuse-bind-flowthrough")
+    if settings.get("gem5_compact_reuse_bind_performance"):
+        command.append("--gem5-compact-reuse-bind-performance")
     if settings.get("gem5_cpu_type"):
         command.extend([
             "--gem5-cpu-type", str(settings["gem5_cpu_type"]),
@@ -1726,7 +1726,7 @@ def filter_jobs(jobs: list[Job], args: argparse.Namespace) -> list[Job]:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run manifest-defined K2 experiment profiles.")
+        description="Run manifest-defined ReusePlan experiment profiles.")
     parser.add_argument(
         "--manifest", default=str(DEFAULT_MANIFEST),
         help="JSON experiment manifest.")

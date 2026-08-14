@@ -14,7 +14,7 @@ index d30a399..540d088 100644
  #include "cpu/o3/iew.hh"
  #include "cpu/o3/limits.hh"
  #include "debug/Drain.hh"
-+#include "mem/cache/replacement_policies/ecg_epoch_request_ext.hh"
++#include "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh"
  #include "debug/Fetch.hh"
  #include "debug/HtmCpu.hh"
  #include "debug/LSQ.hh"
@@ -23,7 +23,7 @@ index d30a399..540d088 100644
          req->setByteEnable(byte_enable);
  
 +        // GraphBrew ECG producer (env GEM5_ECG_PRODUCER=1): bind the ecg.load's per-dynamic
-+        // graph mask to its OWN demand Request as an EcgEpochExtension — the race-free
++        // graph mask to its OWN demand Request as an EcgReusePlanExtension — the race-free
 +        // O3/multicore delivery that replaces the single-slot mailbox. Gated so the SAME
 +        // binary A/Bs mailbox-only (off) vs extension (on).
 +        {
@@ -42,7 +42,7 @@ index d30a399..540d088 100644
 +                        ecg_popt, ecg_current_epoch,
 +                        ecg_context_id, ecg_sequence)) {
 +                    if (ecg_epoch_count == 2) {
-+                        gem5::replacement_policy::graph::attachEcgEpochPair(
++                        gem5::replacement_policy::graph::attachEcgReusePlan(
 +                            req, ecg_dest, ecg_tier,
 +                            ecg_epoch1, ecg_epoch2,
 +                            ecg_current_epoch, ecg_context_id, ecg_sequence);

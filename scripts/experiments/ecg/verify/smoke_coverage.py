@@ -15,11 +15,11 @@ BENCHMARKS = ("pr", "bfs", "sssp", "bc", "cc")
 DEFAULT_GRAPHS = ("kron_s12_k4",)
 POLICIES = (
     "LRU", "SRRIP", "GRASP", "POPT",
-    "ECG_K2", "ECG_K2_ONLINE",
-    "ECG_K2_STREAMSHIELD", "ECG_K2_ONLINE_STREAMSHIELD",
+    "ECG_REUSE_PLAN", "ECG_REUSE_PLAN_ONLINE",
+    "ECG_REUSE_PLAN_FLOWTHROUGH", "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH",
 )
-K2_POLICIES = set(POLICIES[4:])
-SS_POLICIES = {"ECG_K2_STREAMSHIELD", "ECG_K2_ONLINE_STREAMSHIELD"}
+REUSE_PLAN_POLICIES = set(POLICIES[4:])
+FLOWTHROUGH_POLICIES = {"ECG_REUSE_PLAN_FLOWTHROUGH", "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH"}
 
 
 def row_name(row: dict[str, str]) -> str:
@@ -127,58 +127,58 @@ def validate(
                 errors.append(
                     f"{row_name(row)}: capped timing marked speed-valid")
 
-        if policy in K2_POLICIES:
-            if number(row, "ecg_schedule_k") != 2:
-                errors.append(f"{row_name(row)}: schedule_k != 2")
+        if policy in REUSE_PLAN_POLICIES:
+            if number(row, "ecg_reuse_plan_depth") != 2:
+                errors.append(f"{row_name(row)}: reuse_plan_depth != 2")
             if number(row, "ecg_epochs_effective") != 32768:
                 errors.append(f"{row_name(row)}: effective epochs != 32768")
             if simulator == "gem5":
                 isa_name = (
-                    "mload"
-                    if row.get("ecg_isa_variant") == "mask"
+                    "load"
+                    if row.get("ecg_isa_variant") == "computed"
                     else "iload")
                 expected = (
-                    f"ecg.stream.weighted64+ecg.k2.{isa_name}.cw24"
-                    if policy in SS_POLICIES and
+                    f"ecg.flow.weighted+ecg.bind.{isa_name}.cw24"
+                    if policy in FLOWTHROUGH_POLICIES and
                     row.get("benchmark") == "sssp"
-                    else f"ecg.stream.load2+ecg.k2.{isa_name}"
-                    if policy in SS_POLICIES
-                    else f"ecg.weighted64+ecg.k2.{isa_name}.cw24"
+                    else f"ecg.flow.load+ecg.bind.{isa_name}"
+                    if policy in FLOWTHROUGH_POLICIES
+                    else f"ecg.plan.weighted+ecg.bind.{isa_name}.cw24"
                     if row.get("benchmark") == "sssp"
-                    else f"ecg.k2.{isa_name}")
+                    else f"ecg.bind.{isa_name}")
                 if row.get("gem5_ecg_delivery") != expected:
                     errors.append(
                         f"{row_name(row)}: delivery="
                         f"{row.get('gem5_ecg_delivery')!r}, expected={expected!r}")
-                if (policy in SS_POLICIES and
+                if (policy in FLOWTHROUGH_POLICIES and
                         not (number(
-                            row, "gem5_stream_bypass_trace_events") or 0) > 0):
+                            row, "gem5_flowthrough_trace_events") or 0) > 0):
                     errors.append(
-                        f"{row_name(row)}: bypass trace missing")
+                        f"{row_name(row)}: FlowThrough trace missing")
             if simulator == "sniper":
                 if row.get("sniper_ecg_delivery") not in {
-                        "fused-k2-model",
-                        "fused-k2-weighted64-model",
-                        "fused-k2-weighted32-model"}:
+                        "fused-reuse_plan-model",
+                        "fused-reuse_plan-weighted64-model",
+                        "fused-reuse_plan-weighted32-model"}:
                     errors.append(f"{row_name(row)}: fused delivery missing")
-                bad_receipts = number(row, "sniper_fused_k2_bad_receipts")
+                bad_receipts = number(row, "sniper_fused_reuse_plan_bad_receipts")
                 if require_fused_receipts:
                     require_number(
-                        errors, row, "sniper_fused_k2_receipts", positive=True)
+                        errors, row, "sniper_fused_reuse_plan_receipts", positive=True)
                     if bad_receipts is None:
                         errors.append(
                             f"{row_name(row)}: "
-                            "missing sniper_fused_k2_bad_receipts")
+                            "missing sniper_fused_reuse_plan_bad_receipts")
                 if bad_receipts not in (None, 0):
                     errors.append(
                         f"{row_name(row)}: "
                         f"bad fused receipts={bad_receipts:g}")
-                if policy in SS_POLICIES:
+                if policy in FLOWTHROUGH_POLICIES:
                     require_number(
-                        errors, row, "sniper_stream_bypass_reads",
+                        errors, row, "sniper_flowthrough_reads",
                         positive=True)
                     require_number(
-                        errors, row, "sniper_stream_bypass_writes",
+                        errors, row, "sniper_flowthrough_writes",
                         positive=True)
 
     expected_rows = (
@@ -215,7 +215,7 @@ def main() -> int:
         help="Expected simulator set. Defaults to all three backends.")
     parser.add_argument(
         "--allow-unvalidated-fused-receipts", action="store_true",
-        help="Accept fused K2 rows without per-row receipt traces when a "
+        help="Accept fused ReusePlan rows without per-row receipt traces when a "
              "separate mechanism gate validates the transport.")
     args = parser.parse_args()
     path = Path(args.csv)

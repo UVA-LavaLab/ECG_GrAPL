@@ -19,7 +19,7 @@
 #include "graph.h"
 #include "pvector.h"
 
-#include "ecg_epoch_builder.h"
+#include "ecg_reuse_plan_builder.h"
 #include "ecg_mode6_builder.h"
 
 #include "gem5_sim/gem5_harness.h"
@@ -65,20 +65,20 @@ pvector<ScoreT> Brandes_Gem5(const Graph &g, int num_iters) {
     int num_edge_regions = gem5_make_edge_regions(g, edge_regions, 2);
 
     // Per-edge next-ref epoch budget keyed on depth (int32). BC pushes along
-    // OUT-edges reading depth[dest]; Schedule-2 uses its fixed 8-byte pair
+    // OUT-edges reading depth[dest]; two-epoch ReusePlan uses its fixed 8-byte pair
     // record and bypasses the legacy 32-bit single-epoch cap.
     constexpr int kNumVtxPerLine = 64 / sizeof(int32_t);
-    const int ecg_sched_k =
-        gem5_env_int_clamped("ECG_EDGE_MASK_SCHED", 0, 0, 4);
+    const int ecg_reuse_plan_depth =
+        gem5_env_int_clamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
     uint32_t requested_epoch_count = static_cast<uint32_t>(
         gem5_env_int_clamped("ECG_EDGE_MASK_EPOCHS", 65535, 2, 65535));
-    if (ecg_sched_k == 2)
+    if (ecg_reuse_plan_depth == 2)
         requested_epoch_count =
-            ecg_epoch::normalizeK2EpochCount(requested_epoch_count);
+            ecg_reuse_plan::normalizeReusePlanEpochCount(requested_epoch_count);
     uint8_t edge_id_bits = 1;
     while ((1ULL << edge_id_bits) < static_cast<uint64_t>(g.num_nodes())) edge_id_bits++;
     uint32_t edge_epoch_count = requested_epoch_count;
-    if (ecg_sched_k != 2) {
+    if (ecg_reuse_plan_depth != 2) {
         if (edge_id_bits < 32) {
             uint32_t spare = 32u - edge_id_bits;
             uint32_t ne_cap = (spare >= 16) ? 65535u : (1u << spare);
@@ -92,19 +92,19 @@ pvector<ScoreT> Brandes_Gem5(const Graph &g, int num_iters) {
     // Deliver one edge mask on both irregular forward-BFS loads: depth[dest]
     // and path_counts[dest]. The backward successor-DAG phase remains plain.
     bool ecg_extract_on = gem5_ecg_extract_enabled();
-    // Schedule-2 loads the packed record, then carries its K2 mask on the exact
-    // depth[dest] request. StreamShield remains on the record request.
-    const bool ecg_load2_on = gem5_ecg_load2_enabled();
-    const bool ecg_stream_load2_on = gem5_ecg_stream_load2_enabled();
-    const bool ecg_k2_pload_on =
-        gem5_ecg_pload_enabled() && ecg_sched_k == 2;
-    const bool ecg_k2_mask_only_on =
-        ecg_k2_pload_on && gem5_ecg_k2_mask_only_enabled();
-    if (ecg_load2_on || ecg_stream_load2_on || ecg_k2_pload_on)
+    // two-epoch ReusePlan loads the packed record, then carries its ReusePlan mask on the exact
+    // depth[dest] request. FlowThrough remains on the record request.
+    const bool ecg_plan_load_on = gem5_ecg_plan_load_enabled();
+    const bool ecg_flow_load_on = gem5_ecg_flow_load_enabled();
+    const bool ecg_bind_iload_on =
+        gem5_ecg_pload_enabled() && ecg_reuse_plan_depth == 2;
+    const bool ecg_bind_computed_address_on =
+        ecg_bind_iload_on && gem5_ecg_bind_computed_address_enabled();
+    if (ecg_plan_load_on || ecg_flow_load_on || ecg_bind_iload_on)
         ecg_extract_on = true;
     std::vector<std::vector<uint16_t>> out_edge_epochs;
-    if (ecg_extract_on && ecg_sched_k != 2) {
-        ecg_epoch::buildInEdgeEpochs(g, static_cast<uint32_t>(kNumVtxPerLine),
+    if (ecg_extract_on && ecg_reuse_plan_depth != 2) {
+        ecg_reuse_plan::buildInEdgeEpochs(g, static_cast<uint32_t>(kNumVtxPerLine),
                                      edge_epoch_count, /*linemin=*/true,
                                      out_edge_epochs, /*push_out_edges=*/true);
     }
@@ -117,18 +117,18 @@ pvector<ScoreT> Brandes_Gem5(const Graph &g, int num_iters) {
     {
         auto ecg_meta = ::ecg_metadata::configure(
             static_cast<uint64_t>(g.num_nodes()), edge_epoch_count);
-        // No compact path here yet: this kernel builds the 64-bit Schedule-2
+        // No compact path here yet: this kernel builds the 64-bit two-epoch ReusePlan
         // record, so it streams 8 bytes per edge whatever the budget computes.
         // Declaring it keeps the receipt honest; only gem5 PR has the compact
         // 32-bit record so far.
-        if (ecg_sched_k == 2)
+        if (ecg_reuse_plan_depth == 2)
             ::ecg_metadata::declareContainerBytes(ecg_meta, 8);
         ::ecg_metadata::announce(ecg_meta, "gem5-bc");
         ::ecg_metadata::enforceExpectedBytesPerEdge(ecg_meta, "gem5-bc");
     }
-    if (ecg_extract_on && ecg_sched_k == 2) {
+    if (ecg_extract_on && ecg_reuse_plan_depth == 2) {
         std::vector<uint64_t> pair_records;
-        ecg_epoch::buildInEdgeEpochPairRecords(
+        ecg_reuse_plan::buildInEdgeReusePlanRecords(
             g, static_cast<uint32_t>(kNumVtxPerLine),
             edge_epoch_count, /*linemin=*/true,
             pair_off, pair_records, /*push_out_edges=*/true);
@@ -140,27 +140,27 @@ pvector<ScoreT> Brandes_Gem5(const Graph &g, int num_iters) {
     gem5_export_context(regions, 4, g, GEM5_SIDEBAND_PATH,
                         edge_regions, num_edge_regions, edge_epoch_count);
     const bool ecg_load_evict_on =
-        gem5_ecg_pload_enabled() && ecg_extract_on && ecg_sched_k != 2;
+        gem5_ecg_pload_enabled() && ecg_extract_on && ecg_reuse_plan_depth != 2;
     const int  ecg_evict_wc = ecg_mode6::ecgEvictWidthClass(g.num_nodes());
     if (ecg_load_evict_on)
         fprintf(stderr, "[ECG_PLOAD] BC fused ecg.load EVICT delivery (depth) ACTIVE\n");
     if (pair_ok) {
         fprintf(stderr,
-                ecg_stream_load2_on && ecg_k2_pload_on
-                    ? (ecg_k2_mask_only_on
-                        ? "[ECG_K2_MLOAD] BC computed-address masked loads "
-                          "+ StreamShield record load ACTIVE\n"
-                        : "[ECG_K2_ILOAD] BC fused indexed masked loads "
-                          "+ StreamShield record load ACTIVE\n")
-                    : ecg_k2_pload_on
-                        ? (ecg_k2_mask_only_on
-                            ? "[ECG_K2_MLOAD] BC computed-address masked loads ACTIVE\n"
-                            : "[ECG_K2_ILOAD] BC fused indexed masked loads ACTIVE\n")
-                    : ecg_stream_load2_on
-                        ? "[ECG_STREAM_LOAD2] BC request-bound StreamShield+K2 ACTIVE\n"
-                    : ecg_load2_on
-                        ? "[ECG_LOAD2] BC fused K2 record load ACTIVE\n"
-                        : "[ECG_PACKED8_K2] BC Schedule-2 packed record path ACTIVE\n");
+                ecg_flow_load_on && ecg_bind_iload_on
+                    ? (ecg_bind_computed_address_on
+                        ? "[ECG_REUSE_BIND_LOAD] BC computed-address computed-address loads "
+                          "+ FlowThrough record load ACTIVE\n"
+                        : "[ECG_REUSE_BIND_ILOAD] BC fused indexed computed-address loads "
+                          "+ FlowThrough record load ACTIVE\n")
+                    : ecg_bind_iload_on
+                        ? (ecg_bind_computed_address_on
+                            ? "[ECG_REUSE_BIND_LOAD] BC computed-address computed-address loads ACTIVE\n"
+                            : "[ECG_REUSE_BIND_ILOAD] BC fused indexed computed-address loads ACTIVE\n")
+                    : ecg_flow_load_on
+                        ? "[ECG_FLOW_LOAD] BC request-bound FlowThrough+ReusePlan ACTIVE\n"
+                    : ecg_plan_load_on
+                        ? "[ECG_PLAN_LOAD] BC fused ReusePlan record load ACTIVE\n"
+                        : "[ECG_PACKED8_REUSE_PLAN] BC two-epoch ReusePlan packed record path ACTIVE\n");
     }
 
     GEM5_RESET_STATS();
@@ -204,10 +204,10 @@ pvector<ScoreT> Brandes_Gem5(const Graph &g, int num_iters) {
                 }
                 if (dv == current_depth + 1) {
                     const int64_t old_paths = masked_path_count
-                        ? static_cast<int64_t>(ecg_k2_mask_only_on
-                            ? gem5_ecg_mload_k2_u64(
+                        ? static_cast<int64_t>(ecg_bind_computed_address_on
+                            ? gem5_ecg_bind_load_u64(
                                 &path_counts[v], record)
-                            : gem5_ecg_load_k2_u64(
+                            : gem5_ecg_bind_iload_u64(
                                 path_counts.data(), record))
                         : path_counts[v];
                     path_counts[v] = old_paths + source_paths;
@@ -215,34 +215,34 @@ pvector<ScoreT> Brandes_Gem5(const Graph &g, int num_iters) {
             };
             if (pair_ok &&
                 static_cast<size_t>(u + 1) < pair_off.size()) {
-                // The packed K2 record replaces the unweighted CSR edge word.
+                // The packed ReusePlan record replaces the unweighted CSR edge word.
                 for (uint64_t pos = pair_off[u];
                      pos < pair_off[u + 1]; ++pos) {
-                    const uint64_t record = ecg_stream_load2_on
-                        ? gem5_ecg_stream_load2_instruction(&pair_flat[pos])
-                        : ecg_load2_on
-                            ? gem5_ecg_load2_instruction(&pair_flat[pos])
+                    const uint64_t record = ecg_flow_load_on
+                        ? gem5_ecg_flow_load_instruction(&pair_flat[pos])
+                        : ecg_plan_load_on
+                            ? gem5_ecg_plan_load_instruction(&pair_flat[pos])
                             : pair_flat[pos];
                     const NodeID v = static_cast<NodeID>(
-                        ecg_epoch::extractEpochPairDest(record));
+                        ecg_reuse_plan::extractReusePlanDest(record));
                     int32_t dv;
-                    if (ecg_k2_pload_on) {
-                        if (ecg_k2_mask_only_on) {
-                            dv = gem5_ecg_mload_k2_s32(
+                    if (ecg_bind_iload_on) {
+                        if (ecg_bind_computed_address_on) {
+                            dv = gem5_ecg_bind_load_s32(
                                 &depth[v], record);
                         } else {
                             const uint32_t bits =
-                                gem5_ecg_load_k2(depth.data(), record);
+                                gem5_ecg_bind_iload_u32(depth.data(), record);
                             std::memcpy(&dv, &bits, sizeof(int32_t));
                         }
                     } else {
-                        if (!ecg_load2_on)
+                        if (!ecg_plan_load_on)
                             GEM5_ECG_EXTRACT2(record);
                         dv = depth[v];
                         GEM5_ECG_CLEAR_EXTRACT2_HINT();
                     }
                     process_neighbor(
-                        v, dv, record, ecg_k2_pload_on);
+                        v, dv, record, ecg_bind_iload_on);
                 }
             } else {
                 size_t edge_pos = 0;

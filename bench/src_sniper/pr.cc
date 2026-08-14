@@ -23,7 +23,7 @@
 // ECG mode 6 (per-edge mask) builder — shared with cache_sim and gem5.
 #include "ecg_mode6_builder.h"
 // Shared per-edge next-ref epoch builder (SNIPER_ECG_EXTRACT delivery).
-#include "ecg_epoch_builder.h"
+#include "ecg_reuse_plan_builder.h"
 
 using namespace std;
 
@@ -160,7 +160,7 @@ pvector<ScoreT> PageRankPullGS_Sniper(const Graph &g, int max_iters,
     }
     vector<vector<uint16_t>> in_edge_epochs_by_src;
     if (ecg_extract_enabled || lean_pfx_k > 0) {
-        ecg_epoch::buildInEdgeEpochs(g, kNumVtxPerLine, ecg_epoch_count, true,
+        ecg_reuse_plan::buildInEdgeEpochs(g, kNumVtxPerLine, ecg_epoch_count, true,
                                      in_edge_epochs_by_src);
     }
 
@@ -214,7 +214,7 @@ pvector<ScoreT> PageRankPullGS_Sniper(const Graph &g, int max_iters,
                         const auto& eps = (u < static_cast<NodeID>(in_edge_epochs_by_src.size()))
                             ? in_edge_epochs_by_src[u] : in_edge_epochs_by_src[0];
                         uint32_t ne = ecg_epoch_count;
-                        uint32_t cur_ep = ecg_epoch::currentEpoch(u, g.num_nodes(), ne);
+                        uint32_t cur_ep = ecg_reuse_plan::currentEpoch(u, g.num_nodes(), ne);
                         uint32_t thresh = static_cast<uint32_t>(
                             (static_cast<uint64_t>(pfx_epoch_thresh_pct) * ne) / 100);
                         auto jt = it;
@@ -225,7 +225,7 @@ pvector<ScoreT> PageRankPullGS_Sniper(const Graph &g, int max_iters,
                             NodeID cand = *jt;
                             if (cand < 0) continue;
                             uint16_t cand_ep = (cpos < eps.size()) ? eps[cpos] : 0;
-                            if (!ecg_epoch::prefetchKeep(cand_ep, cur_ep, ne,
+                            if (!ecg_reuse_plan::prefetchKeep(cand_ep, cur_ep, ne,
                                                          pfx_epoch_filter, thresh))
                                 continue;
 #if GRAPHBREW_SNIPER_HAS_SIM_API

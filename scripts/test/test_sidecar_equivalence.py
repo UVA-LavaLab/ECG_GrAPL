@@ -43,7 +43,7 @@ COMMON = {
     "CACHE_L3_WAYS": "16",
     "ECG_MODE": "ECG_GRASP_POPT",
     "ECG_EDGE_MASKS": "1",
-    "ECG_EDGE_MASK_SCHED": "2",
+    "ECG_REUSE_PLAN_DEPTH": "2",
     "ECG_EDGE_MASK_EPOCH": "1",
     "ECG_EDGE_MASK_LEAN": "1",
     "ECG_EDGE_MASK_PACK": "1",
@@ -155,7 +155,7 @@ def test_every_cache_sim_kernel_uses_the_shared_metadata():
         assert "::ecg_metadata::announce(" in src, (
             f"{kernel} emits no configuration receipt")
         for dead in ("SIM_CACHE_READ_EDGE_RECORD(",
-                     "SIM_CACHE_READ_EDGE_RECORD_BYPASS(",
+                     "SIM_CACHE_READ_EDGE_RECORD_FLOWTHROUGH(",
                      "GraphSimEcgRecordBytes("):
             assert dead not in src, (
                 f"{kernel} still carries the superseded {dead}")
@@ -248,9 +248,10 @@ def test_cache_sim_and_gem5_derive_identical_width(stamps, variable,
     Both simulators independently call ecg_metadata::configure and print a
     receipt. Identical configuration must produce byte-identical receipts. A
     mismatch means one backend has drifted back to a private width rule, which
-    is exactly the defect that made K2-versus-K1 a comparison of record widths.
+    is exactly the defect that made the two- versus single-epoch comparison a
+    comparison of record widths.
 
-    The variable-width Schedule-2 case is the one that matters most: the shared implementation
+    The variable-width two-epoch ReusePlan case is the one that matters most: the shared implementation
     computes a 4-byte BUDGET, and a backend that materialises the record wider
     must declare the container it really streams. gem5 and Sniper both printed
     the budget while building 64-bit arrays, so the receipt agreed while the
@@ -261,7 +262,7 @@ def test_cache_sim_and_gem5_derive_identical_width(stamps, variable,
         "ECG_EDGE_MASK_EPOCHS": 32,
     }
     if stamps == 2:
-        shared["ECG_EDGE_MASK_SCHED"] = 2
+        shared["ECG_REUSE_PLAN_DEPTH"] = 2
     if variable:
         shared["ECG_RECORD_VARIABLE_WIDTH"] = 1
 
@@ -310,7 +311,7 @@ def test_declared_gem5_timing_stages_are_honestly_scoped():
 
     gem5 once built pvector<uint64_t> unconditionally, so both arms of a
     4-versus-8-byte contrast would have streamed 8 bytes and the comparison
-    would have been vacuous. It now has a compact 32-bit Schedule-2 record, so
+    would have been vacuous. It now has a compact 32-bit two-epoch ReusePlan record, so
     the contrast is real -- but only if the 4-byte arm actually asks for a
     computed width and the 8-byte arm actually forces one.
 
@@ -348,7 +349,7 @@ def test_gem5_forwards_metadata_knobs_into_the_simulated_guest():
 
     graph_se.py builds an explicit allowlist of variables to hand the simulated
     process. The shared metadata implementation knobs were absent from it, so a stage asking for
-    a 4-byte record silently got the Schedule-2 default of 8: the run looked
+    a 4-byte record silently got the two-epoch ReusePlan default of 8: the run looked
     correct at every layer above, and only the guest's own receipt disagreed.
 
     This is the third distinct layer of env plumbing between a manifest stage
@@ -395,7 +396,7 @@ def test_gem5_forwards_metadata_knobs_into_the_simulated_guest():
 def test_compact_two_stamp_record_packs_and_round_trips():
     """The 32-bit two-stamp format must be exact, and honest about its limits.
 
-    gem5 and Sniper previously had only a 64-bit Schedule-2 record, so they
+    gem5 and Sniper previously had only a 64-bit two-epoch ReusePlan record, so they
     streamed 8 bytes per edge and DOUBLED the structural stream against a 4-byte
     CSR edge, while cache_sim modelled the record as substituting for that edge.
     That produced a direction reversal between simulators: 0.557 against LRU in
@@ -403,37 +404,37 @@ def test_compact_two_stamp_record_packs_and_round_trips():
 
     The compact format closes it, but only where the fields genuinely fit.
     """
-    header = (ROOT / "bench/include/ecg_epoch_builder.h").read_text()
-    for fn in ("canPackEpochPair32", "packEpochPairRecord32",
-               "extractEpochPair32Dest", "extractEpochPair32Tier",
-               "extractEpochPair32First", "extractEpochPair32Second",
-               "widenEpochPair32", "buildInEdgeEpochPairRecords32"):
-        assert fn in header, f"compact Schedule-2 helper {fn} is missing"
+    header = (ROOT / "bench/include/ecg_reuse_plan_builder.h").read_text()
+    for fn in ("canPackReusePlan32", "packReusePlanRecord32",
+               "extractReusePlan32Dest", "extractReusePlan32Tier",
+               "extractReusePlan32First", "extractReusePlan32Second",
+               "widenReusePlan32", "buildInEdgeReusePlanRecords32"):
+        assert fn in header, f"compact two-epoch ReusePlan helper {fn} is missing"
 
     # The compact builder must reuse the SAME epoch computation as the 64-bit
     # one, or the two widths would mean different policies.
-    start = header.index("bool buildInEdgeEpochPairRecords32")
+    start = header.index("bool buildInEdgeReusePlanRecords32")
     body = header[start:start + 3000]
-    assert "nextEpochPairForLine" in body, (
+    assert "nextReusePlanForLine" in body, (
         "the compact builder computes epochs its own way, so a width change "
         "would silently change the policy")
 
     # And it must refuse rather than truncate when the fields do not fit.
-    assert "if (!canPackEpochPair32(n, ne)) return false;" in body, (
+    assert "if (!canPackReusePlan32(n, ne)) return false;" in body, (
         "the compact builder does not check feasibility, so it could silently "
         "truncate destinations or epochs")
 
 
 def test_gem5_prefers_the_compact_record_and_declares_its_width():
     src = (ROOT / "bench/src_gem5/pr.cc").read_text()
-    assert "buildInEdgeEpochPairRecords32" in src, (
+    assert "buildInEdgeReusePlanRecords32" in src, (
         "gem5 does not try the compact record, so it always streams 8 bytes")
-    assert "widenEpochPair32" in src, (
+    assert "widenReusePlan32" in src, (
         "gem5 does not widen the compact record for the ISA helpers")
     assert "declareContainerBytes" in src, (
         "gem5 does not declare the container it actually streams, so its "
         "receipt can claim a width the guest does not deliver")
-    assert "canPackEpochPair32" in src, (
+    assert "canPackReusePlan32" in src, (
         "gem5 declares a fixed container instead of the one feasibility allows")
 
 
@@ -470,10 +471,10 @@ def test_riscv_gem5_binaries_are_not_stale_against_the_compact_record():
         f"not {'the gem5 decoder' if guest_has_isa else 'the guest binary'}; "
         "rebuild both (make gem5-riscv-m5ops-pr and the RISCV gem5 build) or "
         "neither, otherwise GEM5_ECG_COMPACT_ISA=1 traps on an unknown opcode")
-    guest_has_proposal = b"ECG_K2_MLOAD_C_SS" in blob
-    sim_has_proposal = b"ecg_stream_load2_compact" in gem5_opt.read_bytes()
+    guest_has_proposal = b"ECG_REUSE_BIND_LOAD_C_FLOW" in blob
+    sim_has_proposal = b"ecg_flow_load_compact" in gem5_opt.read_bytes()
     assert guest_has_proposal == sim_has_proposal, (
-        "the compact StreamShield record-load proposal is present in "
+        "the compact FlowThrough record-load proposal is present in "
         f"{'the guest binary' if guest_has_proposal else 'the gem5 decoder'} "
         "but not both; rebuild gem5 and the RISC-V guest together")
 
@@ -504,7 +505,7 @@ def test_guest_enforces_the_width_the_runner_intended():
 
 
 def test_width_contrast_stages_are_scoped_to_what_gem5_implements():
-    """Only gem5 PR has a compact record, and StreamShield is 8-byte only."""
+    """Only gem5 PR has a compact record, and FlowThrough is 8-byte only."""
     manifest = json.loads(
         (ROOT / "scripts/experiments/ecg/experiment_manifest.json").read_text())
     stages = [s for s in manifest["stages"]
@@ -514,8 +515,8 @@ def test_width_contrast_stages_are_scoped_to_what_gem5_implements():
         assert stage.get("benchmarks") == ["pr"], (
             f"{stage['name']} includes kernels with no compact path, whose "
             "receipts would claim a width they do not stream")
-        assert not any("STREAMSHIELD" in p.upper() for p in stage["policies"]), (
-            f"{stage['name']} includes a StreamShield policy; the stream-load "
+        assert not any("FLOWTHROUGH" in p.upper() for p in stage["policies"]), (
+            f"{stage['name']} includes a FlowThrough policy; the stream-load "
             "instruction is 8-byte only, so the arm would change width AND "
             "allocation together")
         want = "8" if stage["name"].endswith("_8b") else "4"
@@ -532,10 +533,10 @@ def test_compact_records_decode_identically_to_the_64_bit_form():
     64-bit record built from the same graph, field by field, across several
     epoch counts.
     """
-    binary = ROOT / "bench/bin_sim/test_ecg_epoch_pair32"
+    binary = ROOT / "bench/bin_sim/test_ecg_reuse_plan32"
     graph = ROOT / "results/graphs/web-Google-n16/web-Google-n16.sg"
     if not (binary.exists() and graph.exists()):
-        pytest.skip("epoch-pair equivalence harness or graph fixture missing")
+        pytest.skip("ReusePlan equivalence harness or graph fixture missing")
     env = dict(os.environ, OMP_NUM_THREADS="4")
     proc = subprocess.run([str(binary), "-f", str(graph)],
                           env=env, capture_output=True, text=True, timeout=900)
@@ -562,7 +563,7 @@ def test_a_four_byte_receipt_means_a_four_byte_array_was_built():
     receipt without that announcement is the exact defect this guards.
     """
     env = {"ECG_EDGE_MASK_EPOCH": 1, "ECG_EDGE_MASK_LINEMIN": 1,
-           "ECG_EDGE_MASK_EPOCHS": 32, "ECG_EDGE_MASK_SCHED": 2,
+           "ECG_EDGE_MASK_EPOCHS": 32, "ECG_REUSE_PLAN_DEPTH": 2,
            "ECG_RECORD_VARIABLE_WIDTH": 1}
 
     e = dict(os.environ)
@@ -572,7 +573,7 @@ def test_a_four_byte_receipt_means_a_four_byte_array_was_built():
                         env=e, capture_output=True, text=True, timeout=900)
     g5_out = g5.stdout + g5.stderr
     assert "record_bytes=4 " in g5_out, "gem5 did not take the 4-byte budget"
-    assert "Schedule-2 COMPACT record ON" in g5_out, (
+    assert "two-epoch ReusePlan COMPACT record ON" in g5_out, (
         "gem5 announced a 4-byte record but did not build the compact array; "
         "it is streaming 8 bytes per edge while claiming 4")
 
@@ -596,8 +597,8 @@ def test_the_compact_format_has_one_definition_in_three_places():
     """dest[id_bits] | tier[2] | first[eb] | second[eb], transcribed once too often.
 
     The compact record is now decoded by the builder's own helpers, by
-    widenEpochPair32 in the guest, and by ecg_extract2c in the gem5 decoder.
-    The first two are proven equal per record by test_ecg_epoch_pair32; the
+    widenReusePlan32 in the guest, and by ecg_extract2c in the gem5 decoder.
+    The first two are proven equal per record by test_ecg_reuse_plan32; the
     decoder is a third transcription that no unit test can reach, so guard its
     shifts against the layout they are supposed to implement.
 
@@ -608,7 +609,7 @@ def test_the_compact_format_has_one_definition_in_three_places():
                / "decoder.isa").read_text()
     start = decoder.index("0x02: ecg_extract2c")
     body = decoder[start:start + 2600]
-    # Same field order and offsets as packEpochPairRecord32.
+    # Same field order and offsets as packReusePlanRecord32.
     assert "record & id_mask" in body, "dest must occupy the low id_bits"
     assert "(record >> id_bits) & 0x3U" in body, "tier sits directly above dest"
     assert "(record >> (id_bits + 2)) & ep_mask" in body, (
@@ -620,7 +621,7 @@ def test_the_compact_format_has_one_definition_in_three_places():
     assert "setDecodedEcgExtractHint2" in body
     assert "storeEcgMetadataByVertex" in body
 
-    builder = (ROOT / "bench/include/ecg_epoch_builder.h").read_text()
+    builder = (ROOT / "bench/include/ecg_reuse_plan_builder.h").read_text()
     assert "(static_cast<uint32_t>(tier & 0x3u) << id_bits)" in builder, (
         "the packer's layout changed; the gem5 decoder still implements the "
         "old one and will deliver wrong epochs without failing")
@@ -700,7 +701,7 @@ def test_row_cannot_contradict_itself_about_stream_width():
 
     edge_stream_bytes_per_edge is derived from the record width and was computed
     from the NOMINAL width before the guest receipt corrected it, so every
-    compact K2 row asserted ecg_record_bytes=4, ecg_record_replaces_edge=1 and
+    compact ReusePlan row asserted ecg_record_bytes=4, ecg_record_replaces_edge=1 and
     edge_stream_bytes_per_edge=8 together. That is the field a reader is most
     likely to trust when computing bytes per edge, so the contradiction is worse
     than a missing column.

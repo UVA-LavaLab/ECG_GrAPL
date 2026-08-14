@@ -67,22 +67,22 @@ inline void RelaxEdges_Sniper(const WGraph &g, NodeID u, WeightT delta,
             const uint64_t pos = (*pair_off)[u] + edge_pos;
             if (pos >= (*pair_off)[u + 1] || pos >= pair_flat->size()) {
                 std::fprintf(stderr,
-                    "Sniper standalone SSSP K2 index out of range: "
+                    "Sniper standalone SSSP ReusePlan index out of range: "
                     "u=%d edge=%zu\n", static_cast<int>(u), edge_pos);
                 std::abort();
             }
             const uint64_t record = (*pair_flat)[pos];
-            if (ecg_epoch::extractEpochPairDest(record) !=
+            if (ecg_reuse_plan::extractReusePlanDest(record) !=
                 static_cast<uint32_t>(wn.v)) {
                 std::fprintf(stderr,
-                    "Sniper standalone SSSP K2 destination mismatch\n");
+                    "Sniper standalone SSSP ReusePlan destination mismatch\n");
                 std::abort();
             }
             SNIPER_ECG_EXTRACT2(
                 static_cast<uint32_t>(wn.v),
-                ecg_epoch::extractEpochPairTier(record),
-                ecg_epoch::extractEpochPairFirst(record),
-                ecg_epoch::extractEpochPairSecond(record));
+                ecg_reuse_plan::extractReusePlanTier(record),
+                ecg_reuse_plan::extractReusePlanFirst(record),
+                ecg_reuse_plan::extractReusePlanSecond(record));
         } else if (epochs) {
             const uint16_t epoch = edge_pos < epochs->size()
                 ? (*epochs)[edge_pos]
@@ -123,16 +123,16 @@ pvector<WeightT> DeltaStep_Sniper(const WGraph &g, NodeID source, WeightT delta)
     int num_edge_regions = sniper_make_edge_regions(g, edge_regions, 2);
     constexpr int kNumVtxPerLine = 64 / sizeof(WeightT);
     constexpr int kNumEpochs = 256;
-    const int ecg_sched_k =
+    const int ecg_reuse_plan_depth =
         graphbrew_sniper::env_int_clamped(
-            "ECG_EDGE_MASK_SCHED", 0, 0, 4);
+            "ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
     {
         static pvector<uint8_t> popt_matrix;
         // SSSP relaxes OUT-edges reading dist[dest]; the next-ref of dist[v] is over v's
         // IN-neighbours, so the reref matrix is the graph TRANSPOSE (CSC/in_neigh,
         // traverseCSR=false) — matching cache_sim's natural_csr=false. Default true=out_neigh
         // is only correct for PR's in-pull. Undirected forces true internally (do-no-harm).
-        if (ecg_sched_k != 2) {
+        if (ecg_reuse_plan_depth != 2) {
             makeOffsetMatrix(
                 g, popt_matrix, kNumVtxPerLine, kNumEpochs,
                 /*traverseCSR=*/false);
@@ -147,21 +147,21 @@ pvector<WeightT> DeltaStep_Sniper(const WGraph &g, NodeID source, WeightT delta)
     uint32_t ecg_epoch_count = static_cast<uint32_t>(
         graphbrew_sniper::env_int_clamped(
             "ECG_EDGE_MASK_EPOCHS", kNumEpochs, 2, 65535));
-    if (ecg_sched_k == 2)
+    if (ecg_reuse_plan_depth == 2)
         ecg_epoch_count =
-            ecg_epoch::normalizeK2EpochCount(ecg_epoch_count);
+            ecg_reuse_plan::normalizeReusePlanEpochCount(ecg_epoch_count);
     vector<vector<uint16_t>> out_edge_epochs;
     vector<uint64_t> pair_off;
     vector<uint64_t> pair_flat;
     bool pair_ok = false;
-    if (ecg_extract_on && ecg_sched_k == 2) {
-        ecg_epoch::buildInEdgeEpochPairRecords(
+    if (ecg_extract_on && ecg_reuse_plan_depth == 2) {
+        ecg_reuse_plan::buildInEdgeReusePlanRecords(
             g, kNumVtxPerLine, ecg_epoch_count,
             /*linemin=*/true, pair_off, pair_flat,
             /*push_out_edges=*/true);
         pair_ok = true;
     } else if (ecg_extract_on) {
-        ecg_epoch::buildInEdgeEpochs(
+        ecg_reuse_plan::buildInEdgeEpochs(
             g, kNumVtxPerLine, ecg_epoch_count,
             /*linemin=*/true, out_edge_epochs,
             /*push_out_edges=*/true);

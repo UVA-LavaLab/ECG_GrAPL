@@ -21,7 +21,7 @@
 #include "pvector.h"
 
 #include "graphbrew/partition/cagra/popt.h"
-#include "ecg_epoch_builder.h"
+#include "ecg_reuse_plan_builder.h"
 #include "ecg_mode6_builder.h"
 
 #include "gem5_sim/gem5_harness.h"
@@ -42,12 +42,12 @@ inline void RelaxEdges_Gem5(const WGraph &g, NodeID u, WeightT delta,
                             const pvector<uint32_t>* pair_sidecars,
                             const pvector<uint64_t>* pair_compact,
                             bool ecg_load_evict_on, int ecg_evict_wc,
-                            uint32_t edge_epoch_count, bool ecg_load2_on,
-                            bool ecg_stream_load2_on,
-                            bool ecg_k2_pload_on,
+                            uint32_t edge_epoch_count, bool ecg_plan_load_on,
+                            bool ecg_flow_load_on,
+                            bool ecg_bind_iload_on,
                             bool compact_pair_ok) {
-    const bool ecg_k2_mask_only_on =
-        ecg_k2_pload_on && gem5_ecg_k2_mask_only_enabled();
+    const bool ecg_bind_computed_address_on =
+        ecg_bind_iload_on && gem5_ecg_bind_computed_address_enabled();
     const WeightT source_dist = dist[u];
     GEM5_SET_VERTEX_EPOCH(
         u, g.num_nodes(), edge_epoch_count);
@@ -55,20 +55,20 @@ inline void RelaxEdges_Gem5(const WGraph &g, NodeID u, WeightT delta,
     const vector<uint16_t>* u_epochs =
         (out_edge_epochs && static_cast<size_t>(u) < out_edge_epochs->size())
             ? &(*out_edge_epochs)[u] : nullptr;
-    if (compact_pair_ok && ecg_k2_pload_on && pair_off && pair_compact &&
+    if (compact_pair_ok && ecg_bind_iload_on && pair_off && pair_compact &&
         static_cast<size_t>(u + 1) < pair_off->size() &&
         pfx_lookahead == 0) {
         for (uint64_t pos = (*pair_off)[u]; pos < (*pair_off)[u + 1]; ++pos) {
-            const uint64_t record = ecg_stream_load2_on
-                ? gem5_ecg_stream_load2_instruction(&(*pair_compact)[pos])
+            const uint64_t record = ecg_flow_load_on
+                ? gem5_ecg_flow_load_instruction(&(*pair_compact)[pos])
                 : (*pair_compact)[pos];
             const NodeID dest = static_cast<NodeID>(
-                ecg_epoch::extractCompactWeightedDest(record));
+                ecg_reuse_plan::extractCompactWeightedDest(record));
             const WeightT weight = static_cast<WeightT>(
-                ecg_epoch::extractCompactWeightedWeight(record));
-            const uint32_t bits = ecg_k2_mask_only_on
-                ? gem5_ecg_mload_k2_compact_u32(&dist[dest], record)
-                : gem5_ecg_load_k2_weighted64(dist.data(), record);
+                ecg_reuse_plan::extractCompactWeightedWeight(record));
+            const uint32_t bits = ecg_bind_computed_address_on
+                ? gem5_ecg_bind_load_cw24(&dist[dest], record)
+                : gem5_ecg_bind_iload_cw24(dist.data(), record);
             WeightT old_dist;
             std::memcpy(&old_dist, &bits, sizeof(WeightT));
             const WeightT new_dist = source_dist + weight;
@@ -108,30 +108,30 @@ inline void RelaxEdges_Gem5(const WGraph &g, NodeID u, WeightT delta,
             static_cast<size_t>(u + 1) < pair_off->size()) {
             const uint64_t pos = (*pair_off)[u] + edge_pos;
             // The sidecar supplies the upper 32 mask bits. The masked property
-            // load combines them with the edge destination and attaches the K2
-            // pair to the exact dist[dest] request. StreamShield remains on the
+            // load combines them with the edge destination and attaches the ReusePlan
+            // pair to the exact dist[dest] request. FlowThrough remains on the
             // sidecar load, not the governed property request.
-            const uint32_t sidecar = ecg_stream_load2_on
-                ? gem5_ecg_stream_weighted_load2_instruction(
+            const uint32_t sidecar = ecg_flow_load_on
+                ? gem5_ecg_flow_weighted_load_instruction(
                     &(*pair_sidecars)[pos])
-                : ecg_load2_on && !ecg_k2_pload_on
-                    ? gem5_ecg_weighted_load2_instruction(
+                : ecg_plan_load_on && !ecg_bind_iload_on
+                    ? gem5_ecg_plan_weighted_load_instruction(
                         &(*pair_sidecars)[pos], static_cast<uint32_t>(wn.v))
                     : (*pair_sidecars)[pos];
             const uint64_t record =
-                ecg_epoch::combineWeightedEpochPairRecord(
+                ecg_reuse_plan::combineWeightedReusePlanRecord(
                     static_cast<uint32_t>(wn.v), sidecar);
-            if (ecg_k2_pload_on) {
-                if (ecg_k2_mask_only_on) {
+            if (ecg_bind_iload_on) {
+                if (ecg_bind_computed_address_on) {
                     old_dist = static_cast<WeightT>(
-                        gem5_ecg_mload_k2_s32(&dist[wn.v], record));
+                        gem5_ecg_bind_load_s32(&dist[wn.v], record));
                 } else {
                     const uint32_t bits =
-                        gem5_ecg_load_k2(dist.data(), record);
+                        gem5_ecg_bind_iload_u32(dist.data(), record);
                     std::memcpy(&old_dist, &bits, sizeof(WeightT));
                 }
             } else {
-                if (!ecg_load2_on)
+                if (!ecg_plan_load_on)
                     GEM5_ECG_EXTRACT2(record);
                 old_dist = dist[wn.v];
                 GEM5_ECG_CLEAR_EXTRACT2_HINT();
@@ -178,20 +178,20 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
     Gem5EdgeRegion edge_regions[2];
     int num_edge_regions = gem5_make_edge_regions(g, edge_regions, 2);
 
-    // Per-edge next-ref epoch budget. Schedule-2 uses two 15-bit epochs in
+    // Per-edge next-ref epoch budget. two-epoch ReusePlan uses two 15-bit epochs in
     // its fixed 8-byte record and therefore bypasses the legacy 32-bit cap.
     constexpr int kNumVtxPerLine = 64 / sizeof(WeightT);
-    const int ecg_sched_k =
-        gem5_env_int_clamped("ECG_EDGE_MASK_SCHED", 0, 0, 4);
+    const int ecg_reuse_plan_depth =
+        gem5_env_int_clamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
     uint32_t requested_epoch_count = static_cast<uint32_t>(
         gem5_env_int_clamped("ECG_EDGE_MASK_EPOCHS", 65535, 2, 65535));
-    if (ecg_sched_k == 2)
+    if (ecg_reuse_plan_depth == 2)
         requested_epoch_count =
-            ecg_epoch::normalizeK2EpochCount(requested_epoch_count);
+            ecg_reuse_plan::normalizeReusePlanEpochCount(requested_epoch_count);
     uint8_t edge_id_bits = 1;
     while ((1ULL << edge_id_bits) < static_cast<uint64_t>(g.num_nodes())) edge_id_bits++;
     uint32_t edge_epoch_count = requested_epoch_count;
-    if (ecg_sched_k != 2) {
+    if (ecg_reuse_plan_depth != 2) {
         if (edge_id_bits < 32) {
             uint32_t spare = 32u - edge_id_bits;
             uint32_t ne_cap = (spare >= 16) ? 65535u : (1u << spare);
@@ -207,23 +207,23 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
     // build epochs with push_out_edges=true (the transpose). Without this gem5 SSSP delivered
     // no epoch and ECG_GRASP_POPT degenerated to recency.
     const bool ecg_extract_on_env = gem5_ecg_extract_enabled();
-    // FUSED ecg.load2: mirrors gem5 PR pr.cc — enabling GEM5_ENABLE_ECG_LOAD2 alone implies
-    // the extract delivery so the K2 records get built even if GEM5_ENABLE_ECG_EXTRACT was
-    // left unset. ecg.stream.load2 is the request-bound StreamShield variant of the same
+    // FUSED ecg.plan.load: mirrors gem5 PR pr.cc — enabling GEM5_ENABLE_ECG_PLAN_LOAD alone implies
+    // the extract delivery so the ReusePlan records get built even if GEM5_ENABLE_ECG_EXTRACT was
+    // left unset. ecg.flow.load is the request-bound FlowThrough variant of the same
     // fused load (static no-allocate primitive, not an adaptive policy) and implies the
     // same delivery.
-    const bool ecg_load2_on = gem5_ecg_load2_enabled();
-    const bool ecg_stream_load2_on = gem5_ecg_stream_load2_enabled();
-    const bool ecg_k2_pload_on =
-        gem5_ecg_pload_enabled() && ecg_sched_k == 2;
-    const bool ecg_k2_mask_only_on =
-        ecg_k2_pload_on && gem5_ecg_k2_mask_only_enabled();
+    const bool ecg_plan_load_on = gem5_ecg_plan_load_enabled();
+    const bool ecg_flow_load_on = gem5_ecg_flow_load_enabled();
+    const bool ecg_bind_iload_on =
+        gem5_ecg_pload_enabled() && ecg_reuse_plan_depth == 2;
+    const bool ecg_bind_computed_address_on =
+        ecg_bind_iload_on && gem5_ecg_bind_computed_address_enabled();
     const bool ecg_extract_on =
-        ecg_extract_on_env || ecg_load2_on || ecg_stream_load2_on ||
-        ecg_k2_pload_on;
+        ecg_extract_on_env || ecg_plan_load_on || ecg_flow_load_on ||
+        ecg_bind_iload_on;
     std::vector<std::vector<uint16_t>> out_edge_epochs;
-    if (ecg_extract_on && ecg_sched_k != 2) {
-        ecg_epoch::buildInEdgeEpochs(g, static_cast<uint32_t>(kNumVtxPerLine),
+    if (ecg_extract_on && ecg_reuse_plan_depth != 2) {
+        ecg_reuse_plan::buildInEdgeEpochs(g, static_cast<uint32_t>(kNumVtxPerLine),
                                      edge_epoch_count, /*linemin=*/true,
                                      out_edge_epochs, /*push_out_edges=*/true);
     }
@@ -239,18 +239,18 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
     {
         auto ecg_meta = ::ecg_metadata::configure(
             static_cast<uint64_t>(g.num_nodes()), edge_epoch_count);
-        // No compact path here yet: this kernel builds the 64-bit Schedule-2
+        // No compact path here yet: this kernel builds the 64-bit two-epoch ReusePlan
         // record, so it streams 8 bytes per edge whatever the budget computes.
         // Declaring it keeps the receipt honest; only gem5 PR has the compact
         // 32-bit record so far.
-        if (ecg_sched_k == 2)
+        if (ecg_reuse_plan_depth == 2)
             ::ecg_metadata::declareContainerBytes(ecg_meta, 8);
         ::ecg_metadata::announce(ecg_meta, "gem5-sssp");
         ::ecg_metadata::enforceExpectedBytesPerEdge(ecg_meta, "gem5-sssp");
     }
-    if (ecg_extract_on && ecg_sched_k == 2) {
+    if (ecg_extract_on && ecg_reuse_plan_depth == 2) {
         std::vector<uint64_t> pair_records;
-        ecg_epoch::buildInEdgeEpochPairRecords(
+        ecg_reuse_plan::buildInEdgeReusePlanRecords(
             g, static_cast<uint32_t>(kNumVtxPerLine),
             edge_epoch_count, /*linemin=*/true,
             pair_off, pair_records, /*push_out_edges=*/true);
@@ -260,20 +260,20 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
         pair_sidecars = pvector<uint32_t>(
             pair_records.size(), uint32_t(0), 4096);
         for (size_t i = 0; i < pair_records.size(); ++i) {
-            pair_sidecars[i] = ecg_epoch::packWeightedEpochPairSidecar(
-                ecg_epoch::extractEpochPairTier(pair_records[i]),
-                ecg_epoch::extractEpochPairFirst(pair_records[i]),
-                ecg_epoch::extractEpochPairSecond(pair_records[i]));
+            pair_sidecars[i] = ecg_reuse_plan::packWeightedReusePlanSidecar(
+                ecg_reuse_plan::extractReusePlanTier(pair_records[i]),
+                ecg_reuse_plan::extractReusePlanFirst(pair_records[i]),
+                ecg_reuse_plan::extractReusePlanSecond(pair_records[i]));
         }
         pair_compact = pvector<uint64_t>(
             pair_records.size(), uint64_t(0), 4096);
         compact_pair_ok =
             static_cast<uint64_t>(g.num_nodes()) <=
-                ecg_epoch::kCompactWeightedMaxVertices;
+                ecg_reuse_plan::kCompactWeightedMaxVertices;
         for (NodeID src = 0; compact_pair_ok && src < g.num_nodes(); ++src) {
             uint64_t pos = pair_off[src];
             for (WNode edge : g.out_neigh(src)) {
-                if (!ecg_epoch::canPackCompactWeightedEdge(
+                if (!ecg_reuse_plan::canPackCompactWeightedEdge(
                         g.num_nodes(), static_cast<uint32_t>(edge.v),
                         static_cast<int64_t>(edge.w))) {
                     compact_pair_ok = false;
@@ -281,29 +281,29 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
                 }
                 const uint64_t pair = pair_flat[pos];
                 pair_compact[pos] =
-                    ecg_epoch::packCompactWeightedEpochPairRecord(
+                    ecg_reuse_plan::packCompactWeightedReusePlanRecord(
                         static_cast<uint32_t>(edge.v),
                         static_cast<uint32_t>(edge.w),
-                        ecg_epoch::extractEpochPairTier(pair),
-                        ecg_epoch::extractEpochPairFirst(pair),
-                        ecg_epoch::extractEpochPairSecond(pair));
+                        ecg_reuse_plan::extractReusePlanTier(pair),
+                        ecg_reuse_plan::extractReusePlanFirst(pair),
+                        ecg_reuse_plan::extractReusePlanSecond(pair));
                 ++pos;
             }
         }
         if (!compact_pair_ok) pair_compact.clear();
         pair_ok = true;
     }
-    const char* k2_validate_env = std::getenv("ECG_K2_VALIDATE");
-    if (pair_ok && k2_validate_env && k2_validate_env[0] &&
-        std::strcmp(k2_validate_env, "0") != 0 &&
-        (!ecg_epoch::validateWeightedEpochPairRecords(
+    const char* reuse_plan_validate_env = std::getenv("ECG_REUSE_PLAN_VALIDATE");
+    if (pair_ok && reuse_plan_validate_env && reuse_plan_validate_env[0] &&
+        std::strcmp(reuse_plan_validate_env, "0") != 0 &&
+        (!ecg_reuse_plan::validateWeightedReusePlanRecords(
              g, pair_off, pair_flat) ||
-         !ecg_epoch::validateWeightedEpochPairSidecars(
+         !ecg_reuse_plan::validateWeightedReusePlanSidecars(
              pair_off, pair_flat, pair_sidecars) ||
          (compact_pair_ok &&
-          !ecg_epoch::validateCompactWeightedEpochPairRecords(
+          !ecg_reuse_plan::validateCompactWeightedReusePlanRecords(
               g, pair_off, pair_flat, pair_compact)))) {
-        std::fprintf(stderr, "gem5 SSSP K2 record validation failed\n");
+        std::fprintf(stderr, "gem5 SSSP ReusePlan record validation failed\n");
         std::abort();
     }
     gem5_export_context(regions, 1, g, GEM5_SIDEBAND_PATH,
@@ -317,28 +317,28 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
         fprintf(stderr, "[ECG_PLOAD] SSSP fused ecg.load EVICT delivery ACTIVE\n");
     if (pair_ok) {
         fprintf(stderr,
-                compact_pair_ok && ecg_k2_pload_on
-                    ? (ecg_k2_mask_only_on
-                        ? "[ECG_K2_MLOAD_CW24] SSSP compact mask-only load ACTIVE\n"
-                        : "[ECG_K2_ILOAD_CW24] SSSP compact indexed load ACTIVE\n")
-                    : ecg_stream_load2_on && ecg_k2_pload_on
-                    ? (ecg_k2_mask_only_on
-                        ? "[ECG_K2_MLOAD] SSSP computed-address masked load "
-                          "+ StreamShield 4B sidecar ACTIVE\n"
-                        : "[ECG_K2_ILOAD] SSSP fused indexed masked load "
-                          "+ StreamShield 4B sidecar ACTIVE\n")
-                    : ecg_k2_pload_on
-                        ? (ecg_k2_mask_only_on
-                            ? "[ECG_K2_MLOAD] SSSP computed-address masked load ACTIVE\n"
-                            : "[ECG_K2_ILOAD] SSSP fused indexed masked load ACTIVE\n")
-                    : ecg_stream_load2_on
-                        ? "[ECG_STREAM_WLOAD2] SSSP request-bound 4B sidecar ACTIVE\n"
-                    : ecg_load2_on
-                        ? "[ECG_WLOAD2] SSSP fused 4B sidecar ACTIVE\n"
-                        : "[ECG_PACKED8_K2] SSSP Schedule-2 packed record path ACTIVE\n");
+                compact_pair_ok && ecg_bind_iload_on
+                    ? (ecg_bind_computed_address_on
+                        ? "[ECG_REUSE_BIND_LOAD_CW24] SSSP compact computed-address load ACTIVE\n"
+                        : "[ECG_REUSE_BIND_ILOAD_CW24] SSSP compact indexed load ACTIVE\n")
+                    : ecg_flow_load_on && ecg_bind_iload_on
+                    ? (ecg_bind_computed_address_on
+                        ? "[ECG_REUSE_BIND_LOAD] SSSP computed-address computed-address load "
+                          "+ FlowThrough 4B sidecar ACTIVE\n"
+                        : "[ECG_REUSE_BIND_ILOAD] SSSP fused indexed computed-address load "
+                          "+ FlowThrough 4B sidecar ACTIVE\n")
+                    : ecg_bind_iload_on
+                        ? (ecg_bind_computed_address_on
+                            ? "[ECG_REUSE_BIND_LOAD] SSSP computed-address computed-address load ACTIVE\n"
+                            : "[ECG_REUSE_BIND_ILOAD] SSSP fused indexed computed-address load ACTIVE\n")
+                    : ecg_flow_load_on
+                        ? "[ECG_FLOW_WLOAD] SSSP request-bound 4B sidecar ACTIVE\n"
+                    : ecg_plan_load_on
+                        ? "[ECG_PLAN_WLOAD] SSSP fused 4B sidecar ACTIVE\n"
+                        : "[ECG_PACKED8_REUSE_PLAN] SSSP two-epoch ReusePlan packed record path ACTIVE\n");
     }
 
-    if (ecg_sched_k != 2) {
+    if (ecg_reuse_plan_depth != 2) {
         constexpr int numVtxPerLine = 64 / sizeof(WeightT);
         constexpr int numEpochs = 256;
         static pvector<uint8_t> popt_matrix;
@@ -381,8 +381,8 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
                                     pair_ok ? &pair_sidecars : nullptr,
                                     compact_pair_ok ? &pair_compact : nullptr,
                                     ecg_load_evict_on, ecg_evict_wc, edge_epoch_count,
-                                    ecg_load2_on, ecg_stream_load2_on,
-                                    ecg_k2_pload_on, compact_pair_ok);
+                                    ecg_plan_load_on, ecg_flow_load_on,
+                                    ecg_bind_iload_on, compact_pair_ok);
             }
 
             while (curr_bin_index < local_bins.size() &&
@@ -397,8 +397,8 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
                                     pair_ok ? &pair_sidecars : nullptr,
                                     compact_pair_ok ? &pair_compact : nullptr,
                                     ecg_load_evict_on, ecg_evict_wc, edge_epoch_count,
-                                    ecg_load2_on, ecg_stream_load2_on,
-                                    ecg_k2_pload_on, compact_pair_ok);
+                                    ecg_plan_load_on, ecg_flow_load_on,
+                                    ecg_bind_iload_on, compact_pair_ok);
             }
 
             for (size_t i = curr_bin_index; i < local_bins.size(); i++) {

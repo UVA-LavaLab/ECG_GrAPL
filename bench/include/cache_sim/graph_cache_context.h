@@ -49,7 +49,7 @@
 #endif
 
 #include "../ecg_mode6_builder.h"
-#include "../ecg_epoch_builder.h"
+#include "../ecg_reuse_plan_builder.h"
 #include "../ecg_victim_policy.h"
 
 namespace cache_sim {
@@ -811,11 +811,11 @@ struct AccessHints {
                                         // gem5/Sniper which stamp only on real per-edge delivery.
                                         // Resolves the epoch==0 ambiguity (real epoch-0 delivery is
                                         // still valid; a cleared read is not).
-    // ECG_EDGE_MASK_SCHED: forward schedule of the next-K absolute next-ref epochs
+    // ECG_REUSE_PLAN_DEPTH: forward schedule of the next-K absolute next-ref epochs
     // (sorted ascending) delivered alongside edge_epoch. n=0 => no schedule (inert).
     uint16_t edge_epoch_sched[4] = {0, 0, 0, 0};
     uint8_t  edge_epoch_sched_n = 0;
-    uint8_t  edge_grasp_tier = 0;       // K2-carried 1/2/3 hot/moderate/cold tier
+    uint8_t  edge_grasp_tier = 0;       // ReusePlan-carried 1/2/3 hot/moderate/cold tier
     bool     edge_grasp_tier_valid = false;
 
     // ECG mask encoding constants (2-bit, from ECG -M flag graphConfig.h)
@@ -1397,13 +1397,13 @@ struct GraphCacheContext {
     // AccessHints::edge_epoch so the cache can use >128 epochs.
     std::vector<std::vector<uint16_t>> in_edge_epoch_by_src;
 
-    // ECG_EDGE_MASK_SCHED=K: parallel per-edge forward SCHEDULE — the next-K absolute
+    // ECG_REUSE_PLAN_DEPTH=K: parallel per-edge forward SCHEDULE — the next-K absolute
     // next-ref epochs of dest's line (sorted ascending), flattened K-per-edge so edge i
     // occupies [i*K, i*K+K). Lets a resident line self-advance across epochs (matrix-like)
-    // without a reserved way. Built by buildInEdgeMasks_PR when ECG_EDGE_MASK_SCHED set.
+    // without a reserved way. Built by buildInEdgeMasks_PR when ECG_REUSE_PLAN_DEPTH set.
     std::vector<std::vector<uint16_t>> in_edge_epoch_sched_by_src;
     std::vector<std::vector<uint8_t>> in_edge_grasp_tier_by_src;
-    uint32_t edge_epoch_sched_k = 0;  // K (0 = disabled / single-epoch legacy path)
+    uint32_t edge_epoch_reuse_plan_depth = 0;  // K (0 = disabled / single-epoch legacy path)
 
     // === OUT-edge per-edge masks (dual-direction capability) ===
     // The mirror of in_edge_masks_by_src for kernels that traverse the OUT edge
@@ -2309,7 +2309,7 @@ struct GraphCacheContext {
     //   [26:33] POPT quant (7 bits)
     //   [33:64] prefetch target (31 bits)
     inline uint32_t configuredEpochScheduleK() const {
-        const char* value = std::getenv("ECG_EDGE_MASK_SCHED");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DEPTH");
         if (!value) return 0;
         int parsed = std::atoi(value);
         if (parsed <= 0) return 0;
@@ -2324,17 +2324,17 @@ struct GraphCacheContext {
         if (count < 2) count = 2;
         if (count > 65535) count = 65535;
         if (configuredEpochScheduleK() == 2)
-            count = ecg_epoch::normalizeK2EpochCount(count);
+            count = ecg_reuse_plan::normalizeReusePlanEpochCount(count);
         return count;
     }
 
     template<typename GraphT>
-    void buildK2EpochSchedule(
+    void buildReusePlanEpochSchedule(
             const GraphT& g, bool push_out_edges, uint32_t ne, bool linemin,
             std::vector<std::vector<uint16_t>>& target,
             std::vector<std::vector<uint8_t>>& tier_target) {
-        std::vector<std::vector<ecg_epoch::EpochPair>> pairs;
-        ecg_epoch::buildInEdgeEpochPairs(
+        std::vector<std::vector<ecg_reuse_plan::ReusePlan>> pairs;
+        ecg_reuse_plan::buildInEdgeReusePlans(
             g, 16, ne, linemin, pairs, push_out_edges);
         target.assign(pairs.size(), {});
         tier_target.assign(pairs.size(), {});
@@ -2365,8 +2365,8 @@ struct GraphCacheContext {
         in_edge_grasp_tier_by_src.clear();
         in_edge_grasp_tier_by_src.resize(n);
         if (n == 0) return;
-        uint32_t sched_k = configuredEpochScheduleK();
-        if (sched_k == 2 && exact_off.empty())
+        uint32_t reuse_plan_depth = configuredEpochScheduleK();
+        if (reuse_plan_depth == 2 && exact_off.empty())
             registerOutAdjacencyExact(g);
 
         // ECG_EDGE_MASK_EXACT: fill the per-edge POPT field [26:33] with the
@@ -2388,12 +2388,12 @@ struct GraphCacheContext {
         // the 16 vertices sharing dest's cache line) instead of just dest's — matches
         // P-OPT's per-line granularity. 16x build cost, fully parallel.
         const bool edge_mask_linemin = std::getenv("ECG_EDGE_MASK_LINEMIN") != nullptr;
-        // ECG_EDGE_MASK_SCHED=K: also store the next-K (not just the soonest) line
+        // ECG_REUSE_PLAN_DEPTH=K: also store the next-K (not just the soonest) line
         // next-ref epochs per edge, so a resident line self-advances as cur_epoch passes
         // each — recovering the matrix's per-epoch dimension. K in [0,4] (0=disabled).
         // Most effective WITH linemin (multiple vertices/line => multiple distinct
-        // future touches of the line). edge_epoch_sched_k records the active K.
-        edge_epoch_sched_k = sched_k;
+        // future touches of the line). edge_epoch_reuse_plan_depth records the active K.
+        edge_epoch_reuse_plan_depth = reuse_plan_depth;
         edge_epoch_count = configuredEdgeEpochCount(
             edge_epoch_count ? edge_epoch_count : 32u);
         // ECG_EDGE_MASK_PACK: enforce the REAL packed4 spare-bit cap — the epoch must fit
@@ -2407,9 +2407,9 @@ struct GraphCacheContext {
         // switch under CHARGED=1 (and is free under CHARGED=0 / ISA delivery). For large
         // graphs (e.g. kron-s24, id_bits=24) the 8B record is already required, so the
         // 32-bit cap throws away epoch resolution for NO bandwidth saving.
-        // Schedule-2 uses its own 64-bit dest32+tier2+epoch15+epoch15 record, so this
-        // legacy 32/64-bit single-epoch cap does not apply to K2.
-        if (std::getenv("ECG_EDGE_MASK_PACK") && sched_k != 2) {
+        // two-epoch ReusePlan uses its own 64-bit dest32+tier2+epoch15+epoch15 record, so this
+        // legacy 32/64-bit single-epoch cap does not apply to ReusePlan.
+        if (std::getenv("ECG_EDGE_MASK_PACK") && reuse_plan_depth != 2) {
             uint32_t pack_bits = 32;
             if (const char* pb = std::getenv("ECG_EDGE_MASK_PACK_BITS")) {
                 pack_bits = ((uint32_t)std::atoi(pb) >= 64) ? 64u : 32u;
@@ -2476,7 +2476,7 @@ struct GraphCacheContext {
             auto& eps = in_edge_epoch_by_src[src];
             if (edge_mask_epoch) eps.resize(neighbors.size(), 0);
             auto& sch = in_edge_epoch_sched_by_src[src];
-            if (edge_mask_epoch && sched_k) sch.assign(neighbors.size() * sched_k, 0);
+            if (edge_mask_epoch && reuse_plan_depth) sch.assign(neighbors.size() * reuse_plan_depth, 0);
 
             for (size_t i = 0; i < neighbors.size(); i++) {
                 uint32_t dest = neighbors[i];
@@ -2536,12 +2536,12 @@ struct GraphCacheContext {
                     if (i < eps.size()) eps[i] = static_cast<uint16_t>(
                         best_ep >= kNumEpochs5 ? (kNumEpochs5 - 1) : best_ep);  // FULL epoch (untruncated)
 
-                    // ECG_EDGE_MASK_SCHED: build the next-K forward schedule (additive;
+                    // ECG_REUSE_PLAN_DEPTH: build the next-K forward schedule (additive;
                     // leaves eps[i]/best_ep above untouched so the sched-off path stays
                     // byte-identical). Collect up to K forward refs of EACH vertex on the
                     // line (positions lo..lo+K), plus the wrap ref for vertices with no
                     // out-neighbor > src; keep the K SOONEST distances as the schedule.
-                    if (sched_k && i * sched_k < sch.size()) {
+                    if (reuse_plan_depth && i * reuse_plan_depth < sch.size()) {
                         constexpr int kCandCap = 4 * numVtxPerLine;  // 64
                         std::pair<uint32_t, uint32_t> cand[kCandCap];  // (dist, epoch)
                         int nc = 0;
@@ -2552,7 +2552,7 @@ struct GraphCacheContext {
                             while (lo < hi) { int64_t mid = (lo + hi) >> 1;
                                 if ((uint32_t)exact_nbr[mid] > src) hi = mid; else lo = mid + 1; }
                             if (lo < b) {
-                                for (int64_t p = lo; p < b && p < lo + (int64_t)sched_k && nc < kCandCap; ++p) {
+                                for (int64_t p = lo; p < b && p < lo + (int64_t)reuse_plan_depth && nc < kCandCap; ++p) {
                                     uint32_t nb = (uint32_t)exact_nbr[p];
                                     uint32_t ep = (uint32_t)(((uint64_t)nb * kNumEpochs5) / std::max<uint32_t>(1u, n));
                                     if (ep >= kNumEpochs5) ep = kNumEpochs5 - 1;
@@ -2569,8 +2569,8 @@ struct GraphCacheContext {
                                   [](const std::pair<uint32_t, uint32_t>& x,
                                      const std::pair<uint32_t, uint32_t>& y) { return x.first < y.first; });
                         uint32_t fallback = best_ep >= kNumEpochs5 ? (kNumEpochs5 - 1) : best_ep;
-                        for (uint32_t k = 0; k < sched_k; ++k)
-                            sch[i * sched_k + k] = (k < (uint32_t)nc)
+                        for (uint32_t k = 0; k < reuse_plan_depth; ++k)
+                            sch[i * reuse_plan_depth + k] = (k < (uint32_t)nc)
                                 ? static_cast<uint16_t>(cand[k].second)
                                 : static_cast<uint16_t>(fallback);
                     }
@@ -2595,11 +2595,11 @@ struct GraphCacheContext {
                 masks[i] = mask;
             }
         }
-        // Schedule-2 is shared with gem5/Sniper through ecg_epoch_builder.h.
-        // Overwrite the legacy local K2 construction so all three simulators
+        // two-epoch ReusePlan is shared with gem5/Sniper through ecg_reuse_plan_builder.h.
+        // Overwrite the legacy local ReusePlan construction so all three simulators
         // use exactly the same second-reference and wrap semantics.
-        if (edge_mask_epoch && sched_k == 2) {
-            buildK2EpochSchedule(
+        if (edge_mask_epoch && reuse_plan_depth == 2) {
+            buildReusePlanEpochSchedule(
                 g, false, kNumEpochs5, edge_mask_linemin,
                 in_edge_epoch_sched_by_src, in_edge_grasp_tier_by_src);
         }
@@ -2635,13 +2635,13 @@ struct GraphCacheContext {
         out_edge_epoch_sched_by_src.assign(n, {});
         out_edge_grasp_tier_by_src.assign(n, {});
         if (n == 0) return;
-        const uint32_t sched_k = configuredEpochScheduleK();
+        const uint32_t reuse_plan_depth = configuredEpochScheduleK();
         edge_epoch_count = configuredEdgeEpochCount(
             edge_epoch_count ? edge_epoch_count : 32u);
         const uint32_t ne = edge_epoch_count ? edge_epoch_count : 32u;
         constexpr int numVtxPerLine = 16;
         const bool linemin = std::getenv("ECG_EDGE_MASK_LINEMIN") != nullptr;
-        if (sched_k == 2) edge_epoch_sched_k = 2;
+        if (reuse_plan_depth == 2) edge_epoch_reuse_plan_depth = 2;
 
         // Build the sorted IN-adjacency (the transpose of OUT traversal) once.
         exact_in_nv = n;
@@ -2706,8 +2706,8 @@ struct GraphCacheContext {
                 masks[i] = mask;
             }
         }
-        if (sched_k == 2) {
-            buildK2EpochSchedule(
+        if (reuse_plan_depth == 2) {
+            buildReusePlanEpochSchedule(
                 g, true, ne, linemin, out_edge_epoch_sched_by_src,
                 out_edge_grasp_tier_by_src);
         }
@@ -2744,13 +2744,13 @@ struct GraphCacheContext {
         in_edge_epoch_sched_by_src.assign(n, {});
         in_edge_grasp_tier_by_src.assign(n, {});
         if (n == 0) return;
-        const uint32_t sched_k = configuredEpochScheduleK();
+        const uint32_t reuse_plan_depth = configuredEpochScheduleK();
         edge_epoch_count = configuredEdgeEpochCount(
             edge_epoch_count ? edge_epoch_count : 32u);
         const uint32_t ne = edge_epoch_count ? edge_epoch_count : 32u;
         constexpr int numVtxPerLine = 16;
         const bool linemin = std::getenv("ECG_EDGE_MASK_LINEMIN") != nullptr;
-        if (sched_k == 2) edge_epoch_sched_k = 2;
+        if (reuse_plan_depth == 2) edge_epoch_reuse_plan_depth = 2;
 
         // LOCAL sorted OUT-adjacency (the transpose of IN traversal) for next-ref.
         std::vector<int64_t> off((size_t)n + 1, 0);
@@ -2813,8 +2813,8 @@ struct GraphCacheContext {
                 masks[i] = mask;
             }
         }
-        if (sched_k == 2) {
-            buildK2EpochSchedule(
+        if (reuse_plan_depth == 2) {
+            buildReusePlanEpochSchedule(
                 g, false, ne, linemin, in_edge_epoch_sched_by_src,
                 in_edge_grasp_tier_by_src);
         }
@@ -2981,16 +2981,16 @@ struct GraphCacheContext {
         hints_for_thread().edge_epoch =
             (src < eps.size() && edge_pos < eps[src].size()) ? eps[src][edge_pos] : 0;
         hints_for_thread().edge_epoch_valid = true;  // a real per-edge epoch was delivered
-        // ECG_EDGE_MASK_SCHED: deliver the direction-matched forward schedule.
-        // Schedule-2 rows for both directions come from the shared epoch builder;
+        // ECG_REUSE_PLAN_DEPTH: deliver the direction-matched forward schedule.
+        // two-epoch ReusePlan rows for both directions come from the shared epoch builder;
         // PR retains its legacy IN-direction K3/K4 ablation support.
         {
             auto& H = hints_for_thread();
             const auto& schedules = (dir == EdgeMaskDir::OUT)
                 ? out_edge_epoch_sched_by_src : in_edge_epoch_sched_by_src;
-            if (edge_epoch_sched_k && src < schedules.size()) {
+            if (edge_epoch_reuse_plan_depth && src < schedules.size()) {
                 const auto& sc = schedules[src];
-                uint32_t K = edge_epoch_sched_k;
+                uint32_t K = edge_epoch_reuse_plan_depth;
                 uint8_t kn = static_cast<uint8_t>(std::min<uint32_t>(K, 4));
                 if (edge_pos * K + kn <= sc.size()) {
                     H.edge_epoch_sched_n = kn;

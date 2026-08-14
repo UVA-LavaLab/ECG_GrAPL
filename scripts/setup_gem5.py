@@ -70,8 +70,8 @@ OVERLAY_FILE_MAP = {
         "mem/cache/replacement_policies/ecg_rp.cc",
     "mem/cache/replacement_policies/ecg_victim_policy.hh":
         "mem/cache/replacement_policies/ecg_victim_policy.hh",
-    "mem/cache/replacement_policies/ecg_epoch_request_ext.hh":
-        "mem/cache/replacement_policies/ecg_epoch_request_ext.hh",
+    "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh":
+        "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh",
     "mem/cache/replacement_policies/graph_cache_context_gem5.hh":
         "mem/cache/replacement_policies/graph_cache_context_gem5.hh",
     "mem/cache/replacement_policies/GraphReplacementPolicies.py":
@@ -103,7 +103,7 @@ PATCH_FILES = [
 # These are tracked as patches (not full file copies) so upstream gem5
 # changes are easier to merge.
 UNIFIED_DIFF_PATCHES = [
-    # Architectural K2 state: user-level custom CSRs 0x800/0x801 backed by
+    # Architectural ReusePlan state: user-level custom CSRs 0x800/0x801 backed by
     # per-hart RISC-V MiscReg storage. This state is automatically copied and
     # checkpointed by gem5's ISA machinery.
     ("arch/riscv/ecg_csr.patch", "."),
@@ -117,7 +117,7 @@ UNIFIED_DIFF_PATCHES = [
     # prefetcher's latency contract for cycle-accurate parity.
     ("mem/cache/prefetch/queued_cc_latency.patch", "."),
     # ECG masked-load OoO producer: bind the per-dynamic graph mask
-    # ({dest,tier,epoch1,epoch2} for K2) to the property load's own demand
+    # ({dest,tier,epoch1,epoch2} for ReusePlan) to the property load's own demand
     # Request so it reaches the LLC without relying on a shared mailbox under
     # DerivO3CPU. exec_context.hh adds default-noop hint hooks;
     # o3/dyn_inst.hh overrides it with per-dynamic state; o3/lsq.cc attaches the
@@ -126,18 +126,18 @@ UNIFIED_DIFF_PATCHES = [
     ("cpu/exec_context_ecg_producer.patch", "."),
     ("cpu/o3/dyn_inst_ecg_producer.patch", "."),
     ("cpu/o3/lsq_ecg_producer.patch", "."),
-    # Pass the allocating Request to replacement victim selection so K2 uses
+    # Pass the allocating Request to replacement victim selection so ReusePlan uses
     # the request-carried current epoch/context rather than global magic state.
     ("mem/cache/ecg_victim_request.patch", "."),
-    # Coalesced K2 requests retain the latest same-hart/context sequence and
+    # Coalesced ReusePlan requests retain the latest same-hart/context sequence and
     # fail closed on cross-hart/context or ordinary-request conflicts.
     ("mem/cache/mshr_ecg_merge.patch", "."),
-    # StreamShield: packed ECG record misses retain normal L1/L2 fills but
+    # FlowThrough: packed ECG record misses retain normal L1/L2 fills but
     # suppress shared-L3 allocation through the MSHR allocOnFill bit.
-    ("mem/request_stream_bypass.patch", "."),
-    ("mem/cache/base_stream_bypass.patch", "."),
-    ("mem/cache/base_stream_bypass_request_flag.patch", "."),
-    ("mem/cache/prefetch_stream_bypass.patch", "."),
+    ("mem/request_flowthrough.patch", "."),
+    ("mem/cache/base_flowthrough.patch", "."),
+    ("mem/cache/base_flowthrough_request_flag.patch", "."),
+    ("mem/cache/prefetch_flowthrough.patch", "."),
 ]
 
 
@@ -463,23 +463,23 @@ def apply_unified_diff_patches():
             ),
             "mem/cache/mshr_ecg_merge.patch": (
                 target / "src/mem/cache/mshr.hh",
-                "EcgMshrState",
+                "EcgReuseBindMshrState",
             ),
-            "mem/request_stream_bypass.patch": (
+            "mem/request_flowthrough.patch": (
                 target / "src/mem/request.hh",
-                "ECG_STREAM_BYPASS",
+                "ECG_FLOWTHROUGH",
             ),
-            "mem/cache/base_stream_bypass.patch": (
+            "mem/cache/base_flowthrough.patch": (
                 target / "src/mem/cache/base.hh",
                 "allow_alloc_on_fill",
             ),
-            "mem/cache/base_stream_bypass_request_flag.patch": (
+            "mem/cache/base_flowthrough_request_flag.patch": (
                 target / "src/mem/cache/base.cc",
-                "GEM5_ECG_STREAM_REQUEST_BOUND",
+                "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND",
             ),
-            "mem/cache/prefetch_stream_bypass.patch": (
+            "mem/cache/prefetch_flowthrough.patch": (
                 target / "src/mem/cache/prefetch/queued.cc",
-                "pfInfo.isStreamBypass()",
+                "pfInfo.isFlowThrough()",
             ),
         }
         marker_target = marker_targets.get(overlay_rel)
@@ -558,22 +558,22 @@ def apply_current_vertex_pseudo_inst_patch():
             + "    }\n\n"
             + content[end:]
         )
-    legacy_k2 = (
+    legacy_reuse_plan = (
         "        uint32_t dest_id = static_cast<uint32_t>(threadid & 0xFFFFFFFFULL);\n"
         "        uint16_t epoch1 = static_cast<uint16_t>((threadid >> 32) & 0xFFFFULL);\n"
         "        uint16_t epoch2 = static_cast<uint16_t>((threadid >> 48) & 0xFFFFULL);\n"
         "        replacement_policy::graph::setDecodedEcgExtractHint2(dest_id, epoch1, epoch2);"
     )
-    tiered_k2 = (
+    tiered_reuse_plan = (
         "        uint32_t dest_id = static_cast<uint32_t>(threadid & 0xFFFFFFFFULL);\n"
         "        uint8_t tier = static_cast<uint8_t>((threadid >> 32) & 0x3ULL);\n"
         "        uint16_t epoch1 = static_cast<uint16_t>((threadid >> 34) & 0x7FFFULL);\n"
         "        uint16_t epoch2 = static_cast<uint16_t>((threadid >> 49) & 0x7FFFULL);\n"
         "        replacement_policy::graph::setDecodedEcgExtractHint2(dest_id, tier, epoch1, epoch2);"
     )
-    if legacy_k2 in content:
-        content = content.replace(legacy_k2, tiered_k2, 1)
-    legacy_k2_wrapped = (
+    if legacy_reuse_plan in content:
+        content = content.replace(legacy_reuse_plan, tiered_reuse_plan, 1)
+    legacy_reuse_plan_wrapped = (
         "        uint32_t dest_id = static_cast<uint32_t>(threadid & 0xFFFFFFFFULL);\n"
         "        uint16_t epoch1 =\n"
         "            static_cast<uint16_t>((threadid >> 32) & 0xFFFFULL);\n"
@@ -582,7 +582,7 @@ def apply_current_vertex_pseudo_inst_patch():
         "        replacement_policy::graph::setDecodedEcgExtractHint2(\n"
         "            dest_id, epoch1, epoch2);"
     )
-    tiered_k2_wrapped = (
+    tiered_reuse_plan_wrapped = (
         "        uint32_t dest_id = static_cast<uint32_t>(threadid & 0xFFFFFFFFULL);\n"
         "        uint8_t tier = static_cast<uint8_t>((threadid >> 32) & 0x3ULL);\n"
         "        uint16_t epoch1 =\n"
@@ -592,9 +592,9 @@ def apply_current_vertex_pseudo_inst_patch():
         "        replacement_policy::graph::setDecodedEcgExtractHint2(\n"
         "            dest_id, tier, epoch1, epoch2);"
     )
-    if legacy_k2_wrapped in content:
+    if legacy_reuse_plan_wrapped in content:
         content = content.replace(
-            legacy_k2_wrapped, tiered_k2_wrapped, 1)
+            legacy_reuse_plan_wrapped, tiered_reuse_plan_wrapped, 1)
 
     hint_blocks = []
     if "GRAPHBREW_SET_CONTEXT_WORK_ID" not in content:
@@ -699,26 +699,26 @@ def verify_installation_postconditions():
 
     marker_checks = {
         GEM5_DIR / "src/mem/request.hh": [
-            "ECG_STREAM_BYPASS",
+            "ECG_FLOWTHROUGH",
         ],
         GEM5_DIR / "src/mem/cache/base.cc": [
-            "Request::ECG_STREAM_BYPASS",
-            "GEM5_ECG_STREAM_REQUEST_BOUND",
-            "allocOnFill(pkt->cmd) && !stream_bypass",
-            "allocateMissBuffer(pkt, forward_time, true, !stream_bypass)",
+            "Request::ECG_FLOWTHROUGH",
+            "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND",
+            "allocOnFill(pkt->cmd) && !flowthrough",
+            "allocateMissBuffer(pkt, forward_time, true, !flowthrough)",
         ],
         GEM5_DIR / "src/mem/cache/base.hh": [
             "allow_alloc_on_fill",
         ],
         GEM5_DIR / "src/mem/cache/prefetch/base.cc": [
-            "streamBypass(pkt->req->getFlags()",
+            "flowThrough(pkt->req->getFlags()",
         ],
         GEM5_DIR / "src/mem/cache/prefetch/base.hh": [
-            "isStreamBypass",
-            "bool streamBypass",
+            "isFlowThrough",
+            "bool flowThrough",
         ],
         GEM5_DIR / "src/mem/cache/prefetch/queued.cc": [
-            "pfInfo.isStreamBypass()",
+            "pfInfo.isFlowThrough()",
             "GRAPHBREW-PREFETCH-LATENCY-GUARD",
         ],
         GEM5_DIR / "src/mem/cache/prefetch/queued.hh": [
@@ -740,10 +740,10 @@ def verify_installation_postconditions():
             "GRAPHBREW_ECG_EXTRACT2_WORK_ID",
         ],
         GEM5_DIR / "src/arch/riscv/isa/decoder.isa": [
-            "ecg_stream_load2",
-            "ecg_stream_load2_compact",
-            "ecg_load2",
-            "ecg_load_k2_compact",
+            "ecg_flow_load",
+            "ecg_flow_load_compact",
+            "ecg_plan_load",
+            "ecg_bind_iload_compact",
         ],
         GEM5_DIR / "src/arch/riscv/regs/misc.hh": [
             "CSR_ECG_RECORD_FORMAT",

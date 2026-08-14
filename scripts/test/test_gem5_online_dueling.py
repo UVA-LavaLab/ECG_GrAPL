@@ -16,12 +16,12 @@ spec.loader.exec_module(roi_matrix)
 def valid_row():
     return {
         "timing_valid_for_speedup": "1",
-        "gem5_k2_dueling_request_bound_victims": 20000,
-        "gem5_k2_dueling_leader_samples": 2048,
-        "gem5_k2_dueling_follower_selections": 18000,
-        "gem5_k2_dueling_completed_windows": 2,
-        "gem5_k2_dueling_winner_changes": 0,
-        "gem5_k2_dueling_follower_variant_overrides": 0,
+        "gem5_reuse_plan_dueling_request_bound_victims": 20000,
+        "gem5_reuse_plan_dueling_leader_samples": 2048,
+        "gem5_reuse_plan_dueling_follower_selections": 18000,
+        "gem5_reuse_plan_dueling_completed_windows": 2,
+        "gem5_reuse_plan_dueling_winner_changes": 0,
+        "gem5_reuse_plan_dueling_follower_variant_overrides": 0,
     }
 
 
@@ -33,14 +33,14 @@ def test_online_dueling_activity_accepts_full_roi_window():
 
 def test_online_dueling_activity_rejects_partial_window():
     row = valid_row()
-    row["gem5_k2_dueling_leader_samples"] = 1023
+    row["gem5_reuse_plan_dueling_leader_samples"] = 1023
     assert not roi_matrix.validate_online_dueling_activity(
         row, required=True)
     assert row["timing_valid_for_speedup"] == "0"
     assert "leader_samples<1024" in row["error"]
 
 
-def test_online_dueling_activity_is_optional_for_static_k2():
+def test_online_dueling_activity_is_optional_for_static_reuse_plan():
     row = {}
     assert roi_matrix.validate_online_dueling_activity(
         row, required=False)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Multi-kernel 3-simulator K2 mechanism conformance + full debug.
+"""Multi-kernel 3-simulator ReusePlan mechanism conformance + full debug.
 
 The eviction DECISION (`ecg_victim_policy.h`) is kernel-AGNOSTIC and byte-identical across
 cache_sim / gem5 / Sniper, so the ECG policy must obey the same eviction spec for EVERY
@@ -8,7 +8,7 @@ each simulator with the eviction trace on, asserts every L3
 eviction obeys the policy spec (reusing `verify_ecg.py`'s `verify_trace`), AND captures the
 per-sim `[ECG-CONFIG …]` banner (full debug: each run proves the policy/mode/variant it ran).
 
-This certifies DECISION and Schedule-2 delivery equivalence across kernels.
+This certifies DECISION and two-epoch ReusePlan delivery equivalence across kernels.
 PR consumes IN-edge records; BFS/SSSP/BC consume transpose-correct OUT-edge
 records; CC follows OUT-edge records under its undirected/symmetric contract.
 
@@ -83,15 +83,15 @@ GEM5_RISCV_KERNELS = {"pr", "bfs", "bc", "cc", "sssp"}
 # prefetch the equivalence is SPEC-level (every eviction obeys the ECG spec), not
 # byte-identical counts.
 STREAM_PF_DEGREE = 0
-SCHEDULE_K = 0
-STREAM_BYPASS = False
-ADAPTIVE_STREAM_BYPASS = False
+REUSE_PLAN_DEPTH = 0
+FLOWTHROUGH = False
+ADAPTIVE_FLOWTHROUGH = False
 GEM5_ISA_VARIANT = "indexed"
 RUN_META = {}
 
 
 def effective_variant(kernel):
-    if SCHEDULE_K == 2:
+    if REUSE_PLAN_DEPTH == 2:
         if kernel == "pr":
             return "epoch_first"
         if kernel in ("bfs", "sssp"):
@@ -113,20 +113,20 @@ def detailed_row_provenance(sim, kernel):
         "variant": (
             row.get("ecg_variant_effective") ==
             effective_variant(kernel)),
-        "schedule_k": row.get("ecg_schedule_k") == str(SCHEDULE_K),
+        "reuse_plan_depth": row.get("ecg_reuse_plan_depth") == str(REUSE_PLAN_DEPTH),
     }
-    if GEM5_ISA_VARIANT == "mask":
-        checks["isa_variant"] = row.get("ecg_isa_variant") == "mask"
+    if GEM5_ISA_VARIANT == "computed":
+        checks["isa_variant"] = row.get("ecg_isa_variant") == "computed"
     return all(checks.values()), checks
 
 
 def sniper_policy():
-    if SCHEDULE_K == 2 and ADAPTIVE_STREAM_BYPASS:
-        return "ECG:K2_ADAPTIVE_STREAMSHIELD"
-    if SCHEDULE_K == 2 and STREAM_BYPASS:
-        return "ECG:K2_STREAMSHIELD"
-    if SCHEDULE_K == 2:
-        return "ECG:K2"
+    if REUSE_PLAN_DEPTH == 2 and ADAPTIVE_FLOWTHROUGH:
+        return "ECG:REUSE_PLAN_ADAPTIVE_FLOWTHROUGH"
+    if REUSE_PLAN_DEPTH == 2 and FLOWTHROUGH:
+        return "ECG:REUSE_PLAN_FLOWTHROUGH"
+    if REUSE_PLAN_DEPTH == 2:
+        return "ECG:REUSE_PLAN"
     return "ECG:ECG_GRASP_POPT"
 
 
@@ -245,7 +245,7 @@ def evidence_inputs(
         "trace_oracle": Path(ecg.__file__).resolve(),
         "roi_matrix": ecg.ROI_MATRIX,
         "policy_source": ecg.ROOT / "bench/include/ecg_victim_policy.h",
-        "epoch_builder": ecg.ROOT / "bench/include/ecg_epoch_builder.h",
+        "epoch_builder": ecg.ROOT / "bench/include/ecg_reuse_plan_builder.h",
     }
     for kernel in kernels:
         paths[f"cache_sim_{kernel}"] = (
@@ -348,7 +348,7 @@ def _stale(binp, kernel):
     bmt = binp.stat().st_mtime
     inc = ecg.ROOT / "bench" / "include"
     deps = [inc / "cache_sim" / "cache_sim.h", inc / "ecg_victim_policy.h",
-            inc / "ecg_epoch_builder.h", inc / "ecg_mode6_builder.h",
+            inc / "ecg_reuse_plan_builder.h", inc / "ecg_mode6_builder.h",
             inc / "cache_sim" / "graph_cache_context.h",
             ecg.ROOT / "bench" / "src_sim" / f"{kernel}.cc"]
     newer = [d.name for d in deps if d.exists() and d.stat().st_mtime > bmt]
@@ -388,13 +388,13 @@ def run_cache(kernel):
            "ECG_VARIANT": effective_variant(kernel), "ECG_DEBUG": "1"}
     env["CACHE_ECG_EPOCH_REGION_INDICES"] = (
         cache_sim_ecg_epoch_region_indices(kernel))
-    if SCHEDULE_K:
-        env["ECG_EDGE_MASK_SCHED"] = str(SCHEDULE_K)
-        env["ECG_K2_DELIVERY_TRACE"] = "32"
-    if STREAM_BYPASS:
-        env["ECG_STREAM_BYPASS"] = "1"
-        if ADAPTIVE_STREAM_BYPASS:
-            env["ECG_STREAM_BYPASS_ADAPTIVE"] = "1"
+    if REUSE_PLAN_DEPTH:
+        env["ECG_REUSE_PLAN_DEPTH"] = str(REUSE_PLAN_DEPTH)
+        env["ECG_REUSE_PLAN_DELIVERY_TRACE"] = "32"
+    if FLOWTHROUGH:
+        env["ECG_FLOWTHROUGH"] = "1"
+        if ADAPTIVE_FLOWTHROUGH:
+            env["ECG_FLOWTHROUGH_ADAPTIVE"] = "1"
     if kernel in ("bfs", "bc", "cc", "sssp"):
         # Out-traversal kernels read property[dest] over out_neigh(u); deliver the FAITHFUL per-edge
         # OUT-direction next-ref masks (ECG_EDGE_MASKS=1, epoch = next in_neigh(dest) > u) — the same
@@ -439,7 +439,7 @@ def _roi_log(out):
     logs = sorted((out / "logs").glob("*.log")) if (out / "logs").exists() else []
     text = logs[0].read_text(errors="ignore") if logs else ""
     # gem5 redirects benchmark stdout/stderr away from the simulator log. Append
-    # them so K2 EXPECT records from the guest can be matched against RECV records
+    # them so ReusePlan EXPECT records from the guest can be matched against RECV records
     # emitted by the decoder/backend.
     for path in sorted(out.rglob("benchmark_stderr.txt")):
         text += "\n" + path.read_text(errors="ignore")
@@ -451,9 +451,9 @@ def _roi_log(out):
 
 
 def run_gem5(kernel):
-    """gem5 <kernel> with ECG_GRASP_POPT + coverage geometry. Schedule-2 runs
-    all five kernels on RISC-V through the request-bound K2 property load. The
-    record/sidecar stream remains separate and may carry StreamShield."""
+    """gem5 <kernel> with ECG_GRASP_POPT + coverage geometry. two-epoch ReusePlan runs
+    all five kernels on RISC-V through the request-bound ReusePlan property load. The
+    record/sidecar stream remains separate and may carry FlowThrough."""
     out = Path("/tmp") / f"equivk_gem5_{GEM5_ISA_VARIANT}_{kernel}"
     shutil.rmtree(out, ignore_errors=True)
     guest = (
@@ -461,7 +461,7 @@ def run_gem5(kernel):
     guest_stale = stale_dependencies(guest, (
         ecg.ROOT / "bench/src_gem5" / f"{kernel}.cc",
         ecg.ROOT / "bench/include/gem5_sim/gem5_harness.h",
-        ecg.ROOT / "bench/include/ecg_epoch_builder.h",
+        ecg.ROOT / "bench/include/ecg_reuse_plan_builder.h",
     ))
     gem5_stale = stale_dependencies(GEM5_RISCV, (
         ecg.ROOT /
@@ -472,7 +472,7 @@ def run_gem5(kernel):
         "replacement_policies/ecg_victim_policy.hh",
         ecg.ROOT /
         "bench/include/gem5_sim/overlays/mem/cache/"
-        "replacement_policies/ecg_epoch_request_ext.hh",
+        "replacement_policies/ecg_reuse_bind_request_ext.hh",
         ecg.ROOT /
         "bench/include/gem5_sim/overlays/arch/riscv/isa/"
         "decoder_ecg_extract.isa",
@@ -498,17 +498,17 @@ def run_gem5(kernel):
                "ECG_VARIANT": effective_variant(kernel), "ECG_EVICT_TRACE": "4000",
                "ECG_EVICT_TRACE_ROI": "1", "ECG_STORED_REFRESH": "1",
                "ECG_DEBUG": "1"}
-    if SCHEDULE_K:
-        env["ECG_EDGE_MASK_SCHED"] = str(SCHEDULE_K)
-        env["ECG_K2_DELIVERY_TRACE"] = "32"
-    if STREAM_BYPASS:
-        env["ECG_STREAM_BYPASS"] = "1"
-        env["ECG_STREAM_BYPASS_TRACE"] = "8"
-        if ADAPTIVE_STREAM_BYPASS:
-            env["ECG_STREAM_BYPASS_ADAPTIVE"] = "1"
-    explicit = {"ECG_K2_DELIVERY_TRACE": "32"}
-    if STREAM_BYPASS:
-        explicit["ECG_STREAM_BYPASS_TRACE"] = "8"
+    if REUSE_PLAN_DEPTH:
+        env["ECG_REUSE_PLAN_DEPTH"] = str(REUSE_PLAN_DEPTH)
+        env["ECG_REUSE_PLAN_DELIVERY_TRACE"] = "32"
+    if FLOWTHROUGH:
+        env["ECG_FLOWTHROUGH"] = "1"
+        env["ECG_FLOWTHROUGH_TRACE"] = "8"
+        if ADAPTIVE_FLOWTHROUGH:
+            env["ECG_FLOWTHROUGH_ADAPTIVE"] = "1"
+    explicit = {"ECG_REUSE_PLAN_DELIVERY_TRACE": "32"}
+    if FLOWTHROUGH:
+        explicit["ECG_FLOWTHROUGH_TRACE"] = "8"
     env["GRAPHBREW_EXPLICIT_CELL_ENV"] = json.dumps(
         explicit, sort_keys=True, separators=(",", ":"))
     cmd = [sys.executable, str(ecg.ROI_MATRIX), "--suite", "gem5", "--no-build",
@@ -554,7 +554,7 @@ def run_sniper(kernel):
     workload_stale = stale_dependencies(workload, (
         ecg.ROOT / "bench/src_sniper/sg_kernel.cc",
         ecg.ROOT / "bench/include/sniper_sim/sniper_harness.h",
-        ecg.ROOT / "bench/include/ecg_epoch_builder.h",
+        ecg.ROOT / "bench/include/ecg_reuse_plan_builder.h",
         ecg.ROOT / "bench/include/ecg_victim_policy.h",
     ))
     sniper_stale = stale_dependencies(sniper_binary, (
@@ -579,17 +579,17 @@ def run_sniper(kernel):
     env = {**os.environ, "SNIPER_ECG_MODE": "ECG_GRASP_POPT",
            "ECG_VARIANT": effective_variant(kernel),
            "ECG_EVICT_TRACE": "4000", "ECG_DEBUG": "1"}
-    if SCHEDULE_K:
-        env["ECG_EDGE_MASK_SCHED"] = str(SCHEDULE_K)
-        env["ECG_K2_DELIVERY_TRACE"] = "32"
-    if STREAM_BYPASS:
-        env["ECG_STREAM_BYPASS"] = "1"
-        env["ECG_STREAM_BYPASS_TRACE"] = "8"
-        if ADAPTIVE_STREAM_BYPASS:
-            env["ECG_STREAM_BYPASS_ADAPTIVE"] = "1"
-    explicit = {"ECG_K2_DELIVERY_TRACE": "32"}
-    if STREAM_BYPASS:
-        explicit["ECG_STREAM_BYPASS_TRACE"] = "8"
+    if REUSE_PLAN_DEPTH:
+        env["ECG_REUSE_PLAN_DEPTH"] = str(REUSE_PLAN_DEPTH)
+        env["ECG_REUSE_PLAN_DELIVERY_TRACE"] = "32"
+    if FLOWTHROUGH:
+        env["ECG_FLOWTHROUGH"] = "1"
+        env["ECG_FLOWTHROUGH_TRACE"] = "8"
+        if ADAPTIVE_FLOWTHROUGH:
+            env["ECG_FLOWTHROUGH_ADAPTIVE"] = "1"
+    explicit = {"ECG_REUSE_PLAN_DELIVERY_TRACE": "32"}
+    if FLOWTHROUGH:
+        explicit["ECG_FLOWTHROUGH_TRACE"] = "8"
     env["GRAPHBREW_EXPLICIT_CELL_ENV"] = json.dumps(
         explicit, sort_keys=True, separators=(",", ":"))
     # Per-kernel geometry: cc's comp[] (~4KB) and sssp's dist[] fit Sniper's inner
@@ -645,18 +645,18 @@ def main(argv=None):
     ap.add_argument("--stream-prefetch-degree", type=int, default=0,
                     help="cross-sim structure stream-prefetcher degree (0=off, the byte-identical "
                          "baseline; >0 = spec-level equivalence under the realistic prefetcher).")
-    ap.add_argument("--schedule-k", type=int, choices=[0, 2], default=0,
-                    help="enable Schedule-2 delivery and require live K2 pair/distance coverage "
+    ap.add_argument("--reuse-plan-depth", type=int, choices=[0, 2], default=0,
+                    help="enable two-epoch ReusePlan delivery and require live ReusePlan pair/distance coverage "
                          "for PR/BFS/SSSP/BC/CC.")
-    ap.add_argument("--stream-bypass", action="store_true",
-                    help="enable StreamShield and require a live LLC-bypass mechanism trace.")
-    ap.add_argument("--adaptive-stream-bypass", action="store_true",
-                    help="duel LLC allocation versus StreamShield for eligible "
-                         "K2 records (requires --stream-bypass).")
+    ap.add_argument("--flowthrough", action="store_true",
+                    help="enable FlowThrough and require a live placement trace.")
+    ap.add_argument("--adaptive-flowthrough", action="store_true",
+                    help="duel LLC allocation versus FlowThrough for eligible "
+                         "ReusePlan records (requires --flowthrough).")
     ap.add_argument(
-        "--gem5-isa-variant", choices=["indexed", "mask"], default="indexed",
-        help="K2 ISA/model variant for gem5 and Sniper; mask validates "
-             "computed-address K2-M.")
+        "--gem5-isa-variant", choices=["indexed", "computed"], default="indexed",
+        help="ReusePlan ISA/model variant for gem5 and Sniper; computed "
+             "validates computed-address ReuseBind.")
     ap.add_argument(
         "--evidence-dir", type=Path,
         help="Archive a complete manifest, raw traces, ROI rows, and "
@@ -669,23 +669,23 @@ def main(argv=None):
         help="Allow evidence capture from a dirty git worktree.")
     args = ap.parse_args(argv)
 
-    global STREAM_PF_DEGREE, SCHEDULE_K, STREAM_BYPASS
-    global ADAPTIVE_STREAM_BYPASS, GEM5_ISA_VARIANT
+    global STREAM_PF_DEGREE, REUSE_PLAN_DEPTH, FLOWTHROUGH
+    global ADAPTIVE_FLOWTHROUGH, GEM5_ISA_VARIANT
     STREAM_PF_DEGREE = args.stream_prefetch_degree
-    SCHEDULE_K = args.schedule_k
-    STREAM_BYPASS = args.stream_bypass
-    ADAPTIVE_STREAM_BYPASS = args.adaptive_stream_bypass
+    REUSE_PLAN_DEPTH = args.reuse_plan_depth
+    FLOWTHROUGH = args.flowthrough
+    ADAPTIVE_FLOWTHROUGH = args.adaptive_flowthrough
     GEM5_ISA_VARIANT = args.gem5_isa_variant
     RUN_META.clear()
-    if STREAM_BYPASS and SCHEDULE_K != 2:
-        ap.error("--stream-bypass requires --schedule-k 2")
-    if ADAPTIVE_STREAM_BYPASS and not STREAM_BYPASS:
-        ap.error("--adaptive-stream-bypass requires --stream-bypass")
-    if (GEM5_ISA_VARIANT == "mask" and
+    if FLOWTHROUGH and REUSE_PLAN_DEPTH != 2:
+        ap.error("--flowthrough requires --reuse-plan-depth 2")
+    if ADAPTIVE_FLOWTHROUGH and not FLOWTHROUGH:
+        ap.error("--adaptive-flowthrough requires --flowthrough")
+    if (GEM5_ISA_VARIANT == "computed" and
             not (args.gem5 or args.sniper)):
-        ap.error("--gem5-isa-variant mask requires --gem5 or --sniper")
-    if GEM5_ISA_VARIANT == "mask" and SCHEDULE_K != 2:
-        ap.error("--gem5-isa-variant mask requires --schedule-k 2")
+        ap.error("--gem5-isa-variant computed requires --gem5 or --sniper")
+    if GEM5_ISA_VARIANT == "computed" and REUSE_PLAN_DEPTH != 2:
+        ap.error("--gem5-isa-variant computed requires --reuse-plan-depth 2")
 
     required = [ecg.GRAPH]
     required.extend(
@@ -744,11 +744,11 @@ def main(argv=None):
                         ("sniper", args.sniper))
                     if enabled
                 ],
-                "schedule_k": SCHEDULE_K,
+                "reuse_plan_depth": REUSE_PLAN_DEPTH,
                 "isa_variant": GEM5_ISA_VARIANT,
                 "stream_prefetch_degree": STREAM_PF_DEGREE,
-                "stream_bypass": STREAM_BYPASS,
-                "adaptive_stream_bypass": ADAPTIVE_STREAM_BYPASS,
+                "flowthrough": FLOWTHROUGH,
+                "adaptive_flowthrough": ADAPTIVE_FLOWTHROUGH,
             },
             "inputs": evidence_inputs(
                 args.kernels, args.gem5, args.sniper, evidence_dir),
@@ -759,7 +759,7 @@ def main(argv=None):
     preflight = {
         "exact_victim_unit": ecg.run_synthetic(),
         "field_layout_parity": ecg.run_field_parity(),
-        "epoch_pair_unit": ecg.run_epoch_pair_unit(),
+        "reuse_plan_unit": ecg.run_reuse_plan_unit(),
         "unknown_mode_hard_fail": ecg.verify_unknown_mode_hardfails(),
         "unknown_variant_hard_fail":
             ecg.verify_unknown_variant_hardfails(),
@@ -789,10 +789,10 @@ def main(argv=None):
     RUNNERS = {"cache_sim": run_cache, "gem5": run_gem5, "sniper": run_sniper}
     sims_order = [s for s in ("cache_sim", "gem5", "sniper") if s in enabled]
 
-    print("== Multi-kernel 3-sim K2 mechanism conformance ==")
+    print("== Multi-kernel 3-sim ReusePlan mechanism conformance ==")
     variant_label = (
         "PR=epoch_first,BFS/SSSP=degree_first,BC/CC=rrip_first"
-        if SCHEDULE_K else "rrip_first")
+        if REUSE_PLAN_DEPTH else "rrip_first")
     print(f"   graph={ecg.GRAPH.name}  policy=ECG:ECG_GRASP_POPT variant={variant_label}  "
           f"sims={sims_order}")
     print("   (SSSP weights are auto-synthesized by WeightedBuilder)\n")
@@ -808,24 +808,24 @@ def main(argv=None):
             result, banner = RUNNERS[sim](kernel)
             cov = {}
             fused_path_ok = True
-            if SCHEDULE_K:
-                spec_ok = ecg.verify_k2_trace(
+            if REUSE_PLAN_DEPTH:
+                spec_ok = ecg.verify_reuse_plan_trace(
                     f"{sim}/{kernel}", result,
-                    ne=32768 if SCHEDULE_K == 2 else 65535,
+                    ne=32768 if REUSE_PLAN_DEPTH == 2 else 65535,
                     coverage=cov,
                     expected_policy=expected_trace_policy(kernel),
                     require_exact_bind=(
-                        sim == "sniper" and GEM5_ISA_VARIANT == "mask"))
+                        sim == "sniper" and GEM5_ISA_VARIANT == "computed"))
                 bc_dual_load_ok = True
                 if kernel == "bc" and sim == "gem5":
                     bc_dual_load_ok = (
                         {4, 8}.issubset(set(
-                            cov.get("k2_accept_widths", []))) and
-                        cov.get("k2_accept_valid", False))
+                            cov.get("reuse_plan_accept_widths", []))) and
+                        cov.get("reuse_plan_accept_valid", False))
                 elif kernel == "bc" and sim == "sniper":
                     bc_dual_load_ok = (
                         {8, 16}.issubset(set(
-                            cov.get("k2_fused_vertices_per_line", []))))
+                            cov.get("reuse_plan_fused_vertices_per_line", []))))
                 if kernel == "bc" and sim in ("gem5", "sniper"):
                     print(
                         "      BC depth/path_counts delivery: "
@@ -835,31 +835,31 @@ def main(argv=None):
                 spec_ok = ecg.verify_trace(
                     f"{sim}/{kernel}", result, coverage=cov,
                     expected_policy=expected_trace_policy(kernel))
-            if SCHEDULE_K == 2:
+            if REUSE_PLAN_DEPTH == 2:
                 text, ran_ok = result
                 if sim == "gem5":
-                    if GEM5_ISA_VARIANT == "mask":
+                    if GEM5_ISA_VARIANT == "computed":
                         fused_marker = (
-                            "[ECG_K2_MLOAD_CW24]"
+                            "[ECG_REUSE_BIND_LOAD_CW24]"
                             if kernel == "sssp"
-                            else "[ECG_K2_MLOAD]")
-                        fused_label = "computed-address K2-M property load"
+                            else "[ECG_REUSE_BIND_LOAD]")
+                        fused_label = "computed-address ReuseBind property load"
                     elif kernel == "sssp":
-                        fused_marker = "[ECG_K2_ILOAD_CW24]"
-                        fused_label = "indexed K2-I property load"
-                    elif STREAM_BYPASS:
-                        fused_marker = "[ECG_K2_ILOAD]"
-                        fused_label = "indexed K2-I property load"
+                        fused_marker = "[ECG_REUSE_BIND_ILOAD_CW24]"
+                        fused_label = "indexed ReuseBind-Indexed property load"
+                    elif FLOWTHROUGH:
+                        fused_marker = "[ECG_REUSE_BIND_ILOAD]"
+                        fused_label = "indexed ReuseBind-Indexed property load"
                     else:
-                        fused_marker = "[ECG_K2_ILOAD]"
-                        fused_label = "indexed K2-I property load"
+                        fused_marker = "[ECG_REUSE_BIND_ILOAD]"
+                        fused_label = "indexed ReuseBind-Indexed property load"
                     fused_ok = fused_marker in text
                     fused_path_ok = ran_ok and fused_ok
                     print(f"      {fused_label}: "
                           f"{'[OK]' if ran_ok and fused_ok else '[FAIL]'}")
                     spec_ok &= ran_ok and fused_ok
                     if (kernel == "sssp" and
-                            GEM5_ISA_VARIANT == "mask"):
+                            GEM5_ISA_VARIANT == "computed"):
                         rows_path = (
                             Path("/tmp") /
                             f"equivk_gem5_{GEM5_ISA_VARIANT}_{kernel}" /
@@ -868,16 +868,16 @@ def main(argv=None):
                         if rows_path.exists():
                             rows = list(csv.DictReader(rows_path.open()))
                             provenance_ok = len(rows) == 1 and all((
-                                rows[0].get("ecg_isa_variant") == "mask",
+                                rows[0].get("ecg_isa_variant") == "computed",
                                 rows[0].get("ecg_record_bytes") == "8",
                                 rows[0].get("edge_stream_bytes_per_edge") == "8",
                                 rows[0].get("ecg_record_replaces_edge") == "1",
                             ))
-                        print("      compact K2-M provenance: "
+                        print("      compact ReuseBind provenance: "
                               f"{'[OK]' if provenance_ok else '[FAIL]'}")
                         spec_ok &= provenance_ok
                 elif sim == "sniper":
-                    if GEM5_ISA_VARIANT == "mask":
+                    if GEM5_ISA_VARIANT == "computed":
                         rows_path = (
                             Path("/tmp") /
                             f"equivk_sniper_{GEM5_ISA_VARIANT}_{kernel}" /
@@ -895,20 +895,20 @@ def main(argv=None):
                                     marker.get("all_rows_ok") is True)
                             provenance_ok = len(rows) == 1 and all((
                                 rows[0].get("status") == "ok",
-                                rows[0].get("ecg_isa_variant") == "mask",
+                                rows[0].get("ecg_isa_variant") == "computed",
                                 rows[0].get(
                                     "policy_label") == sniper_policy_label(),
                                 rows[0].get("sniper_transport_matched") == "1",
-                                rows[0].get("sniper_k2_exact_bind") == "1",
+                                rows[0].get("sniper_reuse_bind_exact") == "1",
                                 rows[0].get(
-                                    "sniper_k2_epoch_context_bound") == "1",
+                                    "sniper_reuse_plan_epoch_context_bound") == "1",
                                 rows[0].get(
                                     "sniper_transport_receipts_validated") ==
                                     "1",
                                 rows[0].get(
-                                    "sniper_k2_exact_bind_validated") == "1",
+                                    "sniper_reuse_bind_exact_validated") == "1",
                                 rows[0].get(
-                                    "sniper_k2_epoch_context_validated") == "1",
+                                    "sniper_reuse_plan_epoch_context_validated") == "1",
                                 rows[0].get("sniper_context_loaded") == "1",
                                 rows[0].get(
                                     "sniper_popt_matrix_required") == "0",
@@ -918,16 +918,16 @@ def main(argv=None):
                             ))
                         fused_ok = (
                             provenance_ok and
-                            "[K2_TRANSPORT_MATCHED]" in text and
-                            "[K2_EXACT_BIND]" in text)
-                        fused_label = "computed-address K2-M load binding"
+                            "[REUSE_PLAN_TRANSPORT_MATCHED]" in text and
+                            "[REUSE_PLAN_EXACT_BIND]" in text)
+                        fused_label = "computed-address ReuseBind load binding"
                     else:
-                        valid = ecg.K2_FUSED_VALID_RE.search(text)
+                        valid = ecg.REUSE_PLAN_FUSED_VALID_RE.search(text)
                         fused_ok = (
                             valid is not None and
                             int(valid.group(1)) > 0 and
                             int(valid.group(2)) == 0)
-                        fused_label = "fused K2 sideband"
+                        fused_label = "fused ReusePlan sideband"
                     fused_path_ok = ran_ok and fused_ok
                     print(f"      {fused_label}: "
                           f"{'[OK]' if ran_ok and fused_ok else '[FAIL]'}")
@@ -940,53 +940,53 @@ def main(argv=None):
                         f"{'[OK]' if provenance_ok else '[FAIL]'} "
                         f"{provenance_checks}")
                     spec_ok &= provenance_ok
-            streamshield_ok = None
-            if STREAM_BYPASS:
+            flowthrough_ok = None
+            if FLOWTHROUGH:
                 text, ran_ok = result
-                if ADAPTIVE_STREAM_BYPASS:
+                if ADAPTIVE_FLOWTHROUGH:
                     adaptive_marker = (
-                        "[ECG-STREAM-BYPASS sim=cache_sim active=1 adaptive=1]"
+                        "[ECG-FLOWTHROUGH sim=cache_sim active=1 adaptive=1]"
                         if sim == "cache_sim" else
-                        f"[ECG-STREAM-ADAPTIVE sim={sim} active=1]")
-                    bypass_ok = adaptive_marker in text
+                        f"[ECG-FLOWTHROUGH-ADAPTIVE sim={sim} active=1]")
+                    flowthrough_active = adaptive_marker in text
                 elif sim == "cache_sim":
-                    bypass_ok = (
-                        "[ECG-STREAM-BYPASS sim=cache_sim active=1" in text)
+                    flowthrough_active = (
+                        "[ECG-FLOWTHROUGH sim=cache_sim active=1" in text)
                 elif sim == "gem5":
-                    bypass_ok = "[ECG-STREAM-BYPASS sim=gem5" in text
+                    flowthrough_active = "[ECG-FLOWTHROUGH sim=gem5" in text
                 else:
-                    reads = re.search(r"nuca-cache\.stream-bypass-reads = (\d+)", text)
-                    writes = re.search(r"nuca-cache\.stream-bypass-writes = (\d+)", text)
-                    bypass_ok = (
+                    reads = re.search(r"nuca-cache\.flowthrough-reads = (\d+)", text)
+                    writes = re.search(r"nuca-cache\.flowthrough-writes = (\d+)", text)
+                    flowthrough_active = (
                         reads is not None and writes is not None and
                         int(reads.group(1)) > 0 and int(writes.group(1)) > 0
                     )
-                print(f"      StreamShield LLC bypass: "
-                      f"{'[OK]' if ran_ok and bypass_ok else '[FAIL]'}")
-                streamshield_ok = (
-                    ran_ok and fused_path_ok and bypass_ok and
-                    bool(cov.get("k2_delivery_match", False)))
+                print(f"      FlowThrough placement: "
+                      f"{'[OK]' if ran_ok and flowthrough_active else '[FAIL]'}")
+                flowthrough_ok = (
+                    ran_ok and fused_path_ok and flowthrough_active and
+                    bool(cov.get("reuse_plan_delivery_match", False)))
             ev, tv = cov.get("epoch_victims", 0), cov.get("victims", 0)
             dec = cov.get("epoch_decisive", 0)
             nz = cov.get("epoch_victims_nz", 0)   # stamped victims with a NON-ZERO delivered epoch
-            k2_live = cov.get("k2_ways", 0) > 0
-            delivery_ok = ev > 0 or (SCHEDULE_K == 2 and k2_live)
-            # >=1 stamped property victim normally proves delivery. Under K2,
-            # resident stamped K2 property ways + verified pair distances also
+            reuse_plan_live = cov.get("reuse_plan_ways", 0) > 0
+            delivery_ok = ev > 0 or (REUSE_PLAN_DEPTH == 2 and reuse_plan_live)
+            # >=1 stamped property victim normally proves delivery. Under ReusePlan,
+            # resident stamped ReusePlan property ways + verified pair distances also
             # prove delivery even if a non-inclusive backend evicts records for
             # the whole bounded trace (Sniper PR's do-no-harm geometry).
             decisive_ok = dec > 0         # epoch DISTANCE strictly decided >=1 victim
             # collapse check: stamped property was evicted but EVERY delivered epoch was 0 -> the
             # epochs collapsed (a delivery-quality regression, not the benign tied-eff-dist case).
             collapsed = ev > 0 and nz == 0
-            if STREAM_BYPASS:
-                cell_ok = bool(streamshield_ok)
+            if FLOWTHROUGH:
+                cell_ok = bool(flowthrough_ok)
                 label = (
-                    ("adaptive allocate-vs-shield placement is live; "
-                     if ADAPTIVE_STREAM_BYPASS else
-                     "StreamShield removes post-delivery LLC churn; ") +
-                    "K2 delivery is live and eviction is certified by the "
-                    "separate no-bypass fused gate")
+                    ("adaptive allocate-vs-FlowThrough placement is live; "
+                     if ADAPTIVE_FLOWTHROUGH else
+                     "FlowThrough removes post-delivery LLC churn; ") +
+                    "ReusePlan delivery is live and eviction is certified by the "
+                    "separate non-FlowThrough fused gate")
             elif STREAM_PF_DEGREE > 0:
                 # Under the realistic stream prefetcher, the prefetched STRUCTURAL lines
                 # change the cache contents (and carry no epoch), so the epoch may no
@@ -997,7 +997,7 @@ def main(argv=None):
                 label = (f"prefetch(d{STREAM_PF_DEGREE}) spec-level: evictions obey spec; "
                          f"decisive {dec}x nonzero {nz} stamped {ev} (decisiveness is the degree-0 metric)")
             elif (kernel in EXPECTED_DECISIVE and sim != "sniper" and
-                  not STREAM_BYPASS):
+                  not FLOWTHROUGH):
                 cell_ok = decisive_ok
                 label = ("decisive real-epoch reuse" if decisive_ok
                          else "FAIL: reuse-sensitive kernel has no decisive epoch eviction")
@@ -1024,9 +1024,9 @@ def main(argv=None):
                 label = f"FAIL: {ev} stamped victims but ALL epoch=0 (delivery COLLAPSED, not do-no-harm)"
             else:
                 cell_ok = True            # do-no-harm: delivery + policy verified
-                if SCHEDULE_K == 2 and k2_live and ev == 0:
+                if REUSE_PLAN_DEPTH == 2 and reuse_plan_live and ev == 0:
                     label = (
-                        f"K2 resident+distance verified ({cov.get('k2_ways', 0)} ways); "
+                        f"ReusePlan resident+distance verified ({cov.get('reuse_plan_ways', 0)} ways); "
                         "no property victim in bounded trace (record-first do-no-harm)")
                 else:
                     label = (f"delivery+policy verified; epoch decisive {dec}x, nonzero {nz}/{ev}"

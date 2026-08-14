@@ -152,7 +152,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--stop-on-error", action="store_true",
         help="Do not launch later shards after the first failure. Enabled "
-             "automatically for serial k2_final_campaign runs.")
+             "automatically for serial reuse_plan_final_campaign runs.")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--allow-missing-graphs", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -178,10 +178,10 @@ def main(argv: list[str] | None = None) -> int:
     sniper_limit = args.sniper_jobs or args.jobs
     if (sniper_limit > 1 and any(
             shard.suite == "sniper" and
-            shard.profile == "k2_final_campaign"
+            shard.profile == "reuse_plan_final_campaign"
             for shard in shards)):
         raise SystemExit(
-            "k2_final_campaign Sniper shards must run serially; "
+            "reuse_plan_final_campaign Sniper shards must run serially; "
             "use --sniper-jobs 1")
     limits = {
         "cache-sim": args.cache_sim_jobs or args.jobs,
@@ -205,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
 
     stop_on_error = args.stop_on_error or (
         args.jobs == 1 and
-        any(shard.profile == "k2_final_campaign" for shard in shards))
+        any(shard.profile == "reuse_plan_final_campaign" for shard in shards))
     if stop_on_error and args.jobs == 1:
         semaphore = threading.BoundedSemaphore(1)
         for shard in shards:

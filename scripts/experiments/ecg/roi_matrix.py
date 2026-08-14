@@ -49,7 +49,7 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 RESULTS_ROOT = PROJECT_ROOT / "results" / "ecg_experiments" / "roi_matrix"
-MIN_SNIPER_K2_CERT_RECEIPTS = 32
+MIN_SNIPER_REUSE_PLAN_CERT_RECEIPTS = 32
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gem5_guest_receipt import (  # noqa: E402
     immutable_fuse_files,
@@ -197,17 +197,17 @@ GEM5_STAT_KEYS = {
         "system.l3cache.replacement_policy.hotPropertyAccesses",
     "popt_roi_rereference_queries":
         "system.l3cache.replacement_policy.rereferenceQueries",
-    "gem5_k2_dueling_request_bound_victims":
+    "gem5_reuse_plan_dueling_request_bound_victims":
         "system.l3cache.replacement_policy.requestBoundVictims",
-    "gem5_k2_dueling_leader_samples":
+    "gem5_reuse_plan_dueling_leader_samples":
         "system.l3cache.replacement_policy.leaderSamples",
-    "gem5_k2_dueling_follower_selections":
+    "gem5_reuse_plan_dueling_follower_selections":
         "system.l3cache.replacement_policy.followerSelections",
-    "gem5_k2_dueling_completed_windows":
+    "gem5_reuse_plan_dueling_completed_windows":
         "system.l3cache.replacement_policy.completedWindows",
-    "gem5_k2_dueling_winner_changes":
+    "gem5_reuse_plan_dueling_winner_changes":
         "system.l3cache.replacement_policy.winnerChanges",
-    "gem5_k2_dueling_follower_variant_overrides":
+    "gem5_reuse_plan_dueling_follower_variant_overrides":
         "system.l3cache.replacement_policy.followerVariantOverrides",
     # Demand-load (cpu.data) L3 stats EXCLUDING prefetcher fills. The L2 stream
     # prefetcher otherwise dominates overall::total (>>demand). Sniper's NUCA
@@ -227,7 +227,7 @@ GEM5_STAT_KEYS = {
     "dram_write_requests": "system.mem_ctrl.dram.numWrites::total",
     "dram_prefetch_read_bytes":
         "system.mem_ctrl.dram.bytesRead::l2cache.prefetcher",
-    # Bandwidth SATURATION. K2 trades bandwidth for exposed latency: it can use
+    # Bandwidth SATURATION. ReusePlan trades bandwidth for exposed latency: it can use
     # more total traffic while exposing far fewer demand misses to full DRAM
     # latency. Which side binds depends entirely on whether the memory system is
     # saturated, so utilisation must be reported alongside execution time rather
@@ -408,8 +408,8 @@ def apply_overhead_metrics(row: dict[str, Any]) -> None:
       prefetcher, explicitly treating P-OPT's matrix latency as perfectly
       hidden. This is a P-OPT-favorable sensitivity, not stream simulation.
 
-    The analytic mode is only symmetric with K2 when no prefetcher is active.
-    K2's edge records are simulated accesses a structure prefetcher covers,
+    The analytic mode is only symmetric with ReusePlan when no prefetcher is active.
+    ReusePlan's edge records are simulated accesses a structure prefetcher covers,
     while a flat charge can never be covered, so under a prefetcher the analytic
     mode penalises P-OPT with demand misses a real prefetcher removes. Measured
     on web-Google PageRank under STRIDE8, simulating the stream costs 0 extra
@@ -687,30 +687,30 @@ def policy_cache_geometry(
         l3_size: str) -> dict[str, Any]:
     metadata = popt_charge_metadata(args, spec, l3_size)
     baseline_ways = max(int(args.l3_ways), 1)
-    override_ways = max(int(getattr(args, "k2_l3_ways", 0)), 0)
+    override_ways = max(int(getattr(args, "reuse_plan_l3_ways", 0)), 0)
     metadata.update({
-        "k2_l3_ways_requested": override_ways,
-        "k2_baseline_l3_ways": baseline_ways,
-        "k2_effective_l3_ways": metadata["popt_effective_l3_ways"],
-        "k2_area_mode": (
+        "reuse_plan_l3_ways_requested": override_ways,
+        "reuse_plan_baseline_l3_ways": baseline_ways,
+        "reuse_plan_effective_l3_ways": metadata["popt_effective_l3_ways"],
+        "reuse_plan_area_mode": (
             "equal_capacity" if override_ways == 0
             else "baseline_equal_silicon_reference"),
     })
     transport = ecg_transport_for(spec, args.benchmark)
-    is_k2 = (
+    is_reuse_plan = (
         spec.policy == "ECG" and
         spec.ecg_mode == "ECG_GRASP_POPT" and
-        transport.schedule_k == 2)
-    if is_k2:
-        metadata["k2_metadata_bits_per_line"] = 49
+        transport.reuse_plan_depth == 2)
+    if is_reuse_plan:
+        metadata["reuse_plan_metadata_bits_per_line"] = 49
     if override_ways == 0:
         return metadata
     if override_ways > baseline_ways:
         raise ValueError(
-            f"K2 L3 ways ({override_ways}) cannot exceed baseline "
+            f"ReusePlan L3 ways ({override_ways}) cannot exceed baseline "
             f"ways ({baseline_ways})")
 
-    if not is_k2:
+    if not is_reuse_plan:
         return metadata
 
     line_size = parse_size_bytes(args.line_size)
@@ -720,10 +720,10 @@ def policy_cache_geometry(
     metadata.update({
         "popt_effective_l3_size": format_size_bytes(effective_bytes),
         "popt_effective_l3_ways": str(override_ways),
-        "k2_effective_l3_ways": str(override_ways),
-        "k2_effective_l3_size": format_size_bytes(effective_bytes),
-        "k2_area_mode": "equal_silicon_sensitivity",
-        "k2_metadata_bits_per_line": 49,
+        "reuse_plan_effective_l3_ways": str(override_ways),
+        "reuse_plan_effective_l3_size": format_size_bytes(effective_bytes),
+        "reuse_plan_area_mode": "equal_silicon_sensitivity",
+        "reuse_plan_metadata_bits_per_line": 49,
     })
     return metadata
 
@@ -836,8 +836,8 @@ def clear_sideband_files(paths: dict[str, Path]) -> None:
             pass
 
 
-def clear_sniper_k2_sidebands(paths: dict[str, Path]) -> None:
-    for key in ("k2_offsets", "k2_records"):
+def clear_sniper_reuse_plan_sidebands(paths: dict[str, Path]) -> None:
+    for key in ("reuse_plan_offsets", "reuse_plan_records"):
         try:
             paths[key].unlink()
         except (KeyError, FileNotFoundError):
@@ -847,7 +847,7 @@ def clear_sniper_k2_sidebands(paths: dict[str, Path]) -> None:
 def validate_sniper_fused_receipts(
         log_path: Path, paths: dict[str, Path]) -> tuple[int, int]:
     receipt_re = re.compile(
-        r"\[ECG-K2-FUSED-RECV sim=sniper seq=(\d+) src=(\d+) "
+        r"\[ECG-ReusePlan-FUSED-RECV sim=sniper seq=(\d+) src=(\d+) "
         r"line=(\d+) addr_line=0x([0-9a-fA-F]+) vpl=(\d+) "
         r"index=(\d+) begin=(\d+) end=(\d+) "
         r"dest=(\d+) tier=(\d+) epoch1=(\d+) epoch2=(\d+)\]")
@@ -866,8 +866,8 @@ def validate_sniper_fused_receipts(
     if not receipts:
         return 0, 0
     try:
-        offsets_file = paths["k2_offsets"].open("rb")
-        records_file = paths["k2_records"].open("rb")
+        offsets_file = paths["reuse_plan_offsets"].open("rb")
+        records_file = paths["reuse_plan_records"].open("rb")
     except (KeyError, FileNotFoundError, OSError):
         return len(receipts), len(receipts)
     try:
@@ -927,18 +927,18 @@ def validate_sniper_fused_receipts(
         records_file.close()
     with log_path.open("a") as out:
         out.write(
-            f"\n[ECG-K2-FUSED-VALID count={len(receipts)} bad={bad}]\n")
+            f"\n[ECG-ReusePlan-FUSED-VALID count={len(receipts)} bad={bad}]\n")
     return len(receipts), bad
 
 
 def validate_sniper_exact_bind_trace(
         log_path: Path, expected_count: int = 0) -> tuple[int, int]:
     bind_re = re.compile(
-        r"\[ECG-K2-BIND-CONSUME sim=sniper seq=(\d+) core=(\d+) "
+        r"\[ECG-ReusePlan-BIND-CONSUME sim=sniper seq=(\d+) core=(\d+) "
         r"bound=0x([0-9a-fA-F]+) line=0x([0-9a-fA-F]+) size=(\d+) "
         r"current=(\d+) context=(\d+)\]")
     receipt_re = re.compile(
-        r"\[ECG-K2-FUSED-RECV sim=sniper seq=(\d+) src=(\d+) "
+        r"\[ECG-ReusePlan-FUSED-RECV sim=sniper seq=(\d+) src=(\d+) "
         r"line=(\d+) addr_line=0x([0-9a-fA-F]+)")
     if not log_path.exists():
         return 0, 0
@@ -1004,8 +1004,8 @@ def sniper_sideband_paths(sniper_out: Path) -> dict[str, Path]:
         "popt_matrix": sideband_dir / "sniper_popt_matrix.bin",
         "out_edges": sideband_dir / "sniper_graphbrew_out_edges.bin",
         "in_edges": sideband_dir / "sniper_graphbrew_in_edges.bin",
-        "k2_offsets": Path(str(context) + ".k2_offsets.bin"),
-        "k2_records": Path(str(context) + ".k2_records.bin"),
+        "reuse_plan_offsets": Path(str(context) + ".reuse_plan_offsets.bin"),
+        "reuse_plan_records": Path(str(context) + ".reuse_plan_records.bin"),
     }
 
 
@@ -1183,18 +1183,18 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
         "CACHE_LINE_SIZE": args.line_size,
         "CACHE_OUTPUT_JSON": str(json_path),
         # Simulate P-OPT's rereference-matrix column stream as real accesses so
-        # the structure prefetcher covers it exactly as it covers K2's per-edge
+        # the structure prefetcher covers it exactly as it covers ReusePlan's per-edge
         # records. Only meaningful for policies that carry the overhead charge.
         "POPT_MATRIX_STREAM_SIM": (
             "1" if (spec.charge_popt_overhead and
                     getattr(args, "popt_matrix_stream", "analytic") == "simulated")
             else "0"),
-        # Structural-stream bypass, offered to every policy so K2's StreamShield
+        # Structural-FlowThrough, offered to every policy so ReusePlan's FlowThrough
         # is not a mechanism its competitors are denied.
         "CACHE_STREAM_PREFETCH_MODEL": getattr(
             args, "stream_prefetch_model", "stride"),
-        "STRUCTURAL_BYPASS": (
-            "1" if getattr(args, "structural_bypass", "off") == "all" else "0"),
+        "FLOWTHROUGH": (
+            "1" if getattr(args, "flowthrough", "off") == "all" else "0"),
         # Structure-stream prefetcher degree, applied to ALL policies (0 = off).
         # This is the cross-sim LEVELING control: --prefetcher STRIDE is the switch
         # that turns on each simulator's native generic stream/stride prefetcher
@@ -1219,7 +1219,7 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
     if spec.ecg_mode:
         env["ECG_MODE"] = spec.ecg_mode
         env["ECG_VARIANT"] = effective_ecg_variant(
-            args, transport.schedule_k, spec)
+            args, transport.reuse_plan_depth, spec)
         if spec.ecg_mode == "ECG_GRASP_POPT":
             env.update({
                 "ECG_EXACT_REREF": "1",
@@ -1251,23 +1251,23 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
     return env
 
 
-def requested_ecg_schedule_k() -> int:
-    raw = os.environ.get("ECG_EDGE_MASK_SCHED", "0") or "0"
+def requested_ecg_reuse_plan_depth() -> int:
+    raw = os.environ.get("ECG_REUSE_PLAN_DEPTH", "0") or "0"
     try:
         return int(raw)
     except ValueError as exc:
         raise RuntimeError(
-            f"ECG_EDGE_MASK_SCHED must be an integer, got {raw!r}") from exc
+            f"ECG_REUSE_PLAN_DEPTH must be an integer, got {raw!r}") from exc
 
 
 @dataclass(frozen=True)
 class EcgTransport:
-    schedule_k: int = 0
-    stream_bypass: bool = False
+    reuse_plan_depth: int = 0
+    flowthrough: bool = False
     trace_enabled: bool = True
     set_dueling: bool = False
     edge_masks: bool = False
-    stream_adaptive: bool = False
+    flowthrough_adaptive: bool = False
 
 
 def ecg_transport_for(spec: PolicySpec, benchmark: str) -> EcgTransport:
@@ -1275,60 +1275,60 @@ def ecg_transport_for(spec: PolicySpec, benchmark: str) -> EcgTransport:
         return EcgTransport()
 
     explicit = spec.ecg_transport_pinned
-    if (explicit and spec.ecg_schedule_k == 2 and
+    if (explicit and spec.ecg_reuse_plan_depth == 2 and
             benchmark not in ("pr", "bfs", "sssp", "bc", "cc")):
         raise RuntimeError(
-            f"ECG K2 delivery is not implemented for benchmark {benchmark!r}.")
-    schedule_k = (
-        spec.ecg_schedule_k if explicit else requested_ecg_schedule_k())
-    stream_bypass = (
-        spec.ecg_stream_bypass if explicit
-        else os.environ.get("ECG_STREAM_BYPASS") == "1")
-    stream_adaptive = (
-        spec.ecg_stream_adaptive if explicit
-        else os.environ.get("ECG_STREAM_BYPASS_ADAPTIVE") == "1")
+            f"ECG ReusePlan delivery is not implemented for benchmark {benchmark!r}.")
+    reuse_plan_depth = (
+        spec.ecg_reuse_plan_depth if explicit else requested_ecg_reuse_plan_depth())
+    flowthrough = (
+        spec.ecg_flowthrough if explicit
+        else os.environ.get("ECG_FLOWTHROUGH") == "1")
+    flowthrough_adaptive = (
+        spec.ecg_flowthrough_adaptive if explicit
+        else os.environ.get("ECG_FLOWTHROUGH_ADAPTIVE") == "1")
     return EcgTransport(
-        schedule_k=schedule_k,
-        stream_bypass=stream_bypass,
+        reuse_plan_depth=reuse_plan_depth,
+        flowthrough=flowthrough,
         set_dueling=spec.ecg_set_dueling,
         trace_enabled=not explicit,
-        edge_masks=explicit or schedule_k > 0,
-        stream_adaptive=stream_adaptive,
+        edge_masks=explicit or reuse_plan_depth > 0,
+        flowthrough_adaptive=flowthrough_adaptive,
     )
 
 
 def apply_ecg_transport_env(
         env: dict[str, str], transport: EcgTransport) -> None:
-    explicit_k2_trace = env.get("ECG_K2_DELIVERY_TRACE")
-    explicit_bypass_trace = env.get("ECG_STREAM_BYPASS_TRACE")
+    explicit_reuse_plan_trace = env.get("ECG_REUSE_PLAN_DELIVERY_TRACE")
+    explicit_flowthrough_trace = env.get("ECG_FLOWTHROUGH_TRACE")
     for key in (
-        "ECG_EDGE_MASK_SCHED",
+        "ECG_REUSE_PLAN_DEPTH",
         "ECG_EDGE_MASKS",
-        "ECG_K2_DELIVERY_TRACE",
-        "ECG_STREAM_BYPASS",
-        "ECG_STREAM_BYPASS_TRACE",
-        "ECG_STREAM_BYPASS_ADAPTIVE",
+        "ECG_REUSE_PLAN_DELIVERY_TRACE",
+        "ECG_FLOWTHROUGH",
+        "ECG_FLOWTHROUGH_TRACE",
+        "ECG_FLOWTHROUGH_ADAPTIVE",
         "ECG_SET_DUELING",
     ):
         env.pop(key, None)
     if transport.edge_masks:
         env["ECG_EDGE_MASKS"] = "1"
-    if transport.schedule_k:
-        env["ECG_EDGE_MASK_SCHED"] = str(transport.schedule_k)
-        trace = explicit_k2_trace
+    if transport.reuse_plan_depth:
+        env["ECG_REUSE_PLAN_DEPTH"] = str(transport.reuse_plan_depth)
+        trace = explicit_reuse_plan_trace
         if trace is None and transport.trace_enabled:
-            trace = os.environ.get("ECG_K2_DELIVERY_TRACE")
+            trace = os.environ.get("ECG_REUSE_PLAN_DELIVERY_TRACE")
         if trace:
-            env["ECG_K2_DELIVERY_TRACE"] = trace
-    if transport.stream_bypass:
-        env["ECG_STREAM_BYPASS"] = "1"
-        if transport.stream_adaptive:
-            env["ECG_STREAM_BYPASS_ADAPTIVE"] = "1"
-        trace = explicit_bypass_trace
+            env["ECG_REUSE_PLAN_DELIVERY_TRACE"] = trace
+    if transport.flowthrough:
+        env["ECG_FLOWTHROUGH"] = "1"
+        if transport.flowthrough_adaptive:
+            env["ECG_FLOWTHROUGH_ADAPTIVE"] = "1"
+        trace = explicit_flowthrough_trace
         if trace is None and transport.trace_enabled:
-            trace = os.environ.get("ECG_STREAM_BYPASS_TRACE")
+            trace = os.environ.get("ECG_FLOWTHROUGH_TRACE")
         if trace:
-            env["ECG_STREAM_BYPASS_TRACE"] = trace
+            env["ECG_FLOWTHROUGH_TRACE"] = trace
     if transport.set_dueling:
         env["ECG_SET_DUELING"] = "1"
 
@@ -1363,8 +1363,8 @@ def scrub_cell_mechanism_env(env: dict[str, str]) -> None:
 
 def disable_gem5_event_traces(env: dict[str, str]) -> None:
     for key in (
-            "ECG_K2_DELIVERY_TRACE",
-            "ECG_STREAM_BYPASS_TRACE",
+            "ECG_REUSE_PLAN_DELIVERY_TRACE",
+            "ECG_FLOWTHROUGH_TRACE",
             "GEM5_ECG_EXT_TRACE",
             "ECG_EVICT_TRACE",
             "ECG_EVICT_TRACE_ROI"):
@@ -1402,18 +1402,18 @@ def explicit_ecg_record_bytes(default: int) -> int:
     return width
 
 
-def require_sniper_k2_certification_budget(
+def require_sniper_reuse_plan_certification_budget(
         env: dict[str, str]) -> int:
-    raw = env.get("ECG_K2_DELIVERY_TRACE", "0") or "0"
+    raw = env.get("ECG_REUSE_PLAN_DELIVERY_TRACE", "0") or "0"
     try:
         budget = int(raw)
     except ValueError as exc:
         raise RuntimeError(
-            f"ECG_K2_DELIVERY_TRACE must be an integer, got {raw!r}") from exc
-    if budget < MIN_SNIPER_K2_CERT_RECEIPTS:
+            f"ECG_REUSE_PLAN_DELIVERY_TRACE must be an integer, got {raw!r}") from exc
+    if budget < MIN_SNIPER_REUSE_PLAN_CERT_RECEIPTS:
         raise RuntimeError(
-            "Sniper K2-M exact-bind certification requires "
-            f"ECG_K2_DELIVERY_TRACE >= {MIN_SNIPER_K2_CERT_RECEIPTS}; "
+            "Sniper ReuseBind exact-bind certification requires "
+            f"ECG_REUSE_PLAN_DELIVERY_TRACE >= {MIN_SNIPER_REUSE_PLAN_CERT_RECEIPTS}; "
             f"got {budget}")
     return budget
 
@@ -1448,14 +1448,14 @@ def apply_explicit_cell_mechanism_env(
 def apply_gem5_compact_fused_receipt(
         row: dict[str, Any], log_text: str, requested: bool) -> bool:
     """Attest fused-compact activation from the guest, never from the request."""
-    active = "[ECG_K2_ILOAD_C]" in log_text
+    active = "[ECG_REUSE_BIND_ILOAD_C]" in log_text
     row["gem5_compact_fused_active"] = int(active)
     if active:
-        row["gem5_ecg_delivery"] = "ecg.k2.iload.compact"
+        row["gem5_ecg_delivery"] = "ecg.bind.iload.compact"
     if requested and not active:
         mark_row_error(row, (
-            "fused compact K2 was requested but the guest emitted no "
-            "ECG_K2_ILOAD_C activation receipt"))
+            "fused compact ReusePlan was requested but the guest emitted no "
+            "ECG_REUSE_BIND_ILOAD_C activation receipt"))
     return active
 
 
@@ -1610,12 +1610,12 @@ def apply_sniper_geometry_receipt(
 def validate_online_dueling_activity(
         row: dict[str, Any], required: bool,
         positive_fields: tuple[str, ...] = ONLINE_DUELING_REQUIRED_POSITIVE_FIELDS,
-        leader_samples_field: str = "gem5_k2_dueling_leader_samples") -> bool:
+        leader_samples_field: str = "gem5_reuse_plan_dueling_leader_samples") -> bool:
     """Fail-closed check that online set-dueling actually ran in the ROI.
 
     Shared by gem5 (default fields) and Sniper (``sniper_*`` fields passed by
     the caller) -- the gem5 field names/semantics are never renamed; Sniper
-    passes its own ``sniper_k2_dueling_*`` fields explicitly instead.
+    passes its own ``sniper_reuse_plan_dueling_*`` fields explicitly instead.
     """
     if not required:
         return True
@@ -1630,7 +1630,7 @@ def validate_online_dueling_activity(
     if missing:
         mark_row_error(
             row,
-            "online K2 set-dueling was not exercised in the ROI: "
+            "online ReusePlan set-dueling was not exercised in the ROI: "
             f"{missing}")
         return False
     return True
@@ -1647,31 +1647,31 @@ def mark_row_error(row: dict[str, Any], message: str) -> None:
     row["timing_valid_for_speedup"] = "0"
 
 
-def apply_gem5_compact_k2m_streamshield_receipt(
+def apply_gem5_compact_reuse_bind_flowthrough_receipt(
         row: dict[str, Any], log_text: str, requested: bool,
         require_trace_receipts: bool = True,
         performance_requested: bool = False) -> bool:
     """Validate the proposal path, with traces required only for mechanism rows."""
     format_receipt = re.search(
-        r"\[ECG_K2_MLOAD_C_SS\][^\n]*"
+        r"\[ECG_REUSE_BIND_LOAD_C_FLOW\][^\n]*"
         r"id_bits=(\d+) epoch_bits=(\d+)", log_text)
-    active = "[ECG_K2_MLOAD_C_SS]" in log_text
-    row["gem5_compact_k2m_streamshield_active"] = int(active)
+    active = "[ECG_REUSE_BIND_LOAD_C_FLOW]" in log_text
+    row["gem5_compact_reuse_bind_flowthrough_active"] = int(active)
     if active:
         row["gem5_ecg_delivery"] = (
-            "ecg.stream.load2.compact+ecg.k2.mload.f32")
+            "ecg.flow.load.compact+ecg.bind.load.f32")
         row["proposal_path_active"] = 1
     else:
         row["proposal_path_active"] = 0
-    all_bypass_lines = re.findall(
-        r"\[ECG-STREAM-BYPASS sim=gem5 [^\n]*allocate=0\]",
+    all_flowthrough_lines = re.findall(
+        r"\[ECG-FLOWTHROUGH sim=gem5 [^\n]*allocate=0\]",
         log_text)
     range_lines = [
-        line for line in all_bypass_lines
+        line for line in all_flowthrough_lines
         if "source=range" in line
     ]
     request_flag_lines = re.findall(
-        r"\[ECG-STREAM-BYPASS sim=gem5 [^\n]*"
+        r"\[ECG-FLOWTHROUGH sim=gem5 [^\n]*"
         r"source=request-flag [^\n]*allocate=0\]",
         log_text)
     request_flag_sizes = []
@@ -1682,11 +1682,11 @@ def apply_gem5_compact_k2m_streamshield_receipt(
     request_flag_events = len(request_flag_lines)
     size4_events = sum(size == 4 for size in request_flag_sizes)
     bad_size_events = sum(size != 4 for size in request_flag_sizes)
-    row["gem5_stream_bypass_request_flag_events"] = request_flag_events
-    row["gem5_stream_bypass_request_flag_size4_events"] = size4_events
-    row["gem5_stream_bypass_request_flag_bad_size_events"] = bad_size_events
-    row["gem5_stream_bypass_all_events"] = len(all_bypass_lines)
-    row["gem5_stream_bypass_range_events"] = len(range_lines)
+    row["gem5_flowthrough_request_flag_events"] = request_flag_events
+    row["gem5_flowthrough_request_flag_size4_events"] = size4_events
+    row["gem5_flowthrough_request_flag_bad_size_events"] = bad_size_events
+    row["gem5_flowthrough_all_events"] = len(all_flowthrough_lines)
+    row["gem5_flowthrough_range_events"] = len(range_lines)
     if format_receipt:
         row["proposal_compact_id_bits"] = int(format_receipt.group(1))
         row["proposal_compact_epoch_bits"] = int(format_receipt.group(2))
@@ -1695,8 +1695,8 @@ def apply_gem5_compact_k2m_streamshield_receipt(
         performance_requested and active and format_receipt is not None)
     if requested and not active:
         mark_row_error(row, (
-            "proposal compact K2-M+StreamShield was requested but "
-            "the guest emitted no ECG_K2_MLOAD_C_SS activation receipt"))
+            "proposal compact ReuseBind+FlowThrough was requested but "
+            "the guest emitted no ECG_REUSE_BIND_LOAD_C_FLOW activation receipt"))
     elif performance_requested and format_receipt is None:
         mark_row_error(row, (
             "trace-free proposal timing was requested but the guest emitted "
@@ -1704,27 +1704,27 @@ def apply_gem5_compact_k2m_streamshield_receipt(
     elif require_trace_receipts and requested and (
             request_flag_events == 0 or
             size4_events == 0 or bad_size_events != 0 or
-            len(all_bypass_lines) != request_flag_events or range_lines):
+            len(all_flowthrough_lines) != request_flag_events or range_lines):
         mark_row_error(row, (
-            "proposal compact K2-M+StreamShield was requested but "
-            + ("the LLC emitted no request-flag StreamShield receipt"
+            "proposal compact ReuseBind+FlowThrough was requested but "
+            + ("the LLC emitted no request-flag FlowThrough receipt"
                if request_flag_events == 0 else
-               "the request-flag StreamShield receipts did not attest "
+               "the request-flag FlowThrough receipts did not attest "
                "only 4-byte request-flag record requests")))
     return active
 
 
-def apply_gem5_request_bound_k2_receipt(
+def apply_gem5_reuse_bind_receipt(
         row: dict[str, Any], log_text: str, requested: bool,
         line_bytes: int = 64,
         require_discriminating: bool = False,
         trace_limit: int = 0) -> bool:
     request_re = re.compile(
-        r"\[ECG-K2-REQUEST sim=gem5 seq=(\d+) request_seq=(\d+) "
+        r"\[ECG-ReuseBind-REQUEST sim=gem5 seq=(\d+) request_seq=(\d+) "
         r"dest=(\d+) tier=(\d+) epoch1=(\d+) epoch2=(\d+) "
         r"current=(\d+) context=(\d+)\]")
     accept_re = re.compile(
-        r"\[ECG-K2-ACCEPT sim=gem5 seq=(\d+) request_seq=(\d+) "
+        r"\[ECG-ReuseBind-ACCEPT sim=gem5 seq=(\d+) request_seq=(\d+) "
         r"request_dest=(\d+) fill_dest=(\d+) source=(\w+) "
         r"tier=(\d+) epoch1=(\d+) epoch2=(\d+) current=(\d+) "
         r"context=(\d+) (?:property_elem_bytes|width)=(\d+)\]")
@@ -1743,7 +1743,7 @@ def apply_gem5_request_bound_k2_receipt(
     accepts = []
     accepted_metadata = set()
     accepted_epoch_states = set()
-    accepted_record_epoch_pairs = set()
+    accepted_plan_epochs = set()
     accept_sequences = set()
     duplicate_accepts = 0
     mailbox_accepts = 0
@@ -1771,7 +1771,7 @@ def apply_gem5_request_bound_k2_receipt(
         if valid:
             accepted_metadata.add(payload)
             accepted_epoch_states.add(payload[1:4])
-            accepted_record_epoch_pairs.add(payload[1:3])
+            accepted_plan_epochs.add(payload[1:3])
             if request_dest == fill_dest:
                 exact_vertex_accepts += 1
             else:
@@ -1789,21 +1789,21 @@ def apply_gem5_request_bound_k2_receipt(
         (payload[2], payload[3], payload[4])
         for payload in requests.values()
     }
-    request_record_epoch_pairs = {
+    request_plan_epochs = {
         (payload[2], payload[3])
         for payload in requests.values()
     }
     payload_discriminating = (
         len(request_epoch_states) > 1 and
         len(accepted_epoch_states) > 1 and
-        len(request_record_epoch_pairs) > 1 and
-        len(accepted_record_epoch_pairs) > 1 and
+        len(request_plan_epochs) > 1 and
+        len(accepted_plan_epochs) > 1 and
         any(
             epoch1 != 0 or epoch2 != 0
-            for (epoch1, epoch2) in accepted_record_epoch_pairs
+            for (epoch1, epoch2) in accepted_plan_epochs
         )
     )
-    exact_request_bound = (
+    exact_bind = (
         bool(requests) and bool(accepts) and
         request_conflicts == 0 and duplicate_accepts == 0 and bad == 0)
     trace_saturated = (
@@ -1814,37 +1814,37 @@ def apply_gem5_request_bound_k2_receipt(
         )
     )
     row.update({
-        "gem5_k2_request_receipts": len(requests),
-        "gem5_k2_request_trace_events": raw_request_receipts,
-        "gem5_k2_request_trace_max_seq": request_trace_max_seq,
-        "gem5_k2_duplicate_request_receipts": (
+        "gem5_reuse_bind_request_receipts": len(requests),
+        "gem5_reuse_bind_request_trace_events": raw_request_receipts,
+        "gem5_reuse_bind_request_trace_max_seq": request_trace_max_seq,
+        "gem5_reuse_bind_duplicate_request_receipts": (
             raw_request_receipts - len(requests)),
-        "gem5_k2_request_accepts": len(accepts),
-        "gem5_k2_request_bad_receipts": bad,
-        "gem5_k2_request_conflicts": request_conflicts,
-        "gem5_k2_duplicate_accepts": duplicate_accepts,
-        "gem5_k2_mailbox_accepts": mailbox_accepts,
-        "gem5_k2_exact_vertex_accepts": exact_vertex_accepts,
-        "gem5_k2_coalesced_line_accepts": coalesced_line_accepts,
-        "gem5_k2_nonzero_epoch_accepts": nonzero_epoch_accepts,
-        "gem5_k2_request_line_bytes": line_bytes,
-        "gem5_k2_request_metadata_values": len(request_metadata),
-        "gem5_k2_accept_metadata_values": len(accepted_metadata),
-        "gem5_k2_request_epoch_states": len(request_epoch_states),
-        "gem5_k2_accept_epoch_states": len(accepted_epoch_states),
-        "gem5_k2_request_record_epoch_pairs": len(
-            request_record_epoch_pairs),
-        "gem5_k2_accept_record_epoch_pairs": len(
-            accepted_record_epoch_pairs),
-        "gem5_k2_payload_discriminating": int(payload_discriminating),
-        "gem5_k2_exact_request_bound": int(exact_request_bound),
-        "gem5_k2_delivery_trace_saturated": int(trace_saturated),
+        "gem5_reuse_bind_request_accepts": len(accepts),
+        "gem5_reuse_bind_request_bad_receipts": bad,
+        "gem5_reuse_bind_request_conflicts": request_conflicts,
+        "gem5_reuse_bind_duplicate_accepts": duplicate_accepts,
+        "gem5_reuse_bind_mailbox_accepts": mailbox_accepts,
+        "gem5_reuse_bind_exact_vertex_accepts": exact_vertex_accepts,
+        "gem5_reuse_bind_coalesced_line_accepts": coalesced_line_accepts,
+        "gem5_reuse_bind_nonzero_epoch_accepts": nonzero_epoch_accepts,
+        "gem5_reuse_bind_request_line_bytes": line_bytes,
+        "gem5_reuse_bind_request_metadata_values": len(request_metadata),
+        "gem5_reuse_bind_accept_metadata_values": len(accepted_metadata),
+        "gem5_reuse_bind_request_epoch_states": len(request_epoch_states),
+        "gem5_reuse_bind_accept_epoch_states": len(accepted_epoch_states),
+        "gem5_reuse_bind_request_plan_epochs": len(
+            request_plan_epochs),
+        "gem5_reuse_bind_accept_plan_epochs": len(
+            accepted_plan_epochs),
+        "gem5_reuse_bind_payload_discriminating": int(payload_discriminating),
+        "gem5_reuse_plan_exact_bind": int(exact_bind),
+        "gem5_reuse_bind_trace_saturated": int(trace_saturated),
     })
-    valid = exact_request_bound and (
+    valid = exact_bind and (
         not require_discriminating or payload_discriminating)
     if requested and not valid:
         mark_row_error(row, (
-            "proposal K2-M exact Request binding was not attested "
+            "proposal ReuseBind exact Request binding was not attested "
             f"(requests={len(requests)} accepts={len(accepts)} "
             f"conflicts={request_conflicts} "
             f"duplicate_accepts={duplicate_accepts} "
@@ -1853,33 +1853,33 @@ def apply_gem5_request_bound_k2_receipt(
             f"accept_metadata={len(accepted_metadata)} "
             f"request_epoch_states={len(request_epoch_states)} "
             f"accept_epoch_states={len(accepted_epoch_states)} "
-            f"request_record_epochs={len(request_record_epoch_pairs)} "
-            f"accept_record_epochs={len(accepted_record_epoch_pairs)} "
+            f"request_record_epochs={len(request_plan_epochs)} "
+            f"accept_record_epochs={len(accepted_plan_epochs)} "
             f"discriminating={int(payload_discriminating)})"))
     return valid
 
 
-def validate_gem5_compact_k2m_streamshield_rows(
+def validate_gem5_compact_reuse_bind_flowthrough_rows(
         rows: list[dict[str, Any]], args: argparse.Namespace,
         policies: list[PolicySpec]) -> None:
     """Require every requested proposal cell to attest the complete mechanism."""
-    if not args.gem5_compact_k2m_streamshield or args.dry_run:
+    if not args.gem5_compact_reuse_bind_flowthrough or args.dry_run:
         return
     proposal_rows = [
         row for row in rows
         if str(row.get(
-            "gem5_compact_k2m_streamshield_requested", "0")) == "1"
+            "gem5_compact_reuse_bind_flowthrough_requested", "0")) == "1"
     ]
     target_labels = {
         spec.label for spec in policies
         if (
             spec.policy == "ECG" and
             spec.ecg_mode == "ECG_GRASP_POPT" and
-            args.ecg_isa_variant == "mask" and
+            args.ecg_isa_variant == "computed" and
             ecg_transport_for(
-                spec, args.benchmark).schedule_k == 2 and
+                spec, args.benchmark).reuse_plan_depth == 2 and
             ecg_transport_for(
-                spec, args.benchmark).stream_bypass
+                spec, args.benchmark).flowthrough
         )
     }
     expected_keys = {
@@ -1896,18 +1896,18 @@ def validate_gem5_compact_k2m_streamshield_rows(
         if (
             row.get("status") != "ok" or
             str(row.get("proposal_path_active", "0")) != "1" or
-            str(row.get("gem5_k2_exact_request_bound", "0")) != "1" or
-            str(row.get("gem5_k2_payload_discriminating", "0")) != "1" or
-            int(row.get("gem5_k2_nonzero_epoch_accepts") or 0) < 8 or
-            int(row.get("gem5_k2_coalesced_line_accepts") or 0) <= 0 or
+            str(row.get("gem5_reuse_plan_exact_bind", "0")) != "1" or
+            str(row.get("gem5_reuse_bind_payload_discriminating", "0")) != "1" or
+            int(row.get("gem5_reuse_bind_nonzero_epoch_accepts") or 0) < 8 or
+            int(row.get("gem5_reuse_bind_coalesced_line_accepts") or 0) <= 0 or
             int(row.get(
-                "gem5_stream_bypass_request_flag_size4_events") or 0) <= 0 or
+                "gem5_flowthrough_request_flag_size4_events") or 0) <= 0 or
             int(row.get(
-                "gem5_stream_bypass_request_flag_bad_size_events") or 0) != 0 or
-            int(row.get("gem5_stream_bypass_range_events") or 0) != 0 or
-            int(row.get("gem5_stream_bypass_trace_saturated") or 0) != 0 or
-            int(row.get("gem5_stream_bypass_all_events") or 0) !=
-            int(row.get("gem5_stream_bypass_request_flag_events") or 0)
+                "gem5_flowthrough_request_flag_bad_size_events") or 0) != 0 or
+            int(row.get("gem5_flowthrough_range_events") or 0) != 0 or
+            int(row.get("gem5_flowthrough_trace_saturated") or 0) != 0 or
+            int(row.get("gem5_flowthrough_all_events") or 0) !=
+            int(row.get("gem5_flowthrough_request_flag_events") or 0)
         )
     ]
     if (
@@ -1920,23 +1920,23 @@ def validate_gem5_compact_k2m_streamshield_rows(
                 "status": row.get("status"),
                 "active": row.get("proposal_path_active"),
                 "request_bound": row.get(
-                    "gem5_k2_exact_request_bound"),
+                    "gem5_reuse_plan_exact_bind"),
                 "payload_discriminating": row.get(
-                    "gem5_k2_payload_discriminating"),
+                    "gem5_reuse_bind_payload_discriminating"),
                 "coalesced_accepts": row.get(
-                    "gem5_k2_coalesced_line_accepts"),
+                    "gem5_reuse_bind_coalesced_line_accepts"),
                 "nonzero_epoch_accepts": row.get(
-                    "gem5_k2_nonzero_epoch_accepts"),
+                    "gem5_reuse_bind_nonzero_epoch_accepts"),
                 "stream_size4": row.get(
-                    "gem5_stream_bypass_request_flag_size4_events"),
+                    "gem5_flowthrough_request_flag_size4_events"),
                 "stream_bad_size": row.get(
-                    "gem5_stream_bypass_request_flag_bad_size_events"),
+                    "gem5_flowthrough_request_flag_bad_size_events"),
                 "error": row.get("error"),
             }
             for row in failures
         ]
         raise SystemExit(
-            "proposal compact K2-M+StreamShield gate failed: "
+            "proposal compact ReuseBind+FlowThrough gate failed: "
             f"expected={sorted(expected_keys)} "
             f"observed={sorted(observed_keys)} failures={details}")
 
@@ -1991,7 +1991,7 @@ def apply_sniper_variant_receipt(
     per-set decision), but Sniper has no O3 Request/MSHR to bind a victim
     to. This function -- and the ``sniper_variant_*`` fields it writes --
     must never be conflated with gem5's Request-bound attestation; see
-    ``sniper_k2_dueling_binding_model`` for the explicit distinction.
+    ``sniper_reuse_bind_dueling_model`` for the explicit distinction.
     """
     match = re.search(
         r"\[ECG-VARIANT-RECEIPT sim=sniper requested=([^ ]+) "
@@ -2057,15 +2057,15 @@ def cache_sim_ecg_epoch_region_indices(benchmark: str) -> str:
 
 
 def effective_ecg_variant(
-        args: argparse.Namespace, schedule_k: int | None = None,
+        args: argparse.Namespace, reuse_plan_depth: int | None = None,
         spec: PolicySpec | None = None) -> str:
     requested = spec.ecg_variant if spec else None
     if requested is None:
         requested = os.environ.get("ECG_VARIANT")
     if requested is None:
-        if schedule_k is None:
-            schedule_k = requested_ecg_schedule_k()
-        requested = "adaptive" if schedule_k == 2 else "rrip_first"
+        if reuse_plan_depth is None:
+            reuse_plan_depth = requested_ecg_reuse_plan_depth()
+        requested = "adaptive" if reuse_plan_depth == 2 else "rrip_first"
     if requested != "adaptive":
         return requested
     benchmark = str(args.benchmark).lower()
@@ -2079,28 +2079,28 @@ def effective_ecg_variant(
 
 
 def sniper_mask_mode_ecg_variant(
-        args: argparse.Namespace, schedule_k: int | None,
+        args: argparse.Namespace, reuse_plan_depth: int | None,
         spec: PolicySpec) -> str:
-    """Compute the ECG_VARIANT Sniper's mask-mode (K2-M / ``--ecg-isa-variant
+    """Compute the ECG_VARIANT Sniper's mask-mode (ReuseBind / ``--ecg-isa-variant
     mask``) transport exports, called from run_sniper's mask branch.
 
-    Every ``ECG:K2_*`` PolicySpec pins its own ``ecg_variant`` (e.g.
-    ``ECG:K2_LRU_STREAMSHIELD`` -> "lru_only", ``ECG:K2_DEGREE`` ->
-    "degree_first", ``ECG:K2_RRIP_STREAMSHIELD`` -> "rrip_first",
-    ``ECG:K2_ONLINE_STREAMSHIELD`` -> "rrip_first" with dueling enabled) and
+    Every ``ECG:REUSE_PLAN_*`` PolicySpec pins its own ``ecg_variant`` (e.g.
+    ``ECG:REUSE_PLAN_LRU_FLOWTHROUGH`` -> "lru_only", ``ECG:REUSE_PLAN_DEGREE`` ->
+    "degree_first", ``ECG:REUSE_PLAN_RRIP_FLOWTHROUGH`` -> "rrip_first",
+    ``ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH`` -> "rrip_first" with dueling enabled) and
     that pin MUST reach the child Sniper process unchanged and MUST be what
     the receipt validator (apply_sniper_variant_receipt) checks against --
     anything else would let the runner silently execute (and certify) a
     different variant than the one requested. Only a spec with genuinely no
     pinned variant (``spec.ecg_variant is None``, i.e. it reached
     ECG_GRASP_POPT mode through the generic "ECG:<mode>" parser path rather
-    than a named ``K2_*`` spec) falls back to the generic ECG:K2
+    than a named ``REUSE_PLAN_*`` spec) falls back to the generic ECG:REUSE_PLAN
     adaptive-benchmark mapping, matching gem5/cache_sim's own default.
     """
     if spec.ecg_variant is None:
         return effective_ecg_variant(
-            args, schedule_k=2, spec=parse_policy_spec("ECG:K2"))
-    return effective_ecg_variant(args, schedule_k, spec)
+            args, reuse_plan_depth=2, spec=parse_policy_spec("ECG:REUSE_PLAN"))
+    return effective_ecg_variant(args, reuse_plan_depth, spec)
 
 
 def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size: str) -> list[dict[str, Any]]:
@@ -2149,7 +2149,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         row["ecg_receipt_bytes_per_edge"] = float(
             metadata_receipt.group(2))
         row["ecg_record_bytes"] = record_bytes
-        if "[ECG_COMPACT_K2_WEIGHTED64]" in log_text:
+        if "[ECG_COMPACT_REUSE_PLAN_WEIGHTED64]" in log_text:
             row["ecg_record_replaces_edge"] = 1
             row["edge_stream_bytes_per_edge"] = 8
         elif int(row.get("ecg_record_replaces_edge") or 0):
@@ -2222,21 +2222,21 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
             row[f"{prefix}_struct_misses"] = None
     transport = ecg_transport_for(spec, args.benchmark)
     log_text = log_path.read_text(errors="ignore")
-    if "[ECG_COMPACT_K2_WEIGHTED64]" in log_text:
+    if "[ECG_COMPACT_REUSE_PLAN_WEIGHTED64]" in log_text:
         row.update({
             "graph_edge_bytes": 8,
             "ecg_record_bytes": 8,
             "edge_stream_bytes_per_edge": 8,
             "ecg_record_replaces_edge": 1,
         })
-    if transport.stream_bypass:
+    if transport.flowthrough:
         expected = (
-            "[ECG-STREAM-BYPASS sim=cache_sim active=1 adaptive=1]"
-            if transport.stream_adaptive else
-            "[ECG-STREAM-BYPASS sim=cache_sim active=1")
+            "[ECG-FLOWTHROUGH sim=cache_sim active=1 adaptive=1]"
+            if transport.flowthrough_adaptive else
+            "[ECG-FLOWTHROUGH sim=cache_sim active=1")
         if expected not in log_text:
             row["status"] = "error"
-            row["error"] = "StreamShield requested but cache_sim bypass path was inactive"
+            row["error"] = "FlowThrough requested but cache_sim FlowThrough path was inactive"
     apply_overhead_metrics(row)
     row.update(parse_ecg_log_stats(log_path))
     return [row]
@@ -2317,53 +2317,53 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     apply_explicit_cell_mechanism_env(env, spec)
     transport = ecg_transport_for(spec, args.benchmark)
     apply_ecg_transport_env(env, transport)
-    is_k2_ecg = (
+    is_reuse_plan_ecg = (
         spec.policy == "ECG" and
         spec.ecg_mode == "ECG_GRASP_POPT" and
-        transport.schedule_k == 2)
+        transport.reuse_plan_depth == 2)
     compact_fused_requested = (
         bool(args.gem5_compact_fused) or
         env.get("GEM5_ECG_COMPACT_FUSED") == "1")
-    compact_k2m_verify_requested = (
-        bool(getattr(args, "gem5_compact_k2m_streamshield", False)))
-    compact_k2m_performance_requested = (
-        bool(getattr(args, "gem5_compact_k2m_performance", False)))
-    compact_k2m_streamshield_requested = (
-        compact_k2m_verify_requested or
-        compact_k2m_performance_requested)
+    compact_reuse_bind_verify_requested = (
+        bool(getattr(args, "gem5_compact_reuse_bind_flowthrough", False)))
+    compact_reuse_bind_performance_requested = (
+        bool(getattr(args, "gem5_compact_reuse_bind_performance", False)))
+    compact_reuse_bind_flowthrough_requested = (
+        compact_reuse_bind_verify_requested or
+        compact_reuse_bind_performance_requested)
     if compact_fused_requested and args.benchmark != "pr":
         raise RuntimeError(
-            "fused compact K2 is implemented only for gem5 PageRank; "
+            "fused compact ReusePlan is implemented only for gem5 PageRank; "
             f"benchmark={args.benchmark!r} would run a wide load while being "
             "labelled compact")
     compact_fused_cell_requested = (
-        is_k2_ecg and compact_fused_requested)
+        is_reuse_plan_ecg and compact_fused_requested)
     if compact_fused_cell_requested:
         env["GEM5_ECG_COMPACT_FUSED"] = "1"
     else:
         env.pop("GEM5_ECG_COMPACT_FUSED", None)
-    compact_k2m_streamshield_cell_requested = (
-        is_k2_ecg and compact_k2m_streamshield_requested and
-        transport.stream_bypass and args.ecg_isa_variant == "mask")
-    if compact_k2m_streamshield_cell_requested:
+    compact_reuse_bind_flowthrough_cell_requested = (
+        is_reuse_plan_ecg and compact_reuse_bind_flowthrough_requested and
+        transport.flowthrough and args.ecg_isa_variant == "computed")
+    if compact_reuse_bind_flowthrough_cell_requested:
         env.update({
-            "GEM5_ECG_COMPACT_K2M_SS": "1",
+            "GEM5_ECG_COMPACT_REUSE_BIND_FLOW": "1",
             "ECG_RECORD_VARIABLE_WIDTH": "1",
             "ECG_EXPECT_BYTES_PER_EDGE": "4",
         })
-        if compact_k2m_verify_requested:
-            env["ECG_STREAM_BYPASS_TRACE"] = "2048"
-            env["ECG_K2_DELIVERY_TRACE"] = "2048"
+        if compact_reuse_bind_verify_requested:
+            env["ECG_FLOWTHROUGH_TRACE"] = "2048"
+            env["ECG_REUSE_PLAN_DELIVERY_TRACE"] = "2048"
             if transport.set_dueling:
-                env["ECG_STREAM_BYPASS_TRACE"] = "131072"
-                env["ECG_K2_DELIVERY_TRACE"] = "131072"
+                env["ECG_FLOWTHROUGH_TRACE"] = "131072"
+                env["ECG_REUSE_PLAN_DELIVERY_TRACE"] = "131072"
         else:
             disable_gem5_event_traces(env)
     else:
-        env.pop("GEM5_ECG_COMPACT_K2M_SS", None)
-    k2_isa_name = (
-        "mload" if args.ecg_isa_variant == "mask" else "iload")
-    if is_k2_ecg:
+        env.pop("GEM5_ECG_COMPACT_REUSE_BIND_FLOW", None)
+    reuse_bind_isa_name = (
+        "load" if args.ecg_isa_variant == "computed" else "iload")
+    if is_reuse_plan_ecg:
         env["GEM5_ECG_ISA_VARIANT"] = args.ecg_isa_variant
         env["GEM5_ECG_EPOCH_CSR"] = "1"
         gem5_ecg_epoch_channel = "csr"
@@ -2371,9 +2371,9 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     requested_ecg_load = os.environ.get("GEM5_FORCE_ECG_LOAD") == "1"
     env.pop("GEM5_FORCE_ECG_LOAD", None)
     env.pop("GEM5_FORCE_ECG_PLOAD", None)
-    env.pop("GEM5_FORCE_ECG_STREAM_LOAD2", None)
-    env.pop("GEM5_FORCE_ECG_LOAD2", None)
-    env.pop("GEM5_ECG_STREAM_REQUEST_BOUND", None)
+    env.pop("GEM5_FORCE_ECG_FLOW_LOAD", None)
+    env.pop("GEM5_FORCE_ECG_PLAN_LOAD", None)
+    env.pop("GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND", None)
     env["GEM5_GRAPHBREW_CTX"] = str(sidebands["context"])
     env["GEM5_POPT_MATRIX"] = str(sidebands["popt_matrix"])
     env["GEM5_GRAPHBREW_OUT_EDGES"] = str(sidebands["out_edges"])
@@ -2395,32 +2395,32 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             "RISCV" in str(GEM5_OPT).upper()
             or "_riscv" in str(GEM5_KERNEL_SUFFIX).lower()
         )
-        if is_k2_ecg and args.ecg_isa_variant == "mask" and not riscv_delivery:
+        if is_reuse_plan_ecg and args.ecg_isa_variant == "computed" and not riscv_delivery:
             raise RuntimeError(
-                "gem5 K2-M requires the RISC-V custom load path; "
-                "X86 packed/extract fallback cannot be labeled mask-only.")
+                "gem5 ReuseBind requires the RISC-V custom load path; "
+                "X86 packed/extract fallback cannot be labeled computed-address.")
         ecg_variant = effective_ecg_variant(
-            args, transport.schedule_k, spec)
+            args, transport.reuse_plan_depth, spec)
         env["ECG_VARIANT"] = ecg_variant
-        schedule_k = transport.schedule_k if is_k2_ecg else 0
-        if schedule_k not in (0, 2):
+        reuse_plan_depth = transport.reuse_plan_depth if is_reuse_plan_ecg else 0
+        if reuse_plan_depth not in (0, 2):
             raise RuntimeError(
                 "gem5 Schedule-K delivery currently supports only "
-                "ECG_EDGE_MASK_SCHED=2.")
-        if schedule_k == 2 and (
+                "ECG_REUSE_PLAN_DEPTH=2.")
+        if reuse_plan_depth == 2 and (
                 args.benchmark not in ("pr", "bfs", "sssp", "bc", "cc")
                 or args.prefetcher not in ("none", "STRIDE")):
             raise RuntimeError(
-                "gem5 Schedule-2 is implemented for PR/BFS/SSSP/BC/CC with "
+                "gem5 two-epoch ReusePlan is implemented for PR/BFS/SSSP/BC/CC with "
                 "prefetcher none or STRIDE.")
         force_delivery = os.environ.get("ECG_FORCE_DELIVERY") == "1"
-        if schedule_k == 2 and args.benchmark in (
+        if reuse_plan_depth == 2 and args.benchmark in (
                 "pr", "bfs", "sssp", "bc", "cc"):
-            k2_masked_pload = (
+            reuse_bind_iload = (
                 riscv_delivery and
                 args.benchmark in ("pr", "bfs", "sssp", "bc", "cc"))
-            # Explicit ablation of the fused masked property load (K2-I). Every
-            # fused delivery -- ecg.k2.iload, ecg.load2, ecg.stream.load2 --
+            # Explicit ablation of the fused computed-address property load (ReuseBind-Indexed). Every
+            # fused delivery -- ecg.bind.iload, ecg.plan.load, ecg.flow.load --
             # carries the CANONICAL 64-bit record and has no 32-bit variant, so
             # a compact record must be widened in software before it can be
             # used. That software widen is precisely the cost under study, so
@@ -2428,49 +2428,49 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             # family off and putting every arm on the plain
             # packed+ecg.extract2 delivery.
             fused_record_load_allowed = (
-                os.environ.get("GRAPHBREW_K2_FUSED_LOAD") != "0")
+                os.environ.get("GRAPHBREW_REUSE_PLAN_FUSED_LOAD") != "0")
             if not fused_record_load_allowed:
-                k2_masked_pload = False
-            if args.gem5_cpu_type == "O3" and not k2_masked_pload:
+                reuse_bind_iload = False
+            if args.gem5_cpu_type == "O3" and not reuse_bind_iload:
                 raise RuntimeError(
-                    "Schedule-2 O3 requires the RISC-V masked property-load "
-                    "path with its request-bound epoch-pair producer.")
+                    "two-epoch ReusePlan O3 requires the RISC-V masked property-load "
+                    "path with its request-bound ReusePlan producer.")
             env.pop("GEM5_FORCE_ECG_LOAD", None)
-            if k2_masked_pload:
+            if reuse_bind_iload:
                 env["GEM5_FORCE_ECG_PLOAD"] = "1"
                 if args.gem5_cpu_type == "O3":
                     env["GEM5_ECG_PRODUCER"] = "1"
             else:
                 env.pop("GEM5_FORCE_ECG_PLOAD", None)
             if (riscv_delivery and
-                    env.get("ECG_STREAM_BYPASS") == "1"):
-                env["GEM5_FORCE_ECG_STREAM_LOAD2"] = "1"
-                env["GEM5_ECG_STREAM_REQUEST_BOUND"] = "1"
-                env.pop("GEM5_FORCE_ECG_LOAD2", None)
+                    env.get("ECG_FLOWTHROUGH") == "1"):
+                env["GEM5_FORCE_ECG_FLOW_LOAD"] = "1"
+                env["GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND"] = "1"
+                env.pop("GEM5_FORCE_ECG_PLAN_LOAD", None)
                 gem5_ecg_delivery = (
-                    f"ecg.stream.wload2+ecg.k2.{k2_isa_name}"
-                    if k2_masked_pload and args.benchmark == "sssp"
-                    else f"ecg.stream.load2+ecg.k2.{k2_isa_name}"
-                    if k2_masked_pload
-                    else "ecg.stream.wload2" if args.benchmark == "sssp"
-                    else "ecg.stream.load2")
-            elif k2_masked_pload:
-                env.pop("GEM5_FORCE_ECG_LOAD2", None)
-                env.pop("GEM5_FORCE_ECG_STREAM_LOAD2", None)
-                env.pop("GEM5_ECG_STREAM_REQUEST_BOUND", None)
-                gem5_ecg_delivery = f"ecg.k2.{k2_isa_name}"
+                    f"ecg.flow.wload+ecg.bind.{reuse_bind_isa_name}"
+                    if reuse_bind_iload and args.benchmark == "sssp"
+                    else f"ecg.flow.load+ecg.bind.{reuse_bind_isa_name}"
+                    if reuse_bind_iload
+                    else "ecg.flow.wload" if args.benchmark == "sssp"
+                    else "ecg.flow.load")
+            elif reuse_bind_iload:
+                env.pop("GEM5_FORCE_ECG_PLAN_LOAD", None)
+                env.pop("GEM5_FORCE_ECG_FLOW_LOAD", None)
+                env.pop("GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND", None)
+                gem5_ecg_delivery = f"ecg.bind.{reuse_bind_isa_name}"
             elif riscv_delivery and fused_record_load_allowed:
-                env["GEM5_FORCE_ECG_LOAD2"] = "1"
-                env.pop("GEM5_FORCE_ECG_STREAM_LOAD2", None)
-                env.pop("GEM5_ECG_STREAM_REQUEST_BOUND", None)
+                env["GEM5_FORCE_ECG_PLAN_LOAD"] = "1"
+                env.pop("GEM5_FORCE_ECG_FLOW_LOAD", None)
+                env.pop("GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND", None)
                 gem5_ecg_delivery = (
-                    "ecg.wload2" if args.benchmark == "sssp"
-                    else "ecg.load2")
+                    "ecg.wplan_load" if args.benchmark == "sssp"
+                    else "ecg.plan.load")
             else:
-                env.pop("GEM5_FORCE_ECG_LOAD2", None)
-                env.pop("GEM5_FORCE_ECG_STREAM_LOAD2", None)
-                env.pop("GEM5_ECG_STREAM_REQUEST_BOUND", None)
-                gem5_ecg_delivery = "packed8+k2+ecg.extract2"
+                env.pop("GEM5_FORCE_ECG_PLAN_LOAD", None)
+                env.pop("GEM5_FORCE_ECG_FLOW_LOAD", None)
+                env.pop("GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND", None)
+                gem5_ecg_delivery = "packed8+reuse_plan+ecg.extract2"
         elif riscv_delivery and (ecg_variant != "grasp_only" or force_delivery):
             if args.benchmark == "pr":
                 # PR already has a 4-byte packed edge-record path (dest+epoch)
@@ -2586,16 +2586,16 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         "gem5_guest_staged_sha256": VALIDATED_GEM5_GUEST_SHA256,
         "gem5_guest_expected_sha256":
             str(args.expected_gem5_guest_sha256),
-        "gem5_compact_k2m_streamshield_requested": int(
-            compact_k2m_streamshield_cell_requested),
-        "gem5_compact_k2m_performance_requested": int(
-            compact_k2m_streamshield_cell_requested and
-            compact_k2m_performance_requested),
+        "gem5_compact_reuse_bind_flowthrough_requested": int(
+            compact_reuse_bind_flowthrough_cell_requested),
+        "gem5_compact_reuse_bind_performance_requested": int(
+            compact_reuse_bind_flowthrough_cell_requested and
+            compact_reuse_bind_performance_requested),
         "gem5_cpu_type": args.gem5_cpu_type,
-        "gem5_k2_delivery_trace_limit": int(
-            env.get("ECG_K2_DELIVERY_TRACE", "0") or 0),
-        "gem5_stream_bypass_trace_limit": int(
-            env.get("ECG_STREAM_BYPASS_TRACE", "0") or 0),
+        "gem5_reuse_bind_trace_limit": int(
+            env.get("ECG_REUSE_PLAN_DELIVERY_TRACE", "0") or 0),
+        "gem5_flowthrough_trace_limit": int(
+            env.get("ECG_FLOWTHROUGH_TRACE", "0") or 0),
     })
     base.update({
         "gem5_opt_expected_sha256": str(args.expected_gem5_opt_sha256),
@@ -2609,31 +2609,31 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     if gem5_ecg_delivery:
         base["gem5_ecg_delivery"] = gem5_ecg_delivery
     if (
-            compact_k2m_streamshield_cell_requested and
-            compact_k2m_verify_requested):
+            compact_reuse_bind_flowthrough_cell_requested and
+            compact_reuse_bind_verify_requested):
         base["timing_model"] = "mechanism_probe_exact_request"
         base["timing_valid_for_speedup"] = "0"
         base["timing_caveat"] = (
-            "Synthetic compact StreamShield plus K2-M O3 correctness gate; "
+            "Synthetic compact FlowThrough plus ReuseBind O3 correctness gate; "
             "this row is not performance evidence.")
     elif (
-            compact_k2m_streamshield_cell_requested and
-            compact_k2m_performance_requested and
+            compact_reuse_bind_flowthrough_cell_requested and
+            compact_reuse_bind_performance_requested and
             args.has_lru_baseline and
             str(base.get("timing_valid_for_speedup")) == "1"):
-        base["timing_model"] = "architectural_compact_k2m_streamshield"
+        base["timing_model"] = "architectural_compact_reuse_bind_flowthrough"
         base["timing_valid_for_speedup"] = "1"
         base["timing_caveat"] = ""
     elif (
-            compact_k2m_streamshield_requested and
-            is_k2_ecg and not transport.stream_bypass):
+            compact_reuse_bind_flowthrough_requested and
+            is_reuse_plan_ecg and not transport.flowthrough):
         base["timing_model"] = "mechanism_semantic_anchor"
         base["timing_valid_for_speedup"] = "0"
         base["timing_caveat"] = (
-            "Non-StreamShield wide-record K2 semantic anchor; it is "
-            "width-unmatched and is not a StreamShield control or "
+            "Non-FlowThrough wide-record ReusePlan semantic anchor; it is "
+            "width-unmatched and is not a FlowThrough control or "
             "performance evidence.")
-    if str(gem5_ecg_delivery).startswith("packed8+k2+ecg.extract2"):
+    if str(gem5_ecg_delivery).startswith("packed8+reuse_plan+ecg.extract2"):
         # Deliberately fail-closed and deliberately NOT relaxed for the compact
         # ISA arm. ecg.extract2c removes the software widen, but the property
         # load is still a separate instruction rather than a fused,
@@ -2663,26 +2663,26 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         for benchmark_log in gem5_out.rglob("benchmark_stderr.txt"):
             log_text += "\n" + benchmark_log.read_text(errors="ignore")
         compact_weighted_markers = (
-            "[ECG_K2_WEIGHTED64]",
-            "[ECG_K2_MLOAD_CW24]",
-            "[ECG_K2_ILOAD_CW24]",
+            "[ECG_REUSE_PLAN_WEIGHTED64]",
+            "[ECG_REUSE_BIND_LOAD_CW24]",
+            "[ECG_REUSE_BIND_ILOAD_CW24]",
         )
         if any(marker in log_text for marker in compact_weighted_markers):
             compact_isa_name = (
-                "mload" if "[ECG_K2_MLOAD_CW24]" in log_text else "iload")
+                "load" if "[ECG_REUSE_BIND_LOAD_CW24]" in log_text else "iload")
             base.update({
                 "gem5_ecg_delivery": (
-                    f"ecg.stream.weighted64+ecg.k2.{compact_isa_name}.cw24"
-                    if transport.stream_bypass
-                    else f"ecg.weighted64+ecg.k2.{compact_isa_name}.cw24"),
+                    f"ecg.flow.weighted+ecg.bind.{compact_isa_name}.cw24"
+                    if transport.flowthrough
+                    else f"ecg.plan.weighted+ecg.bind.{compact_isa_name}.cw24"),
                 "graph_edge_bytes": 8,
                 "ecg_record_bytes": 8,
                 "edge_stream_bytes_per_edge": 8,
                 "ecg_record_replaces_edge": 1,
             })
-        if "[ECG_K2_MLOAD" in log_text:
-            base["ecg_isa_variant"] = "mask"
-        elif "[ECG_K2_ILOAD" in log_text:
+        if "[ECG_REUSE_BIND_LOAD" in log_text:
+            base["ecg_isa_variant"] = "computed"
+        elif "[ECG_REUSE_BIND_ILOAD" in log_text:
             base["ecg_isa_variant"] = "indexed"
         apply_gem5_grasp_receipt(
             base, log_text, required=spec.policy == "GRASP")
@@ -2693,29 +2693,29 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             effective_l3_size, effective_l3_ways)
         apply_gem5_compact_fused_receipt(
             base, log_text, compact_fused_cell_requested)
-        apply_gem5_compact_k2m_streamshield_receipt(
-            base, log_text, compact_k2m_streamshield_cell_requested,
-            require_trace_receipts=compact_k2m_verify_requested,
+        apply_gem5_compact_reuse_bind_flowthrough_receipt(
+            base, log_text, compact_reuse_bind_flowthrough_cell_requested,
+            require_trace_receipts=compact_reuse_bind_verify_requested,
             performance_requested=(
-                compact_k2m_streamshield_cell_requested and
-                compact_k2m_performance_requested))
-        apply_gem5_request_bound_k2_receipt(
+                compact_reuse_bind_flowthrough_cell_requested and
+                compact_reuse_bind_performance_requested))
+        apply_gem5_reuse_bind_receipt(
             base, log_text, (
-                compact_k2m_streamshield_cell_requested and
-                compact_k2m_verify_requested),
+                compact_reuse_bind_flowthrough_cell_requested and
+                compact_reuse_bind_verify_requested),
             64, require_discriminating=(
-                compact_k2m_streamshield_cell_requested and
-                compact_k2m_verify_requested),
+                compact_reuse_bind_flowthrough_cell_requested and
+                compact_reuse_bind_verify_requested),
             trace_limit=int(
-                base.get("gem5_k2_delivery_trace_limit") or 0))
+                base.get("gem5_reuse_bind_trace_limit") or 0))
         if (
-                compact_k2m_streamshield_cell_requested and
-                compact_k2m_performance_requested):
+                compact_reuse_bind_flowthrough_cell_requested and
+                compact_reuse_bind_performance_requested):
             trace_free = (
-                int(base.get("gem5_k2_delivery_trace_limit") or 0) == 0 and
-                int(base.get("gem5_stream_bypass_trace_limit") or 0) == 0 and
-                int(base.get("gem5_k2_request_trace_events") or 0) == 0 and
-                int(base.get("gem5_stream_bypass_all_events") or 0) == 0)
+                int(base.get("gem5_reuse_bind_trace_limit") or 0) == 0 and
+                int(base.get("gem5_flowthrough_trace_limit") or 0) == 0 and
+                int(base.get("gem5_reuse_bind_request_trace_events") or 0) == 0 and
+                int(base.get("gem5_flowthrough_all_events") or 0) == 0)
             if not trace_free:
                 mark_row_error(
                     base,
@@ -2723,30 +2723,30 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             base["proposal_performance_mode_active"] = int(
                 trace_free and
                 int(base.get("proposal_performance_mode_active") or 0) == 1)
-        base["gem5_stream_bypass_trace_saturated"] = int(
-            int(base.get("gem5_stream_bypass_trace_limit") or 0) > 0 and
-            int(base.get("gem5_stream_bypass_all_events") or 0) >=
-            int(base.get("gem5_stream_bypass_trace_limit") or 0))
+        base["gem5_flowthrough_trace_saturated"] = int(
+            int(base.get("gem5_flowthrough_trace_limit") or 0) > 0 and
+            int(base.get("gem5_flowthrough_all_events") or 0) >=
+            int(base.get("gem5_flowthrough_trace_limit") or 0))
         if (
-                compact_k2m_streamshield_cell_requested and
-                int(base.get("gem5_k2_delivery_trace_saturated") or 0)):
+                compact_reuse_bind_flowthrough_cell_requested and
+                int(base.get("gem5_reuse_bind_trace_saturated") or 0)):
             caveat = str(base.get("timing_caveat") or "").strip()
             trace_limit = int(
-                base.get("gem5_k2_delivery_trace_limit") or 0)
+                base.get("gem5_reuse_bind_trace_limit") or 0)
             trace_events = int(
-                base.get("gem5_k2_request_trace_events") or 0)
-            accepts = int(base.get("gem5_k2_request_accepts") or 0)
+                base.get("gem5_reuse_bind_request_trace_events") or 0)
+            accepts = int(base.get("gem5_reuse_bind_request_accepts") or 0)
             exact_accepts = int(
-                base.get("gem5_k2_exact_vertex_accepts") or 0)
+                base.get("gem5_reuse_bind_exact_vertex_accepts") or 0)
             coalesced_accepts = int(
-                base.get("gem5_k2_coalesced_line_accepts") or 0)
-            base["gem5_k2_accepts_per_traced_request"] = (
+                base.get("gem5_reuse_bind_coalesced_line_accepts") or 0)
+            base["gem5_reuse_bind_accepts_per_traced_request"] = (
                 accepts / trace_events if trace_events else 0.0)
             trace_caveat = (
                 f"Exact binding is attested for {accepts} accepted LLC "
                 f"deliveries ({exact_accepts} exact-vertex, "
                 f"{coalesced_accepts} same-line coalesced) observed within "
-                f"the first {trace_limit} traced K2 requests; request-count "
+                f"the first {trace_limit} traced ReusePlan requests; request-count "
                 "coverage is not claimed. Accept traces are emitted only "
                 "after the simulator dest-line guard; non-accepted traced "
                 "requests are unclassified (inner-cache hit or guard "
@@ -2754,10 +2754,10 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             base["timing_caveat"] = " ".join(
                 part for part in (caveat, trace_caveat) if part)
         apply_gem5_variant_receipt(
-            base, log_text, ecg_variant, required=is_k2_ecg,
+            base, log_text, ecg_variant, required=is_reuse_plan_ecg,
             expected_dueling=int(transport.set_dueling))
         # ecg_record_bytes above is a NOMINAL value derived from the schedule,
-        # so it read 8 for every Schedule-2 row even when the guest streamed a
+        # so it read 8 for every two-epoch ReusePlan row even when the guest streamed a
         # compact 4-byte record. Anyone re-parsing the combined CSV would have
         # concluded both width stages streamed 8 bytes. The guest receipt is the
         # only source of truth for what was actually streamed, so promote it.
@@ -2781,19 +2781,19 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         base["ecg_compact_isa_active"] = int("[ECG_EXTRACT2C]" in log_text)
         # The delivery label was hardcoded from the env, so a cell that streamed
         # a 4-byte record and decoded it in the ISA still reported
-        # "packed8+k2+ecg.extract2". Derive it from what the guest reported.
+        # "packed8+reuse_plan+ecg.extract2". Derive it from what the guest reported.
         current = str(base.get("gem5_ecg_delivery", ""))
-        if current.startswith("packed8+k2+ecg.extract2"):
+        if current.startswith("packed8+reuse_plan+ecg.extract2"):
             width = base.get("ecg_receipt_bytes_per_edge")
             stem = "packed4" if width == 4.0 else "packed8"
             op = ("ecg.extract2c" if base.get("ecg_compact_isa_active")
                   else "ecg.extract2")
-            base["gem5_ecg_delivery"] = f"{stem}+k2+{op}"
+            base["gem5_ecg_delivery"] = f"{stem}+reuse_plan+{op}"
         base["gem5_metadata_fatal"] = log_text.count("[ECG-METADATA-FATAL")
-        base["gem5_stream_bypass_trace_events"] = log_text.count(
-            "[ECG-STREAM-BYPASS sim=gem5")
-        base["gem5_stream_adaptive_active"] = int(
-            "[ECG-STREAM-ADAPTIVE sim=gem5 active=1]" in log_text)
+        base["gem5_flowthrough_trace_events"] = log_text.count(
+            "[ECG-FLOWTHROUGH sim=gem5")
+        base["gem5_flowthrough_adaptive_active"] = int(
+            "[ECG-FLOWTHROUGH-ADAPTIVE sim=gem5 active=1]" in log_text)
         pr_result = re.search(
             r"\[ECG-PR-RESULT iterations=(\d+) semantic_edges=(\d+) "
             r"score_checksum=([0-9a-fA-F]+)\]", log_text)
@@ -2801,14 +2801,14 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             base["pr_iterations"] = int(pr_result.group(1))
             base["pr_semantic_edges"] = int(pr_result.group(2))
             base["pr_score_checksum"] = pr_result.group(3).lower()
-        if is_k2_ecg:
-            base["gem5_k2_binding_model"] = (
+        if is_reuse_plan_ecg:
+            base["gem5_reuse_bind_model"] = (
                 "request" if args.gem5_cpu_type == "O3"
                 else "serialized_mailbox")
             if args.gem5_cpu_type != "O3":
                 caveat = str(base.get("timing_caveat") or "").strip()
                 binding_caveat = (
-                    "TimingSimpleCPU uses serialized mailbox-equivalent K2 "
+                    "TimingSimpleCPU uses serialized mailbox-equivalent ReusePlan "
                     "delivery; exact request binding is proven separately by "
                     "the O3 mechanism probe.")
                 base["timing_caveat"] = " ".join(
@@ -2855,10 +2855,10 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             row,
             "P-OPT performed no phase-two rereference queries in the ROI")
     apply_overhead_metrics(row)
-    if (transport.stream_adaptive and
-            not int(row.get("gem5_stream_adaptive_active") or 0)):
+    if (transport.flowthrough_adaptive and
+            not int(row.get("gem5_flowthrough_adaptive_active") or 0)):
         mark_row_error(
-            row, "adaptive StreamShield was requested but not active")
+            row, "adaptive FlowThrough was requested but not active")
     return [row]
 
 
@@ -3178,46 +3178,46 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     env = dict(os.environ)
     scrub_cell_mechanism_env(env)
     apply_explicit_cell_mechanism_env(env, spec)
-    if args.ecg_isa_variant == "mask":
+    if args.ecg_isa_variant == "computed":
         apply_sniper_transport_cell_env(env)
     semantic_edge_limit = int(args.sniper_semantic_edge_limit)
     if semantic_edge_limit > 0:
         env["SNIPER_SEMANTIC_EDGE_LIMIT"] = str(semantic_edge_limit)
     else:
         env.pop("SNIPER_SEMANTIC_EDGE_LIMIT", None)
-    env.pop("SNIPER_ECG_FUSED_K2", None)
+    env.pop("SNIPER_ECG_FUSED_REUSE_PLAN", None)
     env.pop("SNIPER_ECG_FUSED_VALIDATE", None)
-    env.pop("SNIPER_K2_TRANSPORT_MATCHED", None)
-    env.pop("SNIPER_K2_EXACT_BIND", None)
+    env.pop("SNIPER_REUSE_PLAN_TRANSPORT_MATCHED", None)
+    env.pop("SNIPER_REUSE_PLAN_EXACT_BIND", None)
     transport = ecg_transport_for(spec, args.benchmark)
     apply_ecg_transport_env(env, transport)
-    is_k2_ecg = policy_name == "ecg" and spec.ecg_mode == "ECG_GRASP_POPT"
-    if args.ecg_isa_variant == "mask":
-        env["SNIPER_K2_TRANSPORT_MATCHED"] = "1"
-        env["SNIPER_K2_EXACT_BIND"] = "1"
+    is_reuse_plan_ecg = policy_name == "ecg" and spec.ecg_mode == "ECG_GRASP_POPT"
+    if args.ecg_isa_variant == "computed":
+        env["SNIPER_REUSE_PLAN_TRANSPORT_MATCHED"] = "1"
+        env["SNIPER_REUSE_PLAN_EXACT_BIND"] = "1"
         env["SNIPER_ENABLE_ECG_EXTRACT"] = "1"
-        env["SNIPER_ECG_FUSED_K2"] = "1"
-        env["ECG_EDGE_MASK_SCHED"] = "2"
+        env["SNIPER_ECG_FUSED_REUSE_PLAN"] = "1"
+        env["ECG_REUSE_PLAN_DEPTH"] = "2"
         env["ECG_EDGE_MASK_EPOCHS"] = str(args.ecg_epochs)
-        env["ECG_K2_VALIDATE"] = "1"
+        env["ECG_REUSE_PLAN_VALIDATE"] = "1"
         row["sniper_transport_matched"] = 1
-        row["sniper_k2_exact_bind"] = 1
-        row["sniper_k2_epoch_context_bound"] = 1
+        row["sniper_reuse_bind_exact"] = 1
+        row["sniper_reuse_plan_epoch_context_bound"] = 1
         row["sniper_transport_receipts_validated"] = 0
-        row["sniper_k2_exact_bind_validated"] = 0
-        row["sniper_k2_epoch_context_validated"] = 0
+        row["sniper_reuse_bind_exact_validated"] = 0
+        row["sniper_reuse_plan_epoch_context_validated"] = 0
         transport_record_bytes = explicit_ecg_record_bytes(8)
         row["sniper_transport_record_bytes"] = transport_record_bytes
         row["sniper_transport_bytes_per_edge"] = transport_record_bytes
         row["timing_model"] = "transport_matched_diagnostic"
         row["timing_valid_for_speedup"] = "0"
         row["timing_caveat"] = (
-            "Transport-matched K2-M certification row; timing remains "
+            "Transport-matched ReuseBind certification row; timing remains "
             "diagnostic because Sniper models rather than executes the "
             "architectural epoch/context CSR channel.")
-    if (is_k2_ecg and args.ecg_isa_variant == "mask" and
+    if (is_reuse_plan_ecg and args.ecg_isa_variant == "computed" and
             args.sniper_require_fused_receipts):
-        require_sniper_k2_certification_budget(env)
+        require_sniper_reuse_plan_certification_budget(env)
     if policy_name == "popt":
         popt_fast = (
             "0" if os.environ.get("SNIPER_POPT_FAST") == "0" else "1")
@@ -3277,47 +3277,47 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     if spec.ecg_mode and policy_name == "ecg":
         env["SNIPER_ECG_MODE"] = spec.ecg_mode
     ecg_variant = effective_ecg_variant(
-        args, transport.schedule_k, spec)
+        args, transport.reuse_plan_depth, spec)
     env["ECG_VARIANT"] = ecg_variant
-    if args.ecg_isa_variant == "mask":
+    if args.ecg_isa_variant == "computed":
         env["SNIPER_ECG_MODE"] = "ECG_GRASP_POPT"
         env["ECG_MODE"] = "ECG_GRASP_POPT"
-        # Preserve any spec-pinned variant (e.g. ECG:K2_LRU_STREAMSHIELD ->
+        # Preserve any spec-pinned variant (e.g. ECG:REUSE_PLAN_LRU_FLOWTHROUGH ->
         # "lru_only") instead of unconditionally overwriting it with the
-        # generic ECG:K2 adaptive mapping; see sniper_mask_mode_ecg_variant.
+        # generic ECG:REUSE_PLAN adaptive mapping; see sniper_mask_mode_ecg_variant.
         ecg_variant = sniper_mask_mode_ecg_variant(
-            args, transport.schedule_k, spec)
+            args, transport.reuse_plan_depth, spec)
         env["ECG_VARIANT"] = ecg_variant
         env["ECG_EDGE_MASKS"] = "1"
         env["SNIPER_POPT_FAST"] = "1"
-    schedule_k = transport.schedule_k if is_k2_ecg else 0
-    if schedule_k not in (0, 2):
+    reuse_plan_depth = transport.reuse_plan_depth if is_reuse_plan_ecg else 0
+    if reuse_plan_depth not in (0, 2):
         raise RuntimeError(
             "Sniper Schedule-K delivery currently supports only "
-            "ECG_EDGE_MASK_SCHED=2.")
-    if schedule_k == 2 and (
+            "ECG_REUSE_PLAN_DEPTH=2.")
+    if reuse_plan_depth == 2 and (
             args.benchmark not in ("pr", "bfs", "sssp", "bc", "cc")
             or args.prefetcher not in ("none", "STRIDE")):
         raise RuntimeError(
-            "Sniper Schedule-2 is implemented for PR/BFS/SSSP/BC/CC with "
+            "Sniper two-epoch ReusePlan is implemented for PR/BFS/SSSP/BC/CC with "
             "prefetcher none or STRIDE.")
-    if schedule_k == 2 and args.sniper_workload != "sg_kernel":
+    if reuse_plan_depth == 2 and args.sniper_workload != "sg_kernel":
         raise RuntimeError(
-            "Sniper Schedule-2 requires --sniper-workload sg_kernel; "
+            "Sniper two-epoch ReusePlan requires --sniper-workload sg_kernel; "
             "the smoke/full-wrapper workloads do not emit extract2 pairs.")
-    if (env.get("ECG_STREAM_BYPASS") == "1" and
+    if (env.get("ECG_FLOWTHROUGH") == "1" and
             args.sniper_workload != "sg_kernel"):
         raise RuntimeError(
-            "Sniper StreamShield requires --sniper-workload sg_kernel; "
+            "Sniper FlowThrough requires --sniper-workload sg_kernel; "
             "the smoke/full-wrapper workloads do not export packed-stream ranges.")
     force_delivery = os.environ.get("ECG_FORCE_DELIVERY") == "1"
-    fused_k2 = False
+    fused_reuse_plan = False
     fused_validation = False
-    k2_trace_requested = (
-        env.get("ECG_K2_DELIVERY_TRACE", "0") not in ("", "0"))
+    reuse_plan_trace_requested = (
+        env.get("ECG_REUSE_PLAN_DELIVERY_TRACE", "0") not in ("", "0"))
     cold_mechanism_proof = (
         args.sniper_require_fused_receipts or
-        (schedule_k == 2 and k2_trace_requested)
+        (reuse_plan_depth == 2 and reuse_plan_trace_requested)
     )
     if cold_mechanism_proof:
         cmd.insert(cmd.index("--roi") + 1, "--no-cache-warming")
@@ -3325,31 +3325,31 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     else:
         row["sniper_cache_warming"] = 1
     if (spec.ecg_mode == "ECG_GRASP_POPT" and policy_name == "ecg"
-            and (schedule_k == 2 or ecg_variant != "grasp_only"
+            and (reuse_plan_depth == 2 or ecg_variant != "grasp_only"
                  or force_delivery)):
         # Performance-equivalent to gem5/cache_sim: consume the delivered
         # per-edge epoch, not Sniper's stronger live findNextRef oracle.
         env["SNIPER_ENABLE_ECG_EXTRACT"] = "1"
         env["ECG_EDGE_MASK_EPOCHS"] = str(args.ecg_epochs)
-        fused_k2 = (
-            schedule_k == 2 and args.sniper_workload == "sg_kernel"
+        fused_reuse_plan = (
+            reuse_plan_depth == 2 and args.sniper_workload == "sg_kernel"
         )
-        if fused_k2:
-            env["SNIPER_ECG_FUSED_K2"] = "1"
+        if fused_reuse_plan:
+            env["SNIPER_ECG_FUSED_REUSE_PLAN"] = "1"
             fused_validation = cold_mechanism_proof
             if fused_validation:
                 env["SNIPER_ECG_FUSED_VALIDATE"] = "1"
         row["sniper_ecg_delivery"] = (
-            "matched-k2m-sideband-model"
-            if fused_k2 and args.ecg_isa_variant == "mask"
-            else "fused-k2-weighted32-model"
-            if fused_k2 and args.benchmark == "sssp"
-            else "fused-k2-model" if fused_k2
-            else "per-edge-extract2-k2" if schedule_k == 2
+            "matched-reuse_bind-sideband-model"
+            if fused_reuse_plan and args.ecg_isa_variant == "computed"
+            else "fused-reuse_plan-weighted32-model"
+            if fused_reuse_plan and args.benchmark == "sssp"
+            else "fused-reuse_plan-model" if fused_reuse_plan
+            else "per-edge-extract2-reuse_plan" if reuse_plan_depth == 2
             else "per-edge-extract")
-        if fused_k2:
-            if args.ecg_isa_variant == "mask":
-                row["timing_model"] = "matched_mask_only_sideband_model"
+        if fused_reuse_plan:
+            if args.ecg_isa_variant == "computed":
+                row["timing_model"] = "matched_computed_address_sideband_model"
                 row["timing_valid_for_speedup"] = "0"
                 row["timing_caveat"] = (
                     "All policies use transport-matched, runtime-receipted "
@@ -3365,14 +3365,14 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
                     "non-tracing runs execute no per-edge SimMagic or "
                     "software-only delivery call. Sniper remains "
                     "scale/direction corroboration, not an architectural "
-                    "K2-M speedup authority.")
-        elif schedule_k == 2:
+                    "ReuseBind speedup authority.")
+        elif reuse_plan_depth == 2:
             row["timing_model"] = "prototype_explicit_magic_delivery"
             row["timing_valid_for_speedup"] = "0"
             row["timing_caveat"] = (
-                "This kernel still emits per-edge SimMagic for K2 delivery; "
+                "This kernel still emits per-edge SimMagic for ReusePlan delivery; "
                 "use cache metrics, not speedup.")
-    elif args.ecg_isa_variant != "mask":
+    elif args.ecg_isa_variant != "computed":
         env.pop("SNIPER_ENABLE_ECG_EXTRACT", None)
     apply_instruction_cap_provenance(row, "sniper", args)
     apply_semantic_cap_provenance(row, "sniper", args)
@@ -3381,7 +3381,7 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         return []
 
     if result is None or result.returncode != 0:
-        clear_sniper_k2_sidebands(sidebands)
+        clear_sniper_reuse_plan_sidebands(sidebands)
         row.update({"status": "error", "error": f"exit_code={result.returncode if result else 'unknown'}"})
         return [row]
     log_text = log_path.read_text(errors="ignore")
@@ -3403,14 +3403,14 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             r"edge_visits=(\d+) limit=(\d+) truncated=([01])\]",
             log_text)
         if not work_matches:
-            clear_sniper_k2_sidebands(sidebands)
+            clear_sniper_reuse_plan_sidebands(sidebands)
             row.update({
                 "status": "error",
                 "error": "Sniper semantic edge-limit marker missing",
             })
             return [row]
         if len(work_matches) != 1:
-            clear_sniper_k2_sidebands(sidebands)
+            clear_sniper_reuse_plan_sidebands(sidebands)
             row.update({
                 "status": "error",
                 "error": (
@@ -3431,7 +3431,7 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
                 marker_limit != semantic_limit or
                 visits > semantic_limit or
                 (truncated and visits != semantic_limit)):
-            clear_sniper_k2_sidebands(sidebands)
+            clear_sniper_reuse_plan_sidebands(sidebands)
             row.update({
                 "status": "error",
                 "error": "Sniper semantic edge-limit marker mismatch",
@@ -3446,14 +3446,14 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         row["ecg_receipt_bytes_per_edge"] = float(
             metadata_receipt.group(2))
         row["ecg_record_bytes"] = runtime_record_bytes
-        if (args.ecg_isa_variant == "mask" and
+        if (args.ecg_isa_variant == "computed" and
                 args.benchmark != "sssp"):
             row["ecg_record_replaces_edge"] = 1
             row["edge_stream_bytes_per_edge"] = runtime_record_bytes
         elif int(row.get("ecg_record_replaces_edge") or 0):
             row["edge_stream_bytes_per_edge"] = runtime_record_bytes
-    if args.ecg_isa_variant == "mask":
-        if "[K2_TRANSPORT_MATCHED] SSSP general 12B" in log_text:
+    if args.ecg_isa_variant == "computed":
+        if "[REUSE_PLAN_TRANSPORT_MATCHED] SSSP general 12B" in log_text:
             transport_record_bytes = 12
         elif metadata_receipt:
             transport_record_bytes = int(metadata_receipt.group(1))
@@ -3461,18 +3461,18 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             transport_record_bytes = 8
         row["sniper_transport_record_bytes"] = transport_record_bytes
         row["sniper_transport_bytes_per_edge"] = transport_record_bytes
-    if args.ecg_isa_variant == "mask" and args.benchmark == "sssp":
-        if "[ECG_FUSED_K2_WEIGHTED64]" in log_text:
+    if args.ecg_isa_variant == "computed" and args.benchmark == "sssp":
+        if "[ECG_FUSED_REUSE_PLAN_WEIGHTED64]" in log_text:
             row.update({
-                "sniper_ecg_delivery": "fused-k2-weighted64-model",
+                "sniper_ecg_delivery": "fused-reuse_plan-weighted64-model",
                 "graph_edge_bytes": 8,
                 "ecg_record_bytes": 8,
                 "edge_stream_bytes_per_edge": 8,
                 "ecg_record_replaces_edge": 1,
             })
-        elif "[ECG_FUSED_K2_WEIGHTED32]" in log_text:
+        elif "[ECG_FUSED_REUSE_PLAN_WEIGHTED32]" in log_text:
             row.update({
-                "sniper_ecg_delivery": "fused-k2-weighted32-model",
+                "sniper_ecg_delivery": "fused-reuse_plan-weighted32-model",
                 "graph_edge_bytes": 8,
                 "ecg_record_bytes": 12,
                 "edge_stream_bytes_per_edge": 12,
@@ -3487,7 +3487,7 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         context_loaded = context_marker is not None
         row["sniper_context_loaded"] = int(context_loaded)
         if not context_loaded:
-            clear_sniper_k2_sidebands(sidebands)
+            clear_sniper_reuse_plan_sidebands(sidebands)
             row.update({
                 "status": "error",
                 "error": "Sniper graph policy completed without a loaded graph context",
@@ -3496,31 +3496,31 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         reref_loaded = int(context_marker.group(2))
         row["sniper_rereference_loaded"] = reref_loaded
         if policy_name == "popt" and reref_loaded != 1:
-            clear_sniper_k2_sidebands(sidebands)
+            clear_sniper_reuse_plan_sidebands(sidebands)
             row.update({
                 "status": "error",
                 "error": "Sniper P-OPT completed without a loaded rereference matrix",
             })
             return [row]
-        if (args.ecg_isa_variant == "mask" and policy_name != "popt"
+        if (args.ecg_isa_variant == "computed" and policy_name != "popt"
                 and reref_loaded != 0):
-            clear_sniper_k2_sidebands(sidebands)
+            clear_sniper_reuse_plan_sidebands(sidebands)
             row.update({
                 "status": "error",
                 "error": (
-                    "Matrix-free K2-M row unexpectedly loaded the P-OPT "
+                    "Matrix-free ReuseBind row unexpectedly loaded the P-OPT "
                     "rereference matrix"),
             })
             return [row]
-        if is_k2_ecg:
+        if is_reuse_plan_ecg:
             apply_sniper_variant_receipt(
                 row, log_text, ecg_variant, required=True,
                 expected_dueling=int(transport.set_dueling))
-            row["sniper_k2_dueling_binding_model"] = "marker_population"
+            row["sniper_reuse_bind_dueling_model"] = "marker_population"
 
     raw_stats = read_sniper_stats(sniper_out)
     if not raw_stats.get("success"):
-        clear_sniper_k2_sidebands(sidebands)
+        clear_sniper_reuse_plan_sidebands(sidebands)
         row.update({"status": "error", "error": raw_stats.get("error", "missing Sniper stats")})
         return [row]
 
@@ -3558,56 +3558,56 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         row["status"] = "ok"
     apply_sniper_geometry_receipt(row, sniper_out, l3_kb, sniper_l3_ways)
     apply_overhead_metrics(row)
-    # In certification mode the runner asks for a fixed K2 delivery-trace
+    # In certification mode the runner asks for a fixed ReusePlan delivery-trace
     # budget; require that full budget so a single paired transaction cannot
     # stand in for the whole trace.
     try:
-        k2_trace_budget = int(env.get("ECG_K2_DELIVERY_TRACE", "0") or 0)
+        reuse_plan_trace_budget = int(env.get("ECG_REUSE_PLAN_DELIVERY_TRACE", "0") or 0)
     except ValueError:
-        k2_trace_budget = 0
+        reuse_plan_trace_budget = 0
     fused_count, fused_bad = validate_sniper_fused_receipts(
         log_path, sidebands)
     bind_count, bind_bad = validate_sniper_exact_bind_trace(
-        log_path, k2_trace_budget)
-    row["sniper_k2_delivery_trace_budget"] = k2_trace_budget
-    row["sniper_fused_k2_receipts"] = fused_count
-    row["sniper_fused_k2_bad_receipts"] = fused_bad
-    row["sniper_k2_bind_consumes"] = bind_count
-    row["sniper_k2_bad_bind_consumes"] = bind_bad
+        log_path, reuse_plan_trace_budget)
+    row["sniper_reuse_bind_trace_budget"] = reuse_plan_trace_budget
+    row["sniper_fused_reuse_plan_receipts"] = fused_count
+    row["sniper_fused_reuse_plan_bad_receipts"] = fused_bad
+    row["sniper_reuse_bind_consumes"] = bind_count
+    row["sniper_reuse_bind_bad_consumes"] = bind_bad
     if (fused_count > 0 and fused_bad == 0 and
-            fused_count >= k2_trace_budget):
+            fused_count >= reuse_plan_trace_budget):
         row["sniper_transport_receipts_validated"] = 1
     if (bind_count > 0 and bind_bad == 0 and
-            bind_count >= k2_trace_budget):
-        row["sniper_k2_exact_bind_validated"] = 1
-        row["sniper_k2_epoch_context_validated"] = 1
+            bind_count >= reuse_plan_trace_budget):
+        row["sniper_reuse_bind_exact_validated"] = 1
+        row["sniper_reuse_plan_epoch_context_validated"] = 1
     if fused_validation and (fused_count == 0 or fused_bad != 0):
         row["timing_valid_for_speedup"] = "0"
         row["timing_caveat"] = (
             row.get("timing_caveat", "") +
-            " Fused K2 receipt validation failed.")
-    if (fused_validation and args.ecg_isa_variant == "mask" and
+            " Fused ReusePlan receipt validation failed.")
+    if (fused_validation and args.ecg_isa_variant == "computed" and
             (bind_count == 0 or bind_bad != 0)):
         row["status"] = "error"
         row["error"] = (
-            "exact K2 bind validation failed: "
+            "exact ReusePlan bind validation failed: "
             f"count={bind_count} bad={bind_bad}")
         row["timing_valid_for_speedup"] = "0"
         row["timing_caveat"] = (
             row.get("timing_caveat", "") +
-            " Exact K2 bind validation failed.")
+            " Exact ReusePlan bind validation failed.")
     if fused_validation and (fused_count == 0 or fused_bad != 0):
         row["status"] = "error"
         row["error"] = (
-            "fused K2 receipt validation failed: "
+            "fused ReusePlan receipt validation failed: "
             f"count={fused_count} bad={fused_bad}")
         row["timing_valid_for_speedup"] = "0"
     stats_path = Path(str(metrics.get("stats_path", "")))
     if stats_path.exists():
         stats_text = stats_path.read_text(errors="ignore")
         for field, metric in (
-            ("sniper_stream_bypass_reads", "stream-bypass-reads"),
-            ("sniper_stream_bypass_writes", "stream-bypass-writes"),
+            ("sniper_flowthrough_reads", "flowthrough-reads"),
+            ("sniper_flowthrough_writes", "flowthrough-writes"),
         ):
             match = re.search(
                 rf"nuca-cache\.{re.escape(metric)}\s*=\s*(\d+)",
@@ -3615,45 +3615,45 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             row[field] = int(match.group(1)) if match else 0
         # Sniper analog of gem5's OnlineDuelingStats (ecg_rp.hh): registered via
         # registerStatsMetric("ecg-online-dueling", 0, ...) in cache_set_ecg.cc,
-        # only when the K2 online-dueling selector was actually exercised.
+        # only when the ReusePlan online-dueling selector was actually exercised.
         # "governed_victims" (not "request_bound_victims") because Sniper has
         # no O3 Request/MSHR to bind a victim to -- see
-        # sniper_k2_dueling_binding_model.
+        # sniper_reuse_bind_dueling_model.
         for field, metric in (
-            ("sniper_k2_dueling_governed_victims", "governed-victims"),
-            ("sniper_k2_dueling_leader_samples", "leader-samples"),
-            ("sniper_k2_dueling_follower_selections", "follower-selections"),
-            ("sniper_k2_dueling_completed_windows", "completed-windows"),
-            ("sniper_k2_dueling_winner_changes", "winner-changes"),
-            ("sniper_k2_dueling_follower_variant_overrides",
+            ("sniper_reuse_plan_dueling_governed_victims", "governed-victims"),
+            ("sniper_reuse_plan_dueling_leader_samples", "leader-samples"),
+            ("sniper_reuse_plan_dueling_follower_selections", "follower-selections"),
+            ("sniper_reuse_plan_dueling_completed_windows", "completed-windows"),
+            ("sniper_reuse_plan_dueling_winner_changes", "winner-changes"),
+            ("sniper_reuse_plan_dueling_follower_variant_overrides",
              "follower-variant-overrides"),
         ):
             match = re.search(
                 rf"ecg-online-dueling\.{re.escape(metric)}\s*=\s*(\d+)",
                 stats_text)
             row[field] = int(match.group(1)) if match else 0
-    if is_k2_ecg:
+    if is_reuse_plan_ecg:
         validate_online_dueling_activity(
             row, transport.set_dueling,
             positive_fields=SNIPER_ONLINE_DUELING_REQUIRED_POSITIVE_FIELDS,
-            leader_samples_field="sniper_k2_dueling_leader_samples")
-    if transport.stream_bypass:
-        bypass_reads = int(row.get("sniper_stream_bypass_reads") or 0)
-        bypass_writes = int(row.get("sniper_stream_bypass_writes") or 0)
+            leader_samples_field="sniper_reuse_plan_dueling_leader_samples")
+    if transport.flowthrough:
+        flowthrough_reads = int(row.get("sniper_flowthrough_reads") or 0)
+        flowthrough_writes = int(row.get("sniper_flowthrough_writes") or 0)
         log_text = log_path.read_text(errors="ignore")
         adaptive_active = (
-            "[ECG-STREAM-ADAPTIVE sim=sniper active=1]" in log_text)
-        if transport.stream_adaptive and not adaptive_active:
+            "[ECG-FLOWTHROUGH-ADAPTIVE sim=sniper active=1]" in log_text)
+        if transport.flowthrough_adaptive and not adaptive_active:
             row["status"] = "error"
             row["error"] = (
-                "adaptive StreamShield was requested but not active")
+                "adaptive FlowThrough was requested but not active")
             row["timing_valid_for_speedup"] = "0"
-        elif (not transport.stream_adaptive and
-              (bypass_reads <= 0 or bypass_writes <= 0)):
+        elif (not transport.flowthrough_adaptive and
+              (flowthrough_reads <= 0 or flowthrough_writes <= 0)):
             row["status"] = "error"
             row["error"] = (
-                "StreamShield inactive: expected positive NUCA bypass "
-                f"reads/writes, got {bypass_reads}/{bypass_writes}")
+                "FlowThrough inactive: expected positive NUCA FlowThrough "
+                f"reads/writes, got {flowthrough_reads}/{flowthrough_writes}")
             row["timing_valid_for_speedup"] = "0"
     for key in (
         "pf_issued",
@@ -3734,7 +3734,7 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             })
         else:
             row["ecg_pfx_activity"] = "issued"
-    clear_sniper_k2_sidebands(sidebands)
+    clear_sniper_reuse_plan_sidebands(sidebands)
     return [row]
 
 
@@ -3768,8 +3768,8 @@ def parse_gem5_sections(stats_path: Path) -> list[dict[str, Any]]:
     return parsed
 
 
-def effective_ecg_epoch_count(requested: int, schedule_k: int) -> int:
-    upper = 32768 if schedule_k == 2 else 65535
+def effective_ecg_epoch_count(requested: int, reuse_plan_depth: int) -> int:
+    upper = 32768 if reuse_plan_depth == 2 else 65535
     return min(max(int(requested), 2), upper)
 
 
@@ -3925,7 +3925,7 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
         timing_valid_for_speedup = "0"
         timing_caveat = (
             "Sniper provides scale/direction corroboration only, not an "
-            "architectural K2-M speedup result.")
+            "architectural ReuseBind speedup result.")
     elif simulator == "cache_sim":
         timing_model = "cache_mechanism_model"
         timing_valid_for_speedup = "0"
@@ -4001,33 +4001,33 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
                 f"favors P-OPT.{prefetch_disclosure}")
             if part)
 
-    is_k2 = (
+    is_reuse_plan = (
         spec.policy == "ECG" and
         spec.ecg_mode == "ECG_GRASP_POPT" and
-        transport.schedule_k == 2)
-    trace_free_gem5_k2m = (
+        transport.reuse_plan_depth == 2)
+    trace_free_gem5_reuse_bind = (
         simulator == "gem5" and
-        bool(getattr(args, "gem5_compact_k2m_performance", False)) and
-        transport.stream_bypass)
-    if (is_k2 and args.ecg_isa_variant == "mask" and
+        bool(getattr(args, "gem5_compact_reuse_bind_performance", False)) and
+        transport.flowthrough)
+    if (is_reuse_plan and args.ecg_isa_variant == "computed" and
             simulator in ("gem5", "sniper") and
-            not trace_free_gem5_k2m):
-        timing_model = "prototype_mask_only_load"
+            not trace_free_gem5_reuse_bind):
+        timing_model = "prototype_computed_address_load"
         timing_valid_for_speedup = "0"
         timing_caveat = " ".join(
             part for part in (
                 timing_caveat,
-                "K2-M timing is diagnostic unless gem5 executes the "
-                "architectural compact StreamShield record load and "
+                "ReuseBind timing is diagnostic unless gem5 executes the "
+                "architectural compact FlowThrough record load and "
                 "request-bound property load with per-event tracing disabled.")
             if part)
 
     effective_ecg_epochs = effective_ecg_epoch_count(
-        args.ecg_epochs, transport.schedule_k)
+        args.ecg_epochs, transport.reuse_plan_depth)
     edge_bytes = 8 if args.benchmark == "sssp" else 4
     ecg_record_bytes = (
         explicit_ecg_record_bytes(8)
-        if transport.schedule_k == 2 else 0)
+        if transport.reuse_plan_depth == 2 else 0)
     row = {
         "simulator": simulator,
         "benchmark": args.benchmark,
@@ -4061,12 +4061,12 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
         "ecg_epoch_regions": ecg_epoch_region(args.benchmark),
         "ecg_isa_variant": (
             args.ecg_isa_variant
-            if is_k2
+            if is_reuse_plan
             else "baseline"),
         "ecg_isa_variant_requested": (
-            args.ecg_isa_variant if is_k2 else "baseline"),
+            args.ecg_isa_variant if is_reuse_plan else "baseline"),
         "ecg_charged": args.ecg_charged,
-        "ecg_schedule_k": transport.schedule_k,
+        "ecg_reuse_plan_depth": transport.reuse_plan_depth,
         "graph_edge_bytes": edge_bytes,
         "ecg_record_bytes": ecg_record_bytes,
         "edge_stream_bytes_per_edge": (
@@ -4079,8 +4079,8 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
         "ecg_record_replaces_edge": int(
             bool(args.ecg_charged and ecg_record_bytes and
                  args.benchmark != "sssp")),
-        "ecg_stream_bypass": int(transport.stream_bypass),
-        "ecg_stream_adaptive": int(transport.stream_adaptive),
+        "ecg_flowthrough": int(transport.flowthrough),
+        "ecg_flowthrough_adaptive": int(transport.flowthrough_adaptive),
         "popt_reserve_model": args.popt_reserve_model,
         "policy_label": spec.label,
         "policy": spec.policy,
@@ -4088,11 +4088,11 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
         "ecg_variant_requested": (
             spec.ecg_variant or os.environ.get(
                 "ECG_VARIANT",
-                "adaptive" if transport.schedule_k == 2 else "rrip_first")
+                "adaptive" if transport.reuse_plan_depth == 2 else "rrip_first")
             if spec.ecg_mode else ""
         ),
         "ecg_variant_effective": (
-            effective_ecg_variant(args, transport.schedule_k, spec)
+            effective_ecg_variant(args, transport.reuse_plan_depth, spec)
             if spec.ecg_mode else ""
         ),
         "l1d_size": args.l1d_size,
@@ -4110,14 +4110,14 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
             if charge else args.l3_ways),
         "l1_l2_policy": "LRU",
         # Recorded on every row: a comparison is only valid if all policies in
-        # the matrix had the same bypass option available. Only cache_sim
+        # the matrix had the same FlowThrough option available. Only cache_sim
         # implements it, so other backends must say so rather than echo the
         # request and imply an equalisation that never happened.
         "stream_prefetch_model_requested": (
             getattr(args, "stream_prefetch_model", "stride")
             if simulator == "cache_sim" else "n/a"),
-        "structural_bypass": (
-            getattr(args, "structural_bypass", "off")
+        "flowthrough": (
+            getattr(args, "flowthrough", "off")
             if simulator == "cache_sim" else "unsupported"),
     }
     if charge:
@@ -4357,7 +4357,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="gem5 CPU model (graph_se.py --cpu-type). 'timing'=TimingSimpleCPU "
                              "(in-order, default, all ECG validation used this); 'O3'=DerivO3CPU "
                              "(out-of-order) for the ecg.load OoO-pipeline evaluation. NOTE: under "
-                             "O3 the ecg.load epoch must ride the per-request EcgEpochExtension "
+                             "O3 the ecg.load epoch must ride the per-request EcgReusePlanExtension "
                              "sideband (race-free) rather than the single-slot mailbox, which "
                              "assumes in-order load serialization.")
     parser.add_argument("--gem5-max-insts", default="0",
@@ -4402,8 +4402,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                              "thread-count-dependent miss counts.")
     parser.add_argument("--l3-ways", default="16")
     parser.add_argument(
-        "--k2-l3-ways", type=int, default=0,
-        help="Optional Schedule-2 K2-only LLC associativity override for "
+        "--reuse-plan-l3-ways", type=int, default=0,
+        help="Optional ReusePlan-only LLC associativity override for "
              "equal-silicon sensitivity. Baselines retain --l3-ways; "
              "0 keeps equal data capacity.")
     parser.add_argument("--line-size", default="64")
@@ -4440,16 +4440,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                              "mispredicts the distinction the experiment turns on, so it is "
                              "an UPPER BOUND and results depending on it are ineligible for "
                              "performance claims under the frozen metrics.")
-    parser.add_argument("--structural-bypass", choices=["off", "all"],
+    parser.add_argument("--flowthrough", choices=["off", "all"],
                         default="off",
-                        help="Offer the structural-stream LLC bypass to EVERY policy, not "
-                             "just to K2 via StreamShield. The CSR edge stream is "
+                        help="Offer FlowThrough to EVERY policy, not just ReusePlan. "
+                             "The CSR edge stream is "
                              "sequential and read-once for every policy, so allowing only "
-                             "K2 to decline to allocate it confounds 'K2 replaces better' "
-                             "with 'K2 is the only policy allowed to bypass'. Measured on "
-                             "web-Google PageRank the bypass is worth -20.0%% to LRU, "
-                             "-5.1%% to GRASP and -2.0%% to P-OPT, against StreamShield's "
-                             "-2.4%% to K2.")
+                             "ReusePlan to decline to allocate it confounds 'ReusePlan replaces better' "
+                             "with 'ReusePlan is the only policy allowed to use FlowThrough'. "
+                             "Measured on web-Google PageRank, FlowThrough changes traffic "
+                             "by -20.0%% for LRU, -5.1%% for GRASP, -2.0%% for P-OPT, "
+                             "and -2.4%% for ReusePlan.")
     parser.add_argument(
         "--popt-matrix-stream",
         choices=[
@@ -4462,11 +4462,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                              "and traffic totals after the run. 'simulated': cache_sim issues "
                              "the column stream as real non-temporal accesses at each epoch "
                              "boundary, so a structure prefetcher can cover it exactly as it "
-                             "covers K2's per-edge records. The analytic mode is only "
-                             "symmetric with K2 when no prefetcher is active; with a "
+                             "covers ReusePlan's per-edge records. The analytic mode is only "
+                             "symmetric with ReusePlan when no prefetcher is active; with a "
                              "prefetcher it charges P-OPT demand misses that real hardware "
                              "removes, so 'simulated' is REQUIRED for any prefetch-enabled "
-                             "K2-versus-P-OPT comparison. "
+                             "ReusePlan-versus-P-OPT comparison. "
                              "'analytic_prefetch_upper_bound' explicitly keeps "
                              "the analytic byte charge under a common "
                              "prefetcher while assuming perfect matrix latency "
@@ -4493,23 +4493,23 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                              "record stream is honestly charged by ecgRecordBytes under CHARGED=1.")
     parser.add_argument(
         "--ecg-isa-variant",
-        choices=["indexed", "mask"],
+        choices=["indexed", "computed"],
         default="indexed",
-        help="K2 detailed-simulator ISA: indexed = fused base+record K2-I; "
-             "mask = computed-address K2-M. Sniper uses a transport-matched "
+        help="ReusePlan detailed-simulator ISA: indexed = fused base+record ReuseBind-Indexed; "
+             "mask = computed-address ReuseBind. Sniper uses a transport-matched "
              "diagnostic model until exact request binding lands.")
     parser.add_argument(
         "--gem5-compact-fused", action="store_true",
-        help="Use PR's fused compact K2-I load. Implemented only for gem5 "
+        help="Use PR's fused compact ReuseBind-Indexed load. Implemented only for gem5 "
              "PageRank; unsupported kernels fail instead of falling back.")
     parser.add_argument(
-        "--gem5-compact-k2m-streamshield", action="store_true",
-        help="Run PR's traced proposal correctness gate: a 4-byte "
-             "StreamShield record load followed by a one-for-one "
-             "computed-address K2-M property load.")
+        "--gem5-compact-reuse-bind-flowthrough", action="store_true",
+        help="Run PR's traced correctness gate: a 4-byte "
+             "FlowThrough record load followed by a one-for-one "
+             "computed-address ReuseBind property load.")
     parser.add_argument(
-        "--gem5-compact-k2m-performance", action="store_true",
-        help="Run the same architectural compact K2-M+StreamShield path with "
+        "--gem5-compact-reuse-bind-performance", action="store_true",
+        help="Run the same architectural compact ReuseBind+FlowThrough path with "
              "per-event traces disabled so gem5 target time is admissible.")
     parser.add_argument(
         "--expected-gem5-guest-sha256", default="",
@@ -4593,7 +4593,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Fail controlled Sniper cells unless setarch -R is available and used.")
     parser.add_argument(
         "--sniper-require-fused-receipts", action="store_true",
-        help="Require live fused-K2 receipts and disable cache warming for this mechanism-proof cell.")
+        help="Require live fused-ReusePlan receipts and disable cache warming for this mechanism-proof cell.")
     parser.add_argument(
         "--require-cache-sim-aslr-disable", action="store_true",
         help="Fail controlled cache_sim cells unless setarch -R is available and used.")
@@ -4613,10 +4613,10 @@ def main(argv: list[str]) -> int:
         raise SystemExit(
             "--sniper-semantic-edge-limit requires "
             "--sniper-workload sg_kernel")
-    if semantic_edge_limit > 0 and args.ecg_isa_variant != "mask":
+    if semantic_edge_limit > 0 and args.ecg_isa_variant != "computed":
         raise SystemExit(
             "--sniper-semantic-edge-limit requires "
-            "--ecg-isa-variant mask for transport-matched execution")
+            "--ecg-isa-variant computed for transport-matched execution")
     if semantic_edge_limit > 0 and int(args.sniper_cores) != 1:
         raise SystemExit(
             "--sniper-semantic-edge-limit requires --sniper-cores 1 "
@@ -4628,21 +4628,21 @@ def main(argv: list[str]) -> int:
             "to equal 1")
     if args.threads and args.suite != "sniper":
         raise SystemExit("--threads is currently supported only with --suite sniper")
-    compact_k2m_requested = bool(
-        args.gem5_compact_k2m_streamshield or
-        args.gem5_compact_k2m_performance)
+    compact_reuse_bind_requested = bool(
+        args.gem5_compact_reuse_bind_flowthrough or
+        args.gem5_compact_reuse_bind_performance)
     if (
-            args.gem5_compact_k2m_streamshield and
-            args.gem5_compact_k2m_performance):
+            args.gem5_compact_reuse_bind_flowthrough and
+            args.gem5_compact_reuse_bind_performance):
         raise SystemExit(
-            "choose either --gem5-compact-k2m-streamshield for traced "
-            "correctness or --gem5-compact-k2m-performance for timing")
+            "choose either --gem5-compact-reuse-bind-flowthrough for traced "
+            "correctness or --gem5-compact-reuse-bind-performance for timing")
     if args.gem5_compact_fused and args.suite not in ("gem5", "both"):
         raise SystemExit(
             "--gem5-compact-fused requires --suite gem5 or both")
-    if compact_k2m_requested and args.suite not in ("gem5", "both"):
+    if compact_reuse_bind_requested and args.suite not in ("gem5", "both"):
         raise SystemExit(
-            "compact K2-M+StreamShield requires --suite gem5 or both")
+            "compact ReuseBind+FlowThrough requires --suite gem5 or both")
     if args.suite in ("gem5", "both"):
         gem5_isa = selected_gem5_isa()
     else:
@@ -4650,33 +4650,33 @@ def main(argv: list[str]) -> int:
     if args.gem5_compact_fused and args.benchmark != "pr":
         raise SystemExit(
             "--gem5-compact-fused is implemented only for --benchmark pr")
-    if compact_k2m_requested and args.benchmark != "pr":
+    if compact_reuse_bind_requested and args.benchmark != "pr":
         raise SystemExit(
-            "compact K2-M+StreamShield is implemented only for "
+            "compact ReuseBind+FlowThrough is implemented only for "
             "--benchmark pr")
-    if compact_k2m_requested and args.ecg_isa_variant != "mask":
+    if compact_reuse_bind_requested and args.ecg_isa_variant != "computed":
         raise SystemExit(
-            "compact K2-M+StreamShield requires "
-            "--ecg-isa-variant mask")
-    if compact_k2m_requested and args.gem5_cpu_type != "O3":
+            "compact ReuseBind+FlowThrough requires "
+            "--ecg-isa-variant computed")
+    if compact_reuse_bind_requested and args.gem5_cpu_type != "O3":
         raise SystemExit(
-            "compact K2-M+StreamShield requires --gem5-cpu-type O3 "
+            "compact ReuseBind+FlowThrough requires --gem5-cpu-type O3 "
             "for exact Request-bound delivery")
     if (
-            compact_k2m_requested and
+            compact_reuse_bind_requested and
             parse_size_bytes(str(args.line_size)) != 64):
         raise SystemExit(
-            "compact K2-M+StreamShield requires --line-size 64 "
+            "compact ReuseBind+FlowThrough requires --line-size 64 "
             "because the gem5 ECG request/fill guard is cache-line based")
     if args.gem5_compact_fused and gem5_isa != "riscv":
         raise SystemExit("--gem5-compact-fused requires RISC-V gem5")
-    if compact_k2m_requested and gem5_isa != "riscv":
+    if compact_reuse_bind_requested and gem5_isa != "riscv":
         raise SystemExit(
-            "compact K2-M+StreamShield requires RISC-V gem5")
-    if (getattr(args, "structural_bypass", "off") != "off" and
+            "compact ReuseBind+FlowThrough requires RISC-V gem5")
+    if (getattr(args, "flowthrough", "off") != "off" and
             args.suite not in ("cache-sim", "both")):
         raise SystemExit(
-            "--structural-bypass is implemented in cache_sim only; other "
+            "--flowthrough is implemented in cache_sim only; other "
             "backends would record an equalisation that never happened")
     if (getattr(args, "popt_matrix_stream", "analytic") == "simulated" and
             args.suite not in ("cache-sim", "both")):
@@ -4691,7 +4691,7 @@ def main(argv: list[str]) -> int:
             "--popt-matrix-stream analytic_prefetch_upper_bound is a "
             "gem5-only sensitivity; cache_sim must use simulated streaming")
     # A flat analytic matrix charge cannot be covered by a prefetcher, while
-    # K2's per-edge records are simulated accesses that can. Combining the
+    # ReusePlan's per-edge records are simulated accesses that can. Combining the
     # analytic charge with an active prefetcher therefore prices the two
     # metadata streams differently and produces an invalid comparison; the
     # The reporting rules in wiki/Evaluation-Methodology.md forbid it.
@@ -4710,7 +4710,7 @@ def main(argv: list[str]) -> int:
             "charged P-OPT with an active prefetcher requires "
             "--popt-matrix-stream simulated, or the explicit "
             "analytic_prefetch_upper_bound sensitivity: a flat analytic "
-            "matrix charge cannot be prefetch-covered while K2's records can")
+            "matrix charge cannot be prefetch-covered while ReusePlan's records can")
     if args.all_policies:
         policy_texts = ALL_POLICIES
     elif args.policies is not None:
@@ -4721,14 +4721,14 @@ def main(argv: list[str]) -> int:
         policy_texts = DEFAULT_POLICIES
     policies = [parse_policy_spec(p) for p in policy_texts]
     if (
-            compact_k2m_requested and
+            compact_reuse_bind_requested and
             not any(
-                spec.policy == "ECG" and spec.ecg_stream_bypass and
-                spec.ecg_schedule_k == 2
+                spec.policy == "ECG" and spec.ecg_flowthrough and
+                spec.ecg_reuse_plan_depth == 2
                 for spec in policies)):
         raise SystemExit(
-            "compact K2-M+StreamShield requires at least one "
-            "Schedule-2 ECG StreamShield policy")
+            "compact ReuseBind+FlowThrough requires at least one "
+            "two-epoch ReusePlan ECG FlowThrough policy")
     args.has_lru_baseline = any(spec.label == "LRU" for spec in policies)
     out_dir = Path(args.out_dir) if args.out_dir else RESULTS_ROOT / now_tag()
     if not out_dir.is_absolute():
@@ -4780,7 +4780,7 @@ def main(argv: list[str]) -> int:
         # Persist layered certification failures before any fail-closed
         # run-level validator raises. Do not emit a completion marker here.
         write_outputs(out_dir, rows)
-    validate_gem5_compact_k2m_streamshield_rows(rows, args, policies)
+    validate_gem5_compact_reuse_bind_flowthrough_rows(rows, args, policies)
 
     inert_cells = set()
     for row in rows:

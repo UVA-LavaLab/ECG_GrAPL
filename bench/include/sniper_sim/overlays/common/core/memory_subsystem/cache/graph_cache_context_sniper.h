@@ -28,8 +28,8 @@ static constexpr uint64_t GRAPHBREW_ECG_PFX_TARGET_WORK_ID = 0x47504658ULL;
 // host-side findNextRef matrix, matching gem5/cache_sim.
 static constexpr uint64_t GRAPHBREW_ECG_EXTRACT_WORK_ID = 0x47464C44ULL;  // ECG epoch-extract delivery
 static constexpr uint64_t GRAPHBREW_ECG_EXTRACT2_WORK_ID = 0x47464C45ULL;
-static constexpr uint64_t GRAPHBREW_K2_BIND_WORK_ID = 0x4B32424EULL;
-static constexpr uint64_t GRAPHBREW_K2_CLEAR_WORK_ID = 0x4B324243ULL;
+static constexpr uint64_t GRAPHBREW_REUSE_PLAN_BIND_WORK_ID = 0x4B32424EULL;
+static constexpr uint64_t GRAPHBREW_REUSE_PLAN_CLEAR_WORK_ID = 0x4B324243ULL;
 
 void setCurrentVertexHint(uint32_t core_id, uint64_t vertex);
 bool hasCurrentVertexHint(uint32_t core_id);
@@ -49,17 +49,17 @@ void clearPrefetchTargetHint(uint32_t core_id);
 // property cache line (the delivered epoch is line-min). A collision invalidates
 // the old line tag instead of falling back to stale metadata from another vertex.
 void recordEcgEpoch(uint32_t core_id, uint32_t vertex, uint16_t epoch);
-void recordEcgEpochPair(uint32_t core_id, uint32_t vertex,
+void recordEcgReusePlan(uint32_t core_id, uint32_t vertex,
                         uint8_t tier, uint16_t first, uint16_t second);
-void clearEcgEpochPair(uint32_t core_id, uint32_t vertex);
+void clearEcgReusePlan(uint32_t core_id, uint32_t vertex);
 bool lookupEcgEpoch(uint32_t core_id, uint32_t vertex,
                     uint16_t& epoch, uint64_t& sequence);
-bool lookupEcgEpochPair(uint32_t core_id, uint32_t vertex,
+bool lookupEcgReusePlan(uint32_t core_id, uint32_t vertex,
                         uint8_t& tier, uint16_t& first, uint16_t& second,
                         uint8_t& count, uint64_t& sequence);
-void recordBoundK2Load(uint32_t core_id, uint64_t address);
-void clearBoundK2Load(uint32_t core_id);
-bool consumeBoundK2Load(
+void recordBoundReusePlanLoad(uint32_t core_id, uint64_t address);
+void clearBoundReusePlanLoad(uint32_t core_id);
+bool consumeBoundReusePlanLoad(
     uint32_t core_id, uint64_t line_addr, uint64_t line_size,
     uint16_t* current_epoch = nullptr, uint16_t* context_id = nullptr,
     uint64_t* trace_sequence = nullptr);
@@ -159,22 +159,22 @@ struct GraphCacheContext {
     uint32_t num_regions = 0;
     std::array<EdgeRegion, 2> edge_regions{};
     uint32_t num_edge_regions = 0;
-    uint64_t stream_bypass_base = 0;
-    uint64_t stream_bypass_upper = 0;
-    std::vector<uint64_t> k2_offsets;
-    std::vector<uint64_t> k2_line_offsets;
-    std::vector<uint32_t> k2_line_ids;
-    std::vector<uint64_t> k2_line_records;
-    std::vector<uint64_t> k2_line_indices;
-    std::vector<uint64_t> k2_line8_offsets;
-    std::vector<uint32_t> k2_line8_ids;
-    std::vector<uint64_t> k2_line8_records;
-    std::vector<uint64_t> k2_line8_indices;
-    mutable std::atomic<uint64_t> k2_profile_calls{0};
-    mutable std::atomic<uint64_t> k2_profile_found{0};
-    mutable std::atomic<uint64_t> k2_profile_total_ns{0};
-    mutable std::atomic<uint64_t> k2_profile_classify_ns{0};
-    mutable std::atomic<uint64_t> k2_profile_search_ns{0};
+    uint64_t flowthrough_base = 0;
+    uint64_t flowthrough_upper = 0;
+    std::vector<uint64_t> reuse_plan_offsets;
+    std::vector<uint64_t> reuse_plan_line_offsets;
+    std::vector<uint32_t> reuse_plan_line_ids;
+    std::vector<uint64_t> reuse_plan_line_records;
+    std::vector<uint64_t> reuse_plan_line_indices;
+    std::vector<uint64_t> reuse_plan_line8_offsets;
+    std::vector<uint32_t> reuse_plan_line8_ids;
+    std::vector<uint64_t> reuse_plan_line8_records;
+    std::vector<uint64_t> reuse_plan_line8_indices;
+    mutable std::atomic<uint64_t> reuse_plan_profile_calls{0};
+    mutable std::atomic<uint64_t> reuse_plan_profile_found{0};
+    mutable std::atomic<uint64_t> reuse_plan_profile_total_ns{0};
+    mutable std::atomic<uint64_t> reuse_plan_profile_classify_ns{0};
+    mutable std::atomic<uint64_t> reuse_plan_profile_search_ns{0};
 
     GraphTopology topology;
     MaskConfig mask_config;
@@ -204,8 +204,8 @@ struct GraphCacheContext {
     uint32_t propertyElemSizeForAddress(uint64_t addr) const;
     bool isPropertyData(uint64_t addr) const;
     bool isEcgEpochData(uint64_t addr) const;
-    bool isStreamBypassData(uint64_t addr) const;
-    bool lookupFusedK2Pair(uint64_t line_addr, uint32_t core_id,
+    bool isFlowThroughData(uint64_t addr) const;
+    bool lookupFusedReusePlanPair(uint64_t line_addr, uint32_t core_id,
                            uint8_t& tier,
                            uint16_t& first, uint16_t& second,
                            uint64_t trace_sequence = ~uint64_t{0}) const;
@@ -219,7 +219,7 @@ struct GraphCacheContext {
 };
 
 GraphCacheContext& globalContext();
-bool isEcgStreamBypassAddress(uint64_t addr);
+bool isEcgFlowThroughAddress(uint64_t addr);
 void recordEcgPlacementMiss(uint64_t addr);
 
 }  // namespace sniper

@@ -94,11 +94,11 @@ def test_prefetcher_is_off_by_default():
 
 
 def test_non_temporal_path_uses_the_same_detector():
-    """K2 records and P-OPT matrix columns must not keep oracle coverage.
+    """ReusePlan records and P-OPT matrix columns must not keep oracle coverage.
 
     accessNonTemporal() carries both metadata streams. It previously issued
     prefetches unconditionally regardless of the selected model, so the honest
-    detector never reached the streams the K2-versus-P-OPT comparison turns on.
+    detector never reached the streams the ReusePlan-versus-P-OPT comparison turns on.
     With a 1-entry in-flight budget the detector must throttle that path too.
     """
     stats = run(POPT_MATRIX_STREAM_SIM=1, CACHE_POLICY="POPT",

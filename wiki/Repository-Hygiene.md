@@ -8,7 +8,7 @@ tests, and public documentation only.
 - cache and simulator integration source under `bench/include/`;
 - graph kernels under `bench/src_sim/`, `bench/src_gem5/`, and
   `bench/src_sniper/`;
-- synthesizable K2 cost-model RTL under `bench/src_rtl/`;
+- synthesizable ReusePlan cost-model RTL under `bench/src_rtl/`;
 - setup, experiment, analysis, and verification scripts under `scripts/`;
 - versioned experiment configurations under
   `scripts/experiments/ecg/configs/`;

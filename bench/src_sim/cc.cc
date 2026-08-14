@@ -128,7 +128,7 @@ pvector<NodeID> Afforest_Sim(const Graph &g, CacheType &cache,
 
     // CC traverses OUT-edges and reads comp[dest], so use the shared OUT-edge
     // builder. CC remains undirected-only, but this keeps record position,
-    // tier, and K2 delivery exact instead of relying on IN/OUT order matching.
+    // tier, and ReusePlan delivery exact instead of relying on IN/OUT order matching.
     if (std::getenv("ECG_EDGE_MASKS") ||
         std::getenv("ECG_CC_EDGE_MASKS") ||
         (graph_ctx.mask_config.prefetch_mode == 6 &&
@@ -138,8 +138,8 @@ pvector<NodeID> Afforest_Sim(const Graph &g, CacheType &cache,
     const bool ecg_record = GraphSimEcgEdgeRecord();
     const bool record_charged = ecg_record &&
         GraphSimEnvIntClamped("ECG_EDGE_MASK_CHARGED", 1, 0, 1) > 0;
-    const bool stream_bypass =
-        GraphSimEnvIntClamped("ECG_STREAM_BYPASS", 0, 0, 1) > 0;
+    const bool flowthrough =
+        GraphSimEnvIntClamped("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
     int epoch_bits = 1;
     const uint32_t edge_epochs =
         graph_ctx.edge_epoch_count ? graph_ctx.edge_epoch_count : 2;

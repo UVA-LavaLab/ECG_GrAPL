@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fast policy signal: the frozen decision rule, in minutes instead of a week.
 
-The gem5 timing matrix costs days, but the question "is K2 ahead or behind?"
+The gem5 timing matrix costs days, but the question "is ReusePlan ahead or behind?"
 is answered by cache_sim traffic in minutes. This runs the full
 graph x kernel x policy matrix directly against the cache_sim kernels and
 applies the reporting method from wiki/Evaluation-Methodology.md:
@@ -16,17 +16,17 @@ check, NOT a source of publishable numbers.
 
 Corrected accounting is the default:
   * P-OPT's rereference-matrix column stream is simulated, not charged flat
-  * the structural bypass is offered to every policy, not just K2
+  * the FlowThrough is offered to every policy, not just ReusePlan
   * the stream prefetcher is address-only rather than oracle-guided
 
 Tiers:
   fast  sampled graphs (n16/n18), whole matrix in a few minutes
-  full  full graphs, ~2 hours because K2's mask preprocessing dominates
+  full  full graphs, ~2 hours because ReusePlan's mask preprocessing dominates
 
 Usage:
   python3 scripts/experiments/ecg/analysis/fast_policy_signal.py --tier fast
   python3 scripts/experiments/ecg/analysis/fast_policy_signal.py --tier fast \
-      --kernels pr,bfs --policies LRU,GRASP,ECG:K2
+      --kernels pr,bfs --policies LRU,GRASP,ECG:REUSE_PLAN
 """
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ TIERS = {
 
 DEFAULT_KERNELS = ["pr", "bfs", "sssp", "bc", "cc"]
 DEFAULT_POLICIES = [
-    "LRU", "SRRIP", "GRASP", "POPT", "ECG:K2", "ECG:K2_STREAMSHIELD",
+    "LRU", "SRRIP", "GRASP", "POPT", "ECG:REUSE_PLAN", "ECG:REUSE_PLAN_FLOWTHROUGH",
 ]
 
 # The frozen decision rule.
@@ -119,7 +119,7 @@ def build_env(rm, policy_text: str, kernel: str, l3: str, args) -> dict:
         "--prefetcher", args.prefetcher,
         "--stream-prefetch-model", args.stream_prefetch_model,
         "--popt-matrix-stream", args.popt_matrix_stream,
-        "--structural-bypass", args.structural_bypass,
+        "--flowthrough", args.flowthrough,
     ])
     if args.prefetch_degree:
         ns.structure_prefetch_degree = args.prefetch_degree
@@ -129,12 +129,12 @@ def build_env(rm, policy_text: str, kernel: str, l3: str, args) -> dict:
     env = rm.cache_sim_env(ns, spec, size_bytes(l3), "16", json_path)
     env["OMP_NUM_THREADS"] = "1"
     # Epoch resolution decides whether the per-edge record packs into 4 bytes or
-    # spills to 8, and that single bit of configuration dominates every K2
+    # spills to 8, and that single bit of configuration dominates every ReusePlan
     # result. The pinned specs hardcode 65535 epochs, which always spills.
     if args.ecg_epochs and "ECG_EDGE_MASK_EPOCHS" in env:
         env["ECG_EDGE_MASK_EPOCHS"] = str(args.ecg_epochs)
-    # Schedule-2 historically returned 8 bytes unconditionally instead of
-    # computing its width, which doubled K2's modelled transport whenever its
+    # two-epoch ReusePlan historically returned 8 bytes unconditionally instead of
+    # computing its width, which doubled ReusePlan's modelled transport whenever its
     # fields would in fact have fitted in 4.
     if args.variable_record_width:
         env["ECG_RECORD_VARIABLE_WIDTH"] = "1"
@@ -213,7 +213,7 @@ def main(argv):
                     default="stride")
     ap.add_argument("--popt-matrix-stream", choices=["analytic", "simulated"],
                     default="simulated")
-    ap.add_argument("--structural-bypass", choices=["off", "all"], default="all")
+    ap.add_argument("--flowthrough", choices=["off", "all"], default="all")
     ap.add_argument("--ecg-epochs", type=int, default=0,
                     help="override ECG_EDGE_MASK_EPOCHS for every ECG policy. "
                          "The pinned specs use 65535, which forces a 16-bit "
@@ -222,7 +222,7 @@ def main(argv):
     ap.add_argument("--l1d-size", default="32kB")
     ap.add_argument("--l2-size", default="256kB")
     ap.add_argument("--variable-record-width", action="store_true",
-                    help="compute the Schedule-2 record width from the bit "
+                    help="compute the two-epoch ReusePlan record width from the bit "
                          "budget instead of returning 8 bytes unconditionally")
     ap.add_argument("--tier-bits", type=int, default=None,
                     help="override ECG_RECORD_TIER_BITS (transport width only; "
@@ -250,7 +250,7 @@ def main(argv):
     total = len(graphs) * len(kernels) * len(policies)
     done = 0
     print(f"[signal] tier={args.tier} cells={total} metric={args.metric} "
-          f"bypass={args.structural_bypass} pf={args.stream_prefetch_model}",
+          f"flowthrough={args.flowthrough} pf={args.stream_prefetch_model}",
           flush=True)
     for gname, gpath, l3 in graphs:
         if not (ROOT / gpath).exists():
@@ -338,16 +338,16 @@ def main(argv):
               f"{worst_cell[0]}/{worst_cell[1]} {worst:.3f}")
 
     best = min(summary, key=lambda s: s[1])
-    k2 = [s for s in summary if s[0].startswith("ECG_K2")]
+    reuse_plan = [s for s in summary if s[0].startswith("ECG_REUSE_PLAN")]
     print()
     print(f"best policy: {best[0]} at {best[1]:.3f}")
-    if k2:
-        best_k2 = min(k2, key=lambda s: s[1])
-        if best_k2[0] == best[0]:
-            print(f"K2 LEADS: {best_k2[0]} is the best policy on this matrix.")
+    if reuse_plan:
+        best_reuse_plan = min(reuse_plan, key=lambda s: s[1])
+        if best_reuse_plan[0] == best[0]:
+            print(f"ReusePlan LEADS: {best_reuse_plan[0]} is the best policy on this matrix.")
         else:
-            gap = (best_k2[1] / best[1] - 1) * 100
-            print(f"K2 TRAILS: best K2 variant {best_k2[0]} at {best_k2[1]:.3f} "
+            gap = (best_reuse_plan[1] / best[1] - 1) * 100
+            print(f"ReusePlan TRAILS: best ReusePlan variant {best_reuse_plan[0]} at {best_reuse_plan[1]:.3f} "
                   f"is {gap:+.1f}% behind {best[0]}.")
 
     out = Path(args.out) if args.out else (

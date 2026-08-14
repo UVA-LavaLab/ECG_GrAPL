@@ -56,17 +56,17 @@ POLICY_ORDER = [
     "ECG_DBG_PRIMARY_CHARGED",
     "ECG_DBG_PRIMARY",
     "ECG_POPT_PRIMARY",
-    "ECG_K2_GRASP",
-    "ECG_K2_LRU",
-    "ECG_K2_RRIP",
-    "ECG_K2_DEGREE",
-    "ECG_K2_EPOCH",
-    "ECG_K2",
-    "ECG_K2_ONLINE",
-    "ECG_K2_STREAMSHIELD",
-    "ECG_K2_LRU_STREAMSHIELD",
-    "ECG_K2_ONLINE_STREAMSHIELD",
-    "ECG_K2_ONLINE_ADAPTIVE_STREAMSHIELD",
+    "ECG_REUSE_PLAN_GRASP",
+    "ECG_REUSE_PLAN_LRU",
+    "ECG_REUSE_PLAN_RRIP",
+    "ECG_REUSE_PLAN_DEGREE",
+    "ECG_REUSE_PLAN_EPOCH",
+    "ECG_REUSE_PLAN",
+    "ECG_REUSE_PLAN_ONLINE",
+    "ECG_REUSE_PLAN_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_LRU_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
 ]
 
 BENCHMARK_ORDER = ["pr", "bfs", "sssp", "cc", "bc", "tc"]
@@ -89,17 +89,17 @@ POLICY_LABELS = {
     "ECG_DBG_PRIMARY_CHARGED": "ECG-H+C",
     "ECG_DBG_PRIMARY": "ECG-H",
     "ECG_POPT_PRIMARY": "ECG-P",
-    "ECG_K2_GRASP": "K2-GRASP",
-    "ECG_K2_LRU": "K2-LRU",
-    "ECG_K2_RRIP": "K2-RRIP",
-    "ECG_K2_DEGREE": "K2-degree",
-    "ECG_K2_EPOCH": "K2-epoch",
-    "ECG_K2": "K2",
-    "ECG_K2_ONLINE": "K2-online",
-    "ECG_K2_STREAMSHIELD": "K2+SS",
-    "ECG_K2_LRU_STREAMSHIELD": "K2-LRU+SS",
-    "ECG_K2_ONLINE_STREAMSHIELD": "K2-online+SS",
-    "ECG_K2_ONLINE_ADAPTIVE_STREAMSHIELD": "K2-online+adaptive-SS",
+    "ECG_REUSE_PLAN_GRASP": "ReusePlan-GRASP",
+    "ECG_REUSE_PLAN_LRU": "ReusePlan-LRU",
+    "ECG_REUSE_PLAN_RRIP": "ReusePlan-RRIP",
+    "ECG_REUSE_PLAN_DEGREE": "ReusePlan-degree",
+    "ECG_REUSE_PLAN_EPOCH": "ReusePlan-epoch",
+    "ECG_REUSE_PLAN": "ReusePlan",
+    "ECG_REUSE_PLAN_ONLINE": "ReusePlan-online",
+    "ECG_REUSE_PLAN_FLOWTHROUGH": "ReusePlan+SS",
+    "ECG_REUSE_PLAN_LRU_FLOWTHROUGH": "ReusePlan-LRU+SS",
+    "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH": "ReusePlan-online+SS",
+    "ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH": "ReusePlan-online+adaptive-SS",
 }
 
 POLICY_DESCRIPTIONS = {
@@ -112,19 +112,19 @@ POLICY_DESCRIPTIONS = {
     "ECG_DBG_PRIMARY_CHARGED": "ECG hybrid mode with P-OPT overhead charged",
     "ECG_DBG_PRIMARY": "ECG DBG-primary hybrid mode",
     "ECG_POPT_PRIMARY": "ECG P-OPT-primary oracle-validation mode",
-    "ECG_K2_GRASP": "K2 transport with GRASP-only victim selection",
-    "ECG_K2_LRU": "K2 transport with LRU-only victim selection",
-    "ECG_K2_LRU_STREAMSHIELD":
-        "K2 transport with LRU-only victim selection and StreamShield",
-    "ECG_K2_RRIP": "K2 transport with RRIP-first victim selection",
-    "ECG_K2_DEGREE": "K2 transport with degree-first victim selection",
-    "ECG_K2_EPOCH": "K2 transport with epoch-first victim selection",
-    "ECG_K2": "Two-epoch ECG replacement",
-    "ECG_K2_ONLINE": "Online set-dueling across all K2 victim arms",
-    "ECG_K2_STREAMSHIELD": "Two-epoch ECG plus StreamShield placement",
-    "ECG_K2_ONLINE_STREAMSHIELD": "Online K2 plus StreamShield placement",
-    "ECG_K2_ONLINE_ADAPTIVE_STREAMSHIELD":
-        "Online K2 plus allocate-vs-StreamShield placement dueling",
+    "ECG_REUSE_PLAN_GRASP": "ReusePlan transport with GRASP-only victim selection",
+    "ECG_REUSE_PLAN_LRU": "ReusePlan transport with LRU-only victim selection",
+    "ECG_REUSE_PLAN_LRU_FLOWTHROUGH":
+        "ReusePlan transport with LRU-only victim selection and FlowThrough",
+    "ECG_REUSE_PLAN_RRIP": "ReusePlan transport with RRIP-first victim selection",
+    "ECG_REUSE_PLAN_DEGREE": "ReusePlan transport with degree-first victim selection",
+    "ECG_REUSE_PLAN_EPOCH": "ReusePlan transport with epoch-first victim selection",
+    "ECG_REUSE_PLAN": "Two-epoch ECG replacement",
+    "ECG_REUSE_PLAN_ONLINE": "Online set-dueling across all ReusePlan victim arms",
+    "ECG_REUSE_PLAN_FLOWTHROUGH": "Two-epoch ECG plus FlowThrough placement",
+    "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH": "Online ReusePlan plus FlowThrough placement",
+    "ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH":
+        "Online ReusePlan plus allocate-vs-FlowThrough placement dueling",
 }
 
 POLICY_COLORS = {
@@ -137,16 +137,16 @@ POLICY_COLORS = {
     "ECG_DBG_PRIMARY_CHARGED": "#B79A20",
     "ECG_DBG_PRIMARY": "#54A24B",
     "ECG_POPT_PRIMARY": "#B279A2",
-    "ECG_K2_GRASP": "#8CD17D",
-    "ECG_K2_LRU": "#9C9C9C",
-    "ECG_K2_RRIP": "#59A14F",
-    "ECG_K2_DEGREE": "#2F8F9D",
-    "ECG_K2_EPOCH": "#1F9D55",
-    "ECG_K2": "#2CA02C",
-    "ECG_K2_ONLINE": "#007A3D",
-    "ECG_K2_STREAMSHIELD": "#006D2C",
-    "ECG_K2_ONLINE_STREAMSHIELD": "#00441B",
-    "ECG_K2_ONLINE_ADAPTIVE_STREAMSHIELD": "#00331F",
+    "ECG_REUSE_PLAN_GRASP": "#8CD17D",
+    "ECG_REUSE_PLAN_LRU": "#9C9C9C",
+    "ECG_REUSE_PLAN_RRIP": "#59A14F",
+    "ECG_REUSE_PLAN_DEGREE": "#2F8F9D",
+    "ECG_REUSE_PLAN_EPOCH": "#1F9D55",
+    "ECG_REUSE_PLAN": "#2CA02C",
+    "ECG_REUSE_PLAN_ONLINE": "#007A3D",
+    "ECG_REUSE_PLAN_FLOWTHROUGH": "#006D2C",
+    "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH": "#00441B",
+    "ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH": "#00331F",
 }
 
 POLICY_HATCHES = {
@@ -975,7 +975,7 @@ def is_preliminary_5alg_row(row: dict[str, Any]) -> bool:
 
 def preliminary_policy_ranks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     required = {
-        "LRU", "SRRIP", "GRASP", "POPT", "ECG_K2", "ECG_K2_ONLINE",
+        "LRU", "SRRIP", "GRASP", "POPT", "ECG_REUSE_PLAN", "ECG_REUSE_PLAN_ONLINE",
     }
     grouped: dict[tuple[Any, ...], dict[str, dict[str, Any]]] = defaultdict(dict)
     for row in complete_matrix_rows(rows):
@@ -1052,7 +1052,7 @@ def preliminary_stride_sensitivity(
     )
     logical_keys = keys[1:]
     required = {
-        "LRU", "SRRIP", "GRASP", "POPT", "ECG_K2", "ECG_K2_ONLINE",
+        "LRU", "SRRIP", "GRASP", "POPT", "ECG_REUSE_PLAN", "ECG_REUSE_PLAN_ONLINE",
     }
     grouped: dict[
         tuple[Any, ...], dict[str, list[dict[str, Any]]]
@@ -1183,11 +1183,11 @@ def preliminary_stride_sensitivity(
 
 def online_dueling_regret(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     static_policies = (
-        "ECG_K2_GRASP",
-        "ECG_K2_EPOCH",
-        "ECG_K2_RRIP",
-        "ECG_K2_DEGREE",
-        "ECG_K2_LRU",
+        "ECG_REUSE_PLAN_GRASP",
+        "ECG_REUSE_PLAN_EPOCH",
+        "ECG_REUSE_PLAN_RRIP",
+        "ECG_REUSE_PLAN_DEGREE",
+        "ECG_REUSE_PLAN_LRU",
     )
     grouped: dict[tuple[Any, ...], dict[str, dict[str, Any]]] = defaultdict(dict)
     for row in complete_matrix_rows(rows):
@@ -1197,7 +1197,7 @@ def online_dueling_regret(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     out: list[dict[str, Any]] = []
     for group_key, by_policy in grouped.items():
-        online = by_policy.get("ECG_K2_ONLINE")
+        online = by_policy.get("ECG_REUSE_PLAN_ONLINE")
         static = [
             by_policy[policy] for policy in static_policies
             if policy in by_policy
@@ -2362,7 +2362,7 @@ def generate_outputs(
                     "online_delta_vs_popt_uncharged_pct",
                     "online_delta_vs_popt_pct",
                 ],
-                "Online K2 set-dueling regret versus the best static arm",
+                "Online ReusePlan set-dueling regret versus the best static arm",
             )
         overhead = charged_overhead(roi_rows)
         if overhead:

@@ -1,27 +1,27 @@
-# K2 RTL Cost Models
+# ReusePlan RTL Cost Models
 
 This directory contains synthesizable SystemVerilog used to estimate the
-incremental area and delay of K2-specific logic. It is not a complete CPU,
+incremental area and delay of ReusePlan-specific logic. It is not a complete CPU,
 cache controller, or drop-in hardware implementation.
 
 ## Modules
 
 | File | Purpose |
 |---|---|
-| `k2_victim_select.sv` | Combinational victim ranking and RRIP aging |
-| `k2_replacement_path.sv` | Property/context qualification, epoch distance, static/online variant selection |
-| `k2_online_selector.sv` | Five-arm leader/follower selection window |
-| `k2_request_path.sv` | Request merge state, CSRs, sequence allocation, and sideband pipeline storage |
-| `k2_recency_rank.sv` | Optional per-set recency-rank state |
-| `k2_secded_49.sv` | SECDED encoding for 49 logical metadata bits |
-| `tb_k2_*.sv` | Functional testbenches |
+| `reuse_plan_victim_select.sv` | Combinational victim ranking and RRIP aging |
+| `reuse_plan_replacement_path.sv` | Property/context qualification, epoch distance, static/online variant selection |
+| `reuse_plan_online_selector.sv` | Five-arm leader/follower selection window |
+| `reuse_bind_request_path.sv` | Request merge state, CSRs, sequence allocation, and sideband pipeline storage |
+| `reuse_plan_recency_rank.sv` | Optional per-set recency-rank state |
+| `reuse_plan_secded_49.sv` | SECDED encoding for 49 logical metadata bits |
+| `tb_reuse_plan_*.sv` | Functional testbenches |
 
 ## Verification
 
 Run:
 
 ```bash
-python3 -m scripts.experiments.ecg.analysis.k2_rtl_verify
+python3 -m scripts.experiments.ecg.analysis.reuse_plan_rtl_verify
 ```
 
 The command:

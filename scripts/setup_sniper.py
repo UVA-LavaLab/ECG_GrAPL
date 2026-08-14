@@ -272,10 +272,10 @@ def normalize_context_ready_handler(path: Path, dry_run: bool) -> None:
     _write_overlay_text(path, text, dry_run)
 
 
-def ensure_k2_bind_magic_handler(path: Path, dry_run: bool) -> None:
+def ensure_reuse_plan_bind_magic_handler(path: Path, dry_run: bool) -> None:
     text = _overlay_text(path, dry_run)
-    need_bind = "GRAPHBREW_K2_BIND_WORK_ID" not in text
-    need_clear = "GRAPHBREW_K2_CLEAR_WORK_ID" not in text
+    need_bind = "GRAPHBREW_REUSE_PLAN_BIND_WORK_ID" not in text
+    need_clear = "GRAPHBREW_REUSE_PLAN_CLEAR_WORK_ID" not in text
     if not need_bind and not need_clear:
         return
     old = """         MagicMarkerType args = { thread_id: thread_id, core_id: core_id, arg0: arg0, arg1: arg1, str: NULL };
@@ -283,17 +283,17 @@ def ensure_k2_bind_magic_handler(path: Path, dry_run: bool) -> None:
 """
     blocks = ""
     if need_bind:
-        blocks += """         if (arg0 == graphbrew::sniper::GRAPHBREW_K2_BIND_WORK_ID)
+        blocks += """         if (arg0 == graphbrew::sniper::GRAPHBREW_REUSE_PLAN_BIND_WORK_ID)
          {
-            graphbrew::sniper::recordBoundK2Load(
+            graphbrew::sniper::recordBoundReusePlanLoad(
                static_cast<uint32_t>(core_id), arg1);
             return 0;
          }
 """
     if need_clear:
-        blocks += """         if (arg0 == graphbrew::sniper::GRAPHBREW_K2_CLEAR_WORK_ID)
+        blocks += """         if (arg0 == graphbrew::sniper::GRAPHBREW_REUSE_PLAN_CLEAR_WORK_ID)
          {
-            graphbrew::sniper::clearBoundK2Load(
+            graphbrew::sniper::clearBoundReusePlanLoad(
                static_cast<uint32_t>(core_id));
             return 0;
          }
@@ -889,10 +889,10 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
         """      UInt64 m_reads, m_writes, m_read_misses, m_write_misses;
 """,
         """      UInt64 m_reads, m_writes, m_read_misses, m_write_misses;
-      UInt64 m_stream_bypass_reads, m_stream_bypass_writes;
+      UInt64 m_flowthrough_reads, m_flowthrough_writes;
 """,
         args.dry_run,
-        ["m_stream_bypass_reads"],
+        ["m_flowthrough_reads"],
     )
     replace_once(
         nuca_source,
@@ -900,12 +900,12 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
 {
 """,
         """   , m_write_misses(0)
-   , m_stream_bypass_reads(0)
-   , m_stream_bypass_writes(0)
+   , m_flowthrough_reads(0)
+   , m_flowthrough_writes(0)
 {
 """,
         args.dry_run,
-        ["m_stream_bypass_reads(0)"],
+        ["m_flowthrough_reads(0)"],
     )
     replace_once(
         nuca_source,
@@ -913,21 +913,21 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
 }
 """,
         """   registerStatsMetric("nuca-cache", m_core_id, "write-misses", &m_write_misses);
-   registerStatsMetric("nuca-cache", m_core_id, "stream-bypass-reads", &m_stream_bypass_reads);
-   registerStatsMetric("nuca-cache", m_core_id, "stream-bypass-writes", &m_stream_bypass_writes);
+   registerStatsMetric("nuca-cache", m_core_id, "flowthrough-reads", &m_flowthrough_reads);
+   registerStatsMetric("nuca-cache", m_core_id, "flowthrough-writes", &m_flowthrough_writes);
 }
 """,
         args.dry_run,
-        ['"stream-bypass-reads"'],
+        ['"flowthrough-reads"'],
     )
     migrate_if_present(
         nuca_source,
         """   HitWhere::where_t hit_where = HitWhere::MISS;
    perf->updateTime(now);
-   if (graphbrew::sniper::isEcgStreamBypassAddress(
+   if (graphbrew::sniper::isEcgFlowThroughAddress(
            static_cast<uint64_t>(address)))
    {
-      ++m_stream_bypass_reads;
+      ++m_flowthrough_reads;
       if (count) {
          ++m_reads;
          ++m_read_misses;
@@ -940,8 +940,8 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
 """,
         """   HitWhere::where_t hit_where = HitWhere::MISS;
    perf->updateTime(now);
-   const bool stream_bypass =
-      graphbrew::sniper::isEcgStreamBypassAddress(
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
          static_cast<uint64_t>(address));
 
    PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
@@ -951,11 +951,11 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
     migrate_if_present(
         nuca_source,
         """   HitWhere::where_t hit_where = HitWhere::MISS;
-   if (graphbrew::sniper::isEcgStreamBypassAddress(
+   if (graphbrew::sniper::isEcgFlowThroughAddress(
            static_cast<uint64_t>(address)))
    {
       eviction = false;
-      ++m_stream_bypass_writes;
+      ++m_flowthrough_writes;
       if (count) {
          ++m_writes;
          ++m_write_misses;
@@ -967,8 +967,8 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
    PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
 """,
         """   HitWhere::where_t hit_where = HitWhere::MISS;
-   const bool stream_bypass =
-      graphbrew::sniper::isEcgStreamBypassAddress(
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
          static_cast<uint64_t>(address));
 
    PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
@@ -984,14 +984,14 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
 """,
         """   HitWhere::where_t hit_where = HitWhere::MISS;
    perf->updateTime(now);
-   const bool stream_bypass =
-      graphbrew::sniper::isEcgStreamBypassAddress(
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
          static_cast<uint64_t>(address));
 
    PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
 """,
         args.dry_run,
-        ["perf->updateTime(now);\n   const bool stream_bypass ="],
+        ["perf->updateTime(now);\n   const bool flowthrough ="],
     )
     replace_once(
         nuca_source,
@@ -1002,12 +1002,12 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
 """,
         """   else
    {
-      if (stream_bypass) ++m_stream_bypass_reads;
+      if (flowthrough) ++m_flowthrough_reads;
       if (count) ++m_read_misses;
    }
 """,
         args.dry_run,
-        ["if (stream_bypass) ++m_stream_bypass_reads;"],
+        ["if (flowthrough) ++m_flowthrough_reads;"],
     )
     replace_once(
         nuca_source,
@@ -1016,14 +1016,14 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
    PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
 """,
         """   HitWhere::where_t hit_where = HitWhere::MISS;
-   const bool stream_bypass =
-      graphbrew::sniper::isEcgStreamBypassAddress(
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
          static_cast<uint64_t>(address));
 
    PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
 """,
         args.dry_run,
-        ["HitWhere::where_t hit_where = HitWhere::MISS;\n   const bool stream_bypass ="],
+        ["HitWhere::where_t hit_where = HitWhere::MISS;\n   const bool flowthrough ="],
     )
     replace_once(
         nuca_source,
@@ -1035,10 +1035,10 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
 """,
         """   else
    {
-      if (stream_bypass)
+      if (flowthrough)
       {
          eviction = false;
-         ++m_stream_bypass_writes;
+         ++m_flowthrough_writes;
          if (count) ++m_write_misses;
          if (count) ++m_writes;
          return boost::tuple<SubsecondTime, HitWhere::where_t>(
@@ -1049,7 +1049,7 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
       m_cache->insertSingleLine(address, data_buf,
 """,
         args.dry_run,
-        ["if (stream_bypass)\n      {\n         eviction = false;"],
+        ["if (flowthrough)\n      {\n         eviction = false;"],
     )
     migrate_if_present(
         nuca_source,
@@ -1202,24 +1202,24 @@ def patch_graphbrew_simuser_overlay(args: argparse.Namespace) -> None:
     )
     migrate_if_present(
         magic_server, old_decode, new_decode, args.dry_run)
-    old_k2_decode = (
+    old_reuse_plan_decode = (
         "uint32_t fl_vertex = static_cast<uint32_t>(arg1 & 0xFFFFFFFFULL);\n"
         "            uint16_t fl_epoch1 = static_cast<uint16_t>((arg1 >> 32) & 0xFFFFULL);\n"
         "            uint16_t fl_epoch2 = static_cast<uint16_t>((arg1 >> 48) & 0xFFFFULL);\n"
-        "            graphbrew::sniper::recordEcgEpochPair(\n"
+        "            graphbrew::sniper::recordEcgReusePlan(\n"
         "               static_cast<uint32_t>(core_id), fl_vertex, fl_epoch1, fl_epoch2);"
     )
-    new_k2_decode = (
+    new_reuse_plan_decode = (
         "uint32_t fl_vertex = static_cast<uint32_t>(arg1 & 0xFFFFFFFFULL);\n"
         "            uint8_t fl_tier = static_cast<uint8_t>((arg1 >> 32) & 0x3ULL);\n"
         "            uint16_t fl_epoch1 = static_cast<uint16_t>((arg1 >> 34) & 0x7FFFULL);\n"
         "            uint16_t fl_epoch2 = static_cast<uint16_t>((arg1 >> 49) & 0x7FFFULL);\n"
-        "            graphbrew::sniper::recordEcgEpochPair(\n"
+        "            graphbrew::sniper::recordEcgReusePlan(\n"
         "               static_cast<uint32_t>(core_id), fl_vertex, fl_tier,\n"
         "               fl_epoch1, fl_epoch2);"
     )
     migrate_if_present(
-        magic_server, old_k2_decode, new_k2_decode, args.dry_run)
+        magic_server, old_reuse_plan_decode, new_reuse_plan_decode, args.dry_run)
     migrate_if_present(
         magic_server,
         """ctx.loaded = ctx.loadFromSideband(ctx_path);
@@ -1366,20 +1366,20 @@ def patch_graphbrew_simuser_overlay(args: argparse.Namespace) -> None:
             uint8_t fl_tier = static_cast<uint8_t>((arg1 >> 32) & 0x3ULL);
             uint16_t fl_epoch1 = static_cast<uint16_t>((arg1 >> 34) & 0x7FFFULL);
             uint16_t fl_epoch2 = static_cast<uint16_t>((arg1 >> 49) & 0x7FFFULL);
-            graphbrew::sniper::recordEcgEpochPair(
+            graphbrew::sniper::recordEcgReusePlan(
                static_cast<uint32_t>(core_id), fl_vertex, fl_tier,
                fl_epoch1, fl_epoch2);
             return 0;
          }
-         if (arg0 == graphbrew::sniper::GRAPHBREW_K2_BIND_WORK_ID)
+         if (arg0 == graphbrew::sniper::GRAPHBREW_REUSE_PLAN_BIND_WORK_ID)
          {
-            graphbrew::sniper::recordBoundK2Load(
+            graphbrew::sniper::recordBoundReusePlanLoad(
                static_cast<uint32_t>(core_id), arg1);
             return 0;
          }
-         if (arg0 == graphbrew::sniper::GRAPHBREW_K2_CLEAR_WORK_ID)
+         if (arg0 == graphbrew::sniper::GRAPHBREW_REUSE_PLAN_CLEAR_WORK_ID)
          {
-            graphbrew::sniper::clearBoundK2Load(
+            graphbrew::sniper::clearBoundReusePlanLoad(
                static_cast<uint32_t>(core_id));
             return 0;
          }
@@ -1412,28 +1412,28 @@ magic_server,
             uint8_t fl_tier = static_cast<uint8_t>((arg1 >> 32) & 0x3ULL);
             uint16_t fl_epoch1 = static_cast<uint16_t>((arg1 >> 34) & 0x7FFFULL);
             uint16_t fl_epoch2 = static_cast<uint16_t>((arg1 >> 49) & 0x7FFFULL);
-            graphbrew::sniper::recordEcgEpochPair(
+            graphbrew::sniper::recordEcgReusePlan(
                static_cast<uint32_t>(core_id), fl_vertex, fl_tier,
                fl_epoch1, fl_epoch2);
             return 0;
   }
-  if (arg0 == graphbrew::sniper::GRAPHBREW_K2_BIND_WORK_ID)
+  if (arg0 == graphbrew::sniper::GRAPHBREW_REUSE_PLAN_BIND_WORK_ID)
   {
-            graphbrew::sniper::recordBoundK2Load(
+            graphbrew::sniper::recordBoundReusePlanLoad(
                static_cast<uint32_t>(core_id), arg1);
             return 0;
   }
-  if (arg0 == graphbrew::sniper::GRAPHBREW_K2_CLEAR_WORK_ID)
+  if (arg0 == graphbrew::sniper::GRAPHBREW_REUSE_PLAN_CLEAR_WORK_ID)
   {
-            graphbrew::sniper::clearBoundK2Load(
+            graphbrew::sniper::clearBoundReusePlanLoad(
                static_cast<uint32_t>(core_id));
             return 0;
   }
 """,
 args.dry_run,
-["GRAPHBREW_ECG_EXTRACT2_WORK_ID", "GRAPHBREW_K2_BIND_WORK_ID"],
+["GRAPHBREW_ECG_EXTRACT2_WORK_ID", "GRAPHBREW_REUSE_PLAN_BIND_WORK_ID"],
     )
-    ensure_k2_bind_magic_handler(magic_server, args.dry_run)
+    ensure_reuse_plan_bind_magic_handler(magic_server, args.dry_run)
     ensure_ecg_context_lifecycle_hooks(magic_server, args.dry_run)
     replace_once(
         magic_server,

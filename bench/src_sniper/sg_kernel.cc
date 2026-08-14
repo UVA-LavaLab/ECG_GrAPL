@@ -26,7 +26,7 @@
 #include "ecg_mode6_builder.h"
 // Shared per-edge next-reference epoch builder used by
 // cache_sim/gem5).
-#include "ecg_epoch_builder.h"
+#include "ecg_reuse_plan_builder.h"
 #include "ecg_metadata.h"
 
 // File-backed kernel diagnostic target. Native execution is intentionally kept
@@ -228,13 +228,13 @@ void export_popt_for_graph(const GraphType& graph) {
     sniper_export_popt_matrix(popt_matrix.data(), num_cache_lines, kNumEpochs, graph.num_nodes());
 }
 
-bool fused_k2_model_enabled() {
-    const char* value = std::getenv("SNIPER_ECG_FUSED_K2");
+bool fused_reuse_plan_model_enabled() {
+    const char* value = std::getenv("SNIPER_ECG_FUSED_REUSE_PLAN");
     return value && value[0] && std::string(value) != "0";
 }
 
-bool k2_transport_matched_enabled() {
-    const char* value = std::getenv("SNIPER_K2_TRANSPORT_MATCHED");
+bool reuse_plan_transport_matched_enabled() {
+    const char* value = std::getenv("SNIPER_REUSE_PLAN_TRANSPORT_MATCHED");
     return value && value[0] && std::string(value) != "0";
 }
 
@@ -243,17 +243,17 @@ bool popt_matrix_required() {
     return value && value[0] && std::string(value) != "0";
 }
 
-bool stream_bypass_enabled() {
-    const char* value = std::getenv("ECG_STREAM_BYPASS");
+bool flowthrough_enabled() {
+    const char* value = std::getenv("ECG_FLOWTHROUGH");
     return value && value[0] && std::string(value) != "0";
 }
 
-bool k2_record_validation_enabled() {
-    const char* value = std::getenv("ECG_K2_VALIDATE");
+bool reuse_plan_record_validation_enabled() {
+    const char* value = std::getenv("ECG_REUSE_PLAN_VALIDATE");
     return value && value[0] && std::string(value) != "0";
 }
 
-inline uint32_t consume_fused_k2_sidecar(const uint32_t* sidecar_ptr) {
+inline uint32_t consume_fused_reuse_plan_sidecar(const uint32_t* sidecar_ptr) {
     const uint32_t sidecar = *sidecar_ptr;
     // Keep the real 4-byte load, but allow it to overlap the weighted-edge
     // stream instead of imposing a software-only full memory barrier.
@@ -261,26 +261,26 @@ inline uint32_t consume_fused_k2_sidecar(const uint32_t* sidecar_ptr) {
     return sidecar;
 }
 
-void deliver_k2_record(uint64_t record, bool fused_k2_model) {
-    const uint32_t dest = ecg_epoch::extractEpochPairDest(record);
-    const uint8_t tier = ecg_epoch::extractEpochPairTier(record);
-    const uint16_t first = ecg_epoch::extractEpochPairFirst(record);
-    const uint16_t second = ecg_epoch::extractEpochPairSecond(record);
-    if (fused_k2_model) {
+void deliver_reuse_plan_record(uint64_t record, bool fused_reuse_plan_model) {
+    const uint32_t dest = ecg_reuse_plan::extractReusePlanDest(record);
+    const uint8_t tier = ecg_reuse_plan::extractReusePlanTier(record);
+    const uint16_t first = ecg_reuse_plan::extractReusePlanFirst(record);
+    const uint16_t second = ecg_reuse_plan::extractReusePlanSecond(record);
+    if (fused_reuse_plan_model) {
         SNIPER_ECG_EXPECT2(dest, tier, first, second);
     } else {
         SNIPER_ECG_EXTRACT2(dest, tier, first, second);
     }
 }
 
-void clear_k2_record(uint64_t record, bool fused_k2_model) {
-    if (!fused_k2_model) {
+void clear_reuse_plan_record(uint64_t record, bool fused_reuse_plan_model) {
+    if (!fused_reuse_plan_model) {
         SNIPER_ECG_CLEAR_EXTRACT2(
-            ecg_epoch::extractEpochPairDest(record));
+            ecg_reuse_plan::extractReusePlanDest(record));
     }
 }
 
-struct K2PairStream {
+struct ReusePlanPairStream {
     std::vector<uint64_t> offsets;
     std::vector<uint64_t> wide_records;
     std::vector<uint32_t> compact_records;
@@ -290,7 +290,7 @@ struct K2PairStream {
 
     uint64_t record(uint64_t index) const {
         if (compact) {
-            return ecg_epoch::widenEpochPair32(
+            return ecg_reuse_plan::widenReusePlan32(
                 compact_records[index],
                 compact_id_bits,
                 compact_epoch_bits);
@@ -319,15 +319,15 @@ struct K2PairStream {
 };
 
 template <typename GraphT>
-bool build_k2_pair_stream(
+bool build_reuse_plan_pair_stream(
         const GraphT& graph, uint32_t vertices_per_line,
         uint32_t epoch_count, bool push_out_edges,
-        const char* kernel, K2PairStream& stream) {
+        const char* kernel, ReusePlanPairStream& stream) {
     const uint32_t num_nodes = static_cast<uint32_t>(graph.num_nodes());
     auto metadata = ::ecg_metadata::configure(num_nodes, epoch_count);
     const bool use_compact =
         metadata.record_bytes == sizeof(uint32_t) &&
-        ecg_epoch::canPackEpochPair32(num_nodes, epoch_count);
+        ecg_reuse_plan::canPackReusePlan32(num_nodes, epoch_count);
     ::ecg_metadata::declareContainerBytes(
         metadata, use_compact ? sizeof(uint32_t) : sizeof(uint64_t));
     ::ecg_metadata::announce(metadata, "sniper-sg_kernel");
@@ -335,21 +335,21 @@ bool build_k2_pair_stream(
         metadata, "sniper-sg_kernel");
 
     if (use_compact) {
-        if (!ecg_epoch::buildInEdgeEpochPairRecords32(
+        if (!ecg_reuse_plan::buildInEdgeReusePlanRecords32(
                 graph, vertices_per_line, epoch_count,
                 /*linemin=*/true, stream.offsets,
                 stream.compact_records, push_out_edges)) {
             std::fprintf(
                 stderr,
-                "sniper-sg %s: compact K2 record construction failed\n",
+                "sniper-sg %s: compact ReusePlan record construction failed\n",
                 kernel);
             return false;
         }
         stream.compact = true;
         stream.compact_id_bits =
-            ecg_epoch::epochPair32IdBits(num_nodes);
+            ecg_reuse_plan::reusePlan32IdBits(num_nodes);
         stream.compact_epoch_bits =
-            ecg_epoch::epochPair32EpochBits(epoch_count);
+            ecg_reuse_plan::reusePlan32EpochBits(epoch_count);
         std::fprintf(
             stderr,
             "[ECG-PAIR32 sim=sniper kernel=%s records=%llu "
@@ -360,7 +360,7 @@ bool build_k2_pair_stream(
             stream.compact_epoch_bits);
         stream.wide_records.resize(stream.compact_records.size());
         for (size_t index = 0; index < stream.compact_records.size(); ++index) {
-            stream.wide_records[index] = ecg_epoch::widenEpochPair32(
+            stream.wide_records[index] = ecg_reuse_plan::widenReusePlan32(
                 stream.compact_records[index],
                 stream.compact_id_bits,
                 stream.compact_epoch_bits);
@@ -368,7 +368,7 @@ bool build_k2_pair_stream(
         return true;
     }
 
-    ecg_epoch::buildInEdgeEpochPairRecords(
+    ecg_reuse_plan::buildInEdgeReusePlanRecords(
         graph, vertices_per_line, epoch_count,
         /*linemin=*/true, stream.offsets,
         stream.wide_records, push_out_edges);
@@ -398,9 +398,9 @@ int run_pr(const Graph& graph, int max_iters) {
     SniperEdgeRegion edge_regions[2];
     int num_edge_regions = sniper_make_edge_regions(graph, edge_regions, 2, true);
 
-    const int ecg_sched_k =
-        graphbrew_sniper::env_int_clamped("ECG_EDGE_MASK_SCHED", 0, 0, 4);
-    // Build POPT matrix inline for legacy single-epoch/POPT runs. K2 is
+    const int ecg_reuse_plan_depth =
+        graphbrew_sniper::env_int_clamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
+    // Build POPT matrix inline for legacy single-epoch/POPT runs. ReusePlan is
     // matrix-free and retains only its packed 8-byte record stream.
     constexpr int kNumEpochs = 256;
     const int num_vtx_per_line = graphbrew_sniper::env_int_clamped(
@@ -410,7 +410,7 @@ int run_pr(const Graph& graph, int max_iters) {
     pvector<uint8_t> popt_matrix;
     const int popt_num_cache_lines =
         (graph.num_nodes() + num_vtx_per_line - 1) / num_vtx_per_line;
-    if (ecg_sched_k != 2 || popt_matrix_required()) {
+    if (ecg_reuse_plan_depth != 2 || popt_matrix_required()) {
         makeOffsetMatrix(graph, popt_matrix, num_vtx_per_line, kNumEpochs);
         sniper_export_popt_matrix(popt_matrix.data(), popt_num_cache_lines,
                                   kNumEpochs, graph.num_nodes());
@@ -424,36 +424,36 @@ int run_pr(const Graph& graph, int max_iters) {
     const bool ecg_extract_on = graphbrew_sniper::ecg_extract_enabled();
     const bool ecg_pfx_hints_on =
         graphbrew_sniper::ecg_pfx_hints_enabled();
-    const bool fused_k2_model = fused_k2_model_enabled();
-    const bool k2_transport_matched = k2_transport_matched_enabled();
-    const bool k2_trace_on = graphbrew_sniper::ecg_k2_trace_enabled();
-    const bool software_k2_delivery =
-        !fused_k2_model || k2_trace_on;
+    const bool fused_reuse_plan_model = fused_reuse_plan_model_enabled();
+    const bool reuse_plan_transport_matched = reuse_plan_transport_matched_enabled();
+    const bool reuse_plan_trace_on = graphbrew_sniper::ecg_reuse_plan_trace_enabled();
+    const bool software_reuse_plan_delivery =
+        !fused_reuse_plan_model || reuse_plan_trace_on;
     const bool no_delivery_pair_loop =
-        !software_k2_delivery || (k2_transport_matched && !k2_trace_on);
-    const bool stream_bypass_on = stream_bypass_enabled();
+        !software_reuse_plan_delivery || (reuse_plan_transport_matched && !reuse_plan_trace_on);
+    const bool flowthrough_on = flowthrough_enabled();
     uint32_t ecg_epoch_count = static_cast<uint32_t>(
         graphbrew_sniper::env_int_clamped(
             "ECG_EDGE_MASK_EPOCHS", kNumEpochs, 2, 65535));
-    if (ecg_sched_k == 2 || k2_transport_matched)
+    if (ecg_reuse_plan_depth == 2 || reuse_plan_transport_matched)
         ecg_epoch_count =
-            ecg_epoch::normalizeK2EpochCount(ecg_epoch_count);
+            ecg_reuse_plan::normalizeReusePlanEpochCount(ecg_epoch_count);
     std::vector<std::vector<uint16_t>> in_edge_epochs_by_src;
     std::vector<uint64_t> epoch_packed_off;
     std::vector<uint32_t> epoch_packed_flat;
-    std::vector<uint64_t> epoch_pair_off;
-    std::vector<uint64_t> epoch_pair_flat;
-    std::vector<uint32_t> epoch_pair32_flat;
+    std::vector<uint64_t> reuse_plan_off;
+    std::vector<uint64_t> reuse_plan_flat;
+    std::vector<uint32_t> reuse_plan32_flat;
     uint32_t epoch_pack_id_bits = 1;
     uint32_t epoch_pack_id_mask = 1;
-    uint32_t epoch_pair32_id_bits = 1;
-    uint32_t epoch_pair32_epoch_bits = 1;
+    uint32_t reuse_plan32_id_bits = 1;
+    uint32_t reuse_plan32_epoch_bits = 1;
     bool epoch_packed_ok = false;
-    bool epoch_pair_ok = false;
-    bool epoch_pair32_ok = false;
-    if (ecg_extract_on || k2_transport_matched) {
-        if (ecg_extract_on && ecg_sched_k != 2) {
-            ecg_epoch::buildInEdgeEpochs(
+    bool reuse_plan_ok = false;
+    bool reuse_plan32_ok = false;
+    if (ecg_extract_on || reuse_plan_transport_matched) {
+        if (ecg_extract_on && ecg_reuse_plan_depth != 2) {
+            ecg_reuse_plan::buildInEdgeEpochs(
                 graph, num_vtx_per_line, ecg_epoch_count,
                 /*linemin=*/true, in_edge_epochs_by_src);
         }
@@ -471,21 +471,21 @@ int run_pr(const Graph& graph, int max_iters) {
         // record width or whether a packed record fits.
         auto ecg_meta = ::ecg_metadata::configure(nn, ecg_epoch_count);
         // The shared rule computes the budget a record could occupy; a backend that
-        // materialises it wider must say so. Sniper's Schedule-2 array used to
+        // materialises it wider must say so. Sniper's two-epoch ReusePlan array used to
         // be uint64_t unconditionally while the receipt printed the 4-byte
         // budget. Decide the
         // container first, declare it, and only then announce.
         const bool sniper_pair_requested =
-            (ecg_extract_on && ecg_sched_k == 2) || k2_transport_matched;
+            (ecg_extract_on && ecg_reuse_plan_depth == 2) || reuse_plan_transport_matched;
         const bool use_compact_pair =
             sniper_pair_requested && ecg_meta.record_bytes == 4 &&
-            ecg_epoch::canPackEpochPair32(nn, ecg_epoch_count);
+            ecg_reuse_plan::canPackReusePlan32(nn, ecg_epoch_count);
         if (sniper_pair_requested)
             ::ecg_metadata::declareContainerBytes(
                 ecg_meta, use_compact_pair ? 4 : 8);
         ::ecg_metadata::announce(ecg_meta, "sniper-sg_kernel");
         ::ecg_metadata::enforceExpectedBytesPerEdge(ecg_meta, "sniper-sg_kernel");
-        if (ecg_extract_on && ecg_sched_k != 2 && ecg_meta.packed_fits) {
+        if (ecg_extract_on && ecg_reuse_plan_depth != 2 && ecg_meta.packed_fits) {
             epoch_pack_id_mask = (uint32_t{1} << epoch_pack_id_bits) - 1;
             epoch_packed_off.assign(static_cast<size_t>(nn) + 1, 0);
             for (uint32_t u = 0; u < nn; ++u)
@@ -512,29 +512,29 @@ int run_pr(const Graph& graph, int max_iters) {
             // Prefer the COMPACT 32-bit two-stamp record when the fields fit:
             // it SUBSTITUTES for the 4-byte CSR edge, which is the width
             // cache_sim models, instead of doubling the structural stream.
-            // The canonical 64-bit array is still built because the K2 sideband
+            // The canonical 64-bit array is still built because the ReusePlan sideband
             // file is a fixed uint64 wire format read out of band by the
             // simulator -- it carries no simulated traffic, so the ROI streams
             // 4 bytes per edge either way.
             if (use_compact_pair &&
-                ecg_epoch::buildInEdgeEpochPairRecords32(
+                ecg_reuse_plan::buildInEdgeReusePlanRecords32(
                     graph, num_vtx_per_line, ecg_epoch_count,
-                    /*linemin=*/true, epoch_pair_off, epoch_pair32_flat)) {
-                epoch_pair32_ok = true;
-                epoch_pair32_id_bits = ecg_epoch::epochPair32IdBits(nn);
-                epoch_pair32_epoch_bits =
-                    ecg_epoch::epochPair32EpochBits(ecg_epoch_count);
+                    /*linemin=*/true, reuse_plan_off, reuse_plan32_flat)) {
+                reuse_plan32_ok = true;
+                reuse_plan32_id_bits = ecg_reuse_plan::reusePlan32IdBits(nn);
+                reuse_plan32_epoch_bits =
+                    ecg_reuse_plan::reusePlan32EpochBits(ecg_epoch_count);
                 std::fprintf(stderr,
                              "[ECG-PAIR32 sim=sniper kernel=pr records=%llu "
                              "id_bits=%u epoch_bits=%u (4-byte, substitutes "
                              "for the CSR edge)]\n",
-                             (unsigned long long)epoch_pair32_flat.size(),
-                             epoch_pair32_id_bits, epoch_pair32_epoch_bits);
+                             (unsigned long long)reuse_plan32_flat.size(),
+                             reuse_plan32_id_bits, reuse_plan32_epoch_bits);
             }
-            ecg_epoch::buildInEdgeEpochPairRecords(
+            ecg_reuse_plan::buildInEdgeReusePlanRecords(
                 graph, num_vtx_per_line, ecg_epoch_count,
-                /*linemin=*/true, epoch_pair_off, epoch_pair_flat);
-            epoch_pair_ok = true;
+                /*linemin=*/true, reuse_plan_off, reuse_plan_flat);
+            reuse_plan_ok = true;
         }
 
         const char* debug = std::getenv("ECG_DEBUG");
@@ -543,11 +543,11 @@ int run_pr(const Graph& graph, int max_iters) {
             uint64_t nonzero = 0;
             uint16_t min_epoch = std::numeric_limits<uint16_t>::max();
             uint16_t max_epoch = 0;
-            if (epoch_pair_ok) {
-                total = epoch_pair_flat.size();
-                for (uint64_t record : epoch_pair_flat) {
-                    uint16_t first = ecg_epoch::extractEpochPairFirst(record);
-                    uint16_t second = ecg_epoch::extractEpochPairSecond(record);
+            if (reuse_plan_ok) {
+                total = reuse_plan_flat.size();
+                for (uint64_t record : reuse_plan_flat) {
+                    uint16_t first = ecg_reuse_plan::extractReusePlanFirst(record);
+                    uint16_t second = ecg_reuse_plan::extractReusePlanSecond(record);
                     if (first != 0 || second != 0) ++nonzero;
                     min_epoch = std::min(min_epoch, std::min(first, second));
                     max_epoch = std::max(max_epoch, std::max(first, second));
@@ -584,46 +584,46 @@ int run_pr(const Graph& graph, int max_iters) {
     // the compact record that is the 32-bit array; the 64-bit one exists only
     // as the sideband source and is never touched inside the ROI.
     const uint64_t streamed_pair_base =
-        epoch_pair32_ok && !epoch_pair32_flat.empty()
-            ? reinterpret_cast<uint64_t>(epoch_pair32_flat.data())
-            : (epoch_pair_ok && !epoch_pair_flat.empty()
-                ? reinterpret_cast<uint64_t>(epoch_pair_flat.data()) : 0);
+        reuse_plan32_ok && !reuse_plan32_flat.empty()
+            ? reinterpret_cast<uint64_t>(reuse_plan32_flat.data())
+            : (reuse_plan_ok && !reuse_plan_flat.empty()
+                ? reinterpret_cast<uint64_t>(reuse_plan_flat.data()) : 0);
     const uint64_t streamed_pair_size =
-        epoch_pair32_ok
-            ? epoch_pair32_flat.size() * sizeof(uint32_t)
-            : (epoch_pair_ok ? epoch_pair_flat.size() * sizeof(uint64_t) : 0);
+        reuse_plan32_ok
+            ? reuse_plan32_flat.size() * sizeof(uint32_t)
+            : (reuse_plan_ok ? reuse_plan_flat.size() * sizeof(uint64_t) : 0);
     if (!sniper_export_context(
         regions, 2, graph, nullptr, edge_regions, num_edge_regions,
-        stream_bypass_on
+        flowthrough_on
             ? (streamed_pair_base != 0
                 ? streamed_pair_base
                 : (epoch_packed_ok && !epoch_packed_flat.empty()
                     ? reinterpret_cast<uint64_t>(epoch_packed_flat.data()) : 0))
             : 0,
-        stream_bypass_on
+        flowthrough_on
             ? (streamed_pair_base != 0
                 ? streamed_pair_size
                 : (epoch_packed_ok
                     ? epoch_packed_flat.size() * sizeof(uint32_t) : 0))
             : 0,
-        epoch_pair_ok ? epoch_pair_off.data() : nullptr,
-        epoch_pair_ok ? epoch_pair_off.size() : 0,
-        epoch_pair_ok ? epoch_pair_flat.data() : nullptr,
-        epoch_pair_ok ? epoch_pair_flat.size() : 0)) {
-        std::fprintf(stderr, "sniper-sg PR: context/K2 sideband export failed\n");
+        reuse_plan_ok ? reuse_plan_off.data() : nullptr,
+        reuse_plan_ok ? reuse_plan_off.size() : 0,
+        reuse_plan_ok ? reuse_plan_flat.data() : nullptr,
+        reuse_plan_ok ? reuse_plan_flat.size() : 0)) {
+        std::fprintf(stderr, "sniper-sg PR: context/ReusePlan sideband export failed\n");
         return 2;
     }
-    if (epoch_pair_ok && k2_transport_matched)
+    if (reuse_plan_ok && reuse_plan_transport_matched)
         std::fprintf(
             stderr,
-            "[K2_TRANSPORT_MATCHED] PR %uB record loop ACTIVE\n",
-            epoch_pair32_ok
+            "[REUSE_PLAN_TRANSPORT_MATCHED] PR %uB record loop ACTIVE\n",
+            reuse_plan32_ok
                 ? static_cast<unsigned>(sizeof(uint32_t))
                 : static_cast<unsigned>(sizeof(uint64_t)));
-    if (epoch_pair_ok && k2_transport_matched &&
-        graphbrew_sniper::k2_exact_bind_enabled())
+    if (reuse_plan_ok && reuse_plan_transport_matched &&
+        graphbrew_sniper::reuse_plan_exact_bind_enabled())
         std::fprintf(stderr,
-                     "[K2_EXACT_BIND] PR contrib load binding ACTIVE\n");
+                     "[REUSE_PLAN_EXACT_BIND] PR contrib load binding ACTIVE\n");
     volatile ScoreT* warm_scores = scores.data();
     volatile ScoreT* warm_contrib = contrib.data();
     for (NodeID node = 0; node < graph.num_nodes(); ++node) {
@@ -739,40 +739,40 @@ int run_pr(const Graph& graph, int max_iters) {
             SNIPER_SET_VERTEX(node);
             ScoreT incoming_total = 0.0f;
 
-            if (epoch_pair_ok && !ecg_enabled && packed_stream_compatible &&
-                static_cast<size_t>(node + 1) < epoch_pair_off.size()) {
-                const uint64_t begin = epoch_pair_off[node];
-                const uint64_t end = epoch_pair_off[node + 1];
+            if (reuse_plan_ok && !ecg_enabled && packed_stream_compatible &&
+                static_cast<size_t>(node + 1) < reuse_plan_off.size()) {
+                const uint64_t begin = reuse_plan_off[node];
+                const uint64_t end = reuse_plan_off[node + 1];
                 if (no_delivery_pair_loop) {
                     for (uint64_t pos = begin; pos < end; ++pos) {
                         consume_edge();
-                        const uint64_t rec = epoch_pair32_ok
-                            ? ecg_epoch::widenEpochPair32(
-                                  epoch_pair32_flat[pos], epoch_pair32_id_bits,
-                                  epoch_pair32_epoch_bits)
-                            : epoch_pair_flat[pos];
+                        const uint64_t rec = reuse_plan32_ok
+                            ? ecg_reuse_plan::widenReusePlan32(
+                                  reuse_plan32_flat[pos], reuse_plan32_id_bits,
+                                  reuse_plan32_epoch_bits)
+                            : reuse_plan_flat[pos];
                         const NodeID neighbor = static_cast<NodeID>(
-                            ecg_epoch::extractEpochPairDest(rec));
+                            ecg_reuse_plan::extractReusePlanDest(rec));
                         incoming_total +=
-                            graphbrew_sniper::k2_bound_load(
+                            graphbrew_sniper::reuse_plan_bound_load(
                                 &contrib[neighbor]);
                     }
                 } else {
                     for (uint64_t pos = begin; pos < end; ++pos) {
                         consume_edge();
-                        const uint64_t rec = epoch_pair32_ok
-                            ? ecg_epoch::widenEpochPair32(
-                                  epoch_pair32_flat[pos], epoch_pair32_id_bits,
-                                  epoch_pair32_epoch_bits)
-                            : epoch_pair_flat[pos];
+                        const uint64_t rec = reuse_plan32_ok
+                            ? ecg_reuse_plan::widenReusePlan32(
+                                  reuse_plan32_flat[pos], reuse_plan32_id_bits,
+                                  reuse_plan32_epoch_bits)
+                            : reuse_plan_flat[pos];
                         const NodeID neighbor = static_cast<NodeID>(
-                            ecg_epoch::extractEpochPairDest(rec));
-                        deliver_k2_record(rec, fused_k2_model);
+                            ecg_reuse_plan::extractReusePlanDest(rec));
+                        deliver_reuse_plan_record(rec, fused_reuse_plan_model);
                         incoming_total +=
-                            graphbrew_sniper::k2_bound_load(
+                            graphbrew_sniper::reuse_plan_bound_load(
                                 &contrib[neighbor]);
-                        if (!fused_k2_model) {
-                            clear_k2_record(rec, fused_k2_model);
+                        if (!fused_reuse_plan_model) {
+                            clear_reuse_plan_record(rec, fused_reuse_plan_model);
                         }
                     }
                 }
@@ -981,9 +981,9 @@ int run_bfs(const Graph& graph, NodeID source) {
     };
     SniperEdgeRegion edge_regions[2];
     int num_edge_regions = sniper_make_edge_regions(graph, edge_regions, 2);
-    const int bfs_sched_k =
-        graphbrew_sniper::env_int_clamped("ECG_EDGE_MASK_SCHED", 0, 0, 4);
-    if (bfs_sched_k != 2 || popt_matrix_required())
+    const int bfs_reuse_plan_depth =
+        graphbrew_sniper::env_int_clamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
+    if (bfs_reuse_plan_depth != 2 || popt_matrix_required())
         export_popt_for_graph<Graph, NodeID>(graph);
 
     // SNIPER_ECG_EXTRACT (delivery-faithful, mirrors gem5 ecg.load EVICT): deliver each
@@ -998,14 +998,14 @@ int run_bfs(const Graph& graph, NodeID source) {
     const bool ecg_extract_on = graphbrew_sniper::ecg_extract_enabled();
     const bool ecg_pfx_hints_on =
         graphbrew_sniper::ecg_pfx_hints_enabled();
-    const bool fused_k2_model = fused_k2_model_enabled();
-    const bool k2_transport_matched = k2_transport_matched_enabled();
-    const bool k2_trace_on = graphbrew_sniper::ecg_k2_trace_enabled();
-    const bool software_k2_delivery =
-        !fused_k2_model || k2_trace_on;
+    const bool fused_reuse_plan_model = fused_reuse_plan_model_enabled();
+    const bool reuse_plan_transport_matched = reuse_plan_transport_matched_enabled();
+    const bool reuse_plan_trace_on = graphbrew_sniper::ecg_reuse_plan_trace_enabled();
+    const bool software_reuse_plan_delivery =
+        !fused_reuse_plan_model || reuse_plan_trace_on;
     const bool no_delivery_pair_loop =
-        !software_k2_delivery || (k2_transport_matched && !k2_trace_on);
-    const bool stream_bypass_on = stream_bypass_enabled();
+        !software_reuse_plan_delivery || (reuse_plan_transport_matched && !reuse_plan_trace_on);
+    const bool flowthrough_on = flowthrough_enabled();
     const char* configured_prefetcher = std::getenv("SNIPER_GRAPHBREW_PREFETCHER");
     const bool packed_stream_compatible =
         !configured_prefetcher ||
@@ -1013,23 +1013,23 @@ int run_bfs(const Graph& graph, NodeID source) {
         std::string(configured_prefetcher) == "STRIDE";
     uint32_t ecg_epoch_count = static_cast<uint32_t>(
         graphbrew_sniper::env_int_clamped("ECG_EDGE_MASK_EPOCHS", 256, 2, 65535));
-    if (bfs_sched_k == 2 || k2_transport_matched)
+    if (bfs_reuse_plan_depth == 2 || reuse_plan_transport_matched)
         ecg_epoch_count =
-            ecg_epoch::normalizeK2EpochCount(ecg_epoch_count);
+            ecg_reuse_plan::normalizeReusePlanEpochCount(ecg_epoch_count);
     std::vector<std::vector<uint16_t>> out_edge_epochs;
     if (ecg_extract_on) {
-        if (bfs_sched_k != 2) {
-            ecg_epoch::buildInEdgeEpochs(
+        if (bfs_reuse_plan_depth != 2) {
+            ecg_reuse_plan::buildInEdgeEpochs(
                 graph, kNumVtxPerLine, ecg_epoch_count,
                 /*linemin=*/true, out_edge_epochs,
                 /*push_out_edges=*/true);
         }
     }
-    K2PairStream bfs_pairs;
+    ReusePlanPairStream bfs_pairs;
     bool bfs_pair_ok = false;
-    if ((ecg_extract_on && bfs_sched_k == 2) ||
-        k2_transport_matched) {
-        bfs_pair_ok = build_k2_pair_stream(
+    if ((ecg_extract_on && bfs_reuse_plan_depth == 2) ||
+        reuse_plan_transport_matched) {
+        bfs_pair_ok = build_reuse_plan_pair_stream(
             graph, kNumVtxPerLine, ecg_epoch_count,
             /*push_out_edges=*/true, "bfs", bfs_pairs);
         if (!bfs_pair_ok) return 2;
@@ -1039,7 +1039,7 @@ int run_bfs(const Graph& graph, NodeID source) {
     uint32_t bfs_pack_id_bits = 1;
     uint32_t bfs_pack_id_mask = 1;
     bool bfs_packed_ok = false;
-    if (ecg_extract_on && bfs_sched_k != 2) {
+    if (ecg_extract_on && bfs_reuse_plan_depth != 2) {
         const uint32_t nn = static_cast<uint32_t>(graph.num_nodes());
         while (bfs_pack_id_bits < 31 &&
                (uint64_t{1} << bfs_pack_id_bits) < nn)
@@ -1081,37 +1081,37 @@ int run_bfs(const Graph& graph, NodeID source) {
     }
     if (!sniper_export_context(
             regions, 1, graph, nullptr, edge_regions, num_edge_regions,
-            stream_bypass_on && bfs_pair_ok
+            flowthrough_on && bfs_pair_ok
                 ? bfs_pairs.stream_base() : 0,
-            stream_bypass_on && bfs_pair_ok
+            flowthrough_on && bfs_pair_ok
                 ? bfs_pairs.stream_bytes() : 0,
-            fused_k2_model && bfs_pair_ok
+            fused_reuse_plan_model && bfs_pair_ok
                 ? bfs_pairs.offsets.data() : nullptr,
-            fused_k2_model && bfs_pair_ok
+            fused_reuse_plan_model && bfs_pair_ok
                 ? bfs_pairs.offsets.size() : 0,
-            fused_k2_model && bfs_pair_ok
+            fused_reuse_plan_model && bfs_pair_ok
                 ? bfs_pairs.wide_records.data() : nullptr,
-            fused_k2_model && bfs_pair_ok
+            fused_reuse_plan_model && bfs_pair_ok
                 ? bfs_pairs.wide_records.size() : 0)) {
-        std::fprintf(stderr, "sniper-sg BFS: context/K2 sideband export failed\n");
+        std::fprintf(stderr, "sniper-sg BFS: context/ReusePlan sideband export failed\n");
         return 2;
     }
     if (bfs_pair_ok) {
         std::fprintf(
             stderr,
-            fused_k2_model
-                ? "[ECG_FUSED_K2] BFS Schedule-2 fused sideband ACTIVE\n"
-                : "[ECG_PACKED8_K2] BFS Schedule-2 packed record path ACTIVE\n");
+            fused_reuse_plan_model
+                ? "[ECG_FUSED_REUSE_PLAN] BFS two-epoch ReusePlan fused sideband ACTIVE\n"
+                : "[ECG_PACKED8_REUSE_PLAN] BFS two-epoch ReusePlan packed record path ACTIVE\n");
     }
-    if (bfs_pair_ok && k2_transport_matched)
+    if (bfs_pair_ok && reuse_plan_transport_matched)
         std::fprintf(
             stderr,
-            "[K2_TRANSPORT_MATCHED] BFS %uB record loop ACTIVE\n",
+            "[REUSE_PLAN_TRANSPORT_MATCHED] BFS %uB record loop ACTIVE\n",
             bfs_pairs.record_bytes());
-    if (bfs_pair_ok && k2_transport_matched &&
-        graphbrew_sniper::k2_exact_bind_enabled())
+    if (bfs_pair_ok && reuse_plan_transport_matched &&
+        graphbrew_sniper::reuse_plan_exact_bind_enabled())
         std::fprintf(stderr,
-                     "[K2_EXACT_BIND] BFS parent load binding ACTIVE\n");
+                     "[REUSE_PLAN_EXACT_BIND] BFS parent load binding ACTIVE\n");
     volatile NodeID* warm_parent = parent.data();
     for (NodeID node = 0; node < graph.num_nodes(); ++node)
         warm_parent[node] = node == source ? source : -1;
@@ -1139,9 +1139,9 @@ int run_bfs(const Graph& graph, NodeID source) {
                     consume_edge();
                     const uint64_t rec = bfs_pairs.record(pos);
                     const NodeID neighbor = static_cast<NodeID>(
-                        ecg_epoch::extractEpochPairDest(rec));
+                        ecg_reuse_plan::extractReusePlanDest(rec));
                     const NodeID parent_value =
-                        graphbrew_sniper::k2_bound_load(
+                        graphbrew_sniper::reuse_plan_bound_load(
                             &parent[neighbor]);
                     if (parent_value == -1) {
                         parent[neighbor] = node;
@@ -1153,13 +1153,13 @@ int run_bfs(const Graph& graph, NodeID source) {
                     consume_edge();
                     const uint64_t rec = bfs_pairs.record(pos);
                     const NodeID neighbor = static_cast<NodeID>(
-                        ecg_epoch::extractEpochPairDest(rec));
-                    deliver_k2_record(rec, fused_k2_model);
+                        ecg_reuse_plan::extractReusePlanDest(rec));
+                    deliver_reuse_plan_record(rec, fused_reuse_plan_model);
                     const NodeID parent_value =
-                        graphbrew_sniper::k2_bound_load(
+                        graphbrew_sniper::reuse_plan_bound_load(
                             &parent[neighbor]);
-                    if (!fused_k2_model) {
-                        clear_k2_record(rec, fused_k2_model);
+                    if (!fused_reuse_plan_model) {
+                        clear_reuse_plan_record(rec, fused_reuse_plan_model);
                     }
                     if (parent_value == -1) {
                         parent[neighbor] = node;
@@ -1249,10 +1249,10 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
     };
     SniperEdgeRegion edge_regions[2];
     int num_edge_regions = sniper_make_edge_regions(graph, edge_regions, 2);
-    const int ecg_sched_k =
+    const int ecg_reuse_plan_depth =
         graphbrew_sniper::env_int_clamped(
-            "ECG_EDGE_MASK_SCHED", 0, 0, 4);
-    if (ecg_sched_k != 2 || popt_matrix_required())
+            "ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
+    if (ecg_reuse_plan_depth != 2 || popt_matrix_required())
         export_popt_for_graph<WGraph, WeightT>(graph);
 
     // SNIPER_ECG_EXTRACT (delivery-faithful, mirrors gem5 ecg.load EVICT): deliver each
@@ -1266,20 +1266,20 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
     const bool ecg_extract_on = graphbrew_sniper::ecg_extract_enabled();
     const bool ecg_pfx_hints_on =
         graphbrew_sniper::ecg_pfx_hints_enabled();
-    const bool fused_k2_model = fused_k2_model_enabled();
-    const bool k2_transport_matched = k2_transport_matched_enabled();
-    const bool k2_trace_on = graphbrew_sniper::ecg_k2_trace_enabled();
-    const bool software_k2_delivery =
-        !fused_k2_model || k2_trace_on;
-    const bool stream_bypass_on = stream_bypass_enabled();
+    const bool fused_reuse_plan_model = fused_reuse_plan_model_enabled();
+    const bool reuse_plan_transport_matched = reuse_plan_transport_matched_enabled();
+    const bool reuse_plan_trace_on = graphbrew_sniper::ecg_reuse_plan_trace_enabled();
+    const bool software_reuse_plan_delivery =
+        !fused_reuse_plan_model || reuse_plan_trace_on;
+    const bool flowthrough_on = flowthrough_enabled();
     uint32_t ecg_epoch_count = static_cast<uint32_t>(
         graphbrew_sniper::env_int_clamped("ECG_EDGE_MASK_EPOCHS", 256, 2, 65535));
-    if (ecg_sched_k == 2 || k2_transport_matched)
+    if (ecg_reuse_plan_depth == 2 || reuse_plan_transport_matched)
         ecg_epoch_count =
-            ecg_epoch::normalizeK2EpochCount(ecg_epoch_count);
+            ecg_reuse_plan::normalizeReusePlanEpochCount(ecg_epoch_count);
     std::vector<std::vector<uint16_t>> out_edge_epochs;
-    if (ecg_extract_on && ecg_sched_k != 2) {
-        ecg_epoch::buildInEdgeEpochs(graph, kNumVtxPerLine, ecg_epoch_count,
+    if (ecg_extract_on && ecg_reuse_plan_depth != 2) {
+        ecg_reuse_plan::buildInEdgeEpochs(graph, kNumVtxPerLine, ecg_epoch_count,
                                      /*linemin=*/true, out_edge_epochs,
                                      /*push_out_edges=*/true);
     }
@@ -1289,29 +1289,29 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
     pvector<uint64_t> pair_compact;
     bool pair_ok = false;
     bool compact_pair_ok = false;
-    if ((ecg_extract_on && ecg_sched_k == 2) ||
-        k2_transport_matched) {
-        ecg_epoch::buildInEdgeEpochPairRecords(
+    if ((ecg_extract_on && ecg_reuse_plan_depth == 2) ||
+        reuse_plan_transport_matched) {
+        ecg_reuse_plan::buildInEdgeReusePlanRecords(
             graph, kNumVtxPerLine, ecg_epoch_count,
             /*linemin=*/true, pair_off, pair_flat,
             /*push_out_edges=*/true);
         pair_sidecars = pvector<uint32_t>(
             pair_flat.size(), uint32_t(0), kPropAlign);
         for (size_t i = 0; i < pair_flat.size(); ++i) {
-            pair_sidecars[i] = ecg_epoch::packWeightedEpochPairSidecar(
-                ecg_epoch::extractEpochPairTier(pair_flat[i]),
-                ecg_epoch::extractEpochPairFirst(pair_flat[i]),
-                ecg_epoch::extractEpochPairSecond(pair_flat[i]));
+            pair_sidecars[i] = ecg_reuse_plan::packWeightedReusePlanSidecar(
+                ecg_reuse_plan::extractReusePlanTier(pair_flat[i]),
+                ecg_reuse_plan::extractReusePlanFirst(pair_flat[i]),
+                ecg_reuse_plan::extractReusePlanSecond(pair_flat[i]));
         }
         pair_compact = pvector<uint64_t>(
             pair_flat.size(), uint64_t(0), kPropAlign);
         compact_pair_ok =
             static_cast<uint64_t>(graph.num_nodes()) <=
-                ecg_epoch::kCompactWeightedMaxVertices;
+                ecg_reuse_plan::kCompactWeightedMaxVertices;
         for (NodeID src = 0; compact_pair_ok && src < graph.num_nodes(); ++src) {
             uint64_t pos = pair_off[src];
             for (WNode edge : graph.out_neigh(src)) {
-                if (!ecg_epoch::canPackCompactWeightedEdge(
+                if (!ecg_reuse_plan::canPackCompactWeightedEdge(
                         graph.num_nodes(), static_cast<uint32_t>(edge.v),
                         static_cast<int64_t>(edge.w))) {
                     compact_pair_ok = false;
@@ -1319,12 +1319,12 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
                 }
                 const uint64_t pair = pair_flat[pos];
                 pair_compact[pos] =
-                    ecg_epoch::packCompactWeightedEpochPairRecord(
+                    ecg_reuse_plan::packCompactWeightedReusePlanRecord(
                         static_cast<uint32_t>(edge.v),
                         static_cast<uint32_t>(edge.w),
-                        ecg_epoch::extractEpochPairTier(pair),
-                        ecg_epoch::extractEpochPairFirst(pair),
-                        ecg_epoch::extractEpochPairSecond(pair));
+                        ecg_reuse_plan::extractReusePlanTier(pair),
+                        ecg_reuse_plan::extractReusePlanFirst(pair),
+                        ecg_reuse_plan::extractReusePlanSecond(pair));
                 ++pos;
             }
         }
@@ -1335,64 +1335,64 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
         auto metadata = ::ecg_metadata::configure(
             static_cast<uint32_t>(graph.num_nodes()), ecg_epoch_count);
         const int transport_bytes = (
-            fused_k2_model && !compact_pair_ok) ? 12 : 8;
+            fused_reuse_plan_model && !compact_pair_ok) ? 12 : 8;
         ::ecg_metadata::declareContainerBytes(metadata, transport_bytes);
         metadata.packed_fits = compact_pair_ok;
         ::ecg_metadata::announce(metadata, "sniper-sg_kernel");
         ::ecg_metadata::enforceExpectedBytesPerEdge(
             metadata, "sniper-sg_kernel");
     }
-    if (pair_ok && k2_record_validation_enabled() &&
-        (!ecg_epoch::validateWeightedEpochPairRecords(
+    if (pair_ok && reuse_plan_record_validation_enabled() &&
+        (!ecg_reuse_plan::validateWeightedReusePlanRecords(
              graph, pair_off, pair_flat) ||
-         !ecg_epoch::validateWeightedEpochPairSidecars(
+         !ecg_reuse_plan::validateWeightedReusePlanSidecars(
              pair_off, pair_flat, pair_sidecars) ||
          (compact_pair_ok &&
-          !ecg_epoch::validateCompactWeightedEpochPairRecords(
+          !ecg_reuse_plan::validateCompactWeightedReusePlanRecords(
               graph, pair_off, pair_flat, pair_compact)))) {
-        std::fprintf(stderr, "Sniper SSSP K2 record validation failed\n");
+        std::fprintf(stderr, "Sniper SSSP ReusePlan record validation failed\n");
         std::abort();
     }
     if (!sniper_export_context(
             regions, 1, graph, nullptr, edge_regions, num_edge_regions,
-            stream_bypass_on && pair_ok
-                ? (fused_k2_model
+            flowthrough_on && pair_ok
+                ? (fused_reuse_plan_model
                     ? reinterpret_cast<uint64_t>(
                         compact_pair_ok
                             ? static_cast<const void*>(pair_compact.data())
                             : static_cast<const void*>(pair_sidecars.data()))
                     : reinterpret_cast<uint64_t>(pair_flat.data())) : 0,
-            stream_bypass_on && pair_ok
-                ? (fused_k2_model
+            flowthrough_on && pair_ok
+                ? (fused_reuse_plan_model
                     ? (compact_pair_ok
                         ? pair_compact.size() * sizeof(uint64_t)
                         : pair_sidecars.size() * sizeof(uint32_t))
                     : pair_flat.size() * sizeof(uint64_t)) : 0,
-            fused_k2_model && pair_ok ? pair_off.data() : nullptr,
-            fused_k2_model && pair_ok ? pair_off.size() : 0,
-            fused_k2_model && pair_ok ? pair_flat.data() : nullptr,
-            fused_k2_model && pair_ok ? pair_flat.size() : 0)) {
-        std::fprintf(stderr, "sniper-sg SSSP: context/K2 sideband export failed\n");
+            fused_reuse_plan_model && pair_ok ? pair_off.data() : nullptr,
+            fused_reuse_plan_model && pair_ok ? pair_off.size() : 0,
+            fused_reuse_plan_model && pair_ok ? pair_flat.data() : nullptr,
+            fused_reuse_plan_model && pair_ok ? pair_flat.size() : 0)) {
+        std::fprintf(stderr, "sniper-sg SSSP: context/ReusePlan sideband export failed\n");
         return 2;
     }
     if (pair_ok)
         std::fprintf(
             stderr,
-            fused_k2_model && compact_pair_ok
-                ? "[ECG_FUSED_K2_WEIGHTED64] SSSP compact 8B record ACTIVE\n"
-                : fused_k2_model
-                ? "[ECG_FUSED_K2_WEIGHTED32] SSSP 4B sidecar ACTIVE\n"
-                : "[ECG_PACKED8_K2] SSSP Schedule-2 packed record path ACTIVE\n");
-    if (k2_transport_matched)
+            fused_reuse_plan_model && compact_pair_ok
+                ? "[ECG_FUSED_REUSE_PLAN_WEIGHTED64] SSSP compact 8B record ACTIVE\n"
+                : fused_reuse_plan_model
+                ? "[ECG_FUSED_REUSE_PLAN_WEIGHTED32] SSSP 4B sidecar ACTIVE\n"
+                : "[ECG_PACKED8_REUSE_PLAN] SSSP two-epoch ReusePlan packed record path ACTIVE\n");
+    if (reuse_plan_transport_matched)
         std::fprintf(
             stderr,
             compact_pair_ok
-                ? "[K2_TRANSPORT_MATCHED] SSSP compact 8B record loop ACTIVE\n"
-                : "[K2_TRANSPORT_MATCHED] SSSP general 12B edge+sidecar loop ACTIVE\n");
-    if (pair_ok && k2_transport_matched &&
-        graphbrew_sniper::k2_exact_bind_enabled())
+                ? "[REUSE_PLAN_TRANSPORT_MATCHED] SSSP compact 8B record loop ACTIVE\n"
+                : "[REUSE_PLAN_TRANSPORT_MATCHED] SSSP general 12B edge+sidecar loop ACTIVE\n");
+    if (pair_ok && reuse_plan_transport_matched &&
+        graphbrew_sniper::reuse_plan_exact_bind_enabled())
         std::fprintf(stderr,
-                     "[K2_EXACT_BIND] SSSP edge-governed dist[dest] binding ACTIVE\n");
+                     "[REUSE_PLAN_EXACT_BIND] SSSP edge-governed dist[dest] binding ACTIVE\n");
 
     SemanticEdgeBudget semantic_edges;
     std::queue<NodeID> frontier;
@@ -1411,7 +1411,7 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
             before_property_load(edge, edge_pos);
             const WeightT candidate = source_dist + edge.w;
             const WeightT old_dist =
-                graphbrew_sniper::k2_bound_load(&dist[edge.v]);
+                graphbrew_sniper::reuse_plan_bound_load(&dist[edge.v]);
             after_property_load(edge, edge_pos);
             if (candidate < old_dist) {
                 dist[edge.v] = candidate;
@@ -1429,15 +1429,15 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
             consume_edge();
             const uint64_t record = pair_compact[pos];
             const NodeID dest = static_cast<NodeID>(
-                ecg_epoch::extractCompactWeightedDest(record));
+                ecg_reuse_plan::extractCompactWeightedDest(record));
             const WeightT weight = static_cast<WeightT>(
-                ecg_epoch::extractCompactWeightedWeight(record));
-            if (software_k2_delivery) {
-                deliver_k2_record(pair_flat[pos], fused_k2_model);
+                ecg_reuse_plan::extractCompactWeightedWeight(record));
+            if (software_reuse_plan_delivery) {
+                deliver_reuse_plan_record(pair_flat[pos], fused_reuse_plan_model);
             }
             const WeightT candidate = source_dist + weight;
             const WeightT old_dist =
-                graphbrew_sniper::k2_bound_load(&dist[dest]);
+                graphbrew_sniper::reuse_plan_bound_load(&dist[dest]);
             if (candidate < old_dist) {
                 dist[dest] = candidate;
                 if (!in_queue[dest]) {
@@ -1458,31 +1458,31 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
         if (ecg_pfx_hints_on && !frontier.empty()) {
             SNIPER_ECG_PFX_TARGET(frontier.front());
         }
-        if (fused_k2_model && pair_ok && compact_pair_ok) {
+        if (fused_reuse_plan_model && pair_ok && compact_pair_ok) {
             relax_compact_edges(node, source_dist);
-        } else if (fused_k2_model && pair_ok) {
+        } else if (fused_reuse_plan_model && pair_ok) {
             uint64_t pair_pos = pair_off[node];
-            if (software_k2_delivery) {
+            if (software_reuse_plan_delivery) {
                 relax_edges(
                     node, source_dist,
                     [&](WNode edge, size_t) {
                     const uint32_t sidecar =
-                        consume_fused_k2_sidecar(
+                        consume_fused_reuse_plan_sidecar(
                             &pair_sidecars[pair_pos]);
-                    const uint64_t record = ecg_epoch::packEpochPairRecord(
+                    const uint64_t record = ecg_reuse_plan::packReusePlanRecord(
                         static_cast<uint32_t>(edge.v),
-                        ecg_epoch::extractWeightedEpochPairTier(sidecar),
-                        ecg_epoch::extractWeightedEpochPairFirst(sidecar),
-                        ecg_epoch::extractWeightedEpochPairSecond(sidecar));
+                        ecg_reuse_plan::extractWeightedReusePlanTier(sidecar),
+                        ecg_reuse_plan::extractWeightedReusePlanFirst(sidecar),
+                        ecg_reuse_plan::extractWeightedReusePlanSecond(sidecar));
                     ++pair_pos;
-                    deliver_k2_record(record, fused_k2_model);
+                    deliver_reuse_plan_record(record, fused_reuse_plan_model);
                     },
                     [](WNode, size_t) {});
             } else {
                 relax_edges(
                     node, source_dist,
                     [&](WNode, size_t) {
-                    (void)consume_fused_k2_sidecar(
+                    (void)consume_fused_reuse_plan_sidecar(
                         &pair_sidecars[pair_pos++]);
                     },
                     [](WNode, size_t) {});
@@ -1495,20 +1495,20 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
                 (ecg_extract_on &&
                  static_cast<size_t>(node) < out_edge_epochs.size())
                     ? &out_edge_epochs[node] : nullptr;
-            uint64_t delivered_k2_record = 0;
-            bool delivered_k2 = false;
+            uint64_t delivered_reuse_plan_record = 0;
+            bool delivered_reuse_plan = false;
             relax_edges(
                 node, source_dist,
                 [&](WNode edge, size_t edge_pos) {
                 if (pair_ok &&
                     static_cast<size_t>(node + 1) < pair_off.size()) {
-                    delivered_k2_record =
+                    delivered_reuse_plan_record =
                         pair_flat[pair_off[node] + edge_pos];
-                    if (software_k2_delivery) {
-                        deliver_k2_record(
-                            delivered_k2_record, fused_k2_model);
+                    if (software_reuse_plan_delivery) {
+                        deliver_reuse_plan_record(
+                            delivered_reuse_plan_record, fused_reuse_plan_model);
                     }
-                    delivered_k2 = true;
+                    delivered_reuse_plan = true;
                 } else if (eps) {
                     const uint16_t ep =
                         (edge_pos < eps->size()) ? (*eps)[edge_pos]
@@ -1517,9 +1517,9 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
                 }
                 },
                 [&](WNode, size_t) {
-                if (delivered_k2 && !fused_k2_model)
-                    clear_k2_record(delivered_k2_record, fused_k2_model);
-                delivered_k2 = false;
+                if (delivered_reuse_plan && !fused_reuse_plan_model)
+                    clear_reuse_plan_record(delivered_reuse_plan_record, fused_reuse_plan_model);
+                delivered_reuse_plan = false;
                 });
         } else {
             relax_edges(
@@ -1627,12 +1627,12 @@ int run_bc(const Graph& graph, int num_iters) {
         "SNIPER_ECG_VERTICES_PER_LINE",
         64 / sizeof(int32_t), 1, 1024);
     constexpr int kNumEpochs = 256;
-    const int ecg_sched_k =
+    const int ecg_reuse_plan_depth =
         graphbrew_sniper::env_int_clamped(
-            "ECG_EDGE_MASK_SCHED", 0, 0, 4);
+            "ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
     pvector<uint8_t> popt_matrix;
     int popt_num_cache_lines = (graph.num_nodes() + kNumVtxPerLine - 1) / kNumVtxPerLine;
-    if (ecg_sched_k != 2 || popt_matrix_required()) {
+    if (ecg_reuse_plan_depth != 2 || popt_matrix_required()) {
         makeOffsetMatrix(
             graph, popt_matrix, kNumVtxPerLine, kNumEpochs,
             /*traverseCSR=*/false);
@@ -1642,47 +1642,47 @@ int run_bc(const Graph& graph, int num_iters) {
     }
 
     const bool ecg_extract_on = graphbrew_sniper::ecg_extract_enabled();
-    const bool fused_k2_model = fused_k2_model_enabled();
-    const bool k2_transport_matched = k2_transport_matched_enabled();
-    const bool k2_trace_on = graphbrew_sniper::ecg_k2_trace_enabled();
-    const bool software_k2_delivery =
-        !fused_k2_model || k2_trace_on;
+    const bool fused_reuse_plan_model = fused_reuse_plan_model_enabled();
+    const bool reuse_plan_transport_matched = reuse_plan_transport_matched_enabled();
+    const bool reuse_plan_trace_on = graphbrew_sniper::ecg_reuse_plan_trace_enabled();
+    const bool software_reuse_plan_delivery =
+        !fused_reuse_plan_model || reuse_plan_trace_on;
     const bool no_delivery_pair_loop =
-        !software_k2_delivery || (k2_transport_matched && !k2_trace_on);
-    const bool stream_bypass_on = stream_bypass_enabled();
+        !software_reuse_plan_delivery || (reuse_plan_transport_matched && !reuse_plan_trace_on);
+    const bool flowthrough_on = flowthrough_enabled();
     uint32_t ecg_epoch_count = static_cast<uint32_t>(
         graphbrew_sniper::env_int_clamped("ECG_EDGE_MASK_EPOCHS", kNumEpochs, 2, 65535));
-    if (ecg_sched_k == 2 || k2_transport_matched)
+    if (ecg_reuse_plan_depth == 2 || reuse_plan_transport_matched)
         ecg_epoch_count =
-            ecg_epoch::normalizeK2EpochCount(ecg_epoch_count);
+            ecg_reuse_plan::normalizeReusePlanEpochCount(ecg_epoch_count);
     std::vector<std::vector<uint16_t>> out_edge_epochs;
-    if (ecg_extract_on && ecg_sched_k != 2) {
-        ecg_epoch::buildInEdgeEpochs(graph, kNumVtxPerLine, ecg_epoch_count,
+    if (ecg_extract_on && ecg_reuse_plan_depth != 2) {
+        ecg_reuse_plan::buildInEdgeEpochs(graph, kNumVtxPerLine, ecg_epoch_count,
                                      /*linemin=*/true, out_edge_epochs,
                                      /*push_out_edges=*/true);
     }
-    K2PairStream pairs;
+    ReusePlanPairStream pairs;
     bool pair_ok = false;
-    if ((ecg_extract_on && ecg_sched_k == 2) ||
-        k2_transport_matched) {
-        pair_ok = build_k2_pair_stream(
+    if ((ecg_extract_on && ecg_reuse_plan_depth == 2) ||
+        reuse_plan_transport_matched) {
+        pair_ok = build_reuse_plan_pair_stream(
             graph, kNumVtxPerLine, ecg_epoch_count,
             /*push_out_edges=*/true, "bc", pairs);
         if (!pair_ok) return 2;
     }
     if (!sniper_export_context(
             regions, 4, graph, nullptr, edge_regions, num_edge_regions,
-            stream_bypass_on && pair_ok
+            flowthrough_on && pair_ok
                 ? pairs.stream_base() : 0,
-            stream_bypass_on && pair_ok
+            flowthrough_on && pair_ok
                 ? pairs.stream_bytes() : 0,
-            fused_k2_model && pair_ok ? pairs.offsets.data() : nullptr,
-            fused_k2_model && pair_ok ? pairs.offsets.size() : 0,
-            fused_k2_model && pair_ok
+            fused_reuse_plan_model && pair_ok ? pairs.offsets.data() : nullptr,
+            fused_reuse_plan_model && pair_ok ? pairs.offsets.size() : 0,
+            fused_reuse_plan_model && pair_ok
                 ? pairs.wide_records.data() : nullptr,
-            fused_k2_model && pair_ok
+            fused_reuse_plan_model && pair_ok
                 ? pairs.wide_records.size() : 0)) {
-        std::fprintf(stderr, "sniper-sg BC: context/K2 sideband export failed\n");
+        std::fprintf(stderr, "sniper-sg BC: context/ReusePlan sideband export failed\n");
         return 2;
     }
     auto deliver = [&](NodeID u, size_t edge_pos, NodeID v) {
@@ -1695,18 +1695,18 @@ int run_bc(const Graph& graph, int num_iters) {
     if (pair_ok)
         std::fprintf(
             stderr,
-            fused_k2_model
-                ? "[ECG_FUSED_K2] BC Schedule-2 fused sideband ACTIVE\n"
-                : "[ECG_PACKED8_K2] BC Schedule-2 packed record path ACTIVE\n");
-    if (pair_ok && k2_transport_matched)
+            fused_reuse_plan_model
+                ? "[ECG_FUSED_REUSE_PLAN] BC two-epoch ReusePlan fused sideband ACTIVE\n"
+                : "[ECG_PACKED8_REUSE_PLAN] BC two-epoch ReusePlan packed record path ACTIVE\n");
+    if (pair_ok && reuse_plan_transport_matched)
         std::fprintf(
             stderr,
-            "[K2_TRANSPORT_MATCHED] BC %uB record loop ACTIVE\n",
+            "[REUSE_PLAN_TRANSPORT_MATCHED] BC %uB record loop ACTIVE\n",
             pairs.record_bytes());
-    if (pair_ok && k2_transport_matched &&
-        graphbrew_sniper::k2_exact_bind_enabled())
+    if (pair_ok && reuse_plan_transport_matched &&
+        graphbrew_sniper::reuse_plan_exact_bind_enabled())
         std::fprintf(stderr,
-                     "[K2_EXACT_BIND] BC edge-governed depth/path_counts[dest] binding ACTIVE\n");
+                     "[REUSE_PLAN_EXACT_BIND] BC edge-governed depth/path_counts[dest] binding ACTIVE\n");
 
     if (num_iters < 1) num_iters = 1;
     SemanticEdgeBudget semantic_edges;
@@ -1745,9 +1745,9 @@ int run_bc(const Graph& graph, int num_iters) {
                             consume_edge();
                             const uint64_t record = pairs.record(pos);
                             const NodeID v = static_cast<NodeID>(
-                                ecg_epoch::extractEpochPairDest(record));
+                                ecg_reuse_plan::extractReusePlanDest(record));
                             int32_t depth_v =
-                                graphbrew_sniper::k2_bound_load(&depth[v]);
+                                graphbrew_sniper::reuse_plan_bound_load(&depth[v]);
                             if (depth_v == -1) {
                                 depth[v] = cur_level + 1;
                                 depth_v = cur_level + 1;
@@ -1755,7 +1755,7 @@ int run_bc(const Graph& graph, int num_iters) {
                             }
                             if (depth_v == cur_level + 1) {
                                 const int64_t old_paths =
-                                    graphbrew_sniper::k2_bound_load(
+                                    graphbrew_sniper::reuse_plan_bound_load(
                                         &path_counts[v]);
                                 path_counts[v] = old_paths + source_paths;
                             }
@@ -1766,10 +1766,10 @@ int run_bc(const Graph& graph, int num_iters) {
                             consume_edge();
                             const uint64_t record = pairs.record(pos);
                             const NodeID v = static_cast<NodeID>(
-                                ecg_epoch::extractEpochPairDest(record));
-                            deliver_k2_record(record, fused_k2_model);
+                                ecg_reuse_plan::extractReusePlanDest(record));
+                            deliver_reuse_plan_record(record, fused_reuse_plan_model);
                             int32_t depth_v =
-                                graphbrew_sniper::k2_bound_load(&depth[v]);
+                                graphbrew_sniper::reuse_plan_bound_load(&depth[v]);
                             if (depth_v == -1) {
                                 depth[v] = cur_level + 1;
                                 depth_v = cur_level + 1;
@@ -1777,12 +1777,12 @@ int run_bc(const Graph& graph, int num_iters) {
                             }
                             if (depth_v == cur_level + 1) {
                                 const int64_t old_paths =
-                                    graphbrew_sniper::k2_bound_load(
+                                    graphbrew_sniper::reuse_plan_bound_load(
                                         &path_counts[v]);
                                 path_counts[v] = old_paths + source_paths;
                             }
-                            if (!fused_k2_model) {
-                                clear_k2_record(record, fused_k2_model);
+                            if (!fused_reuse_plan_model) {
+                                clear_reuse_plan_record(record, fused_reuse_plan_model);
                             }
                         }
                     }
@@ -1868,12 +1868,12 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
         "SNIPER_ECG_VERTICES_PER_LINE",
         64 / sizeof(NodeID), 1, 1024);
     constexpr int kNumEpochs = 256;
-    const int ecg_sched_k =
+    const int ecg_reuse_plan_depth =
         graphbrew_sniper::env_int_clamped(
-            "ECG_EDGE_MASK_SCHED", 0, 0, 4);
+            "ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
     pvector<uint8_t> popt_matrix;
     int popt_num_cache_lines = (graph.num_nodes() + kNumVtxPerLine - 1) / kNumVtxPerLine;
-    if (ecg_sched_k != 2 || popt_matrix_required()) {
+    if (ecg_reuse_plan_depth != 2 || popt_matrix_required()) {
         makeOffsetMatrix(
             graph, popt_matrix, kNumVtxPerLine, kNumEpochs,
             /*traverseCSR=*/false);
@@ -1883,47 +1883,47 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
     }
 
     const bool ecg_extract_on = graphbrew_sniper::ecg_extract_enabled();
-    const bool fused_k2_model = fused_k2_model_enabled();
-    const bool k2_transport_matched = k2_transport_matched_enabled();
-    const bool k2_trace_on = graphbrew_sniper::ecg_k2_trace_enabled();
-    const bool software_k2_delivery =
-        !fused_k2_model || k2_trace_on;
+    const bool fused_reuse_plan_model = fused_reuse_plan_model_enabled();
+    const bool reuse_plan_transport_matched = reuse_plan_transport_matched_enabled();
+    const bool reuse_plan_trace_on = graphbrew_sniper::ecg_reuse_plan_trace_enabled();
+    const bool software_reuse_plan_delivery =
+        !fused_reuse_plan_model || reuse_plan_trace_on;
     const bool no_delivery_pair_loop =
-        !software_k2_delivery || (k2_transport_matched && !k2_trace_on);
-    const bool stream_bypass_on = stream_bypass_enabled();
+        !software_reuse_plan_delivery || (reuse_plan_transport_matched && !reuse_plan_trace_on);
+    const bool flowthrough_on = flowthrough_enabled();
     uint32_t ecg_epoch_count = static_cast<uint32_t>(
         graphbrew_sniper::env_int_clamped("ECG_EDGE_MASK_EPOCHS", kNumEpochs, 2, 65535));
-    if (ecg_sched_k == 2 || k2_transport_matched)
+    if (ecg_reuse_plan_depth == 2 || reuse_plan_transport_matched)
         ecg_epoch_count =
-            ecg_epoch::normalizeK2EpochCount(ecg_epoch_count);
+            ecg_reuse_plan::normalizeReusePlanEpochCount(ecg_epoch_count);
     std::vector<std::vector<uint16_t>> out_edge_epochs;
-    if (ecg_extract_on && ecg_sched_k != 2) {
-        ecg_epoch::buildInEdgeEpochs(graph, kNumVtxPerLine, ecg_epoch_count,
+    if (ecg_extract_on && ecg_reuse_plan_depth != 2) {
+        ecg_reuse_plan::buildInEdgeEpochs(graph, kNumVtxPerLine, ecg_epoch_count,
                                      /*linemin=*/true, out_edge_epochs,
                                      /*push_out_edges=*/true);
     }
-    K2PairStream pairs;
+    ReusePlanPairStream pairs;
     bool pair_ok = false;
-    if ((ecg_extract_on && ecg_sched_k == 2) ||
-        k2_transport_matched) {
-        pair_ok = build_k2_pair_stream(
+    if ((ecg_extract_on && ecg_reuse_plan_depth == 2) ||
+        reuse_plan_transport_matched) {
+        pair_ok = build_reuse_plan_pair_stream(
             graph, kNumVtxPerLine, ecg_epoch_count,
             /*push_out_edges=*/true, "cc", pairs);
         if (!pair_ok) return 2;
     }
     if (!sniper_export_context(
             regions, 1, graph, nullptr, edge_regions, num_edge_regions,
-            stream_bypass_on && pair_ok
+            flowthrough_on && pair_ok
                 ? pairs.stream_base() : 0,
-            stream_bypass_on && pair_ok
+            flowthrough_on && pair_ok
                 ? pairs.stream_bytes() : 0,
-            fused_k2_model && pair_ok ? pairs.offsets.data() : nullptr,
-            fused_k2_model && pair_ok ? pairs.offsets.size() : 0,
-            fused_k2_model && pair_ok
+            fused_reuse_plan_model && pair_ok ? pairs.offsets.data() : nullptr,
+            fused_reuse_plan_model && pair_ok ? pairs.offsets.size() : 0,
+            fused_reuse_plan_model && pair_ok
                 ? pairs.wide_records.data() : nullptr,
-            fused_k2_model && pair_ok
+            fused_reuse_plan_model && pair_ok
                 ? pairs.wide_records.size() : 0)) {
-        std::fprintf(stderr, "sniper-sg CC: context/K2 sideband export failed\n");
+        std::fprintf(stderr, "sniper-sg CC: context/ReusePlan sideband export failed\n");
         return 2;
     }
     auto deliver = [&](NodeID u, size_t edge_pos, NodeID v) {
@@ -1936,18 +1936,18 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
     if (pair_ok)
         std::fprintf(
             stderr,
-            fused_k2_model
-                ? "[ECG_FUSED_K2] CC Schedule-2 fused sideband ACTIVE\n"
-                : "[ECG_PACKED8_K2] CC Schedule-2 packed record path ACTIVE\n");
-    if (pair_ok && k2_transport_matched)
+            fused_reuse_plan_model
+                ? "[ECG_FUSED_REUSE_PLAN] CC two-epoch ReusePlan fused sideband ACTIVE\n"
+                : "[ECG_PACKED8_REUSE_PLAN] CC two-epoch ReusePlan packed record path ACTIVE\n");
+    if (pair_ok && reuse_plan_transport_matched)
         std::fprintf(
             stderr,
-            "[K2_TRANSPORT_MATCHED] CC %uB record loop ACTIVE\n",
+            "[REUSE_PLAN_TRANSPORT_MATCHED] CC %uB record loop ACTIVE\n",
             pairs.record_bytes());
-    if (pair_ok && k2_transport_matched &&
-        graphbrew_sniper::k2_exact_bind_enabled())
+    if (pair_ok && reuse_plan_transport_matched &&
+        graphbrew_sniper::reuse_plan_exact_bind_enabled())
         std::fprintf(stderr,
-                     "[K2_EXACT_BIND] CC comp[dest] binding ACTIVE\n");
+                     "[REUSE_PLAN_EXACT_BIND] CC comp[dest] binding ACTIVE\n");
 
     SemanticEdgeBudget semantic_edges;
     std::unordered_map<NodeID, int64_t> count;
@@ -1965,17 +1965,17 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
                     pairs.record(
                         pairs.offsets[u] + static_cast<uint64_t>(r));
                 const NodeID v = static_cast<NodeID>(
-                    ecg_epoch::extractEpochPairDest(record));
+                    ecg_reuse_plan::extractReusePlanDest(record));
                 if (no_delivery_pair_loop) {
                     const NodeID delivered_comp =
-                        graphbrew_sniper::k2_bound_load(&comp[v]);
+                        graphbrew_sniper::reuse_plan_bound_load(&comp[v]);
                     cc_link_loaded(u, v, delivered_comp, comp);
                 } else {
-                    deliver_k2_record(record, fused_k2_model);
+                    deliver_reuse_plan_record(record, fused_reuse_plan_model);
                     const NodeID delivered_comp =
-                        graphbrew_sniper::k2_bound_load(&comp[v]);
-                    if (!fused_k2_model) {
-                        clear_k2_record(record, fused_k2_model);
+                        graphbrew_sniper::reuse_plan_bound_load(&comp[v]);
+                    if (!fused_reuse_plan_model) {
+                        clear_reuse_plan_record(record, fused_reuse_plan_model);
                     }
                     cc_link_loaded(u, v, delivered_comp, comp);
                 }
@@ -2013,9 +2013,9 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
                     consume_edge();
                     const uint64_t record = pairs.record(pos);
                     const NodeID v = static_cast<NodeID>(
-                        ecg_epoch::extractEpochPairDest(record));
+                        ecg_reuse_plan::extractReusePlanDest(record));
                     const NodeID delivered_comp =
-                        graphbrew_sniper::k2_bound_load(&comp[v]);
+                        graphbrew_sniper::reuse_plan_bound_load(&comp[v]);
                     cc_link_loaded(u, v, delivered_comp, comp);
                 }
             } else {
@@ -2024,12 +2024,12 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
                     consume_edge();
                     const uint64_t record = pairs.record(pos);
                     const NodeID v = static_cast<NodeID>(
-                        ecg_epoch::extractEpochPairDest(record));
-                    deliver_k2_record(record, fused_k2_model);
+                        ecg_reuse_plan::extractReusePlanDest(record));
+                    deliver_reuse_plan_record(record, fused_reuse_plan_model);
                     const NodeID delivered_comp =
-                        graphbrew_sniper::k2_bound_load(&comp[v]);
-                    if (!fused_k2_model) {
-                        clear_k2_record(record, fused_k2_model);
+                        graphbrew_sniper::reuse_plan_bound_load(&comp[v]);
+                    if (!fused_reuse_plan_model) {
+                        clear_reuse_plan_record(record, fused_reuse_plan_model);
                     }
                     cc_link_loaded(u, v, delivered_comp, comp);
                 }

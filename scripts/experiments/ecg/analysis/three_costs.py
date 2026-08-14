@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the K2/P-OPT three-cost accounting table."""
+"""Generate the ReusePlan/P-OPT three-cost accounting table."""
 
 from __future__ import annotations
 
@@ -30,20 +30,20 @@ class GraphInfo:
 
 
 TRANSPORTS = {
-    "unweighted_k2": {
+    "unweighted_reuse_plan": {
         "baseline_edge_bytes": 4,
-        "k2_edge_bytes": 8,
-        "description": "PR/BFS/BC/CC 8B K2 record replaces 4B destination",
+        "reuse_plan_edge_bytes": 8,
+        "description": "PR/BFS/BC/CC 8B ReusePlan record replaces 4B destination",
     },
-    "weighted_compact_k2": {
+    "weighted_compact_reuse_plan": {
         "baseline_edge_bytes": 8,
-        "k2_edge_bytes": 8,
+        "reuse_plan_edge_bytes": 8,
         "description": "compact SSSP record replaces 8B weighted edge",
     },
-    "weighted_fallback_k2": {
+    "weighted_fallback_reuse_plan": {
         "baseline_edge_bytes": 8,
-        "k2_edge_bytes": 12,
-        "description": "general SSSP keeps 8B edge plus 4B K2 sidecar",
+        "reuse_plan_edge_bytes": 12,
+        "description": "general SSSP keeps 8B edge plus 4B ReusePlan sidecar",
     },
 }
 
@@ -85,8 +85,8 @@ def read_sg(path: Path, name: str | None = None) -> GraphInfo:
 def cost_rows(
         graph: GraphInfo, cache_bytes: int, *,
         ways: int = 16, line_bytes: int = 64,
-        minimum_k2_line_bits: int = 33,
-        contextual_k2_line_bits: int = 49,
+        minimum_reuse_plan_line_bits: int = 33,
+        contextual_reuse_plan_line_bits: int = 49,
         popt_property_bytes: int = 4,
         popt_active_columns: int = 2,
         popt_min_data_ways: int = 1) -> list[dict[str, Any]]:
@@ -110,9 +110,9 @@ def cost_rows(
     popt_reserved_ways = min(popt_needed_ways, popt_max_reservable)
 
     minimum_metadata_bytes = math.ceil(
-        lines * minimum_k2_line_bits / 8)
+        lines * minimum_reuse_plan_line_bits / 8)
     contextual_metadata_bytes = math.ceil(
-        lines * contextual_k2_line_bits / 8)
+        lines * contextual_reuse_plan_line_bits / 8)
 
     common = {
         **asdict(graph),
@@ -122,14 +122,14 @@ def cost_rows(
         "line_bytes": line_bytes,
         "cache_lines": lines,
         "bytes_per_way": bytes_per_way,
-        "k2_minimum_metadata_bits_per_line": minimum_k2_line_bits,
-        "k2_contextual_metadata_bits_per_line":
-            contextual_k2_line_bits,
-        "k2_minimum_metadata_bytes": minimum_metadata_bytes,
-        "k2_contextual_metadata_bytes": contextual_metadata_bytes,
-        "k2_contextual_way_equivalent":
+        "reuse_plan_minimum_metadata_bits_per_line": minimum_reuse_plan_line_bits,
+        "reuse_plan_contextual_metadata_bits_per_line":
+            contextual_reuse_plan_line_bits,
+        "reuse_plan_minimum_metadata_bytes": minimum_metadata_bytes,
+        "reuse_plan_contextual_metadata_bytes": contextual_metadata_bytes,
+        "reuse_plan_contextual_way_equivalent":
             contextual_metadata_bytes / bytes_per_way,
-        "k2_cost_unit":
+        "reuse_plan_cost_unit":
             "added metadata SRAM area expressed as baseline-way equivalent",
         "popt_property_bytes": popt_property_bytes,
         "popt_active_columns": popt_active_columns,
@@ -145,13 +145,13 @@ def cost_rows(
     }
     rows: list[dict[str, Any]] = []
     for transport, values in TRANSPORTS.items():
-        extra = values["k2_edge_bytes"] - values["baseline_edge_bytes"]
+        extra = values["reuse_plan_edge_bytes"] - values["baseline_edge_bytes"]
         rows.append({
             **common,
             "transport": transport,
             **values,
-            "k2_extra_bytes_per_edge": extra,
-            "k2_extra_active_stream_bytes":
+            "reuse_plan_extra_bytes_per_edge": extra,
+            "reuse_plan_extra_active_stream_bytes":
                 graph.serialized_edges * extra,
             "transport_scope":
                 "one active traversal-direction edge stream",
@@ -165,17 +165,17 @@ def cost_rows(
 def markdown(rows: list[dict[str, Any]]) -> str:
     lines = [
         "| Graph | LLC | Transport | Extra B/edge | Extra active-stream MiB | "
-        "K2 bits/line | Added SRAM way-eq | P-OPT matrix MiB | "
+        "ReusePlan bits/line | Added SRAM way-eq | P-OPT matrix MiB | "
         "Reserved data ways | Fits |",
         "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
             f"| {row['name']} | {row['cache_mib']:.0f} MiB | "
-            f"{row['transport']} | {row['k2_extra_bytes_per_edge']} | "
-            f"{row['k2_extra_active_stream_bytes'] / 1024**2:.2f} | "
-            f"{row['k2_contextual_metadata_bits_per_line']} | "
-            f"{row['k2_contextual_way_equivalent']:.3f} | "
+            f"{row['transport']} | {row['reuse_plan_extra_bytes_per_edge']} | "
+            f"{row['reuse_plan_extra_active_stream_bytes'] / 1024**2:.2f} | "
+            f"{row['reuse_plan_contextual_metadata_bits_per_line']} | "
+            f"{row['reuse_plan_contextual_way_equivalent']:.3f} | "
             f"{row['popt_matrix_bytes'] / 1024**2:.3f} | "
             f"{row['popt_reserved_ways']} | "
             f"{row['popt_matrix_fits']} |")
@@ -192,7 +192,7 @@ def parse_graph(value: str) -> tuple[str, Path]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate K2 transport/metadata/P-OPT capacity table.")
+        description="Generate ReusePlan transport/metadata/P-OPT capacity table.")
     parser.add_argument(
         "--graph", action="append", default=[],
         help="Graph as NAME=PATH.sg; repeat for multiple graphs.")

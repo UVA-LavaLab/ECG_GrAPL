@@ -8,15 +8,15 @@ from dataclasses import dataclass
 
 ONLINE_DUELING_WINDOW_MISSES = 1024
 ONLINE_DUELING_REQUIRED_POSITIVE_FIELDS = (
-    "gem5_k2_dueling_request_bound_victims",
-    "gem5_k2_dueling_leader_samples",
-    "gem5_k2_dueling_follower_selections",
-    "gem5_k2_dueling_completed_windows",
+    "gem5_reuse_plan_dueling_request_bound_victims",
+    "gem5_reuse_plan_dueling_leader_samples",
+    "gem5_reuse_plan_dueling_follower_selections",
+    "gem5_reuse_plan_dueling_completed_windows",
 )
 ONLINE_DUELING_REPORTED_FIELDS = (
     *ONLINE_DUELING_REQUIRED_POSITIVE_FIELDS,
-    "gem5_k2_dueling_winner_changes",
-    "gem5_k2_dueling_follower_variant_overrides",
+    "gem5_reuse_plan_dueling_winner_changes",
+    "gem5_reuse_plan_dueling_follower_variant_overrides",
 )
 
 # Sniper analog of the gem5 online-dueling evidence above. Field names use a
@@ -24,18 +24,18 @@ ONLINE_DUELING_REPORTED_FIELDS = (
 # "request_bound_victims": Sniper has no O3 Request/MSHR-attested victim to
 # bind to, so its population is the closest Sniper-equivalent (a
 # marker/sideband-governed miss population; see cache_set_ecg.cc's
-# OnlineDuelingEvidence comment and sniper_k2_dueling_binding_model). The
+# OnlineDuelingEvidence comment and sniper_reuse_bind_dueling_model). The
 # frozen gem5_* fields above are never renamed or repurposed for Sniper.
 SNIPER_ONLINE_DUELING_REQUIRED_POSITIVE_FIELDS = (
-    "sniper_k2_dueling_governed_victims",
-    "sniper_k2_dueling_leader_samples",
-    "sniper_k2_dueling_follower_selections",
-    "sniper_k2_dueling_completed_windows",
+    "sniper_reuse_plan_dueling_governed_victims",
+    "sniper_reuse_plan_dueling_leader_samples",
+    "sniper_reuse_plan_dueling_follower_selections",
+    "sniper_reuse_plan_dueling_completed_windows",
 )
 SNIPER_ONLINE_DUELING_REPORTED_FIELDS = (
     *SNIPER_ONLINE_DUELING_REQUIRED_POSITIVE_FIELDS,
-    "sniper_k2_dueling_winner_changes",
-    "sniper_k2_dueling_follower_variant_overrides",
+    "sniper_reuse_plan_dueling_winner_changes",
+    "sniper_reuse_plan_dueling_follower_variant_overrides",
 )
 
 
@@ -45,9 +45,9 @@ class PolicySpec:
     policy: str
     ecg_mode: str | None = None
     charge_popt_overhead: bool = False
-    ecg_schedule_k: int = 0
-    ecg_stream_bypass: bool = False
-    ecg_stream_adaptive: bool = False
+    ecg_reuse_plan_depth: int = 0
+    ecg_flowthrough: bool = False
+    ecg_flowthrough_adaptive: bool = False
     ecg_variant: str | None = None
     ecg_transport_pinned: bool = False
     ecg_set_dueling: bool = False
@@ -76,159 +76,145 @@ def parse_policy_spec(text: str) -> PolicySpec:
         upper = upper[: -len(":UNCHARGED")]
         explicit_charge = True
 
-    if upper in ("ECG:K2", "ECG_K2"):
+    if upper in ("ECG:REUSE_PLAN", "ECG_REUSE_PLAN"):
         return PolicySpec(
-            label="ECG_K2",
+            label="ECG_REUSE_PLAN",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_schedule_k=2,
+            ecg_reuse_plan_depth=2,
             ecg_variant="adaptive",
             ecg_transport_pinned=True,
         )
-    k2_variants = {
-        "ECG:K2_GRASP": ("ECG_K2_GRASP", "grasp_only"),
-        "ECG_K2_GRASP": ("ECG_K2_GRASP", "grasp_only"),
-        "ECG:K2_EPOCH": ("ECG_K2_EPOCH", "epoch_first"),
-        "ECG_K2_EPOCH": ("ECG_K2_EPOCH", "epoch_first"),
-        "ECG:K2_RRIP": ("ECG_K2_RRIP", "rrip_first"),
-        "ECG_K2_RRIP": ("ECG_K2_RRIP", "rrip_first"),
-        "ECG:K2_DEGREE": ("ECG_K2_DEGREE", "degree_first"),
-        "ECG_K2_DEGREE": ("ECG_K2_DEGREE", "degree_first"),
-        "ECG:K2_LRU": ("ECG_K2_LRU", "lru_only"),
-        "ECG_K2_LRU": ("ECG_K2_LRU", "lru_only"),
+    reuse_plan_variants = {
+        "ECG:REUSE_PLAN_GRASP": ("ECG_REUSE_PLAN_GRASP", "grasp_only"),
+        "ECG_REUSE_PLAN_GRASP": ("ECG_REUSE_PLAN_GRASP", "grasp_only"),
+        "ECG:REUSE_PLAN_EPOCH": ("ECG_REUSE_PLAN_EPOCH", "epoch_first"),
+        "ECG_REUSE_PLAN_EPOCH": ("ECG_REUSE_PLAN_EPOCH", "epoch_first"),
+        "ECG:REUSE_PLAN_RRIP": ("ECG_REUSE_PLAN_RRIP", "rrip_first"),
+        "ECG_REUSE_PLAN_RRIP": ("ECG_REUSE_PLAN_RRIP", "rrip_first"),
+        "ECG:REUSE_PLAN_DEGREE": ("ECG_REUSE_PLAN_DEGREE", "degree_first"),
+        "ECG_REUSE_PLAN_DEGREE": ("ECG_REUSE_PLAN_DEGREE", "degree_first"),
+        "ECG:REUSE_PLAN_LRU": ("ECG_REUSE_PLAN_LRU", "lru_only"),
+        "ECG_REUSE_PLAN_LRU": ("ECG_REUSE_PLAN_LRU", "lru_only"),
     }
-    if upper in k2_variants:
-        label, variant = k2_variants[upper]
+    if upper in reuse_plan_variants:
+        label, variant = reuse_plan_variants[upper]
         return PolicySpec(
             label=label,
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_schedule_k=2,
+            ecg_reuse_plan_depth=2,
             ecg_variant=variant,
             ecg_transport_pinned=True,
         )
     if upper in (
-        "ECG:K2_RRIP_STREAMSHIELD",
-        "ECG_K2_RRIP_STREAMSHIELD",
-        "ECG:K2_RRIP_SS",
-        "ECG_K2_RRIP_SS",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "ECG_REUSE_PLAN_RRIP_FLOWTHROUGH",
     ):
         return PolicySpec(
-            label="ECG_K2_RRIP_STREAMSHIELD",
+            label="ECG_REUSE_PLAN_RRIP_FLOWTHROUGH",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_schedule_k=2,
-            ecg_stream_bypass=True,
+            ecg_reuse_plan_depth=2,
+            ecg_flowthrough=True,
             ecg_variant="rrip_first",
             ecg_transport_pinned=True,
         )
     if upper in (
-        "ECG:K2_LRU_STREAMSHIELD",
-        "ECG_K2_LRU_STREAMSHIELD",
-        "ECG:K2_LRU_SS",
-        "ECG_K2_LRU_SS",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG_REUSE_PLAN_LRU_FLOWTHROUGH",
     ):
         return PolicySpec(
-            label="ECG_K2_LRU_STREAMSHIELD",
+            label="ECG_REUSE_PLAN_LRU_FLOWTHROUGH",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_schedule_k=2,
-            ecg_stream_bypass=True,
+            ecg_reuse_plan_depth=2,
+            ecg_flowthrough=True,
             ecg_variant="lru_only",
             ecg_transport_pinned=True,
         )
     if upper in (
-        "ECG:K2_STREAMSHIELD",
-        "ECG_K2_STREAMSHIELD",
-        "ECG:K2_SS",
-        "ECG_K2_SS",
+        "ECG:REUSE_PLAN_FLOWTHROUGH",
+        "ECG_REUSE_PLAN_FLOWTHROUGH",
     ):
         return PolicySpec(
-            label="ECG_K2_STREAMSHIELD",
+            label="ECG_REUSE_PLAN_FLOWTHROUGH",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_schedule_k=2,
-            ecg_stream_bypass=True,
+            ecg_reuse_plan_depth=2,
+            ecg_flowthrough=True,
             ecg_variant="adaptive",
             ecg_transport_pinned=True,
         )
-    if upper in ("ECG:K2_ONLINE", "ECG_K2_ONLINE"):
+    if upper in ("ECG:REUSE_PLAN_ONLINE", "ECG_REUSE_PLAN_ONLINE"):
         return PolicySpec(
-            label="ECG_K2_ONLINE",
+            label="ECG_REUSE_PLAN_ONLINE",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_schedule_k=2,
+            ecg_reuse_plan_depth=2,
             ecg_variant="rrip_first",
             ecg_transport_pinned=True,
             ecg_set_dueling=True,
         )
     if upper in (
-        "ECG:K2_ONLINE_STREAMSHIELD",
-        "ECG_K2_ONLINE_STREAMSHIELD",
-        "ECG:K2_ONLINE_SS",
-        "ECG_K2_ONLINE_SS",
+        "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH",
+        "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH",
     ):
         return PolicySpec(
-            label="ECG_K2_ONLINE_STREAMSHIELD",
+            label="ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_schedule_k=2,
-            ecg_stream_bypass=True,
+            ecg_reuse_plan_depth=2,
+            ecg_flowthrough=True,
             ecg_variant="rrip_first",
             ecg_transport_pinned=True,
             ecg_set_dueling=True,
         )
     if upper in (
-        "ECG:K2_ADAPTIVE_STREAMSHIELD",
-        "ECG_K2_ADAPTIVE_STREAMSHIELD",
-        "ECG:K2_ADAPTIVE_SS",
-        "ECG_K2_ADAPTIVE_SS",
+        "ECG:REUSE_PLAN_ADAPTIVE_FLOWTHROUGH",
+        "ECG_REUSE_PLAN_ADAPTIVE_FLOWTHROUGH",
     ):
         return PolicySpec(
-            label="ECG_K2_ADAPTIVE_STREAMSHIELD",
+            label="ECG_REUSE_PLAN_ADAPTIVE_FLOWTHROUGH",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_schedule_k=2,
-            ecg_stream_bypass=True,
-            ecg_stream_adaptive=True,
+            ecg_reuse_plan_depth=2,
+            ecg_flowthrough=True,
+            ecg_flowthrough_adaptive=True,
             ecg_transport_pinned=True,
         )
     if upper in (
-        "ECG:K2_ONLINE_ADAPTIVE_STREAMSHIELD",
-        "ECG_K2_ONLINE_ADAPTIVE_STREAMSHIELD",
-        "ECG:K2_ONLINE_ADAPTIVE_SS",
-        "ECG_K2_ONLINE_ADAPTIVE_SS",
+        "ECG:REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
+        "ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
     ):
         return PolicySpec(
-            label="ECG_K2_ONLINE_ADAPTIVE_STREAMSHIELD",
+            label="ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_schedule_k=2,
-            ecg_stream_bypass=True,
-            ecg_stream_adaptive=True,
+            ecg_reuse_plan_depth=2,
+            ecg_flowthrough=True,
+            ecg_flowthrough_adaptive=True,
             ecg_variant="rrip_first",
             ecg_transport_pinned=True,
             ecg_set_dueling=True,
         )
-    if upper in ("ECG:K1", "ECG_K1"):
+    if upper in ("ECG:REUSE_PLAN_1", "ECG_REUSE_PLAN_1"):
         return PolicySpec(
-            label="ECG_K1",
+            label="ECG_REUSE_PLAN_1",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
             ecg_variant="epoch_first",
             ecg_transport_pinned=True,
         )
     if upper in (
-        "ECG:K1_STREAMSHIELD",
-        "ECG_K1_STREAMSHIELD",
-        "ECG:K1_SS",
-        "ECG_K1_SS",
+        "ECG:REUSE_PLAN_1_FLOWTHROUGH",
+        "ECG_REUSE_PLAN_1_FLOWTHROUGH",
     ):
         return PolicySpec(
-            label="ECG_K1_STREAMSHIELD",
+            label="ECG_REUSE_PLAN_1_FLOWTHROUGH",
             policy="ECG",
             ecg_mode="ECG_GRASP_POPT",
-            ecg_stream_bypass=True,
+            ecg_flowthrough=True,
             ecg_variant="epoch_first",
             ecg_transport_pinned=True,
         )

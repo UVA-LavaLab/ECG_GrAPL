@@ -24,7 +24,7 @@
 
 #include "graphbrew/partition/cagra/popt.h"
 #include "sniper_sim/sniper_harness.h"
-#include "ecg_epoch_builder.h"
+#include "ecg_reuse_plan_builder.h"
 
 using namespace std;
 
@@ -66,12 +66,12 @@ pvector<ScoreT> Brandes_Sniper(const Graph &g, int num_iters) {
     // reref (traverseCSR=false), matching the push_out_edges=true epochs below.
     constexpr int kNumVtxPerLine = 64 / sizeof(int32_t);
     constexpr int kNumEpochs = 256;
-    const int ecg_sched_k =
+    const int ecg_reuse_plan_depth =
         graphbrew_sniper::env_int_clamped(
-            "ECG_EDGE_MASK_SCHED", 0, 0, 4);
+            "ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
     static pvector<uint8_t> popt_matrix;
     int popt_num_cache_lines = (g.num_nodes() + kNumVtxPerLine - 1) / kNumVtxPerLine;
-    if (ecg_sched_k != 2) {
+    if (ecg_reuse_plan_depth != 2) {
         makeOffsetMatrix(
             g, popt_matrix, kNumVtxPerLine, kNumEpochs,
             /*traverseCSR=*/false);
@@ -83,20 +83,20 @@ pvector<ScoreT> Brandes_Sniper(const Graph &g, int num_iters) {
     bool ecg_extract_enabled = graphbrew_sniper::ecg_extract_enabled();
     uint32_t ecg_epoch_count = static_cast<uint32_t>(
         graphbrew_sniper::env_int_clamped("ECG_EDGE_MASK_EPOCHS", kNumEpochs, 2, 65535));
-    if (ecg_sched_k == 2)
+    if (ecg_reuse_plan_depth == 2)
         ecg_epoch_count =
-            ecg_epoch::normalizeK2EpochCount(ecg_epoch_count);
+            ecg_reuse_plan::normalizeReusePlanEpochCount(ecg_epoch_count);
     vector<vector<uint16_t>> out_edge_epochs;
-    if (ecg_extract_enabled && ecg_sched_k != 2) {
-        ecg_epoch::buildInEdgeEpochs(g, kNumVtxPerLine, ecg_epoch_count,
+    if (ecg_extract_enabled && ecg_reuse_plan_depth != 2) {
+        ecg_reuse_plan::buildInEdgeEpochs(g, kNumVtxPerLine, ecg_epoch_count,
                                      /*linemin=*/true, out_edge_epochs,
                                      /*push_out_edges=*/true);
     }
     vector<uint64_t> pair_off;
     vector<uint64_t> pair_flat;
     bool pair_ok = false;
-    if (ecg_extract_enabled && ecg_sched_k == 2) {
-        ecg_epoch::buildInEdgeEpochPairRecords(
+    if (ecg_extract_enabled && ecg_reuse_plan_depth == 2) {
+        ecg_reuse_plan::buildInEdgeReusePlanRecords(
             g, kNumVtxPerLine, ecg_epoch_count,
             /*linemin=*/true, pair_off, pair_flat,
             /*push_out_edges=*/true);
@@ -161,12 +161,12 @@ pvector<ScoreT> Brandes_Sniper(const Graph &g, int num_iters) {
                              pos < pair_off[u + 1]; ++pos) {
                             const uint64_t record = pair_flat[pos];
                             const NodeID v = static_cast<NodeID>(
-                                ecg_epoch::extractEpochPairDest(record));
+                                ecg_reuse_plan::extractReusePlanDest(record));
                             SNIPER_ECG_EXTRACT2(
                                 static_cast<uint32_t>(v),
-                                ecg_epoch::extractEpochPairTier(record),
-                                ecg_epoch::extractEpochPairFirst(record),
-                                ecg_epoch::extractEpochPairSecond(record));
+                                ecg_reuse_plan::extractReusePlanTier(record),
+                                ecg_reuse_plan::extractReusePlanFirst(record),
+                                ecg_reuse_plan::extractReusePlanSecond(record));
                             const int32_t depth_v = depth[v];
                             SNIPER_ECG_CLEAR_EXTRACT2(v);
                             process_neighbor(v, depth_v);

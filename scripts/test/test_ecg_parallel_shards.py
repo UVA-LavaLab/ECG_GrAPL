@@ -77,8 +77,8 @@ def test_serial_final_shards_stop_after_first_failure(
         '"suite":"sniper"}]}')
     shards = tmp_path / "shards.tsv"
     shards.write_text(
-        "k2_final_campaign\t81_final\tg1\tpr\t__whole__\ttag\n"
-        "k2_final_campaign\t81_final\tg2\tpr\t__whole__\ttag\n")
+        "reuse_plan_final_campaign\t81_final\tg1\tpr\t__whole__\ttag\n"
+        "reuse_plan_final_campaign\t81_final\tg2\tpr\t__whole__\ttag\n")
     calls = []
 
     def fail_first(shard, run_root, manifest_path, args, semaphore):
@@ -117,7 +117,7 @@ def test_final_campaign_expands_to_whole_cell_shards(tmp_path):
         [
             sys.executable,
             "scripts/experiments/ecg/slurm/make_slurm_shards.py",
-            "--profile", "k2_final_campaign",
+            "--profile", "reuse_plan_final_campaign",
             "--run-tag", "final-whole",
             "--out", str(shards),
             "--whole-cell",

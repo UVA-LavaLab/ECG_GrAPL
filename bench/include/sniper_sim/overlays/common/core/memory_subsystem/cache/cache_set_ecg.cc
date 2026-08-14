@@ -169,10 +169,10 @@ bool sniperEcgExtractEnabled()
    return enabled;
 }
 
-bool sniperK2ExactBindEnabled()
+bool sniperReusePlanExactBindEnabled()
 {
    static const bool enabled = []() {
-      const char* value = std::getenv("SNIPER_K2_EXACT_BIND");
+      const char* value = std::getenv("SNIPER_REUSE_PLAN_EXACT_BIND");
       return value && value[0] && std::string(value) != "0";
    }();
    return enabled;
@@ -185,7 +185,7 @@ uint32_t requesterCoreOr(core_id_t fallback)
    return static_cast<uint32_t>(fallback);
 }
 
-// ECG:K2_ONLINE_STREAMSHIELD runtime evidence -- the Sniper analog of gem5
+// ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH runtime evidence -- the Sniper analog of gem5
 // GraphEcgRP::OnlineDuelingStats (ecg_rp.hh/.cc). Both consume
 // ecg_policy::OnlineDuelingSelector, so the counters below are semantically
 // the SAME quantities gem5 registers as statistics::Scalar: a leader-set
@@ -253,7 +253,7 @@ inline void incrementEvidenceCounter(UInt64& counter)
 }
 
 // registerStatsMetric follows the SAME convention as nuca_cache.cc's
-// "nuca-cache"/stream-bypass-reads counters: it registers a pointer to a
+// "nuca-cache"/flowthrough-reads counters: it registers a pointer to a
 // live, monotonically-incrementing counter. Sniper's --roi wrapper does NOT
 // reset registered stats at ROI start -- StatsManager::recordStats() only
 // snapshots the current values under a named prefix ("roi-begin", then
@@ -315,10 +315,10 @@ CacheSetECG::CacheSetECG(
    , m_context_load_attempted(false)
    , m_has_pending_insert(false)
    , m_pending_insert_addr(0)
-   , m_pending_exact_k2_valid(false)
-   , m_pending_exact_k2_tier(0)
-   , m_pending_exact_k2_first(0)
-   , m_pending_exact_k2_second(0)
+   , m_pending_exact_reuse_plan_valid(false)
+   , m_pending_exact_reuse_plan_tier(0)
+   , m_pending_exact_reuse_plan_first(0)
+   , m_pending_exact_reuse_plan_second(0)
    , m_pending_request_current_epoch(0)
    , m_pending_request_context_id(0)
    , m_set_index(0)
@@ -410,14 +410,14 @@ CacheSetECG::prepareInsertion(IntPtr addr, UInt32 set_index)
    EcgHostProfileScope profile(EcgHostProfileScope::Kind::Prepare);
    tryLoadContext();
    m_pending_insert_addr = addr & ~(IntPtr(m_blocksize) - 1);
-   m_pending_exact_k2_valid = false;
+   m_pending_exact_reuse_plan_valid = false;
    m_pending_request_current_epoch = 0;
    m_pending_request_context_id = 0;
-   if (sniperK2ExactBindEnabled()) {
+   if (sniperReusePlanExactBindEnabled()) {
       const uint32_t requester_core = requesterCoreOr(m_core_id);
       UInt16 current_epoch = 0, context_id = 0;
       uint64_t bind_sequence = ~uint64_t{0};
-      if (graphbrew::sniper::consumeBoundK2Load(
+      if (graphbrew::sniper::consumeBoundReusePlanLoad(
               requester_core,
               static_cast<uint64_t>(m_pending_insert_addr),
               m_blocksize, &current_epoch, &context_id,
@@ -425,14 +425,14 @@ CacheSetECG::prepareInsertion(IntPtr addr, UInt32 set_index)
          UInt8 tier = 0;
          UInt16 first = 0, second = 0;
          if (context_id != 0 &&
-             graphbrew::sniper::globalContext().lookupFusedK2Pair(
+             graphbrew::sniper::globalContext().lookupFusedReusePlanPair(
                  static_cast<uint64_t>(m_pending_insert_addr),
                  requester_core, tier, first, second,
                  bind_sequence)) {
-            m_pending_exact_k2_valid = true;
-            m_pending_exact_k2_tier = tier;
-            m_pending_exact_k2_first = first;
-            m_pending_exact_k2_second = second;
+            m_pending_exact_reuse_plan_valid = true;
+            m_pending_exact_reuse_plan_tier = tier;
+            m_pending_exact_reuse_plan_first = first;
+            m_pending_exact_reuse_plan_second = second;
             m_pending_request_current_epoch = current_epoch;
             m_pending_request_context_id = context_id;
          }
@@ -444,9 +444,9 @@ CacheSetECG::prepareInsertion(IntPtr addr, UInt32 set_index)
       return value && value[0] && std::string(value) != "0";
    }();
    if (set_dueling &&
-       (!sniperK2ExactBindEnabled() || m_pending_exact_k2_valid) &&
+       (!sniperReusePlanExactBindEnabled() || m_pending_exact_reuse_plan_valid) &&
        graphbrew::sniper::hasCurrentVertexHint(requesterCoreOr(m_core_id))) {
-      // Governed-victim online-dueling evidence (ECG:K2_ONLINE_STREAMSHIELD).
+      // Governed-victim online-dueling evidence (ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH).
       // Sniper analog of gem5 GraphEcgRP::getVictim's requestBoundVictims/
       // leaderSamples/completedWindows/winnerChanges; see the
       // OnlineDuelingEvidence comment above for the naming AND multicore-
@@ -512,7 +512,7 @@ CacheSetECG::poptHint(IntPtr addr) const
 }
 
 bool
-CacheSetECG::lookupLineEcgEpochPair(
+CacheSetECG::lookupLineEcgReusePlan(
       IntPtr line_addr, UInt8& tier,
       UInt16& first, UInt16& second, UInt8& count,
       UInt16& current_epoch, UInt16& context_id) const
@@ -524,15 +524,15 @@ CacheSetECG::lookupLineEcgEpochPair(
       return false;
    uint32_t requester_core = requesterCoreOr(m_core_id);
    if (requester_core >= graphbrew::sniper::MAX_TRACKED_CORES) return false;
-   if (sniperK2ExactBindEnabled()) {
+   if (sniperReusePlanExactBindEnabled()) {
       uint64_t bind_sequence = ~uint64_t{0};
-      if (!graphbrew::sniper::consumeBoundK2Load(
+      if (!graphbrew::sniper::consumeBoundReusePlanLoad(
               requester_core, static_cast<uint64_t>(line_addr),
               m_blocksize, &current_epoch, &context_id,
               &bind_sequence)) {
          return false;
       }
-      if (context_id != 0 && context.lookupFusedK2Pair(
+      if (context_id != 0 && context.lookupFusedReusePlanPair(
               static_cast<uint64_t>(line_addr), requester_core,
               tier, first, second, bind_sequence)) {
          count = 2;
@@ -540,9 +540,9 @@ CacheSetECG::lookupLineEcgEpochPair(
       }
       return false;
    }
-   const char* fused = std::getenv("SNIPER_ECG_FUSED_K2");
+   const char* fused = std::getenv("SNIPER_ECG_FUSED_REUSE_PLAN");
    if (fused && fused[0] && std::strcmp(fused, "0") != 0 &&
-       context.lookupFusedK2Pair(
+       context.lookupFusedReusePlanPair(
            static_cast<uint64_t>(line_addr), requester_core,
            tier, first, second)) {
       count = 2;
@@ -552,7 +552,7 @@ CacheSetECG::lookupLineEcgEpochPair(
    if (v0 == UINT32_MAX) return false;
    current_epoch = context.currentEcgEpoch(requester_core);
    uint64_t sequence = 0;
-   return graphbrew::sniper::lookupEcgEpochPair(
+   return graphbrew::sniper::lookupEcgReusePlan(
        requester_core, v0, tier, first, second, count, sequence);
 }
 
@@ -589,16 +589,16 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
          UInt8 count = 0;
          UInt16 current_epoch = 0, context_id = 0;
          const bool got_exact =
-            sniperK2ExactBindEnabled() && m_pending_exact_k2_valid;
+            sniperReusePlanExactBindEnabled() && m_pending_exact_reuse_plan_valid;
          const bool got_epoch = got_exact ||
-            (!sniperK2ExactBindEnabled() &&
-             lookupLineEcgEpochPair(
+            (!sniperReusePlanExactBindEnabled() &&
+             lookupLineEcgReusePlan(
                 m_pending_insert_addr, tier, first, second, count,
                 current_epoch, context_id));
          if (got_exact) {
-            tier = m_pending_exact_k2_tier;
-            first = m_pending_exact_k2_first;
-            second = m_pending_exact_k2_second;
+            tier = m_pending_exact_reuse_plan_tier;
+            first = m_pending_exact_reuse_plan_first;
+            second = m_pending_exact_reuse_plan_second;
             count = 2;
             current_epoch = m_pending_request_current_epoch;
             context_id = m_pending_request_context_id;
@@ -631,7 +631,7 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
       }
       m_last_touch[way] = ++m_access_tick;
       m_has_pending_insert = false;
-      m_pending_exact_k2_valid = false;
+      m_pending_exact_reuse_plan_valid = false;
       m_pending_request_current_epoch = 0;
       m_pending_request_context_id = 0;
       return;
@@ -858,7 +858,7 @@ CacheSetECG::findECGGraspPoptVictim(CacheCntlr *cntlr)
    auto& context = graphbrew::sniper::globalContext();
    // SNIPER_ECG_EXTRACT: rank property lines by the DELIVERED per-edge epoch
    // (HW-faithful, matching gem5/cache_sim) instead of the host-side findNextRef
-   // matrix. cur_ep formula mirrors ecg_epoch::currentEpoch (snipersim build has
+   // matrix. cur_ep formula mirrors ecg_reuse_plan::currentEpoch (snipersim build has
    // no bench/include path; the kernel side uses the shared helper).
    const bool fatLoad = sniperEcgExtractEnabled();
 
@@ -888,7 +888,7 @@ CacheSetECG::findECGGraspPoptVictim(CacheCntlr *cntlr)
       // marker/sideband condition prepareInsertion uses to admit a
       // governed_victims sample (exact-bind validated, or exact-bind is
       // disabled entirely, AND a live vertex hint for this requester) so
-      // gem5 and Sniper populate their K2 online-dueling evidence under
+      // gem5 and Sniper populate their ReusePlan online-dueling evidence under
       // matching admission criteria -- an un-governed victim (no vertex
       // hint, or an exact-bind fill Sniper could not validate) must not be
       // able to inflate follower_selections/follower_variant_overrides.
@@ -897,7 +897,7 @@ CacheSetECG::findECGGraspPoptVictim(CacheCntlr *cntlr)
       // the Request/MSHR naming caveat -- this counts marker-governed
       // follower-set selections, not an O3 request-attested victim.
       const bool governed =
-         (!sniperK2ExactBindEnabled() || m_pending_exact_k2_valid) &&
+         (!sniperReusePlanExactBindEnabled() || m_pending_exact_reuse_plan_valid) &&
          graphbrew::sniper::hasCurrentVertexHint(requesterCoreOr(m_core_id));
       auto& selector = ecg_policy::globalOnlineDuelingSelector();
       const bool follower = ecg_policy::duelingLeaderArm(m_set_index) < 0;
@@ -915,9 +915,9 @@ CacheSetECG::findECGGraspPoptVictim(CacheCntlr *cntlr)
 
    const uint32_t ne = context.edge_epoch_count ? context.edge_epoch_count : 256u;
    uint32_t requester_core = requesterCoreOr(m_core_id);
-   const bool exact_mode = sniperK2ExactBindEnabled();
+   const bool exact_mode = sniperReusePlanExactBindEnabled();
    const bool request_bound =
-      exact_mode && m_pending_exact_k2_valid &&
+      exact_mode && m_pending_exact_reuse_plan_valid &&
       m_pending_request_context_id != 0;
    const uint32_t cur_ep = request_bound
       ? std::min<uint32_t>(m_pending_request_current_epoch, ne - 1)
@@ -931,7 +931,7 @@ CacheSetECG::findECGGraspPoptVictim(CacheCntlr *cntlr)
    auto isProp = [&](UInt32 w) { return epoch_property[w]; };
    auto dist   = [&](UInt32 w) -> uint32_t {
       if (fatLoad) {
-         return ecg_policy::epochPairDistance(
+         return ecg_policy::reusePlanDistance(
                m_ecg_epoch[w], m_ecg_epoch2[w],
                m_ecg_epoch_count[w], cur_ep, ne);
       }
@@ -1092,7 +1092,7 @@ CacheSetECG::updateReplacementIndex(UInt32 accessed_index)
       UInt16 first = 0, second = 0;
       UInt8 count = 0;
       UInt16 current_epoch = 0, context_id = 0;
-      if (lookupLineEcgEpochPair(
+      if (lookupLineEcgReusePlan(
              m_line_addrs[accessed_index], tier, first, second, count,
              current_epoch, context_id)) {
          if (tier != 0) m_dbg_tiers[accessed_index] = tier;

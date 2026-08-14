@@ -9,7 +9,7 @@
 
 #include "mem/cache/replacement_policies/ecg_rp.hh"
 
-#include "mem/cache/replacement_policies/ecg_epoch_request_ext.hh"
+#include "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh"
 #include "mem/cache/replacement_policies/ecg_victim_policy.hh"
 
 #include <algorithm>
@@ -31,14 +31,14 @@ inline bool requestBoundEcgProducerEnabled() {
     return enabled;
 }
 
-inline void traceAcceptedK2(
+inline void traceAcceptedReusePlan(
         uint32_t request_sequence, uint32_t request_dest,
         uint32_t fill_dest, bool request_bound,
         uint8_t tier, uint16_t first, uint16_t second,
         uint16_t current_epoch, uint16_t context_id,
         uint32_t property_elem_bytes) {
     static const uint64_t trace_limit = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return value
             ? static_cast<uint64_t>(std::strtoull(value, nullptr, 10))
             : 0;
@@ -46,10 +46,10 @@ inline void traceAcceptedK2(
     if (trace_limit == 0) return;
     uint64_t sequence = 0;
     if (request_bound) {
-        if (!graph::ecgK2RequestTraceIndex(request_sequence, sequence))
+        if (!graph::ecgReuseBindTraceIndex(request_sequence, sequence))
             return;
     } else {
-        // The serialized mailbox sequence is the originating decoded K2 load.
+        // The serialized mailbox sequence is the originating decoded ReusePlan load.
         // Only log accepted loads that are part of the traced EXPECT/RECV prefix;
         // inner-cache hits legitimately never reach this LLC callback.
         sequence = request_sequence;
@@ -57,7 +57,7 @@ inline void traceAcceptedK2(
     if (sequence >= trace_limit) return;
     std::fprintf(
         stderr,
-        "[ECG-K2-ACCEPT sim=gem5 seq=%llu request_seq=%u "
+        "[ECG-ReuseBind-ACCEPT sim=gem5 seq=%llu request_seq=%u "
         "request_dest=%u fill_dest=%u "
         "source=%s tier=%u epoch1=%u epoch2=%u current=%u context=%u "
         "property_elem_bytes=%u]\n",
@@ -155,7 +155,7 @@ GraphEcgRP::setVictimRequest(const PacketPtr pkt)
     uint16_t epoch1 = 0, epoch2 = 0;
     uint8_t dbg = 0, popt = 0, count = 0;
     uint32_t dest = 0, sequence = 0;
-    bool got = graph::readEcgEpochPair(
+    bool got = graph::readEcgReusePlan(
         pkt->req, epoch1, epoch2, dbg, popt, count, dest,
         victimCurrentEpoch, victimContextId, sequence);
     if (!got && !requestBoundEcgProducerEnabled()) {
@@ -250,7 +250,7 @@ GraphEcgRP::touch(
                 uint16_t isa_context_id = 0;
                 uint32_t isa_sequence = 0;
                 const bool got_request =
-                    pkt && pkt->req && graph::readEcgEpochPair(
+                    pkt && pkt->req && graph::readEcgReusePlan(
                     pkt->req, isa_epoch, isa_epoch2, isa_dbg, isa_popt,
                     isa_count, isa_dest, isa_current_epoch,
                     isa_context_id, isa_sequence);
@@ -274,7 +274,7 @@ GraphEcgRP::touch(
                 if (got) {
                     if (ecgMode == graph::ECGMode::ECG_GRASP_POPT &&
                         isa_count == 2) {
-                        traceAcceptedK2(
+                        traceAcceptedReusePlan(
                             isa_sequence, isa_dest, vertex, got_request, isa_dbg,
                             isa_epoch, isa_epoch2, isa_current_epoch,
                             isa_context_id, reg_elem);
@@ -406,7 +406,7 @@ GraphEcgRP::reset(
                 // OoO request-sideband FIRST (race-free; an O3 ecg.load attaches the
                 // graph mask to the governed property request). Falls back to the
                 // in-order mailbox/table, which is equivalent for serialized loads.
-                const bool got_request = graph::readEcgEpochPair(
+                const bool got_request = graph::readEcgReusePlan(
                     pkt->req, isa_epoch, isa_epoch2, isa_dbg, isa_popt,
                     isa_count, isa_dest, isa_current_epoch,
                     isa_context_id, isa_sequence);
@@ -423,7 +423,7 @@ GraphEcgRP::reset(
                         ext_trace_sequence.fetch_add(1, std::memory_order_relaxed);
                     if (sequence < ext_trace_limit) {
                         std::cerr
-                            << "[ECG-K2-EXT-RECV sim=gem5 seq=" << sequence
+                            << "[ECG-ReusePlan-EXT-RECV sim=gem5 seq=" << sequence
                             << " dest=" << isa_dest
                             << " tier=" << static_cast<unsigned>(isa_dbg)
                             << " epoch1=" << isa_epoch
@@ -465,7 +465,7 @@ GraphEcgRP::reset(
                 if (got) {
                     if (ecgMode == graph::ECGMode::ECG_GRASP_POPT &&
                         isa_count == 2) {
-                        traceAcceptedK2(
+                        traceAcceptedReusePlan(
                             isa_sequence, isa_dest, vertex, got_request, isa_dbg,
                             isa_epoch, isa_epoch2, isa_current_epoch,
                             isa_context_id, reg_elem);
@@ -678,7 +678,7 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
         };
         auto dist    = [&](ReplaceableEntry* c){
             auto data = getData(c);
-            return ecg_policy::epochPairDistance(
+            return ecg_policy::reusePlanDistance(
                 data->ecg_epoch, data->ecg_epoch2,
                 data->ecg_epoch_count, curEpoch, ne);
         };

@@ -45,8 +45,8 @@ int64_t BUStep_Sim(const Graph &g, pvector<NodeID> &parent, Bitmap &front,
     const bool record_charged = ecg_record &&
         GraphSimEnvIntClamped(
             "ECG_EDGE_MASK_CHARGED", 1, 0, 1) > 0;
-    const bool stream_bypass =
-        GraphSimEnvIntClamped("ECG_STREAM_BYPASS", 0, 0, 1) > 0;
+    const bool flowthrough =
+        GraphSimEnvIntClamped("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
     const auto in_edge_base = g.num_nodes() > 0
         ? g.in_neigh(0).begin() : nullptr;
     int64_t awake_count = 0;
@@ -122,8 +122,8 @@ int64_t TDStep_Sim(const Graph &g, pvector<NodeID> &parent,
     const bool record_charged = ecg_record &&
         GraphSimEnvIntClamped(
             "ECG_EDGE_MASK_CHARGED", 1, 0, 1) > 0;
-    const bool stream_bypass =
-        GraphSimEnvIntClamped("ECG_STREAM_BYPASS", 0, 0, 1) > 0;
+    const bool flowthrough =
+        GraphSimEnvIntClamped("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
     const auto out_edge_base = g.num_nodes() > 0
         ? g.out_neigh(0).begin() : nullptr;
     int64_t scout_count = 0;
@@ -283,10 +283,10 @@ pvector<NodeID> DOBFS_Sim(const Graph &g, NodeID source, CacheType &cache,
         const EvictionPolicy policy = GraphSimEffectiveL3Policy();
         const char* pfx_env = getenv("ECG_PREFETCH_MODE");
         bool popt_prefetch = pfx_env && atoi(pfx_env) == 2;
-        const bool matrix_free_k2 = GraphSimMatrixFreeK2();
+        const bool matrix_free_reuse_plan = GraphSimMatrixFreeReusePlan();
         if (policy == EvictionPolicy::POPT ||
-            (policy == EvictionPolicy::ECG && !matrix_free_k2) ||
-            (popt_prefetch && !matrix_free_k2)) {
+            (policy == EvictionPolicy::ECG && !matrix_free_reuse_plan) ||
+            (popt_prefetch && !matrix_free_reuse_plan)) {
             constexpr int numVtxPerLine = 64 / sizeof(NodeID);
             constexpr int numEpochs = 256;
             // BFS is direction-optimizing, but its ONLY masked property read is the

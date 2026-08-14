@@ -22,23 +22,23 @@ def test_three_cost_formulas():
     rows = cost_rows(graph, 128 * 1024, ways=16, line_bytes=64)
     by_transport = {row["transport"]: row for row in rows}
 
-    assert by_transport["unweighted_k2"]["k2_extra_bytes_per_edge"] == 4
-    assert by_transport["unweighted_k2"][
-        "k2_extra_active_stream_bytes"] == 16384
-    assert by_transport["weighted_compact_k2"][
-        "k2_extra_bytes_per_edge"] == 0
-    assert by_transport["weighted_fallback_k2"][
-        "k2_extra_bytes_per_edge"] == 4
-    assert by_transport["unweighted_k2"][
-        "k2_contextual_metadata_bits_per_line"] == 49
-    assert by_transport["unweighted_k2"][
-        "k2_contextual_way_equivalent"] == pytest.approx(1.53125)
-    assert by_transport["unweighted_k2"]["popt_matrix_bytes"] == 128
-    assert by_transport["unweighted_k2"]["popt_reserved_ways"] == 1
+    assert by_transport["unweighted_reuse_plan"]["reuse_plan_extra_bytes_per_edge"] == 4
+    assert by_transport["unweighted_reuse_plan"][
+        "reuse_plan_extra_active_stream_bytes"] == 16384
+    assert by_transport["weighted_compact_reuse_plan"][
+        "reuse_plan_extra_bytes_per_edge"] == 0
+    assert by_transport["weighted_fallback_reuse_plan"][
+        "reuse_plan_extra_bytes_per_edge"] == 4
+    assert by_transport["unweighted_reuse_plan"][
+        "reuse_plan_contextual_metadata_bits_per_line"] == 49
+    assert by_transport["unweighted_reuse_plan"][
+        "reuse_plan_contextual_way_equivalent"] == pytest.approx(1.53125)
+    assert by_transport["unweighted_reuse_plan"]["popt_matrix_bytes"] == 128
+    assert by_transport["unweighted_reuse_plan"]["popt_reserved_ways"] == 1
     assert "added metadata SRAM" in by_transport[
-        "unweighted_k2"]["k2_cost_unit"]
+        "unweighted_reuse_plan"]["reuse_plan_cost_unit"]
     assert "capacity loss" in by_transport[
-        "unweighted_k2"]["popt_cost_unit"]
+        "unweighted_reuse_plan"]["popt_cost_unit"]
 
 
 def test_real_graph_headers_and_default_cli(tmp_path: Path):

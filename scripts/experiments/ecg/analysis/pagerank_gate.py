@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate the deterministic K2 PageRank study."""
+"""Evaluate the deterministic ReusePlan PageRank study."""
 
 from __future__ import annotations
 
@@ -267,7 +267,7 @@ def validate_baseline(
     require_fields(
         row,
         (
-            "proposal_path_active", "ecg_schedule_k", "graph_edge_bytes",
+            "proposal_path_active", "ecg_reuse_plan_depth", "graph_edge_bytes",
             "edge_stream_bytes_per_edge", "ecg_record_replaces_edge",
             "popt_reserved_ways", "popt_effective_l3_ways",
             "popt_effective_l3_size", "l3_effective_ways",
@@ -276,7 +276,7 @@ def validate_baseline(
         policy)
     for field, value in (
             ("proposal_path_active", "0"),
-            ("ecg_schedule_k", "0"),
+            ("ecg_reuse_plan_depth", "0"),
             ("graph_edge_bytes", "4"),
             ("edge_stream_bytes_per_edge", "4"),
             ("ecg_record_replaces_edge", "0")):
@@ -445,21 +445,21 @@ def validate_oracle(
         raise ValueError("uncharged P-OPT traffic accounting is invalid")
 
 
-def validate_k2(row: dict[str, Any], config: dict[str, Any],
+def validate_reuse_plan(row: dict[str, Any], config: dict[str, Any],
                 graph: dict[str, Any], policy: str) -> None:
     require_fields(
         row,
         (
             "proposal_path_active", "proposal_performance_mode_active",
-            "gem5_compact_k2m_streamshield_active",
-            "gem5_compact_k2m_performance_requested",
-            "gem5_ecg_delivery", "gem5_k2_binding_model",
+            "gem5_compact_reuse_bind_flowthrough_active",
+            "gem5_compact_reuse_bind_performance_requested",
+            "gem5_ecg_delivery", "gem5_reuse_bind_model",
             "ecg_record_bytes", "ecg_record_replaces_edge",
-            "edge_stream_bytes_per_edge", "k2_metadata_bits_per_line",
+            "edge_stream_bytes_per_edge", "reuse_plan_metadata_bits_per_line",
             "l3_effective_ways", "l3_effective_size",
             "ecg_isa_variant", "ecg_epochs",
-            "gem5_k2_delivery_trace_limit",
-            "gem5_stream_bypass_trace_limit",
+            "gem5_reuse_bind_trace_limit",
+            "gem5_flowthrough_trace_limit",
             "proposal_compact_id_bits", "proposal_compact_epoch_bits",
             "proposal_compact_tier_bits",
             "gem5_variant_requested_receipt",
@@ -470,20 +470,20 @@ def validate_k2(row: dict[str, Any], config: dict[str, Any],
     for field, value in (
             ("proposal_path_active", "1"),
             ("proposal_performance_mode_active", "1"),
-            ("gem5_compact_k2m_streamshield_active", "1"),
-            ("gem5_compact_k2m_performance_requested", "1"),
+            ("gem5_compact_reuse_bind_flowthrough_active", "1"),
+            ("gem5_compact_reuse_bind_performance_requested", "1"),
             ("gem5_ecg_delivery",
-             "ecg.stream.load2.compact+ecg.k2.mload.f32"),
-            ("gem5_k2_binding_model", "request"),
+             "ecg.flow.load.compact+ecg.bind.load.f32"),
+            ("gem5_reuse_bind_model", "request"),
             ("ecg_record_bytes", "4"),
             ("ecg_record_replaces_edge", "1"),
             ("edge_stream_bytes_per_edge", "4"),
-            ("k2_metadata_bits_per_line",
-             config["resource_scope"]["k2_metadata_bits_per_line"]),
+            ("reuse_plan_metadata_bits_per_line",
+             config["resource_scope"]["reuse_plan_metadata_bits_per_line"]),
             ("ecg_isa_variant", config["isa_variant"]),
-            ("ecg_epochs", config["k2_epochs"]),
-            ("gem5_k2_delivery_trace_limit", "0"),
-            ("gem5_stream_bypass_trace_limit", "0")):
+            ("ecg_epochs", config["reuse_plan_epochs"]),
+            ("gem5_reuse_bind_trace_limit", "0"),
+            ("gem5_flowthrough_trace_limit", "0")):
         require_text(row, field, value)
     require_text(row, "proposal_compact_id_bits", graph["compact_id_bits"])
     require_text(
@@ -505,19 +505,19 @@ def validate_k2(row: dict[str, Any], config: dict[str, Any],
             ONLINE_DUELING_REPORTED_FIELDS,
             policy)
         for field in (
-                "gem5_k2_dueling_request_bound_victims",
-                "gem5_k2_dueling_follower_selections",
-                "gem5_k2_dueling_completed_windows"):
+                "gem5_reuse_plan_dueling_request_bound_victims",
+                "gem5_reuse_plan_dueling_follower_selections",
+                "gem5_reuse_plan_dueling_completed_windows"):
             require_positive(row, field)
         if integer(
-                row.get("gem5_k2_dueling_leader_samples"),
-                "gem5_k2_dueling_leader_samples") < (
+                row.get("gem5_reuse_plan_dueling_leader_samples"),
+                "gem5_reuse_plan_dueling_leader_samples") < (
                     ONLINE_DUELING_WINDOW_MISSES):
             raise ValueError(
-                "online K2 did not collect a full leader-sample window")
+                "online ReusePlan did not collect a full leader-sample window")
         for field in (
-                "gem5_k2_dueling_winner_changes",
-                "gem5_k2_dueling_follower_variant_overrides"):
+                "gem5_reuse_plan_dueling_winner_changes",
+                "gem5_reuse_plan_dueling_follower_variant_overrides"):
             if number(row.get(field), field) < 0:
                 raise ValueError(f"{field} must be nonnegative")
 
@@ -527,7 +527,7 @@ def build_cells(rows: list[dict[str, str]], config: dict[str, Any]) -> dict[
     graphs = graph_map(config)
     for graph in graphs.values():
         epoch_bits = int(graph["compact_epoch_bits"])
-        if 1 << epoch_bits < int(config["k2_epochs"]):
+        if 1 << epoch_bits < int(config["reuse_plan_epochs"]):
             raise ValueError(
                 f"{graph['name']} has too few compact epoch bits")
         bits = (
@@ -559,7 +559,7 @@ def build_cells(rows: list[dict[str, str]], config: dict[str, Any]) -> dict[
             raise ValueError(f"unexpected policy {policy} in {key}")
 
         validate_common_row(row, config, graphs[graph_name], iteration)
-        if not policy.startswith("ECG_K2_"):
+        if not policy.startswith("ECG_REUSE_PLAN_"):
             validate_baseline(row, graphs[graph_name], policy)
         if policy == "GRASP":
             validate_grasp(row)
@@ -567,8 +567,8 @@ def build_cells(rows: list[dict[str, str]], config: dict[str, Any]) -> dict[
             validate_popt(row, config, graphs[graph_name], iteration)
         elif policy == "POPT_UNCHARGED":
             validate_oracle(row, config, graphs[graph_name])
-        elif policy.startswith("ECG_K2_"):
-            validate_k2(row, config, graphs[graph_name], policy)
+        elif policy.startswith("ECG_REUSE_PLAN_"):
+            validate_reuse_plan(row, config, graphs[graph_name], policy)
 
         per_policy = cells.setdefault(key, {})
         if policy in per_policy:

@@ -39,7 +39,7 @@ DEP_EXTERNAL := $(wildcard $(INCLUDE_EXTERNAL)/rabbit/*.hpp) \
 DEP_CACHE := $(wildcard $(INCLUDE_CACHE)/*.h) \
 	$(INC_DIR)/ecg_victim_policy.h \
 	$(INC_DIR)/ecg_mode6_builder.h \
-	$(INC_DIR)/ecg_epoch_builder.h
+	$(INC_DIR)/ecg_reuse_plan_builder.h
 # Shared ECG metadata/transport headers. These were tracked by NO build rule, so
 # editing ecg_metadata.h or gem5_harness.h left every kernel binary stale while
 # make reported success -- a trap that silently produced binaries missing the
@@ -48,7 +48,7 @@ DEP_ECG := $(wildcard $(INC_DIR)/ecg_*.h) \
 	$(wildcard $(INC_DIR)/gem5_sim/*.h) \
 	$(wildcard $(INC_DIR)/sniper_sim/*.h)
 
-KERNELS_SIM := pr pr_spmv bfs bc cc cc_sv sssp tc ecg_preprocess test_ecg_epoch_pair32
+KERNELS_SIM := pr pr_spmv bfs bc cc cc_sv sssp tc ecg_preprocess test_ecg_reuse_plan32
 KERNELS_GEM5 := pr pr_spmv bfs sssp cc cc_sv bc tc
 KERNELS_SNIPER := sg_kernel pr bfs sssp bc cc cc_sv \
 	pr_kernel_smoke bfs_kernel_smoke sssp_kernel_smoke hello_roi
@@ -271,7 +271,7 @@ test:
 
 verify:
 	$(PYTHON) scripts/experiments/ecg/verify/equiv_kernels.py \
-		--gem5 --sniper --kernels pr bfs --schedule-k 2
+		--gem5 --sniper --kernels pr bfs --reuse-plan-depth 2
 
 clean-sim:
 	rm -rf $(BIN_SIM_DIR)

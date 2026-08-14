@@ -1,4 +1,4 @@
-# K2 Experiment Package
+# ReusePlan Experiment Package
 
 ## Main components
 

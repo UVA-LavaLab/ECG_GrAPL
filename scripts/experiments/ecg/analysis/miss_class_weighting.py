@@ -13,7 +13,7 @@ miss costs the same. That is not true for graph workloads:
     conflicts. Their latency is largely exposed.
 
 So a single miss count understates policies that trade irregular misses for
-sequential ones -- which is exactly what K2 does when it spends edge-record
+sequential ones -- which is exactly what ReusePlan does when it spends edge-record
 bandwidth to protect property lines.
 
 This tool re-scores a matrix under
@@ -41,8 +41,8 @@ from pathlib import Path
 
 DEFAULT_POLICIES = (
     "GRASP", "HAWKEYE_PROXY", "SRRIP", "POPT",
-    "ECG_K2", "ECG_K2_ONLINE",
-    "ECG_K2_STREAMSHIELD", "ECG_K2_ONLINE_STREAMSHIELD",
+    "ECG_REUSE_PLAN", "ECG_REUSE_PLAN_ONLINE",
+    "ECG_REUSE_PLAN_FLOWTHROUGH", "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH",
 )
 FLOOR = 1e-9
 
@@ -106,7 +106,7 @@ def main() -> int:
     parser.add_argument("--baseline", default="LRU")
     parser.add_argument("--policies", nargs="+", default=list(DEFAULT_POLICIES))
     parser.add_argument("--challengers", nargs="+",
-                        default=["ECG_K2", "ECG_K2_ONLINE_STREAMSHIELD"])
+                        default=["ECG_REUSE_PLAN", "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH"])
     parser.add_argument("--weights", nargs="+", type=float,
                         default=[1, 2, 3, 5, 8, 12, 20])
     args = parser.parse_args()

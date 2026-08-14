@@ -68,34 +68,34 @@ def make_rows(module, graphs=None, instruction_cap=0):
                     if instruction_cap and simulator in ("gem5", "sniper"):
                         row["timing_valid_for_speedup"] = "0"
                         row["timing_model"] = "instruction_capped_diagnostic"
-                    if policy in module.K2_POLICIES:
+                    if policy in module.REUSE_PLAN_POLICIES:
                         row.update({
-                            "ecg_schedule_k": "2",
+                            "ecg_reuse_plan_depth": "2",
                             "ecg_epochs_effective": "32768",
                         })
                         if simulator == "gem5":
                             row["ecg_isa_variant"] = "indexed"
                             row["gem5_ecg_delivery"] = (
-                                "ecg.stream.weighted64+ecg.k2.iload.cw24"
-                                if policy in module.SS_POLICIES and
+                                "ecg.flow.weighted+ecg.bind.iload.cw24"
+                                if policy in module.FLOWTHROUGH_POLICIES and
                                 benchmark == "sssp"
-                                else "ecg.stream.load2+ecg.k2.iload"
-                                if policy in module.SS_POLICIES
-                                else "ecg.weighted64+ecg.k2.iload.cw24"
+                                else "ecg.flow.load+ecg.bind.iload"
+                                if policy in module.FLOWTHROUGH_POLICIES
+                                else "ecg.plan.weighted+ecg.bind.iload.cw24"
                                 if benchmark == "sssp"
-                                else "ecg.k2.iload")
-                            if policy in module.SS_POLICIES:
-                                row["gem5_stream_bypass_trace_events"] = "1"
+                                else "ecg.bind.iload")
+                            if policy in module.FLOWTHROUGH_POLICIES:
+                                row["gem5_flowthrough_trace_events"] = "1"
                         if simulator == "sniper":
                             row.update({
-                                "sniper_ecg_delivery": "fused-k2-model",
-                                "sniper_fused_k2_receipts": "1",
-                                "sniper_fused_k2_bad_receipts": "0",
+                                "sniper_ecg_delivery": "fused-reuse_plan-model",
+                                "sniper_fused_reuse_plan_receipts": "1",
+                                "sniper_fused_reuse_plan_bad_receipts": "0",
                             })
-                            if policy in module.SS_POLICIES:
+                            if policy in module.FLOWTHROUGH_POLICIES:
                                 row.update({
-                                    "sniper_stream_bypass_reads": "1",
-                                    "sniper_stream_bypass_writes": "1",
+                                    "sniper_flowthrough_reads": "1",
+                                    "sniper_flowthrough_writes": "1",
                                 })
                     rows.append(row)
     return rows
@@ -153,8 +153,8 @@ def test_smoke_coverage_accepts_separately_validated_fused_transport():
         if row["simulator"] == "sniper"
     ]
     for row in rows:
-        if row["policy_label"] in module.K2_POLICIES:
-            row["sniper_fused_k2_receipts"] = "0"
+        if row["policy_label"] in module.REUSE_PLAN_POLICIES:
+            row["sniper_fused_reuse_plan_receipts"] = "0"
     assert module.validate(
         rows, graphs, 600_000_000, ("sniper",), False) == []
 
@@ -187,11 +187,11 @@ def test_smoke_coverage_rejects_wrong_gem5_delivery():
     row = next(
         row for row in rows
         if row["simulator"] == "gem5" and
-        row["policy_label"] == "ECG_K2_STREAMSHIELD")
-    row["gem5_ecg_delivery"] = "ecg.load2"
+        row["policy_label"] == "ECG_REUSE_PLAN_FLOWTHROUGH")
+    row["gem5_ecg_delivery"] = "ecg.plan.load"
     errors = module.validate(rows)
     assert any(
-        "expected='ecg.stream.load2+ecg.k2.iload'" in error
+        "expected='ecg.flow.load+ecg.bind.iload'" in error
         for error in errors)
 
 
@@ -203,8 +203,8 @@ def test_smoke_coverage_rejects_missing_bad_receipt_count():
     row = next(
         row for row in rows
         if row["simulator"] == "sniper" and
-        row["policy_label"] == "ECG_K2")
-    del row["sniper_fused_k2_bad_receipts"]
+        row["policy_label"] == "ECG_REUSE_PLAN")
+    del row["sniper_fused_reuse_plan_bad_receipts"]
     errors = module.validate(rows)
     assert any(
-        "missing sniper_fused_k2_bad_receipts" in error for error in errors)
+        "missing sniper_fused_reuse_plan_bad_receipts" in error for error in errors)

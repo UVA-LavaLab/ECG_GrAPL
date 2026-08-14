@@ -2,13 +2,13 @@
 //
 // This is the transport counterpart to `ecg_victim_policy.h`. That header owns
 // the eviction DECISION and is byte-identical across cache_sim, gem5 and
-// Sniper; this one owns how a per-edge K2 record reaches the policy, and is
+// Sniper; this one owns how a per-edge ReusePlan record reaches the policy, and is
 // shared the same way. Neither depends on any simulator type.
 //
 // WHY THIS EXISTS. Metadata delivery had accumulated in three places at once:
 // width helpers in graph_sim.h, a different if/else chain in each of the five
 // cache_sim kernels, and separate array construction in each gem5 kernel. That
-// produced real, shipped bugs -- a Schedule-2 shortcut that returned 8 bytes
+// produced real, shipped bugs -- a two-epoch ReusePlan shortcut that returned 8 bytes
 // without consulting the bit budget, a weighted sidecar sized with destination
 // id bits it never needs, and kernels that disagreed about which structure they
 // were even using. One definition, used by every kernel on every simulator,
@@ -24,23 +24,23 @@
 //   Sidecar (S2): the CSR edge is read unmodified and a narrow bit-packed
 //   sidecar carries ONLY stamps and tier. It needs no destination id because
 //   the edge still carries it, so its width is INDEPENDENT of graph size.
-//   Valid for K2-M, which receives an already-computed property address; K2-I
+//   Valid for ReuseBind, which receives an already-computed property address; ReuseBind-Indexed
 //   fuses address generation and does need the id in the operand.
 //
 // RESEARCH KNOBS. Every axis is explicit, validated, and reported in one
 // receipt line so no run is ambiguous about what it measured:
 //
 //   ECG_DELIVERY              packed | sidecar | none   (default packed)
-//   ECG_EDGE_MASK_SCHED       stamps per record, 1 or 2
+//   ECG_REUSE_PLAN_DEPTH       stamps per record, 1 or 2
 //   ECG_EDGE_MASK_EPOCHS      epoch count -> epoch_bits
 //   ECG_RECORD_TIER_BITS      tier bits carried (default 2)
 //   ECG_EDGE_RECORD_BYTES     force packed container width (4/8/16)
 //   ECG_SIDECAR_PAYLOAD_BITS  force sidecar payload width
-//   ECG_RECORD_VARIABLE_WIDTH compute Schedule-2 width instead of forcing 8
+//   ECG_RECORD_VARIABLE_WIDTH compute two-epoch ReusePlan width instead of forcing 8
 //   ECG_VIRTUAL_ID_BITS       pretend the graph needs N id bits, so format
 //                             width can be swept WITHOUT changing topology
 //   ECG_EDGE_MASK_CHARGED     0 = metadata delivered free (oracle ceiling)
-//   ECG_STREAM_BYPASS         metadata stream does not allocate in LLC
+//   ECG_FLOWTHROUGH         metadata stream does not allocate in LLC
 #ifndef ECG_METADATA_H
 #define ECG_METADATA_H
 
@@ -70,7 +70,7 @@ struct Config {
     int record_bytes = 4;    // PackedRecord container width
     int payload_bits = 0;    // Sidecar bits per edge
     bool charged = true;
-    bool bypass = false;
+    bool flowthrough = false;
     bool packed_fits = true; // did the packed record fit 4 bytes?
 };
 
@@ -96,7 +96,7 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
     if (mode && std::string(mode) == "sidecar") c.delivery = Delivery::Sidecar;
     else if (mode && std::string(mode) == "none") c.delivery = Delivery::None;
 
-    c.stamps = envInt("ECG_EDGE_MASK_SCHED", 0, 0, 4);
+    c.stamps = envInt("ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
     if (c.stamps < 1) c.stamps = 1;
     c.epoch_bits = bitsFor(num_epochs ? num_epochs : 2);
     c.tier_bits = envInt("ECG_RECORD_TIER_BITS", 2, 0, 8);
@@ -106,7 +106,7 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
     const int virtual_id_bits = envInt("ECG_VIRTUAL_ID_BITS", 0, 0, 31);
     c.id_bits = virtual_id_bits > 0 ? virtual_id_bits : bitsFor(num_vertices);
     c.charged = envInt("ECG_EDGE_MASK_CHARGED", 1, 0, 1) > 0;
-    c.bypass = envInt("ECG_STREAM_BYPASS", 0, 0, 1) > 0;
+    c.flowthrough = envInt("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
 
     // Sidecar payload carries stamps and tier ONLY; no destination id, because
     // the unmodified CSR edge still delivers it. This is the whole reason the
@@ -125,7 +125,7 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
         c.record_bytes = forced_width;
     } else if (c.stamps == 2 &&
                envInt("ECG_RECORD_VARIABLE_WIDTH", 0, 0, 1) == 0) {
-        // Historical behaviour: Schedule-2 returned 8 bytes without consulting
+        // Historical behaviour: two-epoch ReusePlan returned 8 bytes without consulting
         // the budget. Kept as the default so committed results do not move, but
         // it is a shortcut, not a cost of the second stamp: on a 65,536-vertex
         // graph a two-stamp record needs 16 + 2*5 + 2 = 28 bits and fits in 4.
@@ -171,7 +171,7 @@ inline void requirePackedFeasible(Config& c, bool feasible) {
 // fixes the width independently of the bit budget.
 //
 // The budget says what a record COULD occupy; a backend may still materialise
-// it in a wider container. gem5's Schedule-2 path builds
+// it in a wider container. gem5's two-epoch ReusePlan path builds
 // `pvector<uint64_t> in_edge_pair_flat`, so it streams 8 bytes per edge no
 // matter what the budget computes. Reporting the budget width there would make
 // the receipt claim a 4-byte record while the guest moved 8, which is exactly
@@ -204,10 +204,10 @@ inline void announce(const Config& c, const char* kernel) {
     std::fprintf(stderr,
         "[ECG-METADATA kernel=%s delivery=%s stamps=%d epoch_bits=%d "
         "tier_bits=%d id_bits=%d record_bytes=%d payload_bits=%d "
-        "bytes_per_edge=%.3f charged=%d bypass=%d packed_fits=%d]\n",
+        "bytes_per_edge=%.3f charged=%d flowthrough=%d packed_fits=%d]\n",
         kernel, deliveryName(c), c.stamps, c.epoch_bits, c.tier_bits,
         c.id_bits, c.record_bytes, c.payload_bits, bytesPerEdge(c),
-        c.charged ? 1 : 0, c.bypass ? 1 : 0, c.packed_fits ? 1 : 0);
+        c.charged ? 1 : 0, c.flowthrough ? 1 : 0, c.packed_fits ? 1 : 0);
 }
 
 // Enforce, do not merely report.

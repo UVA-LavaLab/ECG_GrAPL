@@ -342,9 +342,9 @@ def check_sniper_ecg_signal_invariant() -> bool:
         "runner pins epoch count":
             'env["ECG_EDGE_MASK_EPOCHS"] = str(args.ecg_epochs)' in runner,
         "eviction does not broadcast-refresh resident lines":
-            "lookupLineEcgEpochPair(m_line_addrs[way]" not in victim,
+            "lookupLineEcgReusePlan(m_line_addrs[way]" not in victim,
         "actual L3 hit refreshes only accessed line":
-            "lookupLineEcgEpochPair(" in update and
+            "lookupLineEcgReusePlan(" in update and
             "m_line_addrs[accessed_index]" in update,
         "true recency feeds shared victim":
             "ws[w].recency = m_last_touch[w];" in victim,

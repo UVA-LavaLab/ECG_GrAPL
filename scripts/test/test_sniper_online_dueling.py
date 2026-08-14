@@ -1,7 +1,7 @@
 """Sniper analog of test_gem5_online_dueling.py.
 
 Covers roi_matrix.py's Sniper-side online-dueling evidence parsing/validation
-(ECG:K2_ONLINE_STREAMSHIELD), the Sniper [ECG-VARIANT-RECEIPT] attestation,
+(ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH), the Sniper [ECG-VARIANT-RECEIPT] attestation,
 and the realized-LLC-geometry receipt -- all added to reach Sniper/gem5
 parity without renaming or repurposing the frozen gem5_* fields.
 """
@@ -24,12 +24,12 @@ spec.loader.exec_module(roi_matrix)
 def valid_sniper_row():
     return {
         "timing_valid_for_speedup": "1",
-        "sniper_k2_dueling_governed_victims": 20000,
-        "sniper_k2_dueling_leader_samples": 2048,
-        "sniper_k2_dueling_follower_selections": 18000,
-        "sniper_k2_dueling_completed_windows": 2,
-        "sniper_k2_dueling_winner_changes": 0,
-        "sniper_k2_dueling_follower_variant_overrides": 0,
+        "sniper_reuse_plan_dueling_governed_victims": 20000,
+        "sniper_reuse_plan_dueling_leader_samples": 2048,
+        "sniper_reuse_plan_dueling_follower_selections": 18000,
+        "sniper_reuse_plan_dueling_completed_windows": 2,
+        "sniper_reuse_plan_dueling_winner_changes": 0,
+        "sniper_reuse_plan_dueling_follower_variant_overrides": 0,
     }
 
 
@@ -37,7 +37,7 @@ def _validate_sniper(row, required):
     return roi_matrix.validate_online_dueling_activity(
         row, required,
         positive_fields=roi_matrix.SNIPER_ONLINE_DUELING_REQUIRED_POSITIVE_FIELDS,
-        leader_samples_field="sniper_k2_dueling_leader_samples")
+        leader_samples_field="sniper_reuse_plan_dueling_leader_samples")
 
 
 def test_sniper_online_dueling_activity_accepts_full_roi_window():
@@ -48,20 +48,20 @@ def test_sniper_online_dueling_activity_accepts_full_roi_window():
 
 def test_sniper_online_dueling_activity_rejects_partial_window():
     row = valid_sniper_row()
-    row["sniper_k2_dueling_leader_samples"] = 1023
+    row["sniper_reuse_plan_dueling_leader_samples"] = 1023
     assert not _validate_sniper(row, required=True)
     assert row["timing_valid_for_speedup"] == "0"
-    assert "sniper_k2_dueling_leader_samples<1024" in row["error"]
+    assert "sniper_reuse_plan_dueling_leader_samples<1024" in row["error"]
 
 
 def test_sniper_online_dueling_activity_rejects_zero_governed_victims():
     row = valid_sniper_row()
-    row["sniper_k2_dueling_governed_victims"] = 0
+    row["sniper_reuse_plan_dueling_governed_victims"] = 0
     assert not _validate_sniper(row, required=True)
-    assert "sniper_k2_dueling_governed_victims" in row["error"]
+    assert "sniper_reuse_plan_dueling_governed_victims" in row["error"]
 
 
-def test_sniper_online_dueling_activity_is_optional_for_static_k2():
+def test_sniper_online_dueling_activity_is_optional_for_static_reuse_plan():
     row = {}
     assert _validate_sniper(row, required=False)
     assert row == {}
@@ -78,10 +78,10 @@ def test_gem5_and_sniper_dueling_validation_never_cross_populate_fields():
 
     gem5_row = {
         "timing_valid_for_speedup": "1",
-        "gem5_k2_dueling_request_bound_victims": 20000,
-        "gem5_k2_dueling_leader_samples": 2048,
-        "gem5_k2_dueling_follower_selections": 18000,
-        "gem5_k2_dueling_completed_windows": 2,
+        "gem5_reuse_plan_dueling_request_bound_victims": 20000,
+        "gem5_reuse_plan_dueling_leader_samples": 2048,
+        "gem5_reuse_plan_dueling_follower_selections": 18000,
+        "gem5_reuse_plan_dueling_completed_windows": 2,
     }
     assert not _validate_sniper(gem5_row, required=True)
 
@@ -199,66 +199,66 @@ def test_sniper_geometry_receipt_supports_root_level_sim_cfg(tmp_path):
     assert roi_matrix.apply_sniper_geometry_receipt(row, tmp_path, 32, "8")
 
 
-def test_sniper_mask_mode_preserves_pinned_variant_lru_streamshield():
+def test_sniper_mask_mode_preserves_pinned_variant_lru_flowthrough():
     """BLOCKING regression: run_sniper's mask branch must export
-    ECG:K2_LRU_STREAMSHIELD's pinned "lru_only" variant unchanged, not the
-    generic ECG:K2 adaptive-benchmark mapping. Before the fix,
+    ECG:REUSE_PLAN_LRU_FLOWTHROUGH's pinned "lru_only" variant unchanged, not the
+    generic ECG:REUSE_PLAN adaptive-benchmark mapping. Before the fix,
     sniper_mask_mode_ecg_variant's mask branch unconditionally recomputed
     ECG_VARIANT via effective_ecg_variant(..., spec=parse_policy_spec(
-    "ECG:K2")), silently discarding any spec-pinned variant."""
-    spec = roi_matrix.parse_policy_spec("ECG:K2_LRU_STREAMSHIELD")
+    "ECG:REUSE_PLAN")), silently discarding any spec-pinned variant."""
+    spec = roi_matrix.parse_policy_spec("ECG:REUSE_PLAN_LRU_FLOWTHROUGH")
     assert spec.ecg_variant == "lru_only"
     for benchmark in ("pr", "bfs", "sssp", "bc", "cc"):
         args = argparse.Namespace(benchmark=benchmark)
         assert roi_matrix.sniper_mask_mode_ecg_variant(
-            args, spec.ecg_schedule_k, spec) == "lru_only"
+            args, spec.ecg_reuse_plan_depth, spec) == "lru_only"
 
 
-def test_sniper_mask_mode_preserves_pinned_variant_rrip_streamshield():
-    spec = roi_matrix.parse_policy_spec("ECG:K2_RRIP_STREAMSHIELD")
+def test_sniper_mask_mode_preserves_pinned_variant_rrip_flowthrough():
+    spec = roi_matrix.parse_policy_spec("ECG:REUSE_PLAN_RRIP_FLOWTHROUGH")
     assert spec.ecg_variant == "rrip_first"
     for benchmark in ("pr", "bfs", "sssp", "bc", "cc"):
         args = argparse.Namespace(benchmark=benchmark)
         assert roi_matrix.sniper_mask_mode_ecg_variant(
-            args, spec.ecg_schedule_k, spec) == "rrip_first"
+            args, spec.ecg_reuse_plan_depth, spec) == "rrip_first"
 
 
-def test_sniper_mask_mode_preserves_pinned_variant_online_streamshield():
-    spec = roi_matrix.parse_policy_spec("ECG:K2_ONLINE_STREAMSHIELD")
+def test_sniper_mask_mode_preserves_pinned_variant_online_flowthrough():
+    spec = roi_matrix.parse_policy_spec("ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH")
     assert spec.ecg_variant == "rrip_first"
     for benchmark in ("pr", "bfs", "sssp", "bc", "cc"):
         args = argparse.Namespace(benchmark=benchmark)
         assert roi_matrix.sniper_mask_mode_ecg_variant(
-            args, spec.ecg_schedule_k, spec) == "rrip_first"
+            args, spec.ecg_reuse_plan_depth, spec) == "rrip_first"
 
 
 def test_sniper_mask_mode_preserves_pinned_degree_variant():
-    """ECG:K2_DEGREE pins "degree_first"; this must export/expect its own
-    variant, distinct from the generic ECG:K2 adaptive mapping (which would
+    """ECG:REUSE_PLAN_DEGREE pins "degree_first"; this must export/expect its own
+    variant, distinct from the generic ECG:REUSE_PLAN adaptive mapping (which would
     also resolve to "degree_first" for bfs/sssp, but to "epoch_first" for pr
     and "rrip_first" for bc/cc -- the pin must win regardless of benchmark,
     not because the two mappings happen to coincide on some benchmarks)."""
-    spec = roi_matrix.parse_policy_spec("ECG:K2_DEGREE")
+    spec = roi_matrix.parse_policy_spec("ECG:REUSE_PLAN_DEGREE")
     assert spec.ecg_variant == "degree_first"
     for benchmark in ("pr", "bfs", "sssp", "bc", "cc"):
         args = argparse.Namespace(benchmark=benchmark)
         assert roi_matrix.sniper_mask_mode_ecg_variant(
-            args, spec.ecg_schedule_k, spec) == "degree_first"
+            args, spec.ecg_reuse_plan_depth, spec) == "degree_first"
     # And prove the pin actually diverges from the generic adaptive mapping
     # on at least one benchmark, so this test cannot pass by coincidence.
     pr_args = argparse.Namespace(benchmark="pr")
     generic_pr = roi_matrix.effective_ecg_variant(
-        pr_args, schedule_k=2,
-        spec=roi_matrix.parse_policy_spec("ECG:K2"))
+        pr_args, reuse_plan_depth=2,
+        spec=roi_matrix.parse_policy_spec("ECG:REUSE_PLAN"))
     assert generic_pr == "epoch_first"
     assert roi_matrix.sniper_mask_mode_ecg_variant(
-        pr_args, spec.ecg_schedule_k, spec) == "degree_first"
+        pr_args, spec.ecg_reuse_plan_depth, spec) == "degree_first"
     assert generic_pr != "degree_first"
 
 
-def test_sniper_mask_mode_falls_back_to_generic_k2_when_variant_unpinned():
+def test_sniper_mask_mode_falls_back_to_generic_reuse_plan_when_variant_unpinned():
     """A spec with NO pinned ecg_variant (spec.ecg_variant is None) is the
-    ONLY case that should fall back to the generic ECG:K2 adaptive-benchmark
+    ONLY case that should fall back to the generic ECG:REUSE_PLAN adaptive-benchmark
     mapping in mask mode."""
     spec = roi_matrix.parse_policy_spec("ECG:ECG_GRASP_POPT")
     assert spec.ecg_variant is None
@@ -297,7 +297,7 @@ def _run_sniper_end_to_end(monkeypatch, tmp_path, log_text, write_matching_geome
         "--sniper-workload", "sg_kernel",
         "--allow-sniper-sg-kernel-workload",
     ])
-    policy_spec = roi_matrix.parse_policy_spec("ECG:K2_LRU")
+    policy_spec = roi_matrix.parse_policy_spec("ECG:REUSE_PLAN_LRU")
     assert policy_spec.ecg_variant == "lru_only"
 
     label = (
@@ -339,7 +339,7 @@ def _run_sniper_end_to_end(monkeypatch, tmp_path, log_text, write_matching_geome
     monkeypatch.setattr(
         roi_matrix, "extract_graphbrew_metrics",
         lambda raw: _fake_sniper_metrics(str(fake_stats_path)))
-    monkeypatch.delenv("ECG_K2_DELIVERY_TRACE", raising=False)
+    monkeypatch.delenv("ECG_REUSE_PLAN_DELIVERY_TRACE", raising=False)
 
     rows = roi_matrix.run_sniper(args, tmp_path, policy_spec, "32kB")
     assert len(rows) == 1
@@ -409,18 +409,18 @@ def test_sniper_valid_variant_receipt_still_reaches_status_ok(monkeypatch, tmp_p
 
 def test_sniper_mask_mode_variant_matches_receipt_validator_expectation():
     """End-to-end regression tying the fix to the receipt validator: the
-    variant sniper_mask_mode_ecg_variant exports for a pinned K2 spec must
+    variant sniper_mask_mode_ecg_variant exports for a pinned ReusePlan spec must
     be exactly what apply_sniper_variant_receipt is told to expect, so a
     run cannot silently certify a variant the child process never ran."""
     for label, expected in (
-            ("ECG:K2_LRU_STREAMSHIELD", "lru_only"),
-            ("ECG:K2_RRIP_STREAMSHIELD", "rrip_first"),
-            ("ECG:K2_ONLINE_STREAMSHIELD", "rrip_first"),
-            ("ECG:K2_DEGREE", "degree_first")):
+            ("ECG:REUSE_PLAN_LRU_FLOWTHROUGH", "lru_only"),
+            ("ECG:REUSE_PLAN_RRIP_FLOWTHROUGH", "rrip_first"),
+            ("ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH", "rrip_first"),
+            ("ECG:REUSE_PLAN_DEGREE", "degree_first")):
         spec = roi_matrix.parse_policy_spec(label)
         args = argparse.Namespace(benchmark="bfs")
         exported = roi_matrix.sniper_mask_mode_ecg_variant(
-            args, spec.ecg_schedule_k, spec)
+            args, spec.ecg_reuse_plan_depth, spec)
         assert exported == expected, (
             f"{label} exported {exported!r}, expected the pinned "
             f"{expected!r}")

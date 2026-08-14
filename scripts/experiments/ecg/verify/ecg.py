@@ -69,32 +69,32 @@ WAY_RE = re.compile(
     r"(?: epoch2=(\d+) sched_n=(\d+))?"
 )
 HDR_RE = re.compile(r"\[EVICT L3 pol=(\S+)")
-K2_HDR_RE = re.compile(r"\[EVICT L3 .*curEpoch=(\d+)")
-K2_DELIVERY_RE = re.compile(
-    r"\[ECG-K2-(EXPECT|RECV|SIDEBAND) sim=(\w+) seq=(\d+) "
+REUSE_PLAN_HDR_RE = re.compile(r"\[EVICT L3 .*curEpoch=(\d+)")
+REUSE_PLAN_DELIVERY_RE = re.compile(
+    r"\[ECG-ReusePlan-(EXPECT|RECV|SIDEBAND) sim=(\w+) seq=(\d+) "
     r"dest=(\d+) tier=(\d+) epoch1=(\d+) epoch2=(\d+)"
     r"(?: width=(\d+))?\]")
-K2_ACCEPT_RE = re.compile(
-    r"\[ECG-K2-ACCEPT sim=gem5 seq=(\d+) "
+REUSE_PLAN_ACCEPT_RE = re.compile(
+    r"\[ECG-ReuseBind-ACCEPT sim=gem5 seq=(\d+) "
     r"request_seq=(\d+) request_dest=(\d+) fill_dest=(\d+) "
     r"source=(request|mailbox) "
     r"tier=(\d+) epoch1=(\d+) epoch2=(\d+) current=(\d+) "
     r"context=(\d+) (?:property_elem_bytes|width)=(\d+)\]")
-K2_REQUEST_RE = re.compile(
-    r"\[ECG-K2-REQUEST sim=gem5 seq=(\d+) request_seq=(\d+) "
+REUSE_PLAN_REQUEST_RE = re.compile(
+    r"\[ECG-ReuseBind-REQUEST sim=gem5 seq=(\d+) request_seq=(\d+) "
     r"dest=(\d+) tier=(\d+) epoch1=(\d+) epoch2=(\d+) "
     r"current=(\d+) context=(\d+)\]")
-K2_FUSED_RECV_RE = re.compile(
-    r"\[ECG-K2-FUSED-RECV sim=sniper seq=(\d+) src=(\d+) "
+REUSE_PLAN_FUSED_RECV_RE = re.compile(
+    r"\[ECG-ReusePlan-FUSED-RECV sim=sniper seq=(\d+) src=(\d+) "
     r"line=(\d+) addr_line=0x([0-9a-fA-F]+) vpl=(\d+) "
     r"index=(\d+) begin=(\d+) end=(\d+) "
     r"dest=(\d+) tier=(\d+) epoch1=(\d+) epoch2=(\d+)\]")
-K2_BIND_CONSUME_RE = re.compile(
-    r"\[ECG-K2-BIND-CONSUME sim=sniper seq=(\d+) core=(\d+) "
+REUSE_PLAN_BIND_CONSUME_RE = re.compile(
+    r"\[ECG-ReusePlan-BIND-CONSUME sim=sniper seq=(\d+) core=(\d+) "
     r"bound=0x([0-9a-fA-F]+) line=0x([0-9a-fA-F]+) size=(\d+) "
     r"current=(\d+) context=(\d+)\]")
-K2_FUSED_VALID_RE = re.compile(
-    r"\[ECG-K2-FUSED-VALID count=(\d+) bad=(\d+)\]")
+REUSE_PLAN_FUSED_VALID_RE = re.compile(
+    r"\[ECG-ReusePlan-FUSED-VALID count=(\d+) bad=(\d+)\]")
 VIC_RE = re.compile(r"-> victim=way(\d+)(?: reason=(.*))?")
 
 
@@ -191,20 +191,22 @@ def run_gem5_isa_modes(receipt_dir=None):
     normal_process_pass = (
         atomic_runs[-1]["exit_code"] == 0 and
         atomic_runs[-1]["timed_out"] is False)
-    stream_load_pass = "LOAD2/K2" in normal and "stream=" in normal
-    compact_stream_k2m_pass = (
-        "K2-C-SS-MLOAD" in normal and
+    plan_flow_load_pass = "PLAN/FLOW record=" in normal and "stream=" in normal
+    compact_stream_reuse_bind_pass = (
+        "ReuseBind-Compact-Flow" in normal and
         "canonical=0x3a004700000025" in normal)
-    weighted_load_pass = "WLOAD2/K2" in normal and "stream=" in normal
-    masked_pload_pass = (
-        "K2-PLOAD" in normal and "K2-WPLOAD" in normal)
-    mask_only_pass = all(marker in normal for marker in (
-        "K2-M-U32", "K2-M-U32-HIGH", "K2-M-S32", "K2-M-F32",
+    weighted_load_pass = (
+        "PLAN/FLOW weighted sidecar=" in normal and "stream=" in normal)
+    indexed_bind_pass = (
+        "ReuseBind-Indexed-U32" in normal and "ReuseBind-Indexed-CW24" in normal)
+    computed_address_pass = all(marker in normal for marker in (
+        "ReuseBind-U32", "ReuseBind-U32-HIGH", "ReuseBind-S32", "ReuseBind-F32",
         "mrd=0x123456789abcdef0", "mrd=0x76543210"))
     normal_pass = (
-        normal_process_pass and "RESULT: PASS" in normal and stream_load_pass and
-        compact_stream_k2m_pass and weighted_load_pass and
-        masked_pload_pass and mask_only_pass)
+        normal_process_pass and "RESULT: PASS" in normal and
+        plan_flow_load_pass and
+        compact_stream_reuse_bind_pass and weighted_load_pass and
+        indexed_bind_pass and computed_address_pass)
 
     graph_se = (
         ROOT / "bench" / "include" / "gem5_sim" / "configs" /
@@ -222,16 +224,16 @@ def run_gem5_isa_modes(receipt_dir=None):
             "TMPDIR": temp_dir,
             "LC_ALL": "C",
             "LANG": "C",
-            "ECG_EDGE_MASK_SCHED": "2",
+            "ECG_REUSE_PLAN_DEPTH": "2",
             "ECG_VARIANT": "epoch_first",
-            "ECG_STREAM_BYPASS": "1",
-            "ECG_STREAM_BYPASS_TRACE": "8",
-            "ECG_K2_DELIVERY_TRACE": "8",
+            "ECG_FLOWTHROUGH": "1",
+            "ECG_FLOWTHROUGH_TRACE": "8",
+            "ECG_REUSE_PLAN_DELIVERY_TRACE": "8",
             "GEM5_ECG_PRODUCER": "1",
-            "GEM5_ECG_STREAM_REQUEST_BOUND": "1",
+            "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND": "1",
             "GEM5_FORCE_ECG_PLOAD": "1",
-            "GEM5_FORCE_ECG_STREAM_LOAD2": "1",
-            "GEM5_ECG_ISA_VARIANT": "mask",
+            "GEM5_FORCE_ECG_FLOW_LOAD": "1",
+            "GEM5_ECG_ISA_VARIANT": "computed",
             "GEM5_ECG_EPOCH_REGION_INDEX": "0",
             "GEM5_GRAPHBREW_CTX": str(context),
         }
@@ -265,7 +267,7 @@ def run_gem5_isa_modes(receipt_dir=None):
     expected_payload = (37, 3, 17, 29, 11, 7)
     request_by_sequence = {}
     request_conflict = False
-    for match in K2_REQUEST_RE.finditer(o3_text):
+    for match in REUSE_PLAN_REQUEST_RE.finditer(o3_text):
         values = tuple(map(int, match.groups()))
         request_sequence = values[1]
         payload = values[2:]
@@ -277,7 +279,7 @@ def run_gem5_isa_modes(receipt_dir=None):
         if payload == expected_payload
     }
     exact_accept = False
-    for match in K2_ACCEPT_RE.finditer(o3_text):
+    for match in REUSE_PLAN_ACCEPT_RE.finditer(o3_text):
         values = match.groups()
         request_sequence = int(values[1])
         request_dest = int(values[2])
@@ -299,13 +301,13 @@ def run_gem5_isa_modes(receipt_dir=None):
             break
     compact_request_bound_pass = (
         o3_result is not None and o3_result.returncode == 0 and
-        re.search(r"K2-C-SS-MLOAD[^\n]*\[OK\]", o3_text) is not None and
+        re.search(r"ReuseBind-Compact-Flow[^\n]*\[OK\]", o3_text) is not None and
         "[test_ecg_load_modes] RESULT: PASS" in o3_text and
         "canonical=0x3a004700000025" in o3_text and
         not request_conflict and
         bool(exact_request_sequences) and exact_accept)
-    compact_request_bypass_pass = bool(re.search(
-        r"\[ECG-STREAM-BYPASS sim=gem5 [^\n]*"
+    compact_request_flowthrough_pass = bool(re.search(
+        r"\[ECG-FLOWTHROUGH sim=gem5 [^\n]*"
         r"size=4 [^\n]*source=request-flag [^\n]*allocate=0\]",
         o3_text))
 
@@ -323,32 +325,32 @@ def run_gem5_isa_modes(receipt_dir=None):
         atomic_runs[-1]["exit_code"] == 0 and
         atomic_runs[-1]["timed_out"] is False and
         re.search(
-            r"K2-C-SS-MLOAD[^\n]*\[FAIL\]",
+            r"ReuseBind-Compact-Flow[^\n]*\[FAIL\]",
             proposal_teeth) is not None and
         "[test_ecg_load_modes] RESULT: FAIL" in proposal_teeth)
     print(f"  gem5 ISA decode every (mode,width) via REAL decoder -> PASS: "
           f"{'[OK ]' if normal_pass else '[FAIL]'}")
-    print(f"  gem5 StreamShield request-bound LOAD2/K2 round-trip: "
-          f"{'[OK ]' if stream_load_pass else '[FAIL]'}")
-    print(f"  gem5 compact StreamShield decoder -> canonical K2-M mask: "
-          f"{'[OK ]' if compact_stream_k2m_pass else '[FAIL]'}")
-    print(f"  gem5 compact StreamShield request-flag bypass: "
-          f"{'[OK ]' if compact_request_bypass_pass else '[FAIL]'}")
-    print(f"  gem5 compact K2-M exact O3 Request metadata: "
+    print(f"  gem5 ReusePlan/FlowThrough record-load round-trip: "
+          f"{'[OK ]' if plan_flow_load_pass else '[FAIL]'}")
+    print(f"  gem5 compact FlowThrough decoder -> canonical ReuseBind metadata: "
+          f"{'[OK ]' if compact_stream_reuse_bind_pass else '[FAIL]'}")
+    print(f"  gem5 compact FlowThrough request-flag FlowThrough: "
+          f"{'[OK ]' if compact_request_flowthrough_pass else '[FAIL]'}")
+    print(f"  gem5 compact ReuseBind exact O3 Request metadata: "
           f"{'[OK ]' if compact_request_bound_pass else '[FAIL]'}")
-    print(f"  gem5 weighted 4B WLOAD2/K2 round-trip: "
+    print(f"  gem5 weighted 4B ReusePlan/FlowThrough round-trip: "
           f"{'[OK ]' if weighted_load_pass else '[FAIL]'}")
-    print(f"  gem5 request-bound K2 property-load round-trip: "
-          f"{'[OK ]' if masked_pload_pass else '[FAIL]'}")
-    print(f"  gem5 computed-address K2-M typed-load round-trip: "
-          f"{'[OK ]' if mask_only_pass else '[FAIL]'}")
+    print(f"  gem5 indexed ReuseBind property-load round-trip: "
+          f"{'[OK ]' if indexed_bind_pass else '[FAIL]'}")
+    print(f"  gem5 computed-address ReuseBind typed-load round-trip: "
+          f"{'[OK ]' if computed_address_pass else '[FAIL]'}")
     print(f"  gem5 ISA teeth (forced-wrong ECG_WIDTH must mis-decode -> FAIL): "
           f"{'[OK ]' if teeth_fail else '[FAIL]'}")
     print(f"  gem5 compact proposal teeth (wrong record-format CSR -> FAIL): "
           f"{'[OK ]' if proposal_format_teeth_fail else '[FAIL]'}")
     overall_pass = (
         normal_pass and compact_request_bound_pass and
-        compact_request_bypass_pass and teeth_fail and
+        compact_request_flowthrough_pass and teeth_fail and
         proposal_format_teeth_fail)
     if receipt_dir:
         receipt_path = Path(receipt_dir)
@@ -372,7 +374,7 @@ def run_gem5_isa_modes(receipt_dir=None):
             }
 
         payload = {
-            "schema": "graphbrew-ecg-k2m-decoder-probe-v1",
+            "schema": "graphbrew-ecg-reuse_bind-decoder-probe-v1",
             "created_utc": datetime.now(timezone.utc).isoformat(
                 timespec="seconds"),
             "overall_pass": overall_pass,
@@ -384,16 +386,16 @@ def run_gem5_isa_modes(receipt_dir=None):
             },
             "checks": {
                 "atomic_all_modes": normal_pass,
-                "atomic_stream_load2": stream_load_pass,
-                "atomic_compact_stream_to_k2m": compact_stream_k2m_pass,
-                "atomic_weighted_load2": weighted_load_pass,
+                "atomic_flow_load": stream_load_pass,
+                "atomic_compact_stream_to_reuse_bind": compact_stream_reuse_bind_pass,
+                "atomic_weighted_plan_load": weighted_load_pass,
                 "atomic_masked_property_load": masked_pload_pass,
-                "atomic_typed_k2m": mask_only_pass,
+                "atomic_typed_reuse_bind": computed_address_pass,
                 "atomic_wrong_width_teeth": teeth_fail,
                 "atomic_proposal_wrong_format_teeth":
                     proposal_format_teeth_fail,
                 "o3_exact_request_binding": compact_request_bound_pass,
-                "o3_request_flag_bypass": compact_request_bypass_pass,
+                "o3_request_flag_flowthrough": compact_request_flowthrough_pass,
             },
             "runs": {
                 "atomic": atomic_runs,
@@ -695,7 +697,7 @@ def verify_trace(
 
 SYNTH_BIN = ROOT / "bench" / "bin_sim" / "test_ecg_victim"
 PARITY_SRC = ROOT / "bench" / "src_sim" / "test_ecg_packed_field_parity.cc"
-PAIR_SRC = ROOT / "bench" / "src_sim" / "test_ecg_epoch_pair.cc"
+PAIR_SRC = ROOT / "bench" / "src_sim" / "test_ecg_reuse_plan.cc"
 
 
 def run_field_parity():
@@ -720,31 +722,31 @@ def run_field_parity():
     return ok
 
 
-def run_epoch_pair_unit():
-    """Build and run the shared pull/push K2 builder + wire/distance test."""
-    binp = Path("/tmp") / "verify_ecg_epoch_pair"
+def run_reuse_plan_unit():
+    """Build and run the shared pull/push ReusePlan builder + wire/distance test."""
+    binp = Path("/tmp") / "verify_ecg_reuse_plan"
     cc = subprocess.run(
         ["g++", "-O2", "-std=c++17", f"-I{ROOT}/bench/include",
          str(PAIR_SRC), "-o", str(binp)],
         capture_output=True, text=True)
     if cc.returncode != 0:
-        print(f"  [epoch-pair] FAIL: compile error\n{cc.stderr[:400]}")
+        print(f"  [ReusePlan] FAIL: compile error\n{cc.stderr[:400]}")
         return False
     p = subprocess.run([str(binp)], capture_output=True, text=True, timeout=60)
     if p.stdout.strip():
         print("  " + p.stdout.strip())
     ok = p.returncode == 0
-    print(f"  shared epoch-pair builder/wire/distance: [{'OK ' if ok else 'FAIL'}]")
+    print(f"  shared ReusePlan builder/wire/distance: [{'OK ' if ok else 'FAIL'}]")
     return ok
 
 
-def verify_k2_trace(
+def verify_reuse_plan_trace(
         name, result, ne, prefix="", coverage=None,
         expected_policy=None, require_exact_bind=False,
         require_request_bound=False):
-    """Verify Schedule-2 reached resident lines and each traced `dist` is
+    """Verify two-epoch ReusePlan reached resident lines and each traced `dist` is
     min(distance(epoch1), distance(epoch2)). Combined with verify_trace's exact
-    victim rule, this certifies the K2 adapter and eviction decision."""
+    victim rule, this certifies the ReusePlan adapter and eviction decision."""
     text, ran_ok = result
     ok = verify_trace(
         name, result, prefix=prefix, coverage=coverage,
@@ -771,7 +773,7 @@ def verify_k2_trace(
     receipt_bind_match = False
     accepted_ok = False
     for line in text.splitlines():
-        accepted_match = K2_ACCEPT_RE.search(line)
+        accepted_match = REUSE_PLAN_ACCEPT_RE.search(line)
         if accepted_match:
             groups = accepted_match.groups()
             trace_sequence = int(groups[0])
@@ -783,7 +785,7 @@ def verify_k2_trace(
                 int(groups[8]), int(groups[9]), int(groups[10]),
             )
             continue
-        request_match = K2_REQUEST_RE.search(line)
+        request_match = REUSE_PLAN_REQUEST_RE.search(line)
         if request_match:
             groups = request_match.groups()
             trace_sequence = int(groups[0])
@@ -791,7 +793,7 @@ def verify_k2_trace(
                 duplicate_request_sequences.add(trace_sequence)
             requests[trace_sequence] = tuple(map(int, groups[1:]))
             continue
-        bound_match = K2_BIND_CONSUME_RE.search(line)
+        bound_match = REUSE_PLAN_BIND_CONSUME_RE.search(line)
         if bound_match:
             groups = bound_match.groups()
             sequence = int(groups[0])
@@ -802,11 +804,11 @@ def verify_k2_trace(
                 int(groups[4]), int(groups[5]), int(groups[6]),
             )
             continue
-        validated = K2_FUSED_VALID_RE.search(line)
+        validated = REUSE_PLAN_FUSED_VALID_RE.search(line)
         if validated:
             fused_validation = tuple(map(int, validated.groups()))
             continue
-        fused = K2_FUSED_RECV_RE.search(line)
+        fused = REUSE_PLAN_FUSED_RECV_RE.search(line)
         if fused:
             groups = fused.groups()
             receipt = (
@@ -817,7 +819,7 @@ def verify_k2_trace(
                 duplicate_fused_sequences.add(receipt[0])
             fused_receipts.append(receipt)
             continue
-        delivery = K2_DELIVERY_RE.search(line)
+        delivery = REUSE_PLAN_DELIVERY_RE.search(line)
         if delivery:
             kind, _sim, seq, dest, tier, first, second, width = (
                 delivery.groups())
@@ -836,7 +838,7 @@ def verify_k2_trace(
             elif kind == "RECV":
                 received_widths[sequence] = int(width or 4)
             continue
-        h = K2_HDR_RE.search(line)
+        h = REUSE_PLAN_HDR_RE.search(line)
         if h:
             current = int(h.group(1))
             continue
@@ -902,7 +904,7 @@ def verify_k2_trace(
         # records can target one line, so request order is not expected to match
         # the raw sideband sequence. validate_sniper_fused_receipts independently
         # checks every receipt's raw index and exact packed record against the
-        # exported K2 files; this verifier additionally pins line/dest/tier shape.
+        # exported ReusePlan files; this verifier additionally pins line/dest/tier shape.
         exact_bind_ok = receipt_bind_match if require_exact_bind else True
         delivery_ok = (
             set(expected) == required and
@@ -1036,29 +1038,29 @@ def verify_k2_trace(
         )
     live = pair_live or (delivery_ok and len(expected) == 32)
     if coverage is not None:
-        coverage["k2_ways"] = pairs
-        coverage["k2_distinct_ways"] = distinct
-        coverage["k2_distance_mismatches"] = bad
-        coverage["k2_delivery_records"] = len(expected)
-        coverage["k2_delivery_match"] = delivery_ok
-        coverage["k2_delivery_widths"] = sorted(set(expected_widths.values()))
-        coverage["k2_received_widths"] = sorted(set(received_widths.values()))
-        coverage["k2_delivery_width_match"] = (
+        coverage["reuse_plan_ways"] = pairs
+        coverage["reuse_plan_distinct_ways"] = distinct
+        coverage["reuse_plan_distance_mismatches"] = bad
+        coverage["reuse_plan_delivery_records"] = len(expected)
+        coverage["reuse_plan_delivery_match"] = delivery_ok
+        coverage["reuse_plan_delivery_widths"] = sorted(set(expected_widths.values()))
+        coverage["reuse_plan_received_widths"] = sorted(set(received_widths.values()))
+        coverage["reuse_plan_delivery_width_match"] = (
             expected_widths == received_widths)
-        coverage["k2_accept_widths"] = sorted({
+        coverage["reuse_plan_accept_widths"] = sorted({
             item[9] for item in accepted.values()
         })
-        coverage["k2_accept_sources"] = sorted({
+        coverage["reuse_plan_accept_sources"] = sorted({
             item[3] for item in accepted.values()
         })
-        coverage["k2_accept_request_sequences"] = sorted({
+        coverage["reuse_plan_accept_request_sequences"] = sorted({
             item[0] for item in accepted.values()
         })
-        coverage["k2_request_records"] = len(requests)
-        coverage["k2_request_bound_required"] = require_request_bound
-        coverage["k2_accept_valid"] = accepted_ok
-        coverage["k2_bind_consumes"] = len(bound_consumes)
-        coverage["k2_bind_consume_valid"] = (
+        coverage["reuse_bind_request_records"] = len(requests)
+        coverage["reuse_bind_request_bound_required"] = require_request_bound
+        coverage["reuse_plan_accept_valid"] = accepted_ok
+        coverage["reuse_plan_bind_consumes"] = len(bound_consumes)
+        coverage["reuse_plan_bind_consume_valid"] = (
             receipt_bind_match if require_exact_bind else
             bool(bound_consumes) and all(
                 size > 0 and (size & (size - 1)) == 0 and
@@ -1066,15 +1068,15 @@ def verify_k2_trace(
                 0 <= current < ne and context > 0
                 for (_core, bound, line, size, current, context)
                 in bound_consumes.values()))
-        coverage["k2_bind_receipt_match"] = receipt_bind_match
-        coverage["k2_exact_bind_required"] = require_exact_bind
-        coverage["k2_fused_receipts"] = len(fused_receipts)
-        coverage["k2_fused_vertices_per_line"] = sorted({
+        coverage["reuse_plan_bind_receipt_match"] = receipt_bind_match
+        coverage["reuse_plan_exact_bind_required"] = require_exact_bind
+        coverage["reuse_plan_fused_receipts"] = len(fused_receipts)
+        coverage["reuse_plan_fused_vertices_per_line"] = sorted({
             receipt[4] for receipt in fused_receipts
         })
     if bad or not live or not delivery_ok:
         ok = False
-    print(f"  {prefix}{name:14s}: K2 ways={pairs} distinct={distinct} "
+    print(f"  {prefix}{name:14s}: ReusePlan ways={pairs} distinct={distinct} "
           f"distance_mismatches={bad} delivery={len(expected)}/"
           f"{len(sideband) if sideband else len(received)}"
           f"{' match' if delivery_ok else ' MISMATCH'}   "
@@ -1082,7 +1084,7 @@ def verify_k2_trace(
     return ok and live and delivery_ok
 
 
-def verify_k2_request_accepts(
+def verify_reuse_bind_request_accepts(
         name, text, expected_width=4, expected_line_bytes=64,
         coverage=None):
     """Verify O3 request binding without assuming program-order execution.
@@ -1090,13 +1092,13 @@ def verify_k2_request_accepts(
     O3 may execute and replay custom loads out of order, so guest-side EXPECT
     sequence numbers are not a stable key. The Request sequence is: every LLC
     accept must point at an emitted request and reproduce its destination and
-    complete K2 payload on the exact filled line.
+    complete ReusePlan payload on the exact filled line.
     """
     requests = {}
     accepts = []
     duplicate_requests = set()
     for line in text.splitlines():
-        request_match = K2_REQUEST_RE.search(line)
+        request_match = REUSE_PLAN_REQUEST_RE.search(line)
         if request_match:
             groups = request_match.groups()
             request_sequence = int(groups[1])
@@ -1104,7 +1106,7 @@ def verify_k2_request_accepts(
                 duplicate_requests.add(request_sequence)
             requests[request_sequence] = tuple(map(int, groups[2:]))
             continue
-        accept_match = K2_ACCEPT_RE.search(line)
+        accept_match = REUSE_PLAN_ACCEPT_RE.search(line)
         if accept_match:
             groups = accept_match.groups()
             accepts.append((
@@ -1134,11 +1136,11 @@ def verify_k2_request_accepts(
         not duplicate_requests and bad == 0)
     if coverage is not None:
         coverage.update({
-            "k2_o3_requests": len(requests),
-            "k2_o3_accepts": len(accepts),
-            "k2_o3_request_accept_mismatches": bad,
-            "k2_o3_request_width": expected_width,
-            "k2_o3_request_line_bytes": expected_line_bytes,
+            "reuse_plan_o3_requests": len(requests),
+            "reuse_plan_o3_accepts": len(accepts),
+            "reuse_plan_o3_request_accept_mismatches": bad,
+            "reuse_plan_o3_request_width": expected_width,
+            "reuse_plan_o3_request_line_bytes": expected_line_bytes,
         })
     print(
         f"  {name}: O3 requests={len(requests)} accepts={len(accepts)} "
@@ -1257,7 +1259,7 @@ def main(argv=None):
                     help="Also verify Sniper ECG variants (guarded sg_kernel run under prlimit).")
     ap.add_argument(
         "--gem5-isa-only", action="store_true",
-        help="Run only the real RISC-V decoder plus O3 K2-M proposal probe.")
+        help="Run only the real RISC-V decoder plus O3 ReuseBind proposal probe.")
     ap.add_argument(
         "--isa-receipt-dir", default="",
         help="Persist real-decoder commands, logs, hashes, and result JSON.")
@@ -1287,8 +1289,8 @@ def main(argv=None):
     ok_all &= run_synthetic()
     print("\n-- ISA field-layout parity + drift guard (shared ecg_mode6_builder.h) --")
     ok_all &= run_field_parity()
-    print("\n-- Schedule-2 shared builder + wire/distance parity --")
-    ok_all &= run_epoch_pair_unit()
+    print("\n-- two-epoch ReusePlan shared builder + wire/distance parity --")
+    ok_all &= run_reuse_plan_unit()
     print("\n-- negative test: unknown ECG_MODE must hard-fail (not silent DBG_PRIMARY) --")
     ok_all &= verify_unknown_mode_hardfails()
     print(f"\n-- cache_sim (L3 policies, {GRAPH_LABEL}; live-trace integration) --")

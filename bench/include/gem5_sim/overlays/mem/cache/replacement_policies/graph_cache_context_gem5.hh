@@ -335,14 +335,14 @@ inline void setDecodedEcgExtractHint2(
     }
     static std::atomic<uint64_t> trace_sequence{0};
     static const uint64_t trace_limit = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return value ? static_cast<uint64_t>(std::strtoull(value, nullptr, 10)) : 0;
     }();
     const uint64_t sequence =
         trace_sequence.fetch_add(1, std::memory_order_relaxed);
     if (sequence < trace_limit) {
         std::fprintf(stderr,
-            "[ECG-K2-RECV sim=gem5 seq=%llu dest=%u tier=%u "
+            "[ECG-ReusePlan-RECV sim=gem5 seq=%llu dest=%u tier=%u "
             "epoch1=%u epoch2=%u width=%u]\n",
             (unsigned long long)sequence, real_vertex,
             static_cast<unsigned>(tier),
@@ -390,7 +390,7 @@ inline void setDecodedEcgExtractHint2Silent(
 inline void traceExpectedEcgExtractHint2(
         uint64_t packed, uint8_t width_bytes = 4) {
     static const uint64_t trace_limit = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return value
             ? static_cast<uint64_t>(std::strtoull(value, nullptr, 10))
             : 0;
@@ -403,7 +403,7 @@ inline void traceExpectedEcgExtractHint2(
     if (sequence >= trace_limit) return;
 
     std::fprintf(stderr,
-        "[ECG-K2-EXPECT sim=gem5 seq=%llu dest=%u tier=%u "
+        "[ECG-ReusePlan-EXPECT sim=gem5 seq=%llu dest=%u tier=%u "
         "epoch1=%u epoch2=%u width=%u]\n",
         (unsigned long long)sequence,
         static_cast<uint32_t>(packed),
@@ -415,7 +415,7 @@ inline void traceExpectedEcgExtractHint2(
 
 inline void traceExpectedCompactWeightedEcgHint2(uint64_t packed) {
     static const uint64_t trace_limit = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return value
             ? static_cast<uint64_t>(std::strtoull(value, nullptr, 10))
             : 0;
@@ -428,7 +428,7 @@ inline void traceExpectedCompactWeightedEcgHint2(uint64_t packed) {
     if (sequence >= trace_limit) return;
 
     std::fprintf(stderr,
-        "[ECG-K2-EXPECT sim=gem5 seq=%llu dest=%u tier=%u "
+        "[ECG-ReusePlan-EXPECT sim=gem5 seq=%llu dest=%u tier=%u "
         "epoch1=%u epoch2=%u]\n",
         (unsigned long long)sequence,
         static_cast<uint32_t>(packed) & 0x00FFFFFFu,
@@ -778,8 +778,8 @@ struct GraphTopology {
 struct GraphCacheContext {
     PropertyRegion regions[MAX_PROPERTY_REGIONS];
     uint32_t num_regions = 0;
-    uint64_t stream_bypass_base = 0;
-    uint64_t stream_bypass_upper = 0;
+    uint64_t flowthrough_base = 0;
+    uint64_t flowthrough_upper = 0;
 
     GraphTopology topology;
     MaskConfig mask_config;
@@ -818,9 +818,9 @@ struct GraphCacheContext {
         return false;
     }
 
-    bool isStreamBypassData(uint64_t addr) const {
-        return stream_bypass_base < stream_bypass_upper &&
-               addr >= stream_bypass_base && addr < stream_bypass_upper;
+    bool isFlowThroughData(uint64_t addr) const {
+        return flowthrough_base < flowthrough_upper &&
+               addr >= flowthrough_base && addr < flowthrough_upper;
     }
 
     bool isEcgEpochData(uint64_t addr) const {
@@ -931,11 +931,11 @@ struct GraphCacheContext {
         topology.num_vertices = parseJsonUint(content, "\"num_vertices\"");
         topology.num_edges = parseJsonUint(content, "\"num_edges\"");
         topology.edge_epoch_count = parseJsonUint(content, "\"edge_epoch_count\"");
-        stream_bypass_base =
-            parseJsonUint(content, "\"stream_bypass_base\"");
-        uint64_t stream_bypass_size =
-            parseJsonUint(content, "\"stream_bypass_size\"");
-        stream_bypass_upper = stream_bypass_base + stream_bypass_size;
+        flowthrough_base =
+            parseJsonUint(content, "\"flowthrough_base\"");
+        uint64_t flowthrough_size =
+            parseJsonUint(content, "\"flowthrough_size\"");
+        flowthrough_upper = flowthrough_base + flowthrough_size;
         if (topology.edge_epoch_count < 2) topology.edge_epoch_count = 2;
         topology.avg_degree = (topology.num_vertices > 0)
             ? static_cast<double>(topology.num_edges) / topology.num_vertices : 0.0;
@@ -1017,20 +1017,20 @@ private:
     }
 };
 
-inline bool isEcgStreamBypassAddress(uint64_t addr) {
-    const char* enabled = std::getenv("ECG_STREAM_BYPASS");
+inline bool isEcgFlowThroughAddress(uint64_t addr) {
+    const char* enabled = std::getenv("ECG_FLOWTHROUGH");
     if (!enabled || std::strcmp(enabled, "0") == 0) return false;
     static GraphCacheContext context;
     if (!context.loaded ||
-        context.stream_bypass_base >= context.stream_bypass_upper) {
+        context.flowthrough_base >= context.flowthrough_upper) {
         const char* path = std::getenv("GEM5_GRAPHBREW_CTX");
         if (!path || !path[0]) path = "/tmp/gem5_graphbrew_ctx.json";
         context.loaded = context.loadFromSideband(path);
     }
-    const bool match = context.loaded && context.isStreamBypassData(addr);
+    const bool match = context.loaded && context.isFlowThroughData(addr);
     static uint64_t probes = 0;
     static const uint64_t limit = []() {
-        const char* value = std::getenv("ECG_STREAM_BYPASS_TRACE");
+        const char* value = std::getenv("ECG_FLOWTHROUGH_TRACE");
         return value ? std::strtoull(value, nullptr, 10) : 0;
     }();
     if (probes++ < limit) {
@@ -1038,19 +1038,19 @@ inline bool isEcgStreamBypassAddress(uint64_t addr) {
             "[ECG-STREAM-PROBE sim=gem5 addr=%#llx base=%#llx "
             "upper=%#llx loaded=%d match=%d]\n",
             static_cast<unsigned long long>(addr),
-            static_cast<unsigned long long>(context.stream_bypass_base),
-            static_cast<unsigned long long>(context.stream_bypass_upper),
+            static_cast<unsigned long long>(context.flowthrough_base),
+            static_cast<unsigned long long>(context.flowthrough_upper),
             context.loaded ? 1 : 0, match ? 1 : 0);
     }
     static uint64_t ranged_probes = 0;
-    if (context.stream_bypass_base < context.stream_bypass_upper &&
+    if (context.flowthrough_base < context.flowthrough_upper &&
         ranged_probes++ < limit) {
         std::fprintf(stderr,
             "[ECG-STREAM-RANGED sim=gem5 addr=%#llx base=%#llx "
             "upper=%#llx match=%d]\n",
             static_cast<unsigned long long>(addr),
-            static_cast<unsigned long long>(context.stream_bypass_base),
-            static_cast<unsigned long long>(context.stream_bypass_upper),
+            static_cast<unsigned long long>(context.flowthrough_base),
+            static_cast<unsigned long long>(context.flowthrough_upper),
             match ? 1 : 0);
     }
     return match;

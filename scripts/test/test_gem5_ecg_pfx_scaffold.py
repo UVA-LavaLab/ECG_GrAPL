@@ -138,12 +138,12 @@ def test_gem5_schedule2_delivery_is_pair_aware():
     assert "(packed >> 34) & 0x7FFF" in decoder
     assert "(packed >> 49) & 0x7FFF" in decoder
     assert "setDecodedEcgExtractHint2" in decoder
-    assert "0x03: ecg_load_k2" in decoder
-    assert "0x06: ecg_mload_k2_u32" in decoder
-    assert "0x07: ecg_mload_k2_s32" in decoder
-    assert "0x08: ecg_mload_k2_u64" in decoder
-    assert "0x09: ecg_mload_k2_compact_u32" in decoder
-    assert "0x0A: ecg_mload_k2_f32" in decoder
+    assert "0x03: ecg_bind_iload_u32" in decoder
+    assert "0x06: ecg_bind_load_u32" in decoder
+    assert "0x07: ecg_bind_load_s32" in decoder
+    assert "0x08: ecg_bind_load_u64" in decoder
+    assert "0x09: ecg_bind_load_cw24" in decoder
+    assert "0x0A: ecg_bind_load_f32" in decoder
     assert "xc->setEcgLoadHint2(" in decoder
     assert "lookupDecodedEcgHint2" in context
     assert "isEcgEpochData" in context
@@ -159,23 +159,23 @@ def test_gem5_schedule2_delivery_is_pair_aware():
     assert "dd->ecg_dbg_tier < 1 || dd->ecg_dbg_tier > 3" in policy
     assert "ctx.classifyGRASP(addr, llcSize, ghf)" in policy
     assert "isa_dbg >= 1 && isa_dbg <= 3" in policy
-    assert "epochPairDistance(" in policy
-    assert policy.count("readEcgEpochPair(") >= 2
+    assert "reusePlanDistance(" in policy
+    assert policy.count("readEcgReusePlan(") >= 2
     assert policy.count(
         "!got && !requestBoundEcgProducerEnabled()") >= 2
     assert "GRAPHBREW_ECG_EXTRACT2_WORK_ID" in setup
 
     request_ext = read(
         "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/"
-        "ecg_epoch_request_ext.hh")
-    assert "attachEcgEpochPair" in request_ext
-    assert "readEcgEpochPair" in request_ext
+        "ecg_reuse_bind_request_ext.hh")
+    assert "attachEcgReusePlan" in request_ext
+    assert "readEcgReusePlan" in request_ext
     assert "epoch2_" in request_ext
     assert "epoch_count_" in request_ext
     assert "current_epoch_" in request_ext
     assert "context_id_" in request_ext
     assert "sequence_" in request_ext
-    assert "class EcgMshrState" in request_ext
+    assert "class EcgReuseBindMshrState" in request_ext
 
     exec_patch = read(
         "bench/include/gem5_sim/overlays/cpu/exec_context_ecg_producer.patch")
@@ -185,15 +185,15 @@ def test_gem5_schedule2_delivery_is_pair_aware():
         "bench/include/gem5_sim/overlays/cpu/o3/lsq_ecg_producer.patch")
     assert "setEcgLoadHint2" in exec_patch
     assert "setEcgLoadHint2" in dyn_patch
-    assert "attachEcgEpochPair" in lsq_patch
+    assert "attachEcgReusePlan" in lsq_patch
     assert "ecg_current_epoch" in lsq_patch
     assert "ecg_context_id" in lsq_patch
     assert "ecg_sequence" in lsq_patch
-    assert 'schedule_k == "2"' in graph_se
+    assert 'reuse_plan_depth == "2"' in graph_se
     assert '"GRASP_HOT_FRACTION"' in graph_se
 
 
-def test_gem5_k2_uses_architectural_epoch_context_csrs():
+def test_gem5_reuse_plan_uses_architectural_epoch_context_csrs():
     csr_patch = read(
         "bench/include/gem5_sim/overlays/arch/riscv/ecg_csr.patch")
     decoder = read(
@@ -221,7 +221,7 @@ def test_gem5_k2_uses_architectural_epoch_context_csrs():
     assert "MISCREG_ECG_RECORD_FORMAT" in decoder
     # Deliberate acknowledgement tripwire, not a completeness check. Property
     # metadata-delivery instructions read epoch/context. Placement-only record
-    # loads such as ecg_stream_load2_compact deliberately do not; K2-M owns
+    # loads such as ecg_flow_load_compact deliberately do not; ReuseBind owns
     # delivery on the subsequent property Request. The format CSR count changes
     # for compact decode instructions.
     assert decoder.count("MISCREG_ECG_CUR_EPOCH") == 18
@@ -267,7 +267,7 @@ def test_gem5_k2_uses_architectural_epoch_context_csrs():
 
 def test_schedule2_runner_selects_adaptive_variants_and_rejects_o3(monkeypatch):
     monkeypatch.delenv("ECG_VARIANT", raising=False)
-    monkeypatch.setenv("ECG_EDGE_MASK_SCHED", "2")
+    monkeypatch.setenv("ECG_REUSE_PLAN_DEPTH", "2")
     assert roi_matrix.effective_ecg_variant(
         SimpleNamespace(benchmark="pr")) == "epoch_first"
     assert roi_matrix.effective_ecg_variant(
@@ -285,10 +285,10 @@ def test_schedule2_runner_selects_adaptive_variants_and_rejects_o3(monkeypatch):
 
     runner = read("scripts/experiments/ecg/roi_matrix.py")
     graph_se = read("bench/include/gem5_sim/configs/graphbrew/graph_se.py")
-    assert "Schedule-2 O3 requires the RISC-V masked property-load" in runner
+    assert "two-epoch ReusePlan O3 requires the RISC-V masked property-load" in runner
     assert 'args.gem5_cpu_type == "O3"' in runner
-    assert "request_bound_k2" in graph_se
-    assert "Schedule-2 O3 requires the masked property-load path" in graph_se
+    assert "reuse_bind_active" in graph_se
+    assert "two-epoch ReusePlan O3 requires the masked property-load path" in graph_se
     assert "prefetcher none or STRIDE" in runner
     assert "GEM5_ECG_EPOCH_REGION_INDICES" in graph_se
     assert "GEM5_ECG_EPOCH_REGION_INDEX" in graph_se
@@ -297,7 +297,7 @@ def test_schedule2_runner_selects_adaptive_variants_and_rejects_o3(monkeypatch):
     assert "required = set(range(32))" in verifier
 
 
-def test_gem5_k2_uses_configured_epoch_count_not_packed4_cap():
+def test_gem5_reuse_plan_uses_configured_epoch_count_not_packed4_cap():
     for path in (
         "bench/src_gem5/pr.cc",
         "bench/src_gem5/bfs.cc",
@@ -307,16 +307,16 @@ def test_gem5_k2_uses_configured_epoch_count_not_packed4_cap():
     ):
         text = read(path)
         assert 'gem5_env_int_clamped("ECG_EDGE_MASK_EPOCHS"' in text
-        assert "ecg_sched_k != 2" in text
+        assert "ecg_reuse_plan_depth != 2" in text
         assert "requested_epoch_count" in text
     pr = read("bench/src_gem5/pr.cc")
-    assert "Schedule-2 record ON" in pr
-    assert "buildInEdgeEpochPairRecords" in pr
+    assert "two-epoch ReusePlan record ON" in pr
+    assert "buildInEdgeReusePlanRecords" in pr
     cache_context = read("bench/include/cache_sim/graph_cache_context.h")
-    assert 'std::getenv("ECG_EDGE_MASK_PACK") && sched_k != 2' in cache_context
+    assert 'std::getenv("ECG_EDGE_MASK_PACK") && reuse_plan_depth != 2' in cache_context
 
 
-def test_gem5_k2_mailbox_is_cleared_after_governed_load():
+def test_gem5_reuse_plan_mailbox_is_cleared_after_governed_load():
     context = read(
         "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/"
         "graph_cache_context_gem5.hh")
@@ -340,7 +340,7 @@ def test_gem5_k2_mailbox_is_cleared_after_governed_load():
                 or "gem5_ecg_clear_extract2_hint()" in text), path
     runner = read("scripts/experiments/ecg/roi_matrix.py")
     assert '"prototype_instruction_delivery"' in runner
-    assert 'packed8+k2+ecg.extract2' in runner
+    assert 'packed8+reuse_plan+ecg.extract2' in runner
 
 
 def test_gem5_exports_prefetch_and_dram_traffic_metrics():
@@ -399,34 +399,34 @@ def test_epoch_extract_is_not_gated_by_prefetch_enable():
     assert "GEM5_WORK_ECG_EXTRACT_MASK" in harness
 
 
-def test_k2_property_load_clears_mailbox_without_extra_instruction():
+def test_reuse_plan_property_load_clears_mailbox_without_extra_instruction():
     decoder = read(
         "bench/include/gem5_sim/overlays/arch/riscv/isa/"
         "decoder_ecg_extract.isa")
-    k2_load = decoder.split("0x03: ecg_load_k2", 1)[1].split(
+    reuse_plan_load = decoder.split("0x03: ecg_bind_iload_u32", 1)[1].split(
         "}}, ea_code={{", 1)[0]
-    assert "Rd = Mem_uw;" in k2_load
-    assert "clearDecodedEcgExtractHint();" in k2_load
+    assert "Rd = Mem_uw;" in reuse_plan_load
+    assert "clearDecodedEcgExtractHint();" in reuse_plan_load
     assert "traceExpectedEcgExtractHint2(packed);" in decoder
 
     harness = read("bench/include/gem5_sim/gem5_harness.h")
     helper = harness.split(
-        "inline uint32_t gem5_ecg_load_k2(", 1)[1].split(
-            "inline uint32_t gem5_ecg_load_k2_compact(", 1)[0]
-    assert "gem5_trace_ecg_k2_expect" not in helper
+        "inline uint32_t gem5_ecg_bind_iload_u32(", 1)[1].split(
+            "inline uint32_t gem5_ecg_bind_iload_compact(", 1)[0]
+    assert "gem5_trace_ecg_reuse_plan_expect" not in helper
     compact_helper = harness.split(
-        "inline uint32_t gem5_ecg_load_k2_compact(", 1)[1].split(
-            "inline uint32_t gem5_ecg_load_k2_compact_traced(", 1)[0]
-    assert "gem5_trace_ecg_k2_expect" not in compact_helper
+        "inline uint32_t gem5_ecg_bind_iload_compact(", 1)[1].split(
+            "inline uint32_t gem5_ecg_bind_iload_compact_traced(", 1)[0]
+    assert "gem5_trace_ecg_reuse_plan_expect" not in compact_helper
 
     for kernel in ("bfs", "sssp", "bc", "cc"):
         source = read(f"bench/src_gem5/{kernel}.cc")
-        for block in source.split("if (ecg_k2_pload_on) {")[1:]:
+        for block in source.split("if (ecg_bind_iload_on) {")[1:]:
             canonical = block.split("} else {", 1)[0]
             assert "GEM5_ECG_CLEAR_EXTRACT2_HINT" not in canonical, kernel
 
     pr = read("bench/src_gem5/pr.cc")
-    canonical_pr = pr.split("if (ecg_k2_pload_on) {", 1)[1].split(
+    canonical_pr = pr.split("if (ecg_bind_iload_on) {", 1)[1].split(
         "continue;", 1)[0]
     assert "GEM5_ECG_CLEAR_EXTRACT2_HINT" not in canonical_pr
     assert "gem5_ecg_clear_extract2_hint" not in canonical_pr
@@ -434,7 +434,7 @@ def test_k2_property_load_clears_mailbox_without_extra_instruction():
             or "gem5_ecg_clear_extract2_hint()" in pr)
 
 
-def test_k2_mask_only_variant_is_distinct_from_indexed_load():
+def test_reuse_plan_computed_address_variant_is_distinct_from_indexed_load():
     harness = read("bench/include/gem5_sim/gem5_harness.h")
     runner = read("scripts/experiments/ecg/roi_matrix.py")
     decoder = read(
@@ -443,34 +443,34 @@ def test_k2_mask_only_variant_is_distinct_from_indexed_load():
     assert "GEM5_ECG_ISA_VARIANT" in harness
     assert '"ecg_isa_variant"' in runner
     assert 'env["GEM5_ECG_ISA_VARIANT"] = args.ecg_isa_variant' in runner
-    assert "SNIPER_K2_TRANSPORT_MATCHED" in runner
-    assert "matched-k2m-sideband-model" in runner
-    assert '"prototype_mask_only_load"' in runner
-    assert "architectural compact StreamShield record load" in runner
+    assert "SNIPER_REUSE_PLAN_TRANSPORT_MATCHED" in runner
+    assert "matched-reuse_bind-sideband-model" in runner
+    assert '"prototype_computed_address_load"' in runner
+    assert "architectural compact FlowThrough record load" in runner
     assert "request-bound property load with per-event tracing disabled" in (
         runner)
-    assert '"architectural_compact_k2m_streamshield"' in runner
+    assert '"architectural_compact_reuse_bind_flowthrough"' in runner
     assert 'row["gem5_ecg_epoch_channel"]' not in runner
     assert 'base["gem5_ecg_epoch_channel"]' in runner
-    assert "transport.schedule_k == 2" in runner
-    assert 'std::strcmp(value, "mask") == 0' in harness
+    assert "transport.reuse_plan_depth == 2" in runner
+    assert 'std::strcmp(value, "computed") == 0' in harness
     assert '".insn r 0x0b, 0x2, 0x18' in harness
     assert '".insn r 0x0b, 0x2, 0x1c' in harness
     assert '".insn r 0x0b, 0x2, 0x20' in harness
     assert '".insn r 0x0b, 0x2, 0x24' in harness
     assert '".insn r 0x0b, 0x2, 0x28' in harness
 
-    u32 = decoder.split("0x06: ecg_mload_k2_u32", 1)[1].split(
-        "// 0x07 K2-M S32.D32", 1)[0]
-    s32 = decoder.split("0x07: ecg_mload_k2_s32", 1)[1].split(
-        "// 0x08 K2-M U64.D32", 1)[0]
-    u64 = decoder.split("0x08: ecg_mload_k2_u64", 1)[1].split(
-        "// 0x09 K2-M U32.CW24", 1)[0]
+    u32 = decoder.split("0x06: ecg_bind_load_u32", 1)[1].split(
+        "// 0x07 ReuseBind S32.D32", 1)[0]
+    s32 = decoder.split("0x07: ecg_bind_load_s32", 1)[1].split(
+        "// 0x08 ReuseBind U64.D32", 1)[0]
+    u64 = decoder.split("0x08: ecg_bind_load_u64", 1)[1].split(
+        "// 0x09 ReuseBind U32.CW24", 1)[0]
     compact = decoder.split(
-        "0x09: ecg_mload_k2_compact_u32", 1)[1].split(
-            "// 0x0A K2-M F32.D32", 1)[0]
-    f32 = decoder.split("0x0A: ecg_mload_k2_f32", 1)[1].split(
-        "// 0x0B K2-C", 1)[0]
+        "0x09: ecg_bind_load_cw24", 1)[1].split(
+            "// 0x0A ReuseBind F32.D32", 1)[0]
+    f32 = decoder.split("0x0A: ecg_bind_load_f32", 1)[1].split(
+        "// 0x0B ReusePlan-Compact", 1)[0]
     for block in (u32, s32, u64, compact, f32):
         assert "EA = rvZext(Rs1);" in block
         assert "Rs1 +" not in block
@@ -484,7 +484,7 @@ def test_k2_mask_only_variant_is_distinct_from_indexed_load():
     assert "Rd =" not in f32
 
     fused_compact = decoder.split(
-        "0x0: ecg_load_k2_compact", 1)[1].split(
+        "0x0: ecg_bind_iload_compact", 1)[1].split(
             "\n                }", 1)[0]
     assert "MISCREG_ECG_RECORD_FORMAT" in fused_compact
     assert "id_bits + 2 + 2 * epoch_bits > 32" in fused_compact
@@ -493,25 +493,25 @@ def test_k2_mask_only_variant_is_distinct_from_indexed_load():
     assert '".insn r 0x0b, 0x2, 0x2c' in harness
 
     expected_helpers = {
-        "pr": ("gem5_ecg_mload_k2_f32",),
-        "bfs": ("gem5_ecg_mload_k2_s32",),
+        "pr": ("gem5_ecg_bind_load_f32",),
+        "bfs": ("gem5_ecg_bind_load_s32",),
         "sssp": (
-            "gem5_ecg_mload_k2_s32",
-            "gem5_ecg_mload_k2_compact_u32",
+            "gem5_ecg_bind_load_s32",
+            "gem5_ecg_bind_load_cw24",
         ),
         "bc": (
-            "gem5_ecg_mload_k2_s32",
-            "gem5_ecg_mload_k2_u64",
+            "gem5_ecg_bind_load_s32",
+            "gem5_ecg_bind_load_u64",
         ),
-        "cc": ("gem5_ecg_mload_k2_s32",),
+        "cc": ("gem5_ecg_bind_load_s32",),
     }
     for kernel, helpers in expected_helpers.items():
         source = read(f"bench/src_gem5/{kernel}.cc")
-        assert "gem5_ecg_k2_mask_only_enabled()" in source
+        assert "gem5_ecg_bind_computed_address_enabled()" in source
         for helper in helpers:
             assert helper in source
-        assert "ECG_K2_MLOAD" in source
-        assert "ECG_K2_ILOAD" in source
+        assert "ECG_REUSE_BIND_LOAD" in source
+        assert "ECG_REUSE_BIND_ILOAD" in source
 
 
 def test_riscv_gem5_build_unswitches_runtime_policy_loops():
@@ -542,24 +542,24 @@ def test_fused_compact_load_is_architectural_and_fail_closed():
     assert 'asm volatile ("csrw 0x802, %0"' in harness
     assert '".insn r 0x0b, 0x2, 0x2c' in harness
     assert "MISCREG_ECG_RECORD_FORMAT" in decoder
-    assert "ecg_load_k2_compact" in decoder
+    assert "ecg_bind_iload_compact" in decoder
     compact_decode = decoder.split(
         "0x0B: decode ECG_WIDTH", 1)[1].split(
             "\n                }", 1)[0]
-    assert "0x0: ecg_load_k2_compact" in compact_decode
+    assert "0x0: ecg_bind_iload_compact" in compact_decode
     assert "0x1:" not in compact_decode
 
     assert "GEM5_ECG_COMPACT_FUSED" in graph_se
     assert "GEM5_ECG_COMPACT_FUSED=1 but" in guest
     assert "std::abort()" in guest
-    assert "[ECG_K2_ILOAD_C]" in guest
+    assert "[ECG_REUSE_BIND_ILOAD_C]" in guest
 
     # Tracing is a separate helper selected outside the loop; the untraced hot
     # path must not pay a disabled-trace guard on every edge.
     untraced = harness.split(
-        "inline uint32_t gem5_ecg_load_k2_compact(", 1)[1].split(
-            "inline uint32_t gem5_ecg_load_k2_compact_traced(", 1)[0]
-    assert "gem5_trace_ecg_k2_expect" not in untraced
+        "inline uint32_t gem5_ecg_bind_iload_compact(", 1)[1].split(
+            "inline uint32_t gem5_ecg_bind_iload_compact_traced(", 1)[0]
+    assert "gem5_trace_ecg_reuse_plan_expect" not in untraced
 
 
 def test_fused_compact_cli_rejects_unsupported_kernels():
@@ -578,14 +578,14 @@ def test_fused_compact_cli_rejects_unsupported_kernels():
 def test_fused_compact_row_is_attested_from_runtime_not_requested_env():
     active = {"timing_valid_for_speedup": "1"}
     assert roi_matrix.apply_gem5_compact_fused_receipt(
-        active, "[ECG_K2_ILOAD_C] PR ACTIVE", requested=True)
+        active, "[ECG_REUSE_BIND_ILOAD_C] PR ACTIVE", requested=True)
     assert active["gem5_compact_fused_active"] == 1
-    assert active["gem5_ecg_delivery"] == "ecg.k2.iload.compact"
+    assert active["gem5_ecg_delivery"] == "ecg.bind.iload.compact"
     assert "error" not in active
 
     missing = {"timing_valid_for_speedup": "1"}
     assert not roi_matrix.apply_gem5_compact_fused_receipt(
-        missing, "[ECG_K2_ILOAD] PR ACTIVE", requested=True)
+        missing, "[ECG_REUSE_BIND_ILOAD] PR ACTIVE", requested=True)
     assert missing["gem5_compact_fused_active"] == 0
     assert missing["status"] == "error"
     assert missing["timing_valid_for_speedup"] == "0"
@@ -597,7 +597,7 @@ def test_fused_compact_row_is_attested_from_runtime_not_requested_env():
     assert "error" not in baseline
 
 
-def test_proposal_compact_k2m_streamshield_is_fail_closed():
+def test_proposal_compact_reuse_bind_flowthrough_is_fail_closed():
     harness = read("bench/include/gem5_sim/gem5_harness.h")
     guest = read("bench/src_gem5/pr.cc")
     decoder = read(
@@ -607,43 +607,43 @@ def test_proposal_compact_k2m_streamshield_is_fail_closed():
         "bench/include/gem5_sim/configs/graphbrew/graph_se.py")
 
     stream_block = decoder.split(
-        "0x7: ecg_stream_load2_compact", 1)[1].split(
+        "0x7: ecg_flow_load_compact", 1)[1].split(
             "\n            }", 1)[0]
     assert "Mem_uw" in stream_block
     assert "MISCREG_ECG_RECORD_FORMAT" in stream_block
-    assert "mem_flags=[ECG_STREAM_BYPASS]" in stream_block
+    assert "mem_flags=[ECG_FLOWTHROUGH]" in stream_block
     assert "setDecodedEcgExtractHint" not in stream_block
     assert '".insn i 0x0b, 0x7' in harness
-    assert "gem5_ecg_stream_load2_compact_instruction" in guest
-    assert "gem5_ecg_mload_k2_f32" in guest
-    assert "wide_k2m_streamshield_on" in guest
+    assert "gem5_ecg_flow_load_compact_instruction" in guest
+    assert "gem5_ecg_bind_load_f32" in guest
+    assert "wide_reuse_bind_flowthrough_on" in guest
     assert "in_edge_pair32_flat.data()" in guest
     assert "in_edge_pair32_flat.size() * sizeof(uint32_t)" in guest
-    assert "GEM5_ECG_COMPACT_K2M_SS=1 but" in guest
-    assert "[ECG_K2_MLOAD_C_SS]" in guest
-    assert "GEM5_ECG_COMPACT_K2M_SS" in graph_se
+    assert "GEM5_ECG_COMPACT_REUSE_BIND_FLOW=1 but" in guest
+    assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" in guest
+    assert "GEM5_ECG_COMPACT_REUSE_BIND_FLOW" in graph_se
 
     active = {"timing_valid_for_speedup": "1"}
-    assert roi_matrix.apply_gem5_compact_k2m_streamshield_receipt(
+    assert roi_matrix.apply_gem5_compact_reuse_bind_flowthrough_receipt(
         active,
-        "[ECG_K2_MLOAD_C_SS] PR ACTIVE\n"
-        "[ECG-STREAM-BYPASS sim=gem5 cache=l3cache addr=0x40 "
+        "[ECG_REUSE_BIND_LOAD_C_FLOW] PR ACTIVE\n"
+        "[ECG-FLOWTHROUGH sim=gem5 cache=l3cache addr=0x40 "
         "vaddr=0x40 size=4 source=request-flag allocate=0]",
         requested=True)
     assert active["proposal_path_active"] == 1
-    assert active["gem5_stream_bypass_request_flag_events"] == 1
-    assert active["gem5_stream_bypass_request_flag_size4_events"] == 1
-    assert active["gem5_stream_bypass_request_flag_bad_size_events"] == 0
-    assert active["gem5_stream_bypass_all_events"] == 1
-    assert active["gem5_stream_bypass_range_events"] == 0
+    assert active["gem5_flowthrough_request_flag_events"] == 1
+    assert active["gem5_flowthrough_request_flag_size4_events"] == 1
+    assert active["gem5_flowthrough_request_flag_bad_size_events"] == 0
+    assert active["gem5_flowthrough_all_events"] == 1
+    assert active["gem5_flowthrough_range_events"] == 0
     assert active["gem5_ecg_delivery"] == (
-        "ecg.stream.load2.compact+ecg.k2.mload.f32")
+        "ecg.flow.load.compact+ecg.bind.load.f32")
 
     performance = {"timing_valid_for_speedup": "1"}
-    assert roi_matrix.apply_gem5_compact_k2m_streamshield_receipt(
+    assert roi_matrix.apply_gem5_compact_reuse_bind_flowthrough_receipt(
         performance,
-        "[ECG_K2_MLOAD_C_SS] PR compact StreamShield record load "
-        "+ computed-address masked property load ACTIVE "
+        "[ECG_REUSE_BIND_LOAD_C_FLOW] PR compact FlowThrough record load "
+        "+ computed-address computed-address property load ACTIVE "
         "(id_bits=16 epoch_bits=5)\n",
         requested=True,
         require_trace_receipts=False,
@@ -655,35 +655,35 @@ def test_proposal_compact_k2m_streamshield_is_fail_closed():
     assert "error" not in performance
 
     missing = {"timing_valid_for_speedup": "1"}
-    assert not roi_matrix.apply_gem5_compact_k2m_streamshield_receipt(
-        missing, "[ECG_K2_MLOAD] PR ACTIVE", requested=True)
+    assert not roi_matrix.apply_gem5_compact_reuse_bind_flowthrough_receipt(
+        missing, "[ECG_REUSE_BIND_LOAD] PR ACTIVE", requested=True)
     assert missing["status"] == "error"
     assert missing["timing_valid_for_speedup"] == "0"
 
-    no_bypass = {"timing_valid_for_speedup": "1"}
-    assert roi_matrix.apply_gem5_compact_k2m_streamshield_receipt(
-        no_bypass, "[ECG_K2_MLOAD_C_SS] PR ACTIVE", requested=True)
-    assert no_bypass["status"] == "error"
-    assert "request-flag StreamShield" in no_bypass["error"]
+    missing_flowthrough = {"timing_valid_for_speedup": "1"}
+    assert roi_matrix.apply_gem5_compact_reuse_bind_flowthrough_receipt(
+        missing_flowthrough, "[ECG_REUSE_BIND_LOAD_C_FLOW] PR ACTIVE", requested=True)
+    assert missing_flowthrough["status"] == "error"
+    assert "request-flag FlowThrough" in missing_flowthrough["error"]
 
     wrong_width = {"timing_valid_for_speedup": "1"}
-    assert roi_matrix.apply_gem5_compact_k2m_streamshield_receipt(
+    assert roi_matrix.apply_gem5_compact_reuse_bind_flowthrough_receipt(
         wrong_width,
-        "[ECG_K2_MLOAD_C_SS] PR ACTIVE\n"
-        "[ECG-STREAM-BYPASS sim=gem5 cache=l3cache addr=0x40 "
+        "[ECG_REUSE_BIND_LOAD_C_FLOW] PR ACTIVE\n"
+        "[ECG-FLOWTHROUGH sim=gem5 cache=l3cache addr=0x40 "
         "vaddr=0x40 size=8 source=request-flag allocate=0]",
         requested=True)
     assert wrong_width["status"] == "error"
     assert "4-byte request-flag record requests" in wrong_width["error"]
 
 
-def test_proposal_compact_k2m_streamshield_cli_guards():
+def test_proposal_compact_reuse_bind_flowthrough_cli_guards():
     wrong_kernel = subprocess.run(
         [
             sys.executable, str(ROI_MATRIX_PATH),
             "--suite", "gem5", "--benchmark", "bfs",
-            "--ecg-isa-variant", "mask",
-            "--gem5-compact-k2m-streamshield", "--dry-run",
+            "--ecg-isa-variant", "computed",
+            "--gem5-compact-reuse-bind-flowthrough", "--dry-run",
         ],
         cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=60)
     assert wrong_kernel.returncode != 0
@@ -695,21 +695,21 @@ def test_proposal_compact_k2m_streamshield_cli_guards():
             sys.executable, str(ROI_MATRIX_PATH),
             "--suite", "gem5", "--benchmark", "pr",
             "--ecg-isa-variant", "indexed",
-            "--gem5-compact-k2m-streamshield", "--dry-run",
+            "--gem5-compact-reuse-bind-flowthrough", "--dry-run",
         ],
         cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=60)
     assert wrong_isa.returncode != 0
-    assert "requires --ecg-isa-variant mask" in (
+    assert "requires --ecg-isa-variant computed" in (
         wrong_isa.stdout + wrong_isa.stderr)
 
     wrong_policy = subprocess.run(
         [
             sys.executable, str(ROI_MATRIX_PATH),
             "--suite", "gem5", "--benchmark", "pr",
-            "--ecg-isa-variant", "mask",
+            "--ecg-isa-variant", "computed",
             "--gem5-cpu-type", "O3",
-            "--policies", "ECG:K1_STREAMSHIELD",
-            "--gem5-compact-k2m-streamshield", "--dry-run",
+            "--policies", "ECG:REUSE_PLAN_1_FLOWTHROUGH",
+            "--gem5-compact-reuse-bind-flowthrough", "--dry-run",
         ],
         cwd=PROJECT_ROOT,
         env={
@@ -721,16 +721,16 @@ def test_proposal_compact_k2m_streamshield_cli_guards():
         },
         capture_output=True, text=True, timeout=60)
     assert wrong_policy.returncode != 0
-    assert "requires at least one Schedule-2 ECG StreamShield policy" in (
+    assert "requires at least one two-epoch ReusePlan ECG FlowThrough policy" in (
         wrong_policy.stdout + wrong_policy.stderr)
 
     timing_cpu = subprocess.run(
         [
             sys.executable, str(ROI_MATRIX_PATH),
             "--suite", "gem5", "--benchmark", "pr",
-            "--ecg-isa-variant", "mask",
+            "--ecg-isa-variant", "computed",
             "--gem5-cpu-type", "timing",
-            "--gem5-compact-k2m-streamshield", "--dry-run",
+            "--gem5-compact-reuse-bind-flowthrough", "--dry-run",
         ],
         cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=60)
     assert timing_cpu.returncode != 0
@@ -741,10 +741,10 @@ def test_proposal_compact_k2m_streamshield_cli_guards():
         [
             sys.executable, str(ROI_MATRIX_PATH),
             "--suite", "gem5", "--benchmark", "pr",
-            "--ecg-isa-variant", "mask",
+            "--ecg-isa-variant", "computed",
             "--gem5-cpu-type", "O3",
             "--line-size", "128",
-            "--gem5-compact-k2m-streamshield", "--dry-run",
+            "--gem5-compact-reuse-bind-flowthrough", "--dry-run",
         ],
         cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=60)
     assert wrong_line.returncode != 0
@@ -760,22 +760,22 @@ def test_proposal_compact_k2m_streamshield_cli_guards():
     }
     performance_args = roi_matrix.parse_args([
         "--suite", "gem5", "--benchmark", "pr",
-        "--ecg-isa-variant", "mask",
+        "--ecg-isa-variant", "computed",
         "--gem5-cpu-type", "O3",
-        "--policies", "LRU", "ECG:K2_STREAMSHIELD",
-        "--gem5-compact-k2m-performance", "--dry-run",
+        "--policies", "LRU", "ECG:REUSE_PLAN_FLOWTHROUGH",
+        "--gem5-compact-reuse-bind-performance", "--dry-run",
     ])
-    assert performance_args.gem5_compact_k2m_performance is True
+    assert performance_args.gem5_compact_reuse_bind_performance is True
 
     mixed_modes = subprocess.run(
         [
             sys.executable, str(ROI_MATRIX_PATH),
             "--suite", "gem5", "--benchmark", "pr",
-            "--ecg-isa-variant", "mask",
+            "--ecg-isa-variant", "computed",
             "--gem5-cpu-type", "O3",
-            "--policies", "LRU", "ECG:K2_STREAMSHIELD",
-            "--gem5-compact-k2m-streamshield",
-            "--gem5-compact-k2m-performance", "--dry-run",
+            "--policies", "LRU", "ECG:REUSE_PLAN_FLOWTHROUGH",
+            "--gem5-compact-reuse-bind-flowthrough",
+            "--gem5-compact-reuse-bind-performance", "--dry-run",
         ],
         cwd=PROJECT_ROOT, env=riscv_env,
         capture_output=True, text=True, timeout=60)
@@ -784,26 +784,26 @@ def test_proposal_compact_k2m_streamshield_cli_guards():
         mixed_modes.stdout + mixed_modes.stderr)
 
 
-def test_trace_free_k2m_does_not_override_other_timing_caveats():
+def test_trace_free_reuse_bind_does_not_override_other_timing_caveats():
     args = roi_matrix.parse_args([])
     args.benchmark = "pr"
     args.prefetcher = "ECG_PFX"
     args.ecg_pfx_delivery = "instruction"
-    args.ecg_isa_variant = "mask"
-    args.gem5_compact_k2m_performance = True
+    args.ecg_isa_variant = "computed"
+    args.gem5_compact_reuse_bind_performance = True
     args.has_lru_baseline = True
     row = roi_matrix.base_row(
         "gem5", args,
-        roi_matrix.parse_policy_spec("ECG:K2_STREAMSHIELD"),
+        roi_matrix.parse_policy_spec("ECG:REUSE_PLAN_FLOWTHROUGH"),
         "32kB")
     assert row["timing_valid_for_speedup"] == "0"
     assert row["timing_model"] == "prototype_instruction_delivery"
 
 
-def test_trace_free_k2m_scrubs_all_gem5_event_traces():
+def test_trace_free_reuse_bind_scrubs_all_gem5_event_traces():
     env = {
-        "ECG_K2_DELIVERY_TRACE": "2048",
-        "ECG_STREAM_BYPASS_TRACE": "2048",
+        "ECG_REUSE_PLAN_DELIVERY_TRACE": "2048",
+        "ECG_FLOWTHROUGH_TRACE": "2048",
         "GEM5_ECG_EXT_TRACE": "2048",
         "ECG_EVICT_TRACE": "2048",
         "ECG_EVICT_TRACE_ROI": "1",
@@ -815,31 +815,31 @@ def test_trace_free_k2m_scrubs_all_gem5_event_traces():
 
 def test_proposal_request_bound_receipt_matches_request_extension():
     log = "\n".join([
-        "[ECG-K2-REQUEST sim=gem5 seq=0 request_seq=17 "
+        "[ECG-ReuseBind-REQUEST sim=gem5 seq=0 request_seq=17 "
         "dest=9 tier=2 epoch1=3 epoch2=7 current=1 context=4]",
-        "[ECG-K2-ACCEPT sim=gem5 seq=0 request_seq=17 "
+        "[ECG-ReuseBind-ACCEPT sim=gem5 seq=0 request_seq=17 "
         "request_dest=9 fill_dest=9 source=request tier=2 "
         "epoch1=3 epoch2=7 current=1 context=4 "
         "property_elem_bytes=4]",
     ])
     row = {"timing_valid_for_speedup": "1"}
-    assert roi_matrix.apply_gem5_request_bound_k2_receipt(
+    assert roi_matrix.apply_gem5_reuse_bind_receipt(
         row, log, requested=True)
-    assert row["gem5_k2_exact_request_bound"] == 1
-    assert row["gem5_k2_request_bad_receipts"] == 0
+    assert row["gem5_reuse_plan_exact_bind"] == 1
+    assert row["gem5_reuse_bind_request_bad_receipts"] == 0
 
     same_line = {"timing_valid_for_speedup": "1"}
     same_line_log = log.replace(
         "dest=9 tier=2", "dest=11 tier=2").replace(
         "request_dest=9 fill_dest=9",
         "request_dest=11 fill_dest=1")
-    assert roi_matrix.apply_gem5_request_bound_k2_receipt(
+    assert roi_matrix.apply_gem5_reuse_bind_receipt(
         same_line, same_line_log, requested=True, line_bytes=64)
-    assert same_line["gem5_k2_coalesced_line_accepts"] == 1
-    assert same_line["gem5_k2_exact_vertex_accepts"] == 0
+    assert same_line["gem5_reuse_bind_coalesced_line_accepts"] == 1
+    assert same_line["gem5_reuse_bind_exact_vertex_accepts"] == 0
 
     bad = {"timing_valid_for_speedup": "1"}
-    assert not roi_matrix.apply_gem5_request_bound_k2_receipt(
+    assert not roi_matrix.apply_gem5_reuse_bind_receipt(
         bad, same_line_log.replace("fill_dest=1", "fill_dest=32"),
         requested=True)
     assert bad["status"] == "error"
@@ -847,167 +847,167 @@ def test_proposal_request_bound_receipt_matches_request_extension():
 
     discriminating_log = "\n".join([
         log,
-        "[ECG-K2-REQUEST sim=gem5 seq=1 request_seq=18 "
+        "[ECG-ReuseBind-REQUEST sim=gem5 seq=1 request_seq=18 "
         "dest=25 tier=3 epoch1=5 epoch2=9 current=2 context=4]",
-        "[ECG-K2-ACCEPT sim=gem5 seq=1 request_seq=18 "
+        "[ECG-ReuseBind-ACCEPT sim=gem5 seq=1 request_seq=18 "
         "request_dest=25 fill_dest=16 source=request tier=3 "
         "epoch1=5 epoch2=9 current=2 context=4 "
         "property_elem_bytes=4]",
     ])
     discriminating = {"timing_valid_for_speedup": "1"}
-    assert roi_matrix.apply_gem5_request_bound_k2_receipt(
+    assert roi_matrix.apply_gem5_reuse_bind_receipt(
         discriminating, discriminating_log, requested=True,
         require_discriminating=True)
-    assert discriminating["gem5_k2_payload_discriminating"] == 1
-    assert discriminating["gem5_k2_request_metadata_values"] == 2
-    assert discriminating["gem5_k2_accept_metadata_values"] == 2
-    assert discriminating["gem5_k2_request_epoch_states"] == 2
-    assert discriminating["gem5_k2_accept_epoch_states"] == 2
-    assert discriminating["gem5_k2_request_record_epoch_pairs"] == 2
-    assert discriminating["gem5_k2_accept_record_epoch_pairs"] == 2
+    assert discriminating["gem5_reuse_bind_payload_discriminating"] == 1
+    assert discriminating["gem5_reuse_bind_request_metadata_values"] == 2
+    assert discriminating["gem5_reuse_bind_accept_metadata_values"] == 2
+    assert discriminating["gem5_reuse_bind_request_epoch_states"] == 2
+    assert discriminating["gem5_reuse_bind_accept_epoch_states"] == 2
+    assert discriminating["gem5_reuse_bind_request_plan_epochs"] == 2
+    assert discriminating["gem5_reuse_bind_accept_plan_epochs"] == 2
 
     tier_only_log = "\n".join([
         log,
-        "[ECG-K2-REQUEST sim=gem5 seq=1 request_seq=18 "
+        "[ECG-ReuseBind-REQUEST sim=gem5 seq=1 request_seq=18 "
         "dest=25 tier=3 epoch1=3 epoch2=7 current=1 context=4]",
-        "[ECG-K2-ACCEPT sim=gem5 seq=1 request_seq=18 "
+        "[ECG-ReuseBind-ACCEPT sim=gem5 seq=1 request_seq=18 "
         "request_dest=25 fill_dest=16 source=request tier=3 "
         "epoch1=3 epoch2=7 current=1 context=4 "
         "property_elem_bytes=4]",
     ])
     tier_only = {"timing_valid_for_speedup": "1"}
-    assert not roi_matrix.apply_gem5_request_bound_k2_receipt(
+    assert not roi_matrix.apply_gem5_reuse_bind_receipt(
         tier_only, tier_only_log, requested=True,
         require_discriminating=True)
-    assert tier_only["gem5_k2_payload_discriminating"] == 0
-    assert tier_only["gem5_k2_accept_epoch_states"] == 1
+    assert tier_only["gem5_reuse_bind_payload_discriminating"] == 0
+    assert tier_only["gem5_reuse_bind_accept_epoch_states"] == 1
 
     current_only_log = "\n".join([
         log,
-        "[ECG-K2-REQUEST sim=gem5 seq=1 request_seq=18 "
+        "[ECG-ReuseBind-REQUEST sim=gem5 seq=1 request_seq=18 "
         "dest=25 tier=2 epoch1=3 epoch2=7 current=2 context=4]",
-        "[ECG-K2-ACCEPT sim=gem5 seq=1 request_seq=18 "
+        "[ECG-ReuseBind-ACCEPT sim=gem5 seq=1 request_seq=18 "
         "request_dest=25 fill_dest=16 source=request tier=2 "
         "epoch1=3 epoch2=7 current=2 context=4 "
         "property_elem_bytes=4]",
     ])
     current_only = {"timing_valid_for_speedup": "1"}
-    assert not roi_matrix.apply_gem5_request_bound_k2_receipt(
+    assert not roi_matrix.apply_gem5_reuse_bind_receipt(
         current_only, current_only_log, requested=True,
         require_discriminating=True)
-    assert current_only["gem5_k2_payload_discriminating"] == 0
-    assert current_only["gem5_k2_accept_epoch_states"] == 2
-    assert current_only["gem5_k2_accept_record_epoch_pairs"] == 1
+    assert current_only["gem5_reuse_bind_payload_discriminating"] == 0
+    assert current_only["gem5_reuse_bind_accept_epoch_states"] == 2
+    assert current_only["gem5_reuse_bind_accept_plan_epochs"] == 1
 
     duplicate_accept = {"timing_valid_for_speedup": "1"}
     duplicate_log = discriminating_log + "\n" + discriminating_log.splitlines()[-1]
-    assert not roi_matrix.apply_gem5_request_bound_k2_receipt(
+    assert not roi_matrix.apply_gem5_reuse_bind_receipt(
         duplicate_accept, duplicate_log, requested=True,
         require_discriminating=True)
-    assert duplicate_accept["gem5_k2_duplicate_accepts"] == 1
+    assert duplicate_accept["gem5_reuse_bind_duplicate_accepts"] == 1
 
     replay_log = "\n".join([
         log,
-        "[ECG-K2-REQUEST sim=gem5 seq=1 request_seq=17 "
+        "[ECG-ReuseBind-REQUEST sim=gem5 seq=1 request_seq=17 "
         "dest=9 tier=2 epoch1=3 epoch2=7 current=1 context=4]",
     ])
     replay = {"timing_valid_for_speedup": "1"}
-    assert roi_matrix.apply_gem5_request_bound_k2_receipt(
+    assert roi_matrix.apply_gem5_reuse_bind_receipt(
         replay, replay_log, requested=False, trace_limit=2)
-    assert replay["gem5_k2_request_trace_events"] == 2
-    assert replay["gem5_k2_request_receipts"] == 1
-    assert replay["gem5_k2_duplicate_request_receipts"] == 1
-    assert replay["gem5_k2_request_trace_max_seq"] == 1
-    assert replay["gem5_k2_delivery_trace_saturated"] == 1
+    assert replay["gem5_reuse_bind_request_trace_events"] == 2
+    assert replay["gem5_reuse_bind_request_receipts"] == 1
+    assert replay["gem5_reuse_bind_duplicate_request_receipts"] == 1
+    assert replay["gem5_reuse_bind_request_trace_max_seq"] == 1
+    assert replay["gem5_reuse_bind_trace_saturated"] == 1
 
 
 def test_proposal_run_gate_requires_every_requested_row():
     args = SimpleNamespace(
-        gem5_compact_k2m_streamshield=True,
+        gem5_compact_reuse_bind_flowthrough=True,
         dry_run=False,
         l3_sizes=["32kB"],
-        ecg_isa_variant="mask",
+        ecg_isa_variant="computed",
         benchmark="pr",
     )
     policies = [
-        roi_matrix.parse_policy_spec("ECG:K2"),
-        roi_matrix.parse_policy_spec("ECG:K2_LRU_STREAMSHIELD"),
-        roi_matrix.parse_policy_spec("ECG:K2_STREAMSHIELD"),
+        roi_matrix.parse_policy_spec("ECG:REUSE_PLAN"),
+        roi_matrix.parse_policy_spec("ECG:REUSE_PLAN_LRU_FLOWTHROUGH"),
+        roi_matrix.parse_policy_spec("ECG:REUSE_PLAN_FLOWTHROUGH"),
     ]
     good = {
-        "gem5_compact_k2m_streamshield_requested": 1,
-        "policy_label": "ECG_K2_STREAMSHIELD",
+        "gem5_compact_reuse_bind_flowthrough_requested": 1,
+        "policy_label": "ECG_REUSE_PLAN_FLOWTHROUGH",
         "status": "ok",
         "proposal_path_active": 1,
-        "gem5_k2_exact_request_bound": 1,
-        "gem5_k2_payload_discriminating": 1,
-        "gem5_k2_coalesced_line_accepts": 1,
-        "gem5_k2_nonzero_epoch_accepts": 8,
-        "gem5_stream_bypass_request_flag_size4_events": 2,
-        "gem5_stream_bypass_request_flag_bad_size_events": 0,
-        "gem5_stream_bypass_request_flag_events": 2,
-        "gem5_stream_bypass_all_events": 2,
-        "gem5_stream_bypass_range_events": 0,
-        "gem5_stream_bypass_trace_saturated": 0,
+        "gem5_reuse_plan_exact_bind": 1,
+        "gem5_reuse_bind_payload_discriminating": 1,
+        "gem5_reuse_bind_coalesced_line_accepts": 1,
+        "gem5_reuse_bind_nonzero_epoch_accepts": 8,
+        "gem5_flowthrough_request_flag_size4_events": 2,
+        "gem5_flowthrough_request_flag_bad_size_events": 0,
+        "gem5_flowthrough_request_flag_events": 2,
+        "gem5_flowthrough_all_events": 2,
+        "gem5_flowthrough_range_events": 0,
+        "gem5_flowthrough_trace_saturated": 0,
     }
-    roi_matrix.validate_gem5_compact_k2m_streamshield_rows(
+    roi_matrix.validate_gem5_compact_reuse_bind_flowthrough_rows(
         [
             {
-                **good, "policy_label": "ECG_K2_LRU_STREAMSHIELD",
+                **good, "policy_label": "ECG_REUSE_PLAN_LRU_FLOWTHROUGH",
                 "l3_size": "32kB",
             },
             {**good, "l3_size": "32kB"},
-            {"gem5_compact_k2m_streamshield_requested": 0, "status": "ok"},
+            {"gem5_compact_reuse_bind_flowthrough_requested": 0, "status": "ok"},
         ],
         args, policies)
 
-    with pytest.raises(SystemExit, match="proposal compact K2-M"):
-        roi_matrix.validate_gem5_compact_k2m_streamshield_rows(
+    with pytest.raises(SystemExit, match="proposal compact ReuseBind"):
+        roi_matrix.validate_gem5_compact_reuse_bind_flowthrough_rows(
             [
                 {
-                    **good, "policy_label": "ECG_K2_LRU_STREAMSHIELD",
+                    **good, "policy_label": "ECG_REUSE_PLAN_LRU_FLOWTHROUGH",
                     "l3_size": "32kB",
                 },
                 {
                     **good, "l3_size": "32kB",
-                    "gem5_k2_exact_request_bound": 0,
+                    "gem5_reuse_plan_exact_bind": 0,
                 },
             ],
             args, policies)
-    with pytest.raises(SystemExit, match="proposal compact K2-M"):
-        roi_matrix.validate_gem5_compact_k2m_streamshield_rows(
+    with pytest.raises(SystemExit, match="proposal compact ReuseBind"):
+        roi_matrix.validate_gem5_compact_reuse_bind_flowthrough_rows(
             [
                 {
-                    **good, "policy_label": "ECG_K2_LRU_STREAMSHIELD",
+                    **good, "policy_label": "ECG_REUSE_PLAN_LRU_FLOWTHROUGH",
                     "l3_size": "32kB",
-                    "gem5_k2_coalesced_line_accepts": 0,
+                    "gem5_reuse_bind_coalesced_line_accepts": 0,
                 },
                 {**good, "l3_size": "32kB"},
             ],
             args, policies)
     with pytest.raises(SystemExit, match="observed=.*32kB"):
-        roi_matrix.validate_gem5_compact_k2m_streamshield_rows(
+        roi_matrix.validate_gem5_compact_reuse_bind_flowthrough_rows(
             [{**good, "l3_size": "32kB"}], args, policies)
-    with pytest.raises(SystemExit, match="proposal compact K2-M"):
-        roi_matrix.validate_gem5_compact_k2m_streamshield_rows(
+    with pytest.raises(SystemExit, match="proposal compact ReuseBind"):
+        roi_matrix.validate_gem5_compact_reuse_bind_flowthrough_rows(
             [
                 {
-                    **good, "policy_label": "ECG_K2_LRU_STREAMSHIELD",
+                    **good, "policy_label": "ECG_REUSE_PLAN_LRU_FLOWTHROUGH",
                     "l3_size": "32kB",
-                    "gem5_stream_bypass_trace_saturated": 1,
+                    "gem5_flowthrough_trace_saturated": 1,
                 },
                 {**good, "l3_size": "32kB"},
             ],
             args, policies)
 
 
-def test_real_decoder_probe_covers_compact_streamshield_k2m_request():
+def test_real_decoder_probe_covers_compact_flowthrough_reuse_bind_request():
     probe = read("bench/src_gem5/test_ecg_load_modes.cc")
     verifier = read("scripts/experiments/ecg/verify/ecg.py")
 
-    assert "gem5_ecg_stream_load2_compact_instruction" in probe
-    assert "gem5_ecg_mload_k2_f32" in probe
-    assert "K2-C-SS-MLOAD" in probe
+    assert "gem5_ecg_flow_load_compact_instruction" in probe
+    assert "gem5_ecg_bind_load_f32" in probe
+    assert "ReuseBind-Compact-Flow" in probe
     assert "gem5_ecg_write_record_format_csr" in probe
     assert "g_context_retry_lines[2048 * 64]" in probe
     assert "kProposalValueBits = 0x41234567u" in probe
@@ -1018,14 +1018,14 @@ def test_real_decoder_probe_covers_compact_streamshield_k2m_request():
 
     assert '"--cpu-type", "O3"' in verifier
     assert '"GEM5_ECG_PRODUCER": "1"' in verifier
-    assert '"GEM5_ECG_STREAM_REQUEST_BOUND": "1"' in verifier
+    assert '"GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND": "1"' in verifier
     assert 'ROOT / "bench" / "include" / "gem5_sim" / "configs"' in verifier
     assert '"PATH": "/usr/bin:/bin"' in verifier
     assert "expected_payload = (37, 3, 17, 29, 11, 7)" in verifier
     assert "compact_request_bound_pass" in verifier
-    assert "compact_request_bypass_pass" in verifier
+    assert "compact_request_flowthrough_pass" in verifier
     assert "size=4" in verifier
-    assert 'r"K2-C-SS-MLOAD[^\\n]*\\[OK\\]"' in verifier
+    assert 'r"ReuseBind-Compact-Flow[^\\n]*\\[OK\\]"' in verifier
     assert '"[test_ecg_load_modes] RESULT: PASS" in o3_text' in verifier
     assert "--gem5-isa-only" in verifier
     assert "--isa-receipt-dir" in verifier
@@ -1041,29 +1041,29 @@ def test_real_decoder_probe_covers_compact_streamshield_k2m_request():
 def test_proposal_o3_manifest_profile_is_exact_and_mechanism_only():
     manifest = json.loads(read(
         "scripts/experiments/ecg/experiment_manifest.json"))
-    assert "ecg_proposal_k2m_o3_gate" in manifest["profiles"]
+    assert "ecg_proposal_reuse_bind_o3_gate" in manifest["profiles"]
     stage = next(
         item for item in manifest["stages"]
-        if item["name"] == "60_gem5_proposal_k2m_o3")
+        if item["name"] == "60_gem5_proposal_reuse_bind_o3")
     assert stage["suite"] == "gem5"
     assert stage["graph_set"] == "synthetic_kron12_all"
     assert stage["benchmarks"] == ["pr"]
     assert stage["policies"] == [
-        "ECG:K2", "ECG:K2_LRU_STREAMSHIELD",
-        "ECG:K2_STREAMSHIELD"]
-    assert stage["ecg_isa_variant"] == "mask"
+        "ECG:REUSE_PLAN", "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_FLOWTHROUGH"]
+    assert stage["ecg_isa_variant"] == "computed"
     assert stage["gem5_cpu_type"] == "O3"
-    assert stage["gem5_compact_k2m_streamshield"] is True
+    assert stage["gem5_compact_reuse_bind_flowthrough"] is True
     assert stage["ecg_epochs"] == 32
-    assert "ECG_K2_DELIVERY_TRACE" not in stage["env"]
-    assert "ECG_STREAM_BYPASS_TRACE" not in stage["env"]
+    assert "ECG_REUSE_PLAN_DELIVERY_TRACE" not in stage["env"]
+    assert "ECG_FLOWTHROUGH_TRACE" not in stage["env"]
     runner = read("scripts/experiments/ecg/roi_matrix.py")
     experiment_run = read("scripts/experiments/ecg/flows/experiment_run.py")
-    assert 'env["ECG_K2_DELIVERY_TRACE"] = "2048"' in runner
-    assert 'env["ECG_STREAM_BYPASS_TRACE"] = "2048"' in runner
-    assert 'env["ECG_K2_DELIVERY_TRACE"] = "131072"' in runner
-    assert 'env["ECG_STREAM_BYPASS_TRACE"] = "131072"' in runner
-    assert "max(k2_trace, 2048)" not in runner
+    assert 'env["ECG_REUSE_PLAN_DELIVERY_TRACE"] = "2048"' in runner
+    assert 'env["ECG_FLOWTHROUGH_TRACE"] = "2048"' in runner
+    assert 'env["ECG_REUSE_PLAN_DELIVERY_TRACE"] = "131072"' in runner
+    assert 'env["ECG_FLOWTHROUGH_TRACE"] = "131072"' in runner
+    assert "max(reuse_plan_trace, 2048)" not in runner
     assert "max(bypass_trace, 2048)" not in runner
     assert '"mechanism_probe_exact_request"' in runner
     assert 'row.setdefault("status", "ok")' in runner
@@ -1077,7 +1077,7 @@ def test_proposal_certification_preserves_layered_errors_and_persists_first():
     rows = [
         {
             "simulator": "gem5", "status": "error",
-            "error": "proposal K2-M exact Request binding was not attested",
+            "error": "proposal ReuseBind exact Request binding was not attested",
             "options": "-i 1", "l3_size": "32kB", "l3_ways": 8,
             "prefetcher": "none",
         },
@@ -1099,10 +1099,10 @@ def test_proposal_certification_preserves_layered_errors_and_persists_first():
         "certify_sniper_semantic_work(rows, args, policies)", 1)[1]
     assert main_tail.index("write_outputs(out_dir, rows)") < (
         main_tail.index(
-            "validate_gem5_compact_k2m_streamshield_rows"))
+            "validate_gem5_compact_reuse_bind_flowthrough_rows"))
 
 
-def test_proposal_compact_k2m_streamshield_native_path_is_reachable(
+def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
         tmp_path):
     binary = tmp_path / "pr"
     compile_result = subprocess.run(
@@ -1129,16 +1129,16 @@ def test_proposal_compact_k2m_streamshield_native_path_is_reachable(
         "GEM5_ENABLE_ECG_EXTRACT": "1",
         "GEM5_ECG_PFX_MODE": "6",
         "ECG_PREFETCH_MODE": "6",
-        "ECG_EDGE_MASK_SCHED": "2",
+        "ECG_REUSE_PLAN_DEPTH": "2",
         "ECG_EDGE_MASK_EPOCH": "1",
         "ECG_EDGE_MASK_LINEMIN": "1",
         "ECG_EDGE_MASK_EPOCHS": "32",
         "ECG_EDGE_MASK_PACK_BITS": "64",
-        "GEM5_ENABLE_ECG_STREAM_LOAD2": "1",
+        "GEM5_ENABLE_ECG_FLOW_LOAD": "1",
         "GEM5_ENABLE_ECG_PLOAD": "1",
-        "GEM5_ECG_ISA_VARIANT": "mask",
-        "GEM5_ECG_COMPACT_K2M_SS": "1",
-        "ECG_STREAM_BYPASS": "1",
+        "GEM5_ECG_ISA_VARIANT": "computed",
+        "GEM5_ECG_COMPACT_REUSE_BIND_FLOW": "1",
+        "ECG_FLOWTHROUGH": "1",
         "ECG_RECORD_VARIABLE_WIDTH": "1",
         "ECG_EXPECT_BYTES_PER_EDGE": "4",
         "GEM5_GRAPHBREW_CTX": str(tmp_path / "compact-context.json"),
@@ -1154,11 +1154,11 @@ def test_proposal_compact_k2m_streamshield_native_path_is_reachable(
         timeout=60)
     compact_text = compact.stdout + compact.stderr
     assert compact.returncode == 0, compact_text
-    assert "[ECG_K2_MLOAD_C_SS]" in compact_text
+    assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" in compact_text
     assert "[ECG-METADATA-FATAL]" not in compact_text
 
     wide_env = dict(compact_env)
-    wide_env.pop("GEM5_ECG_COMPACT_K2M_SS")
+    wide_env.pop("GEM5_ECG_COMPACT_REUSE_BIND_FLOW")
     wide_env.update({
         "ECG_RECORD_VARIABLE_WIDTH": "0",
         "ECG_EDGE_RECORD_BYTES": "8",
@@ -1176,10 +1176,10 @@ def test_proposal_compact_k2m_streamshield_native_path_is_reachable(
     wide_text = wide.stdout + wide.stderr
     assert wide.returncode == 0, wide_text
     assert (
-        "[ECG_K2_MLOAD] PR computed-address masked load "
-        "+ StreamShield record load ACTIVE"
+        "[ECG_REUSE_BIND_LOAD] PR computed-address computed-address load "
+        "+ FlowThrough record load ACTIVE"
     ) in wide_text
-    assert "[ECG_K2_MLOAD_C_SS]" not in wide_text
+    assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" not in wide_text
     assert "[ECG-METADATA-FATAL]" not in wide_text
 
     receipt = re.compile(

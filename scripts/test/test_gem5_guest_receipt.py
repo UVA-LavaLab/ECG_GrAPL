@@ -574,22 +574,22 @@ def test_actual_benchmark_environment_is_policy_invariant(
         policy="LRU", ecg_mode=None, **common))
     for key, value in {
         "ECG_VARIANT": "epoch_first",
-        "ECG_EDGE_MASK_SCHED": "2",
+        "ECG_REUSE_PLAN_DEPTH": "2",
         "ECG_RECORD_VARIABLE_WIDTH": "1",
         "ECG_EXPECT_BYTES_PER_EDGE": "4",
         "GEM5_FORCE_ECG_PLOAD": "1",
     }.items():
         monkeypatch.setenv(key, value)
-    k2 = benchmark_environment(SimpleNamespace(
+    reuse_plan = benchmark_environment(SimpleNamespace(
         policy="ECG", ecg_mode="ECG_GRASP_POPT", **common))
     monkeypatch.setenv("ECG_VARIANT", "lru_only")
-    k2_lru = benchmark_environment(SimpleNamespace(
+    reuse_plan_lru = benchmark_environment(SimpleNamespace(
         policy="ECG", ecg_mode="ECG_GRASP_POPT", **common))
-    assert {len(lru), len(k2), len(k2_lru)} == {
+    assert {len(lru), len(reuse_plan), len(reuse_plan_lru)} == {
         layout.TARGET_ENV_ENTRIES}
     totals = {
         sum(len(item.encode()) + 1 for item in values)
-        for values in (lru, k2, k2_lru)
+        for values in (lru, reuse_plan, reuse_plan_lru)
     }
     assert totals == {layout.TARGET_ENV_BYTES}
 

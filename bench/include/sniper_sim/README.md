@@ -3,8 +3,8 @@
 This directory contains the tracked Sniper ECG artifact:
 
 - `configs/graphbrew/` — cache hierarchy and policy configuration;
-- `overlays/` — ECG, GRASP, P-OPT, StreamShield, and prefetch support;
-- `sniper_harness.h` — ROI, sideband, K2, and StreamShield benchmark support.
+- `overlays/` — ECG, GRASP, P-OPT, FlowThrough, and prefetch support;
+- `sniper_harness.h` — ROI, sideband, ReusePlan, and FlowThrough benchmark support.
 
 The Sniper checkout is ignored and pinned by `scripts/setup_sniper.py` to:
 

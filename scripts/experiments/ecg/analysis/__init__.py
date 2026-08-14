@@ -1,1 +1,1 @@
-"""K2 experiment-analysis utilities."""
+"""ReusePlan experiment-analysis utilities."""

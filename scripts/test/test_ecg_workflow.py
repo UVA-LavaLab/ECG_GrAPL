@@ -72,30 +72,30 @@ def load_module(name: str, path: Path):
     return module
 
 
-def test_k2_policy_aliases_are_first_class(monkeypatch):
+def test_reuse_plan_policy_aliases_are_first_class(monkeypatch):
     module = load_module(
         "roi_matrix_policy_config",
         ROOT / "scripts/experiments/ecg/roi_matrix.py",
     )
-    monkeypatch.delenv("ECG_EDGE_MASK_SCHED", raising=False)
-    monkeypatch.delenv("ECG_STREAM_BYPASS", raising=False)
+    monkeypatch.delenv("ECG_REUSE_PLAN_DEPTH", raising=False)
+    monkeypatch.delenv("ECG_FLOWTHROUGH", raising=False)
 
-    k2 = module.parse_policy_spec("ECG:K2")
-    assert k2.label == "ECG_K2"
-    assert k2.ecg_mode == "ECG_GRASP_POPT"
+    reuse_plan = module.parse_policy_spec("ECG:REUSE_PLAN")
+    assert reuse_plan.label == "ECG_REUSE_PLAN"
+    assert reuse_plan.ecg_mode == "ECG_GRASP_POPT"
     for benchmark in ("pr", "bfs", "sssp", "bc", "cc"):
         assert module.ecg_transport_for(
-            k2, benchmark) == module.EcgTransport(
+            reuse_plan, benchmark) == module.EcgTransport(
                 2, False, False, False, True)
 
-    streamshield = module.parse_policy_spec("ECG:K2_STREAMSHIELD")
-    assert streamshield.label == "ECG_K2_STREAMSHIELD"
+    flowthrough = module.parse_policy_spec("ECG:REUSE_PLAN_FLOWTHROUGH")
+    assert flowthrough.label == "ECG_REUSE_PLAN_FLOWTHROUGH"
     for benchmark in ("pr", "bfs", "sssp", "bc", "cc"):
         assert module.ecg_transport_for(
-            streamshield, benchmark) == module.EcgTransport(
+            flowthrough, benchmark) == module.EcgTransport(
                 2, True, False, False, True)
-    k1 = module.parse_policy_spec("ECG:K1")
-    k1_ss = module.parse_policy_spec("ECG:K1_STREAMSHIELD")
+    k1 = module.parse_policy_spec("ECG:REUSE_PLAN_1")
+    k1_ss = module.parse_policy_spec("ECG:REUSE_PLAN_1_FLOWTHROUGH")
     assert module.ecg_transport_for(
         k1, "pr") == module.EcgTransport(0, False, False, False, True)
     assert module.ecg_transport_for(
@@ -104,80 +104,80 @@ def test_k2_policy_aliases_are_first_class(monkeypatch):
     module.apply_ecg_transport_env(
         k1_bfs_env, module.ecg_transport_for(k1, "bfs"))
     assert k1_bfs_env["ECG_EDGE_MASKS"] == "1"
-    assert "ECG_EDGE_MASK_SCHED" not in k1_bfs_env
-    online = module.parse_policy_spec("ECG:K2_ONLINE")
-    assert online.label == "ECG_K2_ONLINE"
+    assert "ECG_REUSE_PLAN_DEPTH" not in k1_bfs_env
+    online = module.parse_policy_spec("ECG:REUSE_PLAN_ONLINE")
+    assert online.label == "ECG_REUSE_PLAN_ONLINE"
     online_transport = module.ecg_transport_for(online, "pr")
     assert online_transport == module.EcgTransport(
         2, False, False, True, True)
-    lru_ss = module.parse_policy_spec("ECG:K2_LRU_STREAMSHIELD")
-    assert lru_ss.label == "ECG_K2_LRU_STREAMSHIELD"
+    lru_ss = module.parse_policy_spec("ECG:REUSE_PLAN_LRU_FLOWTHROUGH")
+    assert lru_ss.label == "ECG_REUSE_PLAN_LRU_FLOWTHROUGH"
     assert lru_ss.ecg_variant == "lru_only"
     assert module.ecg_transport_for(
         lru_ss, "pr") == module.EcgTransport(
             2, True, False, False, True)
     monkeypatch.setenv("ECG_VARIANT", "grasp_only")
     assert module.effective_ecg_variant(
-        argparse.Namespace(benchmark="pr"), 2, k2) == "epoch_first"
-    monkeypatch.setenv("ECG_K2_DELIVERY_TRACE", "32")
+        argparse.Namespace(benchmark="pr"), 2, reuse_plan) == "epoch_first"
+    monkeypatch.setenv("ECG_REUSE_PLAN_DELIVERY_TRACE", "32")
     run_env = {}
     module.apply_ecg_transport_env(
-        run_env, module.ecg_transport_for(k2, "pr"))
-    assert "ECG_K2_DELIVERY_TRACE" not in run_env
+        run_env, module.ecg_transport_for(reuse_plan, "pr"))
+    assert "ECG_REUSE_PLAN_DELIVERY_TRACE" not in run_env
     assert run_env["ECG_EDGE_MASKS"] == "1"
     monkeypatch.setenv(
         "GRAPHBREW_EXPLICIT_CELL_ENV",
-        json.dumps({"ECG_STREAM_BYPASS_TRACE": "8"}))
+        json.dumps({"ECG_FLOWTHROUGH_TRACE": "8"}))
     traced_env = dict(os.environ)
     module.scrub_cell_mechanism_env(traced_env)
-    module.apply_explicit_cell_mechanism_env(traced_env, streamshield)
+    module.apply_explicit_cell_mechanism_env(traced_env, flowthrough)
     module.apply_ecg_transport_env(
-        traced_env, module.ecg_transport_for(streamshield, "pr"))
-    assert traced_env["ECG_STREAM_BYPASS_TRACE"] == "8"
+        traced_env, module.ecg_transport_for(flowthrough, "pr"))
+    assert traced_env["ECG_FLOWTHROUGH_TRACE"] == "8"
     online_env = {}
     module.apply_ecg_transport_env(online_env, online_transport)
     assert online_env["ECG_SET_DUELING"] == "1"
 
     adaptive_ss = module.parse_policy_spec(
-        "ECG:K2_ONLINE_ADAPTIVE_STREAMSHIELD")
+        "ECG:REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH")
     adaptive_transport = module.ecg_transport_for(adaptive_ss, "sssp")
-    assert adaptive_ss.label == "ECG_K2_ONLINE_ADAPTIVE_STREAMSHIELD"
-    assert adaptive_transport.stream_bypass
-    assert adaptive_transport.stream_adaptive
+    assert adaptive_ss.label == "ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH"
+    assert adaptive_transport.flowthrough
+    assert adaptive_transport.flowthrough_adaptive
     adaptive_env = {}
     module.apply_ecg_transport_env(adaptive_env, adaptive_transport)
-    assert adaptive_env["ECG_STREAM_BYPASS"] == "1"
-    assert adaptive_env["ECG_STREAM_BYPASS_ADAPTIVE"] == "1"
+    assert adaptive_env["ECG_FLOWTHROUGH"] == "1"
+    assert adaptive_env["ECG_FLOWTHROUGH_ADAPTIVE"] == "1"
     static_adaptive_ss = module.parse_policy_spec(
-        "ECG:K2_ADAPTIVE_STREAMSHIELD")
+        "ECG:REUSE_PLAN_ADAPTIVE_FLOWTHROUGH")
     static_adaptive_transport = module.ecg_transport_for(
         static_adaptive_ss, "sssp")
-    assert static_adaptive_ss.label == "ECG_K2_ADAPTIVE_STREAMSHIELD"
-    assert static_adaptive_transport.stream_adaptive
+    assert static_adaptive_ss.label == "ECG_REUSE_PLAN_ADAPTIVE_FLOWTHROUGH"
+    assert static_adaptive_transport.flowthrough_adaptive
     assert not static_adaptive_transport.set_dueling
 
-    monkeypatch.setenv("ECG_STREAM_BYPASS", "1")
-    monkeypatch.setenv("ECG_STREAM_BYPASS_ADAPTIVE", "1")
+    monkeypatch.setenv("ECG_FLOWTHROUGH", "1")
+    monkeypatch.setenv("ECG_FLOWTHROUGH_ADAPTIVE", "1")
     env_driven = module.ecg_transport_for(
         module.parse_policy_spec("ECG:ECG_GRASP_POPT"), "bfs")
-    assert env_driven.stream_bypass
-    assert env_driven.stream_adaptive
+    assert env_driven.flowthrough
+    assert env_driven.flowthrough_adaptive
 
     baseline_env = {
-        "ECG_EDGE_MASK_SCHED": "2",
+        "ECG_REUSE_PLAN_DEPTH": "2",
         "ECG_EDGE_MASKS": "1",
-        "ECG_STREAM_BYPASS": "1",
+        "ECG_FLOWTHROUGH": "1",
     }
     module.apply_ecg_transport_env(
         baseline_env, module.EcgTransport())
-    assert "ECG_EDGE_MASK_SCHED" not in baseline_env
+    assert "ECG_REUSE_PLAN_DEPTH" not in baseline_env
     assert "ECG_EDGE_MASKS" not in baseline_env
-    assert "ECG_STREAM_BYPASS" not in baseline_env
+    assert "ECG_FLOWTHROUGH" not in baseline_env
     contaminated = {
         "ECG_PREFETCH_MODE": "6",
         "ECG_MODE": "ECG_GRASP_POPT",
-        "GEM5_FORCE_ECG_LOAD2": "1",
-        "SNIPER_ECG_FUSED_K2": "1",
+        "GEM5_FORCE_ECG_PLAN_LOAD": "1",
+        "SNIPER_ECG_FUSED_REUSE_PLAN": "1",
         "GRASP_HOT_FRACTION": "0.40",
         "POPT_DUAL_REREF": "1",
         "ECG_DEBUG": "1",
@@ -189,21 +189,21 @@ def test_k2_policy_aliases_are_first_class(monkeypatch):
         "GRAPHBREW_EXPLICIT_CELL_ENV",
         json.dumps({
             "ECG_EDGE_MASK_AMPLIFY": "3",
-            "ECG_EDGE_MASK_SCHED": "4",
+            "ECG_REUSE_PLAN_DEPTH": "4",
             "GRASP_HOT_FRACTION": "0.25",
         }),
     )
     explicit_env = {}
-    module.apply_explicit_cell_mechanism_env(explicit_env, k2)
+    module.apply_explicit_cell_mechanism_env(explicit_env, reuse_plan)
     assert explicit_env == {
         "ECG_EDGE_MASK_AMPLIFY": "3",
-        "ECG_EDGE_MASK_SCHED": "4",
+        "ECG_REUSE_PLAN_DEPTH": "4",
         "GRASP_HOT_FRACTION": "0.25",
     }
     module.apply_ecg_transport_env(
-        explicit_env, module.ecg_transport_for(k2, "pr"))
+        explicit_env, module.ecg_transport_for(reuse_plan, "pr"))
     assert explicit_env["ECG_EDGE_MASK_AMPLIFY"] == "3"
-    assert explicit_env["ECG_EDGE_MASK_SCHED"] == "2"
+    assert explicit_env["ECG_REUSE_PLAN_DEPTH"] == "2"
     assert explicit_env["GRASP_HOT_FRACTION"] == "0.25"
     baseline = module.parse_policy_spec("LRU")
     baseline_env = {}
@@ -215,10 +215,10 @@ def test_k2_policy_aliases_are_first_class(monkeypatch):
     assert grasp_env == {"GRASP_HOT_FRACTION": "0.25"}
 
 
-def test_streamshield_manifest_is_complete():
+def test_flowthrough_manifest_is_complete():
     manifest = json.loads(
         (ROOT / "scripts/experiments/ecg/experiment_manifest.json").read_text())
-    assert "streamshield_sniper_realgraph" in manifest["profiles"]
+    assert "flowthrough_sniper_realgraph" in manifest["profiles"]
     assert "ecg_cache_sim_factorial" in manifest["profiles"]
     assert "ecg_3sim_allalg_smoke" in manifest["profiles"]
     assert "ecg_3sim_realgraph_allalg" in manifest["profiles"]
@@ -239,13 +239,13 @@ def test_streamshield_manifest_is_complete():
         stage for stage in manifest["stages"]
         if stage["name"] == "19a_cache_sim_equal_capacity_16"
     )
-    assert not equal_capacity.get("k2_l3_ways")
+    assert not equal_capacity.get("reuse_plan_l3_ways")
     semantic_realgraph = next(
         stage for stage in manifest["stages"]
         if stage["name"] == "34b_sniper_realgraph_semantic_probe"
     )
-    assert semantic_realgraph["policies"] == ["LRU", "ECG:K2"]
-    assert semantic_realgraph["ecg_isa_variant"] == "mask"
+    assert semantic_realgraph["policies"] == ["LRU", "ECG:REUSE_PLAN"]
+    assert semantic_realgraph["ecg_isa_variant"] == "computed"
     assert semantic_realgraph["sniper_semantic_edge_limit"] == 100000
     assert not semantic_realgraph.get("sniper_roi_icount")
     assert "ecg_replacement_baseline" in manifest["profiles"]
@@ -255,20 +255,20 @@ def test_streamshield_manifest_is_complete():
     assert "ecg_preliminary_5alg_3sim" in manifest["profiles"]
     assert "ecg_preliminary_5alg_stride" in manifest["profiles"]
     assert "ecg_online_dueling" in manifest["profiles"]
-    assert "ecg_streamshield_generality" in manifest["profiles"]
-    assert "gem5_streamshield_mechanism" in manifest["profiles"]
-    assert "sniper_streamshield_mechanism" in manifest["profiles"]
+    assert "ecg_flowthrough_generality" in manifest["profiles"]
+    assert "gem5_flowthrough_mechanism" in manifest["profiles"]
+    assert "sniper_flowthrough_mechanism" in manifest["profiles"]
     stage = next(
         stage for stage in manifest["stages"]
-        if stage["name"] == "40_sniper_streamshield_realgraph")
+        if stage["name"] == "40_sniper_flowthrough_realgraph")
     assert stage["policies"] == [
         "LRU", "SRRIP", "GRASP", "POPT",
-        "ECG:K2", "ECG:K2_ONLINE",
-        "ECG:K2_STREAMSHIELD", "ECG:K2_ONLINE_STREAMSHIELD",
+        "ECG:REUSE_PLAN", "ECG:REUSE_PLAN_ONLINE",
+        "ECG:REUSE_PLAN_FLOWTHROUGH", "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH",
     ]
     assert stage["prefetcher"] == "STRIDE"
     assert stage["popt_reserve_model"] == "size_correct"
-    graph = manifest["graph_sets"]["web_google_streamshield"][0]
+    graph = manifest["graph_sets"]["web_google_flowthrough"][0]
     assert graph["structure_prefetch_degree"] == 8
     assert "sniper_roi_icount" not in stage
     assert stage["sniper_workload"] == "sg_kernel"
@@ -277,22 +277,22 @@ def test_streamshield_manifest_is_complete():
     assert "env" not in stage
     factorial = next(
         stage for stage in manifest["stages"]
-        if stage["name"] == "20_cache_sim_streamshield_factorial")
+        if stage["name"] == "20_cache_sim_flowthrough_factorial")
     assert factorial["policies"] == [
         "LRU", "SRRIP", "GRASP", "POPT:UNCHARGED", "POPT",
-        "ECG:K1", "ECG:K1_STREAMSHIELD",
-        "ECG:K2", "ECG:K2_STREAMSHIELD",
-        "ECG:K2_ONLINE", "ECG:K2_ONLINE_STREAMSHIELD",
-        "ECG:K2_ONLINE_ADAPTIVE_STREAMSHIELD",
+        "ECG:REUSE_PLAN_1", "ECG:REUSE_PLAN_1_FLOWTHROUGH",
+        "ECG:REUSE_PLAN", "ECG:REUSE_PLAN_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_ONLINE", "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
     ]
     generality = next(
         stage for stage in manifest["stages"]
-        if stage["name"] == "21_cache_sim_streamshield_generality")
+        if stage["name"] == "21_cache_sim_flowthrough_generality")
     assert generality["benchmarks"] == ["pr", "bfs", "sssp", "bc", "cc"]
     assert generality["policies"] == [
         "LRU", "SRRIP", "GRASP", "POPT:UNCHARGED", "POPT",
-        "ECG:K2_ONLINE", "ECG:K2_ONLINE_STREAMSHIELD",
-        "ECG:K2_ONLINE_ADAPTIVE_STREAMSHIELD",
+        "ECG:REUSE_PLAN_ONLINE", "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
     ]
     assert generality["prefetcher"] == "none"
     assert generality["ecg_charged"] == 1
@@ -306,7 +306,7 @@ def test_streamshield_manifest_is_complete():
     assert replacement["ecg_charged"] == 0
     assert manifest["defaults"]["ecg_epoch_pack_bits"] == 64
     assert manifest["defaults"]["require_cache_sim_aslr_disable"] is True
-    assert replacement["policies"][-1] == "ECG:K2_ONLINE"
+    assert replacement["policies"][-1] == "ECG:REUSE_PLAN_ONLINE"
     smoke_stages = [
         stage for stage in manifest["stages"]
         if "ecg_3sim_allalg_smoke" in stage.get("profiles", [])]
@@ -356,7 +356,7 @@ def test_streamshield_manifest_is_complete():
     assert sampled_timing["graph_set"] == "realgraph_samples"
     assert sampled_timing["benchmarks"] == ["pr"]
     assert sampled_timing["policies"] == [
-        "GRASP", "POPT", "ECG:K2_ONLINE_STREAMSHIELD"]
+        "GRASP", "POPT", "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH"]
     assert sampled_timing["prefetcher"] == "none"
     assert sampled_timing["sniper_require_fused_receipts"] is True
     assert all("gem5_max_insts" not in stage for stage in sampled_stages)
@@ -380,9 +380,9 @@ def test_streamshield_manifest_is_complete():
     warm_probe = next(
         stage for stage in manifest["stages"]
         if stage["name"] == "34_sniper_realgraph_warm_probe")
-    assert warm_probe["graph_set"] == "web_google_streamshield"
+    assert warm_probe["graph_set"] == "web_google_flowthrough"
     assert warm_probe["benchmarks"] == ["pr"]
-    assert warm_probe["policies"] == ["LRU", "ECG:K2"]
+    assert warm_probe["policies"] == ["LRU", "ECG:REUSE_PLAN"]
     assert warm_probe["sniper_roi_icount"] == 100_000
     assert warm_probe["sniper_frontend"] == "sift"
     assert "sniper_require_fused_receipts" not in warm_probe
@@ -399,7 +399,7 @@ def test_streamshield_manifest_is_complete():
         assert stage["benchmarks"] == ["pr", "bfs", "sssp", "bc", "cc"]
         assert stage["policies"] == [
             "LRU", "SRRIP", "GRASP", "POPT",
-            "ECG:K2", "ECG:K2_ONLINE",
+            "ECG:REUSE_PLAN", "ECG:REUSE_PLAN_ONLINE",
         ]
         assert stage["graph_set"] == "synthetic_kron15_all"
         assert stage["prefetcher"] == "none"
@@ -417,7 +417,7 @@ def test_streamshield_manifest_is_complete():
         assert stage["benchmarks"] == ["pr", "bfs", "sssp", "bc", "cc"]
         assert stage["policies"] == [
             "LRU", "SRRIP", "GRASP", "POPT",
-            "ECG:K2", "ECG:K2_ONLINE",
+            "ECG:REUSE_PLAN", "ECG:REUSE_PLAN_ONLINE",
         ]
         assert stage["graph_set"] == "synthetic_kron15_all_stride"
         assert stage["prefetcher"] == "STRIDE"
@@ -425,11 +425,11 @@ def test_streamshield_manifest_is_complete():
     assert stride_graph["structure_prefetch_degree"] == 8
     gem5_mechanism = next(
         stage for stage in manifest["stages"]
-        if stage["name"] == "30_gem5_streamshield_mechanism")
+        if stage["name"] == "30_gem5_flowthrough_mechanism")
     assert gem5_mechanism["env"]["GEM5_KERNEL_SUFFIX"] == "_riscv_m5ops"
     sniper_mechanism = next(
         stage for stage in manifest["stages"]
-        if stage["name"] == "31_sniper_streamshield_mechanism")
+        if stage["name"] == "31_sniper_flowthrough_mechanism")
     assert sniper_mechanism["sniper_workload"] == "sg_kernel"
     assert sniper_mechanism["sniper_require_fused_receipts"] is True
 
@@ -459,7 +459,7 @@ def test_sniper_sg_kernel_supports_synthetic_profiles():
 def test_public_documents_use_the_expected_reading_flow():
     """The public flow is README, design wiki, methodology, reproduction."""
     root_readme = (ROOT / "README.md").read_text()
-    wiki = (ROOT / "wiki/K2-StreamShield.md").read_text()
+    wiki = (ROOT / "wiki/ReusePlan-FlowThrough.md").read_text()
     methodology = (ROOT / "wiki/Evaluation-Methodology.md").read_text()
     reproduction = (ROOT / "wiki/Reproduction.md").read_text()
 
@@ -476,25 +476,25 @@ def test_public_documents_use_the_expected_reading_flow():
     assert "gem5 O3 execution time is used for architectural speedup" in (
         method_flat)
     assert "cache_sim does not model cycles or instructions" in method_flat
-    assert "time is not used as a K2-M speedup" in method_flat
+    assert "time is not used as a ReuseBind speedup" in method_flat
     assert "popt_target_time_charged=0" in methodology
     assert "optimistic P-OPT bound" in methodology
 
     # README is concise; the wiki owns the illustrated explanation.
     assert len(root_readme.splitlines()) < 60
     assert "Illustrated design guide" in root_readme
-    assert "wiki/K2-StreamShield.md" in root_readme
+    assert "wiki/ReusePlan-FlowThrough.md" in root_readme
     assert "wiki/Evaluation-Methodology.md" in root_readme
     assert "wiki/Reproduction.md" in root_readme
     assert "--profile" not in root_readme
     for figure in (
-            "assets/k2-overview.svg",
-            "assets/k2-record.svg",
-            "assets/k2-reuse-example.svg",
-            "assets/k2-cpu-pipeline.svg",
-            "assets/k2-cpu-pipeline-regions.svg",
-            "assets/k2-cpu-pipeline-lsu.svg",
-            "assets/streamshield-path.svg"):
+            "assets/reuse-plan-overview.svg",
+            "assets/reuse-plan-record.svg",
+            "assets/reuse-plan-example.svg",
+            "assets/reuse-plan-cpu-pipeline.svg",
+            "assets/reuse-plan-cpu-pipeline-regions.svg",
+            "assets/reuse-plan-cpu-pipeline-lsu.svg",
+            "assets/flowthrough-path.svg"):
         assert figure in wiki
         assert (ROOT / "wiki" / figure).is_file()
     assert "values in the following example are illustrative" in wiki
@@ -512,21 +512,21 @@ def test_public_documents_use_the_expected_reading_flow():
     # Superseded experiment names do not appear in public documents.
     for doc in (methodology, reproduction, root_readme, wiki):
         assert "pr_screen_v1" not in doc and "pr_screen_v2" not in doc
-        assert "proposal_k2m_sota_pr_screen_v1" not in doc
-        assert "proposal_k2m_sota_pr_screen_v2" not in doc
+        assert "proposal_reuse_bind_sota_pr_screen_v1" not in doc
+        assert "proposal_reuse_bind_sota_pr_screen_v2" not in doc
 
 
-def test_k2_cache_sim_paths_do_not_build_popt_matrix():
+def test_reuse_plan_cache_sim_paths_do_not_build_popt_matrix():
     helper = (
         ROOT / "bench/include/cache_sim/graph_sim.h"
     ).read_text()
-    assert "GraphSimMatrixFreeK2" in helper
+    assert "GraphSimMatrixFreeReusePlan" in helper
     for relative in (
         "bench/src_sim/pr.cc",
         "bench/src_sim/bfs.cc",
     ):
         source = (ROOT / relative).read_text()
-        assert "GraphSimMatrixFreeK2" in source, relative
+        assert "GraphSimMatrixFreeReusePlan" in source, relative
     bfs = (ROOT / "bench/src_sim/bfs.cc").read_text()
     # One delivery site per direction (top-down and bottom-up), both routed
     # through the shared metadata helper rather than duplicating the chain.
@@ -555,13 +555,13 @@ def test_k2_cache_sim_paths_do_not_build_popt_matrix():
             ROOT / relative).read_text(), relative
 
 
-def test_streamshield_profile_and_slurm_shards(tmp_path):
+def test_flowthrough_profile_and_slurm_shards(tmp_path):
     run_dir = tmp_path / "dryrun"
     listed = subprocess.run(
         [
             sys.executable,
             "scripts/experiments/ecg/flows/experiment_run.py",
-            "--profile", "streamshield_sniper_realgraph",
+            "--profile", "flowthrough_sniper_realgraph",
             "--run-dir", str(run_dir),
             "--list", "--dry-run", "--no-build",
         ],
@@ -573,8 +573,8 @@ def test_streamshield_profile_and_slurm_shards(tmp_path):
     assert listed.returncode == 0, listed.stdout + listed.stderr
     for policy in (
         "LRU", "SRRIP", "GRASP", "POPT",
-        "ECG:K2", "ECG:K2_ONLINE",
-        "ECG:K2_STREAMSHIELD", "ECG:K2_ONLINE_STREAMSHIELD",
+        "ECG:REUSE_PLAN", "ECG:REUSE_PLAN_ONLINE",
+        "ECG:REUSE_PLAN_FLOWTHROUGH", "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH",
     ):
         assert policy in listed.stdout
     assert "--sniper-roi-icount" not in listed.stdout
@@ -587,7 +587,7 @@ def test_streamshield_profile_and_slurm_shards(tmp_path):
         [
             sys.executable,
             "scripts/experiments/ecg/flows/experiment_run.py",
-            "--profile", "streamshield_sniper_realgraph",
+            "--profile", "flowthrough_sniper_realgraph",
             "--run-dir", str(tmp_path / "blocked"),
             "--allow-missing-graphs", "--no-build",
         ],
@@ -604,7 +604,7 @@ def test_streamshield_profile_and_slurm_shards(tmp_path):
         [
             sys.executable,
             "scripts/experiments/ecg/slurm/make_slurm_shards.py",
-            "--profile", "streamshield_sniper_realgraph",
+            "--profile", "flowthrough_sniper_realgraph",
             "--run-tag", "ecg_successor_test",
             "--out", str(shards),
             "--allow-missing-graphs",
@@ -620,8 +620,8 @@ def test_streamshield_profile_and_slurm_shards(tmp_path):
     assert len(rows) == 8
     assert [row[4] for row in rows] == [
         "LRU", "SRRIP", "GRASP", "POPT",
-        "ECG:K2", "ECG:K2_ONLINE",
-        "ECG:K2_STREAMSHIELD", "ECG:K2_ONLINE_STREAMSHIELD",
+        "ECG:REUSE_PLAN", "ECG:REUSE_PLAN_ONLINE",
+        "ECG:REUSE_PLAN_FLOWTHROUGH", "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH",
     ]
     sbatch = (
         ROOT / "scripts/experiments/ecg/slurm/slurm_experiment_shard.sbatch"
@@ -637,6 +637,7 @@ def test_capped_realgraph_profile_forwards_instruction_budgets(tmp_path):
             "--profile", "ecg_3sim_realgraph_allalg_1b",
             "--run-dir", str(tmp_path / "capped"),
             "--allow-missing-graphs",
+            "--allow-missing-runtime-inputs",
             "--list", "--dry-run", "--no-build",
         ],
         cwd=ROOT,
@@ -718,53 +719,53 @@ def test_aggregation_removes_stale_sniper_timing_outputs(tmp_path):
 
 def test_final_design_docs_and_run_flow_are_consistent():
     readme = (ROOT / "README.md").read_text()
-    wiki = (ROOT / "wiki/K2-StreamShield.md").read_text()
+    wiki = (ROOT / "wiki/ReusePlan-FlowThrough.md").read_text()
     methodology = (ROOT / "wiki/Evaluation-Methodology.md").read_text()
     reproduction = (ROOT / "wiki/Reproduction.md").read_text()
     manifest = json.loads(
         (ROOT / "scripts/experiments/ecg/experiment_manifest.json").read_text())
 
-    assert "wiki/K2-StreamShield.md" in readme
+    assert "wiki/ReusePlan-FlowThrough.md" in readme
     assert "wiki/Evaluation-Methodology.md" in readme
     assert "wiki/Reproduction.md" in readme
     assert "--profile" not in readme
 
     # The wiki is the detailed explanatory layer and contains no measured
     # performance tables.
-    assert "Evaluation-Methodology.md" in wiki
-    assert "Reproduction.md" in wiki
+    assert "(Evaluation-Methodology)" in wiki
+    assert "(Reproduction)" in wiki
     assert "epoch_first" not in wiki
     assert "no experimental results" in wiki
     assert "## 3. Computing future distance by hand" in wiki
-    assert "## 6. StreamShield placement" in wiki
+    assert "## 6. FlowThrough placement" in wiki
 
     assert "# Evaluation Methodology" in methodology
     assert "contains no" in methodology
     assert "performance results" in methodology
 
     assert "## 4. Inspect the PageRank study" in reproduction
-    assert "k2_pagerank_study" in reproduction
+    assert "reuse_plan_pagerank_study" in reproduction
     assert "cit-Patents/cit-Patents.el" in reproduction
     assert "cit-Patents/cit-Patents.mtx" not in reproduction
     assert "python3 -I" in reproduction
     assert "--require-pinned-python" in reproduction
     assert "--no-build --no-resume" in reproduction
     assert "## 6. Final role-separated campaign" in reproduction
-    assert "k2_final_campaign" in reproduction
+    assert "reuse_plan_final_campaign" in reproduction
     assert "## 7. Cross-simulator consistency" in reproduction
     assert "--input-run-dirs" in reproduction
 
     blocked_stage = next(
         stage for stage in manifest["stages"]
-        if stage["name"] == "40_sniper_streamshield_realgraph")
+        if stage["name"] == "40_sniper_flowthrough_realgraph")
     assert blocked_stage["blocked_reason"]
     assert (
-        "ECG:K2_ONLINE_ADAPTIVE_STREAMSHIELD"
+        "ECG:REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH"
         not in blocked_stage["policies"])
     factorial = next(
         stage for stage in manifest["stages"]
-        if stage["name"] == "20_cache_sim_streamshield_factorial")
-    assert "ECG:K2_ONLINE_ADAPTIVE_STREAMSHIELD" in factorial["policies"]
+        if stage["name"] == "20_cache_sim_flowthrough_factorial")
+    assert "ECG:REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH" in factorial["policies"]
 
 
 def test_partial_policy_matrix_is_not_resumable(tmp_path):
@@ -871,7 +872,7 @@ def test_policy_labels_share_one_parser():
     assert module.policy_output_label("POPT") == "POPT"
     assert module.policy_output_label("POPT_CHARGED") == "POPT"
     assert module.policy_output_label("POPT:UNCHARGED") == "POPT_UNCHARGED"
-    assert module.policy_output_label("ECG:K2") == "ECG_K2"
+    assert module.policy_output_label("ECG:REUSE_PLAN") == "ECG_REUSE_PLAN"
 
 
 def test_sharded_policies_share_comparison_scope():
@@ -892,21 +893,21 @@ def test_sharded_policies_share_comparison_scope():
         "threads": "1",
         "section": "1",
         "timing_valid_for_speedup": "1",
-        "final_expected_policy_labels": json.dumps(["LRU", "ECG_K2"]),
+        "final_expected_policy_labels": json.dumps(["LRU", "ECG_REUSE_PLAN"]),
     }
     rows = [
         {**common, "pipeline_run_name": "lru", "final_job_id": "lru",
          "policy_label": "LRU", "sim_ticks": "100", "l3_misses": "50"},
-        {**common, "pipeline_run_name": "k2", "final_job_id": "k2",
-         "policy_label": "ECG_K2", "sim_ticks": "80", "l3_misses": "40"},
+        {**common, "pipeline_run_name": "reuse_plan", "final_job_id": "reuse_plan",
+         "policy_label": "ECG_REUSE_PLAN", "sim_ticks": "80", "l3_misses": "40"},
         {**common, "pipeline_run_name": "partial", "final_job_id": "partial",
          "final_output_status": "partial", "policy_label": "SRRIP",
          "sim_ticks": "90", "l3_misses": "45"},
     ]
     relative = module.roi_relative_metrics(rows)
     assert len(relative) == 2
-    k2 = next(row for row in relative if row["policy_label"] == "ECG_K2")
-    assert k2["speedup_vs_lru"] == 1.25
+    reuse_plan = next(row for row in relative if row["policy_label"] == "ECG_REUSE_PLAN")
+    assert reuse_plan["speedup_vs_lru"] == 1.25
 
 
 def test_pipeline_rejects_non_o3_speedup_flags():
@@ -933,7 +934,7 @@ def test_pipeline_rejects_non_o3_speedup_flags():
             "section": "1",
             "timing_valid_for_speedup": "1",
             "final_expected_policy_labels": json.dumps(
-                ["LRU", "ECG_K2"]),
+                ["LRU", "ECG_REUSE_PLAN"]),
         }
         rows = [
             {
@@ -946,9 +947,9 @@ def test_pipeline_rejects_non_o3_speedup_flags():
             },
             {
                 **common,
-                "pipeline_run_name": "k2",
+                "pipeline_run_name": "reuse_plan",
                 "final_job_id": "same-job",
-                "policy_label": "ECG_K2",
+                "policy_label": "ECG_REUSE_PLAN",
                 "sim_ticks": "80",
                 "l3_misses": "40",
             },
@@ -1002,7 +1003,7 @@ def test_mechanism_only_roi_summary_suppresses_timing():
             "prefetcher": "none",
             "l3_size": "32kB",
             "threads": "",
-            "policy_label": "ECG_K2_STREAMSHIELD",
+            "policy_label": "ECG_REUSE_PLAN_FLOWTHROUGH",
             "sim_ticks": "123",
             "ipc": "1.5",
             "l3_misses": "45",
@@ -1041,7 +1042,7 @@ def test_mechanism_only_roi_summary_suppresses_timing():
             "final_matrix_id": "proposal",
             "final_matrix_config_hash": "same",
             "final_expected_policy_labels": json.dumps([
-                "LRU", "ECG_K2_STREAMSHIELD"]),
+                "LRU", "ECG_REUSE_PLAN_FLOWTHROUGH"]),
             "policy_label": "LRU",
             "timing_model": "",
             "timing_valid_for_speedup": "1",
@@ -1052,7 +1053,7 @@ def test_mechanism_only_roi_summary_suppresses_timing():
             "final_matrix_id": "proposal",
             "final_matrix_config_hash": "same",
             "final_expected_policy_labels": json.dumps([
-                "LRU", "ECG_K2_STREAMSHIELD"]),
+                "LRU", "ECG_REUSE_PLAN_FLOWTHROUGH"]),
         },
     ]
     relative_rows = module.roi_relative_metrics(relative_input)
@@ -1071,7 +1072,7 @@ def test_pipeline_manifest_binds_inputs_scripts_and_outputs(tmp_path):
     (run_dir / "resolved_manifest.json").write_text(
         '{"profiles": ["proposal"]}\n')
     (run_dir / "combined_roi_matrix.csv").write_text(
-        "status,policy_label\nok,ECG_K2_STREAMSHIELD\n")
+        "status,policy_label\nok,ECG_REUSE_PLAN_FLOWTHROUGH\n")
     out_dir = tmp_path / "pipeline"
     rows = [{
         "status": "ok",
@@ -1080,7 +1081,7 @@ def test_pipeline_manifest_binds_inputs_scripts_and_outputs(tmp_path):
         "prefetcher": "none",
         "l3_size": "32kB",
         "threads": "",
-        "policy_label": "ECG_K2_STREAMSHIELD",
+        "policy_label": "ECG_REUSE_PLAN_FLOWTHROUGH",
         "ecg_record_bytes": "4",
         "edge_stream_bytes_per_edge": "4",
         "timing_valid_for_speedup": "0",
@@ -1099,15 +1100,15 @@ def test_pipeline_manifest_binds_inputs_scripts_and_outputs(tmp_path):
     assert "tables/roi_policy_summary.tex" in manifest["outputs"]
 
 
-def test_online_dueling_regret_uses_best_static_k2_arm():
+def test_online_dueling_regret_uses_best_static_reuse_plan_arm():
     module = load_module(
         "aggregate_results_online_regret",
         ROOT / "scripts/experiments/ecg/flows/aggregate_results.py",
     )
     policies = [
         "POPT_UNCHARGED", "POPT",
-        "ECG_K2_GRASP", "ECG_K2_EPOCH", "ECG_K2_RRIP",
-        "ECG_K2_DEGREE", "ECG_K2_LRU", "ECG_K2_ONLINE",
+        "ECG_REUSE_PLAN_GRASP", "ECG_REUSE_PLAN_EPOCH", "ECG_REUSE_PLAN_RRIP",
+        "ECG_REUSE_PLAN_DEGREE", "ECG_REUSE_PLAN_LRU", "ECG_REUSE_PLAN_ONLINE",
     ]
     common = {
         "status": "ok",
@@ -1129,12 +1130,12 @@ def test_online_dueling_regret_uses_best_static_k2_arm():
     misses = {
         "POPT_UNCHARGED": 90,
         "POPT": 70,
-        "ECG_K2_GRASP": 100,
-        "ECG_K2_EPOCH": 120,
-        "ECG_K2_RRIP": 95,
-        "ECG_K2_DEGREE": 80,
-        "ECG_K2_LRU": 130,
-        "ECG_K2_ONLINE": 84,
+        "ECG_REUSE_PLAN_GRASP": 100,
+        "ECG_REUSE_PLAN_EPOCH": 120,
+        "ECG_REUSE_PLAN_RRIP": 95,
+        "ECG_REUSE_PLAN_DEGREE": 80,
+        "ECG_REUSE_PLAN_LRU": 130,
+        "ECG_REUSE_PLAN_ONLINE": 84,
     }
     rows = [
         {
@@ -1151,7 +1152,7 @@ def test_online_dueling_regret_uses_best_static_k2_arm():
     regret = module.online_dueling_regret(rows)
     assert len(regret) == 1
     assert regret[0]["final_graph"] == "web-Google"
-    assert regret[0]["best_static_policy"] == "ECG_K2_DEGREE"
+    assert regret[0]["best_static_policy"] == "ECG_REUSE_PLAN_DEGREE"
     assert regret[0]["online_regret_pct"] == 5.0
     assert regret[0]["online_delta_vs_popt_uncharged_pct"] == pytest.approx(
         -6.6666666667)
@@ -1168,7 +1169,7 @@ def test_preliminary_policy_ranks_use_overhead_aware_misses():
         "aggregate_results_preliminary_ranks",
         ROOT / "scripts/experiments/ecg/flows/aggregate_results.py",
     )
-    policies = ["LRU", "SRRIP", "GRASP", "POPT", "ECG_K2", "ECG_K2_ONLINE"]
+    policies = ["LRU", "SRRIP", "GRASP", "POPT", "ECG_REUSE_PLAN", "ECG_REUSE_PLAN_ONLINE"]
     common = {
         "status": "ok",
         "final_output_status": "ok",
@@ -1190,8 +1191,8 @@ def test_preliminary_policy_ranks_use_overhead_aware_misses():
         "SRRIP": 90,
         "GRASP": 70,
         "POPT": 60,
-        "ECG_K2": 65,
-        "ECG_K2_ONLINE": 68,
+        "ECG_REUSE_PLAN": 65,
+        "ECG_REUSE_PLAN_ONLINE": 68,
     }
     rows = [
         {
@@ -1204,11 +1205,11 @@ def test_preliminary_policy_ranks_use_overhead_aware_misses():
     ]
     ranked = module.preliminary_policy_ranks(rows)
     assert len(ranked) == 6
-    k2 = next(row for row in ranked if row["policy_label"] == "ECG_K2")
-    assert k2["best_policy"] == "ECG_K2"
-    assert k2["rank_within_simulator"] == 1
-    assert k2["effective_miss_reduction_vs_popt_pct"] == pytest.approx(18.75)
-    assert k2["record_transport_model"] == "fused_wide_record"
+    reuse_plan = next(row for row in ranked if row["policy_label"] == "ECG_REUSE_PLAN")
+    assert reuse_plan["best_policy"] == "ECG_REUSE_PLAN"
+    assert reuse_plan["rank_within_simulator"] == 1
+    assert reuse_plan["effective_miss_reduction_vs_popt_pct"] == pytest.approx(18.75)
+    assert reuse_plan["record_transport_model"] == "fused_wide_record"
     stride_rows = [
         {**row, "prefetcher": "STRIDE",
          "final_matrix_id":
@@ -1224,33 +1225,33 @@ def test_requested_fused_receipt_validation_is_fail_closed():
         ROOT / "scripts/experiments/ecg/roi_matrix.py"
     ).read_text()
     assert "if fused_validation and (fused_count == 0 or fused_bad != 0)" in runner
-    assert "Fused K2 receipt validation failed." in runner
+    assert "Fused ReusePlan receipt validation failed." in runner
 
 
-def test_all_five_kernels_expose_indexed_and_mask_only_delivery():
+def test_all_five_kernels_expose_indexed_and_computed_address_delivery():
     for kernel in ("pr", "bfs", "sssp", "bc", "cc"):
         source = (
             ROOT / f"bench/src_gem5/{kernel}.cc"
         ).read_text()
-        assert "gem5_ecg_load_k2" in source, kernel
-        assert f"[ECG_K2_MLOAD" in source, kernel
-        assert f"[ECG_K2_ILOAD" in source, kernel
+        assert "gem5_ecg_bind_iload_u32" in source, kernel
+        assert f"[ECG_REUSE_BIND_LOAD" in source, kernel
+        assert f"[ECG_REUSE_BIND_ILOAD" in source, kernel
 
     sniper = (
         ROOT / "bench/src_sniper/sg_kernel.cc"
     ).read_text()
     for kernel in ("BFS", "BC", "CC"):
-        assert f"[ECG_FUSED_K2] {kernel}" in sniper
-    assert "[ECG_FUSED_K2_WEIGHTED64] SSSP" in sniper
-    assert "[ECG_FUSED_K2_WEIGHTED32] SSSP" in sniper
-    assert sniper.count("const bool fused_k2_model =") == 5
+        assert f"[ECG_FUSED_REUSE_PLAN] {kernel}" in sniper
+    assert "[ECG_FUSED_REUSE_PLAN_WEIGHTED64] SSSP" in sniper
+    assert "[ECG_FUSED_REUSE_PLAN_WEIGHTED32] SSSP" in sniper
+    assert sniper.count("const bool fused_reuse_plan_model =") == 5
     assert sniper.count('"SNIPER_ECG_VERTICES_PER_LINE"') >= 5
 
     runner = (
         ROOT / "scripts/experiments/ecg/roi_matrix.py"
     ).read_text()
     assert (
-        'schedule_k == 2 and args.sniper_workload == "sg_kernel"'
+        'reuse_plan_depth == 2 and args.sniper_workload == "sg_kernel"'
         in runner)
     # The RISC-V fused record load must still be the default delivery, but it
     # has to be ablatable: every fused variant carries the canonical 64-bit
@@ -1258,18 +1259,18 @@ def test_all_five_kernels_expose_indexed_and_mask_only_delivery():
     # one is active. The condition therefore gates on an explicit switch rather
     # than on riscv_delivery alone.
     assert 'elif riscv_delivery and fused_record_load_allowed:' in runner
-    assert 'GRAPHBREW_K2_FUSED_LOAD' in runner, (
+    assert 'GRAPHBREW_REUSE_PLAN_FUSED_LOAD' in runner, (
         "the fused delivery family must be switchable off, or width and "
         "software decode cannot be separated")
     verifier = (
         ROOT / "scripts/experiments/ecg/verify/equiv_kernels.py"
     ).read_text()
-    assert "computed-address K2-M property load" in verifier
-    assert "matched Sniper K2-M is not implemented" not in verifier
-    assert "computed-address K2-M load binding" in verifier
-    assert '"sniper_k2_exact_bind") == "1"' in verifier
-    assert "indexed K2-I property load" in verifier
-    assert "fused K2 sideband" in verifier
+    assert "computed-address ReuseBind property load" in verifier
+    assert "matched Sniper ReuseBind is not implemented" not in verifier
+    assert "computed-address ReuseBind load binding" in verifier
+    assert '"sniper_reuse_bind_exact") == "1"' in verifier
+    assert "indexed ReuseBind-Indexed property load" in verifier
+    assert "fused ReusePlan sideband" in verifier
 
 
 def test_preliminary_stride_sensitivity_separates_demand_and_traffic():
@@ -1277,7 +1278,7 @@ def test_preliminary_stride_sensitivity_separates_demand_and_traffic():
         "aggregate_results_stride_sensitivity",
         ROOT / "scripts/experiments/ecg/flows/aggregate_results.py",
     )
-    policies = ["LRU", "SRRIP", "GRASP", "POPT", "ECG_K2", "ECG_K2_ONLINE"]
+    policies = ["LRU", "SRRIP", "GRASP", "POPT", "ECG_REUSE_PLAN", "ECG_REUSE_PLAN_ONLINE"]
     rows = []
     for prefetcher, miss_scale, traffic_scale, matrix in (
         ("none", 1.0, 1.0, "base"),
@@ -1307,10 +1308,10 @@ def test_preliminary_stride_sensitivity_separates_demand_and_traffic():
                 "final_expected_policy_labels": json.dumps(policies),
             })
     sensitivity = module.preliminary_stride_sensitivity(rows)
-    k2 = next(row for row in sensitivity if row["policy_label"] == "ECG_K2")
-    assert k2["demand_miss_reduction_pct"] == 75.0
-    assert k2["traffic_change_pct"] == 50.0
-    assert k2["traffic_unit"] == "memory_transactions"
+    reuse_plan = next(row for row in sensitivity if row["policy_label"] == "ECG_REUSE_PLAN")
+    assert reuse_plan["demand_miss_reduction_pct"] == 75.0
+    assert reuse_plan["traffic_change_pct"] == 50.0
+    assert reuse_plan["traffic_unit"] == "memory_transactions"
     duplicate = [dict(row) for row in rows]
     duplicate.append(dict(rows[0]))
     with pytest.raises(RuntimeError, match="duplicate inputs"):
@@ -1328,7 +1329,7 @@ def test_sniper_stride_sensitivity_reports_traffic_without_demand_split():
         "aggregate_results_sniper_stride_scope",
         ROOT / "scripts/experiments/ecg/flows/aggregate_results.py",
     )
-    policies = ["LRU", "SRRIP", "GRASP", "POPT", "ECG_K2", "ECG_K2_ONLINE"]
+    policies = ["LRU", "SRRIP", "GRASP", "POPT", "ECG_REUSE_PLAN", "ECG_REUSE_PLAN_ONLINE"]
     rows = []
     for prefetcher, misses, matrix_hash in (
             ("none", 100, "none"),
@@ -1360,15 +1361,15 @@ def test_sniper_stride_sensitivity_reports_traffic_without_demand_split():
                 "final_expected_policy_labels": json.dumps(policies),
             })
     sensitivity = module.preliminary_stride_sensitivity(rows)
-    k2 = next(
+    reuse_plan = next(
         row for row in sensitivity
-        if row["policy_label"] == "ECG_K2")
-    assert k2["demand_miss_metric_available"] == 0
-    assert k2["demand_miss_unavailable_reason"] == (
+        if row["policy_label"] == "ECG_REUSE_PLAN")
+    assert reuse_plan["demand_miss_metric_available"] == 0
+    assert reuse_plan["demand_miss_unavailable_reason"] == (
         "sniper_lacks_prefetch_miss_split")
-    assert "demand_miss_reduction_pct" not in k2
-    assert k2["traffic_unit"] == "llc_read_misses"
-    assert k2["traffic_change_pct"] == pytest.approx(300.0)
+    assert "demand_miss_reduction_pct" not in reuse_plan
+    assert reuse_plan["traffic_unit"] == "llc_read_misses"
+    assert reuse_plan["traffic_change_pct"] == pytest.approx(300.0)
 
 
 def test_l3_pressure_requires_positive_activity():
@@ -1396,7 +1397,7 @@ def test_missing_policy_shards_produce_no_relative_rows():
     )
     expected = json.dumps([
         "LRU", "SRRIP", "GRASP", "POPT",
-        "ECG_K2", "ECG_K2_STREAMSHIELD",
+        "ECG_REUSE_PLAN", "ECG_REUSE_PLAN_FLOWTHROUGH",
     ])
     common = {
         "status": "ok",
@@ -1414,7 +1415,7 @@ def test_missing_policy_shards_produce_no_relative_rows():
     }
     rows = [
         {**common, "policy_label": "LRU", "sim_ticks": "100"},
-        {**common, "policy_label": "ECG_K2", "sim_ticks": "80"},
+        {**common, "policy_label": "ECG_REUSE_PLAN", "sim_ticks": "80"},
     ]
     assert module.roi_relative_metrics(rows) == []
 
@@ -1424,7 +1425,7 @@ def test_mismatched_matrix_hashes_do_not_compare():
         "aggregate_results_mismatched_hashes",
         ROOT / "scripts/experiments/ecg/flows/aggregate_results.py",
     )
-    expected = json.dumps(["LRU", "ECG_K2"])
+    expected = json.dumps(["LRU", "ECG_REUSE_PLAN"])
     common = {
         "status": "ok",
         "final_output_status": "ok",
@@ -1442,7 +1443,7 @@ def test_mismatched_matrix_hashes_do_not_compare():
         {**common, "final_matrix_config_hash": "a",
          "policy_label": "LRU", "sim_ticks": "100"},
         {**common, "final_matrix_config_hash": "b",
-         "policy_label": "ECG_K2", "sim_ticks": "80"},
+         "policy_label": "ECG_REUSE_PLAN", "sim_ticks": "80"},
     ]
     assert module.roi_relative_metrics(rows) == []
 

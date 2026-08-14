@@ -99,7 +99,7 @@ def test_gem5_popt_matrix_stream_is_disclosed_as_analytic():
 
     The rereference matrix reaches the gem5 replacement policy through a
     sideband file, so streaming columns costs no simulated traffic, no latency
-    and no instructions -- while K2 pays for its records in full. Left
+    and no instructions -- while ReusePlan pays for its records in full. Left
     undisclosed, that asymmetry reads as P-OPT beating everything.
 
     The runner must record the omitted stream, and the analysis must surface it

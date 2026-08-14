@@ -1,12 +1,12 @@
 # ECG Next RISC-V Instruction Overlay
 
 This directory contains the tracked gem5 ISA definitions for ECG metadata
-delivery. The custom-0 instruction family supports:
+delivery. The custom-0 instruction family is organized by role:
 
-- wide and compact K2 record extraction;
-- request-flagged StreamShield record loads;
-- fused indexed and computed-address property loads; and
-- exact request binding of tier and epoch metadata for replacement.
+- `ecg.plan.load*` acquires a ReusePlan record with ordinary placement;
+- `ecg.flow.load*` acquires a record with FlowThrough placement;
+- `ecg.bind.load.*` binds a plan to a computed-address property load; and
+- `ecg.bind.iload.*` combines indexed address generation and binding.
 
 The compact format is configured once through the ECG record-format CSR.
 Instruction decoding widens compact records to the canonical metadata layout

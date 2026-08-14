@@ -137,7 +137,7 @@ def test_sniper_grasp_popt_context_gate_remains_fail_closed():
     (which already fail the row when Sniper completes without a loaded
     graph context, or when P-OPT completes without a loaded rereference
     matrix) must remain intact and unconditional -- they run before any of
-    the new Sniper K2 online-dueling / variant-receipt / geometry-receipt
+    the new Sniper ReusePlan online-dueling / variant-receipt / geometry-receipt
     related evidence code.
     """
     text = read(ROI_MATRIX)
@@ -147,7 +147,7 @@ def test_sniper_grasp_popt_context_gate_remains_fail_closed():
     assert "Sniper P-OPT completed without a loaded rereference matrix" in text
     assert 'row["sniper_context_loaded"] = int(context_loaded)' in text
     assert 'row["sniper_rereference_loaded"] = reref_loaded' in text
-    # The is_k2_ecg-gated receipt/evidence code must sit
+    # The is_reuse_plan_ecg-gated receipt/evidence code must sit
     # AFTER the fail-closed context gate, not before it (an early return on
     # a missing context must short-circuit before any evidence is trusted).
     #
@@ -187,7 +187,7 @@ def test_sniper_grasp_popt_context_gate_remains_fail_closed():
         "Sniper graph policy completed without a loaded graph context")
     variant_receipt_line = _first_call_lineno("apply_sniper_variant_receipt")
     assert context_gate_line < variant_receipt_line, (
-        "the Sniper K2 variant-receipt call must be parsed AFTER (i.e. at a "
+        "the Sniper ReusePlan variant-receipt call must be parsed AFTER (i.e. at a "
         "later source line than) the fail-closed missing-graph-context gate")
 
 

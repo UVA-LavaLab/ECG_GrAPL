@@ -1,19 +1,19 @@
 # Evaluation Methodology
 
-This page defines how K2 and StreamShield are evaluated. It contains no
+This page defines how ReusePlan and FlowThrough are evaluated. It contains no
 performance results.
 
 ## Simulator roles
 
 | Simulator | Use |
 |---|---|
-| **gem5 O3** | architectural execution time and request-bound K2-M behavior |
+| **gem5 O3** | architectural execution time and request-bound ReuseBind behavior |
 | **cache_sim** | functional replacement behavior and total memory traffic |
 | **Sniper** | larger-scale cache and traffic trends |
 
 Only gem5 O3 execution time is used for architectural speedup. cache_sim does
 not model cycles or instructions. Sniper uses a coarser delivery model than
-gem5's request-bound O3 path, so its time is not used as a K2-M speedup.
+gem5's request-bound O3 path, so its time is not used as a ReuseBind speedup.
 
 Absolute miss rates are not compared across simulators. Each simulator is
 compared with its own matching baseline.
@@ -31,9 +31,9 @@ The policy set contains:
 - GRASP;
 - capacity- and traffic-charged P-OPT;
 - an uncharged P-OPT control;
-- K2 with an LRU replacement control;
-- static RRIP-first K2 with StreamShield; and
-- online K2 with StreamShield.
+- ReusePlan with an LRU replacement control;
+- static RRIP-first ReusePlan with FlowThrough; and
+- online ReusePlan with FlowThrough.
 
 ## Primary quantities
 
@@ -65,8 +65,8 @@ Complete-design comparisons include record layout, transport, ISA, placement,
 and replacement. Their instruction counts may differ, so time, traffic, and
 retired instructions must be reported together.
 
-Replacement-only attribution uses K2 RRIP-first plus StreamShield versus K2
-LRU plus StreamShield. These configurations share the record layout, delivery
+Replacement-only attribution uses ReusePlan RRIP-first plus FlowThrough versus ReusePlan
+LRU plus FlowThrough. These configurations share the record layout, delivery
 path, ISA, and instruction count. Exact per-cell instruction equality is
 required for this attribution.
 
@@ -98,13 +98,13 @@ The final campaign separates simulator responsibilities:
 The full-graph cache_sim primary uses a 4-byte record with 16 epochs, which
 fits all three graphs for PR, BFS, BC, and CC. Weighted SSSP uses its
 implemented 8-byte replacement record. Two wide-record controls isolate the
-cost of record width and the effect of increasing K2 resolution from 16 to
+cost of record width and the effect of increasing ReusePlan resolution from 16 to
 256 epochs.
 
 P-OPT reference rows are limited to PageRank and Connected Components. They
-compare directly with the compact 4-byte/16-epoch K2 primary in the same cell
+compare directly with the compact 4-byte/16-epoch ReusePlan primary in the same cell
 and pin property width, resident columns, P-OPT's 256 epochs, minimum data
-ways, and simulated matrix streaming. A separate wide K2/256-epoch control
+ways, and simulated matrix streaming. A separate wide ReusePlan/256-epoch control
 shows the sensitivity to epoch resolution. gem5 P-OPT time still omits
 matrix-stream latency and therefore remains an optimistic bound.
 

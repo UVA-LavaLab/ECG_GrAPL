@@ -37,11 +37,11 @@ inline void RelaxEdges_Sim(const WGraph &g, NodeID u, WeightT delta,
                            CacheType &cache, GraphCacheContext &graph_ctx,
                            const vector<uint32_t> &vertex_masks,
                            int pfx_lookahead, int pfx_top_k,
-                           bool record_charged, bool stream_bypass,
+                           bool record_charged, bool flowthrough,
                            bool compact_weighted,
                            const ::ecg_metadata::Config &ecg_meta,
                            WNode* out_edge_base) {
-    (void)compact_weighted; (void)stream_bypass;
+    (void)compact_weighted; (void)flowthrough;
     auto out_neigh = g.out_neigh(u);
     // ECG_EDGE_MASKS: consume the OUT-edge per-edge masks (transpose-correct — the
     // epoch is the next in-neighbour of dest > u, i.e. the next reader of dist[dest])
@@ -199,8 +199,8 @@ pvector<WeightT> DeltaStep_Sim(const WGraph &g, NodeID source,
     }
     const bool record_charged = GraphSimEcgEdgeRecord() &&
         GraphSimEnvIntClamped("ECG_EDGE_MASK_CHARGED", 1, 0, 1) > 0;
-    const bool stream_bypass =
-        GraphSimEnvIntClamped("ECG_STREAM_BYPASS", 0, 0, 1) > 0;
+    const bool flowthrough =
+        GraphSimEnvIntClamped("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
     int epoch_bits = 1;
     const uint32_t edge_epochs =
         graph_ctx.edge_epoch_count ? graph_ctx.edge_epoch_count : 2;
@@ -209,12 +209,12 @@ pvector<WeightT> DeltaStep_Sim(const WGraph &g, NodeID source,
         ++epoch_bits;
     }
     bool compact_weighted =
-        GraphSimEnvIntClamped("ECG_EDGE_MASK_SCHED", 0, 0, 4) == 2 &&
+        GraphSimEnvIntClamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4) == 2 &&
         static_cast<uint64_t>(g.num_nodes()) <=
-            ecg_epoch::kCompactWeightedMaxVertices;
+            ecg_reuse_plan::kCompactWeightedMaxVertices;
     for (NodeID u = 0; compact_weighted && u < g.num_nodes(); ++u) {
         for (WNode edge : g.out_neigh(u)) {
-            if (!ecg_epoch::canPackCompactWeightedEdge(
+            if (!ecg_reuse_plan::canPackCompactWeightedEdge(
                     g.num_nodes(), static_cast<uint32_t>(edge.v),
                     static_cast<int64_t>(edge.w))) {
                 compact_weighted = false;
@@ -237,7 +237,7 @@ pvector<WeightT> DeltaStep_Sim(const WGraph &g, NodeID source,
     if (compact_weighted) {
         std::fprintf(
             stderr,
-            "[ECG_COMPACT_K2_WEIGHTED64] SSSP 8B replacement record ACTIVE\n");
+            "[ECG_COMPACT_REUSE_PLAN_WEIGHTED64] SSSP 8B replacement record ACTIVE\n");
     }
     WNode* out_edge_base = g.num_nodes() > 0
         ? g.out_neigh(0).begin() : nullptr;
@@ -274,7 +274,7 @@ pvector<WeightT> DeltaStep_Sim(const WGraph &g, NodeID source,
                 if (source_dist >= delta * static_cast<WeightT>(curr_bin_index))
                     RelaxEdges_Sim(g, u, delta, source_dist, dist, local_bins, cache,
                                    graph_ctx, vertex_masks, pfx_lookahead,
-                                   pfx_top_k, record_charged, stream_bypass,
+                                   pfx_top_k, record_charged, flowthrough,
                                    compact_weighted,
                                    ecg_meta,
                                    out_edge_base);
@@ -292,7 +292,7 @@ pvector<WeightT> DeltaStep_Sim(const WGraph &g, NodeID source,
                     const WeightT source_dist = dist[u];
                     RelaxEdges_Sim(g, u, delta, source_dist, dist, local_bins, cache,
                                    graph_ctx, vertex_masks, pfx_lookahead,
-                                   pfx_top_k, record_charged, stream_bypass,
+                                   pfx_top_k, record_charged, flowthrough,
                                    compact_weighted,
                                    ecg_meta,
                                    out_edge_base);

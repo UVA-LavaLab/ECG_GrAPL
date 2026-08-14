@@ -234,20 +234,20 @@ int main() {
                 placement_follower = set;
         }
         const bool placement_default_ok =
-            !placement.shouldBypass(placement_follower);
+            !placement.shouldFlowThrough(placement_follower);
         for (int miss = 0; miss < 700; ++miss)
             placement.recordMiss(
                 placement_leader[ecg_policy::PLACE_ALLOCATE]);
         for (int miss = 0; miss < 324; ++miss)
             placement.recordMiss(
-                placement_leader[ecg_policy::PLACE_SHIELD]);
+                placement_leader[ecg_policy::PLACE_FLOWTHROUGH]);
         const bool placement_winner_ok =
-            placement.winnerArm() == ecg_policy::PLACE_SHIELD &&
-            placement.shouldBypass(placement_follower) &&
-            !placement.shouldBypass(
+            placement.winnerArm() == ecg_policy::PLACE_FLOWTHROUGH &&
+            placement.shouldFlowThrough(placement_follower) &&
+            !placement.shouldFlowThrough(
                 placement_leader[ecg_policy::PLACE_ALLOCATE]) &&
-            placement.shouldBypass(
-                placement_leader[ecg_policy::PLACE_SHIELD]);
+            placement.shouldFlowThrough(
+                placement_leader[ecg_policy::PLACE_FLOWTHROUGH]);
         const bool ok = leaders_ok && winner_ok && leader_policy_ok &&
             placement_default_ok && placement_winner_ok;
         printf("    %-46s [%s]\n",

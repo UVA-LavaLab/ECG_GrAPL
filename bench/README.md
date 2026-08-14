@@ -9,7 +9,7 @@
 | `include/cache_sim/` | Functional cache hierarchy |
 | `include/gem5_sim/` | gem5 overlays/configuration |
 | `include/sniper_sim/` | Sniper overlays/configuration |
-| `include/ecg_*` | Shared K2 record, mode-6, and victim-policy logic |
+| `include/ecg_*` | Shared ReusePlan record, mode-6, and victim-policy logic |
 
 The GAPBS and reordering headers under `include/external/` and
 `include/graphbrew/` are retained only as build dependencies for graph loading,

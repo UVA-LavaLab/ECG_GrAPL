@@ -30,10 +30,10 @@ bool graphCtxRegistrationLogEnabled()
     return enabled != 0;
 }
 
-bool k2LookupProfileEnabled()
+bool reuse_planLookupProfileEnabled()
 {
     static int enabled = []() {
-        const char* value = std::getenv("SNIPER_K2_LOOKUP_PROFILE");
+        const char* value = std::getenv("SNIPER_REUSE_PLAN_LOOKUP_PROFILE");
         return value && value[0] && std::strcmp(value, "0") != 0 ? 1 : 0;
     }();
     return enabled != 0;
@@ -339,24 +339,24 @@ void recordEcgEpoch(uint32_t core_id, uint32_t vertex, uint16_t epoch)
     m.version[i].store(sequence << 1, std::memory_order_release);
 }
 
-void recordEcgEpochPair(uint32_t core_id, uint32_t vertex,
+void recordEcgReusePlan(uint32_t core_id, uint32_t vertex,
                         uint8_t tier, uint16_t first, uint16_t second)
 {
     if (core_id >= MAX_TRACKED_CORES) return;
     if (tier == 0) {
-        clearEcgEpochPair(core_id, vertex);
+        clearEcgReusePlan(core_id, vertex);
         return;
     }
     static std::atomic<uint64_t> trace_sequence{0};
     static const uint64_t trace_limit = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return value ? static_cast<uint64_t>(std::strtoull(value, nullptr, 10)) : 0;
     }();
     const uint64_t sequence_index =
         trace_sequence.fetch_add(1, std::memory_order_relaxed);
     if (sequence_index < trace_limit) {
         std::fprintf(stderr,
-            "[ECG-K2-RECV sim=sniper seq=%llu dest=%u tier=%u "
+            "[ECG-ReusePlan-RECV sim=sniper seq=%llu dest=%u tier=%u "
             "epoch1=%u epoch2=%u]\n",
             (unsigned long long)sequence_index, vertex,
             static_cast<unsigned>(tier),
@@ -395,7 +395,7 @@ void recordEcgEpochPair(uint32_t core_id, uint32_t vertex,
     m.version[i].store(sequence << 1, std::memory_order_release);
 }
 
-void clearEcgEpochPair(uint32_t core_id, uint32_t vertex)
+void clearEcgReusePlan(uint32_t core_id, uint32_t vertex)
 {
     if (core_id >= MAX_TRACKED_CORES) return;
     auto& m = ecgEpochMaps()[core_id];
@@ -418,11 +418,11 @@ bool lookupEcgEpoch(uint32_t core_id, uint32_t vertex,
     uint16_t second = 0;
     uint8_t tier = 0;
     uint8_t count = 0;
-    return lookupEcgEpochPair(
+    return lookupEcgReusePlan(
         core_id, vertex, tier, epoch, second, count, sequence);
 }
 
-bool lookupEcgEpochPair(uint32_t core_id, uint32_t vertex,
+bool lookupEcgReusePlan(uint32_t core_id, uint32_t vertex,
                         uint8_t& tier, uint16_t& first, uint16_t& second,
                         uint8_t& count, uint64_t& sequence)
 {
@@ -593,20 +593,20 @@ uint8_t MaskConfig::dbgTierToRRPV(uint8_t dbg_tier) const
 
 GraphCacheContext::~GraphCacheContext()
 {
-    if (!k2LookupProfileEnabled()) return;
+    if (!reuse_planLookupProfileEnabled()) return;
     const uint64_t calls =
-        k2_profile_calls.load(std::memory_order_relaxed);
+        reuse_plan_profile_calls.load(std::memory_order_relaxed);
     const uint64_t found =
-        k2_profile_found.load(std::memory_order_relaxed);
+        reuse_plan_profile_found.load(std::memory_order_relaxed);
     const uint64_t total =
-        k2_profile_total_ns.load(std::memory_order_relaxed);
+        reuse_plan_profile_total_ns.load(std::memory_order_relaxed);
     const uint64_t classify =
-        k2_profile_classify_ns.load(std::memory_order_relaxed);
+        reuse_plan_profile_classify_ns.load(std::memory_order_relaxed);
     const uint64_t search =
-        k2_profile_search_ns.load(std::memory_order_relaxed);
+        reuse_plan_profile_search_ns.load(std::memory_order_relaxed);
     std::fprintf(
         stderr,
-        "[K2-LOOKUP-PROFILE calls=%llu found=%llu total_ns=%llu "
+        "[ReusePlan-LOOKUP-PROFILE calls=%llu found=%llu total_ns=%llu "
         "classify_ns=%llu search_ns=%llu avg_ns=%.3f]\n",
         (unsigned long long)calls,
         (unsigned long long)found,
@@ -624,39 +624,39 @@ bool GraphCacheContext::loadFromSideband(const std::string& path)
 
     topology.num_vertices = static_cast<uint32_t>(parseJsonUint(content, "\"num_vertices\""));
     topology.num_edges = parseJsonUint(content, "\"num_edges\"");
-    stream_bypass_base = parseJsonUint(content, "\"stream_bypass_base\"");
-    const uint64_t stream_bypass_size =
-        parseJsonUint(content, "\"stream_bypass_size\"");
-    stream_bypass_upper = stream_bypass_base + stream_bypass_size;
-    std::vector<uint64_t> raw_k2_records;
-    const char* fused_k2 = std::getenv("SNIPER_ECG_FUSED_K2");
+    flowthrough_base = parseJsonUint(content, "\"flowthrough_base\"");
+    const uint64_t flowthrough_size =
+        parseJsonUint(content, "\"flowthrough_size\"");
+    flowthrough_upper = flowthrough_base + flowthrough_size;
+    std::vector<uint64_t> raw_reuse_plan_records;
+    const char* fused_reuse_plan = std::getenv("SNIPER_ECG_FUSED_REUSE_PLAN");
     const bool offsets_loaded = loadBinaryVector(
-        parseJsonString(content, "\"k2_offsets_path\""), k2_offsets);
+        parseJsonString(content, "\"reuse_plan_offsets_path\""), reuse_plan_offsets);
     const bool records_loaded = loadBinaryVector(
-        parseJsonString(content, "\"k2_records_path\""), raw_k2_records);
-    const bool fused_k2_enabled =
-        fused_k2 && fused_k2[0] && std::strcmp(fused_k2, "0") != 0;
-    if (fused_k2_enabled &&
+        parseJsonString(content, "\"reuse_plan_records_path\""), raw_reuse_plan_records);
+    const bool fused_reuse_plan_enabled =
+        fused_reuse_plan && fused_reuse_plan[0] && std::strcmp(fused_reuse_plan, "0") != 0;
+    if (fused_reuse_plan_enabled &&
         (!offsets_loaded || !records_loaded ||
-         k2_offsets.size() != static_cast<size_t>(topology.num_vertices) + 1 ||
-        k2_offsets.empty() || k2_offsets.back() != raw_k2_records.size())) {
+         reuse_plan_offsets.size() != static_cast<size_t>(topology.num_vertices) + 1 ||
+        reuse_plan_offsets.empty() || reuse_plan_offsets.back() != raw_reuse_plan_records.size())) {
         std::fprintf(stderr,
-            "[FATAL] Sniper fused K2 sideband is missing or incomplete "
+            "[FATAL] Sniper fused ReusePlan sideband is missing or incomplete "
             "(offsets=%zu records=%zu vertices=%u)\n",
-           k2_offsets.size(), raw_k2_records.size(),
+           reuse_plan_offsets.size(), raw_reuse_plan_records.size(),
            topology.num_vertices);
         std::abort();
     }
-    const char* trace_value = std::getenv("ECG_K2_DELIVERY_TRACE");
+    const char* trace_value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
     const uint64_t trace_limit = trace_value
         ? std::strtoull(trace_value, nullptr, 10) : 0;
-    if (fused_k2_enabled) {
+    if (fused_reuse_plan_enabled) {
         const uint64_t count = std::min<uint64_t>(
-            trace_limit, raw_k2_records.size());
+            trace_limit, raw_reuse_plan_records.size());
         for (uint64_t sequence = 0; sequence < count; ++sequence) {
-            const uint64_t record = raw_k2_records[sequence];
+            const uint64_t record = raw_reuse_plan_records[sequence];
             std::fprintf(stderr,
-                "[ECG-K2-SIDEBAND sim=sniper seq=%llu dest=%u "
+                "[ECG-ReusePlan-SIDEBAND sim=sniper seq=%llu dest=%u "
                 "tier=%u epoch1=%u epoch2=%u]\n",
                 (unsigned long long)sequence,
                 static_cast<unsigned>(record & 0xFFFFFFFFULL),
@@ -665,16 +665,16 @@ bool GraphCacheContext::loadFromSideband(const std::string& path)
                 static_cast<unsigned>((record >> 49) & 0x7FFFULL));
         }
     }
-    k2_line_offsets.clear();
-    k2_line_ids.clear();
-    k2_line_records.clear();
-    k2_line_indices.clear();
-    k2_line8_offsets.clear();
-    k2_line8_ids.clear();
-    k2_line8_records.clear();
-    k2_line8_indices.clear();
-    if (fused_k2_enabled) {
-        struct IndexedK2Record {
+    reuse_plan_line_offsets.clear();
+    reuse_plan_line_ids.clear();
+    reuse_plan_line_records.clear();
+    reuse_plan_line_indices.clear();
+    reuse_plan_line8_offsets.clear();
+    reuse_plan_line8_ids.clear();
+    reuse_plan_line8_records.clear();
+    reuse_plan_line8_indices.clear();
+    if (fused_reuse_plan_enabled) {
+        struct IndexedReusePlanRecord {
             uint32_t line_id;
             uint64_t record;
             uint64_t raw_index;
@@ -687,14 +687,14 @@ bool GraphCacheContext::loadFromSideband(const std::string& path)
                 std::vector<uint64_t>& indices) {
             offsets.assign(
                 static_cast<size_t>(topology.num_vertices) + 1, 0);
-            std::vector<IndexedK2Record> source_lines;
+            std::vector<IndexedReusePlanRecord> source_lines;
             for (uint32_t src = 0; src < topology.num_vertices; ++src) {
-                const uint64_t begin = k2_offsets[src];
-                const uint64_t end = k2_offsets[src + 1];
+                const uint64_t begin = reuse_plan_offsets[src];
+                const uint64_t end = reuse_plan_offsets[src + 1];
                 source_lines.clear();
                 source_lines.reserve(static_cast<size_t>(end - begin));
                 for (uint64_t index = begin; index < end; ++index) {
-                    const uint64_t record = raw_k2_records[index];
+                    const uint64_t record = raw_reuse_plan_records[index];
                     if (((record >> 32) & 0x3ULL) == 0) continue;
                     source_lines.push_back({
                         static_cast<uint32_t>(record) / vertices_per_line,
@@ -704,18 +704,18 @@ bool GraphCacheContext::loadFromSideband(const std::string& path)
                 }
                 std::stable_sort(
                     source_lines.begin(), source_lines.end(),
-                    [](const IndexedK2Record& left,
-                       const IndexedK2Record& right) {
+                    [](const IndexedReusePlanRecord& left,
+                       const IndexedReusePlanRecord& right) {
                         return left.line_id < right.line_id;
                     });
                 uint32_t previous_line = UINT32_MAX;
-                for (const IndexedK2Record& indexed : source_lines) {
+                for (const IndexedReusePlanRecord& indexed : source_lines) {
                     if (indexed.line_id == previous_line) {
                         if ((indexed.record >> 32) !=
                             (records.back() >> 32)) {
                             std::fprintf(
                                 stderr,
-                                "[FATAL] Sniper fused K2 line has inconsistent "
+                                "[FATAL] Sniper fused ReusePlan line has inconsistent "
                                 "tier/epoch hints (src=%u line=%u vpl=%u)\n",
                                 src, indexed.line_id, vertices_per_line);
                             std::abort();
@@ -732,12 +732,12 @@ bool GraphCacheContext::loadFromSideband(const std::string& path)
         };
         const uint32_t primary_vpl = ecgVerticesPerLine();
         build_line_index(
-            primary_vpl, k2_line_offsets, k2_line_ids,
-            k2_line_records, k2_line_indices);
+            primary_vpl, reuse_plan_line_offsets, reuse_plan_line_ids,
+            reuse_plan_line_records, reuse_plan_line_indices);
         if (primary_vpl != 8) {
             build_line_index(
-                8, k2_line8_offsets, k2_line8_ids,
-                k2_line8_records, k2_line8_indices);
+                8, reuse_plan_line8_offsets, reuse_plan_line8_ids,
+                reuse_plan_line8_records, reuse_plan_line8_indices);
         }
     }
     topology.max_degree = static_cast<uint32_t>(parseJsonUint(content, "\"max_degree\""));
@@ -751,10 +751,10 @@ bool GraphCacheContext::loadFromSideband(const std::string& path)
     if (const char* ne_env = std::getenv("ECG_EDGE_MASK_EPOCHS")) {
         uint32_t ne = static_cast<uint32_t>(std::strtoul(ne_env, nullptr, 10));
         if (ne < 2) ne = 2;
-        const char* schedule = std::getenv("ECG_EDGE_MASK_SCHED");
-        const bool tiered_k2 =
+        const char* schedule = std::getenv("ECG_REUSE_PLAN_DEPTH");
+        const bool tiered_reuse_plan =
             schedule && std::strcmp(schedule, "2") == 0;
-        const uint32_t max_epochs = tiered_k2 ? 32768u : 65535u;
+        const uint32_t max_epochs = tiered_reuse_plan ? 32768u : 65535u;
         if (ne > max_epochs) ne = max_epochs;
         edge_epoch_count = ne;
     }
@@ -943,19 +943,19 @@ bool GraphCacheContext::isEcgEpochData(uint64_t addr) const
     return false;
 }
 
-bool GraphCacheContext::isStreamBypassData(uint64_t addr) const
+bool GraphCacheContext::isFlowThroughData(uint64_t addr) const
 {
-    return stream_bypass_base < stream_bypass_upper &&
-           addr >= stream_bypass_base && addr < stream_bypass_upper;
+    return flowthrough_base < flowthrough_upper &&
+           addr >= flowthrough_base && addr < flowthrough_upper;
 }
 
-bool GraphCacheContext::lookupFusedK2Pair(
+bool GraphCacheContext::lookupFusedReusePlanPair(
         uint64_t line_addr, uint32_t core_id,
         uint8_t& tier, uint16_t& first, uint16_t& second,
         uint64_t trace_sequence) const
 {
     using Clock = std::chrono::steady_clock;
-    const bool profile = k2LookupProfileEnabled();
+    const bool profile = reuse_planLookupProfileEnabled();
     const auto total_start = profile ? Clock::now() : Clock::time_point{};
     struct TotalTimer {
         const GraphCacheContext* context;
@@ -965,13 +965,13 @@ bool GraphCacheContext::lookupFusedK2Pair(
             if (!enabled) return;
             const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 Clock::now() - start).count();
-            context->k2_profile_total_ns.fetch_add(
+            context->reuse_plan_profile_total_ns.fetch_add(
                 static_cast<uint64_t>(ns), std::memory_order_relaxed);
         }
     } total_timer{this, profile, total_start};
     if (profile)
-        k2_profile_calls.fetch_add(1, std::memory_order_relaxed);
-    if (k2_offsets.empty())
+        reuse_plan_profile_calls.fetch_add(1, std::memory_order_relaxed);
+    if (reuse_plan_offsets.empty())
         return false;
     const auto classify_start = profile ? Clock::now() : Clock::time_point{};
     const uint32_t src = currentVertexForPopt(core_id);
@@ -982,14 +982,14 @@ bool GraphCacheContext::lookupFusedK2Pair(
         elem_size > 0 ? std::max<uint32_t>(1, 64 / elem_size)
                       : ecgVerticesPerLine();
     const bool use_line8 =
-        vertices_per_line == 8 && !k2_line8_offsets.empty();
+        vertices_per_line == 8 && !reuse_plan_line8_offsets.empty();
     const auto& line_offsets =
-        use_line8 ? k2_line8_offsets : k2_line_offsets;
-    const auto& line_ids = use_line8 ? k2_line8_ids : k2_line_ids;
+        use_line8 ? reuse_plan_line8_offsets : reuse_plan_line_offsets;
+    const auto& line_ids = use_line8 ? reuse_plan_line8_ids : reuse_plan_line_ids;
     const auto& line_records =
-        use_line8 ? k2_line8_records : k2_line_records;
+        use_line8 ? reuse_plan_line8_records : reuse_plan_line_records;
     const auto& line_indices =
-        use_line8 ? k2_line8_indices : k2_line_indices;
+        use_line8 ? reuse_plan_line8_indices : reuse_plan_line_indices;
     if (line_offsets.empty() || line_ids.empty() ||
         line_records.empty() || line_indices.empty() ||
         static_cast<size_t>(src + 1) >= line_offsets.size())
@@ -998,7 +998,7 @@ bool GraphCacheContext::lookupFusedK2Pair(
     if (profile) {
         const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - classify_start).count();
-        k2_profile_classify_ns.fetch_add(
+        reuse_plan_profile_classify_ns.fetch_add(
             static_cast<uint64_t>(ns), std::memory_order_relaxed);
     }
     const uint64_t indexed_begin = line_offsets[src];
@@ -1012,26 +1012,26 @@ bool GraphCacheContext::lookupFusedK2Pair(
     if (profile) {
         const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - search_start).count();
-        k2_profile_search_ns.fetch_add(
+        reuse_plan_profile_search_ns.fetch_add(
             static_cast<uint64_t>(ns), std::memory_order_relaxed);
     }
     if (found == line_ids.begin() + indexed_end || *found != line_id)
         return false;
     if (profile)
-        k2_profile_found.fetch_add(1, std::memory_order_relaxed);
+        reuse_plan_profile_found.fetch_add(1, std::memory_order_relaxed);
     const uint64_t indexed_position =
         static_cast<uint64_t>(found - line_ids.begin());
     const uint64_t record = line_records[indexed_position];
     const uint64_t raw_index = line_indices[indexed_position];
-    const uint64_t raw_begin = k2_offsets[src];
-    const uint64_t raw_end = k2_offsets[src + 1];
+    const uint64_t raw_begin = reuse_plan_offsets[src];
+    const uint64_t raw_end = reuse_plan_offsets[src + 1];
     const uint32_t dest = static_cast<uint32_t>(record);
     tier = static_cast<uint8_t>((record >> 32) & 0x3ULL);
     first = static_cast<uint16_t>((record >> 34) & 0x7FFFULL);
     second = static_cast<uint16_t>((record >> 49) & 0x7FFFULL);
     static std::atomic<uint64_t> fused_receipts{0};
     static const uint64_t fused_trace_limit = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return value ? std::strtoull(value, nullptr, 10) : 0;
     }();
     static const bool validate_once = []() {
@@ -1052,7 +1052,7 @@ bool GraphCacheContext::lookupFusedK2Pair(
     if ((fused_trace_limit > 0 && receipt < fused_trace_limit) ||
         emit_validation) {
         std::fprintf(stderr,
-            "[ECG-K2-FUSED-RECV sim=sniper seq=%llu src=%u "
+            "[ECG-ReusePlan-FUSED-RECV sim=sniper seq=%llu src=%u "
             "line=%u addr_line=0x%llx vpl=%u index=%llu begin=%llu end=%llu "
             "dest=%u tier=%u epoch1=%u epoch2=%u]\n",
             (unsigned long long)receipt, src,
@@ -1148,31 +1148,31 @@ GraphCacheContext& globalContext()
 }
 
 namespace {
-struct BoundK2LoadState {
+struct BoundReusePlanLoadState {
     std::array<std::atomic<uint64_t>, MAX_TRACKED_CORES> address{};
     std::array<std::atomic<uint16_t>, MAX_TRACKED_CORES> current_epoch{};
     std::array<std::atomic<uint16_t>, MAX_TRACKED_CORES> context_id{};
     std::array<std::atomic<bool>, MAX_TRACKED_CORES> valid{};
 };
 
-uint64_t boundK2TraceLimit()
+uint64_t boundReusePlanTraceLimit()
 {
     static const uint64_t limit = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return value ? std::strtoull(value, nullptr, 10) : 0;
     }();
     return limit;
 }
 
-std::atomic<uint64_t>& boundK2ConsumeSequence()
+std::atomic<uint64_t>& boundReusePlanConsumeSequence()
 {
     static std::atomic<uint64_t> sequence{0};
     return sequence;
 }
 
-BoundK2LoadState& boundK2LoadState()
+BoundReusePlanLoadState& boundReusePlanLoadState()
 {
-    static BoundK2LoadState state;
+    static BoundReusePlanLoadState state;
     return state;
 }
 
@@ -1213,10 +1213,10 @@ uint16_t currentEcgContextId()
     return activeEcgContextId().load(std::memory_order_acquire);
 }
 
-void recordBoundK2Load(uint32_t core_id, uint64_t address)
+void recordBoundReusePlanLoad(uint32_t core_id, uint64_t address)
 {
     if (core_id >= MAX_TRACKED_CORES) return;
-    auto& state = boundK2LoadState();
+    auto& state = boundReusePlanLoadState();
     state.address[core_id].store(address, std::memory_order_relaxed);
     state.current_epoch[core_id].store(
         globalContext().currentEcgEpoch(core_id),
@@ -1226,20 +1226,20 @@ void recordBoundK2Load(uint32_t core_id, uint64_t address)
     state.valid[core_id].store(true, std::memory_order_release);
 }
 
-void clearBoundK2Load(uint32_t core_id)
+void clearBoundReusePlanLoad(uint32_t core_id)
 {
     if (core_id >= MAX_TRACKED_CORES) return;
-    boundK2LoadState().valid[core_id].store(
+    boundReusePlanLoadState().valid[core_id].store(
         false, std::memory_order_release);
 }
 
-bool consumeBoundK2Load(
+bool consumeBoundReusePlanLoad(
         uint32_t core_id, uint64_t line_addr, uint64_t line_size,
         uint16_t* current_epoch, uint16_t* context_id,
         uint64_t* trace_sequence)
 {
     if (core_id >= MAX_TRACKED_CORES || line_size == 0) return false;
-    auto& state = boundK2LoadState();
+    auto& state = boundReusePlanLoadState();
     if (!state.valid[core_id].load(std::memory_order_acquire)) return false;
     const uint64_t address =
         state.address[core_id].load(std::memory_order_relaxed);
@@ -1258,12 +1258,12 @@ bool consumeBoundK2Load(
             std::memory_order_relaxed);
     }
     const uint64_t sequence =
-        boundK2ConsumeSequence().fetch_add(1, std::memory_order_relaxed);
+        boundReusePlanConsumeSequence().fetch_add(1, std::memory_order_relaxed);
     if (trace_sequence) *trace_sequence = sequence;
-    if (sequence < boundK2TraceLimit()) {
+    if (sequence < boundReusePlanTraceLimit()) {
         std::fprintf(
             stderr,
-            "[ECG-K2-BIND-CONSUME sim=sniper seq=%llu core=%u "
+            "[ECG-ReusePlan-BIND-CONSUME sim=sniper seq=%llu core=%u "
             "bound=0x%llx line=0x%llx size=%llu current=%u context=%u]\n",
             (unsigned long long)sequence, core_id,
             (unsigned long long)address,
@@ -1275,20 +1275,20 @@ bool consumeBoundK2Load(
     return context_id == nullptr || *context_id != 0;
 }
 
-bool isEcgStreamBypassAddress(uint64_t addr)
+bool isEcgFlowThroughAddress(uint64_t addr)
 {
-    const char* enabled = std::getenv("ECG_STREAM_BYPASS");
+    const char* enabled = std::getenv("ECG_FLOWTHROUGH");
     if (!enabled || std::strcmp(enabled, "0") == 0) return false;
     GraphCacheContext& context = globalContext();
     if (!context.loaded ||
-        context.stream_bypass_base >= context.stream_bypass_upper) {
+        context.flowthrough_base >= context.flowthrough_upper) {
         const char* path = std::getenv("SNIPER_GRAPHBREW_CTX");
         if (!path || !path[0]) path = "/tmp/sniper_graphbrew_ctx.json";
         context.loaded = context.loadFromSideband(path);
     }
-    const bool match = context.loaded && context.isStreamBypassData(addr);
+    const bool match = context.loaded && context.isFlowThroughData(addr);
     static const bool adaptive = []() {
-        const char* value = std::getenv("ECG_STREAM_BYPASS_ADAPTIVE");
+        const char* value = std::getenv("ECG_FLOWTHROUGH_ADAPTIVE");
         return value && std::strcmp(value, "0") != 0;
     }();
     if (adaptive) {
@@ -1296,7 +1296,7 @@ bool isEcgStreamBypassAddress(uint64_t addr)
         if (!announced) {
             announced = true;
             std::fprintf(
-                stderr, "[ECG-STREAM-ADAPTIVE sim=sniper active=1]\n");
+                stderr, "[ECG-FLOWTHROUGH-ADAPTIVE sim=sniper active=1]\n");
         }
     }
     const uint64_t line_size =
@@ -1304,40 +1304,40 @@ bool isEcgStreamBypassAddress(uint64_t addr)
             ? context.rereference.cache_line_size : 64;
     const size_t set_index =
         static_cast<size_t>(addr / line_size);
-    const bool bypass = match && (
+    const bool flowthrough = match && (
         !adaptive ||
-        ecg_policy::globalOnlinePlacementSelector().shouldBypass(set_index));
+        ecg_policy::globalOnlinePlacementSelector().shouldFlowThrough(set_index));
     static uint64_t probes = 0;
     static const uint64_t limit = []() {
-        const char* value = std::getenv("ECG_STREAM_BYPASS_TRACE");
+        const char* value = std::getenv("ECG_FLOWTHROUGH_TRACE");
         return value ? std::strtoull(value, nullptr, 10) : 0;
     }();
     if (probes++ < limit) {
         std::fprintf(stderr,
-            "[ECG-STREAM-PROBE sim=sniper addr=%#llx base=%#llx "
+            "[ECG-FLOWTHROUGH-PROBE sim=sniper addr=%#llx base=%#llx "
             "upper=%#llx loaded=%d match=%d]\n",
             static_cast<unsigned long long>(addr),
-            static_cast<unsigned long long>(context.stream_bypass_base),
-            static_cast<unsigned long long>(context.stream_bypass_upper),
-            context.loaded ? 1 : 0, bypass ? 1 : 0);
+            static_cast<unsigned long long>(context.flowthrough_base),
+            static_cast<unsigned long long>(context.flowthrough_upper),
+            context.loaded ? 1 : 0, flowthrough ? 1 : 0);
     }
     static uint64_t ranged_probes = 0;
-    if (context.stream_bypass_base < context.stream_bypass_upper &&
+    if (context.flowthrough_base < context.flowthrough_upper &&
         ranged_probes++ < limit) {
         std::fprintf(stderr,
-            "[ECG-STREAM-RANGED sim=sniper addr=%#llx base=%#llx "
+            "[ECG-FLOWTHROUGH-RANGED sim=sniper addr=%#llx base=%#llx "
             "upper=%#llx match=%d]\n",
             static_cast<unsigned long long>(addr),
-            static_cast<unsigned long long>(context.stream_bypass_base),
-            static_cast<unsigned long long>(context.stream_bypass_upper),
-            bypass ? 1 : 0);
+            static_cast<unsigned long long>(context.flowthrough_base),
+            static_cast<unsigned long long>(context.flowthrough_upper),
+            flowthrough ? 1 : 0);
     }
-    return bypass;
+    return flowthrough;
 }
 
 void recordEcgPlacementMiss(uint64_t addr)
 {
-    const char* value = std::getenv("ECG_STREAM_BYPASS_ADAPTIVE");
+    const char* value = std::getenv("ECG_FLOWTHROUGH_ADAPTIVE");
     if (!value || std::strcmp(value, "0") == 0) return;
     GraphCacheContext& context = globalContext();
     const uint64_t line_size =

@@ -85,8 +85,8 @@ void BCBFS_Sim(const Graph &g, NodeID source,
     const bool ecg_record = GraphSimEcgEdgeRecord();
     const bool record_charged = ecg_record &&
         GraphSimEnvIntClamped("ECG_EDGE_MASK_CHARGED", 1, 0, 1) > 0;
-    const bool stream_bypass =
-        GraphSimEnvIntClamped("ECG_STREAM_BYPASS", 0, 0, 1) > 0;
+    const bool flowthrough =
+        GraphSimEnvIntClamped("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
     int epoch_bits = 1;
     const uint32_t edge_epochs =
         graph_ctx.edge_epoch_count ? graph_ctx.edge_epoch_count : 2;

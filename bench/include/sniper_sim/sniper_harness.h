@@ -14,7 +14,7 @@
 #include <fstream>
 #include <string>
 
-#include "ecg_epoch_builder.h"
+#include "ecg_reuse_plan_builder.h"
 #include <graph.h>
 #include <pvector.h>
 
@@ -37,8 +37,8 @@ constexpr uint64_t GRAPHBREW_SNIPER_USER_POPT_READY = 0x47504f50ULL;  // "GPOP"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_PFX_TARGET = 0x47504658ULL;  // "GPFX"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_EXTRACT = 0x47464C44ULL;  // ECG epoch-extract delivery
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_EXTRACT2 = 0x47464C45ULL; // dest + two epochs
-constexpr uint64_t GRAPHBREW_SNIPER_USER_K2_BIND = 0x4B32424EULL;  // "K2BN"
-constexpr uint64_t GRAPHBREW_SNIPER_USER_K2_CLEAR = 0x4B324243ULL; // "K2BC"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_REUSE_PLAN_BIND = 0x4B32424EULL;  // "ReusePlanBN"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_REUSE_PLAN_CLEAR = 0x4B324243ULL; // "ReusePlanBC"
 
 inline const char* env_or_default(const char* name, const char* fallback) {
     const char* value = std::getenv(name);
@@ -108,25 +108,25 @@ inline void notify_user(uint64_t command, uint64_t argument) {
 #endif
 }
 
-inline bool k2_exact_bind_enabled() {
+inline bool reuse_plan_exact_bind_enabled() {
     static const bool enabled = []() {
-        const char* value = std::getenv("SNIPER_K2_EXACT_BIND");
+        const char* value = std::getenv("SNIPER_REUSE_PLAN_EXACT_BIND");
         return value && value[0] && std::string(value) != "0";
     }();
     return enabled;
 }
 
 template <typename T>
-inline T k2_bound_load(const T* address) {
-    if (!k2_exact_bind_enabled()) return *address;
+inline T reuse_plan_bound_load(const T* address) {
+    if (!reuse_plan_exact_bind_enabled()) return *address;
     asm volatile("" ::: "memory");
     notify_user(
-        GRAPHBREW_SNIPER_USER_K2_BIND,
+        GRAPHBREW_SNIPER_USER_REUSE_PLAN_BIND,
         reinterpret_cast<uint64_t>(address));
     asm volatile("" ::: "memory");
     const T value = *address;
     asm volatile("" ::: "memory");
-    notify_user(GRAPHBREW_SNIPER_USER_K2_CLEAR, 0);
+    notify_user(GRAPHBREW_SNIPER_USER_REUSE_PLAN_CLEAR, 0);
     asm volatile("" ::: "memory");
     return value;
 }
@@ -244,29 +244,29 @@ inline void ecg_extract(uint64_t vertex, uint16_t epoch) {
     notify_user(GRAPHBREW_SNIPER_USER_ECG_EXTRACT, packed);
 }
 
-inline uint64_t ecg_k2_trace_limit() {
+inline uint64_t ecg_reuse_plan_trace_limit() {
     static const uint64_t trace_limit = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return value ? static_cast<uint64_t>(std::strtoull(value, nullptr, 10)) : 0;
     }();
     return trace_limit;
 }
 
-inline bool ecg_k2_trace_enabled() {
-    return ecg_k2_trace_limit() > 0;
+inline bool ecg_reuse_plan_trace_enabled() {
+    return ecg_reuse_plan_trace_limit() > 0;
 }
 
 inline void trace_ecg_extract2(
         uint32_t vertex, uint8_t tier,
         uint16_t first, uint16_t second) {
-    const uint64_t trace_limit = ecg_k2_trace_limit();
+    const uint64_t trace_limit = ecg_reuse_plan_trace_limit();
     if (trace_limit == 0) return;
     static std::atomic<uint64_t> trace_sequence{0};
     const uint64_t sequence =
         trace_sequence.fetch_add(1, std::memory_order_relaxed);
     if (sequence < trace_limit) {
         std::fprintf(stderr,
-            "[ECG-K2-EXPECT sim=sniper seq=%llu dest=%u tier=%u "
+            "[ECG-ReusePlan-EXPECT sim=sniper seq=%llu dest=%u tier=%u "
             "epoch1=%u epoch2=%u]\n",
             (unsigned long long)sequence, vertex,
             static_cast<unsigned>(tier),
@@ -281,14 +281,14 @@ inline void ecg_extract2(
     trace_ecg_extract2(vertex, tier, first, second);
     // SimMagic2 is 64-bit safe after the early-clobber fix.
     const uint64_t packed =
-        ecg_epoch::packEpochPairRecord(vertex, tier, first, second);
+        ecg_reuse_plan::packReusePlanRecord(vertex, tier, first, second);
     notify_user(GRAPHBREW_SNIPER_USER_ECG_EXTRACT2, packed);
 }
 
 inline void ecg_clear_extract2(uint32_t vertex) {
     if (!ecg_extract_enabled()) return;
     const uint64_t clear_record =
-        ecg_epoch::packEpochPairRecord(vertex, 0, 0, 0);
+        ecg_reuse_plan::packReusePlanRecord(vertex, 0, 0, 0);
     notify_user(GRAPHBREW_SNIPER_USER_ECG_EXTRACT2, clear_record);
 }
 
@@ -384,55 +384,55 @@ inline bool sniper_export_context(
     const char* path = nullptr,
     const SniperEdgeRegion* edge_regions = nullptr,
     int num_edge_regions = 0,
-    uint64_t stream_bypass_base = 0,
-    uint64_t stream_bypass_size = 0,
-    const uint64_t* k2_offsets = nullptr,
-    size_t k2_offset_count = 0,
-    const uint64_t* k2_records = nullptr,
-    size_t k2_record_count = 0) {
+    uint64_t flowthrough_base = 0,
+    uint64_t flowthrough_size = 0,
+    const uint64_t* reuse_plan_offsets = nullptr,
+    size_t reuse_plan_offset_count = 0,
+    const uint64_t* reuse_plan_records = nullptr,
+    size_t reuse_plan_record_count = 0) {
     const std::string resolved_path = path ? std::string(path) : graphbrew_sniper::context_path();
-    if (stream_bypass_size > 0) {
+    if (flowthrough_size > 0) {
         const uint64_t line_size =
             static_cast<uint64_t>(graphbrew_sniper::cache_line_size());
-        if (stream_bypass_base > UINT64_MAX - stream_bypass_size) {
-            fprintf(stderr, "sniper_harness: stream bypass range overflow\n");
+        if (flowthrough_base > UINT64_MAX - flowthrough_size) {
+            fprintf(stderr, "sniper_harness: FlowThrough range overflow\n");
             return false;
         }
-        const uint64_t raw_upper = stream_bypass_base + stream_bypass_size;
-        const uint64_t base_remainder = stream_bypass_base % line_size;
+        const uint64_t raw_upper = flowthrough_base + flowthrough_size;
+        const uint64_t base_remainder = flowthrough_base % line_size;
         const uint64_t base_padding =
             base_remainder == 0 ? 0 : line_size - base_remainder;
-        if (stream_bypass_base > UINT64_MAX - base_padding) {
-            fprintf(stderr, "sniper_harness: aligned stream bypass base overflow\n");
+        if (flowthrough_base > UINT64_MAX - base_padding) {
+            fprintf(stderr, "sniper_harness: aligned FlowThrough base overflow\n");
             return false;
         }
-        const uint64_t aligned_base = stream_bypass_base + base_padding;
+        const uint64_t aligned_base = flowthrough_base + base_padding;
         const uint64_t aligned_upper = raw_upper - (raw_upper % line_size);
-        stream_bypass_base = aligned_base;
-        stream_bypass_size = aligned_upper > aligned_base
+        flowthrough_base = aligned_base;
+        flowthrough_size = aligned_upper > aligned_base
             ? aligned_upper - aligned_base : 0;
     }
 
-    std::string k2_offsets_path;
-    std::string k2_records_path;
-    const bool k2_requested =
-        k2_offsets || k2_offset_count || k2_records || k2_record_count;
-    if (k2_requested) {
-        if (!k2_offsets || k2_offset_count == 0 ||
-            !k2_records || k2_record_count == 0) {
-            fprintf(stderr, "sniper_harness: incomplete K2 sideband inputs\n");
+    std::string reuse_plan_offsets_path;
+    std::string reuse_plan_records_path;
+    const bool reuse_bind_requested =
+        reuse_plan_offsets || reuse_plan_offset_count || reuse_plan_records || reuse_plan_record_count;
+    if (reuse_bind_requested) {
+        if (!reuse_plan_offsets || reuse_plan_offset_count == 0 ||
+            !reuse_plan_records || reuse_plan_record_count == 0) {
+            fprintf(stderr, "sniper_harness: incomplete ReusePlan sideband inputs\n");
             return false;
         }
-        k2_offsets_path = resolved_path + ".k2_offsets.bin";
-        k2_records_path = resolved_path + ".k2_records.bin";
+        reuse_plan_offsets_path = resolved_path + ".reuse_plan_offsets.bin";
+        reuse_plan_records_path = resolved_path + ".reuse_plan_records.bin";
         const bool offsets_ok = sniper_write_binary_atomic(
-            k2_offsets_path, k2_offsets, sizeof(uint64_t), k2_offset_count);
+            reuse_plan_offsets_path, reuse_plan_offsets, sizeof(uint64_t), reuse_plan_offset_count);
         const bool records_ok = sniper_write_binary_atomic(
-            k2_records_path, k2_records, sizeof(uint64_t), k2_record_count);
+            reuse_plan_records_path, reuse_plan_records, sizeof(uint64_t), reuse_plan_record_count);
         if (!offsets_ok || !records_ok) {
-            std::remove(k2_offsets_path.c_str());
-            std::remove(k2_records_path.c_str());
-            fprintf(stderr, "sniper_harness: cannot publish complete K2 sidebands\n");
+            std::remove(reuse_plan_offsets_path.c_str());
+            std::remove(reuse_plan_records_path.c_str());
+            fprintf(stderr, "sniper_harness: cannot publish complete ReusePlan sidebands\n");
             return false;
         }
     }
@@ -441,28 +441,28 @@ inline bool sniper_export_context(
     FILE* f = fopen(temp_context_path.c_str(), "w");
     if (!f) {
         fprintf(stderr, "sniper_harness: cannot write sideband to %s\n", resolved_path.c_str());
-        std::remove(k2_offsets_path.c_str());
-        std::remove(k2_records_path.c_str());
+        std::remove(reuse_plan_offsets_path.c_str());
+        std::remove(reuse_plan_records_path.c_str());
         return false;
     }
 
     fprintf(f, "{\n");
     fprintf(f, "  \"num_vertices\": %ld,\n", (long)g.num_nodes());
     fprintf(f, "  \"num_edges\": %ld,\n", (long)g.num_edges_directed());
-    fprintf(f, "  \"stream_bypass_base\": %lu,\n",
-            (unsigned long)stream_bypass_base);
-    fprintf(f, "  \"stream_bypass_size\": %lu,\n",
-            (unsigned long)stream_bypass_size);
-    if (stream_bypass_size > 0) {
+    fprintf(f, "  \"flowthrough_base\": %lu,\n",
+            (unsigned long)flowthrough_base);
+    fprintf(f, "  \"flowthrough_size\": %lu,\n",
+            (unsigned long)flowthrough_size);
+    if (flowthrough_size > 0) {
         fprintf(stderr,
             "[ECG-STREAM-REGION sim=sniper base=%#lx size=%lu]\n",
-            (unsigned long)stream_bypass_base,
-            (unsigned long)stream_bypass_size);
+            (unsigned long)flowthrough_base,
+            (unsigned long)flowthrough_size);
     }
-    fprintf(f, "  \"k2_offsets_path\": \"%s\",\n",
-            k2_offsets_path.c_str());
-    fprintf(f, "  \"k2_records_path\": \"%s\",\n",
-            k2_records_path.c_str());
+    fprintf(f, "  \"reuse_plan_offsets_path\": \"%s\",\n",
+            reuse_plan_offsets_path.c_str());
+    fprintf(f, "  \"reuse_plan_records_path\": \"%s\",\n",
+            reuse_plan_records_path.c_str());
     fprintf(f, "  \"directed\": %s,\n", g.directed() ? "true" : "false");
 
     fprintf(f, "  \"property_regions\": [\n");
@@ -555,8 +555,8 @@ inline bool sniper_export_context(
     if (!context_complete || !context_closed ||
         std::rename(temp_context_path.c_str(), resolved_path.c_str()) != 0) {
         std::remove(temp_context_path.c_str());
-        std::remove(k2_offsets_path.c_str());
-        std::remove(k2_records_path.c_str());
+        std::remove(reuse_plan_offsets_path.c_str());
+        std::remove(reuse_plan_records_path.c_str());
         fprintf(stderr, "sniper_harness: cannot publish complete context %s\n",
                 resolved_path.c_str());
         return false;

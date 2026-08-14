@@ -469,14 +469,14 @@ struct CacheLine {
                                   // Distinguishes a real epoch-0 (low-ID next-referencer) from an
                                   // undelivered line — epoch==0 alone is ambiguous. Mirrors Sniper's
                                   // m_ecg_epoch_valid so all 3 sims represent "stamped" identically.
-    // ECG_EDGE_MASK_SCHED=K: a short per-line forward SCHEDULE of the next-K ABSOLUTE
+    // ECG_REUSE_PLAN_DEPTH=K: a short per-line forward SCHEDULE of the next-K ABSOLUTE
     // next-ref epochs (sorted ascending). Recovers the P-OPT matrix's per-epoch
     // self-advance: at eviction the SOONEST schedule entry still ahead of cur_epoch is
     // used, so a resident line is no longer BLIND to references after the first stamped
     // one (the root cause of the 1-D mask's staleness vs the matrix's 2-D row). Inert
-    // (n=0) unless ECG_EDGE_MASK_SCHED delivers a schedule; ecg_epoch stays primary.
-    static constexpr int ECG_SCHED_KMAX = 4;
-    uint16_t ecg_epoch_sched[ECG_SCHED_KMAX] = {0, 0, 0, 0};
+    // (n=0) unless ECG_REUSE_PLAN_DEPTH delivers a schedule; ecg_epoch stays primary.
+    static constexpr int ECG_REUSE_PLAN_DEPTHMAX = 4;
+    uint16_t ecg_epoch_sched[ECG_REUSE_PLAN_DEPTHMAX] = {0, 0, 0, 0};
     uint8_t  ecg_epoch_sched_n = 0;
     uint32_t ecg_exact_pred = UINT32_MAX; // ECG_EXACT_STORED: exact next-ref STAMPED at access (precomputed-mask model)
     bool pin = false;            // PIN policy: line is pinned in cache (high-reuse region)
@@ -922,16 +922,16 @@ public:
         return false;
     }
 
-    // ECG_EDGE_MASK_SCHED: copy the per-thread schedule hint onto a line at fill/refresh.
+    // ECG_REUSE_PLAN_DEPTH: copy the per-thread schedule hint onto a line at fill/refresh.
     // No-op (clears to n=0) when no schedule is delivered, so the single-epoch path is
     // byte-identical to before. Mirrors the ecg_epoch stamp, kept next to it at every site.
     inline void stampEpochSchedule(CacheLine& L) {
         if (!graph_ctx_) { L.ecg_epoch_sched_n = 0; return; }
         const auto& H = graph_ctx_->hints_for_thread();
         uint8_t kn = H.edge_epoch_sched_n;
-        if (kn > CacheLine::ECG_SCHED_KMAX) kn = CacheLine::ECG_SCHED_KMAX;
+        if (kn > CacheLine::ECG_REUSE_PLAN_DEPTHMAX) kn = CacheLine::ECG_REUSE_PLAN_DEPTHMAX;
         L.ecg_epoch_sched_n = kn;
-        for (uint8_t k = 0; k < CacheLine::ECG_SCHED_KMAX; ++k)
+        for (uint8_t k = 0; k < CacheLine::ECG_REUSE_PLAN_DEPTHMAX; ++k)
             L.ecg_epoch_sched[k] = (k < kn) ? H.edge_epoch_sched[k] : 0;
         if (ecgTierCarried() && H.edge_grasp_tier_valid)
             L.ecg_dbg_tier = H.edge_grasp_tier;
@@ -1983,7 +1983,7 @@ private:
                 // 1-D base: circular distance to the single stamped next-ref epoch.
                 uint32_t d = ecg_policy::epochDistance(
                     set[i].ecg_epoch, cur_epoch, ne);
-                // 2-D recovery (ECG_EDGE_MASK_SCHED): take the SOONEST upcoming entry in
+                // 2-D recovery (ECG_REUSE_PLAN_DEPTH): take the SOONEST upcoming entry in
                 // the per-line schedule. A passed entry wraps to a large circular
                 // distance, so min() naturally skips it and the line self-advances to
                 // its next true reference — emulating the matrix's per-epoch recompute.
@@ -2415,7 +2415,7 @@ public:
         }
         
         // L3 miss - fetch from memory
-        if (adaptive_streamshield_) {
+        if (adaptive_flowthrough_) {
             placement_selector_.recordMiss(l3_->setIndexForAddress(address));
         }
         memory_accesses_++;
@@ -2425,15 +2425,15 @@ public:
         l1_->insert(address, is_write);
     }
 
-    // ECG StreamShield: an explicit non-temporal packed-edge request preserves
+    // ECG FlowThrough: an explicit non-temporal packed-edge request preserves
     // LLC hits but suppresses allocation after an LLC miss. L1/L2 fill normally.
     void accessStream(uint64_t address, bool is_write = false) {
         if (!enabled_) return;
         static bool announced = false;
         if (!announced) {
             announced = true;
-            std::cerr << "[ECG-STREAM-BYPASS sim=cache_sim active=1 adaptive="
-                      << (adaptive_streamshield_ ? 1 : 0) << "]\n";
+            std::cerr << "[ECG-FLOWTHROUGH sim=cache_sim active=1 adaptive="
+                      << (adaptive_flowthrough_ ? 1 : 0) << "]\n";
         }
         accessNonTemporal(address, is_write);
     }
@@ -2451,8 +2451,8 @@ public:
             return degree < 0 ? 0 : (degree > 32 ? 32 : degree);
         }();
         // Route through the SAME detector as ordinary accesses. This path
-        // carries K2's per-edge records and P-OPT's simulated matrix columns,
-        // i.e. exactly the metadata streams the K2-versus-P-OPT comparison
+        // carries ReusePlan's per-edge records and P-OPT's simulated matrix columns,
+        // i.e. exactly the metadata streams the ReusePlan-versus-P-OPT comparison
         // turns on. Leaving it on an unconditional issue loop meant the
         // address-only prefetcher did not reach the streams it was written
         // for, and both policies kept oracle-quality coverage of their
@@ -2485,21 +2485,21 @@ public:
             return;
         }
         const size_t set_index = l3_->setIndexForAddress(address);
-        if (adaptive_streamshield_) {
+        if (adaptive_flowthrough_) {
             placement_selector_.recordMiss(set_index);
         }
-        const bool bypass = !adaptive_streamshield_ ||
-            placement_selector_.shouldBypass(set_index);
-        // LLC miss: the static arm bypasses; the adaptive allocate arm retains
-        // the record so reused streams can opt out of StreamShield.
+        const bool flowthrough = !adaptive_flowthrough_ ||
+            placement_selector_.shouldFlowThrough(set_index);
+        // LLC miss: the static arm applies FlowThrough; the adaptive allocate arm retains
+        // the record so reused streams can opt out of FlowThrough.
         memory_accesses_++;
         if (was_prefetched) markPrefetchEvictedBeforeUse(line_addr);
-        if (!bypass) l3_->insert(address, is_write);
+        if (!flowthrough) l3_->insert(address, is_write);
         l2_->insert(address, is_write);
         l1_->insert(address, is_write);
     }
 
-    // StreamShield prefetch: warm private caches without allocating the
+    // FlowThrough prefetch: warm private caches without allocating the
     // one-touch record in LLC. Existing L3 data may still be promoted downward.
     void prefetchStream(uint64_t address) {
         if (!enabled_) return;
@@ -2523,14 +2523,14 @@ public:
             return;
         }
         const size_t set_index = l3_->setIndexForAddress(address);
-        if (adaptive_streamshield_) {
+        if (adaptive_flowthrough_) {
             placement_selector_.recordMiss(set_index);
         }
-        const bool bypass = !adaptive_streamshield_ ||
-            placement_selector_.shouldBypass(set_index);
+        const bool flowthrough = !adaptive_flowthrough_ ||
+            placement_selector_.shouldFlowThrough(set_index);
         prefetch_fills_++;
         markPrefetchFill(line_addr);
-        if (!bypass) l3_->insert(address, false, true);
+        if (!flowthrough) l3_->insert(address, false, true);
         l2_->insert(address, false, true);
         l1_->insert(address, false, true);
     }
@@ -2690,11 +2690,11 @@ public:
     // columns resident in reserved LLC ways and stream in a fresh column at
     // every epoch boundary. cache_sim consults the matrix host-side, so that
     // stream previously existed only as a flat analytic charge added to the
-    // miss count after the run. K2's per-edge records, by contrast, are real
-    // simulated accesses, so a structure prefetcher covered K2's sequential
+    // miss count after the run. ReusePlan's per-edge records, by contrast, are real
+    // simulated accesses, so a structure prefetcher covered ReusePlan's sequential
     // stream while no prefetcher could ever cover P-OPT's. Both are sequential
     // streams; pricing only one of them through the hierarchy systematically
-    // favours K2. This issues the column stream as real accesses so the two are
+    // favours ReusePlan. This issues the column stream as real accesses so the two are
     // accounted symmetrically.
     //
     // The stream is non-temporal because the resident columns live in the
@@ -2706,7 +2706,7 @@ public:
     // region. Note the mechanism: accessNonTemporal() issues stream prefetches
     // unconditionally rather than consulting findRegion(), because both callers
     // are structural streams by construction. The effect is the intended one --
-    // the column stream is prefetch-covered exactly as K2's records are -- but
+    // the column stream is prefetch-covered exactly as ReusePlan's records are -- but
     // it is not the region classifier that makes it so.
     //
     // Fidelity boundary: published P-OPT streams columns with a dedicated
@@ -3115,8 +3115,8 @@ private:
     // L3 metadata transaction per inner-cache hit). Isolates how much of the refresh
     // win needs the aggressive broadcast vs is recoverable by the free piggybacked form.
     bool refresh_llc_only_ = std::getenv("ECG_REFRESH_LLC_ONLY") != nullptr;
-    bool adaptive_streamshield_ = []() {
-        const char* value = std::getenv("ECG_STREAM_BYPASS_ADAPTIVE");
+    bool adaptive_flowthrough_ = []() {
+        const char* value = std::getenv("ECG_FLOWTHROUGH_ADAPTIVE");
         return value && value[0] && std::string(value) != "0";
     }();
     ecg_policy::OnlinePlacementSelector placement_selector_;

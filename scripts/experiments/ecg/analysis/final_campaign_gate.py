@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a complete role-separated K2 final campaign."""
+"""Validate a complete role-separated ReusePlan final campaign."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from analysis import pagerank_gate, three_costs  # noqa: E402
 
 DEFAULT_MANIFEST = ECG_DIR / "experiment_manifest.json"
 DEFAULT_SCREEN = ECG_DIR / "configs" / "pagerank_study.json"
-FINAL_PROFILE = "k2_final_campaign"
+FINAL_PROFILE = "reuse_plan_final_campaign"
 TIMING_STAGES = {
     "70_gem5_pagerank_i1",
     "71_gem5_pagerank_i2",
@@ -37,7 +37,7 @@ CACHE_CONTROL_STAGES = {
     "83_cache_sim_final_wide256",
 }
 FINAL_STAGES = {
-    "60_gem5_proposal_k2m_o3",
+    "60_gem5_proposal_reuse_bind_o3",
     *TIMING_STAGES,
     *CACHE_CONTROL_STAGES,
     "81_sniper_final_semantic",
@@ -186,10 +186,10 @@ def validate_role_rows(
                         row.get("gem5_cpu_type") != "O3" or
                         str(row.get("timing_valid_for_speedup")) != "1"):
                     errors.append(f"{key}/{policy} is not valid gem5 O3 timing")
-                if policy.startswith("ECG_K2") and integer(
+                if policy.startswith("ECG_REUSE_PLAN") and integer(
                         row, "ecg_record_bytes") != 4:
-                    errors.append(f"{key}/{policy} is not compact 4-byte K2")
-            elif stage == "60_gem5_proposal_k2m_o3":
+                    errors.append(f"{key}/{policy} is not compact 4-byte ReusePlan")
+            elif stage == "60_gem5_proposal_reuse_bind_o3":
                 if row.get("simulator") != "gem5":
                     errors.append(f"{key}/{policy} mechanism row is not gem5")
                 if str(row.get("timing_valid_for_speedup")) != "0":
@@ -205,7 +205,7 @@ def validate_role_rows(
                 if integer(row, "l3_effective_ways") != expected_ways:
                     errors.append(
                         f"{key}/{policy} effective LLC ways != {expected_ways}")
-                if policy.startswith("ECG_K2"):
+                if policy.startswith("ECG_REUSE_PLAN"):
                     expected_width = 4 if stage in {
                         "80_cache_sim_final_fullgraph",
                         "84_cache_sim_final_popt",
@@ -250,10 +250,10 @@ def validate_role_rows(
                 if not positive(row, "l3_accesses") or not positive(
                         row, "l3_misses"):
                     errors.append(f"{key}/{policy} lacks LLC turnover")
-                if policy.startswith("ECG_K2") and (
-                        integer(row, "sniper_k2_bind_consumes") < 32 or
-                        integer(row, "sniper_k2_bad_bind_consumes") != 0 or
-                        str(row.get("sniper_k2_exact_bind_validated")) != "1"):
+                if policy.startswith("ECG_REUSE_PLAN") and (
+                        integer(row, "sniper_reuse_bind_consumes") < 32 or
+                        integer(row, "sniper_reuse_bind_bad_consumes") != 0 or
+                        str(row.get("sniper_reuse_bind_exact_validated")) != "1"):
                     errors.append(f"{key}/{policy} exact-bind proof failed")
     return errors
 

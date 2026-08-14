@@ -76,10 +76,10 @@ def benchmark_environment(args):
     ecg_grasp_popt = args.policy == "ECG" and args.ecg_mode == "ECG_GRASP_POPT"
     ecg_variant = os.environ.get("ECG_VARIANT", "rrip_first")
     force_delivery = os.environ.get("ECG_FORCE_DELIVERY") == "1"
-    schedule_k = os.environ.get("ECG_EDGE_MASK_SCHED", "0")
+    reuse_plan_depth = os.environ.get("ECG_REUSE_PLAN_DEPTH", "0")
     ecg_epoch_delivery = (
         ecg_grasp_popt and (
-            schedule_k == "2" or
+            reuse_plan_depth == "2" or
             ecg_variant != "grasp_only" or
             force_delivery
         )
@@ -93,10 +93,10 @@ def benchmark_environment(args):
         f"GEM5_ECG_PFX_HINT_FILTER={args.ecg_pfx_hint_filter if args.prefetcher == 'ECG_PFX' else 0}",
         f"GEM5_ECG_PFX_FILTER_ELEM_SIZE=4",
         f"GEM5_ECG_PFX_FILTER_LINE_SIZE=64",
-        f"ECG_EDGE_MASK_SCHED={schedule_k}",
-        f"ECG_K2_DELIVERY_TRACE={os.environ.get('ECG_K2_DELIVERY_TRACE', '0')}",
-        f"ECG_STREAM_BYPASS={os.environ.get('ECG_STREAM_BYPASS', '0')}",
-        f"ECG_STREAM_BYPASS_TRACE={os.environ.get('ECG_STREAM_BYPASS_TRACE', '0')}",
+        f"ECG_REUSE_PLAN_DEPTH={reuse_plan_depth}",
+        f"ECG_REUSE_PLAN_DELIVERY_TRACE={os.environ.get('ECG_REUSE_PLAN_DELIVERY_TRACE', '0')}",
+        f"ECG_FLOWTHROUGH={os.environ.get('ECG_FLOWTHROUGH', '0')}",
+        f"ECG_FLOWTHROUGH_TRACE={os.environ.get('ECG_FLOWTHROUGH_TRACE', '0')}",
         f"GEM5_ECG_EPOCH_REGION_INDICES={os.environ.get('GEM5_ECG_EPOCH_REGION_INDICES', '')}",
         f"GEM5_ECG_EPOCH_REGION_INDEX={os.environ.get('GEM5_ECG_EPOCH_REGION_INDEX', '')}",
         f"GEM5_ECG_ISA_VARIANT={os.environ.get('GEM5_ECG_ISA_VARIANT', 'indexed')}",
@@ -109,8 +109,8 @@ def benchmark_environment(args):
         # custom-0 R-type family that loads the governed property and carries its
         # graph mask on the same request.
         f"GEM5_ENABLE_ECG_PLOAD={1 if os.environ.get('GEM5_FORCE_ECG_PLOAD') == '1' else 0}",
-        f"GEM5_ENABLE_ECG_STREAM_LOAD2={1 if os.environ.get('GEM5_FORCE_ECG_STREAM_LOAD2') == '1' else 0}",
-        f"GEM5_ENABLE_ECG_LOAD2={1 if os.environ.get('GEM5_FORCE_ECG_LOAD2') == '1' else 0}",
+        f"GEM5_ENABLE_ECG_FLOW_LOAD={1 if os.environ.get('GEM5_FORCE_ECG_FLOW_LOAD') == '1' else 0}",
+        f"GEM5_ENABLE_ECG_PLAN_LOAD={1 if os.environ.get('GEM5_FORCE_ECG_PLAN_LOAD') == '1' else 0}",
     ]
     # Propagate ECG mode + per-edge-mask lookahead from the outer harness
     # env so kernel-side `ecg_pfx_mode` reads the value roi_matrix.py set.
@@ -133,7 +133,7 @@ def benchmark_environment(args):
         # Metadata transport knobs (bench/include/ecg_metadata.h). The guest derives
         # record width and delivery structure from these, so without forwarding
         # them a stage that asks for a 4-byte record silently gets the
-        # Schedule-2 default of 8 and measures the wrong thing while looking
+        # two-epoch ReusePlan default of 8 and measures the wrong thing while looking
         # correct from the outside.
         "ECG_RECORD_VARIABLE_WIDTH",
         "ECG_EDGE_RECORD_BYTES",
@@ -149,7 +149,7 @@ def benchmark_environment(args):
         "ECG_EXPECT_BYTES_PER_EDGE",
         "GEM5_ECG_COMPACT_ISA",
         "GEM5_ECG_COMPACT_FUSED",
-        "GEM5_ECG_COMPACT_K2M_SS",
+        "GEM5_ECG_COMPACT_REUSE_BIND_FLOW",
         # Derived from the shared metadata definition rather than maintained
         # by hand: these three also feed the width calculation and the receipt's
         # bypass field, and were silently inert in the guest.
@@ -243,18 +243,18 @@ def parse_args():
 def create_system(args):
     """Create the full gem5 system for graph benchmark simulation."""
 
-    if os.environ.get("ECG_EDGE_MASK_SCHED", "0") == "2":
-        request_bound_k2 = (
+    if os.environ.get("ECG_REUSE_PLAN_DEPTH", "0") == "2":
+        reuse_bind_active = (
             os.environ.get("GEM5_FORCE_ECG_PLOAD") == "1" and
             os.environ.get("GEM5_ECG_PRODUCER") == "1"
         )
-        if args.cpu_type == "O3" and not request_bound_k2:
+        if args.cpu_type == "O3" and not reuse_bind_active:
             raise RuntimeError(
-                "Schedule-2 O3 requires the masked property-load path and "
-                "request-bound epoch-pair producer.")
+                "two-epoch ReusePlan O3 requires the masked property-load path and "
+                "request-bound ReusePlan producer.")
         if args.prefetcher not in ("none", "STRIDE"):
             raise RuntimeError(
-                "Schedule-2 is implemented only with prefetcher none or STRIDE.")
+                "two-epoch ReusePlan is implemented only with prefetcher none or STRIDE.")
 
     system = System()
     system.clk_domain = SrcClockDomain()

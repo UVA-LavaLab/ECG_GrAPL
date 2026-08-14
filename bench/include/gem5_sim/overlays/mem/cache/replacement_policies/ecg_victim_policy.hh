@@ -10,7 +10,7 @@
 // bench/src_sim/test_ecg_victim.cc.
 //
 // The seven variants (selected by ECG_VARIANT) and the invariants are documented
-// in wiki/K2-StreamShield.md. Summary:
+// in wiki/ReusePlan-FlowThrough.md. Summary:
 //   - epoch is PROPERTY-ONLY; record (non-property) lines never carry a usable
 //     epoch and are ranked by recency / set order.
 //   - "recency" is normalised so SMALLER == older == evict-first. cache_sim and
@@ -199,7 +199,7 @@ inline OnlineDuelingSelector& globalOnlineDuelingSelector() {
 
 enum PlacementArm : uint8_t {
     PLACE_ALLOCATE = 0,
-    PLACE_SHIELD = 1,
+    PLACE_FLOWTHROUGH = 1,
     PLACE_ARM_COUNT = 2,
 };
 
@@ -208,18 +208,18 @@ enum PlacementArm : uint8_t {
 inline int placementLeaderArm(size_t set_index) {
     const uint64_t slot = static_cast<uint64_t>(set_index) & 63u;
     if (slot == 5) return PLACE_ALLOCATE;
-    if (slot == 6) return PLACE_SHIELD;
+    if (slot == 6) return PLACE_FLOWTHROUGH;
     return -1;
 }
 
 class OnlinePlacementSelector {
   public:
-    bool shouldBypass(size_t set_index) const {
+    bool shouldFlowThrough(size_t set_index) const {
         const int leader = placementLeaderArm(set_index);
         const uint8_t arm = leader >= 0
             ? static_cast<uint8_t>(leader)
             : winner_.load(std::memory_order_relaxed);
-        return arm == PLACE_SHIELD;
+        return arm == PLACE_FLOWTHROUGH;
     }
 
     void recordMiss(size_t set_index) {
@@ -232,11 +232,11 @@ class OnlinePlacementSelector {
         if ((total % kWindowMisses) != 0) return;
         const uint64_t allocate_misses = misses_[PLACE_ALLOCATE].exchange(
             0, std::memory_order_relaxed);
-        const uint64_t shield_misses = misses_[PLACE_SHIELD].exchange(
+        const uint64_t flowthrough_misses = misses_[PLACE_FLOWTHROUGH].exchange(
             0, std::memory_order_relaxed);
         winner_.store(
-            shield_misses < allocate_misses
-                ? PLACE_SHIELD : PLACE_ALLOCATE,
+            flowthrough_misses < allocate_misses
+                ? PLACE_FLOWTHROUGH : PLACE_ALLOCATE,
             std::memory_order_relaxed);
     }
 
@@ -278,9 +278,9 @@ inline uint32_t epochDistance(uint16_t epoch, uint32_t current, uint32_t ne) {
     return (e + ne - (current % ne)) % ne;
 }
 
-// Schedule-2 effective distance: the line is needed at the nearer of its next
+// two-epoch ReusePlan effective distance: the line is needed at the nearer of its next
 // two references. count<=1 preserves the legacy single-epoch behavior.
-inline uint32_t epochPairDistance(uint16_t first, uint16_t second,
+inline uint32_t reusePlanDistance(uint16_t first, uint16_t second,
                                   uint8_t count, uint32_t current,
                                   uint32_t ne) {
     uint32_t distance = epochDistance(first, current, ne);
@@ -348,7 +348,7 @@ inline size_t selectVictim(WayState* ways, size_t n, int variant, uint8_t rrpvMa
 
     // degree_first (frontier traversal): keep RRIP's eligibility gate, then
     // protect high-degree property lines independent of visit order. Within the
-    // coldest degree tier, Schedule-2/epoch distance selects the farthest next
+    // coldest degree tier, two-epoch ReusePlan/epoch distance selects the farthest next
     // use; true recency resolves any remaining tie.
     if (variant == DEGREE_FIRST) {
         for (;;) {

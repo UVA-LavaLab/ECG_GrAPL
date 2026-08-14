@@ -326,7 +326,7 @@ def test_gem5_sideband_paths_are_per_output_directory(tmp_path):
 # The 2026-07-25 review found the charged P-OPT column implausible (2.684 on
 # web-Google PageRank, worse than LRU for a near-oracle policy). The cause was
 # accounting, not P-OPT: its matrix stream was a flat analytic penalty that no
-# prefetcher can cover, while K2's per-edge records were simulated accesses the
+# prefetcher can cover, while ReusePlan's per-edge records were simulated accesses the
 # prefetcher does cover. Both are sequential streams.
 
 
@@ -363,11 +363,11 @@ def test_simulated_stream_supports_single_pass_kernels_without_i_option():
     assert row["popt_target_time_charged"] == 0
 
 
-def test_cache_sim_runtime_receipt_overrides_nominal_k2_width(tmp_path):
+def test_cache_sim_runtime_receipt_overrides_nominal_reuse_plan_width(tmp_path):
     args = roi_matrix.parse_args([
         "--suite", "cache-sim",
         "--benchmark", "pr",
-        "--policies", "ECG:K2_RRIP_STREAMSHIELD",
+        "--policies", "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
         "--options", "-g 10 -k 4 -o 5 -n 1 -i 1",
         "--l3-sizes", "32kB",
         "--ecg-epochs", "16",
@@ -376,7 +376,7 @@ def test_cache_sim_runtime_receipt_overrides_nominal_k2_width(tmp_path):
     args.dry_run = False
     args.has_lru_baseline = True
     spec = roi_matrix.parse_policy_spec(
-        "ECG:K2_RRIP_STREAMSHIELD")
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH")
     out = tmp_path / "matrix"
     out.mkdir()
     row = roi_matrix.base_row("cache_sim", args, spec, "32kB")
@@ -385,7 +385,7 @@ def test_cache_sim_runtime_receipt_overrides_nominal_k2_width(tmp_path):
     log = (
         "[ECG-METADATA kernel=pr delivery=packed stamps=2 "
         "epoch_bits=4 tier_bits=2 id_bits=10 record_bytes=4 "
-        "payload_bits=10 bytes_per_edge=4.000 charged=1 bypass=1 "
+        "payload_bits=10 bytes_per_edge=4.000 charged=1 flowthrough=1 "
         "packed_fits=1]\n")
     receipt = re.search(
         r"\[ECG-METADATA [^\]]*record_bytes=(\d+)"

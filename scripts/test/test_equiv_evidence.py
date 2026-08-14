@@ -12,7 +12,7 @@ from scripts.experiments.ecg.verify.equiv_kernels import (
 def write_roi_output(root: Path) -> None:
     csv_path = root / "roi_matrix.csv"
     json_path = root / "roi_matrix.json"
-    rows = [{"status": "ok", "policy_label": "ECG_K2"}]
+    rows = [{"status": "ok", "policy_label": "ECG_REUSE_PLAN"}]
     with csv_path.open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=rows[0].keys())
         writer.writeheader()
@@ -39,7 +39,7 @@ def test_roi_completion_and_cell_archive(tmp_path: Path):
     output = tmp_path / "output"
     output.mkdir()
     write_roi_output(output)
-    errors, row = validate_roi_output(output, "ECG_K2")
+    errors, row = validate_roi_output(output, "ECG_REUSE_PLAN")
     assert errors == []
     assert row["status"] == "ok"
 
@@ -55,5 +55,5 @@ def test_roi_completion_and_cell_archive(tmp_path: Path):
     marker = json.loads((output / "roi_matrix.complete.json").read_text())
     marker["all_rows_ok"] = False
     (output / "roi_matrix.complete.json").write_text(json.dumps(marker))
-    errors, _ = validate_roi_output(output, "ECG_K2")
+    errors, _ = validate_roi_output(output, "ECG_REUSE_PLAN")
     assert "completion marker all_rows_ok is not true" in errors

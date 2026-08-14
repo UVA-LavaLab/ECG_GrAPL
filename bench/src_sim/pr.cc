@@ -21,7 +21,7 @@
 // P-OPT rereference matrix builder
 #include "graphbrew/partition/cagra/popt.h"
 // Shared ECG epoch helpers for cache_sim, gem5, and Sniper
-#include "ecg_epoch_builder.h"
+#include "ecg_reuse_plan_builder.h"
 
 using namespace std;
 using namespace cache_sim;
@@ -74,10 +74,10 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
         const EvictionPolicy policy = GraphSimEffectiveL3Policy();
         const char* pfx_env = getenv("ECG_PREFETCH_MODE");
         bool popt_prefetch = pfx_env && (atoi(pfx_env) == 2 || atoi(pfx_env) == 4 || atoi(pfx_env) == 6 || atoi(pfx_env) == 7);
-        const bool matrix_free_k2 = GraphSimMatrixFreeK2();
+        const bool matrix_free_reuse_plan = GraphSimMatrixFreeReusePlan();
         if (policy == EvictionPolicy::POPT ||
-            (policy == EvictionPolicy::ECG && !matrix_free_k2) ||
-            (popt_prefetch && !matrix_free_k2)) {
+            (policy == EvictionPolicy::ECG && !matrix_free_reuse_plan) ||
+            (popt_prefetch && !matrix_free_reuse_plan)) {
             constexpr int numVtxPerLine = 64 / sizeof(ScoreT);
             constexpr int numEpochs = 256;
             buildAndRegisterReref(g, graph_ctx, /*natural_csr=*/true, "PR(pull/in)",
@@ -164,8 +164,8 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                 const auto& src_tiers = graph_ctx.in_edge_grasp_tier_by_src[u];
                 const bool edge_mask_lean = GraphSimEnvIntClamped("ECG_EDGE_MASK_LEAN", 0, 0, 1) > 0;
                 const bool edge_mask_pack = GraphSimEnvIntClamped("ECG_EDGE_MASK_PACK", 0, 0, 1) > 0;
-                const bool stream_bypass =
-                    GraphSimEnvIntClamped("ECG_STREAM_BYPASS", 0, 0, 1) > 0;
+                const bool flowthrough =
+                    GraphSimEnvIntClamped("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
                 // Combined stack: DROPLET-style lookahead prefetch layered ON TOP of
                 // the ECG_GRASP_POPT epoch eviction. The epoch stamp reduces TOTAL
                 // memory traffic (fewer unique fetches — something DROPLET cannot do,
@@ -243,10 +243,10 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                             for (uint8_t k = 0; k < 4; ++k)
                                 saved_sched[k] =
                                     graph_ctx.hints_for_thread().edge_epoch_sched[k];
-                            // Epoch filter (ecg_epoch::prefetchKeep): skip low-value prefetches.
+                            // Epoch filter (ecg_reuse_plan::prefetchKeep): skip low-value prefetches.
                             const int pfx_filter = GraphSimEnvIntClamped("ECG_PREFETCH_EPOCH_FILTER", 0, 0, 2);
                             const int pfx_thresh_pct = GraphSimEnvIntClamped("ECG_PREFETCH_EPOCH_THRESH_PCT", 50, 0, 100);
-                            const uint32_t cur_ep_k = ecg_epoch::currentEpoch(u, g.num_nodes(), (uint32_t)rec_ne);
+                            const uint32_t cur_ep_k = ecg_reuse_plan::currentEpoch(u, g.num_nodes(), (uint32_t)rec_ne);
                             const uint32_t thresh = (uint32_t)(((uint64_t)pfx_thresh_pct * (uint64_t)rec_ne) / 100);
                             auto jt = it;
                             size_t cpos = edge_pos;
@@ -276,7 +276,7 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                                         cand_ep = static_cast<uint16_t>(packed >> id_bits);
                                     }
                                 }
-                                if (!ecg_epoch::prefetchKeep(cand_ep, cur_ep_k,
+                                if (!ecg_reuse_plan::prefetchKeep(cand_ep, cur_ep_k,
                                         (uint32_t)rec_ne, pfx_filter, thresh))
                                     continue;
                                 graph_ctx.hints_for_thread().edge_epoch = cand_ep;
@@ -285,12 +285,12 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                                     cpos < src_tiers.size() ? src_tiers[cpos] : 0;
                                 graph_ctx.hints_for_thread().edge_grasp_tier_valid =
                                     graph_ctx.hints_for_thread().edge_grasp_tier != 0;
-                                if (graph_ctx.edge_epoch_sched_k) {
+                                if (graph_ctx.edge_epoch_reuse_plan_depth) {
                                     const auto& sc =
                                         graph_ctx.in_edge_epoch_sched_by_src[u];
                                     auto& H = graph_ctx.hints_for_thread();
                                     const uint32_t K =
-                                        graph_ctx.edge_epoch_sched_k;
+                                        graph_ctx.edge_epoch_reuse_plan_depth;
                                     H.edge_epoch_sched_n =
                                         static_cast<uint8_t>(
                                             std::min<uint32_t>(K, 4));
@@ -376,29 +376,29 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                         edge_pos < src_tiers.size() ? src_tiers[edge_pos] : 0;
                     graph_ctx.hints_for_thread().edge_grasp_tier_valid =
                         graph_ctx.hints_for_thread().edge_grasp_tier != 0;
-                    // ECG_EDGE_MASK_SCHED: deliver the per-edge forward schedule so the
+                    // ECG_REUSE_PLAN_DEPTH: deliver the per-edge forward schedule so the
                     // resident line can self-advance across epochs (matrix-like). Inert
-                    // (n=0) when ECG_EDGE_MASK_SCHED is unset.
-                    if (graph_ctx.edge_epoch_sched_k) {
+                    // (n=0) when ECG_REUSE_PLAN_DEPTH is unset.
+                    if (graph_ctx.edge_epoch_reuse_plan_depth) {
                         const auto& sc = graph_ctx.in_edge_epoch_sched_by_src[u];
-                        uint32_t K = graph_ctx.edge_epoch_sched_k;
+                        uint32_t K = graph_ctx.edge_epoch_reuse_plan_depth;
                         auto& H = graph_ctx.hints_for_thread();
                         uint8_t kn = static_cast<uint8_t>(std::min<uint32_t>(K, 4));
                         H.edge_epoch_sched_n = kn;
                         for (uint8_t k = 0; k < kn; ++k)
                             H.edge_epoch_sched[k] = ((size_t)edge_pos * K + k < sc.size())
                                 ? sc[(size_t)edge_pos * K + k] : carried_epoch;
-                        static uint64_t k2_trace_sequence = 0;
-                        static const uint64_t k2_trace_limit = []() {
+                        static uint64_t reuse_plan_trace_sequence = 0;
+                        static const uint64_t reuse_plan_trace_limit = []() {
                             const char* value =
-                                std::getenv("ECG_K2_DELIVERY_TRACE");
+                                std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
                             return value
                                 ? static_cast<uint64_t>(
                                       std::strtoull(value, nullptr, 10))
                                 : 0;
                         }();
-                        const uint64_t sequence = k2_trace_sequence++;
-                        if (kn >= 2 && sequence < k2_trace_limit) {
+                        const uint64_t sequence = reuse_plan_trace_sequence++;
+                        if (kn >= 2 && sequence < reuse_plan_trace_limit) {
                             const uint16_t expected_first =
                                 ((size_t)edge_pos * K < sc.size())
                                     ? sc[(size_t)edge_pos * K]
@@ -408,7 +408,7 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                                     ? sc[(size_t)edge_pos * K + 1]
                                     : carried_epoch;
                             std::fprintf(stderr,
-                                "[ECG-K2-EXPECT sim=cache_sim seq=%llu "
+                                "[ECG-ReusePlan-EXPECT sim=cache_sim seq=%llu "
                                 "dest=%u tier=%u epoch1=%u epoch2=%u]\n",
                                 (unsigned long long)sequence,
                                 static_cast<unsigned>(v),
@@ -417,7 +417,7 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                                 static_cast<unsigned>(expected_first),
                                 static_cast<unsigned>(expected_second));
                             std::fprintf(stderr,
-                                "[ECG-K2-RECV sim=cache_sim seq=%llu "
+                                "[ECG-ReusePlan-RECV sim=cache_sim seq=%llu "
                                 "dest=%u tier=%u epoch1=%u epoch2=%u]\n",
                                 (unsigned long long)sequence,
                                 static_cast<unsigned>(v),

@@ -11,7 +11,7 @@ PUBLIC_PAGES = (
     ROOT / "README.md",
     ROOT / "CONTRIBUTING.md",
     ROOT / "wiki/Home.md",
-    ROOT / "wiki/K2-StreamShield.md",
+    ROOT / "wiki/ReusePlan-FlowThrough.md",
     ROOT / "wiki/Evaluation-Methodology.md",
     ROOT / "wiki/Reproduction.md",
     ROOT / "wiki/Repository-Hygiene.md",
@@ -74,6 +74,16 @@ def test_wiki_page_links_use_rendered_slugs():
             if (page.parent / target).suffix == ".md":
                 assert not (page.parent / target).exists(), (
                     f"{page} links to raw wiki source {target!r}")
+
+
+def test_design_guide_uses_aligned_instruction_family():
+    guide = (ROOT / "wiki/ReusePlan-FlowThrough.md").read_text()
+    for mnemonic in (
+            "ecg.plan.load",
+            "ecg.flow.load",
+            "ecg.bind.load",
+            "ecg.bind.iload"):
+        assert mnemonic in guide
 
 
 def test_svg_figures_are_valid_and_use_straight_connectors():

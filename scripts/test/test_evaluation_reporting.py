@@ -65,7 +65,7 @@ def test_popt_analytic_timing_is_described_as_an_optimistic_bound():
 def test_preliminary_results_are_not_published_in_public_documents():
     for path in (
             ROOT / "README.md",
-            ROOT / "wiki/K2-StreamShield.md",
+            ROOT / "wiki/ReusePlan-FlowThrough.md",
             ROOT / "wiki/Evaluation-Methodology.md",
             ROOT / "wiki/Reproduction.md"):
         text = path.read_text(errors="ignore")

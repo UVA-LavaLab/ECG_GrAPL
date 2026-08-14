@@ -34,21 +34,21 @@ def gem5_delivery(
     for sequence in range(32):
         dest = sequence + 1
         lines.extend([
-            f"[ECG-K2-EXPECT sim=gem5 seq={sequence} dest={dest} "
+            f"[ECG-ReusePlan-EXPECT sim=gem5 seq={sequence} dest={dest} "
             "tier=1 epoch1=2 epoch2=3 width=4]",
-            f"[ECG-K2-RECV sim=gem5 seq={sequence} dest={dest} "
+            f"[ECG-ReusePlan-RECV sim=gem5 seq={sequence} dest={dest} "
             "tier=1 epoch1=2 epoch2=3 width=4]",
         ])
         if source == "request":
             lines.append(
-                f"[ECG-K2-REQUEST sim=gem5 seq={sequence} "
+                f"[ECG-ReuseBind-REQUEST sim=gem5 seq={sequence} "
                 f"request_seq={100 + sequence} dest={dest} tier=1 "
                 "epoch1=2 epoch2=3 current=1 context=7]")
     accept_order = list(range(31, -1, -1)) if reverse_accepts else list(range(32))
     for request_index in accept_order:
         dest = request_index + 1
         lines.append(
-            f"[ECG-K2-ACCEPT sim=gem5 seq={request_index} "
+            f"[ECG-ReuseBind-ACCEPT sim=gem5 seq={request_index} "
             f"request_seq={100 + request_index if source == 'request' else request_index} "
             f"request_dest={dest} "
             f"fill_dest={dest + fill_offset} source=request tier=1 "
@@ -58,24 +58,24 @@ def gem5_delivery(
 
 
 def test_gem5_acceptance_must_match_delivery():
-    assert ecg.verify_k2_trace(
+    assert ecg.verify_reuse_plan_trace(
         "gem5/test", (gem5_delivery(), True), ne=32768,
         expected_policy="ECG:rrip_first")
-    assert not ecg.verify_k2_trace(
+    assert not ecg.verify_reuse_plan_trace(
         "gem5/test", (gem5_delivery(fill_offset=16), True), ne=32768,
         expected_policy="ECG:rrip_first")
 
 
 def test_gem5_request_acceptance_is_order_independent_but_mailbox_is_serial():
-    assert ecg.verify_k2_trace(
+    assert ecg.verify_reuse_plan_trace(
         "gem5/test",
         (gem5_delivery(source="request", reverse_accepts=True), True),
         ne=32768, expected_policy="ECG:rrip_first",
         require_request_bound=True)
-    assert ecg.verify_k2_trace(
+    assert ecg.verify_reuse_plan_trace(
         "gem5/test", (gem5_delivery(source="mailbox"), True), ne=32768,
         expected_policy="ECG:rrip_first")
-    assert not ecg.verify_k2_trace(
+    assert not ecg.verify_reuse_plan_trace(
         "gem5/test", (gem5_delivery(source="mailbox"), True), ne=32768,
         expected_policy="ECG:rrip_first", require_request_bound=True)
 
@@ -83,12 +83,12 @@ def test_gem5_request_acceptance_is_order_independent_but_mailbox_is_serial():
 def test_o3_request_accept_verifier_uses_request_sequence_not_execute_order():
     text = gem5_delivery(source="request", reverse_accepts=True)
     cov = {}
-    assert ecg.verify_k2_request_accepts(
+    assert ecg.verify_reuse_bind_request_accepts(
         "gem5/o3", text, expected_width=4, coverage=cov)
-    assert cov["k2_o3_request_accept_mismatches"] == 0
+    assert cov["reuse_plan_o3_request_accept_mismatches"] == 0
 
     wrong_fill = text.replace("fill_dest=1", "fill_dest=999", 1)
-    assert not ecg.verify_k2_request_accepts(
+    assert not ecg.verify_reuse_bind_request_accepts(
         "gem5/o3", wrong_fill, expected_width=4)
 
 
@@ -96,9 +96,9 @@ def test_gem5_accepts_only_the_traced_loads_that_reach_llc():
     lines = gem5_delivery(source="mailbox").splitlines()
     accepted_subset = "\n".join(
         line for line in lines
-        if "ECG-K2-ACCEPT" not in line or
+        if "ECG-ReuseBind-ACCEPT" not in line or
         any(f"seq={sequence} " in line for sequence in (0, 14, 23)))
-    assert ecg.verify_k2_trace(
+    assert ecg.verify_reuse_plan_trace(
         "gem5/test", (accepted_subset, True), ne=32768,
         expected_policy="ECG:rrip_first")
 
@@ -106,9 +106,9 @@ def test_gem5_accepts_only_the_traced_loads_that_reach_llc():
 def test_duplicate_delivery_sequence_fails():
     text = gem5_delivery()
     duplicate = (
-        "[ECG-K2-EXPECT sim=gem5 seq=0 dest=999 tier=1 "
+        "[ECG-ReusePlan-EXPECT sim=gem5 seq=0 dest=999 tier=1 "
         "epoch1=2 epoch2=3 width=4]\n")
-    assert not ecg.verify_k2_trace(
+    assert not ecg.verify_reuse_plan_trace(
         "gem5/test", (duplicate + text, True), ne=32768,
         expected_policy="ECG:rrip_first",
         require_request_bound=True)
@@ -120,12 +120,12 @@ def test_gem5_corrupt_unaccepted_request_fails():
     lines = gem5_delivery(source="request").splitlines()
     kept = []
     for line in lines:
-        if "ECG-K2-ACCEPT" in line and "seq=1 " in line:
+        if "ECG-ReuseBind-ACCEPT" in line and "seq=1 " in line:
             continue
-        if "ECG-K2-REQUEST" in line and "seq=1 " in line:
+        if "ECG-ReuseBind-REQUEST" in line and "seq=1 " in line:
             line = line.replace("dest=2", "dest=999")
         kept.append(line)
-    assert not ecg.verify_k2_trace(
+    assert not ecg.verify_reuse_plan_trace(
         "gem5/test", ("\n".join(kept), True), ne=32768,
         expected_policy="ECG:rrip_first", require_request_bound=True)
 
@@ -137,8 +137,8 @@ def test_gem5_request_subset_without_corruption_still_passes():
     lines = gem5_delivery(source="request").splitlines()
     kept = [
         line for line in lines
-        if not ("ECG-K2-ACCEPT" in line and "seq=1 " in line)
+        if not ("ECG-ReuseBind-ACCEPT" in line and "seq=1 " in line)
     ]
-    assert ecg.verify_k2_trace(
+    assert ecg.verify_reuse_plan_trace(
         "gem5/test", ("\n".join(kept), True), ne=32768,
         expected_policy="ECG:rrip_first", require_request_bound=True)

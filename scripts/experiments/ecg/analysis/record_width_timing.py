@@ -2,7 +2,7 @@
 """Read the record-width timing matrix and evaluate the width comparison.
 
 The matrix reports execution time, off-chip bytes and DRAM bus utilisation
-together, because K2's trade only resolves when all three are read at once: it
+together, because ReusePlan's trade only resolves when all three are read at once: it
 can spend more bandwidth while exposing far fewer demand misses to full DRAM
 latency, and which side binds depends on saturation.
 
@@ -112,9 +112,9 @@ DECODE_STAGES = {
     "42_isa_plain_4b_software": "one instruction + software widen, compact",
     "43_isa_plain_4b_hardware": "one instruction (ecg.extract2c), compact",
     "44_isa_plain_8b": "one instruction (ecg.extract2), wide",
-    "50_fused_compact_4b": "fused compact K2-I (serialized TimingSimple)",
-    "51_fused_software_4b": "fused K2-I after software widening",
-    "52_fused_wide_8b": "fused K2-I, wide record",
+    "50_fused_compact_4b": "fused compact ReuseBind-Indexed (serialized TimingSimple)",
+    "51_fused_software_4b": "fused ReuseBind-Indexed after software widening",
+    "52_fused_wide_8b": "fused ReuseBind-Indexed, wide record",
 }
 
 
@@ -143,11 +143,11 @@ def report_coverage(rows, expected) -> None:
     for stage, graph in sorted(expected):
         got = {r.get("policy_label") for r in rows
                if r["_stage"] == stage and r["_graph"] == graph}
-        if "LRU" not in got or "ECG_K2" not in got:
+        if "LRU" not in got or "ECG_REUSE_PLAN" not in got:
             missing.append(f"{stage}/{graph} (have: {sorted(got) or 'none'})")
     if missing:
         print()
-        print("  INCOMPLETE -- these stage/graph cells lack LRU or ECG_K2:")
+        print("  INCOMPLETE -- these stage/graph cells lack LRU or ECG_REUSE_PLAN:")
         for m in missing:
             print(f"    {m}")
         print("  Every figure below covers only the cells that finished.")
@@ -204,21 +204,21 @@ def report_decode_matrix(rows, expected=None) -> bool:
               f"{i:>9.4f}{b:>9.4f}{t:>8.4f}")
 
     def contrast(a, b, title, note):
-        pairs = [(g, norm[(a, g, "ECG_K2")], norm[(b, g, "ECG_K2")])
+        pairs = [(g, norm[(a, g, "ECG_REUSE_PLAN")], norm[(b, g, "ECG_REUSE_PLAN")])
                  for g in sorted({k[1] for k in norm})
-                 if (a, g, "ECG_K2") in norm and (b, g, "ECG_K2") in norm]
+                 if (a, g, "ECG_REUSE_PLAN") in norm and (b, g, "ECG_REUSE_PLAN") in norm]
         if not pairs:
             return
         print(f"\n  {title}")
         print(f"    {note}")
-        print("    estimator: (K2 / own-stage LRU)_A / "
-              "(K2 / own-stage LRU)_B")
+        print("    estimator: (ReusePlan / own-stage LRU)_A / "
+              "(ReusePlan / own-stage LRU)_B")
         drift = []
         for g, x, y in pairs:
             print(f"      {g:<24} insts x{x[0]/y[0]:.3f}  "
                   f"traffic x{x[1]/y[1]:.4f}  time x{x[2]/y[2]:.3f}")
-            direct_a = raw[(a, g, "ECG_K2")]
-            direct_b = raw[(b, g, "ECG_K2")]
+            direct_a = raw[(a, g, "ECG_REUSE_PLAN")]
+            direct_b = raw[(b, g, "ECG_REUSE_PLAN")]
             lru_a = raw[(a, g, "LRU")]
             lru_b = raw[(b, g, "LRU")]
             direct = tuple(
@@ -265,11 +265,11 @@ def report_decode_matrix(rows, expected=None) -> bool:
              "the fused load family takes only the 64-bit record, so the "
              "compact arm still widens in software: this is width PLUS decode")
     contrast("51_fused_software_4b", "50_fused_compact_4b",
-             "FUSED DECODE: software widen versus compact K2-I",
+             "FUSED DECODE: software widen versus compact ReuseBind-Indexed",
              "same dedicated loop skeleton and 4-byte record; the compact "
              "instruction removes the guest widen")
     contrast("50_fused_compact_4b", "52_fused_wide_8b",
-             "FUSED IMPLEMENTATION: compact K2-I versus wide K2-I",
+             "FUSED IMPLEMENTATION: compact ReuseBind-Indexed versus wide ReuseBind-Indexed",
              "dedicated matched loop skeletons in one build. Traffic prices "
              "the container; time also includes two different custom-op "
              "decoders, and compact decode is modeled as one instruction")
@@ -336,7 +336,7 @@ def report_idealised_mechanisms(rows) -> None:
                       f"{extra / base * 100:>12.1f}%")
         print()
         print("  => The P-OPT rows below are a conservative timing baseline")
-        print("     for K2, not a target-time P-OPT performance claim.")
+        print("     for ReusePlan, not a target-time P-OPT performance claim.")
     else:
         print("  no analytic-only mechanism detected in these rows")
 

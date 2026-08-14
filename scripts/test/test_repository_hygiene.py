@@ -41,7 +41,7 @@ def test_retired_process_files_are_not_tracked():
     tracked = set(tracked_files())
     retired = {
         "wiki/ECG-HPCA-Paper.md",
-        "scripts/experiments/ecg/flows/freeze_proposal_k2m.py",
+        "scripts/experiments/ecg/flows/freeze_proposal_reuse_bind.py",
         "scripts/test/test_ecg_paper_ssot.py",
         "scripts/test/test_frozen_metrics.py",
     }
@@ -66,7 +66,7 @@ def test_public_documentation_and_figures_are_tracked():
     required = {
         "README.md",
         "wiki/Home.md",
-        "wiki/K2-StreamShield.md",
+        "wiki/ReusePlan-FlowThrough.md",
         "wiki/Evaluation-Methodology.md",
         "wiki/Reproduction.md",
         "wiki/Repository-Hygiene.md",
@@ -157,5 +157,40 @@ def test_authored_evaluation_code_avoids_process_jargon():
             continue
         text = (ROOT / relative).read_text(errors="ignore").lower()
         if any(term in text for term in forbidden):
+            offenders.append(relative)
+    assert offenders == []
+
+
+def test_retired_mechanism_names_are_absent():
+    forbidden_content = (
+        "K" + "2",
+        "Stream" + "Shield",
+        "stream" + "shield",
+        "ecg.k" + "2",
+        "ecg.stream.load" + "2",
+        "m" + "load",
+        "load" + "2",
+        "stream-" + "bypass",
+        "structural-" + "bypass",
+        "--schedule-" + "k",
+        "PLACE_" + "SHIELD",
+        "--ecg-isa-variant " + "mask",
+    )
+    forbidden_paths = (
+        "k" + "2",
+        "stream" + "shield",
+        "stream_" + "bypass",
+        "epoch_" + "pair",
+    )
+    offenders = []
+    for relative in tracked_files():
+        if relative == "wiki/assets/logo.svg" or relative.startswith(
+                ("bench/include/external/", "bench/include/graphbrew/")):
+            continue
+        if any(term in relative.lower() for term in forbidden_paths):
+            offenders.append(relative)
+            continue
+        text = (ROOT / relative).read_text(errors="ignore")
+        if any(term in text for term in forbidden_content):
             offenders.append(relative)
     assert offenders == []

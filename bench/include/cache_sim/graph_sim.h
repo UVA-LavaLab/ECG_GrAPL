@@ -44,9 +44,9 @@ inline bool GraphSimEcgGraspPoptPolicy() {
            StringToECGMode(mode) == ECGMode::ECG_GRASP_POPT;
 }
 
-inline bool GraphSimMatrixFreeK2() {
+inline bool GraphSimMatrixFreeReusePlan() {
     return GraphSimEcgGraspPoptPolicy() &&
-           GraphSimEnvIntClamped("ECG_EDGE_MASK_SCHED", 0, 0, 4) == 2;
+           GraphSimEnvIntClamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4) == 2;
 }
 
 inline bool GraphSimEcgEdgeRecord() {
@@ -75,14 +75,14 @@ inline int GraphSimEcgRecordBytes(uint64_t num_vertices, int epoch_bits) {
         "ECG_RECORD_POPT_BITS", 0, 0, 8);
     int prefetch_bits = GraphSimEnvIntClamped(
         "ECG_RECORD_PREFETCH_BITS", 0, 0, 32);
-    int schedule_k = GraphSimEnvIntClamped(
-        "ECG_EDGE_MASK_SCHED", 0, 0, 4);
-    // Schedule-2 historically returned 8 bytes unconditionally, skipping the
+    int reuse_plan_depth = GraphSimEnvIntClamped(
+        "ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
+    // two-epoch ReusePlan historically returned 8 bytes unconditionally, skipping the
     // bit budget below. That is an implementation shortcut, not a cost of the
     // second future epoch: on a 65,536-vertex graph with 5-bit epochs and 2
     // tier bits the two-epoch record needs 16 + 2*5 + 2 = 28 bits and fits in
-    // 4 bytes. Charging it 8 doubled K2's modelled transport and made every
-    // K2-versus-K1 comparison a comparison of record widths.
+    // 4 bytes. Charging it 8 doubled ReusePlan's modelled transport and made every
+    // ReusePlan-versus-single-epoch comparison a comparison of record widths.
     //
     // ECG_RECORD_VARIABLE_WIDTH=1 computes the width from the same budget as
     // every other schedule. The default preserves the historical 8 bytes so
@@ -91,8 +91,8 @@ inline int GraphSimEcgRecordBytes(uint64_t num_vertices, int epoch_bits) {
         const char* v = std::getenv("ECG_RECORD_VARIABLE_WIDTH");
         return v && std::atoi(v) != 0;
     }();
-    if (schedule_k == 2 && !variable_width) return 8;
-    int epoch_payload_bits = epoch_bits * std::max(1, schedule_k);
+    if (reuse_plan_depth == 2 && !variable_width) return 8;
+    int epoch_payload_bits = epoch_bits * std::max(1, reuse_plan_depth);
     int needed = id_bits + epoch_payload_bits +
                  tier_bits + popt_bits + prefetch_bits;
     if (needed <= 32) return 4;
@@ -102,7 +102,7 @@ inline int GraphSimEcgRecordBytes(uint64_t num_vertices, int epoch_bits) {
 
 inline int GraphSimEcgWeightedSidecarBytes(
         uint64_t num_vertices, int epoch_bits) {
-    if (GraphSimEnvIntClamped("ECG_EDGE_MASK_SCHED", 0, 0, 4) == 2)
+    if (GraphSimEnvIntClamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4) == 2)
         return 4;
     return GraphSimEcgRecordBytes(num_vertices, epoch_bits);
 }
@@ -178,18 +178,19 @@ inline void prefetch_with_site(
     cache.prefetch(address);
 }
 
-// Structural-stream bypass, offered to EVERY policy rather than to K2 alone.
+// Structural-FlowThrough, offered to EVERY policy rather than to ReusePlan alone.
 //
-// StreamShield lets K2 read its one-touch per-edge records without allocating
+// FlowThrough lets ReusePlan read its one-touch per-edge records without allocating
 // them in the LLC. The same argument applies to any policy's structural CSR
 // edge stream: it is sequential and read-once, so allocating it evicts reusable
-// property lines. Leaving the option available only to K2 confounds "K2's
-// replacement is better" with "K2 is the only policy allowed to bypass".
-// STRUCTURAL_BYPASS=1 applies it uniformly to the CSR edge stream of every
+// property lines. Leaving the option available only to ReusePlan confounds "ReusePlan's
+// replacement is better" with "ReusePlan is the only policy allowed to use
+// FlowThrough".
+// FLOWTHROUGH=1 applies it uniformly to the CSR edge stream of every
 // kernel and every policy, so the two effects can be separated.
-inline bool structural_bypass_enabled() {
+inline bool flowthrough_enabled() {
     static const bool enabled = [](){
-        const char* v = std::getenv("STRUCTURAL_BYPASS");
+        const char* v = std::getenv("FLOWTHROUGH");
         return v && std::atoi(v) != 0;
     }();
     return enabled;
@@ -199,7 +200,7 @@ template <typename Cache>
 inline decltype(auto) access_edge_with_site(
         Cache& cache, uint64_t address, uint64_t site_id) {
     HawkeyeSiteScope scope(site_id);
-    if (structural_bypass_enabled()) return cache.accessStream(address, false);
+    if (flowthrough_enabled()) return cache.accessStream(address, false);
     return cache.access(address, false);
 }
 
@@ -293,8 +294,8 @@ inline decltype(auto) access_edge_with_site(
     } while(0)
 
 // Track CSR edge list traversal (reading neighbor IDs from edge array).
-// Call once per edge during neighbor iteration. Honours STRUCTURAL_BYPASS so
-// every policy, not only K2, can decline to allocate this one-touch stream.
+// Call once per edge during neighbor iteration. Honours FLOWTHROUGH so
+// every policy, not only ReusePlan, can decline to allocate this one-touch stream.
 #define SIM_CACHE_READ_EDGE(cache, neighbor_ptr) \
     ::cache_sim::access_edge_with_site( \
         (cache), reinterpret_cast<uint64_t>(neighbor_ptr), \
@@ -318,7 +319,7 @@ inline decltype(auto) access_edge_with_site(
         } \
     } while (0)
 
-#define SIM_CACHE_READ_EDGE_RECORD_BYPASS(cache, neighbor_ptr, edge_base, synthetic_base, record_bytes) \
+#define SIM_CACHE_READ_EDGE_RECORD_FLOWTHROUGH(cache, neighbor_ptr, edge_base, synthetic_base, record_bytes) \
     do { \
         const uint64_t _edge_index = static_cast<uint64_t>( \
             (neighbor_ptr) - (edge_base)); \
@@ -344,8 +345,8 @@ inline decltype(auto) access_edge_with_site(
 // disagree about which structure they were using.
 //
 // PackedRecord SUBSTITUTES for the CSR edge. Sidecar reads the CSR edge through
-// the ordinary edge path and adds a narrow bit-packed entry, so the bypass flag
-// applies only to the metadata and never grants K2 an edge-placement privilege
+// the ordinary edge path and adds a narrow bit-packed entry, so the FlowThrough flag
+// applies only to the metadata and never grants ReusePlan an edge-placement privilege
 // the baselines lack.
 #define SIM_ECG_EDGE(cache, cfg, neighbor_ptr, edge_base, record_base, sidecar_base) \
     do { \
@@ -360,7 +361,7 @@ inline decltype(auto) access_edge_with_site(
                 (cache), reinterpret_cast<uint64_t>(neighbor_ptr), _site); \
             const uint64_t _a = ::ecg_metadata::sidecarAddress( \
                 (cfg), (sidecar_base), _idx); \
-            if ((cfg).bypass) \
+            if ((cfg).flowthrough) \
                 ::cache_sim::access_stream_with_site((cache), _a, false, _site); \
             else \
                 ::cache_sim::access_with_site((cache), _a, false, _site); \
@@ -369,7 +370,7 @@ inline decltype(auto) access_edge_with_site(
                 (cfg), (record_base), _idx); \
             for (int _h = 0; _h < ((cfg).record_bytes >= 16 ? 2 : 1); ++_h) { \
                 const uint64_t _ha = _a + static_cast<uint64_t>(_h) * 8ULL; \
-                if ((cfg).bypass) \
+                if ((cfg).flowthrough) \
                     ::cache_sim::access_stream_with_site( \
                         (cache), _ha, false, _site); \
                 else \
@@ -378,14 +379,14 @@ inline decltype(auto) access_edge_with_site(
         } \
     } while (0)
 
-// ECG StreamShield: one-touch packed edge records can bypass LLC allocation
+// ECG FlowThrough: one-touch packed edge records can skip shared-LLC insertion
 // while still filling the private caches. Only ECG's explicit stream path uses
 // this; baseline CSR accesses remain unchanged.
-#define SIM_CACHE_READ_EDGE_BYPASS(cache, neighbor_ptr) \
+#define SIM_CACHE_READ_EDGE_FLOWTHROUGH(cache, neighbor_ptr) \
     ::cache_sim::access_stream_with_site( \
         (cache), reinterpret_cast<uint64_t>(neighbor_ptr), false, \
         CACHE_SIM_HAWKEYE_SITE_ID)
-#define SIM_CACHE_READ_STREAM_BYPASS(cache, ptr, idx) \
+#define SIM_CACHE_READ_FLOWTHROUGH(cache, ptr, idx) \
     ::cache_sim::access_stream_with_site( \
         (cache), reinterpret_cast<uint64_t>(&(ptr)[idx]), false, \
         CACHE_SIM_HAWKEYE_SITE_ID)

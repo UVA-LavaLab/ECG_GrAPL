@@ -28,7 +28,7 @@
 #include <cstring>
 #include <atomic>
 
-#include "ecg_epoch_builder.h"
+#include "ecg_reuse_plan_builder.h"
 #include <string>
 
 #ifndef NO_M5OPS
@@ -95,10 +95,10 @@ inline bool gem5_ecg_pload_enabled() {
     return enabled != 0;
 }
 
-inline bool gem5_ecg_k2_mask_only_enabled() {
+inline bool gem5_ecg_bind_computed_address_enabled() {
     static int enabled = []() {
         const char* value = std::getenv("GEM5_ECG_ISA_VARIANT");
-        return (value && std::strcmp(value, "mask") == 0) ? 1 : 0;
+        return (value && std::strcmp(value, "computed") == 0) ? 1 : 0;
     }();
     return enabled != 0;
 }
@@ -166,11 +166,11 @@ inline uint32_t gem5_ecg_load_embedded(const void* prop_base, uint64_t fat_edge)
 // with about 16 instructions of runtime shifts and masks per edge. Returns the
 // destination vertex, so the caller needs no mask either.
 #ifndef NO_M5OPS
-inline void gem5_trace_ecg_k2_expect(uint64_t packed);
+inline void gem5_trace_ecg_reuse_plan_expect(uint64_t packed);
 
-inline bool gem5_ecg_k2_trace_enabled() {
+inline bool gem5_ecg_reuse_plan_trace_enabled() {
     static int on = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return (value && std::strtoull(value, nullptr, 10) > 0) ? 1 : 0;
     }();
     return on != 0;
@@ -178,7 +178,7 @@ inline bool gem5_ecg_k2_trace_enabled() {
 #else
 // Tracing needs the m5ops build; without it the traced path cannot exist, so
 // the selector is a compile-time false and both loops fold to one.
-inline bool gem5_ecg_k2_trace_enabled() { return false; }
+inline bool gem5_ecg_reuse_plan_trace_enabled() { return false; }
 #endif
 
 inline uint32_t gem5_ecg_extract2c_instruction(uint32_t record, uint32_t fmt) {
@@ -204,7 +204,7 @@ inline uint32_t gem5_ecg_extract2c_instruction(uint32_t record, uint32_t fmt) {
 inline uint32_t gem5_ecg_extract2c_instruction_traced(uint32_t record,
                                                       uint32_t fmt) {
 #ifndef NO_M5OPS
-    gem5_trace_ecg_k2_expect(ecg_epoch::widenEpochPair32(
+    gem5_trace_ecg_reuse_plan_expect(ecg_reuse_plan::widenReusePlan32(
         record, fmt & 0x3FU, (fmt >> 8) & 0x3FU));
 #endif
     return gem5_ecg_extract2c_instruction(record, fmt);
@@ -231,9 +231,9 @@ inline bool gem5_ecg_compact_fused_enabled() {
     return enabled != 0;
 }
 
-inline bool gem5_ecg_compact_k2m_streamshield_enabled() {
+inline bool gem5_ecg_compact_reuse_bind_flowthrough_enabled() {
     static int enabled = []() {
-        const char* value = std::getenv("GEM5_ECG_COMPACT_K2M_SS");
+        const char* value = std::getenv("GEM5_ECG_COMPACT_REUSE_BIND_FLOW");
         return (value && std::strcmp(value, "0") != 0) ? 1 : 0;
     }();
     return enabled != 0;
@@ -386,27 +386,27 @@ inline uint32_t gem5_ecg_extract_mask_instruction(uint64_t fat_mask) {
 #endif
 }
 
-inline void gem5_trace_ecg_k2_expect(uint64_t packed) {
+inline void gem5_trace_ecg_reuse_plan_expect(uint64_t packed) {
     static uint64_t trace_sequence = 0;
     static const uint64_t trace_limit = []() {
-        const char* value = std::getenv("ECG_K2_DELIVERY_TRACE");
+        const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
         return value ? static_cast<uint64_t>(std::strtoull(value, nullptr, 10)) : 0;
     }();
     if (trace_limit == 0) return;
     const uint64_t sequence = trace_sequence++;
     if (sequence < trace_limit) {
         std::fprintf(stderr,
-            "[ECG-K2-EXPECT sim=gem5 seq=%llu dest=%u tier=%u "
+            "[ECG-ReusePlan-EXPECT sim=gem5 seq=%llu dest=%u tier=%u "
             "epoch1=%u epoch2=%u]\n",
             (unsigned long long)sequence,
-            ecg_epoch::extractEpochPairDest(packed),
-            static_cast<unsigned>(ecg_epoch::extractEpochPairTier(packed)),
-            static_cast<unsigned>(ecg_epoch::extractEpochPairFirst(packed)),
-            static_cast<unsigned>(ecg_epoch::extractEpochPairSecond(packed)));
+            ecg_reuse_plan::extractReusePlanDest(packed),
+            static_cast<unsigned>(ecg_reuse_plan::extractReusePlanTier(packed)),
+            static_cast<unsigned>(ecg_reuse_plan::extractReusePlanFirst(packed)),
+            static_cast<unsigned>(ecg_reuse_plan::extractReusePlanSecond(packed)));
     }
 }
 
-inline uint32_t gem5_ecg_load_k2(const void* prop_base, uint64_t packed_record) {
+inline uint32_t gem5_ecg_bind_iload_u32(const void* prop_base, uint64_t packed_record) {
 #if defined(__riscv)
     uint64_t val = 0;
     asm volatile (".insn r 0x0b, 0x2, 0x0c, %0, %1, %2"
@@ -416,16 +416,16 @@ inline uint32_t gem5_ecg_load_k2(const void* prop_base, uint64_t packed_record) 
     return static_cast<uint32_t>(val);
 #else
     const uint32_t* base = static_cast<const uint32_t*>(prop_base);
-    const uint32_t dest = ecg_epoch::extractEpochPairDest(packed_record);
+    const uint32_t dest = ecg_reuse_plan::extractReusePlanDest(packed_record);
     return base ? base[dest] : 0;
 #endif
 }
 
-// Fused compact Schedule-2 load. Rs1 is the property base and Rs2 is the
+// Fused compact two-epoch ReusePlan load. Rs1 is the property base and Rs2 is the
 // 32-bit record; CSR 0x802 carries the loop-invariant id/epoch field widths.
 // That leaves both source operands available for the actual memory operation
 // and keeps the hot path to one custom instruction per edge.
-inline uint32_t gem5_ecg_load_k2_compact(
+inline uint32_t gem5_ecg_bind_iload_compact(
         const void* prop_base, uint32_t packed_record,
         uint32_t id_bits, uint32_t epoch_bits) {
 #if defined(__riscv)
@@ -437,25 +437,25 @@ inline uint32_t gem5_ecg_load_k2_compact(
     return static_cast<uint32_t>(val);
 #else
     const uint32_t* base = static_cast<const uint32_t*>(prop_base);
-    const uint32_t dest = ecg_epoch::extractEpochPair32Dest(
+    const uint32_t dest = ecg_reuse_plan::extractReusePlan32Dest(
         packed_record, id_bits);
     (void)epoch_bits;
     return base ? base[dest] : 0;
 #endif
 }
 
-inline uint32_t gem5_ecg_load_k2_compact_traced(
+inline uint32_t gem5_ecg_bind_iload_compact_traced(
         const void* prop_base, uint32_t packed_record,
         uint32_t id_bits, uint32_t epoch_bits) {
 #ifndef NO_M5OPS
-    gem5_trace_ecg_k2_expect(ecg_epoch::widenEpochPair32(
+    gem5_trace_ecg_reuse_plan_expect(ecg_reuse_plan::widenReusePlan32(
         packed_record, id_bits, epoch_bits));
 #endif
-    return gem5_ecg_load_k2_compact(
+    return gem5_ecg_bind_iload_compact(
         prop_base, packed_record, id_bits, epoch_bits);
 }
 
-inline uint64_t gem5_ecg_load_k2_u64(
+inline uint64_t gem5_ecg_bind_iload_u64(
         const void* prop_base, uint64_t packed_record) {
 #if defined(__riscv)
     uint64_t val = 0;
@@ -466,12 +466,12 @@ inline uint64_t gem5_ecg_load_k2_u64(
     return val;
 #else
     const uint64_t* base = static_cast<const uint64_t*>(prop_base);
-    const uint32_t dest = ecg_epoch::extractEpochPairDest(packed_record);
+    const uint32_t dest = ecg_reuse_plan::extractReusePlanDest(packed_record);
     return base ? base[dest] : 0;
 #endif
 }
 
-inline uint32_t gem5_ecg_load_k2_weighted64(
+inline uint32_t gem5_ecg_bind_iload_cw24(
         const void* prop_base, uint64_t packed_record) {
 #if defined(__riscv)
     uint64_t val = 0;
@@ -483,12 +483,12 @@ inline uint32_t gem5_ecg_load_k2_weighted64(
 #else
     const uint32_t* base = static_cast<const uint32_t*>(prop_base);
     const uint32_t dest =
-        ecg_epoch::extractCompactWeightedDest(packed_record);
+        ecg_reuse_plan::extractCompactWeightedDest(packed_record);
     return base ? base[dest] : 0;
 #endif
 }
 
-inline uint32_t gem5_ecg_mload_k2_u32(
+inline uint32_t gem5_ecg_bind_load_u32(
         const void* prop_addr, uint64_t packed_record) {
 #if defined(__riscv)
     uint64_t val = 0;
@@ -502,7 +502,7 @@ inline uint32_t gem5_ecg_mload_k2_u32(
 #endif
 }
 
-inline int32_t gem5_ecg_mload_k2_s32(
+inline int32_t gem5_ecg_bind_load_s32(
         const void* prop_addr, uint64_t packed_record) {
 #if defined(__riscv)
     int64_t val = 0;
@@ -516,7 +516,7 @@ inline int32_t gem5_ecg_mload_k2_s32(
 #endif
 }
 
-inline uint64_t gem5_ecg_mload_k2_u64(
+inline uint64_t gem5_ecg_bind_load_u64(
         const void* prop_addr, uint64_t packed_record) {
 #if defined(__riscv)
     uint64_t val = 0;
@@ -530,7 +530,7 @@ inline uint64_t gem5_ecg_mload_k2_u64(
 #endif
 }
 
-inline uint32_t gem5_ecg_mload_k2_compact_u32(
+inline uint32_t gem5_ecg_bind_load_cw24(
         const void* prop_addr, uint64_t packed_record) {
 #if defined(__riscv)
     uint64_t val = 0;
@@ -544,7 +544,7 @@ inline uint32_t gem5_ecg_mload_k2_compact_u32(
 #endif
 }
 
-inline float gem5_ecg_mload_k2_f32(
+inline float gem5_ecg_bind_load_f32(
         const void* prop_addr, uint64_t packed_record) {
 #if defined(__riscv)
     float val = 0.0f;
@@ -582,7 +582,7 @@ inline uint32_t gem5_ecg_extract2_instruction_untraced(uint64_t packed) {
 }
 
 inline uint32_t gem5_ecg_extract2_instruction(uint64_t packed) {
-    gem5_trace_ecg_k2_expect(packed);
+    gem5_trace_ecg_reuse_plan_expect(packed);
 #if defined(__riscv)
     uint64_t real_vertex = 0;
     asm volatile (".insn r 0x0b, 0x0, 0x01, %0, %1, x0"
@@ -598,26 +598,26 @@ inline uint32_t gem5_ecg_extract2_instruction(uint64_t packed) {
 #endif
 }
 
-inline bool gem5_ecg_stream_load2_enabled() {
+inline bool gem5_ecg_flow_load_enabled() {
     static int enabled = []() {
-        const char* value = std::getenv("GEM5_ENABLE_ECG_STREAM_LOAD2");
+        const char* value = std::getenv("GEM5_ENABLE_ECG_FLOW_LOAD");
         return (value && std::strcmp(value, "0") != 0) ? 1 : 0;
     }();
     return enabled != 0;
 }
 
-inline bool gem5_ecg_load2_enabled() {
+inline bool gem5_ecg_plan_load_enabled() {
     static int enabled = []() {
-        const char* value = std::getenv("GEM5_ENABLE_ECG_LOAD2");
+        const char* value = std::getenv("GEM5_ENABLE_ECG_PLAN_LOAD");
         return (value && std::strcmp(value, "0") != 0) ? 1 : 0;
     }();
     return enabled != 0;
 }
 
-// ecg.stream.load2 rd, 0(rs1): load one packed K2 record with a request-bound
-// LLC no-allocate flag. The returned record feeds gem5_ecg_load_k2, which owns
+// ecg.flow.load rd, 0(rs1): load one packed ReusePlan record with a request-bound
+// LLC no-allocate flag. The returned record feeds gem5_ecg_bind_iload_u32, which owns
 // canonical metadata delivery on the subsequent property request.
-inline uint64_t gem5_ecg_stream_load2_instruction(const void* record_ptr) {
+inline uint64_t gem5_ecg_flow_load_instruction(const void* record_ptr) {
     uint64_t packed = 0;
 #if defined(__riscv)
     asm volatile (".insn i 0x0b, 0x3, %0, 0(%1)"
@@ -630,7 +630,7 @@ inline uint64_t gem5_ecg_stream_load2_instruction(const void* record_ptr) {
     return packed;
 }
 
-inline uint64_t gem5_ecg_stream_load2_compact_instruction(
+inline uint64_t gem5_ecg_flow_load_compact_instruction(
         const void* record_ptr, uint32_t id_bits, uint32_t epoch_bits) {
     uint64_t packed = 0;
 #if defined(__riscv)
@@ -642,7 +642,7 @@ inline uint64_t gem5_ecg_stream_load2_compact_instruction(
     (void)epoch_bits;
 #else
     if (record_ptr) {
-        packed = ecg_epoch::widenEpochPair32(
+        packed = ecg_reuse_plan::widenReusePlan32(
             *static_cast<const uint32_t*>(record_ptr),
             id_bits, epoch_bits);
     }
@@ -650,7 +650,7 @@ inline uint64_t gem5_ecg_stream_load2_compact_instruction(
     return packed;
 }
 
-inline uint64_t gem5_ecg_load2_instruction(const void* record_ptr) {
+inline uint64_t gem5_ecg_plan_load_instruction(const void* record_ptr) {
     uint64_t packed = 0;
 #if defined(__riscv)
     asm volatile (".insn i 0x0b, 0x4, %0, 0(%1)"
@@ -660,11 +660,11 @@ inline uint64_t gem5_ecg_load2_instruction(const void* record_ptr) {
 #else
     if (record_ptr) packed = *static_cast<const uint64_t*>(record_ptr);
 #endif
-    gem5_trace_ecg_k2_expect(packed);
+    gem5_trace_ecg_reuse_plan_expect(packed);
     return packed;
 }
 
-inline uint32_t gem5_ecg_stream_weighted_load2_instruction(
+inline uint32_t gem5_ecg_flow_weighted_load_instruction(
         const void* sidecar_ptr) {
     uint64_t sidecar = 0;
 #if defined(__riscv)
@@ -679,7 +679,7 @@ inline uint32_t gem5_ecg_stream_weighted_load2_instruction(
     return static_cast<uint32_t>(sidecar);
 }
 
-inline uint32_t gem5_ecg_weighted_load2_instruction(
+inline uint32_t gem5_ecg_plan_weighted_load_instruction(
         const void* sidecar_ptr, uint32_t dest) {
     uint64_t sidecar = 0;
 #if defined(__riscv)
@@ -691,13 +691,13 @@ inline uint32_t gem5_ecg_weighted_load2_instruction(
     if (sidecar_ptr)
         sidecar = *static_cast<const uint32_t*>(sidecar_ptr);
 #endif
-    gem5_trace_ecg_k2_expect(ecg_epoch::packEpochPairRecord(
+    gem5_trace_ecg_reuse_plan_expect(ecg_reuse_plan::packReusePlanRecord(
         dest,
-        ecg_epoch::extractWeightedEpochPairTier(
+        ecg_reuse_plan::extractWeightedReusePlanTier(
             static_cast<uint32_t>(sidecar)),
-        ecg_epoch::extractWeightedEpochPairFirst(
+        ecg_reuse_plan::extractWeightedReusePlanFirst(
             static_cast<uint32_t>(sidecar)),
-        ecg_epoch::extractWeightedEpochPairSecond(
+        ecg_reuse_plan::extractWeightedReusePlanSecond(
             static_cast<uint32_t>(sidecar))));
     return static_cast<uint32_t>(sidecar);
 }
@@ -787,87 +787,87 @@ inline void gem5_ecg_clear_extract2_hint() {
     } while (0)
 #else
 #define GEM5_SET_VERTEX(vertex_id) do {} while(0)
-inline bool gem5_ecg_stream_load2_enabled() {
-    const char* value = std::getenv("GEM5_ENABLE_ECG_STREAM_LOAD2");
+inline bool gem5_ecg_flow_load_enabled() {
+    const char* value = std::getenv("GEM5_ENABLE_ECG_FLOW_LOAD");
     return value && std::strcmp(value, "0") != 0;
 }
-inline bool gem5_ecg_load2_enabled() {
-    const char* value = std::getenv("GEM5_ENABLE_ECG_LOAD2");
+inline bool gem5_ecg_plan_load_enabled() {
+    const char* value = std::getenv("GEM5_ENABLE_ECG_PLAN_LOAD");
     return value && std::strcmp(value, "0") != 0;
 }
-inline uint64_t gem5_ecg_stream_load2_instruction(const void* record_ptr) {
+inline uint64_t gem5_ecg_flow_load_instruction(const void* record_ptr) {
     return record_ptr ? *static_cast<const uint64_t*>(record_ptr) : 0;
 }
-inline uint64_t gem5_ecg_stream_load2_compact_instruction(
+inline uint64_t gem5_ecg_flow_load_compact_instruction(
         const void* record_ptr, uint32_t id_bits, uint32_t epoch_bits) {
     return record_ptr
-        ? ecg_epoch::widenEpochPair32(
+        ? ecg_reuse_plan::widenReusePlan32(
               *static_cast<const uint32_t*>(record_ptr),
               id_bits, epoch_bits)
         : 0;
 }
-inline uint64_t gem5_ecg_load2_instruction(const void* record_ptr) {
+inline uint64_t gem5_ecg_plan_load_instruction(const void* record_ptr) {
     return record_ptr ? *static_cast<const uint64_t*>(record_ptr) : 0;
 }
-inline uint32_t gem5_ecg_stream_weighted_load2_instruction(
+inline uint32_t gem5_ecg_flow_weighted_load_instruction(
         const void* sidecar_ptr) {
     return sidecar_ptr ? *static_cast<const uint32_t*>(sidecar_ptr) : 0;
 }
-inline uint32_t gem5_ecg_weighted_load2_instruction(
+inline uint32_t gem5_ecg_plan_weighted_load_instruction(
         const void* sidecar_ptr, uint32_t) {
     return sidecar_ptr ? *static_cast<const uint32_t*>(sidecar_ptr) : 0;
 }
-inline uint32_t gem5_ecg_load_k2(
+inline uint32_t gem5_ecg_bind_iload_u32(
         const void* prop_base, uint64_t packed_record) {
     const uint32_t* base = static_cast<const uint32_t*>(prop_base);
-    const uint32_t dest = ecg_epoch::extractEpochPairDest(packed_record);
+    const uint32_t dest = ecg_reuse_plan::extractReusePlanDest(packed_record);
     return base ? base[dest] : 0;
 }
-inline uint32_t gem5_ecg_load_k2_compact(
+inline uint32_t gem5_ecg_bind_iload_compact(
         const void* prop_base, uint32_t packed_record,
         uint32_t id_bits, uint32_t epoch_bits) {
     const uint32_t* base = static_cast<const uint32_t*>(prop_base);
-    const uint32_t dest = ecg_epoch::extractEpochPair32Dest(
+    const uint32_t dest = ecg_reuse_plan::extractReusePlan32Dest(
         packed_record, id_bits);
     (void)epoch_bits;
     return base ? base[dest] : 0;
 }
-inline uint32_t gem5_ecg_load_k2_compact_traced(
+inline uint32_t gem5_ecg_bind_iload_compact_traced(
         const void* prop_base, uint32_t packed_record,
         uint32_t id_bits, uint32_t epoch_bits) {
-    return gem5_ecg_load_k2_compact(
+    return gem5_ecg_bind_iload_compact(
         prop_base, packed_record, id_bits, epoch_bits);
 }
-inline uint64_t gem5_ecg_load_k2_u64(
+inline uint64_t gem5_ecg_bind_iload_u64(
         const void* prop_base, uint64_t packed_record) {
     const uint64_t* base = static_cast<const uint64_t*>(prop_base);
-    const uint32_t dest = ecg_epoch::extractEpochPairDest(packed_record);
+    const uint32_t dest = ecg_reuse_plan::extractReusePlanDest(packed_record);
     return base ? base[dest] : 0;
 }
-inline uint32_t gem5_ecg_load_k2_weighted64(
+inline uint32_t gem5_ecg_bind_iload_cw24(
         const void* prop_base, uint64_t packed_record) {
     const uint32_t* base = static_cast<const uint32_t*>(prop_base);
     const uint32_t dest =
-        ecg_epoch::extractCompactWeightedDest(packed_record);
+        ecg_reuse_plan::extractCompactWeightedDest(packed_record);
     return base ? base[dest] : 0;
 }
-inline uint32_t gem5_ecg_mload_k2_u32(
+inline uint32_t gem5_ecg_bind_load_u32(
         const void* prop_addr, uint64_t) {
     return prop_addr ? *static_cast<const uint32_t*>(prop_addr) : 0;
 }
-inline int32_t gem5_ecg_mload_k2_s32(
+inline int32_t gem5_ecg_bind_load_s32(
         const void* prop_addr, uint64_t) {
     return prop_addr ? *static_cast<const int32_t*>(prop_addr) : 0;
 }
-inline uint64_t gem5_ecg_mload_k2_u64(
+inline uint64_t gem5_ecg_bind_load_u64(
         const void* prop_addr, uint64_t) {
     return prop_addr ? *static_cast<const uint64_t*>(prop_addr) : 0;
 }
-inline uint32_t gem5_ecg_mload_k2_compact_u32(
+inline uint32_t gem5_ecg_bind_load_cw24(
         const void* prop_addr, uint64_t) {
     return prop_addr ? *static_cast<const uint32_t*>(prop_addr) : 0;
 }
-inline float gem5_ecg_mload_k2_f32(
+inline float gem5_ecg_bind_load_f32(
         const void* prop_addr, uint64_t) {
     return prop_addr ? *static_cast<const float*>(prop_addr) : 0.0f;
 }
@@ -1227,8 +1227,8 @@ inline void gem5_export_context(
     const Gem5EdgeRegion* edge_regions = nullptr,
     int num_edge_regions = 0,
     uint32_t edge_epoch_count = 0,
-    uint64_t stream_bypass_base = 0,
-    uint64_t stream_bypass_size = 0)
+    uint64_t flowthrough_base = 0,
+    uint64_t flowthrough_size = 0)
 {
     FILE* f = fopen(path, "w");
     if (!f) {
@@ -1240,15 +1240,15 @@ inline void gem5_export_context(
     fprintf(f, "  \"num_vertices\": %ld,\n", (long)g.num_nodes());
     fprintf(f, "  \"num_edges\": %ld,\n", (long)g.num_edges_directed());
     fprintf(f, "  \"edge_epoch_count\": %u,\n", edge_epoch_count);
-    fprintf(f, "  \"stream_bypass_base\": %lu,\n",
-            (unsigned long)stream_bypass_base);
-    fprintf(f, "  \"stream_bypass_size\": %lu,\n",
-            (unsigned long)stream_bypass_size);
-    if (stream_bypass_size > 0) {
+    fprintf(f, "  \"flowthrough_base\": %lu,\n",
+            (unsigned long)flowthrough_base);
+    fprintf(f, "  \"flowthrough_size\": %lu,\n",
+            (unsigned long)flowthrough_size);
+    if (flowthrough_size > 0) {
         fprintf(stderr,
             "[ECG-STREAM-REGION sim=gem5 base=%#lx size=%lu]\n",
-            (unsigned long)stream_bypass_base,
-            (unsigned long)stream_bypass_size);
+            (unsigned long)flowthrough_base,
+            (unsigned long)flowthrough_size);
     }
     fprintf(f, "  \"directed\": %s,\n", g.directed() ? "true" : "false");
 

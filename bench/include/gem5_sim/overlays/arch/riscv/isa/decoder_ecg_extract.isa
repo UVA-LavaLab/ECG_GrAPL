@@ -45,7 +45,7 @@
                         }
                         Rd = rvZext(dest_id);
                     }});
-                    // Tiered Schedule-2 register delivery:
+                    // Tiered two-epoch ReusePlan register delivery:
                     // dest[31:0] | tier[33:32] |
                     // epoch1[48:34] | epoch2[63:49].
                     0x01: ecg_extract2({{
@@ -69,7 +69,7 @@
                             current_epoch, context_id);
                         Rd = rvZext(dest_id);
                     }});
-                    // COMPACT Schedule-2 delivery. Rs1 holds the 32-bit record
+                    // COMPACT two-epoch ReusePlan delivery. Rs1 holds the 32-bit record
                     // dest[id_bits] | tier[2] | first[eb] | second[eb]; Rs2
                     // holds the loop-invariant format word
                     // (id_bits | epoch_bits << 8). Widening in the decoder is
@@ -150,14 +150,14 @@
                     Rd = rvZext(dest_id);
                 }});
             }
-            // Schedule-2 record acquisition. Stream forms are placement-only;
-            // non-stream forms retain legacy mailbox delivery. Canonical K2 uses
-            // ecg_load_k2 below to attach metadata to the property request.
+            // two-epoch ReusePlan record acquisition. Stream forms are placement-only;
+            // non-stream forms retain legacy mailbox delivery. Canonical ReusePlan uses
+            // ecg_bind_iload_u32 below to attach metadata to the property request.
             format Load {
-                0x3: ecg_stream_load2({{
+                0x3: ecg_flow_load({{
                     Rd = Mem_ud;
-                }}, mem_flags=[ECG_STREAM_BYPASS]);
-                0x4: ecg_load2({{
+                }}, mem_flags=[ECG_FLOWTHROUGH]);
+                0x4: ecg_plan_load({{
                     uint64_t packed = Mem_ud;
                     uint32_t dest_id = static_cast<uint32_t>(
                         packed & 0xFFFFFFFFULL);
@@ -178,12 +178,12 @@
                         current_epoch, context_id);
                     Rd = packed;
                 }});
-                0x5: ecg_stream_weighted_load2({{
+                0x5: ecg_flow_weighted_load({{
                     Rd = Mem_uw;
                 }}, ea_code={{
                     EA = rvZext(Rs1);
-                }}, mem_flags=[ECG_STREAM_BYPASS]);
-                0x6: ecg_weighted_load2({{
+                }}, mem_flags=[ECG_FLOWTHROUGH]);
+                0x6: ecg_plan_weighted_load({{
                     uint32_t sidecar = Mem_uw;
                     uint32_t dest_id = static_cast<uint32_t>(Rs2);
                     uint8_t tier = static_cast<uint8_t>(sidecar & 0x3U);
@@ -206,12 +206,12 @@
                     (void)dest_dependency;
                     EA = rvZext(Rs1);
                 }});
-                // Compact unweighted StreamShield record load. Memory moves
+                // Compact unweighted FlowThrough record load. Memory moves
                 // four bytes, while rd receives the canonical
-                // dest32|tier2|epoch1_15|epoch2_15 mask consumed by K2-M.
+                // dest32|tier2|epoch1_15|epoch2_15 mask consumed by ReuseBind.
                 // Field widths are loop-invariant architectural state in CSR
                 // 0x802, written before the ROI.
-                0x7: ecg_stream_load2_compact({{
+                0x7: ecg_flow_load_compact({{
                     const uint64_t compact =
                         static_cast<uint32_t>(Mem_uw);
                     const uint32_t fmt = static_cast<uint32_t>(
@@ -221,7 +221,7 @@
                     panic_if(
                         id_bits == 0 || epoch_bits == 0 ||
                         id_bits + 2 + 2 * epoch_bits > 32,
-                        "Invalid compact StreamShield K2 format: "
+                        "Invalid compact FlowThrough ReusePlan format: "
                         "id_bits=%u epoch_bits=%u",
                         id_bits, epoch_bits);
                     const uint64_t id_mask =
@@ -242,7 +242,7 @@
                         (static_cast<uint64_t>(tier) << 32) |
                         (static_cast<uint64_t>(epoch1) << 34) |
                         (static_cast<uint64_t>(epoch2) << 49);
-                }}, mem_flags=[ECG_STREAM_BYPASS]);
+                }}, mem_flags=[ECG_FLOWTHROUGH]);
             }
             // GraphBrew FUSED ecg.load (custom-0, FUNCT3=0x2, R-type): indexed-
             // property load + metadata delivery in ONE op. rs1 = property base, rs2 =
@@ -340,9 +340,9 @@
                             current_epoch, context_id);
                         EA = rvZext(Rs1 + static_cast<uint64_t>(dest_id) * 4);
                     }});
-                    // 0x03 K2: dest32 | tier2 | epoch1_15 | epoch2_15.
+                    // 0x03 ReusePlan: dest32 | tier2 | epoch1_15 | epoch2_15.
                     // The graph mask rides the governed property-load Request.
-                    0x03: ecg_load_k2({{
+                    0x03: ecg_bind_iload_u32({{
                         Rd = Mem_uw;
                         // The cache fill/hit consumes the mailbox before
                         // completeAcc executes. Clear here so private-cache hits
@@ -376,8 +376,8 @@
                         EA = rvZext(
                             Rs1 + static_cast<uint64_t>(dest_id) * 4);
                     }});
-                    // 0x04 K2-64: same mask, governed 8-byte property load.
-                    0x04: ecg_load_k2_u64({{
+                    // 0x04 ReusePlan-U64: same mask, governed 8-byte property load.
+                    0x04: ecg_bind_iload_u64({{
                         Rd = Mem_ud;
                         gem5::replacement_policy::graph::
                             clearDecodedEcgExtractHint();
@@ -408,9 +408,9 @@
                         EA = rvZext(
                             Rs1 + static_cast<uint64_t>(dest_id) * 8);
                     }});
-                    // 0x05 compact weighted K2:
+                    // 0x05 compact weighted ReusePlan:
                     // dest24 | weight8 | tier2 | epoch1_15 | epoch2_15.
-                    0x05: ecg_load_k2_weighted64({{
+                    0x05: ecg_bind_iload_cw24({{
                         Rd = Mem_uw;
                         gem5::replacement_policy::graph::
                             clearDecodedEcgExtractHint();
@@ -441,9 +441,9 @@
                         EA = rvZext(
                             Rs1 + static_cast<uint64_t>(dest_id) * 4);
                     }});
-                    // 0x06 K2-M U32.D32: rs1 is the already-computed property
+                    // 0x06 ReuseBind U32.D32: rs1 is the already-computed property
                     // address; rs2 carries dest32|tier2|epoch1_15|epoch2_15.
-                    0x06: ecg_mload_k2_u32({{
+                    0x06: ecg_bind_load_u32({{
                         Rd = Mem_uw;
                         gem5::replacement_policy::graph::
                             clearDecodedEcgExtractHint();
@@ -472,8 +472,8 @@
                             current_epoch, context_id);
                         EA = rvZext(Rs1);
                     }});
-                    // 0x07 K2-M S32.D32.
-                    0x07: ecg_mload_k2_s32({{
+                    // 0x07 ReuseBind S32.D32.
+                    0x07: ecg_bind_load_s32({{
                         Rd_sd = Mem_sw;
                         gem5::replacement_policy::graph::
                             clearDecodedEcgExtractHint();
@@ -502,8 +502,8 @@
                             current_epoch, context_id);
                         EA = rvZext(Rs1);
                     }});
-                    // 0x08 K2-M U64.D32.
-                    0x08: ecg_mload_k2_u64({{
+                    // 0x08 ReuseBind U64.D32.
+                    0x08: ecg_bind_load_u64({{
                         Rd = Mem_ud;
                         gem5::replacement_policy::graph::
                             clearDecodedEcgExtractHint();
@@ -532,8 +532,8 @@
                             current_epoch, context_id);
                         EA = rvZext(Rs1);
                     }});
-                    // 0x09 K2-M U32.CW24: compact weighted record.
-                    0x09: ecg_mload_k2_compact_u32({{
+                    // 0x09 ReuseBind U32.CW24: compact weighted record.
+                    0x09: ecg_bind_load_cw24({{
                         Rd = Mem_uw;
                         gem5::replacement_policy::graph::
                             clearDecodedEcgExtractHint();
@@ -563,8 +563,8 @@
                             current_epoch, context_id);
                         EA = rvZext(Rs1);
                     }});
-                    // 0x0A K2-M F32.D32: bit-preserving FP property load.
-                    0x0A: ecg_mload_k2_f32({{
+                    // 0x0A ReuseBind F32.D32: bit-preserving FP property load.
+                    0x0A: ecg_bind_load_f32({{
                         STATUS status = xc->readMiscReg(MISCREG_STATUS);
                         if (status.fs == FPUStatus::OFF)
                             return std::make_shared<IllegalInstFault>(
@@ -600,15 +600,15 @@
                             current_epoch, context_id);
                         EA = rvZext(Rs1);
                     }}, inst_flags=FloatMemReadOp);
-                    // 0x0B K2-C: fused 4-byte property load with a COMPACT
-                    // 32-bit Schedule-2 record in Rs2. The record format is
+                    // 0x0B ReusePlan-Compact: fused 4-byte property load with a COMPACT
+                    // 32-bit two-epoch ReusePlan record in Rs2. The record format is
                     // architectural state in CSR 0x802:
                     //   fmt[5:0]   = id_bits
                     //   fmt[13:8]  = epoch_bits
                     // The CSR is written once before the ROI, so the hot path
                     // remains one record load plus one governed property load.
                     0x0B: decode ECG_WIDTH {
-                    0x0: ecg_load_k2_compact({{
+                    0x0: ecg_bind_iload_compact({{
                         Rd = Mem_uw;
                         gem5::replacement_policy::graph::
                             clearDecodedEcgExtractHint();
@@ -622,7 +622,7 @@
                         panic_if(
                             id_bits == 0 || epoch_bits == 0 ||
                             id_bits + 2 + 2 * epoch_bits > 32,
-                            "Invalid compact K2 record format: id_bits=%u "
+                            "Invalid compact ReusePlan record format: id_bits=%u "
                             "epoch_bits=%u", id_bits, epoch_bits);
 
                         const uint64_t id_mask =

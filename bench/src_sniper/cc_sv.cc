@@ -23,7 +23,7 @@
 
 #include "graphbrew/partition/cagra/popt.h"
 #include "sniper_sim/sniper_harness.h"
-#include "ecg_epoch_builder.h"
+#include "ecg_reuse_plan_builder.h"
 
 using namespace std;
 
@@ -58,7 +58,7 @@ pvector<NodeID> ShiloachVishkin_Sniper(const Graph &g) {
         graphbrew_sniper::env_int_clamped("ECG_EDGE_MASK_EPOCHS", kNumEpochs, 2, 65535));
     vector<vector<uint16_t>> out_edge_epochs;
     if (ecg_extract_enabled) {
-        ecg_epoch::buildInEdgeEpochs(g, kNumVtxPerLine, ecg_epoch_count,
+        ecg_reuse_plan::buildInEdgeEpochs(g, kNumVtxPerLine, ecg_epoch_count,
                                      /*linemin=*/true, out_edge_epochs,
                                      /*push_out_edges=*/true);
     }

@@ -1,12 +1,12 @@
 {
   "version": 2,
   "id": "pagerank_study",
-  "scope": "Deterministic sampled PageRank evaluation of static RRIP-first K2-M with StreamShield.",
+  "scope": "Deterministic sampled PageRank evaluation of static RRIP-first ReuseBind with FlowThrough.",
   "simulator": "gem5",
   "cpu_type": "O3",
-  "isa_variant": "mask",
-  "k2_timing_mode": "compact_trace_free",
-  "k2_epochs": 32,
+  "isa_variant": "computed",
+  "reuse_plan_timing_mode": "compact_trace_free",
+  "reuse_plan_epochs": 32,
   "compact_tier_bits": 2,
   "benchmark": "pr",
   "prefetcher": "none",
@@ -129,9 +129,9 @@
       "GRASP",
       "POPT",
       "POPT:UNCHARGED",
-      "ECG:K2_LRU_STREAMSHIELD",
-      "ECG:K2_RRIP_STREAMSHIELD",
-      "ECG:K2_ONLINE_STREAMSHIELD"
+      "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+      "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+      "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH"
     ],
     "sanity_baseline": "LRU",
     "serious_baselines": [
@@ -140,10 +140,10 @@
     ],
     "charged_popt_baseline": "POPT",
     "oracle_control": "POPT:UNCHARGED",
-    "transport_control": "ECG:K2_LRU_STREAMSHIELD",
-    "primary_candidate": "ECG:K2_RRIP_STREAMSHIELD",
+    "transport_control": "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+    "primary_candidate": "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
     "characterization_only": [
-      "ECG:K2_ONLINE_STREAMSHIELD"
+      "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH"
     ]
   },
   "popt_model": {
@@ -204,17 +204,17 @@
     "stop_if_primary_fails": true
   },
   "variant_receipts": {
-    "ECG_K2_LRU_STREAMSHIELD": {
+    "ECG_REUSE_PLAN_LRU_FLOWTHROUGH": {
       "requested": "lru_only",
       "effective": 6,
       "dueling": 0
     },
-    "ECG_K2_RRIP_STREAMSHIELD": {
+    "ECG_REUSE_PLAN_RRIP_FLOWTHROUGH": {
       "requested": "rrip_first",
       "effective": 2,
       "dueling": 0
     },
-    "ECG_K2_ONLINE_STREAMSHIELD": {
+    "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH": {
       "requested": "rrip_first",
       "effective": 2,
       "dueling": 1
@@ -228,31 +228,31 @@
     "note": "Run all 12 whole cells without policy sharding so each comparison retains its matching baseline. The local sequential run is resumable."
   },
   "resource_scope": {
-    "screen": "K2 uses equal data capacity; charged P-OPT loses reserved LLC ways for its matrix.",
-    "k2_data_ways": 16,
-    "k2_metadata_bits_per_line": 49,
+    "screen": "ReusePlan uses equal data capacity; charged P-OPT loses reserved LLC ways for its matrix.",
+    "reuse_plan_data_ways": 16,
+    "reuse_plan_metadata_bits_per_line": 49,
     "lower_hardware_cost_claim_allowed": false,
     "charged_in_roi": {
       "grasp": "common DBG-ordered traversal",
       "popt": "reserved LLC capacity plus cumulative analytic matrix-stream traffic; stream latency omitted",
-      "k2": "4-byte replacement records and StreamShield placement"
+      "reuse_plan": "4-byte replacement records and FlowThrough placement"
     },
     "declared_outside_roi": {
       "grasp": "DBG preprocessing and degree-sorted layout",
       "popt": "rereference-matrix construction",
-      "k2": "record construction"
+      "reuse_plan": "record construction"
     },
     "disclosed_hardware": {
       "grasp": "region registers and comparators",
-      "k2": "49 metadata bits/line, request sideband, CSRs, StreamShield flag, and online dueling state"
+      "reuse_plan": "49 metadata bits/line, request sideband, CSRs, FlowThrough flag, and online dueling state"
     },
     "required_post_screen_sensitivities": [
       "target-time P-OPT matrix-stream latency",
       "two-slot serialized P-OPT",
-      "15-way K2 versus 16-way baselines",
-      "14-way K2 versus 16-way baselines"
+      "15-way ReusePlan versus 16-way baselines",
+      "14-way ReusePlan versus 16-way baselines"
     ]
   },
-  "sampling_caveat": "The samples charge more P-OPT stream bytes per edge than the available full graphs, while their smaller vertex IDs also allow K2's 4-byte compact record to fit. Full-graph evaluation must re-check both effects and may require a wider K2 encoding.",
+  "sampling_caveat": "The samples charge more P-OPT stream bytes per edge than the available full graphs, while their smaller vertex IDs also allow ReusePlan's 4-byte compact record to fit. Full-graph evaluation must re-check both effects and may require a wider ReusePlan encoding.",
   "compact_record_feasibility": "Every sampled graph must satisfy id_bits + 2 tier bits + 2*epoch_bits <= 32. Full-graph expansion must re-check the encoding."
 }

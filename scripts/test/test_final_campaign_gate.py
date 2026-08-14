@@ -19,7 +19,7 @@ def test_final_gate_derives_all_cells_from_manifests():
     for stage, _, _ in expected:
         stage_cells[stage] = stage_cells.get(stage, 0) + 1
     assert stage_cells == {
-        "60_gem5_proposal_k2m_o3": 1,
+        "60_gem5_proposal_reuse_bind_o3": 1,
         "70_gem5_pagerank_i1": 3,
         "71_gem5_pagerank_i2": 3,
         "72_gem5_pagerank_i4": 3,
@@ -46,7 +46,7 @@ def test_final_gate_discovers_nested_run_directories(tmp_path):
 
 def test_final_gate_rejects_missing_policy():
     expected = {
-        ("stage", "graph", "pr"): ("LRU", "ECG_K2"),
+        ("stage", "graph", "pr"): ("LRU", "ECG_REUSE_PLAN"),
     }
     groups = {
         ("stage", "graph", "pr"): [

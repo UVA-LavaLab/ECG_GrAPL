@@ -4,12 +4,12 @@
 
 # ECG Next Documentation
 
-ECG Next combines compact K2 reuse records, exact K2-M request binding, and
-StreamShield placement for irregular graph analytics.
+ECG Next combines compact ReusePlan records, exact ReuseBind request binding,
+and FlowThrough placement for irregular graph analytics.
 
 ## Start here
 
-- [K2 and StreamShield](K2-StreamShield) — architecture, record layout,
+- [ReusePlan and FlowThrough](ReusePlan-FlowThrough) — architecture, record layout,
   request path, and worked examples.
 - [Evaluation methodology](Evaluation-Methodology) — workloads, baselines,
   simulator roles, and reporting rules.
