@@ -2463,24 +2463,6 @@ def generate_outputs(
                     "{:+.1f}%",
                     0.0,
                 )
-                sniper_single_thread_relative = [
-                    row for row in replacement_relative
-                    if (
-                        row.get("simulator") == "sniper" and
-                        str(row.get("threads", "1")) in ("", "1", "1.0") and
-                        as_float(row.get("speedup_vs_lru")) is not None
-                    )
-                ]
-                if sniper_single_thread_relative:
-                    plot_grouped_metric_by_benchmark(
-                        figures_dir / "sniper_replacement_speedup_by_benchmark.svg",
-                        sniper_single_thread_relative,
-                        "speedup_vs_lru",
-                        "Sniper speedup vs LRU",
-                        1.0,
-                        "gmean",
-                        "geomean",
-                    )
             if prefetch_relative:
                 prefetchers = {row.get("prefetcher", "") for row in prefetch_relative}
                 prefetch_prefix = "droplet" if prefetchers <= {"DROPLET"} else "prefetch"
