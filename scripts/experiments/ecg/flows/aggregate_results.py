@@ -304,6 +304,21 @@ def marker_outputs_valid(payload: dict[str, Any], base_dir: Path) -> bool:
     return True
 
 
+def discover_input_run_dirs(paths: list[Path]) -> list[Path]:
+    discovered = set()
+    for path in paths:
+        path = path.resolve()
+        if any((path / name).is_file() for name in (
+                "resolved_manifest.json",
+                "combined_roi_matrix.csv",
+                "combined_proof_matrix.csv")):
+            discovered.add(path)
+            continue
+        for manifest in path.glob("**/resolved_manifest.json"):
+            discovered.add(manifest.parent.resolve())
+    return sorted(discovered)
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fieldnames = sorted({key for row in rows for key in row.keys()})
@@ -745,6 +760,32 @@ def collect_csvs(run_dirs: list[Path], input_csvs: list[Path]) -> tuple[list[dic
                         marker_payload.get("config_hash", "")))
                 row["final_comparison_config_hash"] = str(
                     marker_payload.get("comparison_config_hash", ""))
+                if (
+                        path.name == "roi_matrix.csv" and
+                        len(path.parents) > 3 and
+                        path.parents[3].name == "matrices"):
+                    stage = path.parents[2].name
+                    graph = path.parents[1].name
+                    benchmark = path.parent.name
+                    matrix_id = str(
+                        marker_payload.get("matrix_id", ""))
+                    if not row.get("final_stage"):
+                        row["final_stage"] = stage
+                    if not row.get("final_graph"):
+                        row["final_graph"] = graph
+                    if not row.get("benchmark"):
+                        row["benchmark"] = benchmark
+                    if not row.get("final_job_id"):
+                        row["final_job_id"] = matrix_id
+                    if not row.get("final_kind"):
+                        row["final_kind"] = "roi_matrix"
+                    if not row.get("final_output_csv"):
+                        row["final_output_csv"] = str(path.resolve())
+                    if not row.get("final_output_status"):
+                        row["final_output_status"] = "ok"
+                    if not row.get("final_output_detail"):
+                        row["final_output_detail"] = (
+                            f"{len(rows)} ok rows")
         if kind == "proof":
             proof_rows.extend(rows)
         else:
@@ -2650,7 +2691,8 @@ def main(argv: list[str]) -> int:
     for pattern in args.input_run_glob:
         resolved_pattern = str(resolve_path(pattern)) if not Path(pattern).is_absolute() else pattern
         run_dir_inputs.extend(sorted(glob.glob(resolved_pattern)))
-    run_dirs = [resolve_path(path) for path in run_dir_inputs]
+    run_dirs = discover_input_run_dirs(
+        [resolve_path(path) for path in run_dir_inputs])
     if not args.skip_run:
         for profile in args.profiles:
             run_dirs.append(run_profile(args, run_root, profile))

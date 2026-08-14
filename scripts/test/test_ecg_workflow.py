@@ -2195,3 +2195,58 @@ def test_direct_complete_matrix_has_standalone_hash(tmp_path):
     assert len(roi) == 1
     assert roi[0]["final_matrix_config_hash"] == "standalone-hash"
     assert proof == []
+
+
+def test_aggregate_discovers_nested_run_directories(tmp_path):
+    module = load_module(
+        "aggregate_results_nested_inputs",
+        ROOT / "scripts/experiments/ecg/flows/aggregate_results.py",
+    )
+    direct = tmp_path / "direct"
+    nested = tmp_path / "root" / "cell"
+    direct.mkdir()
+    nested.mkdir(parents=True)
+    (direct / "combined_roi_matrix.csv").write_text("")
+    (nested / "resolved_manifest.json").write_text("{}")
+    assert module.discover_input_run_dirs(
+        [direct, tmp_path / "root"]) == [
+            direct.resolve(), nested.resolve()]
+
+
+def test_direct_completed_matrix_infers_final_cell_metadata(tmp_path):
+    module = load_module(
+        "aggregate_results_direct_final_metadata",
+        ROOT / "scripts/experiments/ecg/flows/aggregate_results.py",
+    )
+    matrix_dir = (
+        tmp_path / "run" / "matrices" / "70_gem5_pagerank_i1" /
+        "web-Google-n16" / "pr")
+    matrix_dir.mkdir(parents=True)
+    matrix = matrix_dir / "roi_matrix.csv"
+    with matrix.open("w", newline="") as handle:
+        writer = csv.DictWriter(
+            handle, fieldnames=["status", "policy_label"])
+        writer.writeheader()
+        writer.writerow({"status": "ok", "policy_label": "LRU"})
+    matrix_id = "70_gem5_pagerank_i1_web-Google-n16_pr"
+    (matrix_dir / "roi_matrix.complete.json").write_text(json.dumps({
+        "complete": True,
+        "all_rows_ok": True,
+        "rows": 1,
+        "matrix_id": matrix_id,
+        "shard_group": "repair",
+        "matrix_config_hash": "standalone-hash",
+        "expected_policy_labels": ["LRU"],
+        "outputs": {
+            "roi_matrix.csv": output_descriptor(matrix),
+        },
+    }))
+    roi, proof = module.collect_csvs([], [matrix])
+    assert len(roi) == 1
+    assert roi[0]["final_stage"] == "70_gem5_pagerank_i1"
+    assert roi[0]["final_graph"] == "web-Google-n16"
+    assert roi[0]["benchmark"] == "pr"
+    assert roi[0]["final_job_id"] == matrix_id
+    assert roi[0]["final_output_csv"] == str(matrix.resolve())
+    assert roi[0]["final_output_status"] == "ok"
+    assert proof == []
