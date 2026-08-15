@@ -1,4 +1,4 @@
-<p align="center"><img src="wiki/assets/logo.svg" alt="ECG graph logo" width="190"></p>
+<p align="center"><img src="wiki/assets/logo.png" alt="ECG graph logo" width="190"></p>
 
 <h1 align="center">ECG Next</h1>
 

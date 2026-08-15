@@ -71,6 +71,7 @@ def test_public_documentation_and_figures_are_tracked():
         "wiki/Evaluation-Methodology.md",
         "wiki/Reproduction.md",
         "wiki/Repository-Hygiene.md",
+        "wiki/assets/logo.png",
         "scripts/experiments/ecg/configs/pagerank_study.json",
     }
     required.update(
@@ -156,7 +157,10 @@ def test_authored_evaluation_code_avoids_process_jargon():
     for relative in tracked_files():
         if relative not in root_files and not relative.startswith(roots):
             continue
-        if relative == "wiki/assets/logo.svg":
+        if relative in {
+                "wiki/assets/logo.svg",
+                "wiki/assets/logo.png",
+        }:
             continue
         text = (ROOT / relative).read_text(errors="ignore").lower()
         if any(term in text for term in forbidden):
@@ -187,7 +191,10 @@ def test_retired_mechanism_names_are_absent():
     )
     offenders = []
     for relative in tracked_files():
-        if relative == "wiki/assets/logo.svg" or relative.startswith(
+        if relative in {
+                "wiki/assets/logo.svg",
+                "wiki/assets/logo.png",
+        } or relative.startswith(
                 ("bench/include/external/", "bench/include/graphbrew/")):
             continue
         if any(term in relative.lower() for term in forbidden_paths):

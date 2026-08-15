@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="ECG graph logo" width="180">
+  <img src="assets/logo.png" alt="ECG graph logo" width="180">
 </p>
 
 # ECG Next Documentation
