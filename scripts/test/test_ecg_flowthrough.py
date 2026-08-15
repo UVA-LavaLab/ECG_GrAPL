@@ -80,6 +80,8 @@ def test_gem5_flowthrough_suppresses_only_l3_allocation():
     assert "getVaddr()" in patch
     assert "Request::ECG_FLOWTHROUGH" in flag_patch
     assert "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND" in flag_patch
+    assert "flag_flowthrough && (!request_bound_only || stream_range_match)" in flag_patch
+    assert "rejecting squashed or stale" in flag_patch
     assert "size=%u source=%s allocate=0" in flag_patch
     assert "pkt->req->getSize()" in flag_patch
     assert "allocOnFill(pkt->cmd) && !flowthrough" in patch

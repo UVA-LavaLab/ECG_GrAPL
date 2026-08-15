@@ -1,7 +1,7 @@
 diff --git a/src/mem/cache/base.cc b/src/mem/cache/base.cc
 --- a/src/mem/cache/base.cc
 +++ b/src/mem/cache/base.cc
-@@ -78,21 +78,52 @@
+@@ -78,21 +78,59 @@
          return false;
      const Addr stream_addr = pkt->req->hasVaddr()
          ? pkt->req->getVaddr() : pkt->getAddr();
@@ -13,10 +13,18 @@ diff --git a/src/mem/cache/base.cc b/src/mem/cache/base.cc
 +            std::getenv("GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND");
 +        return value && std::strcmp(value, "0") != 0;
 +    }();
++    const bool stream_range_match =
++        (!request_bound_only || flag_flowthrough) &&
+-        replacement_policy::graph::isEcgFlowThroughAddress(stream_addr);
++        replacement_policy::graph::isEcgFlowThroughAddress(stream_addr);
++    // Keep request-bound selection exact while rejecting squashed or stale
++    // flagged requests outside the published structural-record stream.
++    const bool request_flag_flowthrough =
++        flag_flowthrough && (!request_bound_only || stream_range_match);
 +    const bool range_flowthrough =
-+        !request_bound_only &&
-         replacement_policy::graph::isEcgFlowThroughAddress(stream_addr);
-+    const bool flowthrough_eligible = flag_flowthrough || range_flowthrough;
++        !request_bound_only && stream_range_match;
++    const bool flowthrough_eligible =
++        request_flag_flowthrough || range_flowthrough;
 +    static const bool adaptive = []() {
 +        const char *value = std::getenv("ECG_FLOWTHROUGH_ADAPTIVE");
 +        return value && std::strcmp(value, "0") != 0;
@@ -54,7 +62,7 @@ diff --git a/src/mem/cache/base.cc b/src/mem/cache/base.cc
 -                static_cast<unsigned long long>(stream_addr));
 +                static_cast<unsigned long long>(stream_addr),
 +                static_cast<unsigned>(pkt->req->getSize()),
-+                flag_flowthrough ? "request-flag" : "range");
++                request_flag_flowthrough ? "request-flag" : "range");
          }
      }
      return flowthrough;
