@@ -319,7 +319,7 @@ def test_only_one_pagerank_configuration_is_published():
     assert "superseded_screens" not in cfg
     assert "outcome" not in cfg["execution"]
     config_dir = ROOT / "scripts/experiments/ecg/configs"
-    files = sorted(p.name for p in config_dir.glob("*.json"))
+    files = sorted(p.name for p in config_dir.glob("*pagerank*.json"))
     assert files == ["pagerank_study.json"]
     for name in files:
         assert "_v1" not in name and "_v2" not in name
@@ -586,6 +586,22 @@ def test_legacy_diagnostic_requires_explicit_allow_blocked(tmp_path):
         [*base, "--allow-blocked", "--dry-run"],
         cwd=ROOT, capture_output=True, text=True, timeout=60)
     assert allowed.returncode == 0, allowed.stdout + allowed.stderr
+
+
+def test_underscaled_final_profile_is_execution_blocked(tmp_path):
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/experiments/ecg/flows/experiment_run.py",
+            "--profile", "reuse_plan_final_campaign",
+            "--run-dir", str(tmp_path / "blocked-final"),
+            "--no-build",
+        ],
+        cwd=ROOT, capture_output=True, text=True, timeout=60)
+    assert result.returncode != 0
+    output = result.stdout + result.stderr
+    assert "profile reuse_plan_final_campaign is blocked" in output
+    assert "GRASP/P-OPT evaluation scale" in output
 
 
 def test_profile_expands_to_twelve_whole_cells(tmp_path):

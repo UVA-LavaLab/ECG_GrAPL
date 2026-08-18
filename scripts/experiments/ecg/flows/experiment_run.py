@@ -1713,6 +1713,18 @@ def filter_jobs(jobs: list[Job], args: argparse.Namespace) -> list[Job]:
     return selected
 
 
+def validate_profile_controls(
+        args: argparse.Namespace, manifest: dict[str, Any]) -> None:
+    if args.allow_blocked or args.list or args.dry_run or args.check_graphs:
+        return
+    controls = manifest.get("profile_controls", {})
+    for profile in args.profile:
+        control = controls.get(profile, {})
+        reason = str(control.get("reason", ""))
+        if str(control.get("status", "")) == "blocked" and reason:
+            raise SystemExit(f"profile {profile} is blocked: {reason}")
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run manifest-defined ReusePlan experiment profiles.")
@@ -1770,6 +1782,7 @@ def main(argv: list[str]) -> int:
 
     manifest_path = resolve_path(args.manifest)
     manifest = load_manifest(manifest_path)
+    validate_profile_controls(args, manifest)
     run_dir = Path(args.run_dir) if args.run_dir else RESULTS_ROOT / f"{'_'.join(args.profile)}_{now_tag()}"
     if not run_dir.is_absolute():
         run_dir = PROJECT_ROOT / run_dir

@@ -96,6 +96,13 @@ diagnostic rather than final reference rows.
 
 ## Final campaign roles
 
+The historical `reuse_plan_final_campaign` profile is a scale-limited pilot,
+not the publication campaign. It completed mechanism/P-OPT validation and most
+sampled timing cells before being stopped. The publication corpus must include
+the six core literature-scale graphs (web-Google, Pokec, Patents, roadNet-CA,
+LiveJournal, and Orkut); Twitter-2010 is the cache-only billion-edge stress
+case.
+
 The final campaign separates simulator responsibilities:
 
 - **gem5 O3:** compact 4-byte, 32-epoch PageRank timing only;

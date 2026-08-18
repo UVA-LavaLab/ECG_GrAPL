@@ -5,6 +5,31 @@ Generated graphs, binaries, traces, and experiment output remain under
 
 ## 1. Prepare graph data
 
+Prepare the literature-scale publication corpus with the resumable corpus
+tool:
+
+```bash
+make converter
+
+python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py
+```
+
+The default core contains web-Google, soc-pokec, cit-Patents, roadNet-CA,
+soc-LiveJournal1, and com-Orkut. Add the billion-edge Twitter stress graph
+only when sufficient storage and conversion memory are available:
+
+```bash
+python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py \
+  --graphs twitter-2010 --include-scale-stress
+```
+
+Downloads are resumable. Conversion and generated SHA-256 receipts are written
+under `results/graphs`; researchers do not maintain checksum constants in the
+repository.
+
+The commands below describe the earlier three-graph pilot inputs and remain
+useful for smoke and sampled timing runs.
+
 Download the three SNAP edge lists:
 
 ```bash
@@ -149,6 +174,11 @@ python3 scripts/experiments/ecg/analysis/pagerank_gate.py \
 ```
 
 ## 6. Final role-separated campaign
+
+> **Scale warning:** the checked-in `reuse_plan_final_campaign` profile is the
+> stopped three-graph pilot. It is retained for auditability, not publication.
+> A publication run must use the literature-scale corpus above and a revised
+> scale campaign profile.
 
 Inspect the complete campaign before launching:
 

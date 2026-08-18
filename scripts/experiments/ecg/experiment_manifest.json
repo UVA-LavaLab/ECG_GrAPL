@@ -57,7 +57,13 @@
     "ecg_fused_compact_matrix": "Fused compact ReusePlan TimingSimple matrix: hardware-decoded 4B, software-widened 4B, and wide 8B controls in one build with per-stage LRU and ReusePlan-LRU; O3 request binding is a separate mechanism gate.",
     "ecg_proposal_reuse_bind_o3_gate": "Exact O3 request-bound correctness gate for the proposal's compact FlowThrough record load plus one-for-one computed-address ReuseBind property load.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
-    "reuse_plan_final_campaign": "Role-separated final evaluation: mechanism preflight, gem5 O3 PageRank timing, full-graph cache_sim traffic, and full-graph Sniper semantic-work corroboration."
+    "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign."
+  },
+  "profile_controls": {
+    "reuse_plan_final_campaign": {
+      "status": "blocked",
+      "reason": "The three-graph corpus is smaller than the GRASP/P-OPT evaluation scale. Use --list or --dry-run for audit only; publication requires the literature-scale replacement profile."
+    }
   },
   "benchmark_options": {
     "synthetic_pr": {
