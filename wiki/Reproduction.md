@@ -23,9 +23,22 @@ python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py \
   --graphs twitter-2010 --include-scale-stress
 ```
 
+After the six core edge lists are present, generate the uniform 262,144-vertex
+symmetrized gem5 timing samples:
+
+```bash
+python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py \
+  --samples-only
+
+python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py \
+  --semantics-only
+```
+
 Downloads are resumable. Conversion and generated SHA-256 receipts are written
 under `results/graphs`; researchers do not maintain checksum constants in the
-repository.
+repository. The tool also writes a deterministic `*-dbg.sg` for each graph and
+timing sample. Final simulator jobs consume those preordered files with
+`-o 0`; DBG is never recomputed per policy.
 
 The commands below describe the earlier three-graph pilot inputs and remain
 useful for smoke and sampled timing runs.
@@ -179,6 +192,39 @@ python3 scripts/experiments/ecg/analysis/pagerank_gate.py \
 > stopped three-graph pilot. It is retained for auditability, not publication.
 > A publication run must use the literature-scale corpus above and a revised
 > scale campaign profile.
+
+Run the literature-scale mechanism and timing screen first:
+
+```bash
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile reuse_plan_literature_scale_campaign \
+  --run-dir results/ecg_experiments/runs/literature_scale_screen \
+  --only 60 90 91 --no-build
+
+python3 scripts/experiments/ecg/analysis/literature_scale_gate.py \
+  --phase screen \
+  --input-run-dirs \
+    results/ecg_experiments/runs/literature_scale_screen \
+  --output \
+    results/ecg_experiments/aggregates/literature_scale/screen_gate.json
+```
+
+Launch full-graph roles only if the screen gate reports `"valid": true`:
+
+```bash
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile reuse_plan_literature_scale_campaign \
+  --run-dir results/ecg_experiments/runs/literature_scale_full \
+  --only 92 93 94 95 --no-build
+
+python3 scripts/experiments/ecg/analysis/literature_scale_gate.py \
+  --phase complete \
+  --input-run-dirs \
+    results/ecg_experiments/runs/literature_scale_screen \
+    results/ecg_experiments/runs/literature_scale_full \
+  --output \
+    results/ecg_experiments/aggregates/literature_scale/gate.json
+```
 
 Inspect the complete campaign before launching:
 

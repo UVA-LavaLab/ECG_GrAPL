@@ -12,10 +12,14 @@
       "archive": "web-Google.txt.gz",
       "edge_list": "web-Google.el",
       "sg": "web-Google.sg",
+      "dbg_sg": "web-Google-dbg.sg",
+      "reorder": 5,
       "source_vertices": 875713,
       "source_edges": 5105039,
       "source_directed": true,
-      "symmetrize": true
+      "symmetrize": true,
+      "timing_sample_name": "web-Google-final-n18",
+      "timing_sample_vertices": 262144
     },
     {
       "name": "soc-pokec",
@@ -26,10 +30,14 @@
       "archive": "soc-pokec-relationships.txt.gz",
       "edge_list": "soc-pokec.el",
       "sg": "soc-pokec.sg",
+      "dbg_sg": "soc-pokec-dbg.sg",
+      "reorder": 5,
       "source_vertices": 1632803,
       "source_edges": 30622564,
       "source_directed": true,
-      "symmetrize": true
+      "symmetrize": true,
+      "timing_sample_name": "soc-pokec-final-n18",
+      "timing_sample_vertices": 262144
     },
     {
       "name": "cit-Patents",
@@ -40,10 +48,14 @@
       "archive": "cit-Patents.txt.gz",
       "edge_list": "cit-Patents.el",
       "sg": "cit-Patents.sg",
+      "dbg_sg": "cit-Patents-dbg.sg",
+      "reorder": 5,
       "source_vertices": 3774768,
       "source_edges": 16518948,
       "source_directed": true,
-      "symmetrize": true
+      "symmetrize": true,
+      "timing_sample_name": "cit-Patents-final-n18",
+      "timing_sample_vertices": 262144
     },
     {
       "name": "roadNet-CA",
@@ -54,10 +66,14 @@
       "archive": "roadNet-CA.txt.gz",
       "edge_list": "roadNet-CA.el",
       "sg": "roadNet-CA.sg",
+      "dbg_sg": "roadNet-CA-dbg.sg",
+      "reorder": 5,
       "source_vertices": 1965206,
       "source_edges": 2766607,
       "source_directed": false,
-      "symmetrize": true
+      "symmetrize": true,
+      "timing_sample_name": "roadNet-CA-final-n18",
+      "timing_sample_vertices": 262144
     },
     {
       "name": "soc-LiveJournal1",
@@ -68,10 +84,14 @@
       "archive": "soc-LiveJournal1.txt.gz",
       "edge_list": "soc-LiveJournal1.el",
       "sg": "soc-LiveJournal1.sg",
+      "dbg_sg": "soc-LiveJournal1-dbg.sg",
+      "reorder": 5,
       "source_vertices": 4847571,
       "source_edges": 68993773,
       "source_directed": true,
-      "symmetrize": true
+      "symmetrize": true,
+      "timing_sample_name": "soc-LiveJournal1-final-n18",
+      "timing_sample_vertices": 262144
     },
     {
       "name": "com-Orkut",
@@ -82,10 +102,14 @@
       "archive": "com-orkut.ungraph.txt.gz",
       "edge_list": "com-Orkut.el",
       "sg": "com-Orkut.sg",
+      "dbg_sg": "com-Orkut-dbg.sg",
+      "reorder": 5,
       "source_vertices": 3072441,
       "source_edges": 117185083,
       "source_directed": false,
-      "symmetrize": true
+      "symmetrize": true,
+      "timing_sample_name": "com-Orkut-final-n18",
+      "timing_sample_vertices": 262144
     },
     {
       "name": "twitter-2010",
@@ -96,6 +120,8 @@
       "archive": "twitter-2010.txt.gz",
       "edge_list": "twitter-2010.el",
       "sg": "twitter-2010.sg",
+      "dbg_sg": "twitter-2010-dbg.sg",
+      "reorder": 5,
       "source_vertices": 41652230,
       "source_edges": 1468364884,
       "source_directed": true,

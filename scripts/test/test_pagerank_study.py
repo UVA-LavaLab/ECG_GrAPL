@@ -314,13 +314,16 @@ def test_public_methodology_matches_experiment_configuration():
     assert "web-Google, soc-pokec, and cit-Patents" in flat
 
 
-def test_only_one_pagerank_configuration_is_published():
+def test_pagerank_configurations_are_explicitly_scoped():
     cfg = config()
     assert "superseded_screens" not in cfg
     assert "outcome" not in cfg["execution"]
     config_dir = ROOT / "scripts/experiments/ecg/configs"
     files = sorted(p.name for p in config_dir.glob("*pagerank*.json"))
-    assert files == ["pagerank_study.json"]
+    assert files == [
+        "pagerank_literature_scale.json",
+        "pagerank_study.json",
+    ]
     for name in files:
         assert "_v1" not in name and "_v2" not in name
     result = gate().evaluate(synthetic_rows(cfg=cfg), cfg)

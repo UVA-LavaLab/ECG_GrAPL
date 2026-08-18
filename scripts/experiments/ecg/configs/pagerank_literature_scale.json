@@ -1,0 +1,297 @@
+{
+  "version": 3,
+  "id": "pagerank_literature_scale",
+  "scope": "Six-graph deterministic n18 PageRank timing evaluation for the literature-scale campaign.",
+  "simulator": "gem5",
+  "cpu_type": "O3",
+  "isa_variant": "computed",
+  "reuse_plan_timing_mode": "compact_trace_free",
+  "reuse_plan_epochs": 16,
+  "compact_tier_bits": 2,
+  "benchmark": "pr",
+  "prefetcher": "none",
+  "iterations": [
+    1,
+    8
+  ],
+  "options_template": "-f {graph_path} -o 0 -n 1 -i {iterations} -t 0",
+  "graphs": [
+    {
+      "name": "web-Google-final-n18",
+      "path": "results/graphs/web-Google-final-n18/web-Google-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 3189312,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 3189312,
+          "checksum": "9fd129952739c4e6"
+        },
+        "8": {
+          "edges": 25514496,
+          "checksum": "3a45667924ae7448"
+        }
+      }
+    },
+    {
+      "name": "soc-pokec-final-n18",
+      "path": "results/graphs/soc-pokec-final-n18/soc-pokec-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 8117878,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 8117878,
+          "checksum": "ff00c718ef96f1e4"
+        },
+        "8": {
+          "edges": 64943024,
+          "checksum": "0dab3a2dfc9c384f"
+        }
+      }
+    },
+    {
+      "name": "cit-Patents-final-n18",
+      "path": "results/graphs/cit-Patents-final-n18/cit-Patents-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 509878,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 509878,
+          "checksum": "cb6060edcd912c9b"
+        },
+        "8": {
+          "edges": 4079024,
+          "checksum": "1c1f4afe24c68199"
+        }
+      }
+    },
+    {
+      "name": "roadNet-CA-final-n18",
+      "path": "results/graphs/roadNet-CA-final-n18/roadNet-CA-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 728154,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 728154,
+          "checksum": "13ffd9a7693f712a"
+        },
+        "8": {
+          "edges": 5825232,
+          "checksum": "8f1a004ec092de30"
+        }
+      }
+    },
+    {
+      "name": "soc-LiveJournal1-final-n18",
+      "path": "results/graphs/soc-LiveJournal1-final-n18/soc-LiveJournal1-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 6861882,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 6861882,
+          "checksum": "8ea13b26ecf4b0cf"
+        },
+        "8": {
+          "edges": 54895056,
+          "checksum": "053b40a4582905df"
+        }
+      }
+    },
+    {
+      "name": "com-Orkut-final-n18",
+      "path": "results/graphs/com-Orkut-final-n18/com-Orkut-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 14320090,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 14320090,
+          "checksum": "657d1debd0115b91"
+        },
+        "8": {
+          "edges": 114560720,
+          "checksum": "a4fd5da7c18eb9c2"
+        }
+      }
+    }
+  ],
+  "semantic_receipt_provenance": {
+    "command": "setarch x86_64 -R bench/bin_gem5/pr -f {graph_path} -o 0 -n 1 -i {iterations} -t 0",
+    "graph_source": "Generated literature-scale corpus n18 DBG samples.",
+    "reason_for_t0": "Disable convergence-based early exit so requested and executed iteration counts match."
+  },
+  "policies": {
+    "all": [
+      "LRU",
+      "SRRIP",
+      "GRASP",
+      "POPT",
+      "POPT:UNCHARGED",
+      "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+      "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+      "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH"
+    ],
+    "sanity_baseline": "LRU",
+    "serious_baselines": [
+      "SRRIP",
+      "GRASP",
+      "POPT"
+    ],
+    "charged_popt_baseline": "POPT",
+    "oracle_control": "POPT:UNCHARGED",
+    "transport_control": "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+    "primary_candidate": "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+    "characterization_only": [
+      "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH"
+    ]
+  },
+  "popt_model": {
+    "epochs": 256,
+    "property_bytes": 4,
+    "reserved_column_slots": 3,
+    "expected_reserved_ways_in_screen": 2,
+    "expected_effective_data_ways_in_screen": 14,
+    "minimum_data_ways": 1,
+    "reload_each_iteration": true,
+    "charge_initial_columns_in_roi": true,
+    "screen_stream_charge": "analytic_cumulative_offchip",
+    "timing_treatment": "optimistic_no_stream_latency"
+  },
+  "metrics": {
+    "primary": [
+      "sim_ticks",
+      "dram_offchip_bytes"
+    ],
+    "secondary": [
+      "l3_misses",
+      "roi_insts",
+      "ipc",
+      "dram_bus_util_pct"
+    ],
+    "aggregation": "geometric_mean_of_per_cell_ratios",
+    "tie_band": 0.02
+  },
+  "decision": {
+    "max_time_ratio_vs_lru": 0.97,
+    "max_traffic_ratio_vs_lru": 1.02,
+    "max_time_ratio_vs_serious_baselines": 0.97,
+    "max_traffic_ratio_vs_serious_baselines": 1.02,
+    "max_time_ratio_per_cell": 1.02,
+    "max_traffic_ratio_per_cell": 1.02,
+    "max_time_ratio_per_graph": 1.02,
+    "max_time_ratio_i8": 0.97,
+    "max_time_ratio_leave_one_graph_out": 0.97,
+    "max_traffic_ratio_leave_one_graph_out": 1.02,
+    "max_time_ratio_vs_transport_control_for_policy_claim": 0.98,
+    "max_time_ratio_vs_transport_control_leave_one_graph_out": 0.98,
+    "replacement_claim_requires_exact_roi_instruction_parity": true,
+    "max_ratio_vs_oracle_for_robustness": 1.02,
+    "max_oracle_ratio_vs_charged": 1.02,
+    "baseline_sanity_time_range": [
+      0.5,
+      1.5
+    ],
+    "charged_popt_sanity_time_range": [
+      0.5,
+      4.0
+    ],
+    "baseline_sanity_traffic_range": [
+      0.1,
+      4.0
+    ],
+    "stop_if_primary_fails": true
+  },
+  "variant_receipts": {
+    "ECG_REUSE_PLAN_LRU_FLOWTHROUGH": {
+      "requested": "lru_only",
+      "effective": 6,
+      "dueling": 0
+    },
+    "ECG_REUSE_PLAN_RRIP_FLOWTHROUGH": {
+      "requested": "rrip_first",
+      "effective": 2,
+      "dueling": 0
+    },
+    "ECG_REUSE_PLAN_ONLINE_FLOWTHROUGH": {
+      "requested": "rrip_first",
+      "effective": 2,
+      "dueling": 1
+    }
+  },
+  "execution": {
+    "ready": true,
+    "policy_sharding_allowed": false,
+    "maximum_policy_runtime_seconds": 43200,
+    "note": "Run all 12 whole cells without policy sharding. ReusePlan records and DBG order are precomputed once."
+  },
+  "resource_scope": {
+    "screen": "ReusePlan uses equal data capacity; charged P-OPT loses reserved LLC ways for its matrix.",
+    "reuse_plan_data_ways": 16,
+    "reuse_plan_metadata_bits_per_line": 49,
+    "lower_hardware_cost_claim_allowed": false,
+    "charged_in_roi": {
+      "grasp": "common DBG-ordered traversal",
+      "popt": "reserved LLC capacity plus cumulative analytic matrix-stream traffic; stream latency omitted",
+      "reuse_plan": "4-byte replacement records and FlowThrough placement"
+    },
+    "declared_outside_roi": {
+      "grasp": "precomputed DBG layout",
+      "popt": "rereference-matrix construction",
+      "reuse_plan": "validated precomputed record sidecar"
+    }
+  },
+  "sampling_caveat": "Architectural timing uses uniform n18 samples. Full-graph replacement, traffic, record-width, and scale claims require the literature-scale cache_sim roles.",
+  "compact_record_feasibility": "Every n18 sample uses 18 destination bits, 2 tier bits, and two 4-bit epochs: 28 total bits."
+}

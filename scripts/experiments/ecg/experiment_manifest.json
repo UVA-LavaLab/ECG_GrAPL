@@ -57,12 +57,22 @@
     "ecg_fused_compact_matrix": "Fused compact ReusePlan TimingSimple matrix: hardware-decoded 4B, software-widened 4B, and wide 8B controls in one build with per-stage LRU and ReusePlan-LRU; O3 request binding is a separate mechanism gate.",
     "ecg_proposal_reuse_bind_o3_gate": "Exact O3 request-bound correctness gate for the proposal's compact FlowThrough record load plus one-for-one computed-address ReuseBind property load.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
-    "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign."
+    "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
+    "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
+    "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
     "reuse_plan_final_campaign": {
       "status": "blocked",
       "reason": "The three-graph corpus is smaller than the GRASP/P-OPT evaluation scale. Use --list or --dry-run for audit only; publication requires the literature-scale replacement profile."
+    },
+    "reuse_plan_literature_scale_campaign": {
+      "status": "ready",
+      "reason": "Run stages 60/90/91 first and require the literature-scale screen gate to pass before stages 92-95."
+    },
+    "reuse_plan_twitter_scale_stress": {
+      "status": "blocked",
+      "reason": "Twitter-2010 is optional and remains blocked until its converted graph receipt is complete."
     }
   },
   "benchmark_options": {
@@ -105,6 +115,13 @@
       "sssp": "-f {graph_path} -o 5 -n 1 -r 0",
       "bc": "-f {graph_path} -o 5 -n 1 -i 1",
       "cc": "-f {graph_path} -o 5 -n 1"
+    },
+    "file_all_kernels_preordered": {
+      "pr": "-f {graph_path} -o 0 -n 1 -i 1",
+      "bfs": "-f {graph_path} -o 0 -n 1 -r 212",
+      "sssp": "-f {graph_path} -o 0 -n 1 -r 212",
+      "bc": "-f {graph_path} -o 0 -n 1 -i 1",
+      "cc": "-f {graph_path} -o 0 -n 1"
     }
   },
   "graph_sets": {
@@ -308,6 +325,129 @@
         "l3_sizes": [
           "8MB"
         ],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "literature_scale_core_8mb": [
+      {
+        "name": "web-Google",
+        "path": "results/graphs/web-Google/web-Google-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "compact_id_bits": 20,
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "soc-pokec",
+        "path": "results/graphs/soc-pokec/soc-pokec-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "compact_id_bits": 21,
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "cit-Patents",
+        "path": "results/graphs/cit-Patents/cit-Patents-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "compact_id_bits": 22,
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "roadNet-CA",
+        "path": "results/graphs/roadNet-CA/roadNet-CA-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "compact_id_bits": 21,
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "soc-LiveJournal1",
+        "path": "results/graphs/soc-LiveJournal1/soc-LiveJournal1-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "compact_id_bits": 23,
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "com-Orkut",
+        "path": "results/graphs/com-Orkut/com-Orkut-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "compact_id_bits": 22,
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "literature_scale_compact16": [
+      {
+        "name": "web-Google",
+        "path": "results/graphs/web-Google/web-Google-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "soc-pokec",
+        "path": "results/graphs/soc-pokec/soc-pokec-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "cit-Patents",
+        "path": "results/graphs/cit-Patents/cit-Patents-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "roadNet-CA",
+        "path": "results/graphs/roadNet-CA/roadNet-CA-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "com-Orkut",
+        "path": "results/graphs/com-Orkut/com-Orkut-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "literature_scale_sniper": [
+      {
+        "name": "roadNet-CA",
+        "path": "results/graphs/roadNet-CA/roadNet-CA-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "sniper_semantic_edge_limit": 5533214,
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "soc-LiveJournal1",
+        "path": "results/graphs/soc-LiveJournal1/soc-LiveJournal1-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "sniper_semantic_edge_limit": 50000000,
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      },
+      {
+        "name": "com-Orkut",
+        "path": "results/graphs/com-Orkut/com-Orkut-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "sniper_semantic_edge_limit": 50000000,
+        "l3_sizes": ["8MB"],
+        "structure_prefetch_degree": 8
+      }
+    ],
+    "twitter_scale_stress": [
+      {
+        "name": "twitter-2010",
+        "path": "results/graphs/twitter-2010/twitter-2010-dbg.sg",
+        "options_key": "file_all_kernels_preordered",
+        "compact_id_bits": 26,
+        "l3_sizes": ["8MB"],
         "structure_prefetch_degree": 8
       }
     ]
@@ -1853,7 +1993,8 @@
       "kind": "roi_matrix",
       "profiles": [
         "ecg_proposal_reuse_bind_o3_gate",
-        "reuse_plan_final_campaign"
+        "reuse_plan_final_campaign",
+        "reuse_plan_literature_scale_campaign"
       ],
       "suite": "gem5",
       "graph_set": "synthetic_kron12_all",
@@ -2151,6 +2292,184 @@
         "ECG_EDGE_RECORD_BYTES": "8",
         "ECG_EXPECT_BYTES_PER_EDGE": "8",
         "ECG_REUSE_PLAN_DELIVERY_TRACE": "32"
+      }
+    },
+    {
+      "name": "90_gem5_literature_scale_i1",
+      "kind": "roi_matrix",
+      "suite": "gem5",
+      "profiles": ["reuse_plan_literature_scale_campaign"],
+      "screen_config": "scripts/experiments/ecg/configs/pagerank_literature_scale.json",
+      "screen_iteration": 1,
+      "out_subdir": "90_gem5_literature_scale_i1",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "91_gem5_literature_scale_i8",
+      "kind": "roi_matrix",
+      "suite": "gem5",
+      "profiles": ["reuse_plan_literature_scale_campaign"],
+      "screen_config": "scripts/experiments/ecg/configs/pagerank_literature_scale.json",
+      "screen_iteration": 8,
+      "out_subdir": "91_gem5_literature_scale_i8",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      }
+    },
+    {
+      "name": "92_cache_sim_literature_scale_wide16",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_literature_scale_campaign"],
+      "suite": "cache-sim",
+      "graph_set": "literature_scale_core_8mb",
+      "benchmarks": ["pr", "bfs", "sssp", "bc", "cc"],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "computed",
+      "policy_sharding_allowed": false,
+      "out_subdir": "92_cache_sim_literature_scale_wide16",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8"
+      }
+    },
+    {
+      "name": "93_cache_sim_literature_scale_popt",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_literature_scale_campaign"],
+      "suite": "cache-sim",
+      "graph_set": "literature_scale_core_8mb",
+      "benchmarks": ["pr", "cc"],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "POPT:UNCHARGED",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"
+      ],
+      "popt_reserve_model": "size_correct",
+      "popt_property_bytes": 4,
+      "popt_active_columns": 2,
+      "popt_num_epochs": 256,
+      "popt_min_data_ways": 1,
+      "popt_matrix_stream": "simulated",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "computed",
+      "policy_sharding_allowed": false,
+      "out_subdir": "93_cache_sim_literature_scale_popt",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8"
+      }
+    },
+    {
+      "name": "94_cache_sim_literature_scale_compact16",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_literature_scale_campaign"],
+      "suite": "cache-sim",
+      "graph_set": "literature_scale_compact16",
+      "benchmarks": ["pr", "bfs", "bc", "cc"],
+      "policies": [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "computed",
+      "policy_sharding_allowed": false,
+      "out_subdir": "94_cache_sim_literature_scale_compact16",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      }
+    },
+    {
+      "name": "95_sniper_literature_scale_matched",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_literature_scale_campaign"],
+      "suite": "sniper",
+      "graph_set": "literature_scale_sniper",
+      "benchmarks": ["pr", "cc"],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "computed",
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 24,
+      "sniper_queue_model": "windowed_mg1",
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "policy_sharding_allowed": false,
+      "out_subdir": "95_sniper_literature_scale_matched",
+      "timeout_sniper": 86400,
+      "env": {
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8",
+        "ECG_REUSE_PLAN_DELIVERY_TRACE": "32"
+      }
+    },
+    {
+      "name": "96_cache_sim_twitter_scale_stress",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_twitter_scale_stress"],
+      "suite": "cache-sim",
+      "graph_set": "twitter_scale_stress",
+      "benchmarks": ["pr", "cc"],
+      "policies": [
+        "LRU",
+        "SRRIP",
+        "GRASP",
+        "POPT",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"
+      ],
+      "popt_reserve_model": "size_correct",
+      "popt_property_bytes": 4,
+      "popt_active_columns": 2,
+      "popt_num_epochs": 256,
+      "popt_min_data_ways": 1,
+      "popt_matrix_stream": "simulated",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "computed",
+      "policy_sharding_allowed": false,
+      "out_subdir": "96_cache_sim_twitter_scale_stress",
+      "timeout_cache": 172800,
+      "env": {
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8"
       }
     }
   ]
