@@ -92,6 +92,12 @@ make gem5-riscv-m5ops-pr gem5-riscv-m5ops-bfs \
 make sniper-sg_kernel
 ```
 
+`make all-sim` builds `bench/bin_sim/reuse_plan_sidecar`. gem5 PageRank runs
+cache generated sidecars under `results/ecg_experiments/reuse_plan_sidecars/`.
+The cache key includes the graph, reorder options, record width, epoch count,
+property-line width, tier fraction, and generator binary. Existing sidecars are
+reused; gem5 validates and immutably seals them before execution.
+
 Build receipts are generated from the guest binary's material inputs: source
 and included files, compiler/toolchain, link inputs, and build configuration.
 They do not encode the repository HEAD or an unrelated worktree diff. Do not

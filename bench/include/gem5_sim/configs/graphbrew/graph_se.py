@@ -155,6 +155,8 @@ def benchmark_environment(args):
         # bypass field, and were silently inert in the guest.
         "ECG_RECORD_POPT_BITS",
         "ECG_RECORD_PREFETCH_BITS",
+        "GEM5_REUSE_PLAN_SIDECAR",
+        "GEM5_REUSE_PLAN_SIDECAR_REQUIRED",
     )):
         outer = os.environ.get(pass_name)
         if outer is not None and outer != "":

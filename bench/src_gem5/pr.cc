@@ -26,6 +26,7 @@
 // ECG mode 6 (per-edge mask) builder — shared with cache_sim and Sniper.
 #include "ecg_mode6_builder.h"
 #include "ecg_reuse_plan_builder.h"
+#include "ecg_reuse_plan_sidecar.h"
 
 using namespace std;
 
@@ -40,9 +41,10 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     // and does not drift with unrelated heap allocations (e.g. sideband path
     // strings). Without this, a few bytes of heap shift change conflict misses
     // in the tiny ROI caches and confound the per-policy comparison.
-    constexpr size_t kPropAlign = 4096;
-    pvector<ScoreT> scores(g.num_nodes(), init_score, kPropAlign);
-    pvector<ScoreT> outgoing_contrib(g.num_nodes(), ScoreT(0), kPropAlign);
+    constexpr size_t kDataAlign = 2 * 1024 * 1024;
+    pvector<ScoreT> scores(g.num_nodes(), init_score, kDataAlign);
+    pvector<ScoreT> outgoing_contrib(
+        g.num_nodes(), ScoreT(0), kDataAlign);
 
     const int ecg_reuse_plan_depth =
         gem5_env_int_clamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
@@ -194,6 +196,9 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     pvector<uint64_t> in_edge_pair_flat;
     pvector<uint32_t> in_edge_pair32_flat;
     bool pair32_ok = false;
+    bool pair_sidecar_loaded = false;
+    uint64_t pair_sidecar_graph_hash = 0;
+    uint64_t pair_sidecar_payload_hash = 0;
     uint32_t pair32_id_bits = 1, pair32_epoch_bits = 1;
     bool use_compact_pair = false;
     vector<uint64_t> pair_off;
@@ -268,17 +273,52 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
             ::ecg_metadata::enforceExpectedBytesPerEdge(ecg_meta, "gem5-pr");
         }
         if (ecg_reuse_plan_depth == 2) {
+            const char* sidecar_path =
+                std::getenv("GEM5_REUSE_PLAN_SIDECAR");
+            const bool sidecar_required =
+                std::getenv("GEM5_REUSE_PLAN_SIDECAR_REQUIRED") != nullptr;
+            if (sidecar_required &&
+                (!sidecar_path || !sidecar_path[0])) {
+                fprintf(stderr,
+                    "[ECG-METADATA-FATAL] ReusePlan sidecar is required "
+                    "but GEM5_REUSE_PLAN_SIDECAR is empty\n");
+                std::abort();
+            }
             // Prefer the COMPACT 32-bit two-stamp record when the fields fit.
             // The 64-bit form always costs 8 bytes per edge and so doubles the
             // structural stream against a 4-byte CSR edge; the compact form
             // SUBSTITUTES for that edge, which is the width cache_sim models.
             std::vector<uint32_t> pair32;
-            if (use_compact_pair &&
-                ecg_reuse_plan::buildInEdgeReusePlanRecords32(
-                    g, kNumVtxPerLine, edge_epoch_count, true,
-                    pair_off, pair32)) {
+            bool compact_ready = false;
+            if (use_compact_pair && sidecar_path && sidecar_path[0]) {
+                ecg_reuse_plan::ReusePlanSidecarHeader header;
+                std::string error;
+                compact_ready = ecg_reuse_plan::loadReusePlanSidecar(
+                    sidecar_path, g, false, kNumVtxPerLine,
+                    edge_epoch_count, true,
+                    ecg_reuse_plan::configuredReuseHotFraction(),
+                    pair_off, pair32, header, error);
+                if (!compact_ready && sidecar_required) {
+                    fprintf(stderr,
+                        "[ECG-METADATA-FATAL] ReusePlan sidecar rejected: "
+                        "%s\n", error.c_str());
+                    std::abort();
+                }
+                if (compact_ready) {
+                    pair_sidecar_loaded = true;
+                    pair_sidecar_graph_hash = header.graph_hash;
+                    pair_sidecar_payload_hash = header.payload_hash;
+                }
+            }
+            if (use_compact_pair && !compact_ready) {
+                compact_ready =
+                    ecg_reuse_plan::buildInEdgeReusePlanRecords32(
+                        g, kNumVtxPerLine, edge_epoch_count, true,
+                        pair_off, pair32);
+            }
+            if (use_compact_pair && compact_ready) {
                 in_edge_pair32_flat = pvector<uint32_t>(
-                    pair32.size(), uint32_t(0), 4096);
+                    pair32.size(), uint32_t(0), kDataAlign);
                 std::copy(pair32.begin(), pair32.end(),
                           in_edge_pair32_flat.begin());
                 pair32_ok = true;
@@ -296,21 +336,56 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                            static_cast<uint32_t>(g.num_nodes())),
                        ecg_reuse_plan::reusePlan32EpochBits(edge_epoch_count));
             } else {
-            std::vector<uint64_t> pair_records;
-            ecg_reuse_plan::buildInEdgeReusePlanRecords(
-                g, kNumVtxPerLine, edge_epoch_count, true,
-                pair_off, pair_records);
-            in_edge_pair_flat = pvector<uint64_t>(
-                pair_records.size(), uint64_t(0), 4096);
-            std::copy(
-                pair_records.begin(), pair_records.end(),
-                in_edge_pair_flat.begin());
-            pair_ok = true;
-            printf("[gem5 ECG mode 6] two-epoch ReusePlan record ON: "
-                   "ne=%u records=%llu "
-                   "(8-byte dest32+tier2+epoch15+epoch15)\n",
-                   edge_epoch_count,
-                   (unsigned long long)in_edge_pair_flat.size());
+                std::vector<uint64_t> pair_records;
+                bool wide_ready = false;
+                if (sidecar_path && sidecar_path[0]) {
+                    ecg_reuse_plan::ReusePlanSidecarHeader header;
+                    std::string error;
+                    wide_ready = ecg_reuse_plan::loadReusePlanSidecar(
+                        sidecar_path, g, false, kNumVtxPerLine,
+                        edge_epoch_count, true,
+                        ecg_reuse_plan::configuredReuseHotFraction(),
+                        pair_off, pair_records, header, error);
+                    if (!wide_ready && sidecar_required) {
+                        fprintf(stderr,
+                            "[ECG-METADATA-FATAL] ReusePlan sidecar rejected: "
+                            "%s\n", error.c_str());
+                        std::abort();
+                    }
+                    if (wide_ready) {
+                        pair_sidecar_loaded = true;
+                        pair_sidecar_graph_hash = header.graph_hash;
+                        pair_sidecar_payload_hash = header.payload_hash;
+                    }
+                }
+                if (!wide_ready) {
+                    ecg_reuse_plan::buildInEdgeReusePlanRecords(
+                        g, kNumVtxPerLine, edge_epoch_count, true,
+                        pair_off, pair_records);
+                }
+                in_edge_pair_flat = pvector<uint64_t>(
+                    pair_records.size(), uint64_t(0), kDataAlign);
+                std::copy(
+                    pair_records.begin(), pair_records.end(),
+                    in_edge_pair_flat.begin());
+                pair_ok = true;
+                printf("[gem5 ECG mode 6] two-epoch ReusePlan record ON: "
+                       "ne=%u records=%llu "
+                       "(8-byte dest32+tier2+epoch15+epoch15)\n",
+                       edge_epoch_count,
+                       (unsigned long long)in_edge_pair_flat.size());
+            }
+            if (pair_sidecar_loaded) {
+                fprintf(stderr,
+                    "[ReusePlan-SIDECAR sim=gem5 active=1 "
+                    "record_bytes=%u records=%llu graph_hash=%llu "
+                    "payload_hash=%llu]\n",
+                    pair32_ok ? 4U : 8U,
+                    (unsigned long long)(
+                        pair32_ok ? in_edge_pair32_flat.size()
+                                  : in_edge_pair_flat.size()),
+                    (unsigned long long)pair_sidecar_graph_hash,
+                    (unsigned long long)pair_sidecar_payload_hash);
             }
         } else {
         vector<uint8_t> avg_reref_by_line;
@@ -387,7 +462,7 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     packed_off[u + 1] = packed_off[u] +
                         static_cast<uint64_t>(g.in_degree(u));
                 in_edge_packed_flat = pvector<uint32_t>(
-                    packed_off[nn], uint32_t(0), 4096);
+                    packed_off[nn], uint32_t(0), kDataAlign);
                 for (uint32_t u = 0; u < nn; u++) {
                     const auto& eps = in_edge_epochs_by_src[u];
                     size_t i = 0;

@@ -250,6 +250,14 @@ def roi_input_paths(
             "gem5_sim" / "configs" / "graphbrew",
             "gem5_benchmark_binary": guest_binary,
         })
+        if (
+                benchmark == "pr" and
+                any(
+                    "REUSE_PLAN" in str(policy).upper()
+                    for policy in settings.get("policies", []))):
+            paths["reuse_plan_sidecar_generator"] = (
+                PROJECT_ROOT / "bench" / "bin_sim" /
+                "reuse_plan_sidecar")
         if suffix == "_riscv_m5ops":
             paths["gem5_guest_build_receipt"] = Path(
                 str(guest_binary) + ".build.json")

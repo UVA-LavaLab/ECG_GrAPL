@@ -48,7 +48,8 @@ DEP_ECG := $(wildcard $(INC_DIR)/ecg_*.h) \
 	$(wildcard $(INC_DIR)/gem5_sim/*.h) \
 	$(wildcard $(INC_DIR)/sniper_sim/*.h)
 
-KERNELS_SIM := pr pr_spmv bfs bc cc cc_sv sssp tc ecg_preprocess test_ecg_reuse_plan32
+KERNELS_SIM := pr pr_spmv bfs bc cc cc_sv sssp tc ecg_preprocess \
+	reuse_plan_sidecar test_ecg_reuse_plan32
 KERNELS_GEM5 := pr pr_spmv bfs sssp cc cc_sv bc tc
 KERNELS_SNIPER := sg_kernel pr bfs sssp bc cc cc_sv \
 	pr_kernel_smoke bfs_kernel_smoke sssp_kernel_smoke hello_roi
@@ -162,7 +163,12 @@ $(GEM5_RISCV_BUILD_CONFIG): FORCE_GEM5_RISCV_CONFIG | $(BIN_GEM5_DIR)
 		mv $@.tmp $@; \
 	fi
 
-ifeq ($(filter clean clean-all clean-sim clean-gem5-bin clean-sniper-bin,$(MAKECMDGOALS)),)
+GEM5_DEP_GOALS := $(filter \
+	gem5-% all-gem5 \
+	$(BIN_GEM5_DIR)/%_riscv_m5ops \
+	$(BIN_GEM5_DIR)/%_riscv_m5ops.d \
+	$(BIN_GEM5_DIR)/%_riscv_m5ops.build.json,$(MAKECMDGOALS))
+ifneq ($(GEM5_DEP_GOALS),)
 -include $(wildcard $(BIN_GEM5_DIR)/*_riscv_m5ops.d)
 endif
 

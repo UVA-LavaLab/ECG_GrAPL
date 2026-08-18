@@ -238,9 +238,15 @@ def test_riscv_make_rule_models_all_outputs_and_command_signature():
     assert "RISCV_CXX_SHA256=" not in makefile
     assert "PROOT_SHA256=" not in makefile
     assert ".PRECIOUS: $(RISCV_GUEST_BINARIES)" in makefile
-    prerequisites = makefile.split(
-        "$(BIN_GEM5_DIR)/%_riscv_m5ops \\\n", 1)[1].split(
-            "\n\t$(GEM5_GUEST_CLEAN_ENV)", 1)[0]
+    match = re.search(
+        r"\$\(BIN_GEM5_DIR\)/%_riscv_m5ops \\\n"
+        r"\$\(BIN_GEM5_DIR\)/%_riscv_m5ops\.d \\\n"
+        r"\$\(BIN_GEM5_DIR\)/%_riscv_m5ops\.build\.json &: \\\n"
+        r"(?P<prerequisites>.*?)"
+        r"\n\t\$\(GEM5_GUEST_CLEAN_ENV\)",
+        makefile, re.S)
+    assert match is not None
+    prerequisites = match.group("prerequisites")
     assert "$(GEM5_GUEST_RECEIPT)" not in prerequisites
     assert "Makefile" not in prerequisites
     assert "$(DEP_GAPBS)" not in prerequisites
@@ -537,7 +543,10 @@ def test_guest_environment_bytes_and_entry_count_are_policy_invariant():
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
-    fixed = [f"FIXED_{index:02d}=1" for index in range(46)]
+    fixed = [
+        f"FIXED_{index:02d}=1"
+        for index in range(module.TARGET_ENV_ENTRIES - 3)
+    ]
     baseline = module.finalize_environment([
         *fixed,
         "GRAPHBREW_ABSENT_ENV_00=0",

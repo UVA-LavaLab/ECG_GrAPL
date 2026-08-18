@@ -15,6 +15,13 @@ Only gem5 O3 execution time is used for architectural speedup. cache_sim does
 not model cycles or instructions. Sniper uses a coarser delivery model than
 gem5's request-bound O3 path, so its time is not used as a ReuseBind speedup.
 
+ReusePlan records are graph-derived immutable inputs, not measured graph work.
+The gem5 PageRank flow generates each record sidecar once with the native
+builder, keys it by the reordered graph and mechanism configuration, and then
+loads it through an immutable sealed file. The guest validates record ordering,
+configuration, graph hash, and payload hash before the ROI and aborts on any
+mismatch. Detailed O3 simulation never recomputes the sidecar.
+
 Absolute miss rates are not compared across simulators. Each simulator is
 compared with its own matching baseline.
 

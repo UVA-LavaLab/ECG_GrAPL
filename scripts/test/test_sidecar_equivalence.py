@@ -549,6 +549,58 @@ def test_compact_records_decode_identically_to_the_64_bit_form():
         f"to pack:\n{out[-1000:]}")
 
 
+def test_reuse_plan_sidecar_is_deterministic_and_fail_closed(tmp_path):
+    tool = ROOT / "bench/bin_sim/reuse_plan_sidecar"
+    if not tool.exists():
+        pytest.skip("ReusePlan sidecar generator not built")
+    first = tmp_path / "first.bin"
+    second = tmp_path / "second.bin"
+    base_env = {
+        **os.environ,
+        "ECG_REUSE_PLAN_SIDECAR_RECORD_BYTES": "4",
+        "ECG_REUSE_PLAN_SIDECAR_EPOCHS": "16",
+        "ECG_REUSE_PLAN_SIDECAR_VPL": "16",
+        "ECG_REUSE_PLAN_SIDECAR_LINEMIN": "1",
+        "ECG_REUSE_PLAN_SIDECAR_PUSH": "0",
+        "OMP_NUM_THREADS": "4",
+    }
+    command = [
+        str(tool), "-g", "10", "-k", "4",
+        "-o", "5", "-n", "1", "-i", "1",
+    ]
+    for output in (first, second):
+        env = {
+            **base_env,
+            "ECG_REUSE_PLAN_SIDECAR": str(output),
+        }
+        result = subprocess.run(
+            command, env=env, cwd=ROOT,
+            capture_output=True, text=True, timeout=300)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "[ReusePlan-SIDECAR-OK" in result.stdout
+    assert first.read_bytes() == second.read_bytes()
+
+    verify_env = {
+        **base_env,
+        "ECG_REUSE_PLAN_SIDECAR": str(first),
+        "ECG_REUSE_PLAN_SIDECAR_VERIFY_ONLY": "1",
+    }
+    verified = subprocess.run(
+        command, env=verify_env, cwd=ROOT,
+        capture_output=True, text=True, timeout=300)
+    assert verified.returncode == 0, verified.stdout + verified.stderr
+
+    corrupted = bytearray(first.read_bytes())
+    corrupted[-1] ^= 0x01
+    first.write_bytes(corrupted)
+    rejected = subprocess.run(
+        command, env=verify_env, cwd=ROOT,
+        capture_output=True, text=True, timeout=300)
+    assert rejected.returncode != 0
+    assert "payload hash mismatch" in (
+        rejected.stdout + rejected.stderr)
+
+
 @pytest.mark.skipif(not (GEM5_PR.exists() and GRAPH.exists()),
                     reason="gem5 pr binary or graph fixture missing")
 def test_a_four_byte_receipt_means_a_four_byte_array_was_built():

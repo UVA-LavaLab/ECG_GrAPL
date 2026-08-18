@@ -324,6 +324,20 @@ def tool_paths(values: dict[str, str]) -> dict[str, Path]:
     }
 
 
+def default_tool_paths() -> dict[str, Path]:
+    return {
+        "STRACE": GUEST_STRACE,
+        "PROOT": GUEST_PROOT,
+        "PROOT_LOADER": GUEST_PROOT_LOADER,
+        "PROOT_LIBC": GUEST_PROOT_LIBC,
+        "PROOT_TALLOC": GUEST_PROOT_TALLOC,
+        "FUSEPY": GUEST_FUSEPY,
+        "LIBFUSE": GUEST_LIBFUSE,
+        "FUSERMOUNT": GUEST_FUSERMOUNT,
+        "PYTHON": GUEST_PYTHON,
+    }
+
+
 def require_tool(path: Path, label: str) -> Path:
     if not path.is_file():
         raise ValueError(f"{label} is missing: {path}")
@@ -569,7 +583,9 @@ def serve_immutable_fuse(
 @contextmanager
 def immutable_fuse_files(
         files: dict[str, tuple[bytes, int]], mountpoint: Path,
-        tools: dict[str, Path]):
+        tools: dict[str, Path] | None = None):
+    if tools is None:
+        tools = default_tool_paths()
     require_fuse_tools(tools)
     if os.path.ismount(mountpoint):
         raise ValueError(f"immutable FUSE path is already mounted: {mountpoint}")

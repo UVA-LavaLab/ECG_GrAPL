@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 from contextlib import ExitStack
 import csv
+import fcntl
 import functools
 import hashlib
 import json
@@ -49,6 +50,12 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 RESULTS_ROOT = PROJECT_ROOT / "results" / "ecg_experiments" / "roi_matrix"
+REUSE_PLAN_SIDECAR_ROOT = (
+    PROJECT_ROOT / "results" / "ecg_experiments" /
+    "reuse_plan_sidecars")
+REUSE_PLAN_SIDECAR_TOOL = (
+    PROJECT_ROOT / "bench" / "bin_sim" / "reuse_plan_sidecar")
+REUSE_PLAN_PR_VERTICES_PER_LINE = 16  # 64-byte line / 4-byte float.
 MIN_SNIPER_REUSE_PLAN_CERT_RECEIPTS = 32
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gem5_guest_receipt import (  # noqa: E402
@@ -105,6 +112,101 @@ def cached_file_sha256(path_text: str) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def reuse_plan_sidecar_options(options: str) -> list[str]:
+    parts = shlex.split(options)
+    filtered: list[str] = []
+    index = 0
+    while index < len(parts):
+        part = parts[index]
+        if part in ("-i", "-t") and index + 1 < len(parts):
+            index += 2
+            continue
+        if ((part.startswith("-i") or part.startswith("-t")) and
+                part[2:].replace(".", "", 1).isdigit()):
+            index += 1
+            continue
+        filtered.append(part)
+        index += 1
+    return filtered
+
+
+def ensure_reuse_plan_sidecar(
+        args: argparse.Namespace, env: dict[str, str],
+        record_bytes: int) -> Path:
+    if args.benchmark != "pr":
+        raise RuntimeError(
+            "host-generated ReusePlan sidecars are currently implemented "
+            "only for gem5 PageRank")
+    if record_bytes not in (4, 8):
+        raise RuntimeError(
+            f"unsupported ReusePlan sidecar width: {record_bytes}")
+    if not REUSE_PLAN_SIDECAR_TOOL.is_file():
+        raise RuntimeError(
+            f"missing ReusePlan sidecar generator: "
+            f"{REUSE_PLAN_SIDECAR_TOOL}; run make sim-reuse_plan_sidecar")
+    graph_fingerprint = str(args.expected_graph_sha256 or "")
+    if not graph_fingerprint:
+        options = shlex.split(args.options)
+        try:
+            graph_path = Path(options[options.index("-f") + 1])
+        except (ValueError, IndexError):
+            graph_path = Path()
+        graph_fingerprint = (
+            hash_input_path(graph_path)
+            if graph_path and graph_path.is_file()
+            else hashlib.sha256(
+                json.dumps(
+                    reuse_plan_sidecar_options(args.options),
+                    separators=(",", ":")).encode()).hexdigest())
+    hot_fraction = env.get("GRASP_HOT_FRACTION", "0.15")
+    key = {
+        "schema": 1,
+        "generator_sha256": cached_file_sha256(
+            str(REUSE_PLAN_SIDECAR_TOOL)),
+        "graph": graph_fingerprint,
+        "options": reuse_plan_sidecar_options(args.options),
+        "record_bytes": record_bytes,
+        "epochs": int(args.ecg_epochs),
+        "vertices_per_line": REUSE_PLAN_PR_VERTICES_PER_LINE,
+        "linemin": 1,
+        "push_out_edges": 0,
+        "hot_fraction": hot_fraction,
+    }
+    digest = hashlib.sha256(json.dumps(
+        key, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    sidecar = REUSE_PLAN_SIDECAR_ROOT / f"{digest}.bin"
+    lock_path = REUSE_PLAN_SIDECAR_ROOT / f"{digest}.lock"
+    if args.dry_run:
+        return sidecar
+    REUSE_PLAN_SIDECAR_ROOT.mkdir(parents=True, exist_ok=True)
+    generator_env = dict(env)
+    generator_env.update({
+        "ECG_REUSE_PLAN_SIDECAR": str(sidecar),
+        "ECG_REUSE_PLAN_SIDECAR_RECORD_BYTES": str(record_bytes),
+        "ECG_REUSE_PLAN_SIDECAR_EPOCHS": str(int(args.ecg_epochs)),
+        "ECG_REUSE_PLAN_SIDECAR_VPL":
+            str(REUSE_PLAN_PR_VERTICES_PER_LINE),
+        "ECG_REUSE_PLAN_SIDECAR_LINEMIN": "1",
+        "ECG_REUSE_PLAN_SIDECAR_PUSH": "0",
+    })
+    command = [
+        str(REUSE_PLAN_SIDECAR_TOOL),
+        *reuse_plan_sidecar_options(args.options),
+    ]
+    with lock_path.open("w") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        if sidecar.is_file():
+            return sidecar
+        result = subprocess.run(
+            command, cwd=PROJECT_ROOT, env=generator_env,
+            capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise RuntimeError(
+                "ReusePlan sidecar generation failed:\n" +
+                (result.stdout + result.stderr)[-4000:])
+    return sidecar
 
 
 def gem5_sideband_paths(gem5_out: Path) -> dict[str, Path]:
@@ -1144,17 +1246,39 @@ def validate_expected_gem5_inputs(args: argparse.Namespace) -> None:
                 f"{actual} != {expected}")
 
 
-def parse_ecg_log_stats(log_path: Path) -> dict[str, Any]:
-    if not log_path.exists():
+def parse_ecg_log_stats(
+        log_path: Path, combined_text: str | None = None
+        ) -> dict[str, Any]:
+    if combined_text is None and not log_path.exists():
         return {}
     stats: dict[str, Any] = {}
     pattern = re.compile(r"(build_s|vertices|pfx_candidates|pfx_encoded|pfx_no_candidate|pfx_table_miss|pfx_dedup_skips|runtime_no_target|runtime_duplicate|runtime_issued)=([0-9.]+)")
-    for line in log_path.read_text(errors="ignore").splitlines():
+    text = (
+        combined_text if combined_text is not None
+        else log_path.read_text(errors="ignore"))
+    for line in text.splitlines():
         if not line.startswith("ECG Mask Stats:"):
             continue
         for key, value in pattern.findall(line):
             out_key = f"ecg_{key}"
             stats[out_key] = float(value) if "." in value else int(value)
+    sidecar = re.search(
+        r"\[ReusePlan-SIDECAR sim=gem5 active=1 "
+        r"record_bytes=(\d+) records=(\d+) graph_hash=(\d+) "
+        r"payload_hash=(\d+)\]",
+        text)
+    if sidecar:
+        stats.update({
+            "gem5_reuse_plan_sidecar_active": 1,
+            "gem5_reuse_plan_sidecar_record_bytes":
+                int(sidecar.group(1)),
+            "gem5_reuse_plan_sidecar_records":
+                int(sidecar.group(2)),
+            "gem5_reuse_plan_sidecar_graph_hash":
+                sidecar.group(3),
+            "gem5_reuse_plan_sidecar_payload_hash":
+                sidecar.group(4),
+        })
     return stats
 
 
@@ -2305,6 +2429,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         cmd.extend(["--ecg-mode", spec.ecg_mode])
 
     if not args.dry_run:
+        if gem5_out.exists():
+            shutil.rmtree(gem5_out)
         sidebands["context"].parent.mkdir(parents=True, exist_ok=True)
         clear_sideband_files(sidebands)
 
@@ -2504,6 +2630,28 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         env["GEM5_ENABLE_ECG_PFX_HINTS"] = "1"
         env["GEM5_ECG_PFX_LOOKAHEAD"] = effective_ecg_pfx_value(args, "ECG_PREFETCH_LOOKAHEAD")
 
+    reuse_plan_sidecar: Path | None = None
+    reuse_plan_sidecar_hash = ""
+    if is_reuse_plan_ecg and args.benchmark == "pr":
+        if (
+                env.get("ECG_RECORD_VARIABLE_WIDTH") == "1" and
+                "ECG_EXPECT_BYTES_PER_EDGE" not in env and
+                "ECG_EDGE_RECORD_BYTES" not in env):
+            raise RuntimeError(
+                "ECG_RECORD_VARIABLE_WIDTH=1 requires an explicit "
+                "ECG_EXPECT_BYTES_PER_EDGE or ECG_EDGE_RECORD_BYTES value")
+        record_bytes = int(
+            env.get(
+                "ECG_EXPECT_BYTES_PER_EDGE",
+                env.get("ECG_EDGE_RECORD_BYTES", "8")))
+        reuse_plan_sidecar = ensure_reuse_plan_sidecar(
+            args, env, record_bytes)
+        env["GEM5_REUSE_PLAN_SIDECAR"] = str(reuse_plan_sidecar)
+        env["GEM5_REUSE_PLAN_SIDECAR_REQUIRED"] = "1"
+        if not args.dry_run:
+            reuse_plan_sidecar_hash = hash_input_path(
+                reuse_plan_sidecar)
+
     pass_fds: list[int] = []
     with ExitStack() as runtime:
         if not args.dry_run:
@@ -2528,6 +2676,14 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
                 if hashlib.sha256(graph_data).hexdigest() != graph_hash:
                     raise RuntimeError("graph changed while sealing inputs")
                 runtime_files[graph.name] = (graph_data, 0o444)
+            if reuse_plan_sidecar is not None:
+                sidecar_data = reuse_plan_sidecar.read_bytes()
+                if hashlib.sha256(sidecar_data).hexdigest() != \
+                        reuse_plan_sidecar_hash:
+                    raise RuntimeError(
+                        "ReusePlan sidecar changed while sealing inputs")
+                runtime_files[reuse_plan_sidecar.name] = (
+                    sidecar_data, 0o444)
 
             runtime_mount = out_dir / fixed_runtime_mount_name("runtime")
             runtime.enter_context(
@@ -2543,6 +2699,13 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
                 options = shlex.split(args.options)
                 options[options.index("-f") + 1] = str(sealed_graph)
                 cmd[cmd.index("--options") + 1] = shlex.join(options)
+            if reuse_plan_sidecar is not None:
+                sealed_sidecar = runtime_mount / reuse_plan_sidecar.name
+                if hash_input_path(sealed_sidecar) != \
+                        reuse_plan_sidecar_hash:
+                    raise RuntimeError(
+                        "served ReusePlan sidecar hash mismatch")
+                env["GEM5_REUSE_PLAN_SIDECAR"] = str(sealed_sidecar)
 
             config_hash = (
                 args.expected_gem5_config_sha256 or
@@ -2577,6 +2740,10 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     if (not args.dry_run and
             hash_input_path(binary) != VALIDATED_GEM5_GUEST_SHA256):
         raise RuntimeError("gem5 guest changed after execution")
+    if (not args.dry_run and reuse_plan_sidecar is not None and
+            hash_input_path(reuse_plan_sidecar) !=
+            reuse_plan_sidecar_hash):
+        raise RuntimeError("ReusePlan sidecar changed after execution")
     if args.dry_run:
         return []
 
@@ -2662,6 +2829,12 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         log_text = log_path.read_text(errors="ignore")
         for benchmark_log in gem5_out.rglob("benchmark_stderr.txt"):
             log_text += "\n" + benchmark_log.read_text(errors="ignore")
+        base.update(parse_ecg_log_stats(log_path, log_text))
+        if (
+                is_reuse_plan_ecg and args.benchmark == "pr" and
+                int(base.get("gem5_reuse_plan_sidecar_active") or 0) != 1):
+            mark_row_error(
+                base, "gem5 ReusePlan run did not consume a validated sidecar")
         compact_weighted_markers = (
             "[ECG_REUSE_PLAN_WEIGHTED64]",
             "[ECG_REUSE_BIND_LOAD_CW24]",

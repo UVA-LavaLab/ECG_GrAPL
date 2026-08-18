@@ -554,6 +554,19 @@ def test_reuse_plan_cache_sim_paths_do_not_build_popt_matrix():
             ROOT / relative).read_text(), relative
 
 
+def test_gem5_sidecar_scope_preserves_non_pr_reuse_plan_paths():
+    runner = (
+        ROOT / "scripts/experiments/ecg/roi_matrix.py"
+    ).read_text()
+    assert (
+        'if is_reuse_plan_ecg:\n'
+        '        env["GEM5_ECG_ISA_VARIANT"]' in runner)
+    assert (
+        'if is_reuse_plan_ecg and args.benchmark == "pr":\n'
+        "        if (" in runner)
+    assert "ECG_RECORD_VARIABLE_WIDTH=1 requires an explicit" in runner
+
+
 def test_flowthrough_profile_and_slurm_shards(tmp_path):
     run_dir = tmp_path / "dryrun"
     listed = subprocess.run(
