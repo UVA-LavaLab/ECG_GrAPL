@@ -37,7 +37,10 @@ from typing import Any, Iterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from policy_specs import policy_output_label  # noqa: E402
-from gem5_guest_receipt import stable_receipt_fingerprint  # noqa: E402
+from gem5_guest_receipt import (  # noqa: E402
+    material_input_fingerprint,
+    stable_receipt_fingerprint,
+)
 from path_fingerprints import hash_path  # noqa: E402
 
 
@@ -48,9 +51,7 @@ PROOF_MATRIX = ECG_DIR / "flows" / "proof_matrix.py"
 DEFAULT_MANIFEST = ECG_DIR / "experiment_manifest.json"
 RESULTS_ROOT = PROJECT_ROOT / "results" / "ecg_experiments" / "runs"
 DEFAULT_LOCK = Path(os.environ.get("GRAPHBREW_EXPERIMENT_RUNNER_LOCK", "/tmp/graphbrew_experiment_run.lock"))
-PINNED_PYTHON = Path("/usr/bin/python3.12")
-PINNED_PYTHON_SHA256 = (
-    "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118")
+REFERENCE_PYTHON = Path("/usr/bin/python3.12")
 ROI_RUNTIME_METADATA_ENV = frozenset({
     "GRAPHBREW_MATRIX_CONFIG_HASH",
     "GRAPHBREW_MATRIX_GROUP_HASH",
@@ -63,7 +64,7 @@ ROI_RUNTIME_METADATA_ENV = frozenset({
 
 def execution_python(args: argparse.Namespace) -> Path:
     return (
-        PINNED_PYTHON
+        REFERENCE_PYTHON
         if getattr(args, "require_pinned_python", False)
         else Path(sys.executable))
 PLANNING_MISSING_GEM5_GUEST_SHA256 = (
@@ -193,27 +194,6 @@ def validate_marker_outputs(
     return True, ""
 
 
-def compute_git_state_fingerprint() -> str:
-    digest = hashlib.sha256()
-    for command in (
-        ["/usr/bin/git", "rev-parse", "HEAD"],
-        ["/usr/bin/git", "diff", "--binary", "--no-ext-diff"],
-        ["/usr/bin/git", "diff", "--cached", "--binary", "--no-ext-diff"],
-    ):
-        result = subprocess.run(
-            command, cwd=str(PROJECT_ROOT),
-            env=clean_job_environment({}),
-            capture_output=True, check=False)
-        digest.update(result.stdout)
-        digest.update(result.stderr)
-    return digest.hexdigest()
-
-
-@functools.lru_cache(maxsize=1)
-def git_state_fingerprint() -> str:
-    return compute_git_state_fingerprint()
-
-
 def roi_input_paths(
         args: argparse.Namespace,
         settings: dict[str, Any],
@@ -289,27 +269,21 @@ def roi_input_fingerprints(
         args, settings, graph_path, benchmark, effective_env)
 
     fingerprints = {
-        "git_state": git_state_fingerprint(),
-        **{
-            name: path_fingerprint(str(path))
-            for name, path in paths.items()
-        },
+        name: path_fingerprint(str(path))
+        for name, path in paths.items()
     }
     guest_receipt = paths.get("gem5_guest_build_receipt")
     if guest_receipt and guest_receipt.exists():
         fingerprints["gem5_guest_build_receipt_stable"] = (
             stable_receipt_fingerprint(guest_receipt))
+        fingerprints["gem5_guest_material_inputs"] = (
+            material_input_fingerprint(guest_receipt))
     return fingerprints
 
 
 def validate_job_inputs(job: Job) -> tuple[bool, str]:
     expected = job.metadata.get("input_fingerprints", {})
     paths = job.metadata.get("input_paths", {})
-    expected_git = str(expected.get("git_state", ""))
-    actual_git = compute_git_state_fingerprint()
-    if expected_git and actual_git != expected_git:
-        return False, (
-            "tracked repository state changed after the run was planned")
     for name, path_text in paths.items():
         wanted = str(expected.get(name, ""))
         path = Path(str(path_text))
@@ -321,13 +295,23 @@ def validate_job_inputs(job: Job) -> tuple[bool, str]:
         if name == "gem5_guest_build_receipt":
             wanted_stable = str(expected.get(
                 "gem5_guest_build_receipt_stable", ""))
-            actual_stable = (
-                stable_receipt_fingerprint(path)
-                if path.exists() else "missing")
+            try:
+                actual_stable = (
+                    stable_receipt_fingerprint(path)
+                    if path.exists() else "missing")
+                actual_material = (
+                    material_input_fingerprint(path)
+                    if path.exists() else "missing")
+            except ValueError as error:
+                return False, str(error)
             if wanted_stable and actual_stable != wanted_stable:
                 return False, (
                     "stable gem5 guest receipt changed: "
                     f"expected={wanted_stable} actual={actual_stable}")
+            wanted_material = str(expected.get(
+                "gem5_guest_material_inputs", ""))
+            if wanted_material and actual_material != wanted_material:
+                return False, "gem5 guest material inputs changed"
     return True, ""
 
 
@@ -577,10 +561,7 @@ def make_proof_job(args: argparse.Namespace, run_dir: Path, settings: dict[str, 
         })
         for name, value in roi_input_fingerprints(
                 args, proof_settings, None, str(benchmark)).items():
-            if name == "git_state":
-                inputs.setdefault(name, value)
-            else:
-                inputs[f"{benchmark}:{name}"] = value
+            inputs[f"{benchmark}:{name}"] = value
     inputs["proof_matrix"] = path_fingerprint(str(PROOF_MATRIX.resolve()))
     input_paths["proof_matrix"] = str(PROOF_MATRIX.resolve())
     material_env = clean_job_environment({})
@@ -1193,7 +1174,8 @@ def roi_comparison_config_hash(
     comparison_inputs = {
         key: value for key, value in inputs.items()
         if key not in {
-            "git_state", "manifest", "experiment_run", "roi_matrix", "policy_specs",
+            "git_state", "manifest", "experiment_run", "roi_matrix",
+            "policy_specs",
         }
     }
     return hashlib.sha256(json.dumps(
@@ -1531,7 +1513,6 @@ def write_preflight(run_dir: Path, args: argparse.Namespace) -> None:
     for name, cmd in {
         "git_status.txt": ["/usr/bin/git", "--no-pager", "status", "--short"],
         "git_diff_stat.txt": ["/usr/bin/git", "--no-pager", "diff", "--stat"],
-        "git_head.txt": ["/usr/bin/git", "rev-parse", "HEAD"],
     }.items():
         result = subprocess.run(
             cmd, cwd=str(PROJECT_ROOT), env=clean_job_environment({}),
@@ -1731,7 +1712,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--manifest", default=str(DEFAULT_MANIFEST),
         help="JSON experiment manifest.")
     parser.add_argument(
-        "--require-pinned-python", action="store_true",
+        "--require-reference-python", "--require-pinned-python",
+        dest="require_pinned_python", action="store_true",
         help=(
             "Require the repository's reference /usr/bin/python3.12 build. "
             "By default, use the current Python interpreter."))
@@ -1808,13 +1790,11 @@ def main(argv: list[str]) -> int:
 
     if (
             not args.dry_run and args.require_pinned_python and (
-                Path(sys.executable).resolve() != PINNED_PYTHON or
-                path_fingerprint(str(PINNED_PYTHON)) !=
-                PINNED_PYTHON_SHA256 or
+                Path(sys.executable).resolve() != REFERENCE_PYTHON or
                 not sys.flags.isolated)):
         raise SystemExit(
-            "--require-pinned-python requires /usr/bin/python3.12 -I "
-            "with the repository reference hash")
+            "--require-reference-python requires /usr/bin/python3.12 -I "
+            "on the reference host")
 
     if not args.dry_run:
         for name in (

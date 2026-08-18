@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Atomically build and verify provenance-bound gem5 guest kernels."""
+"""Atomically build and verify material-input-bound gem5 guest kernels."""
 
 from __future__ import annotations
 
@@ -25,37 +25,16 @@ from typing import Iterable
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
-PINNED_RISCV_CXX = Path("/usr/bin/riscv64-linux-gnu-g++-13")
-PINNED_RISCV_CXX_SHA256 = (
-    "a675774e2afe01433771f6745de50870300833dc60ed5854662b414eff5fb7b6")
-PINNED_STRACE = Path("/usr/bin/strace")
-PINNED_STRACE_SHA256 = (
-    "28f957c227012de0b18d1bd7fff2d396cb693ea60ed8013be68de071e84b5001")
-PINNED_PROOT = PROJECT_ROOT / "bench/include/gem5_sim/.tools/proot"
-PINNED_PROOT_SHA256 = (
-    "9f6fc9a29f9338aee2df61d16f84fb498d0c1c541c4e52bd648843108790853b")
-PINNED_PROOT_LOADER = Path(
+GUEST_STRACE = Path("/usr/bin/strace")
+GUEST_PROOT = PROJECT_ROOT / "bench/include/gem5_sim/.tools/proot"
+GUEST_PROOT_LOADER = Path(
     "/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2")
-PINNED_PROOT_LOADER_SHA256 = (
-    "cd4df4f3c7b83673d61189bf2eaebd33ca4f2853ab9772b8a25e025ef99b1e81")
-PINNED_PROOT_LIBC = Path("/usr/lib/x86_64-linux-gnu/libc.so.6")
-PINNED_PROOT_LIBC_SHA256 = (
-    "8db37cf3f2169f59a0f07ef1fea308c35656668c64c8ff294e1860f4121eb161")
-PINNED_PROOT_TALLOC = Path("/usr/lib/x86_64-linux-gnu/libtalloc.so.2")
-PINNED_PROOT_TALLOC_SHA256 = (
-    "5e4fb8691231a2431f5126f79c884bdc0678ef08b2c3d5f9c5017365589dbf4b")
-PINNED_FUSEPY = PROJECT_ROOT / "bench/include/gem5_sim/.tools/fusepy.py"
-PINNED_FUSEPY_SHA256 = (
-    "7a7b60998bd459d5bbe6fcd8d4886fa4d3784d58bd8209db4f83ebee7299af87")
-PINNED_LIBFUSE = PROJECT_ROOT / "bench/include/gem5_sim/.tools/libfuse.so.2"
-PINNED_LIBFUSE_SHA256 = (
-    "654ae57bdd98c3c85e7a592e4f73cc59dc19a12d545bce77a57b0c4e7af8f394")
-PINNED_FUSERMOUNT = Path("/usr/bin/fusermount3")
-PINNED_FUSERMOUNT_SHA256 = (
-    "d278775c1528dd32efc85c2cb322423ee93aa8dcf76aaa595f7022d427910704")
-PINNED_PYTHON = Path("/usr/bin/python3.12")
-PINNED_PYTHON_SHA256 = (
-    "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118")
+GUEST_PROOT_LIBC = Path("/usr/lib/x86_64-linux-gnu/libc.so.6")
+GUEST_PROOT_TALLOC = Path("/usr/lib/x86_64-linux-gnu/libtalloc.so.2")
+GUEST_FUSEPY = PROJECT_ROOT / "bench/include/gem5_sim/.tools/fusepy.py"
+GUEST_LIBFUSE = PROJECT_ROOT / "bench/include/gem5_sim/.tools/libfuse.so.2"
+GUEST_FUSERMOUNT = Path("/usr/bin/fusermount3")
+GUEST_PYTHON = Path("/usr/bin/python3.12")
 MATERIAL_COMPILER_ENV = (
     "PATH",
     "COMPILER_PATH",
@@ -64,6 +43,25 @@ MATERIAL_COMPILER_ENV = (
     "CPATH",
     "CPLUS_INCLUDE_PATH",
 )
+LEGACY_ORCHESTRATION_DEPENDENCIES = frozenset({
+    "Makefile",
+    "scripts/experiments/ecg/gem5_guest_receipt.py",
+})
+TOOL_PATH_FIELDS = (
+    "STRACE",
+    "PROOT",
+    "PROOT_LOADER",
+    "PROOT_LIBC",
+    "PROOT_TALLOC",
+    "FUSEPY",
+    "LIBFUSE",
+    "FUSERMOUNT",
+    "PYTHON",
+)
+LEGACY_BUILD_HASH_FIELDS = frozenset({
+    "RISCV_CXX_SHA256",
+    *(f"{name}_SHA256" for name in TOOL_PATH_FIELDS if name != "STRACE"),
+})
 
 
 def sha256(path: Path) -> str:
@@ -72,6 +70,13 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def file_receipt(path: Path) -> dict[str, str]:
+    return {
+        "path": str(path),
+        "sha256": sha256(path),
+    }
 
 
 def stable_receipt_payload(payload: dict) -> dict:
@@ -104,38 +109,35 @@ def stable_receipt_fingerprint(path: Path) -> str:
         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def git_state(root: Path = PROJECT_ROOT) -> dict[str, str]:
-    def output(command: list[str]) -> bytes:
-        result = subprocess.run(
-            ["/usr/bin/git", *command], cwd=root,
-            env=execution_environment(),
-            capture_output=True, check=True)
-        return result.stdout
-
-    commit = output(["rev-parse", "HEAD"]).decode().strip()
-    diff = output(["diff", "--binary", "--no-ext-diff"])
-    cached = output(
-        ["diff", "--cached", "--binary", "--no-ext-diff"])
-    return {
-        "commit": commit,
-        "diff_sha256": hashlib.sha256(diff).hexdigest(),
-        "cached_diff_sha256": hashlib.sha256(cached).hexdigest(),
-    }
-
-
-def git_state_difference(
-        expected: dict[str, str],
-        root: Path = PROJECT_ROOT) -> str:
-    current = git_state(root)
-    fields = [
-        key for key in ("commit", "diff_sha256", "cached_diff_sha256")
-        if expected.get(key) != current.get(key)
-    ]
-    changed = subprocess.run(
-        ["/usr/bin/git", "diff", "--name-only", "HEAD"],
-        cwd=root, env=execution_environment(),
-        capture_output=True, text=True, check=True).stdout.splitlines()
-    return f"components={fields} tracked_paths={changed}"
+def material_input_fingerprint(
+        path: Path, root: Path = PROJECT_ROOT) -> str:
+    """Fingerprint current receipt dependencies and reject stale receipts."""
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"invalid gem5 guest receipt {path}: {error}") from error
+    dependencies = payload.get("dependencies")
+    if not isinstance(dependencies, dict) or not dependencies:
+        raise ValueError("gem5 guest receipt has no material dependencies")
+    current = {}
+    for name, expected in sorted(dependencies.items()):
+        if payload.get("schema_version") == 2 and \
+                name in LEGACY_ORCHESTRATION_DEPENDENCIES:
+            continue
+        dependency = Path(name)
+        if not dependency.is_absolute():
+            dependency = root / dependency
+        dependency = dependency.resolve()
+        if not dependency.is_file():
+            raise ValueError(
+                f"gem5 guest material input is missing: {name}")
+        actual = sha256(dependency)
+        if actual != expected:
+            raise ValueError(
+                f"gem5 guest material input changed: {name}")
+        current[name] = actual
+    return hashlib.sha256(json.dumps(
+        current, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def resolve_compiler(compiler_text: str) -> Path:
@@ -148,10 +150,6 @@ def resolve_compiler(compiler_text: str) -> Path:
     if not driver:
         raise ValueError(f"compiler not found: {parts[0]}")
     driver_path = Path(driver).resolve()
-    if driver_path != PINNED_RISCV_CXX or \
-            sha256(driver_path) != PINNED_RISCV_CXX_SHA256:
-        raise ValueError(
-            "RISCV_CXX must resolve to the pinned RISC-V compiler")
     if driver_path.read_bytes()[:4] != b"\x7fELF":
         raise ValueError("RISCV_CXX must be an ELF compiler, not a wrapper")
     return driver_path
@@ -263,112 +261,99 @@ def parse_build_config(path: Path) -> dict[str, str]:
     required = {
         "RISCV_CXX",
         "RISCV_CXX_RESOLVED",
-        "RISCV_CXX_SHA256",
         "CXXFLAGS_GEM5_RISCV",
         "INCLUDES",
-        "PROOT",
-        "PROOT_SHA256",
-        "PROOT_LOADER",
-        "PROOT_LOADER_SHA256",
-        "PROOT_LIBC",
-        "PROOT_LIBC_SHA256",
-        "PROOT_TALLOC",
-        "PROOT_TALLOC_SHA256",
-        "FUSEPY",
-        "FUSEPY_SHA256",
-        "LIBFUSE",
-        "LIBFUSE_SHA256",
-        "FUSERMOUNT",
-        "FUSERMOUNT_SHA256",
-        "PYTHON",
-        "PYTHON_SHA256",
+        *TOOL_PATH_FIELDS,
         "HOME",
         "TMPDIR",
         "LC_ALL",
         "LANG",
         *MATERIAL_COMPILER_ENV,
     }
-    if set(values) != required:
+    fields = set(values)
+    if not (required - {"STRACE"}) <= fields or fields - required - \
+            LEGACY_BUILD_HASH_FIELDS:
         raise ValueError("RISC-V build config fields do not match schema")
+    values.setdefault("STRACE", str(GUEST_STRACE))
     return values
+
+
+def normalize_build_config_values(values: dict[str, str]) -> dict[str, str]:
+    normalized = {
+        key: value for key, value in values.items()
+        if key not in LEGACY_BUILD_HASH_FIELDS
+    }
+    normalized.setdefault("STRACE", str(GUEST_STRACE))
+    for field in ("RISCV_CXX_RESOLVED", *TOOL_PATH_FIELDS):
+        if field not in normalized:
+            raise ValueError(f"RISC-V build config lacks {field}")
+        normalized[field] = str(Path(normalized[field]).resolve())
+    return normalized
 
 
 def validate_build_config(
         path: Path, compiler: str, flags: str, includes: str) -> dict[str, str]:
-    values = parse_build_config(path)
+    values = normalize_build_config_values(parse_build_config(path))
     driver = resolve_compiler(compiler)
-    normalized = dict(values)
-    normalized["RISCV_CXX_RESOLVED"] = str(
-        Path(values["RISCV_CXX_RESOLVED"]).resolve())
     expected = {
         "RISCV_CXX": compiler,
         "RISCV_CXX_RESOLVED": str(driver),
-        "RISCV_CXX_SHA256": sha256(driver),
         "CXXFLAGS_GEM5_RISCV": flags,
         "INCLUDES": includes,
-        "PROOT": str(PINNED_PROOT),
-        "PROOT_SHA256": PINNED_PROOT_SHA256,
-        "PROOT_LOADER": str(PINNED_PROOT_LOADER),
-        "PROOT_LOADER_SHA256": PINNED_PROOT_LOADER_SHA256,
-        "PROOT_LIBC": str(PINNED_PROOT_LIBC),
-        "PROOT_LIBC_SHA256": PINNED_PROOT_LIBC_SHA256,
-        "PROOT_TALLOC": str(PINNED_PROOT_TALLOC),
-        "PROOT_TALLOC_SHA256": PINNED_PROOT_TALLOC_SHA256,
-        "FUSEPY": str(PINNED_FUSEPY),
-        "FUSEPY_SHA256": PINNED_FUSEPY_SHA256,
-        "LIBFUSE": str(PINNED_LIBFUSE),
-        "LIBFUSE_SHA256": PINNED_LIBFUSE_SHA256,
-        "FUSERMOUNT": str(PINNED_FUSERMOUNT),
-        "FUSERMOUNT_SHA256": PINNED_FUSERMOUNT_SHA256,
-        "PYTHON": str(PINNED_PYTHON),
-        "PYTHON_SHA256": PINNED_PYTHON_SHA256,
         "HOME": "/tmp",
         "TMPDIR": "/tmp",
         "LC_ALL": "C",
         "LANG": "C",
         **material_environment(),
     }
-    if normalized != expected:
+    if any(values.get(key) != value for key, value in expected.items()):
         raise ValueError(
             "requested compiler, flags, includes, or environment do not "
             "match .riscv_build_config")
+    for field in TOOL_PATH_FIELDS:
+        if not Path(values[field]).is_file():
+            raise ValueError(
+                f"RISC-V build tool is missing: {field}={values[field]}")
     return values
 
 
-def require_trace_tool() -> Path:
-    if not PINNED_STRACE.is_file() or \
-            sha256(PINNED_STRACE) != PINNED_STRACE_SHA256:
-        raise ValueError("pinned strace build tracer is missing or changed")
-    return PINNED_STRACE
-
-
-def require_proot() -> Path:
-    expected = {
-        PINNED_PROOT: PINNED_PROOT_SHA256,
-        PINNED_PROOT_LOADER: PINNED_PROOT_LOADER_SHA256,
-        PINNED_PROOT_LIBC: PINNED_PROOT_LIBC_SHA256,
-        PINNED_PROOT_TALLOC: PINNED_PROOT_TALLOC_SHA256,
+def tool_paths(values: dict[str, str]) -> dict[str, Path]:
+    return {
+        field: Path(values[field]).resolve()
+        for field in TOOL_PATH_FIELDS
     }
-    for path, digest in expected.items():
-        if not path.is_file() or sha256(path) != digest:
-            raise ValueError(
-                f"pinned proot runtime is missing or changed: {path}")
-    return PINNED_PROOT
+
+
+def require_tool(path: Path, label: str) -> Path:
+    if not path.is_file():
+        raise ValueError(f"{label} is missing: {path}")
+    return path
+
+
+def require_trace_tool(tools: dict[str, Path]) -> Path:
+    return require_tool(tools["STRACE"], "strace build tracer")
+
+
+def require_proot(tools: dict[str, Path]) -> Path:
+    for field in ("PROOT", "PROOT_LOADER", "PROOT_LIBC", "PROOT_TALLOC"):
+        require_tool(tools[field], field.lower().replace("_", " "))
+    return tools["PROOT"]
 
 
 @contextmanager
-def sealed_proot_command() -> tuple[list[str], tuple[int, ...]]:
-    require_proot()
+def sealed_proot_command(
+        tools: dict[str, Path]) -> tuple[list[str], tuple[int, ...]]:
+    require_proot(tools)
     runtime = (
-        (PINNED_PROOT_LOADER, PINNED_PROOT_LOADER_SHA256),
-        (PINNED_PROOT_LIBC, PINNED_PROOT_LIBC_SHA256),
-        (PINNED_PROOT_TALLOC, PINNED_PROOT_TALLOC_SHA256),
-        (PINNED_PROOT, PINNED_PROOT_SHA256),
+        tools["PROOT_LOADER"],
+        tools["PROOT_LIBC"],
+        tools["PROOT_TALLOC"],
+        tools["PROOT"],
     )
     fds = []
     try:
-        for path, digest in runtime:
-            fd, _name = open_sealed_guest(path, digest)
+        for path in runtime:
+            fd, _name = open_sealed_guest(path, sha256(path))
             fds.append(fd)
         paths = [f"/proc/self/fd/{fd}" for fd in fds]
         command = [
@@ -380,31 +365,22 @@ def sealed_proot_command() -> tuple[list[str], tuple[int, ...]]:
             os.close(fd)
 
 
-def require_fuse_tools() -> None:
-    expected = {
-        PINNED_FUSEPY: PINNED_FUSEPY_SHA256,
-        PINNED_LIBFUSE: PINNED_LIBFUSE_SHA256,
-        PINNED_FUSERMOUNT: PINNED_FUSERMOUNT_SHA256,
-    }
-    for path, digest in expected.items():
-        if not path.is_file() or sha256(path) != digest:
-            raise ValueError(
-                f"pinned immutable snapshot tool is missing or changed: {path}")
+def require_fuse_tools(tools: dict[str, Path]) -> None:
+    for field in ("FUSEPY", "LIBFUSE", "FUSERMOUNT"):
+        require_tool(tools[field], field.lower().replace("_", " "))
 
 
-def require_isolated_python() -> None:
+def require_isolated_python(expected: Path) -> None:
     executable = Path(sys.executable).resolve()
-    if executable != PINNED_PYTHON or \
-            sha256(executable) != PINNED_PYTHON_SHA256 or \
-            not sys.flags.isolated:
+    if executable != expected.resolve() or not sys.flags.isolated:
         raise ValueError(
-            "guest evidence builds require pinned /usr/bin/python3.12 -I")
+            f"guest evidence builds require {expected} -I")
 
 
 def run_traced_command(
-        command: list[str], trace_path: Path,
+        command: list[str], trace_path: Path, tracer: Path,
         cwd: Path = PROJECT_ROOT) -> None:
-    tracer = require_trace_tool()
+    require_tool(tracer, "strace build tracer")
     subprocess.run(
         [
             str(tracer), "-qq", "-f", "-yy", "-e", "trace=%file",
@@ -542,7 +518,7 @@ def serve_immutable_fuse(
     })
     module = importlib.util.module_from_spec(
         importlib.util.spec_from_loader("graphbrew_fusepy", loader=None))
-    module.__file__ = "pinned-fusepy.py"
+    module.__file__ = "receipt-fusepy.py"
     exec(compile(
         fusepy_source, module.__file__, "exec"), module.__dict__)
 
@@ -592,15 +568,17 @@ def serve_immutable_fuse(
 
 @contextmanager
 def immutable_fuse_files(
-        files: dict[str, tuple[bytes, int]], mountpoint: Path):
-    require_fuse_tools()
+        files: dict[str, tuple[bytes, int]], mountpoint: Path,
+        tools: dict[str, Path]):
+    require_fuse_tools(tools)
     if os.path.ismount(mountpoint):
         raise ValueError(f"immutable FUSE path is already mounted: {mountpoint}")
-    fusepy_source = PINNED_FUSEPY.read_bytes()
-    if hashlib.sha256(fusepy_source).hexdigest() != PINNED_FUSEPY_SHA256:
-        raise ValueError("pinned fusepy changed while loading")
+    fusepy_source = tools["FUSEPY"].read_bytes()
+    fusepy_hash = hashlib.sha256(fusepy_source).hexdigest()
+    if sha256(tools["FUSEPY"]) != fusepy_hash:
+        raise ValueError("fusepy changed while loading")
     libfuse_fd, _libfuse_path = open_sealed_guest(
-        PINNED_LIBFUSE, PINNED_LIBFUSE_SHA256)
+        tools["LIBFUSE"], sha256(tools["LIBFUSE"]))
     process = None
     try:
         mountpoint.mkdir(parents=True, exist_ok=True)
@@ -621,11 +599,11 @@ def immutable_fuse_files(
     finally:
         if os.path.ismount(mountpoint):
             subprocess.run(
-                [str(PINNED_FUSERMOUNT), "-u", str(mountpoint)],
+                [str(tools["FUSERMOUNT"]), "-u", str(mountpoint)],
                 capture_output=True, check=False)
         if os.path.ismount(mountpoint):
             subprocess.run(
-                [str(PINNED_FUSERMOUNT), "-uz", str(mountpoint)],
+                [str(tools["FUSERMOUNT"]), "-uz", str(mountpoint)],
                 capture_output=True, check=False)
         if process is not None:
             process.join(5)
@@ -646,8 +624,9 @@ def run_sealed_snapshot_compile(
         command: list[str],
         input_bindings: dict[Path, tuple[Path, str]],
         snapshot_root: Path, workdir: Path,
-        output_paths: list[Path]) -> list[Path]:
-    require_proot()
+        output_paths: list[Path],
+        tools: dict[str, Path]) -> list[Path]:
+    require_proot(tools)
     mountpoint = snapshot_root.parent / "immutable-inputs"
     immutable_files = {}
     bindings = []
@@ -681,8 +660,8 @@ def run_sealed_snapshot_compile(
     for device in ("/dev/null", "/dev/zero", "/dev/urandom"):
         snapshot_path(snapshot_root, Path(device)).touch()
         bindings.extend(["-b", f"{device}:{device}"])
-    with immutable_fuse_files(immutable_files, mountpoint):
-        with sealed_proot_command() as (proot_command, proot_fds):
+    with immutable_fuse_files(immutable_files, mountpoint, tools):
+        with sealed_proot_command(tools) as (proot_command, proot_fds):
             subprocess.run(
                 [
                     *proot_command,
@@ -822,20 +801,12 @@ def build_guest(
     driver = resolve_compiler(compiler)
     build_config_values = validate_build_config(
         build_config, compiler, flags, includes)
+    tools = tool_paths(build_config_values)
     compiler_before = compiler_receipt(compiler)
-    git_before = git_state()
     fixed_dependencies = {
-        PROJECT_ROOT / "Makefile",
-        Path(__file__).resolve(),
-        require_trace_tool(),
-        require_proot(),
-        PINNED_PROOT_LOADER,
-        PINNED_PROOT_LIBC,
-        PINNED_PROOT_TALLOC,
-        PINNED_FUSEPY,
-        PINNED_LIBFUSE,
-        PINNED_FUSERMOUNT,
-        PINNED_PYTHON,
+        require_trace_tool(tools),
+        require_proot(tools),
+        *tools.values(),
         build_config,
         *link_inputs,
     }
@@ -867,7 +838,8 @@ def build_guest(
         discovery_command = compile_command(
             driver, flags, includes, discovery_depfile, Path(make_target),
             source, link_inputs, discovery_binary)
-        run_traced_command(discovery_command, discovery_trace)
+        run_traced_command(
+            discovery_command, discovery_trace, tools["STRACE"])
         discovery_target_text, discovery_target, discovery_dependencies = (
             parse_depfile(discovery_depfile))
         if discovery_target_text != make_target or \
@@ -899,7 +871,7 @@ def build_guest(
             source, link_inputs, temp_binary)
         built_binary, built_depfile = run_sealed_snapshot_compile(
             command, sealed_inputs, snapshot_root, PROJECT_ROOT,
-            [temp_binary, temp_depfile])
+            [temp_binary, temp_depfile], tools)
         post_target_text, post_target, post_dependencies = parse_depfile(
             built_depfile)
         if post_target_text != make_target or post_target != binary or \
@@ -912,8 +884,6 @@ def build_guest(
             raise ValueError("build input changed during guest compilation")
         if compiler_before != compiler_receipt(compiler):
             raise ValueError("compiler changed during guest compilation")
-        if git_before != git_state():
-            raise ValueError("git state changed during guest compilation")
         if not built_binary.is_file():
             raise ValueError("compiler produced no guest binary")
         require_riscv_elf(built_binary)
@@ -925,8 +895,7 @@ def build_guest(
             driver, flags, includes, depfile, Path(make_target),
             source, link_inputs, binary)
         payload = {
-            "schema_version": 2,
-            "git": git_before,
+            "schema_version": 3,
             "compiler": compiler_before,
             "compiler_environment": material_environment(),
             "build_config_values": build_config_values,
@@ -942,24 +911,21 @@ def build_guest(
             "discovery_compile_command": discovery_command,
             "compile_command": command,
             "canonical_command": canonical_command,
-            "trace_tool": {
-                "path": str(PINNED_STRACE),
-                "sha256": PINNED_STRACE_SHA256,
-            },
+            "trace_tool": file_receipt(tools["STRACE"]),
             "snapshot_runner": {
-                "path": str(PINNED_PROOT),
-                "sha256": PINNED_PROOT_SHA256,
-                "loader_sha256": PINNED_PROOT_LOADER_SHA256,
-                "libc_sha256": PINNED_PROOT_LIBC_SHA256,
-                "talloc_sha256": PINNED_PROOT_TALLOC_SHA256,
+                "path": str(tools["PROOT"]),
+                "sha256": sha256(tools["PROOT"]),
+                "loader_sha256": sha256(tools["PROOT_LOADER"]),
+                "libc_sha256": sha256(tools["PROOT_LIBC"]),
+                "talloc_sha256": sha256(tools["PROOT_TALLOC"]),
                 "immutable_fuse_inputs": True,
-                "fusepy_sha256": PINNED_FUSEPY_SHA256,
-                "libfuse_sha256": PINNED_LIBFUSE_SHA256,
-                "fusermount_sha256": PINNED_FUSERMOUNT_SHA256,
+                "fusepy_sha256": sha256(tools["FUSEPY"]),
+                "libfuse_sha256": sha256(tools["LIBFUSE"]),
+                "fusermount_sha256": sha256(tools["FUSERMOUNT"]),
             },
             "builder_runtime": {
-                "python": str(PINNED_PYTHON),
-                "python_sha256": PINNED_PYTHON_SHA256,
+                "python": str(tools["PYTHON"]),
+                "python_sha256": sha256(tools["PYTHON"]),
                 "isolated": True,
             },
             "traced_inputs": sorted(
@@ -1013,7 +979,7 @@ def validate_receipt(
             payload = json.loads(receipt_path.read_text())
         except (OSError, json.JSONDecodeError) as error:
             return errors + [f"guest build receipt is unreadable: {error}"]
-    if payload.get("schema_version") != 2:
+    if payload.get("schema_version") not in (2, 3):
         errors.append("unsupported guest build receipt schema")
     target_rows = {
         "binary": dependency_key(binary, root),
@@ -1057,26 +1023,23 @@ def validate_receipt(
             errors.append(str(error))
             dep_dependencies = []
     try:
-        if payload.get("git") != git_state(root):
-            errors.append(
-                "guest binary was built from a different git state; "
-                f"{git_state_difference(payload.get('git', {}), root)}")
-    except subprocess.CalledProcessError as error:
-        errors.append(f"cannot verify git state: {error}")
-    try:
         build_values = parse_build_config(build_config)
         compiler_text = build_values["RISCV_CXX"]
         flags = build_values["CXXFLAGS_GEM5_RISCV"]
         includes = build_values["INCLUDES"]
         current_build_values = validate_build_config(
             build_config, compiler_text, flags, includes)
-        if payload.get("build_config_values") != current_build_values:
+        recorded_build_values = normalize_build_config_values(
+            payload.get("build_config_values", {}))
+        if recorded_build_values != current_build_values:
             errors.append("guest receipt build configuration is inconsistent")
         if payload.get("compiler_environment") != material_environment():
             errors.append("guest compiler environment changed")
+        tools = tool_paths(current_build_values)
     except (OSError, ValueError) as error:
         errors.append(f"guest build configuration cannot be verified: {error}")
         compiler_text, flags, includes = "", "", ""
+        tools = {}
     compiler = payload.get("compiler", {})
     try:
         current_compiler = compiler_receipt(compiler_text)
@@ -1085,46 +1048,30 @@ def validate_receipt(
     except (ValueError, subprocess.CalledProcessError) as error:
         errors.append(f"guest compiler cannot be verified: {error}")
         current_compiler = {}
-    fixed_dependencies = {
-        root / "Makefile",
-        Path(__file__).resolve(),
-        PINNED_STRACE,
-        PINNED_PROOT,
-        PINNED_PROOT_LOADER,
-        PINNED_PROOT_LIBC,
-        PINNED_PROOT_TALLOC,
-        PINNED_FUSEPY,
-        PINNED_LIBFUSE,
-        PINNED_FUSERMOUNT,
-        PINNED_PYTHON,
-        build_config,
-        *link_inputs,
-    }
+    fixed_dependencies = {build_config, *link_inputs, *tools.values()}
     fixed_dependencies = {
         path.resolve() for path in fixed_dependencies
     }
     trace_tool = payload.get("trace_tool", {})
-    if trace_tool != {
-            "path": str(PINNED_STRACE),
-            "sha256": PINNED_STRACE_SHA256}:
-        errors.append("guest trace tool does not match pinned strace")
+    if tools and trace_tool != file_receipt(tools["STRACE"]):
+        errors.append("guest trace tool does not match build receipt")
     snapshot_runner = payload.get("snapshot_runner", {})
-    if snapshot_runner != {
-            "path": str(PINNED_PROOT),
-            "sha256": PINNED_PROOT_SHA256,
-            "loader_sha256": PINNED_PROOT_LOADER_SHA256,
-            "libc_sha256": PINNED_PROOT_LIBC_SHA256,
-            "talloc_sha256": PINNED_PROOT_TALLOC_SHA256,
+    if tools and snapshot_runner != {
+            "path": str(tools["PROOT"]),
+            "sha256": sha256(tools["PROOT"]),
+            "loader_sha256": sha256(tools["PROOT_LOADER"]),
+            "libc_sha256": sha256(tools["PROOT_LIBC"]),
+            "talloc_sha256": sha256(tools["PROOT_TALLOC"]),
             "immutable_fuse_inputs": True,
-            "fusepy_sha256": PINNED_FUSEPY_SHA256,
-            "libfuse_sha256": PINNED_LIBFUSE_SHA256,
-            "fusermount_sha256": PINNED_FUSERMOUNT_SHA256}:
-        errors.append("guest snapshot runner does not match pinned proot")
-    if payload.get("builder_runtime") != {
-            "python": str(PINNED_PYTHON),
-            "python_sha256": PINNED_PYTHON_SHA256,
+            "fusepy_sha256": sha256(tools["FUSEPY"]),
+            "libfuse_sha256": sha256(tools["LIBFUSE"]),
+            "fusermount_sha256": sha256(tools["FUSERMOUNT"])}:
+        errors.append("guest snapshot runner does not match build receipt")
+    if tools and payload.get("builder_runtime") != {
+            "python": str(tools["PYTHON"]),
+            "python_sha256": sha256(tools["PYTHON"]),
             "isolated": True}:
-        errors.append("guest builder Python runtime is not pinned")
+        errors.append("guest builder Python runtime does not match receipt")
     traced_rows = payload.get("traced_inputs")
     traced_inputs = set()
     if not isinstance(traced_rows, list) or not traced_rows:
@@ -1152,9 +1099,18 @@ def validate_receipt(
                     errors.append(
                         "traced compiler virtual alias changed: "
                         f"{virtual_path}")
-    expected_dependencies = snapshot(
-        set(dep_dependencies) | traced_inputs | fixed_dependencies)
-    if payload.get("dependencies") != expected_dependencies:
+    dependency_paths = set(dep_dependencies) | traced_inputs | fixed_dependencies
+    recorded_dependencies = dict(payload.get("dependencies", {}))
+    if payload.get("schema_version") == 2:
+        dependency_paths = {
+            path for path in dependency_paths
+            if dependency_key(path, root) not in
+            LEGACY_ORCHESTRATION_DEPENDENCIES
+        }
+        for name in LEGACY_ORCHESTRATION_DEPENDENCIES:
+            recorded_dependencies.pop(name, None)
+    expected_dependencies = snapshot(dependency_paths)
+    if recorded_dependencies != expected_dependencies:
         errors.append("guest dependency hashes do not match build receipt")
     if source not in dep_dependencies:
         errors.append("guest depfile does not include requested kernel source")
@@ -1284,7 +1240,8 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     if args.action == "build":
         try:
-            require_isolated_python()
+            build_values = parse_build_config(args.build_config)
+            require_isolated_python(Path(build_values["PYTHON"]))
             build_guest(
                 args.receipt, args.binary, args.depfile, args.compiler,
                 args.flags, args.includes, args.source, args.link_input,

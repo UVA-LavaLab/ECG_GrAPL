@@ -68,7 +68,7 @@ help:
 	@echo "  make all-sim                  Build cache_sim kernels"
 	@echo "  make converter                Build .el -> .sg converter"
 	@echo "  make setup-gem5               Install/build gem5 overlays"
-	@echo "  make setup-gem5-guest-tools   Install pinned receipt/snapshot tools"
+	@echo "  make setup-gem5-guest-tools   Install receipt/snapshot tools"
 	@echo "  make gem5-riscv-m5ops-pr      Build RISC-V ECG PageRank"
 	@echo "  make setup-sniper             Install/build Sniper overlays"
 	@echo "  make sniper-sg_kernel         Build canonical Sniper workload"
@@ -102,35 +102,18 @@ RISCV_CXX ?= riscv64-linux-gnu-g++
 RISCV_CROSS_COMPILE ?= riscv64-linux-gnu-
 GEM5_GUEST_RECEIPT := scripts/experiments/ecg/gem5_guest_receipt.py
 GEM5_RISCV_BUILD_CONFIG := $(BIN_GEM5_DIR)/.riscv_build_config
-GEM5_GUEST_PROOT := $(INC_DIR)/gem5_sim/.tools/proot
-GEM5_GUEST_PROOT_SHA256 := $(shell test -f "$(GEM5_GUEST_PROOT)" && \
-	sha256sum "$(GEM5_GUEST_PROOT)" | cut -d' ' -f1)
-GEM5_GUEST_PROOT_LOADER := /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
-GEM5_GUEST_PROOT_LOADER_SHA256 := $(shell \
-	sha256sum "$(GEM5_GUEST_PROOT_LOADER)" 2>/dev/null | cut -d' ' -f1)
-GEM5_GUEST_PROOT_LIBC := /usr/lib/x86_64-linux-gnu/libc.so.6
-GEM5_GUEST_PROOT_LIBC_SHA256 := $(shell \
-	sha256sum "$(GEM5_GUEST_PROOT_LIBC)" 2>/dev/null | cut -d' ' -f1)
-GEM5_GUEST_PROOT_TALLOC := /usr/lib/x86_64-linux-gnu/libtalloc.so.2
-GEM5_GUEST_PROOT_TALLOC_SHA256 := $(shell \
-	sha256sum "$(GEM5_GUEST_PROOT_TALLOC)" 2>/dev/null | cut -d' ' -f1)
-GEM5_GUEST_FUSEPY := $(INC_DIR)/gem5_sim/.tools/fusepy.py
-GEM5_GUEST_FUSEPY_SHA256 := $(shell test -f "$(GEM5_GUEST_FUSEPY)" && \
-	sha256sum "$(GEM5_GUEST_FUSEPY)" | cut -d' ' -f1)
-GEM5_GUEST_LIBFUSE := $(INC_DIR)/gem5_sim/.tools/libfuse.so.2
-GEM5_GUEST_LIBFUSE_SHA256 := $(shell test -f "$(GEM5_GUEST_LIBFUSE)" && \
-	sha256sum "$(GEM5_GUEST_LIBFUSE)" | cut -d' ' -f1)
-GEM5_GUEST_FUSERMOUNT := /usr/bin/fusermount3
-GEM5_GUEST_FUSERMOUNT_SHA256 := $(shell \
-	sha256sum "$(GEM5_GUEST_FUSERMOUNT)" 2>/dev/null | cut -d' ' -f1)
-GEM5_GUEST_PYTHON := /usr/bin/python3.12
-GEM5_GUEST_PYTHON_SHA256 := $(shell \
-	sha256sum "$(GEM5_GUEST_PYTHON)" 2>/dev/null | cut -d' ' -f1)
+GEM5_GUEST_STRACE ?= /usr/bin/strace
+GEM5_GUEST_PROOT ?= $(INC_DIR)/gem5_sim/.tools/proot
+GEM5_GUEST_PROOT_LOADER ?= /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+GEM5_GUEST_PROOT_LIBC ?= /usr/lib/x86_64-linux-gnu/libc.so.6
+GEM5_GUEST_PROOT_TALLOC ?= /usr/lib/x86_64-linux-gnu/libtalloc.so.2
+GEM5_GUEST_FUSEPY ?= $(INC_DIR)/gem5_sim/.tools/fusepy.py
+GEM5_GUEST_LIBFUSE ?= $(INC_DIR)/gem5_sim/.tools/libfuse.so.2
+GEM5_GUEST_FUSERMOUNT ?= /usr/bin/fusermount3
+GEM5_GUEST_PYTHON ?= /usr/bin/python3.12
 GEM5_GUEST_CLEAN_ENV := env -i PATH=/usr/bin:/bin HOME=/tmp TMPDIR=/tmp \
 	LC_ALL=C LANG=C
-RISCV_CXX_RESOLVED := /usr/bin/riscv64-linux-gnu-g++-13
-RISCV_CXX_SHA256 := $(shell test -f "$(RISCV_CXX_RESOLVED)" && \
-	sha256sum "$(RISCV_CXX_RESOLVED)" | cut -d' ' -f1)
+RISCV_CXX_RESOLVED := $(shell command -v $(RISCV_CXX) 2>/dev/null)
 
 CXXFLAGS_GEM5 := -std=c++17 -O1 -Wall -g -DNDEBUG -DNO_M5OPS -fopenmp
 CXXFLAGS_GEM5_M5OPS := $(filter-out -DNO_M5OPS,$(CXXFLAGS_GEM5)) \
@@ -151,25 +134,17 @@ $(GEM5_RISCV_BUILD_CONFIG): FORCE_GEM5_RISCV_CONFIG | $(BIN_GEM5_DIR)
 	@{ \
 		printf '%s\n' "RISCV_CXX=$(RISCV_CXX)"; \
 		printf '%s\n' "RISCV_CXX_RESOLVED=$(RISCV_CXX_RESOLVED)"; \
-		printf '%s\n' "RISCV_CXX_SHA256=$(RISCV_CXX_SHA256)"; \
 		printf '%s\n' "CXXFLAGS_GEM5_RISCV=$(CXXFLAGS_GEM5_RISCV)"; \
 		printf '%s\n' "INCLUDES=$(INCLUDES)"; \
+		printf '%s\n' "STRACE=$(GEM5_GUEST_STRACE)"; \
 		printf '%s\n' "PROOT=$(abspath $(GEM5_GUEST_PROOT))"; \
-		printf '%s\n' "PROOT_SHA256=$(GEM5_GUEST_PROOT_SHA256)"; \
 		printf '%s\n' "PROOT_LOADER=$(GEM5_GUEST_PROOT_LOADER)"; \
-		printf '%s\n' "PROOT_LOADER_SHA256=$(GEM5_GUEST_PROOT_LOADER_SHA256)"; \
 		printf '%s\n' "PROOT_LIBC=$(GEM5_GUEST_PROOT_LIBC)"; \
-		printf '%s\n' "PROOT_LIBC_SHA256=$(GEM5_GUEST_PROOT_LIBC_SHA256)"; \
 		printf '%s\n' "PROOT_TALLOC=$(GEM5_GUEST_PROOT_TALLOC)"; \
-		printf '%s\n' "PROOT_TALLOC_SHA256=$(GEM5_GUEST_PROOT_TALLOC_SHA256)"; \
 		printf '%s\n' "FUSEPY=$(abspath $(GEM5_GUEST_FUSEPY))"; \
-		printf '%s\n' "FUSEPY_SHA256=$(GEM5_GUEST_FUSEPY_SHA256)"; \
 		printf '%s\n' "LIBFUSE=$(abspath $(GEM5_GUEST_LIBFUSE))"; \
-		printf '%s\n' "LIBFUSE_SHA256=$(GEM5_GUEST_LIBFUSE_SHA256)"; \
 		printf '%s\n' "FUSERMOUNT=$(GEM5_GUEST_FUSERMOUNT)"; \
-		printf '%s\n' "FUSERMOUNT_SHA256=$(GEM5_GUEST_FUSERMOUNT_SHA256)"; \
 		printf '%s\n' "PYTHON=$(GEM5_GUEST_PYTHON)"; \
-		printf '%s\n' "PYTHON_SHA256=$(GEM5_GUEST_PYTHON_SHA256)"; \
 		printf '%s\n' "PATH=/usr/bin:/bin"; \
 		printf '%s\n' "COMPILER_PATH="; \
 		printf '%s\n' "GCC_EXEC_PREFIX="; \
@@ -210,12 +185,13 @@ $(BIN_GEM5_DIR)/%_m5ops: $(BENCH_DIR)/src_gem5/%.cc $(DEP_GAPBS) \
 $(BIN_GEM5_DIR)/%_riscv_m5ops \
 $(BIN_GEM5_DIR)/%_riscv_m5ops.d \
 $(BIN_GEM5_DIR)/%_riscv_m5ops.build.json &: \
-	$(BENCH_DIR)/src_gem5/%.cc $(DEP_GAPBS) \
-	$(DEP_GRAPH) $(DEP_EXTERNAL) $(DEP_ECG) $(GEM5_M5_RISCV_LIB) \
-	$(GEM5_GUEST_RECEIPT) $(GEM5_GUEST_PROOT) \
+	$(BENCH_DIR)/src_gem5/%.cc $(GEM5_M5_RISCV_LIB) \
+	$(RISCV_CXX_RESOLVED) $(GEM5_GUEST_STRACE) \
+	$(GEM5_GUEST_PROOT) $(GEM5_GUEST_PROOT_LOADER) \
+	$(GEM5_GUEST_PROOT_LIBC) $(GEM5_GUEST_PROOT_TALLOC) \
 	$(GEM5_GUEST_FUSEPY) $(GEM5_GUEST_LIBFUSE) \
-	$(GEM5_GUEST_FUSERMOUNT) \
-	$(GEM5_RISCV_BUILD_CONFIG) Makefile | \
+	$(GEM5_GUEST_FUSERMOUNT) $(GEM5_GUEST_PYTHON) \
+	$(GEM5_RISCV_BUILD_CONFIG) | \
 	$(BIN_GEM5_DIR)
 	$(GEM5_GUEST_CLEAN_ENV) $(GEM5_GUEST_PYTHON) -I \
 		$(GEM5_GUEST_RECEIPT) build \

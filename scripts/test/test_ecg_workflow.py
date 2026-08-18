@@ -691,9 +691,9 @@ def test_experiment_tools_use_active_python_by_default():
     pinned_args = SimpleNamespace(require_pinned_python=True)
     assert runner.execution_python(default_args) == Path(sys.executable)
     assert aggregate.execution_python(default_args) == Path(sys.executable)
-    assert runner.execution_python(pinned_args) == runner.PINNED_PYTHON
-    assert aggregate.execution_python(pinned_args) == aggregate.PINNED_PYTHON
-    assert "--require-pinned-python" in (
+    assert runner.execution_python(pinned_args) == runner.REFERENCE_PYTHON
+    assert aggregate.execution_python(pinned_args) == aggregate.REFERENCE_PYTHON
+    assert "--require-reference-python" in (
         ROOT / "scripts/experiments/ecg/flows/aggregate_results.py"
     ).read_text()
 
@@ -747,7 +747,7 @@ def test_final_design_docs_and_run_flow_are_consistent():
     assert "cit-Patents/cit-Patents.el" in reproduction
     assert "cit-Patents/cit-Patents.mtx" not in reproduction
     assert "python3 -I" in reproduction
-    assert "--require-pinned-python" in reproduction
+    assert "--require-reference-python" in reproduction
     assert "--no-build --no-resume" in reproduction
     assert "## 6. Final role-separated campaign" in reproduction
     assert "reuse_plan_final_campaign" in reproduction
@@ -1094,7 +1094,7 @@ def test_pipeline_manifest_binds_inputs_scripts_and_outputs(tmp_path):
     assert "run_0/run.complete.json" in manifest["inputs"]
     assert "run_0/combined_roi_matrix.csv" in manifest["inputs"]
     assert "aggregate_results.py" in manifest["scripts"]
-    assert "git_state" in manifest
+    assert "git_state" not in manifest
     assert "aggregate/roi_policy_summary.csv" in manifest["outputs"]
     assert "tables/roi_policy_summary.tex" in manifest["outputs"]
 
@@ -1687,7 +1687,7 @@ def test_fallback_matrix_recovers_legacy_comparison_hash(tmp_path):
     assert proof == []
 
 
-def test_comparison_hash_ignores_redundant_git_state():
+def test_comparison_hash_ignores_legacy_git_state():
     module = load_module(
         "experiment_run_comparison_git_state",
         ROOT / "scripts/experiments/ecg/flows/experiment_run.py",
@@ -1927,17 +1927,16 @@ def test_sniper_fingerprint_covers_sift_stack():
         "benchmark_binary",
     ):
         assert key in fingerprints
+    assert "git_state" not in fingerprints
 
 
-def test_job_input_validation_detects_runtime_file_drift(
-        tmp_path, monkeypatch):
+def test_job_input_validation_detects_runtime_file_drift(tmp_path):
     module = load_module(
         "experiment_run_runtime_input_drift",
         ROOT / "scripts/experiments/ecg/flows/experiment_run.py",
     )
     runtime_input = tmp_path / "runtime.bin"
     runtime_input.write_bytes(b"before")
-    current_git = module.compute_git_state_fingerprint()
     job = module.Job(
         job_id="matrix",
         stage="stage",
@@ -1947,7 +1946,6 @@ def test_job_input_validation_detects_runtime_file_drift(
         log_path=tmp_path / "matrix.log",
         metadata={
             "input_fingerprints": {
-                "git_state": current_git,
                 "runtime": module.compute_path_fingerprint(runtime_input),
             },
             "input_paths": {"runtime": str(runtime_input)},
@@ -1974,14 +1972,11 @@ def test_orchestrator_and_matrix_share_input_hashing(tmp_path):
         tree) == roi_matrix.hash_input_path(tree)
 
 
-def test_job_input_validation_detects_repository_drift(
-        tmp_path, monkeypatch):
+def test_job_input_validation_ignores_legacy_repository_fingerprint(tmp_path):
     module = load_module(
-        "experiment_run_repository_drift",
+        "experiment_run_legacy_repository_fingerprint",
         ROOT / "scripts/experiments/ecg/flows/experiment_run.py",
     )
-    monkeypatch.setattr(
-        module, "compute_git_state_fingerprint", lambda: "current")
     job = module.Job(
         job_id="matrix",
         stage="stage",
@@ -1994,9 +1989,7 @@ def test_job_input_validation_detects_repository_drift(
             "input_paths": {},
         },
     )
-    ok, detail = module.validate_job_inputs(job)
-    assert not ok
-    assert "repository state changed" in detail
+    assert module.validate_job_inputs(job) == (True, "")
 
 
 def test_job_input_validation_checks_stable_guest_receipt(
@@ -2010,6 +2003,8 @@ def test_job_input_validation_checks_stable_guest_receipt(
     exact = module.compute_path_fingerprint(receipt)
     monkeypatch.setattr(
         module, "stable_receipt_fingerprint", lambda path: "actual")
+    monkeypatch.setattr(
+        module, "material_input_fingerprint", lambda path: "material")
     job = module.Job(
         job_id="matrix",
         stage="stage",
@@ -2019,9 +2014,9 @@ def test_job_input_validation_checks_stable_guest_receipt(
         log_path=tmp_path / "matrix.log",
         metadata={
             "input_fingerprints": {
-                "git_state": module.compute_git_state_fingerprint(),
                 "gem5_guest_build_receipt": exact,
                 "gem5_guest_build_receipt_stable": "expected",
+                "gem5_guest_material_inputs": "material",
             },
             "input_paths": {
                 "gem5_guest_build_receipt": str(receipt),
@@ -2031,6 +2026,42 @@ def test_job_input_validation_checks_stable_guest_receipt(
     ok, detail = module.validate_job_inputs(job)
     assert not ok
     assert "stable gem5 guest receipt changed" in detail
+
+
+def test_job_input_validation_checks_guest_material_inputs(
+        tmp_path, monkeypatch):
+    module = load_module(
+        "experiment_run_guest_material_drift",
+        ROOT / "scripts/experiments/ecg/flows/experiment_run.py",
+    )
+    receipt = tmp_path / "guest.build.json"
+    receipt.write_text("{}")
+    exact = module.compute_path_fingerprint(receipt)
+    monkeypatch.setattr(
+        module, "stable_receipt_fingerprint", lambda path: "stable")
+    monkeypatch.setattr(
+        module, "material_input_fingerprint", lambda path: "changed")
+    job = module.Job(
+        job_id="matrix",
+        stage="stage",
+        kind="roi_matrix",
+        command=[],
+        out_dir=tmp_path / "out",
+        log_path=tmp_path / "matrix.log",
+        metadata={
+            "input_fingerprints": {
+                "gem5_guest_build_receipt": exact,
+                "gem5_guest_build_receipt_stable": "stable",
+                "gem5_guest_material_inputs": "expected",
+            },
+            "input_paths": {
+                "gem5_guest_build_receipt": str(receipt),
+            },
+        },
+    )
+    ok, detail = module.validate_job_inputs(job)
+    assert not ok
+    assert "gem5 guest material inputs changed" in detail
 
 
 def test_resume_revalidates_inputs_before_skipping(

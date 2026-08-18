@@ -26,12 +26,12 @@ from experiment_run import recover_roi_comparison_config_hash  # noqa: E402
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
 ECG_DIR = PROJECT_ROOT / "scripts" / "experiments" / "ecg"
 EXPERIMENT_RUNNER = ECG_DIR / "flows" / "experiment_run.py"
-PINNED_PYTHON = Path("/usr/bin/python3.12")
+REFERENCE_PYTHON = Path("/usr/bin/python3.12")
 
 
 def execution_python(args: argparse.Namespace) -> Path:
     return (
-        PINNED_PYTHON
+        REFERENCE_PYTHON
         if getattr(args, "require_pinned_python", False)
         else Path(sys.executable))
 
@@ -268,24 +268,6 @@ def output_descriptor(path: Path) -> dict[str, Any]:
     }
 
 
-def git_state_descriptor() -> dict[str, Any]:
-    def capture(*args: str) -> str:
-        result = subprocess.run(
-            ["git", *args], cwd=PROJECT_ROOT,
-            capture_output=True, text=True, check=True)
-        return result.stdout
-
-    status = capture("status", "--porcelain=v1")
-    diff = capture("diff", "--binary", "HEAD")
-    return {
-        "commit": capture("rev-parse", "HEAD").strip(),
-        "status_sha256": hashlib.sha256(status.encode()).hexdigest(),
-        "status_lines": len(status.splitlines()),
-        "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(),
-        "diff_bytes": len(diff.encode()),
-    }
-
-
 def bound_file(path: Path) -> dict[str, Any]:
     return {
         "path": str(path.resolve()),
@@ -486,7 +468,7 @@ def run_profile(args: argparse.Namespace, run_root: Path, profile: str) -> Path:
         str(execution_python(args)), "-I", str(EXPERIMENT_RUNNER),
         "--profile", profile, "--run-dir", str(run_dir)]
     if args.require_pinned_python:
-        command.append("--require-pinned-python")
+        command.append("--require-reference-python")
     if args.dry_run:
         command.append("--dry-run")
     if args.no_build:
@@ -2630,7 +2612,6 @@ def generate_outputs(
         "figure_format": "svg_primary_png_preview",
         "has_faithfulness_summary": bool(roi_rows),
         "has_prefetch_quality_summary": bool(prefetch_quality),
-        "git_state": git_state_descriptor(),
         "scripts": {
             "aggregate_results.py": bound_file(Path(__file__)),
             "experiment_run.py": bound_file(EXPERIMENT_RUNNER),
@@ -2655,7 +2636,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--allow-missing-graphs", action="store_true", help="Pass --allow-missing-graphs to flows/experiment_run.py.")
     parser.add_argument("--force", action="store_true", help="Pass --force to flows/experiment_run.py.")
     parser.add_argument(
-        "--require-pinned-python", action="store_true",
+        "--require-reference-python", "--require-pinned-python",
+        dest="require_pinned_python", action="store_true",
         help="Use the repository reference Python for launched profiles.")
     parser.add_argument("--no-stop-on-error", action="store_false", dest="stop_on_error", help="Continue after failed profile.")
     parser.set_defaults(stop_on_error=True)

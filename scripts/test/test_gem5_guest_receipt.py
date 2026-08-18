@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 from contextlib import contextmanager
 import importlib.util
+import re
 from types import SimpleNamespace
 import subprocess
 import sys
@@ -15,27 +16,19 @@ from scripts.experiments.ecg.flows import experiment_run
 from scripts.experiments.ecg import gem5_guest_receipt as receipt_module
 from scripts.experiments.ecg import roi_matrix
 from scripts.experiments.ecg.gem5_guest_receipt import (
+    GUEST_FUSERMOUNT,
+    GUEST_FUSEPY,
+    GUEST_LIBFUSE,
+    GUEST_PROOT,
+    GUEST_PROOT_LIBC,
+    GUEST_PROOT_LOADER,
+    GUEST_PROOT_TALLOC,
+    GUEST_PYTHON,
+    GUEST_STRACE,
     MATERIAL_COMPILER_ENV,
-    PINNED_FUSERMOUNT,
-    PINNED_FUSERMOUNT_SHA256,
-    PINNED_FUSEPY,
-    PINNED_FUSEPY_SHA256,
-    PINNED_LIBFUSE,
-    PINNED_LIBFUSE_SHA256,
-    PINNED_PYTHON,
-    PINNED_PYTHON_SHA256,
-    PINNED_PROOT,
-    PINNED_PROOT_LIBC,
-    PINNED_PROOT_LIBC_SHA256,
-    PINNED_PROOT_LOADER,
-    PINNED_PROOT_LOADER_SHA256,
-    PINNED_PROOT_SHA256,
-    PINNED_PROOT_TALLOC,
-    PINNED_PROOT_TALLOC_SHA256,
-    PINNED_RISCV_CXX,
-    PINNED_RISCV_CXX_SHA256,
     PROJECT_ROOT,
     build_guest,
+    material_input_fingerprint,
     material_environment,
     open_sealed_guest,
     sha256,
@@ -98,25 +91,17 @@ def write_build_config(
     values = {
         "RISCV_CXX": compiler,
         "RISCV_CXX_RESOLVED": shutil.which(compiler) or "",
-        "RISCV_CXX_SHA256": PINNED_RISCV_CXX_SHA256,
         "CXXFLAGS_GEM5_RISCV": flags,
         "INCLUDES": includes,
-        "PROOT": str(PINNED_PROOT),
-        "PROOT_SHA256": PINNED_PROOT_SHA256,
-        "PROOT_LOADER": str(PINNED_PROOT_LOADER),
-        "PROOT_LOADER_SHA256": PINNED_PROOT_LOADER_SHA256,
-        "PROOT_LIBC": str(PINNED_PROOT_LIBC),
-        "PROOT_LIBC_SHA256": PINNED_PROOT_LIBC_SHA256,
-        "PROOT_TALLOC": str(PINNED_PROOT_TALLOC),
-        "PROOT_TALLOC_SHA256": PINNED_PROOT_TALLOC_SHA256,
-        "FUSEPY": str(PINNED_FUSEPY),
-        "FUSEPY_SHA256": PINNED_FUSEPY_SHA256,
-        "LIBFUSE": str(PINNED_LIBFUSE),
-        "LIBFUSE_SHA256": PINNED_LIBFUSE_SHA256,
-        "FUSERMOUNT": str(PINNED_FUSERMOUNT),
-        "FUSERMOUNT_SHA256": PINNED_FUSERMOUNT_SHA256,
-        "PYTHON": str(PINNED_PYTHON),
-        "PYTHON_SHA256": PINNED_PYTHON_SHA256,
+        "STRACE": str(GUEST_STRACE),
+        "PROOT": str(GUEST_PROOT),
+        "PROOT_LOADER": str(GUEST_PROOT_LOADER),
+        "PROOT_LIBC": str(GUEST_PROOT_LIBC),
+        "PROOT_TALLOC": str(GUEST_PROOT_TALLOC),
+        "FUSEPY": str(GUEST_FUSEPY),
+        "LIBFUSE": str(GUEST_LIBFUSE),
+        "FUSERMOUNT": str(GUEST_FUSERMOUNT),
+        "PYTHON": str(GUEST_PYTHON),
         "HOME": "/tmp",
         "TMPDIR": "/tmp",
         "LC_ALL": "C",
@@ -128,7 +113,7 @@ def write_build_config(
         "".join(f"{key}={value}\n" for key, value in values.items()))
 
 
-def test_guest_build_atomically_binds_target_dependencies_and_git(tmp_path):
+def test_guest_build_binds_only_target_material_inputs(tmp_path):
     source = tmp_path / "pr.cc"
     header = tmp_path / "reorder_hub.h"
     binary = tmp_path / "pr_riscv_m5ops"
@@ -147,13 +132,34 @@ def test_guest_build_atomically_binds_target_dependencies_and_git(tmp_path):
         receipt, binary, depfile, "riscv64-linux-gnu-g++", flags,
         includes, source, [], build_config, str(binary))
 
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
+    assert "git" not in payload
     assert payload["source"] == str(source)
     assert str(header) in payload["dependencies"]
+    assert str(PROJECT_ROOT / "Makefile") not in payload["dependencies"]
+    assert "scripts/experiments/ecg/gem5_guest_receipt.py" not in (
+        payload["dependencies"])
     assert validate_receipt(
         receipt, binary, source, [], build_config) == []
+    legacy = json.loads(json.dumps(payload))
+    legacy["schema_version"] = 2
+    legacy["git"] = {
+        "commit": "legacy",
+        "diff_sha256": "legacy",
+        "cached_diff_sha256": "legacy",
+    }
+    legacy["dependencies"].update({
+        "Makefile": "stale-orchestration-hash",
+        "scripts/experiments/ecg/gem5_guest_receipt.py":
+            "stale-orchestration-hash",
+    })
+    assert validate_receipt(
+        receipt, binary, source, [], build_config, payload=legacy) == []
+    material_input_fingerprint(receipt)
 
     header.write_text("#define DBG_AVG_DEGREE 1\n")
+    with pytest.raises(ValueError, match="material input changed"):
+        material_input_fingerprint(receipt)
     assert any(
         "dependency hashes" in error
         for error in validate_receipt(
@@ -229,8 +235,18 @@ def test_riscv_make_rule_models_all_outputs_and_command_signature():
     assert "-include $(wildcard $(BIN_GEM5_DIR)/*_riscv_m5ops.d)" in makefile
     assert "$(GEM5_GUEST_RECEIPT) build" in makefile
     assert "--build-config $(GEM5_RISCV_BUILD_CONFIG)" in makefile
-    assert "RISCV_CXX_SHA256=" in makefile
+    assert "RISCV_CXX_SHA256=" not in makefile
+    assert "PROOT_SHA256=" not in makefile
     assert ".PRECIOUS: $(RISCV_GUEST_BINARIES)" in makefile
+    prerequisites = makefile.split(
+        "$(BIN_GEM5_DIR)/%_riscv_m5ops \\\n", 1)[1].split(
+            "\n\t$(GEM5_GUEST_CLEAN_ENV)", 1)[0]
+    assert "$(GEM5_GUEST_RECEIPT)" not in prerequisites
+    assert "Makefile" not in prerequisites
+    assert "$(DEP_GAPBS)" not in prerequisites
+    assert "$(DEP_GRAPH)" not in prerequisites
+    assert "$(DEP_EXTERNAL)" not in prerequisites
+    assert "$(DEP_ECG)" not in prerequisites
     result = subprocess.run(
         [
             sys.executable,
@@ -239,6 +255,21 @@ def test_riscv_make_rule_models_all_outputs_and_command_signature():
         ],
         cwd=PROJECT_ROOT)
     assert result.returncode == 0
+
+
+def test_generic_guest_receipts_have_no_manual_sha_pins():
+    sources = [
+        PROJECT_ROOT / "Makefile",
+        PROJECT_ROOT / "scripts/setup_gem5_guest_tools.py",
+        PROJECT_ROOT / "scripts/experiments/ecg/gem5_guest_receipt.py",
+        PROJECT_ROOT / "scripts/experiments/ecg/flows/experiment_run.py",
+    ]
+    for path in sources:
+        text = path.read_text()
+        assert re.search(r"\b[a-f0-9]{64}\b", text) is None, path
+    setup = sources[1].read_text()
+    assert "deb_sha256" not in setup
+    assert "target_sha256" not in setup
 
 
 def test_traced_inputs_cover_openmp_math_and_linker_plugin(tmp_path):
@@ -286,8 +317,8 @@ def test_final_compile_consumes_immutable_snapshot_during_swap_restore(
     real_mount = receipt_module.immutable_fuse_files
 
     @contextmanager
-    def swap_restore(files, mountpoint):
-        with real_mount(files, mountpoint):
+    def swap_restore(files, mountpoint, tools):
+        with real_mount(files, mountpoint, tools):
             source.write_text(original.replace("ORIGINAL", "MALICIOUS"))
             try:
                 yield
@@ -383,7 +414,7 @@ def test_wrapper_compiler_and_config_drift_are_rejected(tmp_path):
     source = tmp_path / "pr.cc"
     source.write_text("int main() { return 0; }\n")
     binary = tmp_path / "pr_riscv_m5ops"
-    with pytest.raises(ValueError, match="pinned RISC-V compiler"):
+    with pytest.raises(ValueError, match="ELF compiler"):
         build_guest(
             Path(str(binary) + ".build.json"), binary,
             Path(str(binary) + ".d"), str(wrapper), "-O0 -static", "",
@@ -401,8 +432,6 @@ def test_experiment_run_fingerprints_both_backends_and_resolves_gem5(
         monkeypatch):
     monkeypatch.setattr(
         experiment_run, "path_fingerprint", lambda path: path)
-    monkeypatch.setattr(
-        experiment_run, "git_state_fingerprint", lambda: "git")
     relative_gem5 = (
         "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt")
     inputs = experiment_run.roi_input_fingerprints(
@@ -417,6 +446,7 @@ def test_experiment_run_fingerprints_both_backends_and_resolves_gem5(
     assert "cache_sim_benchmark_binary" in inputs
     assert "gem5_benchmark_binary" in inputs
     assert "gem5_guest_build_receipt" in inputs
+    assert "git_state" not in inputs
     assert inputs["gem5_binary"] == str(
         (PROJECT_ROOT / relative_gem5).resolve())
 
@@ -609,36 +639,6 @@ def test_current_riscv_pr_receipt_when_binary_is_present():
     ]
     errors = validate_receipt(
         receipt, binary, source, link_inputs, build_config)
-    if errors and all(
-            error.startswith(
-                "guest binary was built from a different git state")
-            for error in errors):
-        payload = json.loads(receipt.read_text())
-        receipt_commit = payload["git"]["commit"]
-        ancestor = subprocess.run(
-            ["git", "merge-base", "--is-ancestor", receipt_commit, "HEAD"],
-            cwd=PROJECT_ROOT)
-        assert ancestor.returncode == 0
-        changed = set(subprocess.run(
-            ["git", "diff", "--name-only", receipt_commit, "HEAD"],
-            cwd=PROJECT_ROOT, capture_output=True, text=True,
-            check=True).stdout.splitlines())
-        changed.update(subprocess.run(
-            ["git", "diff", "--name-only"],
-            cwd=PROJECT_ROOT, capture_output=True, text=True,
-            check=True).stdout.splitlines())
-        changed.update(subprocess.run(
-            ["git", "diff", "--cached", "--name-only"],
-            cwd=PROJECT_ROOT, capture_output=True, text=True,
-            check=True).stdout.splitlines())
-        repo_dependencies = {
-            name for name in payload["dependencies"]
-            if not Path(name).is_absolute()
-        }
-        assert repo_dependencies
-        assert not (changed & repo_dependencies), (
-            "post-run edits touched a guest build dependency")
-        errors = []
     assert errors == []
     payload = json.loads(receipt.read_text())
     assert any(

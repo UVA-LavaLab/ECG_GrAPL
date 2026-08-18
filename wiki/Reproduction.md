@@ -92,6 +92,16 @@ make gem5-riscv-m5ops-pr gem5-riscv-m5ops-bfs \
 make sniper-sg_kernel
 ```
 
+Build receipts are generated from the guest binary's material inputs: source
+and included files, compiler/toolchain, link inputs, and build configuration.
+They do not encode the repository HEAD or an unrelated worktree diff. Do not
+edit checksum fields manually; rerun the corresponding `make` target only when
+one of those material inputs changes.
+
+Dedicated third-party artifact flows may still name an upstream revision when
+that revision defines the experiment being reproduced; those pins are separate
+from the generic build and run receipts.
+
 ## 3. Test
 
 ```bash
@@ -121,7 +131,7 @@ python3 -I scripts/experiments/ecg/flows/experiment_run.py \
 ```
 
 For a provenance-locked rerun on the reference host, invoke
-`/usr/bin/python3.12 -I` and add `--require-pinned-python`.
+`/usr/bin/python3.12 -I` and add `--require-reference-python`.
 
 Summarize a complete run:
 
