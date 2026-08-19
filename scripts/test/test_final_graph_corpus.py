@@ -54,6 +54,7 @@ def test_final_graph_corpus_matches_literature_scale():
         assert graph["dbg_sg"].endswith("-dbg.sg")
         if graph["role"] == "core":
             assert graph["timing_sample_vertices"] == 262144
+            assert graph["timing_sample_edges"] == 350000
             assert graph["timing_sample_name"].endswith("-final-n18")
 
 
@@ -118,6 +119,52 @@ def test_parse_pagerank_semantic_receipt():
         module.parse_pr_receipt("no receipt")
 
 
+def test_rebuilt_timing_sample_invalidates_semantic_receipt(
+        tmp_path, monkeypatch):
+    module = load_module()
+    graph_root = tmp_path / "graphs"
+    source_dir = graph_root / "test-graph"
+    source_dir.mkdir(parents=True)
+    (source_dir / "test.el").write_text("0 1\n1 2\n")
+    sample_dir = graph_root / "test-final-n2"
+    sample_dir.mkdir()
+    semantic = sample_dir / "test-final-n2.semantic.json"
+    semantic.write_text('{"stale": true}\n')
+    observed = {}
+
+    def fake_run(command, cwd, check):
+        observed["command"] = command
+        Path(command[command.index("--output") + 1]).write_text("0 1\n")
+        Path(command[command.index("--vertices") + 1]).write_text(
+            "0 0\n1 1\n")
+        Path(command[command.index("--metadata") + 1]).write_text(
+            json.dumps({"vertices": 2, "target_edges": 1}))
+
+    converted = []
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        module, "convert",
+        lambda source, output, symmetrize, reorder=0:
+        converted.append((source, output, symmetrize, reorder)))
+
+    module.prepare_timing_sample({
+        "name": "test-graph",
+        "edge_list": "test.el",
+        "timing_sample_name": "test-final-n2",
+        "timing_sample_vertices": 2,
+        "timing_sample_edges": 1,
+        "reorder": 5,
+    }, graph_root, force=False)
+
+    assert not semantic.exists()
+    command = observed["command"]
+    assert command[command.index("--target-edges") + 1] == "1"
+    assert [entry[2:] for entry in converted] == [
+        (True, 0),
+        (False, 5),
+    ]
+
+
 def test_literature_scale_campaign_shape_is_frozen():
     manifest = json.loads(MANIFEST.read_text())
     screen = json.loads(SCREEN.read_text())
@@ -138,6 +185,15 @@ def test_literature_scale_campaign_shape_is_frozen():
     assert len(screen["graphs"]) == 6
     assert screen["iterations"] == [1, 8]
     assert len(screen["policies"]["all"]) == 8
+    for graph in screen["graphs"]:
+        assert graph["vertices"] == 262144
+        assert graph["directed_edges"] <= 700000
+        assert graph["semantic_receipts"]["1"]["edges"] == (
+            graph["directed_edges"])
+        assert graph["semantic_receipts"]["8"]["edges"] == (
+            graph["directed_edges"] * 8)
+        assert len(graph["semantic_receipts"]["1"]["checksum"]) == 16
+        assert len(graph["semantic_receipts"]["8"]["checksum"]) == 16
     cells = rows = 0
     for stage in stages:
         if stage["name"].startswith(("90_", "91_")):

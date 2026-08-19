@@ -24,7 +24,9 @@ python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py \
 ```
 
 After the six core edge lists are present, generate the uniform 262,144-vertex
-symmetrized gem5 timing samples:
+symmetrized gem5 timing samples. Each sample is additionally capped at 350,000
+input arcs (at most 700,000 serialized edges after symmetrization), while a
+deterministic coverage set keeps every selected vertex represented:
 
 ```bash
 python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py \

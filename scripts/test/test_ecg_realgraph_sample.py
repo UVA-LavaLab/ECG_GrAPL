@@ -72,6 +72,51 @@ def test_matrix_market_header_is_skipped(tmp_path):
     assert json.loads(metadata.read_text())["edges"] == 3
 
 
+def test_edge_budget_preserves_vertex_coverage(tmp_path):
+    module = load_module()
+    source = tmp_path / "graph.el"
+    source.write_text(
+        "10 11\n"
+        "11 12\n"
+        "12 10\n"
+        "12 13\n"
+        "13 10\n")
+    output = tmp_path / "sample.el"
+    vertices = tmp_path / "vertices.tsv"
+    metadata = tmp_path / "sample.json"
+
+    result = module.write_sample(
+        source, output, vertices, metadata,
+        target_vertices=4, target_edges=3)
+
+    assert output.read_text() == "1\t2\n2\t0\n0\t3\n"
+    assert result["edges"] == 3
+    assert result["induced_edges_before_budget"] == 5
+    assert result["target_edges"] == 3
+    assert result["coverage_edges"] == 3
+    endpoints = {
+        int(value)
+        for line in output.read_text().splitlines()
+        for value in line.split()
+    }
+    assert endpoints == {0, 1, 2, 3}
+
+
+def test_edge_budget_rejects_insufficient_coverage(tmp_path):
+    module = load_module()
+    source = tmp_path / "graph.el"
+    source.write_text(
+        "10 11\n"
+        "11 12\n"
+        "12 13\n")
+    with pytest.raises(RuntimeError, match="cannot cover"):
+        module.write_sample(
+            source, tmp_path / "sample.el",
+            tmp_path / "vertices.tsv",
+            tmp_path / "sample.json",
+            target_vertices=4, target_edges=2)
+
+
 def test_sample_rejects_too_few_vertices(tmp_path):
     module = load_module()
     source = tmp_path / "small.el"

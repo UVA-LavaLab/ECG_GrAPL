@@ -20,7 +20,7 @@
       "name": "web-Google-final-n18",
       "path": "results/graphs/web-Google-final-n18/web-Google-final-n18-dbg.sg",
       "vertices": 262144,
-      "directed_edges": 3189312,
+      "directed_edges": 642172,
       "l1d_size": "32kB",
       "l2_size": "128kB",
       "l3_size": "512kB",
@@ -32,12 +32,12 @@
       "compact_epoch_bits": 4,
       "semantic_receipts": {
         "1": {
-          "edges": 3189312,
-          "checksum": "9fd129952739c4e6"
+          "edges": 642172,
+          "checksum": "ecd582fd90602cdc"
         },
         "8": {
-          "edges": 25514496,
-          "checksum": "3a45667924ae7448"
+          "edges": 5137376,
+          "checksum": "3831a3f90260cd0e"
         }
       }
     },
@@ -45,7 +45,7 @@
       "name": "soc-pokec-final-n18",
       "path": "results/graphs/soc-pokec-final-n18/soc-pokec-final-n18-dbg.sg",
       "vertices": 262144,
-      "directed_edges": 8117878,
+      "directed_edges": 680132,
       "l1d_size": "32kB",
       "l2_size": "128kB",
       "l3_size": "512kB",
@@ -57,12 +57,12 @@
       "compact_epoch_bits": 4,
       "semantic_receipts": {
         "1": {
-          "edges": 8117878,
-          "checksum": "ff00c718ef96f1e4"
+          "edges": 680132,
+          "checksum": "2eda61f23fd506d1"
         },
         "8": {
-          "edges": 64943024,
-          "checksum": "0dab3a2dfc9c384f"
+          "edges": 5441056,
+          "checksum": "f25c3fd3c12826b9"
         }
       }
     },
@@ -95,7 +95,7 @@
       "name": "roadNet-CA-final-n18",
       "path": "results/graphs/roadNet-CA-final-n18/roadNet-CA-final-n18-dbg.sg",
       "vertices": 262144,
-      "directed_edges": 728154,
+      "directed_edges": 555588,
       "l1d_size": "32kB",
       "l2_size": "128kB",
       "l3_size": "512kB",
@@ -107,12 +107,12 @@
       "compact_epoch_bits": 4,
       "semantic_receipts": {
         "1": {
-          "edges": 728154,
-          "checksum": "13ffd9a7693f712a"
+          "edges": 555588,
+          "checksum": "ef480227f4243c62"
         },
         "8": {
-          "edges": 5825232,
-          "checksum": "8f1a004ec092de30"
+          "edges": 4444704,
+          "checksum": "1e7f3196ba667ddb"
         }
       }
     },
@@ -120,7 +120,7 @@
       "name": "soc-LiveJournal1-final-n18",
       "path": "results/graphs/soc-LiveJournal1-final-n18/soc-LiveJournal1-final-n18-dbg.sg",
       "vertices": 262144,
-      "directed_edges": 6861882,
+      "directed_edges": 677614,
       "l1d_size": "32kB",
       "l2_size": "128kB",
       "l3_size": "512kB",
@@ -132,12 +132,12 @@
       "compact_epoch_bits": 4,
       "semantic_receipts": {
         "1": {
-          "edges": 6861882,
-          "checksum": "8ea13b26ecf4b0cf"
+          "edges": 677614,
+          "checksum": "75c895255263a267"
         },
         "8": {
-          "edges": 54895056,
-          "checksum": "053b40a4582905df"
+          "edges": 5420912,
+          "checksum": "3714644927ace9ac"
         }
       }
     },
@@ -145,7 +145,7 @@
       "name": "com-Orkut-final-n18",
       "path": "results/graphs/com-Orkut-final-n18/com-Orkut-final-n18-dbg.sg",
       "vertices": 262144,
-      "directed_edges": 14320090,
+      "directed_edges": 700000,
       "l1d_size": "32kB",
       "l2_size": "128kB",
       "l3_size": "512kB",
@@ -157,12 +157,12 @@
       "compact_epoch_bits": 4,
       "semantic_receipts": {
         "1": {
-          "edges": 14320090,
-          "checksum": "657d1debd0115b91"
+          "edges": 700000,
+          "checksum": "b13b60d593dcb83f"
         },
         "8": {
-          "edges": 114560720,
-          "checksum": "a4fd5da7c18eb9c2"
+          "edges": 5600000,
+          "checksum": "7d6eaf25f9927c38"
         }
       }
     }

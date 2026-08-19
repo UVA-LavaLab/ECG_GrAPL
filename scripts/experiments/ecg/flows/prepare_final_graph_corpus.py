@@ -123,8 +123,12 @@ def prepare_timing_sample(
         force: bool) -> None:
     sample_name = str(graph.get("timing_sample_name", ""))
     target_vertices = int(graph.get("timing_sample_vertices", 0) or 0)
+    target_edges = int(graph.get("timing_sample_edges", 0) or 0)
     if not sample_name or target_vertices <= 0:
         return
+    if target_edges <= 0:
+        raise SystemExit(
+            f"{graph['name']} timing sample lacks an edge budget")
     source = (
         graph_root / str(graph["name"]) /
         str(graph["edge_list"]))
@@ -138,10 +142,20 @@ def prepare_timing_sample(
     metadata = directory / f"{sample_name}.sample.json"
     sg = directory / f"{sample_name}.sg"
     dbg_sg = directory / f"{sample_name}-dbg.sg"
+    semantic = directory / f"{sample_name}.semantic.json"
     directory.mkdir(parents=True, exist_ok=True)
-    if force or not all(
-            path.is_file() for path in
-            (edge_list, vertices, metadata)):
+    metadata_current = False
+    if metadata.is_file():
+        try:
+            existing = json.loads(metadata.read_text())
+            metadata_current = (
+                int(existing.get("vertices", 0)) == target_vertices and
+                int(existing.get("target_edges", 0)) == target_edges)
+        except (OSError, ValueError, json.JSONDecodeError):
+            metadata_current = False
+    sample_changed = force or not metadata_current or not all(
+        path.is_file() for path in (edge_list, vertices))
+    if sample_changed:
         subprocess.run([
             sys.executable, str(SAMPLE_SCRIPT),
             "--input", str(source),
@@ -149,10 +163,12 @@ def prepare_timing_sample(
             "--vertices", str(vertices),
             "--metadata", str(metadata),
             "--target-vertices", str(target_vertices),
+            "--target-edges", str(target_edges),
         ], cwd=PROJECT_ROOT, check=True)
-    if force or not sg.is_file():
+        semantic.unlink(missing_ok=True)
+    if force or sample_changed or not sg.is_file():
         convert(edge_list, sg, True)
-    if force or not dbg_sg.is_file():
+    if force or sample_changed or not dbg_sg.is_file():
         convert(
             sg, dbg_sg, False,
             int(graph.get("reorder", 5)))
@@ -296,6 +312,8 @@ def graph_receipt(
         row["timing_sample_name"] = sample_name
         row["timing_sample_vertices_requested"] = int(
             graph["timing_sample_vertices"])
+        row["timing_sample_edges_requested"] = int(
+            graph["timing_sample_edges"])
         row["timing_sample_sg"] = display(sample_sg)
         row["timing_sample_dbg_sg"] = display(sample_dbg_sg)
         row["timing_sample_present"] = sample_sg.is_file()

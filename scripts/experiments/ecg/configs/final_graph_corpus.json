@@ -19,7 +19,8 @@
       "source_directed": true,
       "symmetrize": true,
       "timing_sample_name": "web-Google-final-n18",
-      "timing_sample_vertices": 262144
+      "timing_sample_vertices": 262144,
+      "timing_sample_edges": 350000
     },
     {
       "name": "soc-pokec",
@@ -37,7 +38,8 @@
       "source_directed": true,
       "symmetrize": true,
       "timing_sample_name": "soc-pokec-final-n18",
-      "timing_sample_vertices": 262144
+      "timing_sample_vertices": 262144,
+      "timing_sample_edges": 350000
     },
     {
       "name": "cit-Patents",
@@ -55,7 +57,8 @@
       "source_directed": true,
       "symmetrize": true,
       "timing_sample_name": "cit-Patents-final-n18",
-      "timing_sample_vertices": 262144
+      "timing_sample_vertices": 262144,
+      "timing_sample_edges": 350000
     },
     {
       "name": "roadNet-CA",
@@ -73,7 +76,8 @@
       "source_directed": false,
       "symmetrize": true,
       "timing_sample_name": "roadNet-CA-final-n18",
-      "timing_sample_vertices": 262144
+      "timing_sample_vertices": 262144,
+      "timing_sample_edges": 350000
     },
     {
       "name": "soc-LiveJournal1",
@@ -91,7 +95,8 @@
       "source_directed": true,
       "symmetrize": true,
       "timing_sample_name": "soc-LiveJournal1-final-n18",
-      "timing_sample_vertices": 262144
+      "timing_sample_vertices": 262144,
+      "timing_sample_edges": 350000
     },
     {
       "name": "com-Orkut",
@@ -109,7 +114,8 @@
       "source_directed": false,
       "symmetrize": true,
       "timing_sample_name": "com-Orkut-final-n18",
-      "timing_sample_vertices": 262144
+      "timing_sample_vertices": 262144,
+      "timing_sample_edges": 350000
     },
     {
       "name": "twitter-2010",
