@@ -94,6 +94,14 @@ def parse_policy_spec(text: str) -> PolicySpec:
         "ECG_REUSE_PLAN_RRIP": ("ECG_REUSE_PLAN_RRIP", "rrip_first"),
         "ECG:REUSE_PLAN_DEGREE": ("ECG_REUSE_PLAN_DEGREE", "degree_first"),
         "ECG_REUSE_PLAN_DEGREE": ("ECG_REUSE_PLAN_DEGREE", "degree_first"),
+        "ECG:REUSE_PLAN_EPOCH_ONLY":
+            ("ECG_REUSE_PLAN_EPOCH_ONLY", "epoch_only"),
+        "ECG_REUSE_PLAN_EPOCH_ONLY":
+            ("ECG_REUSE_PLAN_EPOCH_ONLY", "epoch_only"),
+        "ECG:REUSE_PLAN_SHORTCIRCUIT":
+            ("ECG_REUSE_PLAN_SHORTCIRCUIT", "shortcircuit"),
+        "ECG_REUSE_PLAN_SHORTCIRCUIT":
+            ("ECG_REUSE_PLAN_SHORTCIRCUIT", "shortcircuit"),
         "ECG:REUSE_PLAN_LRU": ("ECG_REUSE_PLAN_LRU", "lru_only"),
         "ECG_REUSE_PLAN_LRU": ("ECG_REUSE_PLAN_LRU", "lru_only"),
     }
@@ -120,6 +128,14 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ("ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
         "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH":
             ("ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
+        "ECG:REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH", "epoch_only"),
+        "ECG_REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH", "epoch_only"),
+        "ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH", "shortcircuit"),
+        "ECG_REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH", "shortcircuit"),
     }
     if upper in reuse_plan_flowthrough_variants:
         label, variant = reuse_plan_flowthrough_variants[upper]

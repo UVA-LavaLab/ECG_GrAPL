@@ -1065,8 +1065,20 @@ public:
         size_t set_idx = getSetIndex(address);
         auto& set = cache_[set_idx];
         if (policy_ == EvictionPolicy::ECG && set_dueling_ && graph_ctx_ &&
-            graph_ctx_->hints_for_thread().current_src != UINT32_MAX)
-            dueling_selector_.recordMiss(set_idx);
+            graph_ctx_->hints_for_thread().current_src != UINT32_MAX) {
+            const size_t sample_set = duelingSampleSetIndex(set_idx);
+            const ecg_policy::MissRecordEvent event =
+                dueling_selector_.recordMiss(sample_set);
+            const int leader = ecg_policy::duelingLeaderArm(sample_set);
+            if (event.leader_sample && leader >= 0)
+                ++dueling_leader_samples_by_arm_[
+                    static_cast<size_t>(leader)];
+            if (event.completed_window) {
+                ++dueling_winner_windows_by_arm_[event.winner_after];
+                ++dueling_completed_windows_;
+            }
+            if (event.winner_changed) ++dueling_winner_changes_;
+        }
         
         // Find victim
         evicting_set_idx_ = set_idx;   // for set-dueling arm selection
@@ -1327,6 +1339,28 @@ public:
     size_t getAssociativity() const { return associativity_; }
     size_t getNumSets() const { return num_sets_; }
     EvictionPolicy getPolicy() const { return policy_; }
+    uint32_t getDuelingSetOffset() const { return dueling_set_offset_; }
+    uint8_t getDuelingWinnerArm() const {
+        return dueling_selector_.winnerArm();
+    }
+    uint64_t getDuelingCompletedWindows() const {
+        return dueling_completed_windows_;
+    }
+    uint64_t getDuelingWinnerChanges() const {
+        return dueling_winner_changes_;
+    }
+    const std::array<uint64_t, ecg_policy::DUEL_ARM_COUNT>&
+    getDuelingLeaderSamplesByArm() const {
+        return dueling_leader_samples_by_arm_;
+    }
+    const std::array<uint64_t, ecg_policy::DUEL_ARM_COUNT>&
+    getDuelingWinnerWindowsByArm() const {
+        return dueling_winner_windows_by_arm_;
+    }
+    const std::array<uint64_t, ecg_policy::DUEL_ARM_COUNT>&
+    getDuelingFollowerSelectionsByArm() const {
+        return dueling_follower_selections_by_arm_;
+    }
 
     // ================================================================
     // P-OPT initialization: call once after building the rereference
@@ -2019,7 +2053,16 @@ private:
                 ecg_policy::parseVariant(std::getenv("ECG_VARIANT"));
             int variant = configured_variant;
             if (set_dueling_) {
-                variant = dueling_selector_.variantForSet(evicting_set_idx_);
+                const size_t sample_set =
+                    duelingSampleSetIndex(evicting_set_idx_);
+                const int leader = ecg_policy::duelingLeaderArm(sample_set);
+                const uint8_t arm = leader >= 0
+                    ? static_cast<uint8_t>(leader)
+                    : dueling_selector_.winnerArm();
+                if (leader < 0 && graph_ctx_->hints_for_thread().current_src !=
+                        UINT32_MAX)
+                    ++dueling_follower_selections_by_arm_[arm];
+                variant = ecg_policy::duelingArmVariant(arm);
             }
             const uint32_t n = graph_ctx_->exact_nv
                 ? graph_ctx_->exact_nv : graph_ctx_->topology.num_vertices;
@@ -2328,8 +2371,26 @@ private:
         const char* value = std::getenv("ECG_SET_DUELING");
         return value && value[0] && std::string(value) != "0";
     }();
+    uint32_t dueling_set_offset_ = []() {
+        const char* value = std::getenv("CACHE_ECG_DUELING_SET_OFFSET");
+        return value
+            ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10) & 63u)
+            : 0u;
+    }();
     ecg_policy::OnlineDuelingSelector dueling_selector_;
+    std::array<uint64_t, ecg_policy::DUEL_ARM_COUNT>
+        dueling_leader_samples_by_arm_{};
+    std::array<uint64_t, ecg_policy::DUEL_ARM_COUNT>
+        dueling_winner_windows_by_arm_{};
+    std::array<uint64_t, ecg_policy::DUEL_ARM_COUNT>
+        dueling_follower_selections_by_arm_{};
+    uint64_t dueling_completed_windows_ = 0;
+    uint64_t dueling_winner_changes_ = 0;
     size_t evicting_set_idx_ = 0;    // set index of the in-progress eviction
+
+    size_t duelingSampleSetIndex(size_t set_idx) const {
+        return set_idx + 64u - dueling_set_offset_;
+    }
 };
 
 // ============================================================================
@@ -3030,6 +3091,34 @@ public:
         ss << "  \"total_memory_traffic\": " << getTotalMemoryTraffic() << ",\n";
         ss << "  \"llc_writebacks\": " << getWritebackTraffic() << ",\n";
         ss << "  \"total_offchip_traffic\": " << getTotalOffChipTraffic() << ",\n";
+        ss << "  \"ecg_dueling_set_offset\": "
+           << l3_->getDuelingSetOffset() << ",\n";
+        ss << "  \"ecg_dueling_final_winner_arm\": "
+           << static_cast<unsigned>(l3_->getDuelingWinnerArm()) << ",\n";
+        ss << "  \"ecg_dueling_completed_windows\": "
+           << l3_->getDuelingCompletedWindows() << ",\n";
+        ss << "  \"ecg_dueling_winner_changes\": "
+           << l3_->getDuelingWinnerChanges() << ",\n";
+        static constexpr const char* kDuelingArmNames[] = {
+            "rrip", "grasp", "epoch", "degree", "lru"
+        };
+        const auto& leader_samples =
+            l3_->getDuelingLeaderSamplesByArm();
+        const auto& winner_windows =
+            l3_->getDuelingWinnerWindowsByArm();
+        const auto& follower_selections =
+            l3_->getDuelingFollowerSelectionsByArm();
+        for (size_t arm = 0; arm < ecg_policy::DUEL_ARM_COUNT; ++arm) {
+            ss << "  \"ecg_dueling_leader_samples_"
+               << kDuelingArmNames[arm] << "\": "
+               << leader_samples[arm] << ",\n";
+            ss << "  \"ecg_dueling_winner_windows_"
+               << kDuelingArmNames[arm] << "\": "
+               << winner_windows[arm] << ",\n";
+            ss << "  \"ecg_dueling_follower_selections_"
+               << kDuelingArmNames[arm] << "\": "
+               << follower_selections[arm] << ",\n";
+        }
         ss << "  \"popt_matrix_stream_lines_simulated\": "
            << popt_stream_lines_ << ",\n";
         ss << "  \"popt_matrix_stream_columns_simulated\": "

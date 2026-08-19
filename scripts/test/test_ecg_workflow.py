@@ -233,6 +233,19 @@ def test_reuse_plan_policy_aliases_are_first_class(monkeypatch):
     assert module.ecg_transport_for(
         lru_ss, "pr") == module.EcgTransport(
             2, True, False, False, True)
+    for label, variant in (
+            ("ECG:REUSE_PLAN_GRASP_FLOWTHROUGH", "grasp_only"),
+            ("ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH", "epoch_first"),
+            ("ECG:REUSE_PLAN_RRIP_FLOWTHROUGH", "rrip_first"),
+            ("ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
+            ("ECG:REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH", "epoch_only"),
+            ("ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH", "shortcircuit"),
+            ("ECG:REUSE_PLAN_LRU_FLOWTHROUGH", "lru_only")):
+        spec = module.parse_policy_spec(label)
+        assert spec.ecg_variant == variant
+        assert module.ecg_transport_for(
+            spec, "pr") == module.EcgTransport(
+                2, True, False, False, True)
     monkeypatch.setenv("ECG_VARIANT", "grasp_only")
     assert module.effective_ecg_variant(
         argparse.Namespace(benchmark="pr"), 2, reuse_plan) == "epoch_first"

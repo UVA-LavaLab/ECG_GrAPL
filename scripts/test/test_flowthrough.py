@@ -127,3 +127,41 @@ def test_reuse_plan_variants_are_distinct_policies():
     assert specs["ECG:REUSE_PLAN"].ecg_set_dueling is False
     assert specs["ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"].ecg_set_dueling is False
     assert specs["ECG:REUSE_PLAN_ONLINE"].ecg_set_dueling is True
+
+
+def test_cache_sim_online_dueling_reports_arm_accounting():
+    env = dict(os.environ)
+    env.update({
+        "OMP_NUM_THREADS": "1",
+        "CACHE_ULTRAFAST": "0",
+        "CACHE_POLICY": "ECG",
+        "CACHE_L1_SIZE": "1024",
+        "CACHE_L2_SIZE": "2048",
+        "CACHE_L3_SIZE": "8192",
+        "CACHE_L3_WAYS": "16",
+        "ECG_MODE": "ECG_GRASP_POPT",
+        "ECG_EDGE_MASKS": "1",
+        "ECG_REUSE_PLAN_DEPTH": "2",
+        "ECG_EDGE_MASK_EPOCHS": "16",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "ECG_SET_DUELING": "1",
+        "CACHE_ECG_DUELING_SET_OFFSET": "7",
+    })
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "stats.json"
+        env["CACHE_OUTPUT_JSON"] = str(out)
+        subprocess.run(
+            [str(PR), "-g", "12", "-k", "8", "-o", "5", "-n", "1", "-i", "2"],
+            env=env, capture_output=True, text=True, check=True, timeout=900)
+        stats = json.loads(out.read_text())
+
+    arms = ("rrip", "grasp", "epoch", "degree", "lru")
+    assert stats["ecg_dueling_set_offset"] == 7
+    assert 0 <= stats["ecg_dueling_final_winner_arm"] < len(arms)
+    assert sum(
+        stats[f"ecg_dueling_leader_samples_{arm}"] for arm in arms) > 0
+    assert sum(
+        stats[f"ecg_dueling_follower_selections_{arm}"] for arm in arms) > 0
+    assert stats["ecg_dueling_completed_windows"] == sum(
+        stats[f"ecg_dueling_winner_windows_{arm}"] for arm in arms)
