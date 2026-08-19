@@ -62,6 +62,10 @@ policy_args=()
 if [[ "$policy" != "__whole__" ]]; then
   policy_args=(--policy "$policy")
 fi
+screen_gate_args=()
+if [[ -n "${GRAPHBREW_SCREEN_GATE:-}" ]]; then
+  screen_gate_args=(--screen-gate "$GRAPHBREW_SCREEN_GATE")
+fi
 
 GRAPHBREW_SHARD_GROUP="$run_tag" \
 python3 scripts/experiments/ecg/flows/experiment_run.py \
@@ -72,5 +76,6 @@ python3 scripts/experiments/ecg/flows/experiment_run.py \
   --graph "$graph" \
   --benchmark "$benchmark" \
   "${policy_args[@]}" \
+  "${screen_gate_args[@]}" \
   --lock-path "$run_dir/.experiment_run.lock" \
   --no-build

@@ -190,15 +190,18 @@ pvector<NodeID> Afforest_Gem5(const Graph &g, int32_t neighbor_rounds = 2) {
                         : "[ECG_PACKED8_REUSE_PLAN] CC two-epoch ReusePlan packed record path ACTIVE\n");
     }
 
+    Gem5EcgEpochQuantizer epoch_quantizer;
+    if (gem5_ecg_epoch_csr_enabled())
+        epoch_quantizer.reset(g.num_nodes(), edge_epoch_count);
+
+    GEM5_ECG_BEGIN_CONTEXT();
     GEM5_RESET_STATS();
     GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE);
-    GEM5_ECG_BEGIN_CONTEXT();
 
     // Phase 1: sparse sampling
     for (int32_t r = 0; r < neighbor_rounds; r++) {
         for (NodeID u = 0; u < g.num_nodes(); u++) {
-            GEM5_SET_VERTEX_EPOCH(
-                u, g.num_nodes(), edge_epoch_count);
+            GEM5_SET_QUANTIZED_VERTEX_EPOCH(epoch_quantizer, u);
             if (pair_ok &&
                 static_cast<size_t>(u + 1) < pair_off.size() &&
                 pair_off[u] + static_cast<uint64_t>(r) < pair_off[u + 1]) {
@@ -255,8 +258,7 @@ pvector<NodeID> Afforest_Gem5(const Graph &g, int32_t neighbor_rounds = 2) {
 
     // Phase 2: full edge traversal skipping largest
     for (NodeID u = 0; u < g.num_nodes(); u++) {
-        GEM5_SET_VERTEX_EPOCH(
-            u, g.num_nodes(), edge_epoch_count);
+        GEM5_SET_QUANTIZED_VERTEX_EPOCH(epoch_quantizer, u);
         if (comp[u] == largest) continue;
         if (pair_ok && static_cast<size_t>(u + 1) < pair_off.size()) {
             for (uint64_t pos = pair_off[u]; pos < pair_off[u + 1]; ++pos) {
@@ -303,9 +305,9 @@ pvector<NodeID> Afforest_Gem5(const Graph &g, int32_t neighbor_rounds = 2) {
     }
     Compress(g, comp);
 
-    GEM5_ECG_END_CONTEXT();
     GEM5_WORK_END(GEM5_WORK_COMPUTE);
     GEM5_DUMP_STATS();
+    GEM5_ECG_END_CONTEXT();
     return comp;
 }
 

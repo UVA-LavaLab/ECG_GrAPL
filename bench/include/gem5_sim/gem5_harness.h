@@ -27,6 +27,8 @@
 #include <cstdio>
 #include <cstring>
 #include <atomic>
+#include <algorithm>
+#include <vector>
 
 #include "ecg_reuse_plan_builder.h"
 #include <string>
@@ -1071,6 +1073,36 @@ private:
     uint32_t epoch_ = 0;
 };
 
+class Gem5EcgEpochQuantizer {
+public:
+    Gem5EcgEpochQuantizer() = default;
+
+    Gem5EcgEpochQuantizer(
+            uint64_t num_vertices, uint32_t num_epochs) {
+        reset(num_vertices, num_epochs);
+    }
+
+    void reset(uint64_t num_vertices, uint32_t num_epochs) {
+        const uint64_t n = num_vertices > 0 ? num_vertices : 1;
+        const uint32_t ne = num_epochs > 1 ? num_epochs : 2;
+        boundaries_.resize(ne - 1);
+        for (uint32_t epoch = 1; epoch < ne; ++epoch) {
+            boundaries_[epoch - 1] = (
+                static_cast<uint64_t>(epoch) * n + ne - 1) / ne;
+        }
+    }
+
+    uint16_t epoch(uint64_t vertex) const {
+        return static_cast<uint16_t>(
+            std::upper_bound(
+                boundaries_.begin(), boundaries_.end(), vertex) -
+            boundaries_.begin());
+    }
+
+private:
+    std::vector<uint64_t> boundaries_;
+};
+
 inline void gem5_ecg_write_context_csr(uint16_t context) {
 #if defined(__riscv)
     uintptr_t value = context;
@@ -1172,6 +1204,16 @@ inline void gem5_ecg_publish_legacy_context(uint16_t context) {
         if (gem5_ecg_epoch_csr_enabled()) { \
             gem5_ecg_update_current_epoch_csr( \
                 (cursor).epoch(static_cast<uint64_t>(vertex_id))); \
+        } else { \
+            GEM5_SET_VERTEX(vertex_id); \
+        } \
+    } while (0)
+
+#define GEM5_SET_QUANTIZED_VERTEX_EPOCH(quantizer, vertex_id) \
+    do { \
+        if (gem5_ecg_epoch_csr_enabled()) { \
+            gem5_ecg_update_current_epoch_csr( \
+                (quantizer).epoch(static_cast<uint64_t>(vertex_id))); \
         } else { \
             GEM5_SET_VERTEX(vertex_id); \
         } \

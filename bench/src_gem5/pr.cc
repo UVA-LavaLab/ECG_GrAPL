@@ -1138,9 +1138,9 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
         if (error < epsilon) break;
     }
 
-    GEM5_ECG_END_CONTEXT();
     GEM5_WORK_END(GEM5_WORK_COMPUTE);
     GEM5_DUMP_STATS();
+    GEM5_ECG_END_CONTEXT();
 
     // Post-ROI semantic receipt. The timing matrix intentionally runs one PR
     // sweep, not convergence, so verify that every mechanism produced the same

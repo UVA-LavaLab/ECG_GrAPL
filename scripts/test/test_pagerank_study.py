@@ -628,7 +628,7 @@ def test_profile_expands_to_twelve_whole_cells(tmp_path):
         "--policies LRU GRASP POPT POPT:UNCHARGED "
         "ECG:REUSE_PLAN_LRU_FLOWTHROUGH ECG:REUSE_PLAN_RRIP_FLOWTHROUGH "
         "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH") == 12
-    assert text.count("--popt-active-columns 3") == 12
+    assert text.count("--popt-active-columns 2") == 12
     assert text.count("--popt-matrix-stream analytic") == 12
     assert text.count("--timeout-gem5 86400") == 12
     assert text.count("--gem5-compact-reuse-bind-performance") == 12
@@ -1036,6 +1036,6 @@ def test_wrong_semantics_or_geometry_is_rejected():
         gate().evaluate(synthetic_rows(), bad_config)
 
     bad_config = config()
-    bad_config["popt_model"]["expected_reserved_ways_in_screen"] = 1
+    bad_config["popt_model"]["expected_reserved_ways_in_screen"] = 2
     with pytest.raises(ValueError, match="reservation differs"):
         gate().evaluate(synthetic_rows(), bad_config)

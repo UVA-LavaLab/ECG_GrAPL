@@ -12,6 +12,7 @@
 #include "mem/cache/replacement_policies/popt_rp.hh"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdio>
 #include <vector>
@@ -166,31 +167,37 @@ GraphPoptRP::getVictim(const ReplacementCandidates& candidates) const
     }
 
     uint8_t maxDist = 0;
-    std::vector<std::pair<ReplaceableEntry*, uint8_t>> wayDists;
-    wayDists.reserve(candidates.size());
+    std::array<uint8_t, 64> fixedWayDists{};
+    std::vector<uint8_t> dynamicWayDists;
+    uint8_t* wayDists = fixedWayDists.data();
+    if (candidates.size() > fixedWayDists.size()) {
+        dynamicWayDists.resize(candidates.size());
+        wayDists = dynamicWayDists.data();
+    }
 
-    for (const auto& c : candidates) {
+    for (size_t way = 0; way < candidates.size(); ++way) {
+        const auto& c = candidates[way];
         auto d = std::static_pointer_cast<PoptReplData>(c->replacementData);
         ++poptStats.rereferenceQueries;
         uint32_t dist = ctx.findNextRef(d->line_addr);
         uint8_t d8 = static_cast<uint8_t>(std::min(dist, uint32_t(127)));
-        wayDists.emplace_back(c, d8);
+        wayDists[way] = d8;
         if (d8 > maxDist) maxDist = d8;
     }
 
     // Phase 3: RRIP tiebreaker among max-distance lines.
     while (true) {
-        for (auto& [entry, dist] : wayDists) {
-            if (dist == maxDist) {
+        for (size_t way = 0; way < candidates.size(); ++way) {
+            if (wayDists[way] == maxDist) {
                 auto d = std::static_pointer_cast<PoptReplData>(
-                    entry->replacementData);
-                if (d->rrpv >= maxRRPV) return entry;
+                    candidates[way]->replacementData);
+                if (d->rrpv >= maxRRPV) return candidates[way];
             }
         }
-        for (auto& [entry, dist] : wayDists) {
-            if (dist == maxDist) {
+        for (size_t way = 0; way < candidates.size(); ++way) {
+            if (wayDists[way] == maxDist) {
                 auto d = std::static_pointer_cast<PoptReplData>(
-                    entry->replacementData);
+                    candidates[way]->replacementData);
                 if (d->rrpv < maxRRPV) d->rrpv++;
             }
         }

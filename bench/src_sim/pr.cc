@@ -164,8 +164,6 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                 const auto& src_tiers = graph_ctx.in_edge_grasp_tier_by_src[u];
                 const bool edge_mask_lean = GraphSimEnvIntClamped("ECG_EDGE_MASK_LEAN", 0, 0, 1) > 0;
                 const bool edge_mask_pack = GraphSimEnvIntClamped("ECG_EDGE_MASK_PACK", 0, 0, 1) > 0;
-                const bool flowthrough =
-                    GraphSimEnvIntClamped("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
                 // Combined stack: DROPLET-style lookahead prefetch layered ON TOP of
                 // the ECG_GRASP_POPT epoch eviction. The epoch stamp reduces TOTAL
                 // memory traffic (fewer unique fetches — something DROPLET cannot do,

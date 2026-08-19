@@ -508,7 +508,31 @@ struct POPTState {
     // Returns: rereference distance (0 = accessed soon, higher = farther away)
     uint32_t findNextRef(uint32_t cline_id) const {
         if (!enabled || cline_id >= num_cache_lines) return 127;
-        uint32_t epoch_id = current_vertex / epoch_size;
+        if (epoch_size == 0 || sub_epoch_size == 0) return 127;
+        struct PositionCache {
+            const POPTState* owner = nullptr;
+            uint32_t vertex = UINT32_MAX;
+            uint32_t epoch_size = 0;
+            uint32_t sub_epoch_size = 0;
+            uint32_t num_epochs = 0;
+            uint32_t epoch_id = 0;
+            uint32_t current_sub_epoch = 0;
+        };
+        static thread_local PositionCache cache;
+        if (cache.owner != this || cache.vertex != current_vertex ||
+            cache.epoch_size != epoch_size ||
+            cache.sub_epoch_size != sub_epoch_size ||
+            cache.num_epochs != num_epochs) {
+            cache.owner = this;
+            cache.vertex = current_vertex;
+            cache.epoch_size = epoch_size;
+            cache.sub_epoch_size = sub_epoch_size;
+            cache.num_epochs = num_epochs;
+            cache.epoch_id = current_vertex / epoch_size;
+            cache.current_sub_epoch =
+                (current_vertex % epoch_size) / sub_epoch_size;
+        }
+        const uint32_t epoch_id = cache.epoch_id;
         if (epoch_id >= num_epochs) return 127;
 
         // Look up rereference matrix entry: matrix is transposed as [epoch][cline]
@@ -523,7 +547,7 @@ struct POPTState {
         } else {
             // MSB=0: Referenced in this epoch — data = sub-epoch of last access
             uint8_t lastRefSubEpoch = entry & AND_MASK;
-            uint32_t currSubEpoch = (current_vertex % epoch_size) / sub_epoch_size;
+            const uint32_t currSubEpoch = cache.current_sub_epoch;
             if (currSubEpoch <= lastRefSubEpoch) {
                 return 0;  // Still will be accessed within this epoch
             } else {
@@ -610,14 +634,20 @@ public:
                    size_t associativity)
         : name_(name), size_bytes_(size_bytes), line_size_(line_size),
           associativity_(associativity) {
-        
+        if (line_size_ == 0 || associativity_ == 0)
+            throw std::invalid_argument(
+                "cache line size and associativity must be positive");
+        if ((line_size_ & (line_size_ - 1)) != 0)
+            throw std::invalid_argument(
+                "cache line size must be a power of two");
+        if (size_bytes_ < line_size_ * associativity_ ||
+            size_bytes_ % (line_size_ * associativity_) != 0)
+            throw std::invalid_argument(
+                "cache size must contain an integral number of sets");
         num_sets_ = size_bytes / (line_size * associativity);
-        if (num_sets_ == 0) num_sets_ = 1;
-        
-        // Round to power of 2 for fast modulo
-        size_t orig_sets = num_sets_;
-        num_sets_ = 1;
-        while (num_sets_ < orig_sets) num_sets_ <<= 1;
+        if ((num_sets_ & (num_sets_ - 1)) != 0)
+            throw std::invalid_argument(
+                "cache set count must be a power of two");
         set_mask_ = num_sets_ - 1;
         
         offset_bits_ = log2i(line_size);
@@ -731,14 +761,20 @@ public:
                         size_t associativity)
         : name_(name), size_bytes_(size_bytes), line_size_(line_size),
           associativity_(associativity), hits_(0), misses_(0), evictions_(0) {
-        
+        if (line_size_ == 0 || associativity_ == 0)
+            throw std::invalid_argument(
+                "cache line size and associativity must be positive");
+        if ((line_size_ & (line_size_ - 1)) != 0)
+            throw std::invalid_argument(
+                "cache line size must be a power of two");
+        if (size_bytes_ < line_size_ * associativity_ ||
+            size_bytes_ % (line_size_ * associativity_) != 0)
+            throw std::invalid_argument(
+                "cache size must contain an integral number of sets");
         num_sets_ = size_bytes / (line_size * associativity);
-        if (num_sets_ == 0) num_sets_ = 1;
-        
-        // Round to power of 2 for fast modulo
-        size_t orig_sets = num_sets_;
-        num_sets_ = 1;
-        while (num_sets_ < orig_sets) num_sets_ <<= 1;
+        if ((num_sets_ & (num_sets_ - 1)) != 0)
+            throw std::invalid_argument(
+                "cache set count must be a power of two");
         set_mask_ = num_sets_ - 1;
         
         offset_bits_ = __builtin_ctzll(line_size);  // Fast log2 for power of 2
@@ -855,9 +891,26 @@ public:
                size_t associativity, EvictionPolicy policy)
         : name_(name), size_bytes_(size_bytes), line_size_(line_size),
           associativity_(associativity), policy_(policy) {
-        
+        if (line_size_ == 0 || associativity_ == 0)
+            throw std::invalid_argument(
+                "cache line size and associativity must be positive");
+        if ((line_size_ & (line_size_ - 1)) != 0)
+            throw std::invalid_argument(
+                "cache line size must be a power of two");
+        if (size_bytes_ < line_size_ * associativity_ ||
+            size_bytes_ % (line_size_ * associativity_) != 0)
+            throw std::invalid_argument(
+                "cache size must contain an integral number of sets");
+        if ((policy_ == EvictionPolicy::POPT ||
+             policy_ == EvictionPolicy::ECG) &&
+            associativity_ > 64) {
+            throw std::invalid_argument(
+                "P-OPT and ECG support at most 64 cache ways");
+        }
         num_sets_ = size_bytes / (line_size * associativity);
-        if (num_sets_ == 0) num_sets_ = 1;
+        if ((num_sets_ & (num_sets_ - 1)) != 0)
+            throw std::invalid_argument(
+                "cache set count must be a power of two");
         
         // Calculate bit widths
         offset_bits_ = log2i(line_size);
@@ -2138,6 +2191,8 @@ private:
                 if (set[candidates[c]].ecg_dbg_tier == max_dbg)
                     narrowed[num_narrowed++] = candidates[c];
 
+            if (num_narrowed == 0)
+                throw std::logic_error("DBG victim narrowing produced no candidate");
             if (num_narrowed == 1 || mode == ECGMode::DBG_ONLY)
                 return narrowed[0];
 
@@ -2162,17 +2217,21 @@ private:
             // candidates. This is cheaper than full POPT_PRIMARY because it
             // only queries candidates that are already eligible for eviction.
             uint32_t max_dist = 0;
+            uint32_t candidate_distances[64] = {};
             for (size_t c = 0; c < num_candidates; c++) {
                 uint32_t dist = graph_ctx_->findNextRef(set[candidates[c]].line_addr);
+                candidate_distances[c] = dist;
                 if (dist > max_dist) max_dist = dist;
             }
 
             size_t narrowed[64];
             size_t num_narrowed = 0;
             for (size_t c = 0; c < num_candidates; c++) {
-                uint32_t dist = graph_ctx_->findNextRef(set[candidates[c]].line_addr);
-                if (dist == max_dist) narrowed[num_narrowed++] = candidates[c];
+                if (candidate_distances[c] == max_dist)
+                    narrowed[num_narrowed++] = candidates[c];
             }
+            if (num_narrowed == 0)
+                throw std::logic_error("P-OPT victim narrowing produced no candidate");
             if (num_narrowed == 1) return narrowed[0];
 
             uint8_t max_dbg = 0;
@@ -2211,6 +2270,8 @@ private:
                 if (hints[c] == max_hint)
                     narrowed[num_narrowed++] = candidates[c];
 
+            if (num_narrowed == 0)
+                throw std::logic_error("ECG hint narrowing produced no candidate");
             if (num_narrowed == 1) return narrowed[0];
 
             // Level 3: DBG tier tiebreak among same-hint lines

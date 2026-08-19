@@ -98,6 +98,8 @@ def shard_command(
     ]
     if shard.policy != "__whole__":
         command.extend(["--policy", shard.policy])
+    if args.screen_gate:
+        command.extend(["--screen-gate", str(args.screen_gate)])
     if args.force:
         command.append("--force")
     if args.allow_missing_graphs:
@@ -154,6 +156,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Do not launch later shards after the first failure. Enabled "
              "automatically for serial reuse_plan_final_campaign runs.")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--screen-gate", default="",
+        help=(
+            "Literature-scale screen GO receipt forwarded to every shard."))
     parser.add_argument("--allow-missing-graphs", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)
@@ -171,6 +177,8 @@ def main(argv: list[str] | None = None) -> int:
 
     manifest_path = experiment_run.resolve_path(args.manifest)
     args.graph_dir = experiment_run.resolve_path(args.graph_dir)
+    if args.screen_gate:
+        args.screen_gate = experiment_run.resolve_path(args.screen_gate)
     manifest = experiment_run.load_manifest(manifest_path)
     shards = read_shards(
         experiment_run.resolve_path(args.shards), stage_suites(manifest))

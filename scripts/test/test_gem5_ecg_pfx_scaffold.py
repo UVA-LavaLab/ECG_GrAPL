@@ -232,6 +232,7 @@ def test_gem5_reuse_plan_uses_architectural_epoch_context_csrs():
     assert 'asm volatile ("csrw 0x802, %0"' in harness
     assert "GEM5_SET_VERTEX_EPOCH" in harness
     assert "GEM5_SET_MONOTONIC_VERTEX_EPOCH" in harness
+    assert "GEM5_SET_QUANTIZED_VERTEX_EPOCH" in harness
     assert "gem5_ecg_update_current_epoch_csr" in harness
     assert "gem5_ecg_current_epoch_csr_changed" in harness
     assert "gem5_ecg_allocate_context_id" in harness
@@ -265,10 +266,20 @@ def test_gem5_reuse_plan_uses_architectural_epoch_context_csrs():
         source = read(f"bench/src_gem5/{kernel}.cc")
         assert "GEM5_ECG_BEGIN_CONTEXT();" in source
         assert "GEM5_ECG_END_CONTEXT();" in source
-        assert "GEM5_SET_VERTEX_EPOCH(" in source
+        assert source.index("GEM5_ECG_BEGIN_CONTEXT();") < source.index(
+            "GEM5_RESET_STATS();")
+        assert source.index("GEM5_DUMP_STATS();") < source.index(
+            "GEM5_ECG_END_CONTEXT();")
+        assert "Gem5EcgEpochQuantizer epoch_quantizer;" in source
+        assert "GEM5_SET_QUANTIZED_VERTEX_EPOCH(" in source
+        assert "GEM5_SET_VERTEX_EPOCH(" not in source
     pr = read("bench/src_gem5/pr.cc")
     assert "GEM5_ECG_BEGIN_CONTEXT();" in pr
     assert "GEM5_ECG_END_CONTEXT();" in pr
+    assert pr.index("GEM5_ECG_BEGIN_CONTEXT();") < pr.index(
+        "GEM5_RESET_STATS();")
+    assert pr.index("GEM5_DUMP_STATS();") < pr.index(
+        "GEM5_ECG_END_CONTEXT();")
     assert "Gem5EcgMonotonicEpochCursor epoch_cursor;" in pr
     assert "GEM5_SET_MONOTONIC_VERTEX_EPOCH(epoch_cursor, u);" in pr
 
@@ -280,6 +291,7 @@ def test_gem5_monotonic_epoch_cursor_is_exact(tmp_path):
         r'''
 #include <cstdint>
 #include "bench/include/gem5_sim/gem5_harness.h"
+#include "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/graph_cache_context_sniper.h"
 
 int main() {
     Gem5EcgMonotonicEpochCursor cursor;
@@ -290,6 +302,15 @@ int main() {
                 if (cursor.epoch(vertex) !=
                         gem5_ecg_quantize_current_epoch(
                             vertex, vertices, epochs)) return 1;
+                if (graphbrew::sniper::quantizeEcgEpoch(
+                        vertex, vertices, epochs) !=
+                        gem5_ecg_quantize_current_epoch(
+                            vertex, vertices, epochs)) return 8;
+                if (ecg_reuse_plan::currentEpoch(
+                        static_cast<uint32_t>(vertex),
+                        static_cast<uint32_t>(vertices), epochs) !=
+                        gem5_ecg_quantize_current_epoch(
+                            vertex, vertices, epochs)) return 9;
             }
         }
     }
@@ -301,6 +322,17 @@ int main() {
     if (!gem5_ecg_current_epoch_csr_changed(1)) return 4;
     if (gem5_ecg_current_epoch_csr_changed(1)) return 5;
     if (!gem5_ecg_current_epoch_csr_changed(0)) return 6;
+    Gem5EcgEpochQuantizer quantizer;
+    for (uint64_t vertices = 1; vertices <= 257; ++vertices) {
+        for (uint32_t epochs = 2; epochs <= 64; ++epochs) {
+            quantizer.reset(vertices, epochs);
+            for (uint64_t vertex = 0; vertex < vertices; ++vertex) {
+                if (quantizer.epoch(vertex) !=
+                        gem5_ecg_quantize_current_epoch(
+                            vertex, vertices, epochs)) return 7;
+            }
+        }
+    }
     return 0;
 }
 ''')

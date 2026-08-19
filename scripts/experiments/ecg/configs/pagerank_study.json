@@ -149,9 +149,9 @@
   "popt_model": {
     "epochs": 256,
     "property_bytes": 4,
-    "reserved_column_slots": 3,
-    "expected_reserved_ways_in_screen": 2,
-    "expected_effective_data_ways_in_screen": 14,
+    "reserved_column_slots": 2,
+    "expected_reserved_ways_in_screen": 1,
+    "expected_effective_data_ways_in_screen": 15,
     "minimum_data_ways": 1,
     "reload_each_iteration": true,
     "charge_initial_columns_in_roi": true,

@@ -714,7 +714,30 @@ struct RereferenceConfig {
     uint32_t findNextRef(uint32_t cline_id, uint32_t current_vertex) const {
         if (matrix == nullptr || cline_id >= num_cache_lines) return 127;
         if (epoch_size == 0 || sub_epoch_size == 0) return 127;
-        uint32_t epoch_id = current_vertex / epoch_size;
+        struct PositionCache {
+            const RereferenceConfig* owner = nullptr;
+            uint32_t vertex = UINT32_MAX;
+            uint32_t epoch_size = 0;
+            uint32_t sub_epoch_size = 0;
+            uint32_t num_epochs = 0;
+            uint32_t epoch_id = 0;
+            uint32_t current_sub_epoch = 0;
+        };
+        static thread_local PositionCache cache;
+        if (cache.owner != this || cache.vertex != current_vertex ||
+            cache.epoch_size != epoch_size ||
+            cache.sub_epoch_size != sub_epoch_size ||
+            cache.num_epochs != num_epochs) {
+            cache.owner = this;
+            cache.vertex = current_vertex;
+            cache.epoch_size = epoch_size;
+            cache.sub_epoch_size = sub_epoch_size;
+            cache.num_epochs = num_epochs;
+            cache.epoch_id = current_vertex / epoch_size;
+            cache.current_sub_epoch =
+                (current_vertex % epoch_size) / sub_epoch_size;
+        }
+        const uint32_t epoch_id = cache.epoch_id;
         if (epoch_id >= num_epochs) return 127;
 
         uint8_t entry = matrix[epoch_id * num_cache_lines + cline_id];
@@ -727,7 +750,7 @@ struct RereferenceConfig {
         } else {
             // Referenced in this epoch — check sub-epoch position.
             uint8_t last_sub = entry & MASK;
-            uint32_t curr_sub = (current_vertex % epoch_size) / sub_epoch_size;
+            const uint32_t curr_sub = cache.current_sub_epoch;
             if (curr_sub <= last_sub) return 0;  // Still upcoming
             // Past final access — check next epoch
             if (epoch_id + 1 < num_epochs) {

@@ -19,7 +19,7 @@ def test_sssp_hoists_source_distance_before_reuse_plan_delivery():
     assert "WeightT new_dist = source_dist + wn.w;" in cache_sim
     assert (
         "const WeightT source_dist = dist[u];\n"
-        "    GEM5_SET_VERTEX_EPOCH(" in gem5)
+        "    GEM5_SET_QUANTIZED_VERTEX_EPOCH(" in gem5)
     assert "WeightT new_dist = source_dist + wn.w;" in gem5
     assert "const WeightT source_dist = dist[node];\n        SNIPER_SET_VERTEX(node);" in sniper
     assert "const WeightT candidate = source_dist + edge.w;" in sniper

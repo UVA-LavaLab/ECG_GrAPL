@@ -217,7 +217,10 @@ Launch full-graph roles only if the screen gate reports `"valid": true`:
 python3 -I scripts/experiments/ecg/flows/experiment_run.py \
   --profile reuse_plan_literature_scale_campaign \
   --run-dir results/ecg_experiments/runs/literature_scale_full \
-  --only 92 93 94 95 --no-build
+  --only 92 93 94 95 \
+  --screen-gate \
+    results/ecg_experiments/aggregates/literature_scale/screen_gate.json \
+  --no-build
 
 python3 scripts/experiments/ecg/analysis/literature_scale_gate.py \
   --phase complete \
@@ -228,84 +231,31 @@ python3 scripts/experiments/ecg/analysis/literature_scale_gate.py \
     results/ecg_experiments/aggregates/literature_scale/gate.json
 ```
 
-Inspect the complete campaign before launching:
-
-```bash
-python3 -I scripts/experiments/ecg/flows/experiment_run.py \
-  --profile reuse_plan_final_campaign \
-  --run-dir results/ecg_experiments/runs/reuse_plan_final_dryrun \
-  --list --dry-run --no-build --no-resume
-```
-
-The list command is authoritative. It expands the campaign into:
-
-- one synthetic ReuseBind mechanism preflight;
-- 12 gem5 O3 PageRank timing cells;
-- 12 full-graph cache_sim compact-record primary cells;
-- 15 matched wide-record cache_sim controls;
-- 15 matched 256-epoch cache_sim controls;
-- six PR/CC P-OPT reference cells with simulated matrix traffic; and
-- 12 full-graph Sniper compact-record corroboration cells; and
-- three wide-record Sniper SSSP cells.
-
-The full-graph compact primary and the P-OPT comparison use a 4-byte ReusePlan record
-with 16 epochs for PR, BFS, BC, and CC. Weighted SSSP uses its implemented
-8-byte replacement record and is evaluated only in the wide-record stages.
-Wide controls isolate record width and raise ReusePlan to 256 epochs for an
-epoch-resolution sensitivity. Sniper runs one full serialized edge sweep per
-graph so the working set turns over an 8 MiB LLC. Sniper rows support
-cache/traffic direction only, never architectural speedup.
-
-Launch the three roles into separate resumable directories:
-
-```bash
-python3 -I scripts/experiments/ecg/flows/experiment_run.py \
-  --profile reuse_plan_final_campaign \
-  --run-dir results/ecg_experiments/runs/reuse_plan_final_timing \
-  --only 60 70 71 72 73 \
-  --no-build
-
-python3 -I scripts/experiments/ecg/flows/experiment_run.py \
-  --profile reuse_plan_final_campaign \
-  --run-dir results/ecg_experiments/runs/reuse_plan_final_popt \
-  --only 84 \
-  --no-build
-
-python3 -I scripts/experiments/ecg/flows/experiment_run.py \
-  --profile reuse_plan_final_campaign \
-  --run-dir results/ecg_experiments/runs/reuse_plan_final_cache \
-  --only 80 82 83 \
-  --no-build
-
-python3 -I scripts/experiments/ecg/flows/experiment_run.py \
-  --profile reuse_plan_final_campaign \
-  --run-dir results/ecg_experiments/runs/reuse_plan_final_sniper \
-  --only 81 85 \
-  --no-build
-```
-
-The first cache command is the P-OPT validation. It is the first end-to-end use
-of simulated matrix streaming and must report non-zero simulated stream lines
-for every charged P-OPT row before the remaining cache_sim stages begin.
-
-For parallel execution, generate whole-cell shards so every shard retains its
-complete policy roster:
+For parallel full-role execution, generate whole-cell shards so every shard
+retains its complete policy roster. The same screen authorization is required
+by every local shard:
 
 ```bash
 python3 scripts/experiments/ecg/slurm/make_slurm_shards.py \
-  --profile reuse_plan_final_campaign \
-  --run-tag reuse_plan_final \
+  --profile reuse_plan_literature_scale_campaign \
+  --only 92 93 94 95 \
+  --run-tag literature_scale_full \
   --whole-cell \
-  --out results/ecg_experiments/slurm/reuse_plan_final.tsv
+  --out results/ecg_experiments/slurm/literature_scale_full.tsv
 
 python3 scripts/experiments/ecg/flows/run_local_shards.py \
-  --shards results/ecg_experiments/slurm/reuse_plan_final.tsv \
+  --shards results/ecg_experiments/slurm/literature_scale_full.tsv \
   --run-root results/ecg_experiments/runs/local \
+  --screen-gate \
+    results/ecg_experiments/aggregates/literature_scale/screen_gate.json \
   --jobs 8 --cache-sim-jobs 4 --gem5-jobs 1 --sniper-jobs 1
 ```
 
-Use `--only 84` when generating the first validation shard set. Generate the
-remaining stages only after the P-OPT rows pass.
+For Slurm arrays, export the same receipt as
+`GRAPHBREW_SCREEN_GATE` before invoking
+`slurm_experiment_shard.sbatch`. The stopped `reuse_plan_final_campaign`
+profile remains available only for `--list --dry-run` audit inspection and
+must not be executed.
 
 ## 7. Cross-simulator consistency
 

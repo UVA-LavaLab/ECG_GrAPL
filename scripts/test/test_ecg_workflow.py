@@ -38,6 +38,123 @@ def output_descriptor(path: Path) -> dict:
     }
 
 
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (["--l3-ways", "0"], "associativity values must be positive"),
+        (
+            ["--l3-ways", "65", "--policies", "ECG:REUSE_PLAN"],
+            "support at most 64 LLC ways",
+        ),
+        (
+            ["--l3-sizes", "1000B"],
+            "L3 size must contain an integral number of cache sets",
+        ),
+        (
+            ["--l3-sizes", "3MB"],
+            "L3 cache set count must be a power of two",
+        ),
+        (
+            ["--line-size", "96"],
+            "cache line size must be a positive power of two",
+        ),
+        (
+            ["--reuse-plan-l3-ways", "65"],
+            "--reuse-plan-l3-ways cannot exceed 64",
+        ),
+    ],
+)
+def test_roi_matrix_rejects_unsafe_cache_geometry(
+        arguments, message):
+    result = subprocess.run([
+        sys.executable,
+        str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "cache-sim",
+        "--dry-run",
+        *arguments,
+    ], cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert message in result.stderr
+
+
+def test_controlled_profiles_fail_before_running_dirty_worktree(
+        monkeypatch):
+    module = load_experiment_run_module()
+    args = SimpleNamespace(
+        list=False, dry_run=False, status=False, check_graphs=False,
+        profile=["controlled"])
+    manifest = {
+        "profile_controls": {
+            "controlled": {"require_clean_worktree": True},
+        },
+    }
+    monkeypatch.setattr(
+        module.subprocess, "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, stdout=" M tracked.cc\n", stderr=""))
+    with pytest.raises(SystemExit, match="requires a clean worktree"):
+        module.validate_clean_worktree(args, manifest)
+
+    monkeypatch.setattr(
+        module.subprocess, "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0,
+            stdout="?? bench/include/gem5_sim/gem5/\n",
+            stderr=""))
+    module.validate_clean_worktree(args, manifest)
+
+
+def test_full_roles_require_commit_bound_screen_authorization(
+        tmp_path, monkeypatch):
+    module = load_experiment_run_module()
+    manifest_path = (
+        ROOT / "scripts/experiments/ecg/experiment_manifest.json")
+    screen_path = (
+        ROOT / "scripts/experiments/ecg/configs/"
+        "pagerank_literature_scale.json")
+    gate = tmp_path / "screen_gate.json"
+    payload = {
+        "valid": True,
+        "phase": "screen",
+        "cell_count": 13,
+        "row_count": 99,
+        "stage_rows": {
+            "60_gem5_proposal_reuse_bind_o3": 3,
+            "90_gem5_literature_scale_i1": 48,
+            "91_gem5_literature_scale_i8": 48,
+        },
+        "pagerank_gate": {
+            "screen_valid": True,
+            "screen_passes": True,
+        },
+        "run_dirs": ["/tmp/screen"],
+        "git_head": "abc",
+        "manifest_sha256": module.file_sha256(manifest_path),
+        "screen_config_sha256": module.file_sha256(screen_path),
+    }
+    gate.write_text(json.dumps(payload))
+    args = SimpleNamespace(
+        dry_run=False, list=False, check_graphs=False,
+        screen_gate=str(gate))
+    job = module.Job(
+        job_id="full", stage="92_cache_sim_literature_scale_wide16",
+        kind="roi_matrix", command=[], out_dir=tmp_path / "out",
+        log_path=tmp_path / "log")
+    monkeypatch.setattr(module, "current_git_head", lambda: "abc")
+    monkeypatch.setattr(
+        module, "recompute_screen_gate",
+        lambda payload, manifest_path, screen_path: dict(payload))
+    authorization = module.validate_screen_authorization(
+        args, [job], manifest_path)
+    assert authorization["sha256"] == module.file_sha256(gate)
+    assert authorization["git_head"] == "abc"
+
+    payload["pagerank_gate"]["screen_passes"] = False
+    gate.write_text(json.dumps(payload))
+    with pytest.raises(SystemExit, match="stale or not GO"):
+        module.validate_screen_authorization(args, [job], manifest_path)
+
+
 def test_cross_stage_pr_semantic_gate_fails_on_checksum_drift(tmp_path):
     experiment_run = load_experiment_run_module()
     jobs = []

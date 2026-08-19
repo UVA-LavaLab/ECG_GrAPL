@@ -45,12 +45,12 @@ inline void RelaxEdges_Gem5(const WGraph &g, NodeID u, WeightT delta,
                             uint32_t edge_epoch_count, bool ecg_plan_load_on,
                             bool ecg_flow_load_on,
                             bool ecg_bind_iload_on,
-                            bool compact_pair_ok) {
+                            bool compact_pair_ok,
+                            const Gem5EcgEpochQuantizer& epoch_quantizer) {
     const bool ecg_bind_computed_address_on =
         ecg_bind_iload_on && gem5_ecg_bind_computed_address_enabled();
     const WeightT source_dist = dist[u];
-    GEM5_SET_VERTEX_EPOCH(
-        u, g.num_nodes(), edge_epoch_count);
+    GEM5_SET_QUANTIZED_VERTEX_EPOCH(epoch_quantizer, u);
     int pfx_lookahead = gem5_env_int_clamped("GEM5_ECG_PFX_LOOKAHEAD", 4, 0, 64);
     const vector<uint16_t>* u_epochs =
         (out_edge_epochs && static_cast<size_t>(u) < out_edge_epochs->size())
@@ -352,9 +352,13 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
                                 numEpochs, g.num_nodes());
     }
 
+    Gem5EcgEpochQuantizer epoch_quantizer;
+    if (gem5_ecg_epoch_csr_enabled())
+        epoch_quantizer.reset(g.num_nodes(), edge_epoch_count);
+
+    GEM5_ECG_BEGIN_CONTEXT();
     GEM5_RESET_STATS();
     GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE);
-    GEM5_ECG_BEGIN_CONTEXT();
 
     pvector<NodeID> frontier(g.num_edges_directed());
     size_t shared_indexes[2] = {0, kMaxBin};
@@ -382,7 +386,8 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
                                     compact_pair_ok ? &pair_compact : nullptr,
                                     ecg_load_evict_on, ecg_evict_wc, edge_epoch_count,
                                     ecg_plan_load_on, ecg_flow_load_on,
-                                    ecg_bind_iload_on, compact_pair_ok);
+                                    ecg_bind_iload_on, compact_pair_ok,
+                                    epoch_quantizer);
             }
 
             while (curr_bin_index < local_bins.size() &&
@@ -398,7 +403,8 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
                                     compact_pair_ok ? &pair_compact : nullptr,
                                     ecg_load_evict_on, ecg_evict_wc, edge_epoch_count,
                                     ecg_plan_load_on, ecg_flow_load_on,
-                                    ecg_bind_iload_on, compact_pair_ok);
+                                    ecg_bind_iload_on, compact_pair_ok,
+                                    epoch_quantizer);
             }
 
             for (size_t i = curr_bin_index; i < local_bins.size(); i++) {
@@ -430,9 +436,9 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
         }
     }
 
-    GEM5_ECG_END_CONTEXT();
     GEM5_WORK_END(GEM5_WORK_COMPUTE);
     GEM5_DUMP_STATS();
+    GEM5_ECG_END_CONTEXT();
     return dist;
 }
 

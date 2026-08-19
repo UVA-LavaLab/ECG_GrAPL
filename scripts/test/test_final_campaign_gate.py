@@ -150,6 +150,75 @@ def test_final_gate_accepts_natural_sniper_completion():
             groups, manifest)[0])
 
 
+def test_final_gate_requires_certified_sniper_fallback():
+    manifest = {
+        "graph_sets": {
+            "factorial_graphs_uniform_8mb": [{
+                "name": "graph",
+                "sniper_semantic_edge_limit": 100000,
+            }],
+        },
+    }
+    row = {
+        "status": "ok",
+        "policy_label": "ECG_REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "final_matrix_config_hash": "hash",
+        "simulator": "sniper",
+        "timing_valid_for_speedup": "0",
+        "sniper_queue_model": "windowed_mg1",
+        "sniper_transport_record_bytes": "4",
+        "edge_stream_bytes_per_edge": "4",
+        "sniper_semantic_edge_limit": "100000",
+        "sniper_semantic_edge_visits": "100000",
+        "sniper_semantic_truncated": "1",
+        "semantic_work_matched": "1",
+        "l3_accesses": "10",
+        "l3_misses": "5",
+        "sniper_reuse_bind_consumes": "32",
+        "sniper_reuse_bind_bad_consumes": "0",
+        "sniper_reuse_bind_certified_prefixes": "1",
+        "sniper_reuse_bind_certified_fallbacks": "10",
+        "sniper_transport_receipts_validated": "1",
+        "sniper_reuse_plan_epoch_context_validated": "1",
+        "sniper_reuse_bind_exact_validated": "1",
+    }
+    groups = {
+        ("81_sniper_final_semantic", "graph", "pr"): [row],
+    }
+    assert final_campaign_gate.validate_role_rows(
+        groups, manifest) == []
+    row["sniper_reuse_bind_certified_fallbacks"] = "0"
+    assert "exact-bind proof failed" in (
+        final_campaign_gate.validate_role_rows(
+            groups, manifest)[0])
+
+
+def test_final_gate_requires_two_column_charged_popt():
+    row = {
+        "status": "ok",
+        "policy_label": "POPT",
+        "final_matrix_config_hash": "hash",
+        "simulator": "cache_sim",
+        "timing_valid_for_speedup": "0",
+        "l3_effective_ways": "15",
+        "popt_overhead_charged": "1",
+        "popt_matrix_active_columns": "2",
+        "popt_effective_l3_ways": "15",
+        "popt_matrix_stream_lines_simulated": "1",
+        "popt_matrix_stream_mode": "simulated",
+    }
+    groups = {
+        ("84_cache_sim_final_popt", "graph", "pr"): [row],
+    }
+    manifest = {"graph_sets": {"factorial_graphs_uniform_8mb": []}}
+    assert final_campaign_gate.validate_role_rows(
+        groups, manifest) == []
+    row["popt_matrix_active_columns"] = "3"
+    assert "P-OPT stream is not charged" in (
+        final_campaign_gate.validate_role_rows(
+            groups, manifest)[0])
+
+
 def test_final_gate_allows_only_documented_untracked_checkouts(tmp_path):
     allowed = tmp_path / "allowed"
     unexpected = tmp_path / "unexpected"

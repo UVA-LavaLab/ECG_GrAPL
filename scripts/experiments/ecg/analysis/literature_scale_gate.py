@@ -9,6 +9,7 @@ from collections import defaultdict
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 import sys
 from typing import Any
 
@@ -229,6 +230,10 @@ def validate_rows(
                             f"{key}/{policy} width/epoch mismatch")
                 if stage.startswith("93_") and policy == "POPT":
                     if (
+                            final_campaign_gate.integer(
+                                row, "popt_overhead_charged") != 1 or
+                            final_campaign_gate.integer(
+                                row, "popt_matrix_active_columns") != 2 or
                             row.get("popt_matrix_stream_mode") != "simulated" or
                             not final_campaign_gate.positive(
                                 row, "popt_matrix_stream_lines_simulated")):
@@ -253,9 +258,69 @@ def validate_rows(
                             row, "sniper_reuse_bind_consumes") < 32 or
                         final_campaign_gate.integer(
                             row, "sniper_reuse_bind_bad_consumes") != 0 or
+                        final_campaign_gate.integer(
+                            row,
+                            "sniper_reuse_bind_certified_prefixes") != 1 or
+                        not final_campaign_gate.positive(
+                            row,
+                            "sniper_reuse_bind_certified_fallbacks") or
+                        str(row.get(
+                            "sniper_transport_receipts_validated")) != "1" or
+                        str(row.get(
+                            "sniper_reuse_plan_epoch_context_validated")) !=
+                        "1" or
                         str(row.get(
                             "sniper_reuse_bind_exact_validated")) != "1"):
                     errors.append(f"{key}/{policy} exact-bind proof failed")
+    return errors
+
+
+def validate_full_role_authorizations(
+        run_dirs: list[Path], manifest_path: Path,
+        screen_path: Path, git_head: str) -> list[str]:
+    errors = []
+    full_stages = COMPLETE_STAGES - SCREEN_STAGES
+    for run_dir in run_dirs:
+        snapshot_path = run_dir / "resolved_manifest.json"
+        if not snapshot_path.is_file():
+            continue
+        try:
+            snapshot = json.loads(snapshot_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            errors.append(f"{run_dir} has unreadable resolved manifest")
+            continue
+        stages = {
+            str(job.get("stage", ""))
+            for job in snapshot.get("jobs", [])
+        }
+        if not stages.intersection(full_stages):
+            continue
+        authorization = snapshot.get("screen_authorization")
+        if not isinstance(authorization, dict):
+            errors.append(f"{run_dir} lacks screen authorization")
+            continue
+        gate_path = Path(str(authorization.get("path", "")))
+        if not gate_path.is_file():
+            errors.append(f"{run_dir} screen authorization file is missing")
+            continue
+        try:
+            gate = json.loads(gate_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            errors.append(f"{run_dir} screen authorization is unreadable")
+            continue
+        valid = (
+            authorization.get("sha256") == sha256(gate_path) and
+            authorization.get("git_head") == git_head and
+            authorization.get("manifest_sha256") ==
+                sha256(manifest_path) and
+            authorization.get("screen_config_sha256") ==
+                sha256(screen_path) and
+            gate.get("valid") is True and
+            gate.get("phase") == "screen" and
+            (gate.get("pagerank_gate") or {}).get(
+                "screen_passes") is True)
+        if not valid:
+            errors.append(f"{run_dir} screen authorization is stale")
     return errors
 
 
@@ -342,6 +407,19 @@ def main(argv: list[str] | None = None) -> int:
         args.phase,
         Path(args.corpus_receipt),
     )
+    git_head = subprocess.run(
+        ["/usr/bin/git", "rev-parse", "HEAD"],
+        cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
+    result.update({
+        "git_head": git_head,
+        "manifest_sha256": sha256(Path(args.manifest)),
+        "screen_config_sha256": sha256(Path(args.screen_config)),
+    })
+    if args.phase == "complete":
+        result["errors"].extend(validate_full_role_authorizations(
+            run_dirs, Path(args.manifest),
+            Path(args.screen_config), git_head))
+        result["valid"] = not result["errors"]
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output:
         Path(args.output).write_text(text)

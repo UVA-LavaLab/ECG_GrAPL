@@ -1233,6 +1233,8 @@ def run_config_hash(
         args: argparse.Namespace, jobs: list[Job]) -> str:
     payload = {
         "profiles": args.profile,
+        "screen_authorization": getattr(
+            args, "_screen_authorization", None),
         "filters": {
             "graph": args.graph,
             "benchmark": args.benchmark,
@@ -1288,6 +1290,8 @@ def write_run_manifest(run_dir: Path, args: argparse.Namespace, manifest: dict[s
         "created_utc": utc_now(),
         "run_config_hash": run_config_hash(args, jobs),
         "profiles": args.profile,
+        "screen_authorization": getattr(
+            args, "_screen_authorization", None),
         "filters": {
             "graph": args.graph,
             "benchmark": args.benchmark,
@@ -1725,6 +1729,154 @@ def validate_profile_controls(
             raise SystemExit(f"profile {profile} is blocked: {reason}")
 
 
+def validate_clean_worktree(
+        args: argparse.Namespace, manifest: dict[str, Any]) -> None:
+    if args.list or args.dry_run or args.status or args.check_graphs:
+        return
+    controls = manifest.get("profile_controls", {})
+    if not any(
+            bool(controls.get(profile, {}).get(
+                "require_clean_worktree", False))
+            for profile in args.profile):
+        return
+    result = subprocess.run(
+        ["/usr/bin/git", "--no-pager", "status", "--short"],
+        cwd=PROJECT_ROOT, env=clean_job_environment({}),
+        capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise SystemExit(
+            "cannot verify clean worktree for controlled evaluation")
+    allowed_untracked = (
+        "bench/include/gem5_sim/gem5",
+        "bench/include/sniper_sim/snipersim",
+    )
+    unexpected = []
+    for line in result.stdout.splitlines():
+        if line.startswith("?? ") and any(
+                line[3:].startswith(path)
+                for path in allowed_untracked):
+            continue
+        unexpected.append(line)
+    if unexpected:
+        raise SystemExit(
+            "controlled evaluation requires a clean worktree; "
+            f"unexpected state: {unexpected}")
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def current_git_head() -> str:
+    result = subprocess.run(
+        ["/usr/bin/git", "rev-parse", "HEAD"],
+        cwd=PROJECT_ROOT, env=clean_job_environment({}),
+        capture_output=True, text=True, check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        raise SystemExit("cannot resolve Git HEAD for screen authorization")
+    return result.stdout.strip()
+
+
+def recompute_screen_gate(
+        payload: dict[str, Any], manifest_path: Path,
+        screen_path: Path) -> dict[str, Any]:
+    run_dirs = payload.get("run_dirs")
+    if not isinstance(run_dirs, list) or not run_dirs:
+        raise SystemExit(
+            "literature-scale screen gate has no source run directories")
+    command = [
+        sys.executable, "-I",
+        str(ECG_DIR / "analysis/literature_scale_gate.py"),
+        "--phase", "screen",
+        "--manifest", str(manifest_path),
+        "--screen-config", str(screen_path),
+        "--input-run-dirs", *[str(path) for path in run_dirs],
+    ]
+    result = subprocess.run(
+        command, cwd=PROJECT_ROOT, env=clean_job_environment({}),
+        capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise SystemExit(
+            "literature-scale screen authorization could not be "
+            f"recomputed:\n{result.stderr}")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise SystemExit(
+            "recomputed literature-scale screen gate is malformed") from error
+
+
+def validate_screen_authorization(
+        args: argparse.Namespace, jobs: list[Job],
+        manifest_path: Path) -> dict[str, Any] | None:
+    full_stages = {
+        "92_cache_sim_literature_scale_wide16",
+        "93_cache_sim_literature_scale_popt",
+        "94_cache_sim_literature_scale_compact16",
+        "95_sniper_literature_scale_matched",
+    }
+    if not any(job.stage in full_stages for job in jobs):
+        return None
+    if args.dry_run or args.list or args.check_graphs:
+        return None
+    if not args.screen_gate:
+        raise SystemExit(
+            "literature-scale full roles require --screen-gate PATH")
+    path = resolve_path(args.screen_gate)
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(
+            f"cannot read literature-scale screen gate {path}: {error}") from error
+    pagerank = payload.get("pagerank_gate") or {}
+    screen_path = ECG_DIR / "configs/pagerank_literature_scale.json"
+    recomputed = recompute_screen_gate(
+        payload, manifest_path, screen_path)
+    recomputed_pagerank = recomputed.get("pagerank_gate") or {}
+    valid = (
+        payload.get("valid") is True and
+        payload.get("phase") == "screen" and
+        payload.get("cell_count") == 13 and
+        payload.get("row_count") == 99 and
+        payload.get("stage_rows") == {
+            "60_gem5_proposal_reuse_bind_o3": 3,
+            "90_gem5_literature_scale_i1": 48,
+            "91_gem5_literature_scale_i8": 48,
+        } and
+        pagerank.get("screen_valid") is True and
+        pagerank.get("screen_passes") is True and
+        recomputed.get("valid") is True and
+        recomputed.get("phase") == "screen" and
+        recomputed.get("cell_count") == payload.get("cell_count") and
+        recomputed.get("row_count") == payload.get("row_count") and
+        recomputed.get("stage_rows") == payload.get("stage_rows") and
+        recomputed.get("run_dirs") == payload.get("run_dirs") and
+        recomputed_pagerank.get("screen_valid") is True and
+        recomputed_pagerank.get("screen_passes") is True and
+        payload.get("git_head") == current_git_head() and
+        recomputed.get("git_head") == payload.get("git_head") and
+        payload.get("manifest_sha256") == file_sha256(manifest_path) and
+        recomputed.get("manifest_sha256") ==
+            payload.get("manifest_sha256") and
+        payload.get("screen_config_sha256") == file_sha256(screen_path) and
+        recomputed.get("screen_config_sha256") ==
+            payload.get("screen_config_sha256"))
+    if not valid:
+        raise SystemExit(
+            "literature-scale screen authorization is stale or not GO")
+    return {
+        "path": str(path),
+        "sha256": file_sha256(path),
+        "git_head": payload["git_head"],
+        "manifest_sha256": payload["manifest_sha256"],
+        "screen_config_sha256": payload["screen_config_sha256"],
+    }
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run manifest-defined ReusePlan experiment profiles.")
@@ -1742,6 +1894,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Allow explicitly selected diagnostic stages with blocked_reason.")
     parser.add_argument("--profile", nargs="+", default=["ecg_smoke"], help="Manifest profile(s) to run.")
     parser.add_argument("--run-dir", default="", help="Run directory. Defaults to results/ecg_experiments/runs/<profile>_<timestamp>.")
+    parser.add_argument(
+        "--screen-gate", default="",
+        help=(
+            "Validated literature-scale screen GO receipt required before "
+            "stages 92-95 execute."))
     parser.add_argument("--graph-dir", default=str(PROJECT_ROOT / "results" / "graphs"), help="Graph root for manifest graph names without explicit paths.")
     parser.add_argument("--only", nargs="+", default=[], help="Only stages whose name contains one of these tokens.")
     parser.add_argument("--skip", nargs="+", default=[], help="Skip stages whose name contains one of these tokens.")
@@ -1783,6 +1940,7 @@ def main(argv: list[str]) -> int:
     manifest_path = resolve_path(args.manifest)
     manifest = load_manifest(manifest_path)
     validate_profile_controls(args, manifest)
+    validate_clean_worktree(args, manifest)
     run_dir = Path(args.run_dir) if args.run_dir else RESULTS_ROOT / f"{'_'.join(args.profile)}_{now_tag()}"
     if not run_dir.is_absolute():
         run_dir = PROJECT_ROOT / run_dir
@@ -1792,6 +1950,8 @@ def main(argv: list[str]) -> int:
         raise SystemExit(
             "no jobs selected; check --profile/--only/--skip/--graph/--benchmark/--policy/--job filters"
         )
+    args._screen_authorization = validate_screen_authorization(
+        args, jobs, manifest_path)
     guard_run_manifest_scope(run_dir, jobs)
     write_run_manifest(run_dir, args, manifest, jobs)
     write_preflight(run_dir, args)

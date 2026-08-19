@@ -4920,6 +4920,46 @@ def main(argv: list[str]) -> int:
     else:
         policy_texts = DEFAULT_POLICIES
     policies = [parse_policy_spec(p) for p in policy_texts]
+    try:
+        l1d_ways = int(args.l1d_ways)
+        l2_ways = int(args.l2_ways)
+        l3_ways = int(args.l3_ways)
+    except ValueError as error:
+        raise SystemExit("cache associativity values must be integers") from error
+    if min(l1d_ways, l2_ways, l3_ways) <= 0:
+        raise SystemExit("cache associativity values must be positive")
+    if args.reuse_plan_l3_ways < 0:
+        raise SystemExit("--reuse-plan-l3-ways must be non-negative")
+    if args.reuse_plan_l3_ways > 64:
+        raise SystemExit("--reuse-plan-l3-ways cannot exceed 64")
+    if l3_ways > 64 and any(
+            spec.policy == "ECG" or
+            (args.suite in ("cache-sim", "both") and spec.policy == "POPT")
+            for spec in policies):
+        raise SystemExit(
+            "cache_sim P-OPT and ReusePlan policies support at most "
+            "64 LLC ways")
+    line_bytes = parse_size_bytes(str(args.line_size))
+    if line_bytes <= 0 or (line_bytes & (line_bytes - 1)) != 0:
+        raise SystemExit("cache line size must be a positive power of two")
+    for label, size_text, ways in (
+            ("L1D", args.l1d_size, l1d_ways),
+            ("L2", args.l2_size, l2_ways),
+            *(
+                ("L3", size_text, l3_ways)
+                for size_text in args.l3_sizes
+            )):
+        size_bytes = parse_size_bytes(str(size_text))
+        set_bytes = line_bytes * ways
+        if line_bytes <= 0 or size_bytes < set_bytes or (
+                size_bytes % set_bytes) != 0:
+            raise SystemExit(
+                f"{label} size must contain an integral number of "
+                "cache sets")
+        sets = size_bytes // set_bytes
+        if (sets & (sets - 1)) != 0:
+            raise SystemExit(
+                f"{label} cache set count must be a power of two")
     if (
             compact_reuse_bind_requested and
             not any(

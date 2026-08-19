@@ -639,12 +639,47 @@ struct RereferenceMatrix {
     uint64_t cache_line_size = 64;
     bool enabled = false;
 
+    struct Position {
+        uint32_t epoch_id = 0;
+        uint32_t current_sub_epoch = 0;
+    };
+
+    Position position(uint32_t current_vertex) const {
+        struct PositionCache {
+            const RereferenceMatrix* owner = nullptr;
+            uint32_t vertex = UINT32_MAX;
+            uint32_t epoch_size = 0;
+            uint32_t sub_epoch_size = 0;
+            uint32_t num_epochs = 0;
+            Position position;
+        };
+        static thread_local PositionCache cache;
+        if (cache.owner != this || cache.vertex != current_vertex ||
+            cache.epoch_size != epoch_size ||
+            cache.sub_epoch_size != sub_epoch_size ||
+            cache.num_epochs != num_epochs) {
+            cache.owner = this;
+            cache.vertex = current_vertex;
+            cache.epoch_size = epoch_size;
+            cache.sub_epoch_size = sub_epoch_size;
+            cache.num_epochs = num_epochs;
+            cache.position.epoch_id =
+                epoch_size > 0 ? current_vertex / epoch_size : 0;
+            cache.position.current_sub_epoch =
+                epoch_size > 0 && sub_epoch_size > 0
+                    ? ((current_vertex % epoch_size) / sub_epoch_size)
+                    : 0;
+        }
+        return cache.position;
+    }
+
     // P-OPT Algorithm 2 semantics using the official artifact convention:
     // MSB=0 means referenced in this epoch (final sub-epoch in low bits),
     // MSB=1 means not referenced (distance-to-next in low bits).
     uint32_t findNextRef(uint32_t cline_id, uint32_t current_vertex) const {
         if (!enabled || cline_id >= num_cache_lines) return 127;
-        uint32_t epoch_id = (epoch_size > 0) ? (current_vertex / epoch_size) : 0;
+        const Position current = position(current_vertex);
+        const uint32_t epoch_id = current.epoch_id;
         if (epoch_id >= num_epochs) return 127;
 
         uint8_t entry = data[epoch_id * num_cache_lines + cline_id];
@@ -655,8 +690,8 @@ struct RereferenceMatrix {
             return entry & AND_MASK;
         } else {
             uint8_t last_ref_sub_epoch = entry & AND_MASK;
-            uint32_t current_sub_epoch = (sub_epoch_size > 0)
-                ? ((current_vertex % epoch_size) / sub_epoch_size) : 0;
+            const uint32_t current_sub_epoch =
+                current.current_sub_epoch;
             if (current_sub_epoch <= last_ref_sub_epoch) return 0;
             if (epoch_id + 1 < num_epochs) {
                 uint8_t next_entry = data[(epoch_id + 1) * num_cache_lines + cline_id];
@@ -670,11 +705,12 @@ struct RereferenceMatrix {
 
     uint32_t findNextRefEpoch(uint32_t cline_id, uint32_t current_vertex) const {
         if (!enabled || cline_id >= num_cache_lines || num_epochs == 0) return 0;
-        uint32_t epoch_id = (epoch_size > 0) ? (current_vertex / epoch_size) : 0;
+        const Position current = position(current_vertex);
+        uint32_t epoch_id = current.epoch_id;
         if (epoch_id >= num_epochs) epoch_id = num_epochs - 1;
 
-        uint32_t current_sub_epoch = (sub_epoch_size > 0 && epoch_size > 0)
-            ? ((current_vertex % epoch_size) / sub_epoch_size) : 0;
+        const uint32_t current_sub_epoch =
+            current.current_sub_epoch;
         constexpr uint8_t OR_MASK = 0x80;
         constexpr uint8_t AND_MASK = 0x7F;
 

@@ -312,6 +312,8 @@ def validate_role_rows(
                         errors.append(f"{key}/{policy} epoch count mismatch")
                 if stage == "84_cache_sim_final_popt" and policy == "POPT":
                     if (
+                            integer(row, "popt_overhead_charged") != 1 or
+                            integer(row, "popt_matrix_active_columns") != 2 or
                             integer(row, "popt_effective_l3_ways") != 15 or
                             not positive(
                                 row, "popt_matrix_stream_lines_simulated") or
@@ -358,6 +360,17 @@ def validate_role_rows(
                 if policy.startswith("ECG_REUSE_PLAN") and (
                         integer(row, "sniper_reuse_bind_consumes") < 32 or
                         integer(row, "sniper_reuse_bind_bad_consumes") != 0 or
+                        integer(
+                            row,
+                            "sniper_reuse_bind_certified_prefixes") != 1 or
+                        not positive(
+                            row,
+                            "sniper_reuse_bind_certified_fallbacks") or
+                        str(row.get(
+                            "sniper_transport_receipts_validated")) != "1" or
+                        str(row.get(
+                            "sniper_reuse_plan_epoch_context_validated")) !=
+                        "1" or
                         str(row.get("sniper_reuse_bind_exact_validated")) != "1"):
                     errors.append(f"{key}/{policy} exact-bind proof failed")
     return errors

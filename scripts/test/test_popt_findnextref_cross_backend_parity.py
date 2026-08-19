@@ -90,3 +90,19 @@ def test_popt_findnextref_cross_backend_parity_pins_pagerank_rereference_lookup(
         f"{result.stderr}")
     assert EXPECTED_PASS_LINE in result.stdout, result.stdout
     assert "[FAIL]" not in result.stdout, result.stdout
+
+    cache_context = (
+        ROOT / "bench/include/cache_sim/graph_cache_context.h").read_text()
+    cache = (ROOT / "bench/include/cache_sim/cache_sim.h").read_text()
+    gem5_context = (
+        ROOT / "bench/include/gem5_sim/overlays/mem/cache/"
+        "replacement_policies/graph_cache_context_gem5.hh").read_text()
+    assert "static thread_local PositionCache cache;" in cache_context
+    assert "static thread_local PositionCache cache;" in cache
+    assert "static thread_local PositionCache cache;" in gem5_context
+    assert "candidate_distances[c] = dist;" in cache
+    popt_tie = cache.split(
+        "mode == ECGMode::POPT_TIE", 1)[1].split(
+            "mode == ECGMode::ECG_EMBEDDED", 1)[0]
+    assert popt_tie.count("graph_ctx_->findNextRef(") == 1
+    assert "P-OPT and ECG support at most 64 cache ways" in cache

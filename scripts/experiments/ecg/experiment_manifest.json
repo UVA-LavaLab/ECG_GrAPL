@@ -64,15 +64,18 @@
   "profile_controls": {
     "reuse_plan_final_campaign": {
       "status": "blocked",
-      "reason": "The three-graph corpus is smaller than the GRASP/P-OPT evaluation scale. Use --list or --dry-run for audit only; publication requires the literature-scale replacement profile."
+      "reason": "The three-graph corpus is smaller than the GRASP/P-OPT evaluation scale. Use --list or --dry-run for audit only; publication requires the literature-scale replacement profile.",
+      "require_clean_worktree": true
     },
     "reuse_plan_literature_scale_campaign": {
       "status": "ready",
-      "reason": "Run stages 60/90/91 first and require the literature-scale screen gate to pass before stages 92-95."
+      "reason": "Run stages 60/90/91 first and require the literature-scale screen gate to pass before stages 92-95.",
+      "require_clean_worktree": true
     },
     "reuse_plan_twitter_scale_stress": {
       "status": "blocked",
-      "reason": "Twitter-2010 is optional and remains blocked until its converted graph receipt is complete."
+      "reason": "Twitter-2010 is optional and remains blocked until its converted graph receipt is complete.",
+      "require_clean_worktree": true
     }
   },
   "benchmark_options": {

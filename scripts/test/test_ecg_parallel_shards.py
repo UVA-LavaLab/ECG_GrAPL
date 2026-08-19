@@ -172,6 +172,8 @@ def test_final_campaign_expands_to_whole_cell_shards(tmp_path):
     ).read_text()
     assert 'if [[ "$policy" != "__whole__" ]]' in sbatch
     assert '"${policy_args[@]}"' in sbatch
+    assert 'GRAPHBREW_SCREEN_GATE' in sbatch
+    assert '"${screen_gate_args[@]}"' in sbatch
 
 
 def test_full_3sim_smoke_expands_to_120_shards(tmp_path):
@@ -287,3 +289,4 @@ def test_slurm_shards_use_per_run_lock():
     ).read_text()
     assert '".local_shard.lock"' in local
     assert "fcntl.LOCK_NB" in local
+    assert '"--screen-gate", str(args.screen_gate)' in local

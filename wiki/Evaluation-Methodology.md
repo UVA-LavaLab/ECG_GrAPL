@@ -87,6 +87,9 @@ P-OPT is charged for reserved LLC capacity and cumulative matrix traffic. The
 current analytic mode sets `popt_target_time_charged=0`, so matrix-stream
 latency is omitted. Timing from this mode is an optimistic P-OPT bound and
 must not be presented as a realistic target-time implementation.
+Capacity reservation covers the reference design's two resident columns
+(current and next); initial loading remains part of cumulative matrix-stream
+traffic rather than a third resident column.
 
 Final P-OPT reference comparisons are limited to PageRank and Connected
 Components. BFS and SSSP comparisons are project extensions: their
