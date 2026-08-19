@@ -107,6 +107,31 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ecg_variant=variant,
             ecg_transport_pinned=True,
         )
+    reuse_plan_flowthrough_variants = {
+        "ECG:REUSE_PLAN_GRASP_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_GRASP_FLOWTHROUGH", "grasp_only"),
+        "ECG_REUSE_PLAN_GRASP_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_GRASP_FLOWTHROUGH", "grasp_only"),
+        "ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_EPOCH_FLOWTHROUGH", "epoch_first"),
+        "ECG_REUSE_PLAN_EPOCH_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_EPOCH_FLOWTHROUGH", "epoch_first"),
+        "ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
+        "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
+    }
+    if upper in reuse_plan_flowthrough_variants:
+        label, variant = reuse_plan_flowthrough_variants[upper]
+        return PolicySpec(
+            label=label,
+            policy="ECG",
+            ecg_mode="ECG_GRASP_POPT",
+            ecg_reuse_plan_depth=2,
+            ecg_flowthrough=True,
+            ecg_variant=variant,
+            ecg_transport_pinned=True,
+        )
     if upper in (
         "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
         "ECG_REUSE_PLAN_RRIP_FLOWTHROUGH",

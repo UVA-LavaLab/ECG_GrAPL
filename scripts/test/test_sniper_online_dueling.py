@@ -415,6 +415,8 @@ def test_sniper_mask_mode_variant_matches_receipt_validator_expectation():
     for label, expected in (
             ("ECG:REUSE_PLAN_LRU_FLOWTHROUGH", "lru_only"),
             ("ECG:REUSE_PLAN_RRIP_FLOWTHROUGH", "rrip_first"),
+            ("ECG:REUSE_PLAN_GRASP_FLOWTHROUGH", "grasp_only"),
+            ("ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
             ("ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH", "rrip_first"),
             ("ECG:REUSE_PLAN_DEGREE", "degree_first")):
         spec = roi_matrix.parse_policy_spec(label)
