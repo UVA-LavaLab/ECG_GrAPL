@@ -39,6 +39,7 @@ constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_EXTRACT = 0x47464C44ULL;  // ECG ep
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_EXTRACT2 = 0x47464C45ULL; // dest + two epochs
 constexpr uint64_t GRAPHBREW_SNIPER_USER_REUSE_PLAN_BIND = 0x4B32424EULL;  // "ReusePlanBN"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_REUSE_PLAN_CLEAR = 0x4B324243ULL; // "ReusePlanBC"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_REUSE_PLAN_CERTIFIED = 0x4B324244ULL;
 
 inline const char* env_or_default(const char* name, const char* fallback) {
     const char* value = std::getenv(name);
@@ -116,9 +117,36 @@ inline bool reuse_plan_exact_bind_enabled() {
     return enabled;
 }
 
+struct ReusePlanBindPrefixState {
+    uint64_t emitted = 0;
+    bool finished = false;
+};
+
+inline ReusePlanBindPrefixState& reuse_plan_bind_prefix_state() {
+    static thread_local ReusePlanBindPrefixState state;
+    return state;
+}
+
 template <typename T>
 inline T reuse_plan_bound_load(const T* address) {
     if (!reuse_plan_exact_bind_enabled()) return *address;
+    static const uint64_t prefix_loads = []() {
+        const char* value =
+            std::getenv("SNIPER_REUSE_PLAN_BIND_PREFIX_LOADS");
+        return value && value[0]
+            ? static_cast<uint64_t>(std::strtoull(value, nullptr, 10))
+            : 0;
+    }();
+    ReusePlanBindPrefixState& state = reuse_plan_bind_prefix_state();
+    if (prefix_loads > 0 && state.emitted >= prefix_loads) {
+        if (!state.finished) {
+            notify_user(
+                GRAPHBREW_SNIPER_USER_REUSE_PLAN_CERTIFIED,
+                state.emitted);
+            state.finished = true;
+        }
+        return *address;
+    }
     asm volatile("" ::: "memory");
     notify_user(
         GRAPHBREW_SNIPER_USER_REUSE_PLAN_BIND,
@@ -128,6 +156,7 @@ inline T reuse_plan_bound_load(const T* address) {
     asm volatile("" ::: "memory");
     notify_user(GRAPHBREW_SNIPER_USER_REUSE_PLAN_CLEAR, 0);
     asm volatile("" ::: "memory");
+    ++state.emitted;
     return value;
 }
 
@@ -197,6 +226,7 @@ inline bool should_emit_ecg_pfx_hint(uint64_t vertex_id) {
 }
 
 inline void roi_begin() {
+    reuse_plan_bind_prefix_state() = ReusePlanBindPrefixState{};
 #if GRAPHBREW_SNIPER_HAS_SIM_API
     SimRoiStart();
 #endif

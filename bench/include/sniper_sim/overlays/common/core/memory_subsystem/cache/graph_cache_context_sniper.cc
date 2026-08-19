@@ -70,9 +70,21 @@ std::array<std::atomic<bool>, MAX_TRACKED_CORES>& vertexValidStorage()
     return storage;
 }
 
-std::array<std::atomic<uint32_t>, MAX_TRACKED_CORES>& prefetchTargetStorage()
+std::array<std::atomic<uint32_t>, MAX_TRACKED_CORES>& fallbackVertexStorage()
 {
     static std::array<std::atomic<uint32_t>, MAX_TRACKED_CORES> storage{};
+    return storage;
+}
+
+std::array<std::atomic<uint16_t>, MAX_TRACKED_CORES>& epochStorage()
+{
+    static std::array<std::atomic<uint16_t>, MAX_TRACKED_CORES> storage{};
+    return storage;
+}
+
+std::array<std::atomic<bool>, MAX_TRACKED_CORES>& epochValidStorage()
+{
+    static std::array<std::atomic<bool>, MAX_TRACKED_CORES> storage{};
     return storage;
 }
 
@@ -145,8 +157,22 @@ bool parseJsonBool(const std::string& json, const std::string& key)
 void setCurrentVertexHint(uint32_t core_id, uint64_t vertex)
 {
     if (core_id >= MAX_TRACKED_CORES) return;
-    vertexStorage()[core_id].store(clampVertex(vertex), std::memory_order_release);
+    const uint32_t clamped = clampVertex(vertex);
+    epochValidStorage()[core_id].store(
+        false, std::memory_order_release);
+    vertexStorage()[core_id].store(clamped, std::memory_order_release);
     vertexValidStorage()[core_id].store(true, std::memory_order_release);
+    const auto& context = globalContext();
+    if (context.loaded && context.topology.num_vertices > 0) {
+        epochStorage()[core_id].store(
+            quantizeEcgEpoch(
+                clamped, context.topology.num_vertices,
+                context.edge_epoch_count),
+            std::memory_order_relaxed);
+        epochValidStorage()[core_id].store(true, std::memory_order_release);
+    } else {
+        epochValidStorage()[core_id].store(false, std::memory_order_release);
+    }
 }
 
 bool hasCurrentVertexHint(uint32_t core_id)
@@ -174,6 +200,7 @@ void clearCurrentVertexHint(uint32_t core_id)
 {
     if (core_id >= MAX_TRACKED_CORES) return;
     vertexValidStorage()[core_id].store(false, std::memory_order_release);
+    epochValidStorage()[core_id].store(false, std::memory_order_release);
 }
 
 static uint32_t& currentNucaRequesterCoreStorage()
@@ -530,7 +557,33 @@ bool RereferenceMatrix::loadFromFile(const std::string& path)
 uint32_t RereferenceMatrix::findNextRef(uint32_t cline_id, uint32_t current_vertex) const
 {
     if (!enabled || cline_id >= num_cache_lines) return 127;
-    uint32_t epoch_id = epoch_size > 0 ? current_vertex / epoch_size : 0;
+    struct PositionCache {
+        const RereferenceMatrix* owner = nullptr;
+        uint32_t vertex = UINT32_MAX;
+        uint32_t epoch_size = 0;
+        uint32_t sub_epoch_size = 0;
+        uint32_t num_epochs = 0;
+        uint32_t epoch_id = 0;
+        uint32_t current_sub_epoch = 0;
+    };
+    static thread_local PositionCache cache;
+    if (cache.owner != this || cache.vertex != current_vertex ||
+        cache.epoch_size != epoch_size ||
+        cache.sub_epoch_size != sub_epoch_size ||
+        cache.num_epochs != num_epochs) {
+        cache.owner = this;
+        cache.vertex = current_vertex;
+        cache.epoch_size = epoch_size;
+        cache.sub_epoch_size = sub_epoch_size;
+        cache.num_epochs = num_epochs;
+        cache.epoch_id =
+            epoch_size > 0 ? current_vertex / epoch_size : 0;
+        cache.current_sub_epoch =
+            epoch_size > 0 && sub_epoch_size > 0
+                ? ((current_vertex % epoch_size) / sub_epoch_size)
+                : 0;
+    }
+    const uint32_t epoch_id = cache.epoch_id;
     if (epoch_id >= num_epochs) return 127;
 
     uint8_t entry = data[static_cast<size_t>(epoch_id) * num_cache_lines + cline_id];
@@ -541,9 +594,7 @@ uint32_t RereferenceMatrix::findNextRef(uint32_t cline_id, uint32_t current_vert
         return entry & AND_MASK;
     } else {
         uint8_t last_ref_sub_epoch = entry & AND_MASK;
-        uint32_t current_sub_epoch = sub_epoch_size > 0
-            ? ((current_vertex % epoch_size) / sub_epoch_size)
-            : 0;
+        const uint32_t current_sub_epoch = cache.current_sub_epoch;
         if (current_sub_epoch <= last_ref_sub_epoch) return 0;
         if (epoch_id + 1 < num_epochs) {
             uint8_t next_entry = data[static_cast<size_t>(epoch_id + 1) * num_cache_lines + cline_id];
@@ -852,31 +903,45 @@ void GraphCacheContext::setCacheLineSize(uint64_t line_size)
 
 uint32_t GraphCacheContext::currentVertexForPopt(uint32_t core_id) const
 {
-    if (hasCurrentVertexHint(core_id)) {
-        uint32_t vertex = getCurrentVertexHint(core_id);
-        current_dst_vertex = vertex;
-        current_outer_vertex = vertex;
-        return vertex;
-    }
-    return current_dst_vertex;
+    if (hasCurrentVertexHint(core_id))
+        return getCurrentVertexHint(core_id);
+    if (core_id < MAX_TRACKED_CORES)
+        return fallbackVertexStorage()[core_id].load(
+            std::memory_order_acquire);
+    return 0;
 }
 
 uint16_t GraphCacheContext::currentEcgEpoch(uint32_t core_id) const
 {
-    const uint32_t n = std::max<uint32_t>(1u, topology.num_vertices);
-    const uint32_t ne = std::max<uint32_t>(2u, edge_epoch_count);
-    uint32_t epoch = static_cast<uint32_t>(
-        (static_cast<uint64_t>(currentVertexForPopt(core_id)) * ne) / n);
-    if (epoch >= ne) epoch = ne - 1;
-    return static_cast<uint16_t>(epoch);
+    if (core_id < MAX_TRACKED_CORES &&
+        epochValidStorage()[core_id].load(std::memory_order_acquire)) {
+        return epochStorage()[core_id].load(std::memory_order_relaxed);
+    }
+    const uint16_t epoch = quantizeEcgEpoch(
+        currentVertexForPopt(core_id), topology.num_vertices,
+        edge_epoch_count);
+    if (core_id < MAX_TRACKED_CORES) {
+        epochStorage()[core_id].store(epoch, std::memory_order_relaxed);
+        epochValidStorage()[core_id].store(true, std::memory_order_release);
+    }
+    return epoch;
 }
 
 void GraphCacheContext::updateVertexFromAddr(uint64_t addr, uint32_t core_id) const
 {
     if (num_regions == 0 || !regions[0].contains(addr) || regions[0].elem_size == 0) return;
     uint32_t vertex = static_cast<uint32_t>((addr - regions[0].base_address) / regions[0].elem_size);
-    current_dst_vertex = vertex;
-    if (!hasCurrentVertexHint(core_id)) current_outer_vertex = vertex;
+    if (core_id < MAX_TRACKED_CORES && !hasCurrentVertexHint(core_id)) {
+        epochValidStorage()[core_id].store(
+            false, std::memory_order_release);
+        fallbackVertexStorage()[core_id].store(
+            vertex, std::memory_order_release);
+        epochStorage()[core_id].store(
+            quantizeEcgEpoch(
+                vertex, topology.num_vertices, edge_epoch_count),
+            std::memory_order_relaxed);
+        epochValidStorage()[core_id].store(true, std::memory_order_release);
+    }
 }
 
 uint32_t GraphCacheContext::vertexForAddress(uint64_t addr) const
@@ -1153,6 +1218,8 @@ struct BoundReusePlanLoadState {
     std::array<std::atomic<uint16_t>, MAX_TRACKED_CORES> current_epoch{};
     std::array<std::atomic<uint16_t>, MAX_TRACKED_CORES> context_id{};
     std::array<std::atomic<bool>, MAX_TRACKED_CORES> valid{};
+    std::array<std::atomic<bool>, MAX_TRACKED_CORES>
+        certification_finished{};
 };
 
 uint64_t boundReusePlanTraceLimit()
@@ -1187,6 +1254,12 @@ std::atomic<uint16_t>& activeEcgContextId()
     static std::atomic<uint16_t> active{0};
     return active;
 }
+
+std::atomic<uint64_t>& certifiedReusePlanFallbacks()
+{
+    static std::atomic<uint64_t> uses{0};
+    return uses;
+}
 }
 
 void beginEcgContext()
@@ -1201,10 +1274,32 @@ void beginEcgContext()
     }
     activeEcgContextId().store(
         static_cast<uint16_t>(context), std::memory_order_release);
+    certifiedReusePlanFallbacks().store(0, std::memory_order_relaxed);
+    auto& state = boundReusePlanLoadState();
+    for (uint32_t core_id = 0; core_id < MAX_TRACKED_CORES; ++core_id) {
+        vertexValidStorage()[core_id].store(
+            false, std::memory_order_relaxed);
+        epochValidStorage()[core_id].store(
+            false, std::memory_order_relaxed);
+        fallbackVertexStorage()[core_id].store(
+            0, std::memory_order_relaxed);
+        state.valid[core_id].store(false, std::memory_order_relaxed);
+        state.certification_finished[core_id].store(
+            false, std::memory_order_relaxed);
+    }
 }
 
 void endEcgContext()
 {
+    const uint64_t fallback_uses =
+        certifiedReusePlanFallbacks().exchange(
+            0, std::memory_order_relaxed);
+    if (fallback_uses > 0) {
+        std::fprintf(
+            stderr,
+            "[ECG-ReusePlan-CERTIFIED-FALLBACK sim=sniper uses=%llu]\n",
+            static_cast<unsigned long long>(fallback_uses));
+    }
     activeEcgContextId().store(0, std::memory_order_release);
 }
 
@@ -1231,6 +1326,32 @@ void clearBoundReusePlanLoad(uint32_t core_id)
     if (core_id >= MAX_TRACKED_CORES) return;
     boundReusePlanLoadState().valid[core_id].store(
         false, std::memory_order_release);
+}
+
+void finishBoundReusePlanCertification(uint32_t core_id)
+{
+    if (core_id >= MAX_TRACKED_CORES) return;
+    auto& state = boundReusePlanLoadState();
+    state.valid[core_id].store(false, std::memory_order_relaxed);
+    state.certification_finished[core_id].store(
+        true, std::memory_order_release);
+    std::fprintf(
+        stderr,
+        "[ECG-ReusePlan-CERTIFIED-PREFIX sim=sniper core=%u]\n",
+        core_id);
+}
+
+bool boundReusePlanCertificationFinished(uint32_t core_id)
+{
+    return core_id < MAX_TRACKED_CORES &&
+        boundReusePlanLoadState().certification_finished[core_id].load(
+            std::memory_order_acquire);
+}
+
+void recordCertifiedReusePlanFallback()
+{
+    certifiedReusePlanFallbacks().fetch_add(
+        1, std::memory_order_relaxed);
 }
 
 bool consumeBoundReusePlanLoad(

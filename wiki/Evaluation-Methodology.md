@@ -124,6 +124,11 @@ matrix-stream latency and therefore remains an optimistic bound.
 
 Sniper runs are bounded by one full serialized edge sweep per graph, use equal
 semantic edge visits across policies, and are excluded from speedup reporting.
+Computed-address rows certify exact property-line binding on a fixed prefix of
+at least 32 observed LLC transactions. Large rows then switch from per-load
+magic markers to the same validated fused sideband lookup for the remaining
+matched-work cache simulation. The runner requires receipts for both the exact
+prefix and the marker-free fallback transition.
 
 The compact cit-Patents encoding uses all 32 available bits. Any wider
 identifier or additional record field requires the 8-byte fallback.

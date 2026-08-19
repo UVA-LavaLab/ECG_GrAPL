@@ -44,6 +44,8 @@ def test_sniper_popt_host_profile_is_opt_in_and_behavior_neutral():
     ).read_text()
     assert "findNextRefAtVertex(" in context_header
     assert "return rereference.findNextRef(" in context_source
+    assert "static thread_local PositionCache cache;" in context_source
+    assert "cache.current_sub_epoch" in context_source
 
 
 def test_popt_fast_rrip_selection_matches_legacy(tmp_path):

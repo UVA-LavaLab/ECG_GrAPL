@@ -276,7 +276,8 @@ def ensure_reuse_plan_bind_magic_handler(path: Path, dry_run: bool) -> None:
     text = _overlay_text(path, dry_run)
     need_bind = "GRAPHBREW_REUSE_PLAN_BIND_WORK_ID" not in text
     need_clear = "GRAPHBREW_REUSE_PLAN_CLEAR_WORK_ID" not in text
-    if not need_bind and not need_clear:
+    need_certified = "GRAPHBREW_REUSE_PLAN_CERTIFIED_WORK_ID" not in text
+    if not need_bind and not need_clear and not need_certified:
         return
     old = """         MagicMarkerType args = { thread_id: thread_id, core_id: core_id, arg0: arg0, arg1: arg1, str: NULL };
          return Sim()->getHooksManager()->callHooks(HookType::HOOK_MAGIC_USER, (UInt64)&args, true /* expect return value */);
@@ -294,6 +295,14 @@ def ensure_reuse_plan_bind_magic_handler(path: Path, dry_run: bool) -> None:
         blocks += """         if (arg0 == graphbrew::sniper::GRAPHBREW_REUSE_PLAN_CLEAR_WORK_ID)
          {
             graphbrew::sniper::clearBoundReusePlanLoad(
+               static_cast<uint32_t>(core_id));
+            return 0;
+         }
+"""
+    if need_certified:
+        blocks += """         if (arg0 == graphbrew::sniper::GRAPHBREW_REUSE_PLAN_CERTIFIED_WORK_ID)
+         {
+            graphbrew::sniper::finishBoundReusePlanCertification(
                static_cast<uint32_t>(core_id));
             return 0;
          }

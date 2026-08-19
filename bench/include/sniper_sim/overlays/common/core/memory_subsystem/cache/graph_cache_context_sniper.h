@@ -30,6 +30,16 @@ static constexpr uint64_t GRAPHBREW_ECG_EXTRACT_WORK_ID = 0x47464C44ULL;  // ECG
 static constexpr uint64_t GRAPHBREW_ECG_EXTRACT2_WORK_ID = 0x47464C45ULL;
 static constexpr uint64_t GRAPHBREW_REUSE_PLAN_BIND_WORK_ID = 0x4B32424EULL;
 static constexpr uint64_t GRAPHBREW_REUSE_PLAN_CLEAR_WORK_ID = 0x4B324243ULL;
+static constexpr uint64_t GRAPHBREW_REUSE_PLAN_CERTIFIED_WORK_ID = 0x4B324244ULL;
+
+inline uint16_t quantizeEcgEpoch(
+        uint64_t vertex, uint64_t num_vertices, uint32_t num_epochs) {
+    const uint64_t n = num_vertices > 0 ? num_vertices : 1;
+    const uint32_t ne = num_epochs > 1 ? num_epochs : 2;
+    uint64_t epoch = (vertex * ne) / n;
+    if (epoch >= ne) epoch = ne - 1;
+    return static_cast<uint16_t>(epoch);
+}
 
 void setCurrentVertexHint(uint32_t core_id, uint64_t vertex);
 bool hasCurrentVertexHint(uint32_t core_id);
@@ -59,6 +69,9 @@ bool lookupEcgReusePlan(uint32_t core_id, uint32_t vertex,
                         uint8_t& count, uint64_t& sequence);
 void recordBoundReusePlanLoad(uint32_t core_id, uint64_t address);
 void clearBoundReusePlanLoad(uint32_t core_id);
+void finishBoundReusePlanCertification(uint32_t core_id);
+bool boundReusePlanCertificationFinished(uint32_t core_id);
+void recordCertifiedReusePlanFallback();
 bool consumeBoundReusePlanLoad(
     uint32_t core_id, uint64_t line_addr, uint64_t line_size,
     uint16_t* current_epoch = nullptr, uint16_t* context_id = nullptr,
@@ -181,9 +194,7 @@ struct GraphCacheContext {
     RereferenceMatrix rereference;
 
     uint32_t current_src_vertex = 0;
-    mutable uint32_t current_dst_vertex = 0;
     uint8_t current_mask = 0;
-    mutable uint32_t current_outer_vertex = 0;
     bool loaded = false;
 
     // Epoch count (ne) for SNIPER_ECG_EXTRACT circular next-ref distance; must

@@ -3390,7 +3390,13 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             "architectural epoch/context CSR channel.")
     if (is_reuse_plan_ecg and args.ecg_isa_variant == "computed" and
             args.sniper_require_fused_receipts):
-        require_sniper_reuse_plan_certification_budget(env)
+        certification_budget = require_sniper_reuse_plan_certification_budget(
+            env)
+        bind_prefix_loads = max(
+            8192, certification_budget * 256)
+        env["SNIPER_REUSE_PLAN_BIND_PREFIX_LOADS"] = str(
+            bind_prefix_loads)
+        row["sniper_reuse_bind_prefix_loads"] = bind_prefix_loads
     if policy_name == "popt":
         popt_fast = (
             "0" if os.environ.get("SNIPER_POPT_FAST") == "0" else "1")
@@ -3742,11 +3748,32 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         log_path, sidebands)
     bind_count, bind_bad = validate_sniper_exact_bind_trace(
         log_path, reuse_plan_trace_budget)
+    certified_prefixes = len(re.findall(
+        r"\[ECG-ReusePlan-CERTIFIED-PREFIX sim=sniper core=\d+\]",
+        log_text))
+    fallback_receipt = re.search(
+        r"\[ECG-ReusePlan-CERTIFIED-FALLBACK sim=sniper uses=(\d+)\]",
+        log_text)
+    certified_fallbacks = (
+        int(fallback_receipt.group(1)) if fallback_receipt else 0)
     row["sniper_reuse_bind_trace_budget"] = reuse_plan_trace_budget
     row["sniper_fused_reuse_plan_receipts"] = fused_count
     row["sniper_fused_reuse_plan_bad_receipts"] = fused_bad
     row["sniper_reuse_bind_consumes"] = bind_count
     row["sniper_reuse_bind_bad_consumes"] = bind_bad
+    row["sniper_reuse_bind_certified_prefixes"] = certified_prefixes
+    row["sniper_reuse_bind_certified_fallbacks"] = certified_fallbacks
+    prefix_loads = int(row.get("sniper_reuse_bind_prefix_loads") or 0)
+    requires_certified_fallback = (
+        fused_validation and prefix_loads > 0 and
+        int(args.sniper_semantic_edge_limit) > prefix_loads)
+    if requires_certified_fallback and (
+            certified_prefixes != 1 or certified_fallbacks <= 0):
+        row["status"] = "error"
+        row["error"] = (
+            "certified ReuseBind prefix did not transition to marker-free "
+            f"fallback: prefixes={certified_prefixes} "
+            f"fallbacks={certified_fallbacks}")
     if (fused_count > 0 and fused_bad == 0 and
             fused_count >= reuse_plan_trace_budget):
         row["sniper_transport_receipts_validated"] = 1

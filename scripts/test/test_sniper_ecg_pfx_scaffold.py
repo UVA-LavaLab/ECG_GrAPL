@@ -1,5 +1,7 @@
 import importlib.util
 from pathlib import Path
+import shutil
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -306,6 +308,8 @@ def test_sniper_computed_address_uses_transport_matched_loops():
     assert '"sniper_reuse_bind_exact"] = 1' in runner
     assert '"sniper_reuse_plan_epoch_context_bound"] = 1' in runner
     assert "GRAPHBREW_SNIPER_USER_REUSE_PLAN_BIND" in harness
+    assert "GRAPHBREW_SNIPER_USER_REUSE_PLAN_CERTIFIED" in harness
+    assert "SNIPER_REUSE_PLAN_BIND_PREFIX_LOADS" in harness
     assert "reuse_plan_bound_load" in harness
     assert source.count("[REUSE_PLAN_EXACT_BIND]") == 5
     assert "const WeightT source_dist = dist[node];" in source
@@ -313,8 +317,11 @@ def test_sniper_computed_address_uses_transport_matched_loops():
     assert "edge-governed dist[dest]" in source
     assert "edge-governed depth/path_counts[dest]" in source
     assert "recordBoundReusePlanLoad" in context_h
+    assert "finishBoundReusePlanCertification" in context_h
+    assert "recordCertifiedReusePlanFallback" in context_h
     assert "consumeBoundReusePlanLoad" in context_cc
     assert "GRAPHBREW_REUSE_PLAN_BIND_WORK_ID" in setup
+    assert "GRAPHBREW_REUSE_PLAN_CERTIFIED_WORK_ID" in setup
     user_case = setup.split('"""      case SIM_CMD_USER:', 2)[2].split(
         '"""', 1)[0]
     assert "GRAPHBREW_REUSE_PLAN_BIND_WORK_ID" in user_case
@@ -324,6 +331,8 @@ def test_sniper_computed_address_uses_transport_matched_loops():
     assert "sniperReusePlanExactBindEnabled" in cache
     assert "m_pending_exact_reuse_plan_valid" in cache
     assert "m_pending_request_current_epoch" in cache
+    assert "boundReusePlanCertificationFinished" in cache
+    assert "std::numeric_limits<uint64_t>::max() - 1" in cache
     assert "m_ecg_context_id" in cache
     assert "beginEcgContext" in context_cc
     assert "currentEcgEpoch" in context_cc
@@ -331,6 +340,96 @@ def test_sniper_computed_address_uses_transport_matched_loops():
     assert runner.count('env["SNIPER_REQUIRE_POPT_MATRIX"] = "1"') == 1
     assert '"sniper_popt_matrix_required"] = int(requires_popt_matrix)' in runner
     assert "Matrix-free ReuseBind row unexpectedly loaded" in runner
+    assert 'env["SNIPER_REUSE_PLAN_BIND_PREFIX_LOADS"]' in runner
+    assert '"sniper_reuse_bind_prefix_loads"' in runner
+    assert '"sniper_reuse_bind_certified_prefixes"' in runner
+    assert '"sniper_reuse_bind_certified_fallbacks"' in runner
+    assert "certified ReuseBind prefix did not transition" in runner
+
+
+def test_sniper_epoch_cache_and_bind_prefix_are_exact(tmp_path):
+    compiler = shutil.which("g++")
+    if compiler is None:
+        return
+    fake_include = tmp_path / "include"
+    fake_include.mkdir()
+    (fake_include / "sim_api.h").write_text(
+        """
+#pragma once
+#include <cstdint>
+extern uint64_t command_counts[4];
+inline uint64_t SimUser(uint64_t command, uint64_t) {
+    if (command == 0x4B32424EULL) ++command_counts[0];
+    else if (command == 0x4B324243ULL) ++command_counts[1];
+    else if (command == 0x4B324244ULL) ++command_counts[2];
+    else ++command_counts[3];
+    return 0;
+}
+inline void SimRoiStart() {}
+inline void SimRoiEnd() {}
+""")
+    source = tmp_path / "sniper_prefix.cc"
+    binary = tmp_path / "sniper_prefix"
+    source.write_text(
+        r'''
+#include <cstdint>
+#include <cstdlib>
+#include "bench/include/sniper_sim/sniper_harness.h"
+#include "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/graph_cache_context_sniper.h"
+
+uint64_t command_counts[4] = {};
+
+int main() {
+    if (graphbrew::sniper::quantizeEcgEpoch(0, 10, 3) != 0) return 1;
+    if (graphbrew::sniper::quantizeEcgEpoch(3, 10, 3) != 0) return 2;
+    if (graphbrew::sniper::quantizeEcgEpoch(4, 10, 3) != 1) return 3;
+    if (graphbrew::sniper::quantizeEcgEpoch(7, 10, 3) != 2) return 4;
+    setenv("SNIPER_REUSE_PLAN_EXACT_BIND", "1", 1);
+    setenv("SNIPER_REUSE_PLAN_BIND_PREFIX_LOADS", "3", 1);
+    int value = 9;
+    for (int i = 0; i < 5; ++i)
+        if (graphbrew_sniper::reuse_plan_bound_load(&value) != 9) return 5;
+    if (command_counts[0] != 3) return 6;
+    if (command_counts[1] != 3) return 7;
+    if (command_counts[2] != 1) return 8;
+    if (command_counts[3] != 0) return 9;
+    graphbrew_sniper::roi_begin();
+    for (int i = 0; i < 4; ++i)
+        (void)graphbrew_sniper::reuse_plan_bound_load(&value);
+    if (command_counts[0] != 6) return 10;
+    if (command_counts[1] != 6) return 11;
+    if (command_counts[2] != 2) return 12;
+    return 0;
+}
+''')
+    subprocess.run([
+        compiler, "-std=c++17", "-O2",
+        f"-I{fake_include}",
+        f"-I{ROOT}",
+        f"-I{ROOT / 'bench/include'}",
+        f"-I{ROOT / 'bench/include/external/gapbs'}",
+        str(source), "-o", str(binary),
+    ], cwd=ROOT, check=True)
+    subprocess.run([str(binary)], check=True)
+
+
+def test_sniper_epoch_lookup_is_cached_per_core():
+    context = read(
+        "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/"
+        "graph_cache_context_sniper.cc")
+    header = read(
+        "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/"
+        "graph_cache_context_sniper.h")
+    assert "epochStorage()[core_id].store(" in context
+    assert "epochValidStorage()[core_id].store(true" in context
+    assert "epochValidStorage()[core_id].load(" in context
+    assert "fallbackVertexStorage()[core_id]" in context
+    assert "vertexValidStorage()[core_id].store(" in context.split(
+        "void beginEcgContext()", 1)[1]
+    assert "epochValidStorage()[core_id].store(" in context.split(
+        "void beginEcgContext()", 1)[1]
+    assert "current_dst_vertex" not in header
+    assert "current_outer_vertex" not in header
 
 
 def test_sniper_ecg_host_profile_covers_cache_callbacks():

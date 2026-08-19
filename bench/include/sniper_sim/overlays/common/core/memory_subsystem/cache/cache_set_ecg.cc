@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 
 namespace {
@@ -417,18 +418,33 @@ CacheSetECG::prepareInsertion(IntPtr addr, UInt32 set_index)
       const uint32_t requester_core = requesterCoreOr(m_core_id);
       UInt16 current_epoch = 0, context_id = 0;
       uint64_t bind_sequence = ~uint64_t{0};
-      if (graphbrew::sniper::consumeBoundReusePlanLoad(
+      const bool consumed =
+         graphbrew::sniper::consumeBoundReusePlanLoad(
               requester_core,
               static_cast<uint64_t>(m_pending_insert_addr),
               m_blocksize, &current_epoch, &context_id,
-              &bind_sequence)) {
+              &bind_sequence);
+      const bool certified_fallback =
+         !consumed &&
+         graphbrew::sniper::boundReusePlanCertificationFinished(
+            requester_core);
+      if (certified_fallback) {
+         current_epoch =
+            graphbrew::sniper::globalContext().currentEcgEpoch(
+               requester_core);
+         context_id = graphbrew::sniper::currentEcgContextId();
+      }
+      if (consumed || certified_fallback) {
          UInt8 tier = 0;
          UInt16 first = 0, second = 0;
          if (context_id != 0 &&
              graphbrew::sniper::globalContext().lookupFusedReusePlanPair(
                  static_cast<uint64_t>(m_pending_insert_addr),
                  requester_core, tier, first, second,
-                 bind_sequence)) {
+                 consumed ? bind_sequence
+                          : std::numeric_limits<uint64_t>::max() - 1)) {
+            if (certified_fallback)
+               graphbrew::sniper::recordCertifiedReusePlanFallback();
             m_pending_exact_reuse_plan_valid = true;
             m_pending_exact_reuse_plan_tier = tier;
             m_pending_exact_reuse_plan_first = first;
