@@ -12,8 +12,13 @@ performance results.
 | **Sniper** | larger-scale cache and traffic trends |
 
 Only gem5 O3 execution time is used for architectural speedup. cache_sim does
-not model cycles or instructions. Sniper uses a coarser delivery model than
-gem5's request-bound O3 path, so its time is not used as a ReuseBind speedup.
+not model cycles or instructions. It replays kernel-declared graph-data
+accesses, not gem5's complete LLC request population: instruction fetches,
+stack traffic, and other guest-runtime data can therefore be absent. A victim
+rule or online-selector winner discovered in cache_sim is a hypothesis, not a
+design result, until the same rule is tested in gem5 O3. Sniper uses a coarser
+delivery model than gem5's request-bound O3 path, so its time is not used as a
+ReuseBind speedup.
 
 ReusePlan records are graph-derived immutable inputs, not measured graph work.
 The gem5 PageRank flow generates each record sidecar once with the native
@@ -24,6 +29,12 @@ mismatch. Detailed O3 simulation never recomputes the sidecar.
 
 Absolute miss rates are not compared across simulators. Each simulator is
 compared with its own matching baseline.
+
+Online-selector diagnostics report per-arm leader samples, winning windows,
+and follower selections, plus the scalar final winning arm. Stability studies
+invoke cache_sim separately for all 64 values of
+`CACHE_ECG_DUELING_SET_OFFSET`; the simulator does not rotate colors within one
+run, and a single favorable leader placement is not sufficient evidence.
 
 ## PageRank study
 

@@ -98,6 +98,10 @@ eligible. ReusePlan refines RRIP; it does not discard RRIP's recency state.
 The code also contains an online selector that compares RRIP-first, GRASP,
 epoch-first, degree-first, and LRU leader sets. That selector is useful for
 studying phase changes, but the static RRIP-first policy is the primary design.
+Per-arm leader, winner-window, and follower counters expose what the selector
+actually chose. cache_sim can rotate the leader-set colors to detect a
+set-index artifact; a cache_sim winner must still transfer to gem5 O3 because
+the functional model does not contain gem5's complete LLC request stream.
 
 ## 5. ReuseBind property loads
 

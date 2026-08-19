@@ -64,8 +64,6 @@ POLICY_ORDER = [
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH",
     "ECG_REUSE_PLAN_EPOCH",
     "ECG_REUSE_PLAN_EPOCH_FLOWTHROUGH",
-    "ECG_REUSE_PLAN_EPOCH_ONLY",
-    "ECG_REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH",
     "ECG_REUSE_PLAN_SHORTCIRCUIT",
     "ECG_REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH",
     "ECG_REUSE_PLAN",
@@ -104,9 +102,6 @@ POLICY_LABELS = {
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH": "ReusePlan-degree+FlowThrough",
     "ECG_REUSE_PLAN_EPOCH": "ReusePlan-epoch",
     "ECG_REUSE_PLAN_EPOCH_FLOWTHROUGH": "ReusePlan-epoch+FlowThrough",
-    "ECG_REUSE_PLAN_EPOCH_ONLY": "ReusePlan-epoch-only",
-    "ECG_REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH":
-        "ReusePlan-epoch-only+FlowThrough",
     "ECG_REUSE_PLAN_SHORTCIRCUIT": "ReusePlan-shortcircuit",
     "ECG_REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH":
         "ReusePlan-shortcircuit+FlowThrough",
@@ -141,10 +136,6 @@ POLICY_DESCRIPTIONS = {
     "ECG_REUSE_PLAN_EPOCH": "ReusePlan transport with epoch-first victim selection",
     "ECG_REUSE_PLAN_EPOCH_FLOWTHROUGH":
         "ReusePlan transport with epoch-first victim selection and FlowThrough",
-    "ECG_REUSE_PLAN_EPOCH_ONLY":
-        "ReusePlan transport with epoch-only insertion and victim selection",
-    "ECG_REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH":
-        "ReusePlan transport with epoch-only insertion and FlowThrough",
     "ECG_REUSE_PLAN_SHORTCIRCUIT":
         "ReusePlan transport with legacy shortcircuit victim selection",
     "ECG_REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH":

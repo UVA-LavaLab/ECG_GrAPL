@@ -238,7 +238,6 @@ def test_reuse_plan_policy_aliases_are_first_class(monkeypatch):
             ("ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH", "epoch_first"),
             ("ECG:REUSE_PLAN_RRIP_FLOWTHROUGH", "rrip_first"),
             ("ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
-            ("ECG:REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH", "epoch_only"),
             ("ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH", "shortcircuit"),
             ("ECG:REUSE_PLAN_LRU_FLOWTHROUGH", "lru_only")):
         spec = module.parse_policy_spec(label)

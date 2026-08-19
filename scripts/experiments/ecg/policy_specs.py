@@ -94,10 +94,6 @@ def parse_policy_spec(text: str) -> PolicySpec:
         "ECG_REUSE_PLAN_RRIP": ("ECG_REUSE_PLAN_RRIP", "rrip_first"),
         "ECG:REUSE_PLAN_DEGREE": ("ECG_REUSE_PLAN_DEGREE", "degree_first"),
         "ECG_REUSE_PLAN_DEGREE": ("ECG_REUSE_PLAN_DEGREE", "degree_first"),
-        "ECG:REUSE_PLAN_EPOCH_ONLY":
-            ("ECG_REUSE_PLAN_EPOCH_ONLY", "epoch_only"),
-        "ECG_REUSE_PLAN_EPOCH_ONLY":
-            ("ECG_REUSE_PLAN_EPOCH_ONLY", "epoch_only"),
         "ECG:REUSE_PLAN_SHORTCIRCUIT":
             ("ECG_REUSE_PLAN_SHORTCIRCUIT", "shortcircuit"),
         "ECG_REUSE_PLAN_SHORTCIRCUIT":
@@ -128,10 +124,6 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ("ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
         "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH":
             ("ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
-        "ECG:REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH":
-            ("ECG_REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH", "epoch_only"),
-        "ECG_REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH":
-            ("ECG_REUSE_PLAN_EPOCH_ONLY_FLOWTHROUGH", "epoch_only"),
         "ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH":
             ("ECG_REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH", "shortcircuit"),
         "ECG_REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH":
@@ -148,6 +140,9 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ecg_variant=variant,
             ecg_transport_pinned=True,
         )
+    # `epoch_only` remains an internal compatibility spelling for
+    # EPOCH_FIRST. Its victim decision does not consume insertion RRPV, so it
+    # is not a distinct experimental policy and intentionally has no label.
     if upper in (
         "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
         "ECG_REUSE_PLAN_RRIP_FLOWTHROUGH",
