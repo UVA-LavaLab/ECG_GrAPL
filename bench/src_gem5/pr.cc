@@ -668,9 +668,12 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     for (int iter = 0; iter < max_iters; iter++) {
         ++executed_iters;
         double error = 0;
+        Gem5EcgMonotonicEpochCursor epoch_cursor;
+        if (gem5_ecg_epoch_csr_enabled()) {
+            epoch_cursor.reset(g.num_nodes(), edge_epoch_count);
+        }
         for (NodeID u = 0; u < g.num_nodes(); u++) {
-            GEM5_SET_VERTEX_EPOCH(
-                u, g.num_nodes(), edge_epoch_count);
+            GEM5_SET_MONOTONIC_VERTEX_EPOCH(epoch_cursor, u);
             ScoreT incoming_total = 0;
 
             if (pair_extract_only &&

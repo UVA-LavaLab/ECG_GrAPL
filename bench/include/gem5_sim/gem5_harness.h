@@ -1034,6 +1034,43 @@ inline uint16_t gem5_ecg_quantize_current_epoch(
     return static_cast<uint16_t>(epoch);
 }
 
+class Gem5EcgMonotonicEpochCursor {
+public:
+    Gem5EcgMonotonicEpochCursor() = default;
+
+    Gem5EcgMonotonicEpochCursor(
+            uint64_t num_vertices, uint32_t num_epochs) {
+        reset(num_vertices, num_epochs);
+    }
+
+    void reset(uint64_t num_vertices, uint32_t num_epochs) {
+        num_vertices_ = num_vertices > 0 ? num_vertices : 1;
+        num_epochs_ = num_epochs > 1 ? num_epochs : 2;
+        epoch_ = 0;
+        next_boundary_ = boundary(1);
+    }
+
+    uint16_t epoch(uint64_t vertex) {
+        while (epoch_ + 1 < num_epochs_ && vertex >= next_boundary_) {
+            ++epoch_;
+            next_boundary_ = boundary(epoch_ + 1);
+        }
+        return static_cast<uint16_t>(epoch_);
+    }
+
+private:
+    uint64_t boundary(uint32_t epoch) const {
+        return (
+            static_cast<uint64_t>(epoch) * num_vertices_ +
+            num_epochs_ - 1) / num_epochs_;
+    }
+
+    uint64_t num_vertices_ = 1;
+    uint64_t next_boundary_ = 1;
+    uint32_t num_epochs_ = 2;
+    uint32_t epoch_ = 0;
+};
+
 inline void gem5_ecg_write_context_csr(uint16_t context) {
 #if defined(__riscv)
     uintptr_t value = context;
@@ -1050,6 +1087,27 @@ inline void gem5_ecg_write_current_epoch_csr(uint16_t epoch) {
 #else
     (void)epoch;
 #endif
+}
+
+inline uint16_t& gem5_ecg_current_epoch_csr_shadow() {
+    static uint16_t epoch = 0;
+    return epoch;
+}
+
+inline void gem5_ecg_reset_current_epoch_csr_shadow(uint16_t epoch) {
+    gem5_ecg_current_epoch_csr_shadow() = epoch;
+}
+
+inline bool gem5_ecg_current_epoch_csr_changed(uint16_t epoch) {
+    uint16_t& current = gem5_ecg_current_epoch_csr_shadow();
+    if (current == epoch) return false;
+    current = epoch;
+    return true;
+}
+
+inline void gem5_ecg_update_current_epoch_csr(uint16_t epoch) {
+    if (gem5_ecg_current_epoch_csr_changed(epoch))
+        gem5_ecg_write_current_epoch_csr(epoch);
 }
 
 inline void gem5_ecg_write_record_format_csr(
@@ -1081,6 +1139,7 @@ inline void gem5_ecg_publish_legacy_context(uint16_t context) {
         if (gem5_ecg_epoch_csr_enabled()) { \
             gem5_ecg_write_context_csr(gem5_ecg_context_id()); \
             gem5_ecg_write_current_epoch_csr(0); \
+            gem5_ecg_reset_current_epoch_csr_shadow(0); \
         } \
     } while (0)
 
@@ -1088,6 +1147,7 @@ inline void gem5_ecg_publish_legacy_context(uint16_t context) {
     do { \
         if (gem5_ecg_epoch_csr_enabled()) { \
             gem5_ecg_write_current_epoch_csr(0); \
+            gem5_ecg_reset_current_epoch_csr_shadow(0); \
             gem5_ecg_write_context_csr(0); \
         } \
         gem5_ecg_publish_legacy_context(0); \
@@ -1097,11 +1157,21 @@ inline void gem5_ecg_publish_legacy_context(uint16_t context) {
 #define GEM5_SET_VERTEX_EPOCH(vertex_id, num_vertices, num_epochs) \
     do { \
         if (gem5_ecg_epoch_csr_enabled()) { \
-            gem5_ecg_write_current_epoch_csr( \
+            gem5_ecg_update_current_epoch_csr( \
                 gem5_ecg_quantize_current_epoch( \
                     static_cast<uint64_t>(vertex_id), \
                     static_cast<uint64_t>(num_vertices), \
                     static_cast<uint32_t>(num_epochs))); \
+        } else { \
+            GEM5_SET_VERTEX(vertex_id); \
+        } \
+    } while (0)
+
+#define GEM5_SET_MONOTONIC_VERTEX_EPOCH(cursor, vertex_id) \
+    do { \
+        if (gem5_ecg_epoch_csr_enabled()) { \
+            gem5_ecg_update_current_epoch_csr( \
+                (cursor).epoch(static_cast<uint64_t>(vertex_id))); \
         } else { \
             GEM5_SET_VERTEX(vertex_id); \
         } \

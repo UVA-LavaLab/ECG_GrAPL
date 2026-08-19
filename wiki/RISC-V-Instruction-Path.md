@@ -51,6 +51,12 @@ The opcode determines the memory width and destination register class. Compact
 record formats use the ECG record-format CSR configured before the region of
 interest.
 
+The context CSR is initialized once per execution context. The current-epoch
+CSR is updated only when traversal crosses a quantized epoch boundary; all
+vertices in the same epoch reuse the existing architectural value. This
+preserves exact Request metadata without serializing the O3 pipeline on every
+vertex.
+
 ### 3. Rename and dispatch
 
 The destination register is renamed normally. The instruction allocates its

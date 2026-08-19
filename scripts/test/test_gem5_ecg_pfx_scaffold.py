@@ -231,6 +231,9 @@ def test_gem5_reuse_plan_uses_architectural_epoch_context_csrs():
     assert 'asm volatile ("csrw 0x801, %0"' in harness
     assert 'asm volatile ("csrw 0x802, %0"' in harness
     assert "GEM5_SET_VERTEX_EPOCH" in harness
+    assert "GEM5_SET_MONOTONIC_VERTEX_EPOCH" in harness
+    assert "gem5_ecg_update_current_epoch_csr" in harness
+    assert "gem5_ecg_current_epoch_csr_changed" in harness
     assert "gem5_ecg_allocate_context_id" in harness
     assert "GEM5_ECG_END_CONTEXT" in harness
     assert "ID reuse requires" in harness
@@ -258,11 +261,57 @@ def test_gem5_reuse_plan_uses_architectural_epoch_context_csrs():
     assert "ctx.currentVertexForPopt()" not in policy.split(
         "GraphEcgRP::getVictim", 1)[1]
 
-    for kernel in ("pr", "bfs", "sssp", "bc", "cc"):
+    for kernel in ("bfs", "sssp", "bc", "cc"):
         source = read(f"bench/src_gem5/{kernel}.cc")
         assert "GEM5_ECG_BEGIN_CONTEXT();" in source
         assert "GEM5_ECG_END_CONTEXT();" in source
         assert "GEM5_SET_VERTEX_EPOCH(" in source
+    pr = read("bench/src_gem5/pr.cc")
+    assert "GEM5_ECG_BEGIN_CONTEXT();" in pr
+    assert "GEM5_ECG_END_CONTEXT();" in pr
+    assert "Gem5EcgMonotonicEpochCursor epoch_cursor;" in pr
+    assert "GEM5_SET_MONOTONIC_VERTEX_EPOCH(epoch_cursor, u);" in pr
+
+
+def test_gem5_monotonic_epoch_cursor_is_exact(tmp_path):
+    source = tmp_path / "epoch_cursor.cc"
+    binary = tmp_path / "epoch_cursor"
+    source.write_text(
+        r'''
+#include <cstdint>
+#include "bench/include/gem5_sim/gem5_harness.h"
+
+int main() {
+    Gem5EcgMonotonicEpochCursor cursor;
+    for (uint64_t vertices = 1; vertices <= 257; ++vertices) {
+        for (uint32_t epochs = 2; epochs <= 64; ++epochs) {
+            cursor.reset(vertices, epochs);
+            for (uint64_t vertex = 0; vertex < vertices; ++vertex) {
+                if (cursor.epoch(vertex) !=
+                        gem5_ecg_quantize_current_epoch(
+                            vertex, vertices, epochs)) return 1;
+            }
+        }
+    }
+    cursor.reset(262144, 16);
+    for (uint64_t vertex = 0; vertex < 262144; ++vertex)
+        if (cursor.epoch(vertex) != (vertex >> 14)) return 2;
+    gem5_ecg_reset_current_epoch_csr_shadow(0);
+    if (gem5_ecg_current_epoch_csr_changed(0)) return 3;
+    if (!gem5_ecg_current_epoch_csr_changed(1)) return 4;
+    if (gem5_ecg_current_epoch_csr_changed(1)) return 5;
+    if (!gem5_ecg_current_epoch_csr_changed(0)) return 6;
+    return 0;
+}
+''')
+    subprocess.run([
+        "g++", "-std=c++17", "-O2", "-DNO_M5OPS",
+        f"-I{PROJECT_ROOT}",
+        f"-I{PROJECT_ROOT / 'bench/include/external/gapbs'}",
+        f"-I{PROJECT_ROOT / 'bench/include'}",
+        str(source), "-o", str(binary),
+    ], check=True, cwd=PROJECT_ROOT)
+    subprocess.run([str(binary)], check=True)
 
 
 def test_schedule2_runner_selects_adaptive_variants_and_rejects_o3(monkeypatch):
