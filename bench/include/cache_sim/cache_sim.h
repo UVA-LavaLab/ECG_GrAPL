@@ -1244,6 +1244,18 @@ public:
                 uint8_t combined = static_cast<uint8_t>((uint32_t(dbg_rrpv) + uint32_t(popt_rrpv)) / 2);
                 if (combined == 0 && dbg_rrpv > 0) combined = 1;  // Reserve 0 for hits
                 set[victim_idx].rrpv = combined;
+            } else if (
+                    reuseAdmissionEnabled() &&
+                    mode == ECGMode::ECG_GRASP_POPT && graph_ctx_ &&
+                    access_hints &&
+                    graph_ctx_->isEcgEpochData(address) &&
+                    access_hints->edge_epoch_valid &&
+                    access_hints->current_src != UINT32_MAX) {
+                set[victim_idx].rrpv = ecg_policy::reuseAdmissionRRPV(
+                    deliveredFirstReuseEpoch(*access_hints),
+                    currentReuseEpoch(),
+                    graph_ctx_->edge_epoch_count, 7);
+                ++reuse_admission_updates_;
             } else {
                 // GRASP 3-tier insertion for DBG_PRIMARY/DBG_ONLY/ECG_EMBEDDED/
                 // ECG_GRASP_POPT. TWO VARIANTS (mask_config.grasp_tier_source):
@@ -1331,7 +1343,10 @@ public:
     }
 
     const CacheStats& getStats() const { return stats_; }
-    void resetStats() { stats_.reset(); }
+    void resetStats() {
+        stats_.reset();
+        reuse_admission_updates_ = 0;
+    }
     
     const std::string& getName() const { return name_; }
     size_t getSizeBytes() const { return size_bytes_; }
@@ -1348,6 +1363,9 @@ public:
     }
     uint64_t getDuelingWinnerChanges() const {
         return dueling_winner_changes_;
+    }
+    uint64_t getReuseAdmissionUpdates() const {
+        return reuse_admission_updates_;
     }
     const std::array<uint64_t, ecg_policy::DUEL_ARM_COUNT>&
     getDuelingLeaderSamplesByArm() const {
@@ -1509,8 +1527,25 @@ private:
                     set[idx].ecg_exact_pred = computeExactPredForStamp(set[idx].line_addr);
                 }
             } else {
-                // GRASP-faithful 3-tier for DBG modes and ECG_EMBEDDED variants
-                if (graph_ctx_) {
+                bool admitted = false;
+                // Refresh the prediction at the same property access that
+                // delivers the new first future epoch. Unlike epoch-first
+                // eviction, this preserves RRIP as the victim mechanism.
+                if (reuseAdmissionEnabled() &&
+                    mode == ECGMode::ECG_GRASP_POPT && graph_ctx_ &&
+                    graph_ctx_->isEcgEpochData(set[idx].line_addr) &&
+                    graph_ctx_->hints_for_thread().edge_epoch_valid &&
+                    graph_ctx_->hints_for_thread().current_src != UINT32_MAX) {
+                    set[idx].rrpv = ecg_policy::reuseAdmissionRRPV(
+                        deliveredFirstReuseEpoch(
+                            graph_ctx_->hints_for_thread()),
+                        currentReuseEpoch(), graph_ctx_->edge_epoch_count, 7);
+                    ++reuse_admission_updates_;
+                    admitted = true;
+                }
+                // GRASP-faithful fallback for accesses without a delivered
+                // ReusePlan epoch.
+                if (!admitted && graph_ctx_) {
                     uint64_t addr = set[idx].line_addr;
                     if (ecgTierCarried() &&
                         mode == ECGMode::ECG_GRASP_POPT &&
@@ -2386,7 +2421,32 @@ private:
         dueling_follower_selections_by_arm_{};
     uint64_t dueling_completed_windows_ = 0;
     uint64_t dueling_winner_changes_ = 0;
+    uint64_t reuse_admission_updates_ = 0;
     size_t evicting_set_idx_ = 0;    // set index of the in-progress eviction
+
+    static bool reuseAdmissionEnabled() {
+        static const bool enabled = ecg_policy::parseReuseAdmission(
+            std::getenv("ECG_REUSE_ADMISSION"));
+        return enabled;
+    }
+
+    uint32_t currentReuseEpoch() const {
+        if (!graph_ctx_ || graph_ctx_->edge_epoch_count < 2)
+            return 0;
+        const uint32_t current =
+            graph_ctx_->hints_for_thread().current_src;
+        const uint32_t vertices = graph_ctx_->exact_nv
+            ? graph_ctx_->exact_nv : graph_ctx_->topology.num_vertices;
+        if (current == UINT32_MAX || vertices == 0) return 0;
+        return static_cast<uint32_t>(
+            (static_cast<uint64_t>(current) *
+             graph_ctx_->edge_epoch_count) / vertices);
+    }
+
+    static uint16_t deliveredFirstReuseEpoch(const AccessHints& hints) {
+        return hints.edge_epoch_sched_n > 0
+            ? hints.edge_epoch_sched[0] : hints.edge_epoch;
+    }
 
     size_t duelingSampleSetIndex(size_t set_idx) const {
         return set_idx + 64u - dueling_set_offset_;
@@ -3099,6 +3159,8 @@ public:
            << l3_->getDuelingCompletedWindows() << ",\n";
         ss << "  \"ecg_dueling_winner_changes\": "
            << l3_->getDuelingWinnerChanges() << ",\n";
+        ss << "  \"ecg_reuse_admission_updates\": "
+           << l3_->getReuseAdmissionUpdates() << ",\n";
         static constexpr const char* kDuelingArmNames[] = {
             "rrip", "grasp", "epoch", "degree", "lru"
         };

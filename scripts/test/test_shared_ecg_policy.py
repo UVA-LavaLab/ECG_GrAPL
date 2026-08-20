@@ -54,6 +54,21 @@ def test_calls_present_in_each_simulator():
             f"{rel} does not use the shared fail-closed variant parser")
 
 
+def test_reuse_admission_mapping_is_shared_across_backends():
+    callers = (
+        "bench/include/cache_sim/cache_sim.h",
+        "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_rp.cc",
+        "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/cache_set_ecg.cc",
+    )
+    for rel in callers:
+        text = (ROOT / rel).read_text(errors="ignore")
+        assert text.count("ecg_policy::reuseAdmissionRRPV") >= 2, (
+            f"{rel} must apply shared future-distance admission on fill and hit")
+        assert "ECG_REUSE_ADMISSION" in text
+    builder = (ROOT / "bench/include/ecg_reuse_plan_builder.h").read_text()
+    assert builder.count("quantizedFutureEpoch(") >= 3
+
+
 def test_grasp_insertion_classifier_is_shared():
     """The GRASP insertion tier is shared with the eviction policy:
     each simulator's graph context must call ecg_policy::classifyGraspTier rather

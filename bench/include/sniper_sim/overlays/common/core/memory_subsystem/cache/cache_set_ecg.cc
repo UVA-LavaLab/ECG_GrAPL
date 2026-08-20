@@ -243,6 +243,24 @@ OnlineDuelingEvidence& onlineDuelingEvidence()
    return evidence;
 }
 
+struct ReuseAdmissionEvidence
+{
+   UInt64 updates = 0;
+};
+
+ReuseAdmissionEvidence& reuseAdmissionEvidence()
+{
+   static ReuseAdmissionEvidence evidence;
+   return evidence;
+}
+
+bool reuseAdmissionEnabled()
+{
+   static const bool enabled = ecg_policy::parseReuseAdmission(
+         std::getenv("ECG_REUSE_ADMISSION"));
+   return enabled;
+}
+
 // __sync_fetch_and_add is a full-barrier GCC/Clang atomic builtin; matches
 // the increment convention already used on shared UInt64 counters elsewhere
 // in this Sniper tree (see the MULTICORE SAFETY comment above). Kept as a
@@ -288,6 +306,17 @@ void ensureOnlineDuelingStatsRegistered()
       registerStatsMetric(
             "ecg-online-dueling", 0, "follower-variant-overrides",
             &evidence.follower_variant_overrides);
+      return true;
+   }();
+   (void)registered;
+}
+
+void ensureReuseAdmissionStatsRegistered()
+{
+   static const bool registered = []() {
+      registerStatsMetric(
+            "ecg-reuse-admission", 0, "updates",
+            &reuseAdmissionEvidence().updates);
       return true;
    }();
    (void)registered;
@@ -540,6 +569,7 @@ CacheSetECG::lookupLineEcgReusePlan(
       return false;
    uint32_t requester_core = requesterCoreOr(m_core_id);
    if (requester_core >= graphbrew::sniper::MAX_TRACKED_CORES) return false;
+   current_epoch = context.currentEcgEpoch(requester_core);
    if (sniperReusePlanExactBindEnabled()) {
       uint64_t bind_sequence = ~uint64_t{0};
       if (!graphbrew::sniper::consumeBoundReusePlanLoad(
@@ -566,7 +596,6 @@ CacheSetECG::lookupLineEcgReusePlan(
    }
    uint32_t v0 = context.vertexForAddress(static_cast<uint64_t>(line_addr));
    if (v0 == UINT32_MAX) return false;
-   current_epoch = context.currentEcgEpoch(requester_core);
    uint64_t sequence = 0;
    return graphbrew::sniper::lookupEcgReusePlan(
        requester_core, v0, tier, first, second, count, sequence);
@@ -597,6 +626,7 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
       m_ecg_epoch_count[way] = 0;
       m_ecg_epoch_valid[way] = false;
       m_ecg_context_id[way] = 0;
+      UInt16 delivered_current_epoch = 0;
       const uint32_t requester_core = requesterCoreOr(m_core_id);
       if (m_property_lines[way] &&
           graphbrew::sniper::hasCurrentVertexHint(requester_core)) {
@@ -626,6 +656,7 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
             m_ecg_epoch_count[way] = count;
             m_ecg_epoch_valid[way] = true;
             m_ecg_context_id[way] = context_id;
+            delivered_current_epoch = current_epoch;
          }
       }
 
@@ -637,6 +668,15 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
          UInt8 combined = static_cast<UInt8>((UInt32(dbg_rrpv) + UInt32(popt_rrpv)) / 2u);
          if (combined == 0 && dbg_rrpv > 0) combined = 1;
          m_rrip_bits[way] = std::min<UInt8>(combined, m_rrip_max);
+      } else if (
+            m_mode == graphbrew::sniper::ECGMode::ECG_GRASP_POPT &&
+            reuseAdmissionEnabled() && m_ecg_epoch_valid[way]) {
+         const UInt32 ne = std::max<UInt32>(
+               2, graphbrew::sniper::globalContext().edge_epoch_count);
+         m_rrip_bits[way] = ecg_policy::reuseAdmissionRRPV(
+               m_ecg_epoch[way], delivered_current_epoch, ne, m_rrip_max);
+         ensureReuseAdmissionStatsRegistered();
+         incrementEvidenceCounter(reuseAdmissionEvidence().updates);
       } else {
          m_rrip_bits[way] =
             m_mode == graphbrew::sniper::ECGMode::ECG_GRASP_POPT &&
@@ -1108,6 +1148,7 @@ CacheSetECG::updateReplacementIndex(UInt32 accessed_index)
       UInt16 first = 0, second = 0;
       UInt8 count = 0;
       UInt16 current_epoch = 0, context_id = 0;
+      bool reuse_admitted = false;
       if (lookupLineEcgReusePlan(
              m_line_addrs[accessed_index], tier, first, second, count,
              current_epoch, context_id)) {
@@ -1117,7 +1158,16 @@ CacheSetECG::updateReplacementIndex(UInt32 accessed_index)
          m_ecg_epoch_count[accessed_index] = count;
          m_ecg_epoch_valid[accessed_index] = true;
          m_ecg_context_id[accessed_index] = context_id;
+         if (reuseAdmissionEnabled() && count > 0) {
+            const UInt32 ne = std::max<UInt32>(2, context.edge_epoch_count);
+            m_rrip_bits[accessed_index] = ecg_policy::reuseAdmissionRRPV(
+                  first, current_epoch, ne, m_rrip_max);
+            ensureReuseAdmissionStatsRegistered();
+            incrementEvidenceCounter(reuseAdmissionEvidence().updates);
+            reuse_admitted = true;
+         }
       }
+      if (reuse_admitted) return;
    }
    if (m_property_lines[accessed_index] && context.loaded) {
       uint64_t llc_size = m_llc_size_bytes ? m_llc_size_bytes : UInt64(m_associativity) * m_blocksize;

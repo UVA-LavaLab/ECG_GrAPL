@@ -91,6 +91,12 @@ inline uint32_t ecgGraspTier(const Ctx& ctx, uint64_t addr, uint64_t llcSize) {
     }
     return ctx.classifyGRASP(addr, llcSize, ghf);  // REGION (GRASP)
 }
+
+inline bool ecgReuseAdmissionEnabled() {
+    static const bool enabled = ecg_policy::parseReuseAdmission(
+        std::getenv("ECG_REUSE_ADMISSION"));
+    return enabled;
+}
 }  // namespace
 
 GraphEcgRP::GraphEcgRP(const Params &p)
@@ -225,6 +231,7 @@ GraphEcgRP::touch(
         data->lastTouchTick = curTick();
         if (ctx.loaded && ctx.isPropertyData(addr)) {
             data->is_property_data = true;
+            bool reuse_admitted = false;
             uint32_t vertex = UINT32_MAX;
             uint64_t reg_base = 0;
             uint32_t reg_elem = 0;
@@ -287,16 +294,28 @@ GraphEcgRP::touch(
                     data->ecg_context_id = isa_context_id;
                     data->ecg_epoch_count = isa_count;
                     data->ecg_epoch_valid = true;
+                    if (ecgReuseAdmissionEnabled() &&
+                        ecgMode == graph::ECGMode::ECG_GRASP_POPT &&
+                        isa_count > 0) {
+                        const uint32_t ne = std::max<uint32_t>(
+                            2u, ctx.topology.edge_epoch_count);
+                        data->rrpv = ecg_policy::reuseAdmissionRRPV(
+                            isa_epoch, isa_current_epoch, ne, rrpvMax);
+                        ++onlineDuelingStats.reuseAdmissionUpdates;
+                        reuse_admitted = true;
+                    }
                 }
             }
-            uint32_t tier =
-                data->ecg_dbg_tier >= 1 && data->ecg_dbg_tier <= 3
-                ? data->ecg_dbg_tier : ecgGraspTier(ctx, addr, llcSize);
-            data->ecg_dbg_tier = static_cast<uint8_t>(tier);
-            if (tier == 1) {
-                data->rrpv = 0;
-            } else if (data->rrpv > 0) {
-                data->rrpv--;
+            if (!reuse_admitted) {
+                uint32_t tier =
+                    data->ecg_dbg_tier >= 1 && data->ecg_dbg_tier <= 3
+                    ? data->ecg_dbg_tier : ecgGraspTier(ctx, addr, llcSize);
+                data->ecg_dbg_tier = static_cast<uint8_t>(tier);
+                if (tier == 1) {
+                    data->rrpv = 0;
+                } else if (data->rrpv > 0) {
+                    data->rrpv--;
+                }
             }
             ctx.updateVertexFromAddr(addr);
         } else if (data->rrpv > 0) {
@@ -380,6 +399,8 @@ GraphEcgRP::reset(
         // the sideband-JSON-derived values. Falls back to sideband if the
         // table has no entry for this vertex.
         bool got_carried_tier = false;
+        bool got_reuse_admission = false;
+        uint16_t admission_current_epoch = 0;
         if (data->is_property_data && ctx.loaded && ctx.num_regions > 0) {
             uint32_t vertex = UINT32_MAX;
             uint64_t reg_base = 0; uint32_t reg_elem = 0;
@@ -485,6 +506,8 @@ GraphEcgRP::reset(
                     data->ecg_context_id = isa_context_id;
                     data->ecg_epoch_count = isa_count;
                     data->ecg_epoch_valid = true;
+                    got_reuse_admission = isa_count > 0;
+                    admission_current_epoch = isa_current_epoch;
                 } else if (ecgMode == graph::ECGMode::ECG_GRASP_POPT) {
                     // Path A: this is a prefetch FILL (the in-order demand
                     // single-slot holds a different vertex). Recover the
@@ -521,7 +544,13 @@ GraphEcgRP::reset(
                 uint32_t tier = got_carried_tier
                     ? data->ecg_dbg_tier : ecgGraspTier(ctx, addr, llcSize);
                 data->ecg_dbg_tier = static_cast<uint8_t>(tier);
-                if (tier == 1) data->rrpv = pRrip;
+                if (ecgReuseAdmissionEnabled() && got_reuse_admission) {
+                    const uint32_t ne = std::max<uint32_t>(
+                        2u, ctx.topology.edge_epoch_count);
+                    data->rrpv = ecg_policy::reuseAdmissionRRPV(
+                        data->ecg_epoch, admission_current_epoch, ne, rrpvMax);
+                    ++onlineDuelingStats.reuseAdmissionUpdates;
+                } else if (tier == 1) data->rrpv = pRrip;
                 else if (tier == 2) data->rrpv = iRrip;
                 else data->rrpv = mRrip;
 
@@ -925,7 +954,10 @@ GraphEcgRP::OnlineDuelingStats::OnlineDuelingStats(
         "Number of online-dueling winner changes"),
     ADD_STAT(
         followerVariantOverrides,
-        "Number of request-bound follower selections overriding static RRIP")
+        "Number of request-bound follower selections overriding static RRIP"),
+    ADD_STAT(
+        reuseAdmissionUpdates,
+        "Number of ReusePlan future-distance RRPV admission or refresh updates")
 {
 }
 

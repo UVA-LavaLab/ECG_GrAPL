@@ -94,6 +94,7 @@ class GraphEcgRP : public Base
         statistics::Scalar completedWindows;
         statistics::Scalar winnerChanges;
         statistics::Scalar followerVariantOverrides;
+        statistics::Scalar reuseAdmissionUpdates;
     } onlineDuelingStats;
 };
 

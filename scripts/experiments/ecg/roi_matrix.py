@@ -311,6 +311,8 @@ GEM5_STAT_KEYS = {
         "system.l3cache.replacement_policy.winnerChanges",
     "gem5_reuse_plan_dueling_follower_variant_overrides":
         "system.l3cache.replacement_policy.followerVariantOverrides",
+    "gem5_reuse_plan_admission_updates":
+        "system.l3cache.replacement_policy.reuseAdmissionUpdates",
     # Demand-load (cpu.data) L3 stats EXCLUDING prefetcher fills. The L2 stream
     # prefetcher otherwise dominates overall::total (>>demand). Sniper's NUCA
     # counters do not provide this split, so the pipeline treats its prefetched
@@ -1289,6 +1291,8 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
     apply_explicit_cell_mechanism_env(env, spec)
     transport = ecg_transport_for(spec, args.benchmark)
     apply_ecg_transport_env(env, transport)
+    env["ECG_REUSE_ADMISSION"] = (
+        "1" if spec.ecg_reuse_admission else "0")
     env.update({
         "CACHE_ULTRAFAST": "0",
         "CACHE_FAST": "0",
@@ -1758,6 +1762,18 @@ def validate_online_dueling_activity(
             f"{missing}")
         return False
     return True
+
+
+def validate_reuse_admission_activity(
+        row: dict[str, Any], required: bool,
+        field: str = "gem5_reuse_plan_admission_updates") -> bool:
+    updates = int(row.get(field) or 0)
+    valid = updates > 0 if required else updates == 0
+    if not valid:
+        mark_row_error(
+            row,
+            f"{field} must be {'positive' if required else 'zero'}, got {updates}")
+    return valid
 
 
 def mark_row_error(row: dict[str, Any], message: str) -> None:
@@ -2308,6 +2324,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "ecg_dueling_final_winner_arm",
         "ecg_dueling_completed_windows",
         "ecg_dueling_winner_changes",
+        "ecg_reuse_admission_updates",
         "ecg_dueling_leader_samples_rrip",
         "ecg_dueling_leader_samples_grasp",
         "ecg_dueling_leader_samples_epoch",
@@ -2335,6 +2352,9 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "popt_matrix_stream_columns_simulated",
     ):
         row[key] = data.get(key)
+    validate_reuse_admission_activity(
+        row, spec.ecg_reuse_admission,
+        field="ecg_reuse_admission_updates")
     fills = row.get("prefetch_fills") or 0
     requests = row.get("prefetch_requests") or 0
     if fills:
@@ -2462,6 +2482,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     apply_explicit_cell_mechanism_env(env, spec)
     transport = ecg_transport_for(spec, args.benchmark)
     apply_ecg_transport_env(env, transport)
+    env["ECG_REUSE_ADMISSION"] = (
+        "1" if spec.ecg_reuse_admission else "0")
     is_reuse_plan_ecg = (
         spec.policy == "ECG" and
         spec.ecg_mode == "ECG_GRASP_POPT" and
@@ -2547,6 +2569,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         ecg_variant = effective_ecg_variant(
             args, transport.reuse_plan_depth, spec)
         env["ECG_VARIANT"] = ecg_variant
+        env["ECG_REUSE_ADMISSION"] = (
+            "1" if spec.ecg_reuse_admission else "0")
         reuse_plan_depth = transport.reuse_plan_depth if is_reuse_plan_ecg else 0
         if reuse_plan_depth not in (0, 2):
             raise RuntimeError(
@@ -3041,6 +3065,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             row,
             "GRASP made no hot-tier property classifications in the ROI")
     validate_online_dueling_activity(row, spec.ecg_set_dueling)
+    validate_reuse_admission_activity(
+        row, spec.ecg_reuse_admission)
     if spec.policy == "POPT" and int(
             row.get("popt_roi_rereference_queries") or 0) <= 0:
         mark_row_error(
@@ -3477,6 +3503,8 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     ecg_variant = effective_ecg_variant(
         args, transport.reuse_plan_depth, spec)
     env["ECG_VARIANT"] = ecg_variant
+    env["ECG_REUSE_ADMISSION"] = (
+        "1" if spec.ecg_reuse_admission else "0")
     if args.ecg_isa_variant == "computed":
         env["SNIPER_ECG_MODE"] = "ECG_GRASP_POPT"
         env["ECG_MODE"] = "ECG_GRASP_POPT"
@@ -3856,6 +3884,14 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             row, transport.set_dueling,
             positive_fields=SNIPER_ONLINE_DUELING_REQUIRED_POSITIVE_FIELDS,
             leader_samples_field="sniper_reuse_plan_dueling_leader_samples")
+        admission_match = re.search(
+            r"ecg-reuse-admission\.updates\s*=\s*(\d+)",
+            stats_text)
+        row["sniper_reuse_plan_admission_updates"] = (
+            int(admission_match.group(1)) if admission_match else 0)
+        validate_reuse_admission_activity(
+            row, spec.ecg_reuse_admission,
+            field="sniper_reuse_plan_admission_updates")
     if transport.flowthrough:
         flowthrough_reads = int(row.get("sniper_flowthrough_reads") or 0)
         flowthrough_writes = int(row.get("sniper_flowthrough_writes") or 0)
@@ -4300,6 +4336,7 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
                  args.benchmark != "sssp")),
         "ecg_flowthrough": int(transport.flowthrough),
         "ecg_flowthrough_adaptive": int(transport.flowthrough_adaptive),
+        "ecg_reuse_admission": int(spec.ecg_reuse_admission),
         "popt_reserve_model": args.popt_reserve_model,
         "policy_label": spec.label,
         "policy": spec.policy,

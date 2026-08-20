@@ -58,6 +58,15 @@ inline int parseVariant(const char* value) {
     std::abort();
 }
 
+inline bool parseReuseAdmission(const char* value) {
+    if (!value || !value[0] || std::string(value) == "0") return false;
+    if (std::string(value) == "1") return true;
+    std::fprintf(
+        stderr, "[FATAL] ECG_REUSE_ADMISSION must be exactly 0 or 1, got %s\n",
+        value);
+    std::abort();
+}
+
 enum DuelingArm : uint8_t {
     DUEL_RRIP = 0,
     DUEL_GRASP = 1,
@@ -276,6 +285,24 @@ inline uint32_t epochDistance(uint16_t epoch, uint32_t current, uint32_t ne) {
     uint32_t e = epoch;
     if (e >= ne) e = ne - 1;
     return (e + ne - (current % ne)) % ne;
+}
+
+// Map the nearest delivered future-use epoch monotonically into RRIP state.
+// A use in the current epoch receives RRPV 0; the farthest representable use
+// receives rrpvMax. Ceiling division preserves a distinct nonzero state for
+// every positive distance when the epoch space is wider than the RRPV space.
+// The first ReusePlan epoch is already the nearest future line reference; the
+// second is retained for stale/coalesced-line eviction handling, not admission.
+inline uint8_t reuseAdmissionRRPV(
+        uint16_t first, uint32_t current, uint32_t ne, uint8_t rrpvMax) {
+    if (ne < 2 || rrpvMax == 0) return 0;
+    const uint32_t distance = epochDistance(first, current, ne);
+    const uint32_t denominator = ne - 1;
+    const uint32_t scaled =
+        (distance * static_cast<uint32_t>(rrpvMax) + denominator - 1) /
+        denominator;
+    return static_cast<uint8_t>(
+        std::min<uint32_t>(scaled, static_cast<uint32_t>(rrpvMax)));
 }
 
 // two-epoch ReusePlan effective distance: the line is needed at the nearer of its next

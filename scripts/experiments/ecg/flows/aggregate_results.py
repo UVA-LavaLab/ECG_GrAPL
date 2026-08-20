@@ -60,6 +60,7 @@ POLICY_ORDER = [
     "ECG_REUSE_PLAN_GRASP_FLOWTHROUGH",
     "ECG_REUSE_PLAN_LRU",
     "ECG_REUSE_PLAN_RRIP",
+    "ECG_REUSE_PLAN_ADMISSION_FLOWTHROUGH",
     "ECG_REUSE_PLAN_DEGREE",
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH",
     "ECG_REUSE_PLAN_EPOCH",
@@ -98,6 +99,8 @@ POLICY_LABELS = {
     "ECG_REUSE_PLAN_GRASP_FLOWTHROUGH": "ReusePlan-GRASP+FlowThrough",
     "ECG_REUSE_PLAN_LRU": "ReusePlan-LRU",
     "ECG_REUSE_PLAN_RRIP": "ReusePlan-RRIP",
+    "ECG_REUSE_PLAN_ADMISSION_FLOWTHROUGH":
+        "ReusePlan-epoch-admission+FlowThrough",
     "ECG_REUSE_PLAN_DEGREE": "ReusePlan-degree",
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH": "ReusePlan-degree+FlowThrough",
     "ECG_REUSE_PLAN_EPOCH": "ReusePlan-epoch",
@@ -130,6 +133,8 @@ POLICY_DESCRIPTIONS = {
     "ECG_REUSE_PLAN_LRU_FLOWTHROUGH":
         "ReusePlan transport with LRU-only victim selection and FlowThrough",
     "ECG_REUSE_PLAN_RRIP": "ReusePlan transport with RRIP-first victim selection",
+    "ECG_REUSE_PLAN_ADMISSION_FLOWTHROUGH":
+        "ReusePlan future-distance admission with RRIP-first and FlowThrough",
     "ECG_REUSE_PLAN_DEGREE": "ReusePlan transport with degree-first victim selection",
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH":
         "ReusePlan transport with degree-first victim selection and FlowThrough",

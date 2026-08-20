@@ -2548,11 +2548,13 @@ struct GraphCacheContext {
                             if ((uint32_t)exact_nbr[mid] > src) hi = mid; else lo = mid + 1;
                         }
                         uint32_t next_nbr, dist;
-                        if (lo < b) { next_nbr = (uint32_t)exact_nbr[lo]; dist = next_nbr - src; }
-                        else        { next_nbr = (uint32_t)exact_nbr[a]; dist = next_nbr + n - src; }  // wrap
+                        const bool wrapped = lo >= b;
+                        if (!wrapped) { next_nbr = (uint32_t)exact_nbr[lo]; dist = next_nbr - src; }
+                        else          { next_nbr = (uint32_t)exact_nbr[a]; dist = next_nbr + n - src; }
                         if (dist < best_dist) {
                             best_dist = dist;
-                            best_ep = (uint32_t)(((uint64_t)next_nbr * kNumEpochs5) / std::max<uint32_t>(1u, n));
+                            best_ep = ecg_reuse_plan::quantizedFutureEpoch(
+                                next_nbr, src, n, kNumEpochs5, wrapped);
                         }
                     }
                     popt = (best_ep >= kNumEpochs5 ? (kNumEpochs5 - 1) : best_ep) & 0x7F;
@@ -2583,8 +2585,9 @@ struct GraphCacheContext {
                                 }
                             } else {  // wrap: vertex's first out-neighbor (next iteration)
                                 uint32_t nb = (uint32_t)exact_nbr[a];
-                                uint32_t ep = (uint32_t)(((uint64_t)nb * kNumEpochs5) / std::max<uint32_t>(1u, n));
-                                if (ep >= kNumEpochs5) ep = kNumEpochs5 - 1;
+                                uint32_t ep =
+                                    ecg_reuse_plan::quantizedFutureEpoch(
+                                        nb, src, n, kNumEpochs5, true);
                                 cand[nc++] = { nb + n - src, ep };
                             }
                         }
@@ -2714,11 +2717,13 @@ struct GraphCacheContext {
                         if ((uint32_t)exact_in_nbr[mid] > src) hi = mid; else lo = mid + 1;
                     }
                     uint32_t next_nbr, dist;
-                    if (lo < b) { next_nbr = (uint32_t)exact_in_nbr[lo]; dist = next_nbr - src; }
-                    else        { next_nbr = (uint32_t)exact_in_nbr[a]; dist = next_nbr + n - src; }
+                    const bool wrapped = lo >= b;
+                    if (!wrapped) { next_nbr = (uint32_t)exact_in_nbr[lo]; dist = next_nbr - src; }
+                    else          { next_nbr = (uint32_t)exact_in_nbr[a]; dist = next_nbr + n - src; }
                     if (dist < best_dist) {
                         best_dist = dist;
-                        best_ep = (uint32_t)(((uint64_t)next_nbr * ne) / std::max<uint32_t>(1u, n));
+                        best_ep = ecg_reuse_plan::quantizedFutureEpoch(
+                            next_nbr, src, n, ne, wrapped);
                     }
                 }
                 uint8_t popt = (best_ep >= ne ? (ne - 1) : best_ep) & 0x7F;
@@ -2821,11 +2826,13 @@ struct GraphCacheContext {
                         if ((uint32_t)nbr[mid] > src) hi = mid; else lo = mid + 1;
                     }
                     uint32_t next_nbr, dist;
-                    if (lo < b) { next_nbr = (uint32_t)nbr[lo]; dist = next_nbr - src; }
-                    else        { next_nbr = (uint32_t)nbr[a]; dist = next_nbr + n - src; }
+                    const bool wrapped = lo >= b;
+                    if (!wrapped) { next_nbr = (uint32_t)nbr[lo]; dist = next_nbr - src; }
+                    else          { next_nbr = (uint32_t)nbr[a]; dist = next_nbr + n - src; }
                     if (dist < best_dist) {
                         best_dist = dist;
-                        best_ep = (uint32_t)(((uint64_t)next_nbr * ne) / std::max<uint32_t>(1u, n));
+                        best_ep = ecg_reuse_plan::quantizedFutureEpoch(
+                            next_nbr, src, n, ne, wrapped);
                     }
                 }
                 uint8_t popt = (best_ep >= ne ? (ne - 1) : best_ep) & 0x7F;

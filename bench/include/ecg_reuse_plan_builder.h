@@ -217,6 +217,21 @@ inline uint32_t currentEpoch(int64_t u, int64_t num_nodes, uint32_t ne) {
         : 0u;
 }
 
+// Preserve the distinction between a forward reference in the current coarse
+// epoch and a wrapped next-cycle reference that quantizes to that same epoch.
+inline uint16_t quantizedFutureEpoch(
+        uint32_t reader, uint32_t current, uint32_t num_nodes,
+        uint32_t ne, bool wrapped) {
+    if (num_nodes == 0 || ne < 2) return 0;
+    uint32_t epoch = static_cast<uint32_t>(
+        (static_cast<uint64_t>(reader) * ne) / num_nodes);
+    if (epoch >= ne) epoch = ne - 1;
+    const uint32_t current_epoch = currentEpoch(current, num_nodes, ne);
+    if (wrapped && epoch == current_epoch)
+        epoch = current_epoch == 0 ? ne - 1 : current_epoch - 1;
+    return static_cast<uint16_t>(epoch);
+}
+
 // Path A filtered epoch gate for the lookahead-prefetch decision
 // across cache_sim / gem5 / Sniper. Returns true to prefetch the candidate.
 inline bool prefetchKeep(uint16_t cand_ep, uint32_t cur_ep, uint32_t ne,
@@ -357,9 +372,8 @@ inline ReusePlan nextReusePlanForLine(
                 ++completed_cycles;
             }
             const uint32_t selected = *it;
-            uint32_t epoch = static_cast<uint32_t>(
-                (static_cast<uint64_t>(selected) * ne) / n);
-            if (epoch >= ne) epoch = ne - 1;
+            const uint32_t epoch = quantizedFutureEpoch(
+                selected, src, n, ne, completed_cycles > 0);
             const uint64_t absolute =
                 static_cast<uint64_t>(selected) +
                 static_cast<uint64_t>(completed_cycles) * n;
@@ -430,7 +444,8 @@ void buildInEdgeEpochs(const GraphT& g,
                 auto it = std::upper_bound(begin, end, src);
                 uint32_t reader;
                 uint32_t dist;
-                if (it != end) {
+                const bool wrapped = it == end;
+                if (!wrapped) {
                     reader = *it;
                     dist = reader - src;
                 } else {
@@ -439,9 +454,8 @@ void buildInEdgeEpochs(const GraphT& g,
                 }
                 if (dist < best_dist) {
                     best_dist = dist;
-                    best_epoch = static_cast<uint32_t>(
-                        (static_cast<uint64_t>(reader) * ne) / n);
-                    if (best_epoch >= ne) best_epoch = ne - 1;
+                    best_epoch = quantizedFutureEpoch(
+                        reader, src, n, ne, wrapped);
                 }
             }
             epochs[edge_pos] = static_cast<uint16_t>(best_epoch);
