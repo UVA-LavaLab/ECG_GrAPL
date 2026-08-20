@@ -134,7 +134,7 @@ POLICY_DESCRIPTIONS = {
         "ReusePlan transport with LRU-only victim selection and FlowThrough",
     "ECG_REUSE_PLAN_RRIP": "ReusePlan transport with RRIP-first victim selection",
     "ECG_REUSE_PLAN_ADMISSION_FLOWTHROUGH":
-        "ReusePlan future-distance admission with RRIP-first and FlowThrough",
+        "Experimental ReusePlan future-distance admission diagnostic",
     "ECG_REUSE_PLAN_DEGREE": "ReusePlan transport with degree-first victim selection",
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH":
         "ReusePlan transport with degree-first victim selection and FlowThrough",

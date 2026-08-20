@@ -103,6 +103,10 @@ actually chose. cache_sim can rotate the leader-set colors to detect a
 set-index artifact; a cache_sim winner must still transfer to gem5 O3 because
 the functional model does not contain gem5's complete LLC request stream.
 
+An experimental admission diagnostic maps the first delivered future-use
+epoch monotonically into RRPV on LLC fill and hit while retaining RRIP-first
+eviction. It is not a primary policy or a performance claim.
+
 ## 5. ReuseBind property loads
 
 ReuseBind is the instruction family that attaches a ReusePlan to the exact

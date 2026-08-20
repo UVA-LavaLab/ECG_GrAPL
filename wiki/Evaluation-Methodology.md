@@ -53,6 +53,9 @@ The policy set contains:
 - static RRIP-first ReusePlan with FlowThrough; and
 - online ReusePlan with FlowThrough.
 
+The epoch-informed admission policy is retained only as a diagnostic and is
+excluded from the primary policy set.
+
 ## Primary quantities
 
 The primary quantities are always reported together:
