@@ -43,7 +43,7 @@
   <!-- 1. Graph IDs and encoding -->
   <circle cx="75" cy="155" r="17" fill="#27313A"/>
   <text x="75" y="161" text-anchor="middle" fill="#FFFFFF" class="sans label">1</text>
-  <text x="102" y="162" class="sans heading">Graph IDs become ReusePlan</text>
+  <text x="102" y="162" class="sans heading">Graph IDs to ReusePlan</text>
   <text x="70" y="198" class="sans body">CSR edge ID 42 selects property[42].</text>
   <text x="70" y="224" class="sans body">The address is irregular, so the ID alone</text>
   <text x="70" y="248" class="sans body">does not describe when the line returns.</text>

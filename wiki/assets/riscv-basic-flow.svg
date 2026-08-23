@@ -77,7 +77,7 @@
     <text x="745" y="318" class="small">bound to property Request</text>
 
     <circle cx="982" cy="152" r="16" fill="#27313A"/><text x="982" y="158" text-anchor="middle" fill="#FFFFFF" class="label">6</text>
-    <text x="1006" y="158" class="heading">LLC + complete</text>
+    <text x="1006" y="158" class="heading">LLC + retire</text>
     <text x="975" y="198" class="body">store tier + epochs</text>
     <text x="975" y="222" class="body">RRIP + nearest reuse</text>
     <rect x="975" y="242" width="170" height="52" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>

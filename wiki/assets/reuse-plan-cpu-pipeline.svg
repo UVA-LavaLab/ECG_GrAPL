@@ -54,7 +54,7 @@
     <rect x="241" y="270" width="48" height="58" rx="7" class="slot"/>
     <text x="79" y="295" class="sans small">Fetch</text><text x="79" y="316" class="sans small">I$</text>
     <text x="141" y="295" class="sans small">Decode</text><text x="141" y="316" class="sans small">role</text>
-    <text x="203" y="295" class="sans small">AGU</text><text x="203" y="316" class="sans small">edge EA</text>
+    <text x="203" y="295" class="sans small">AGU</text><text x="203" y="316" class="sans small">EA</text>
     <text x="265" y="295" class="sans small">LQ</text><text x="265" y="316" class="sans small">FT = 1</text>
   </g>
   <path d="M103 299 H113" class="arrow"/>
@@ -76,12 +76,12 @@
   <!-- Stage 3 -->
   <circle cx="368" cy="158" r="16" fill="#27313A"/>
   <text x="368" y="164" text-anchor="middle" fill="#FFFFFF" class="sans label">3</text>
-  <text x="393" y="164" class="sans heading">Decode + dependency</text>
+  <text x="393" y="164" class="sans heading">Decode + rd-to-rs2</text>
 
   <rect x="360" y="188" width="240" height="90" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
   <text x="480" y="216" text-anchor="middle" class="sans label">custom-0 decode</text>
   <text x="380" y="245" class="sans body">role · width · rd/fd · rs1/rs2</text>
-  <text x="380" y="267" class="sans small">format and context CSRs already set</text>
+  <text x="380" y="267" class="sans small">format/context CSRs preloaded</text>
 
   <rect x="360" y="305" width="240" height="86" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
   <text x="480" y="334" text-anchor="middle" class="sans label">ReusePlan physical register</text>
@@ -92,7 +92,7 @@
   <rect x="378" y="463" width="204" height="23" fill="#F7DEDC" stroke="#27313A"/>
   <rect x="378" y="486" width="204" height="23" fill="#E7F7EA" stroke="#27313A"/>
   <text x="388" y="480" class="mono small">record load: done</text>
-  <text x="388" y="503" class="mono small">property load: wait both</text>
+  <text x="388" y="503" class="mono small">property: wait both</text>
 
   <rect x="360" y="550" width="240" height="82" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="480" y="579" text-anchor="middle" class="sans body">record rd becomes property rs2</text>
@@ -155,7 +155,7 @@
 
   <rect x="970" y="545" width="240" height="90" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="990" y="573" class="sans body">same requestor + context</text>
-  <text x="990" y="597" class="sans body">newest sequence owns metadata</text>
+  <text x="990" y="597" class="sans body">newest sequence owns hint</text>
   <text x="990" y="621" class="sans small">conflict invalidates ReuseBind</text>
 
   <!-- Stage 6 -->
@@ -174,7 +174,7 @@
   <rect x="1275" y="405" width="270" height="112" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="1410" y="434" text-anchor="middle" class="sans label">Request-specific action</text>
   <text x="1295" y="463" class="sans body">property: store metadata on hit/fill</text>
-  <text x="1295" y="487" class="sans body">record: FlowThrough skips miss insert</text>
+  <text x="1295" y="487" class="sans body">record: FlowThrough skips insert</text>
   <text x="1295" y="509" class="sans small">all hits and private fills remain normal</text>
 
   <rect x="1275" y="545" width="270" height="90" rx="8" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>

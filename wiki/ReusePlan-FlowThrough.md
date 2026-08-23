@@ -173,7 +173,7 @@ the property line.
 
 ![FlowThrough cache path](assets/flowthrough-path.svg)
 
-**Figure 5.** The full CPU-to-memory path and selective LLC zoom show that the
+**Figure 5.** The full CPU-to-memory path and separate LLC outcomes show that the
 FlowThrough flag survives the load queue and MSHR, preserves private-cache
 fills and LLC hits, and controls only the LLC insertion gate after a record
 miss.

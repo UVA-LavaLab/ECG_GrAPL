@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="750" viewBox="0 0 1400 750" role="img" aria-labelledby="title desc" fill="#27313A">
-  <title id="title">Detailed FlowThrough architecture with selective LLC zoom</title>
-  <desc id="desc">The upper path shows a FlowThrough record Request through the load queue, translation, private caches, MSHR, LLC, and memory. Lower zoom panels separate normal LLC hits, LLC misses with a blocked insertion gate, and a property Request that is never bypassed.</desc>
+  <title id="title">Detailed FlowThrough architecture and LLC outcomes</title>
+  <desc id="desc">The upper path shows a FlowThrough record Request through the load queue, translation, private caches, MSHR, LLC, and memory. Lower panels separate normal LLC hits, LLC misses with a blocked insertion gate, and a property Request that is never bypassed.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
       <path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/>
@@ -24,13 +24,12 @@
       .body{font-size:15px}
       .small{font-size:14px}
       .arrow{fill:none;stroke:#1769C2;stroke-width:3;marker-end:url(#arrow)}
-      .zoom{fill:none;stroke:#9AA3AD;stroke-width:2;stroke-dasharray:7 6}
       .slot{fill:#FFFFFF;stroke:#27313A;stroke-width:2}
     </style>
   </defs>
 
   <rect width="1400" height="750" fill="#FFFFFF"/>
-  <text x="40" y="48" class="sans title">FlowThrough: detailed cache path and selective LLC zoom</text>
+  <text x="40" y="48" class="sans title">FlowThrough: detailed cache path and LLC outcomes</text>
   <text x="40" y="77" class="sans subtitle">One request bit changes only allocation after a record misses in the LLC.</text>
   <line x1="40" y1="102" x2="1360" y2="102" stroke="#27313A" stroke-width="2"/>
 
@@ -88,14 +87,11 @@
   <path d="M1160 233 H1206" class="arrow"/>
 
   <text x="315" y="315" text-anchor="middle" class="sans small">Request type: record · allocation hint: FlowThrough</text>
-  <text x="1090" y="315" text-anchor="middle" class="sans small">LLC tag lookup always occurs before the split below</text>
-  <line x1="1035" y1="286" x2="1035" y2="375" class="zoom"/>
-  <line x1="1145" y1="286" x2="1145" y2="375" class="zoom"/>
-  <text x="1090" y="344" text-anchor="middle" class="sans small">selective zoom</text>
+  <text x="1090" y="315" text-anchor="middle" class="sans small">LLC tag lookup occurs before the outcomes below</text>
 
-  <!-- LLC hit zoom -->
+  <!-- LLC hit -->
   <rect x="30" y="390" width="350" height="260" rx="11" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
-  <text x="55" y="425" class="sans heading">Zoom A · LLC hit</text>
+  <text x="55" y="425" class="sans heading">LLC hit</text>
   <g text-anchor="middle">
     <rect x="55" y="455" width="85" height="62" rx="8" class="slot"/>
     <rect x="165" y="455" width="85" height="62" rx="8" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
@@ -111,9 +107,9 @@
   <text x="55" y="608" class="sans body">No allocation decision is needed.</text>
   <text x="55" y="632" class="sans small">FlowThrough never bypasses an LLC hit.</text>
 
-  <!-- LLC miss zoom -->
+  <!-- LLC miss -->
   <rect x="405" y="390" width="640" height="260" rx="11" fill="#F7DEDC" stroke="#27313A" stroke-width="3"/>
-  <text x="430" y="425" class="sans heading">Zoom B · LLC miss and returning fill</text>
+  <text x="430" y="425" class="sans heading">LLC miss and returning fill</text>
   <g text-anchor="middle">
     <rect x="430" y="455" width="110" height="62" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
     <rect x="575" y="455" width="110" height="62" rx="8" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
@@ -138,7 +134,7 @@
 
   <!-- Property contrast -->
   <rect x="1070" y="390" width="300" height="260" rx="11" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
-  <text x="1095" y="425" class="sans heading">Contrast · property Request</text>
+  <text x="1095" y="425" class="sans heading">Property Request</text>
   <rect x="1095" y="452" width="250" height="84" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="1220" y="480" text-anchor="middle" class="sans label">FT = 0 · ReuseBind valid</text>
   <text x="1220" y="506" text-anchor="middle" class="mono small">T2 | e1 12 | e2 40</text>

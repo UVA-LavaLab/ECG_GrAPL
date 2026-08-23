@@ -113,7 +113,7 @@
   <rect x="1128" y="254" width="169" height="25" fill="#F7DEDC" stroke="#27313A"/>
   <rect x="1128" y="279" width="169" height="28" fill="#E7F7EA" stroke="#27313A"/>
   <text x="1138" y="272" class="mono small">record: done</text>
-  <text x="1138" y="298" class="mono small">property: wait both</text>
+  <text x="1138" y="298" class="mono small">property: waits</text>
 
   <rect x="1335" y="210" width="200" height="115" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
   <text x="1435" y="238" text-anchor="middle" class="sans label">ROB</text>
