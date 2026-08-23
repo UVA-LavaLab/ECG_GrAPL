@@ -15,6 +15,8 @@ last-level-cache replacement and placement.
 - **FlowThrough** prevents one-touch edge records from occupying the shared
   LLC after a miss while preserving private-cache fills and LLC hits.
 
+![Graph to CSR and edge-aligned ReusePlan masks](wiki/assets/graph-to-csr-reuseplan.svg)
+
 ![ECG architecture at a glance](wiki/assets/ecg-architecture-summary.svg)
 
 ### Why carry reuse with graph IDs?
@@ -26,6 +28,11 @@ a coarse reuse tier and two future-use epochs for that destination. When the
 fields fit, the compact ReusePlan replaces the original 4-byte edge ID; the
 destination remains available for address generation while the extra fields
 carry reuse guidance.
+
+The mask stream is aligned by edge position: mask `i` describes `col_idx[i]`.
+In packed delivery the combined record replaces that destination entry. In
+sidecar delivery the destination remains in `col_idx`, while the narrower mask
+is read from a parallel array at the same `i`.
 
 Record loads follow CSR traversal order and are therefore streaming within an
 adjacency run. FlowThrough keeps their private-cache behavior and LLC hits

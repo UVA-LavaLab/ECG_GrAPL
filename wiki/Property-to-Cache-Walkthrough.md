@@ -24,6 +24,16 @@ The nearest delivered reuse distance is
 
 `min((12 + 256 - 10) mod 256, (40 + 256 - 10) mod 256) = 2`.
 
+## Before the load: graph to mask stream
+
+The graph pass preserves CSR edge order. Each ReusePlan mask is aligned with
+one `col_idx` position: the destination field still identifies the property,
+while tier and future epochs become replacement metadata for that property
+request. Packed delivery replaces the destination entry; sidecar delivery
+keeps a parallel mask array.
+
+![Graph to CSR and edge-aligned ReusePlan masks](assets/graph-to-csr-reuseplan.svg)
+
 ![Concrete property request walkthrough](assets/property-request-walkthrough.svg)
 
 ## Representative architecture
