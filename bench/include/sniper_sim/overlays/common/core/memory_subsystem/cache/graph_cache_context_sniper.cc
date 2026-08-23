@@ -481,33 +481,19 @@ bool lookupEcgReusePlan(uint32_t core_id, uint32_t vertex,
 
 ECGMode stringToECGMode(const std::string& text)
 {
-    if (text == "POPT_PRIMARY" || text == "popt_primary" || text == "popt") return ECGMode::POPT_PRIMARY;
-    if (text == "DBG_ONLY" || text == "dbg_only" || text == "dbg") return ECGMode::DBG_ONLY;
-    if (text == "ECG_EMBEDDED" || text == "ecg_embedded" || text == "embedded") return ECGMode::ECG_EMBEDDED;
-    if (text == "ECG_COMBINED" || text == "ecg_combined" || text == "combined") return ECGMode::ECG_COMBINED;
-    if (text == "ECG_GRASP_POPT" || text == "ecg_grasp_popt" || text == "grasp_popt") return ECGMode::ECG_GRASP_POPT;
-    if (text.empty() || text == "DBG_PRIMARY" || text == "dbg_primary") return ECGMode::DBG_PRIMARY;
-    // Fail fast instead of silently aliasing an unknown/typo'd mode to
-    // DBG_PRIMARY (which would mislabel result rows). POPT_TIE and
-    // ECG_EPOCH_EMBEDDED are cache_sim-only experimental modes.
-    std::fprintf(stderr,
-        "[graphctx] FATAL: unsupported ECG mode '%s' for Sniper. Supported: "
-        "DBG_PRIMARY, POPT_PRIMARY, DBG_ONLY, ECG_EMBEDDED, ECG_COMBINED, "
-        "ECG_GRASP_POPT (POPT_TIE / ECG_EPOCH_EMBEDDED are cache_sim-only).\n", text.c_str());
-    std::abort();
+    const ECGMode mode = ecg_mode::parse(text);
+    if (!ecg_mode::supportedByAllBackends(mode)) {
+        std::fprintf(
+            stderr, "[graphctx] FATAL: ECG mode '%s' is cache_sim-only\n",
+            ecg_mode::name(mode));
+        std::abort();
+    }
+    return mode;
 }
 
 std::string ecgModeToString(ECGMode mode)
 {
-    switch (mode) {
-      case ECGMode::DBG_PRIMARY:  return "DBG_PRIMARY";
-      case ECGMode::POPT_PRIMARY: return "POPT_PRIMARY";
-      case ECGMode::DBG_ONLY:     return "DBG_ONLY";
-      case ECGMode::ECG_EMBEDDED: return "ECG_EMBEDDED";
-      case ECGMode::ECG_COMBINED: return "ECG_COMBINED";
-      case ECGMode::ECG_GRASP_POPT: return "ECG_GRASP_POPT";
-      default:                    return "UNKNOWN";
-    }
+    return ecg_mode::name(mode);
 }
 
 bool PropertyRegion::contains(uint64_t addr) const
@@ -1433,7 +1419,7 @@ bool isEcgFlowThroughAddress(uint64_t addr)
         const char* value = std::getenv("ECG_FLOWTHROUGH_TRACE");
         return value ? std::strtoull(value, nullptr, 10) : 0;
     }();
-    if (probes++ < limit) {
+    if (limit > 0 && probes++ < limit) {
         std::fprintf(stderr,
             "[ECG-FLOWTHROUGH-PROBE sim=sniper addr=%#llx base=%#llx "
             "upper=%#llx loaded=%d match=%d]\n",
@@ -1443,7 +1429,8 @@ bool isEcgFlowThroughAddress(uint64_t addr)
             context.loaded ? 1 : 0, flowthrough ? 1 : 0);
     }
     static uint64_t ranged_probes = 0;
-    if (context.flowthrough_base < context.flowthrough_upper &&
+    if (limit > 0 &&
+        context.flowthrough_base < context.flowthrough_upper &&
         ranged_probes++ < limit) {
         std::fprintf(stderr,
             "[ECG-FLOWTHROUGH-RANGED sim=sniper addr=%#llx base=%#llx "

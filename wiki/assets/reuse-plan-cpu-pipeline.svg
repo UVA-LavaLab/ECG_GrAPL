@@ -1,35 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc" fill="#27313A">
   <title id="title">ReuseBind and FlowThrough through an out-of-order RISC-V pipeline</title>
   <desc id="desc">Two separate horizontal lanes show the stage-by-stage path of a ReuseBind property load and a ReusePlan record load with FlowThrough. A third panel shows the shared cache request and response path. Connectors remain inside their own lanes and do not cross.</desc>
   <defs>
     <marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
-      <path d="M0 0 L8 3.5 L0 7 Z" fill="#344f63"/>
+      <path d="M0 0 L8 3.5 L0 7 Z" fill="#1769C2"/>
     </marker>
     <marker id="teal-arrow" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
-      <path d="M0 0 L8 3.5 L0 7 Z" fill="#21897e"/>
+      <path d="M0 0 L8 3.5 L0 7 Z" fill="#1769C2"/>
     </marker>
     <marker id="coral-arrow" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
-      <path d="M0 0 L8 3.5 L0 7 Z" fill="#d96549"/>
+      <path d="M0 0 L8 3.5 L0 7 Z" fill="#1769C2"/>
     </marker>
     <style>
-      .title{font:700 30px Arial,sans-serif;fill:#17324d}
-      .subtitle{font:400 15px Arial,sans-serif;fill:#607487}
-      .column{font:700 14px Arial,sans-serif;fill:#17324d}
-      .lane-title{font:700 20px Arial,sans-serif;fill:#17324d}
-      .lane-note{font:400 13px Arial,sans-serif;fill:#506679}
-      .box-title{font:700 14px Arial,sans-serif;fill:#17324d}
-      .body{font:400 11px Arial,sans-serif;fill:#405568}
-      .mono{font:700 11px 'Courier New',monospace;fill:#17324d}
-      .small{font:400 11px Arial,sans-serif;fill:#506679}
-      .panel-title{font:700 18px Arial,sans-serif;fill:#17324d}
+      :root{color-scheme:light dark}
+      @media(prefers-color-scheme:dark){
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#9AA3AD"]{stroke:#747D86}
+      }
+      .title{font:700 30px Arial,sans-serif;fill:#27313A}
+      .subtitle{font:400 15px Arial,sans-serif;fill:#27313A}
+      .column{font:700 14px Arial,sans-serif;fill:#27313A}
+      .lane-title{font:700 20px Arial,sans-serif;fill:#27313A}
+      .lane-note{font:400 13px Arial,sans-serif;fill:#27313A}
+      .box-title{font:700 14px Arial,sans-serif;fill:#27313A}
+      .body{font:400 11px Arial,sans-serif;fill:#27313A}
+      .mono{font:700 11px 'Courier New',monospace;fill:#27313A}
+      .small{font:400 11px Arial,sans-serif;fill:#27313A}
+      .panel-title{font:700 18px Arial,sans-serif;fill:#27313A}
     </style>
   </defs>
 
-  <rect width="1600" height="980" fill="#ffffff"/>
+  <rect width="1600" height="980" fill="#FFFFFF"/>
   <text x="42" y="44" class="title">Stage-by-stage RISC-V instruction flow</text>
   <text x="42" y="70" class="subtitle">Each colored lane owns a separate request. The common cache path is shown below on dedicated forward and response tracks.</text>
 
-  <g fill="#e7ebef" stroke="#8a9aaa">
+  <g fill="#F8F6EC" stroke="#27313A" stroke-width="2">
     <rect x="35" y="102" width="160" height="54" rx="9"/>
     <rect x="225" y="102" width="160" height="54" rx="9"/>
     <rect x="415" y="102" width="160" height="54" rx="9"/>
@@ -50,11 +58,11 @@
     <text x="1482" y="135">Complete</text>
   </g>
 
-  <rect x="28" y="178" width="1544" height="260" rx="18" fill="#eef8f6" stroke="#85c8bd" stroke-width="1.5"/>
+  <rect x="28" y="178" width="1544" height="260" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="48" y="211" class="lane-title">ReuseBind property request</text>
   <text x="48" y="233" class="lane-note">ecg.bind.load.* uses a computed address; ecg.bind.iload.* forms an indexed address from the plan.</text>
 
-  <g fill="#ffffff" stroke="#5aaea2" stroke-width="1.2">
+  <g fill="#E7F7EA" stroke="#27313A" stroke-width="2">
     <rect x="35" y="255" width="160" height="145" rx="10"/>
     <rect x="225" y="255" width="160" height="145" rx="10"/>
     <rect x="415" y="255" width="160" height="145" rx="10"/>
@@ -106,7 +114,7 @@
   <text x="1417" y="329" class="body">mark ROB entry complete</text>
   <text x="1417" y="351" class="body">retire in program order</text>
 
-  <g stroke="#21897e" stroke-width="2" marker-end="url(#teal-arrow)">
+  <g stroke="#1769C2" stroke-width="3" marker-end="url(#teal-arrow)">
     <line x1="195" y1="327" x2="221" y2="327"/>
     <line x1="385" y1="327" x2="411" y2="327"/>
     <line x1="575" y1="327" x2="601" y2="327"/>
@@ -116,11 +124,11 @@
     <line x1="1370" y1="327" x2="1396" y2="327"/>
   </g>
 
-  <rect x="28" y="455" width="1544" height="260" rx="18" fill="#fff3ef" stroke="#e6a08f" stroke-width="1.5"/>
+  <rect x="28" y="455" width="1544" height="260" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="48" y="488" class="lane-title">ReusePlan record request</text>
   <text x="48" y="510" class="lane-note">ecg.plan.load* uses ordinary placement; ecg.flow.load* carries the FlowThrough request flag.</text>
 
-  <g fill="#ffffff" stroke="#df8b75" stroke-width="1.2">
+  <g fill="#F7DEDC" stroke="#27313A" stroke-width="2">
     <rect x="35" y="532" width="160" height="145" rx="10"/>
     <rect x="225" y="532" width="160" height="145" rx="10"/>
     <rect x="415" y="532" width="160" height="145" rx="10"/>
@@ -171,7 +179,7 @@
   <text x="1417" y="606" class="body">mark ROB entry complete</text>
   <text x="1417" y="628" class="body">retire in program order</text>
 
-  <g stroke="#d96549" stroke-width="2" marker-end="url(#coral-arrow)">
+  <g stroke="#1769C2" stroke-width="3" marker-end="url(#coral-arrow)">
     <line x1="195" y1="604" x2="221" y2="604"/>
     <line x1="385" y1="604" x2="411" y2="604"/>
     <line x1="575" y1="604" x2="601" y2="604"/>
@@ -181,11 +189,11 @@
     <line x1="1370" y1="604" x2="1396" y2="604"/>
   </g>
 
-  <rect x="110" y="747" width="1380" height="185" rx="18" fill="#f4f6f8" stroke="#aab7c2"/>
+  <rect x="110" y="747" width="1380" height="185" rx="12" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="135" y="778" class="panel-title">Common cache path used by both requests</text>
   <text x="135" y="799" class="small">Forward requests use the upper track; data and fill responses return on the lower track.</text>
 
-  <g fill="#ffffff" stroke="#7f93a4" stroke-width="1.2">
+  <g fill="#EDF5FF" stroke="#27313A" stroke-width="2">
     <rect x="285" y="815" width="150" height="72" rx="10"/>
     <rect x="505" y="815" width="150" height="72" rx="10"/>
     <rect x="725" y="815" width="150" height="72" rx="10"/>
@@ -205,7 +213,7 @@
     <text x="1240" y="864" class="body">service miss</text>
   </g>
 
-  <g stroke="#344f63" stroke-width="1.8" marker-end="url(#arrow)">
+  <g stroke="#1769C2" stroke-width="3" marker-end="url(#arrow)">
     <line x1="435" y1="833" x2="501" y2="833"/>
     <line x1="655" y1="833" x2="721" y2="833"/>
     <line x1="875" y1="833" x2="941" y2="833"/>
@@ -216,8 +224,8 @@
     <line x1="505" y1="874" x2="439" y2="874"/>
   </g>
 
-  <circle cx="135" cy="949" r="5" fill="#21897e"/>
+  <circle cx="135" cy="949" r="5" fill="#1769C2"/>
   <text x="148" y="953" class="small">ReuseBind metadata belongs only to the property request.</text>
-  <circle cx="600" cy="949" r="5" fill="#d96549"/>
+  <circle cx="600" cy="949" r="5" fill="#1769C2"/>
   <text x="613" y="953" class="small">FlowThrough placement belongs only to the record request.</text>
 </svg>

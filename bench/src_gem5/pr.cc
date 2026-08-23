@@ -696,10 +696,12 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                             &outgoing_contrib[v], rec);
                     }
                     const ScoreT old_score = scores[u];
-                    scores[u] = base_score + kDamp * incoming_total;
-                    error += fabs(scores[u] - old_score);
+                    const ScoreT new_score =
+                        base_score + kDamp * incoming_total;
+                    scores[u] = new_score;
+                    error += fabs(new_score - old_score);
                     outgoing_contrib[u] =
-                        scores[u] / g.out_degree(u);
+                        new_score / g.out_degree(u);
                     continue;
                 }
                 if (wide_reuse_bind_flowthrough_on) {
@@ -716,10 +718,12 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                             &outgoing_contrib[v], rec);
                     }
                     const ScoreT old_score = scores[u];
-                    scores[u] = base_score + kDamp * incoming_total;
-                    error += fabs(scores[u] - old_score);
+                    const ScoreT new_score =
+                        base_score + kDamp * incoming_total;
+                    scores[u] = new_score;
+                    error += fabs(new_score - old_score);
                     outgoing_contrib[u] =
-                        scores[u] / g.out_degree(u);
+                        new_score / g.out_degree(u);
                     continue;
                 }
                 if (compact_fused_on) {
@@ -753,10 +757,12 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                         }
                     }
                     const ScoreT old_score = scores[u];
-                    scores[u] = base_score + kDamp * incoming_total;
-                    error += fabs(scores[u] - old_score);
+                    const ScoreT new_score =
+                        base_score + kDamp * incoming_total;
+                    scores[u] = new_score;
+                    error += fabs(new_score - old_score);
                     outgoing_contrib[u] =
-                        scores[u] / g.out_degree(u);
+                        new_score / g.out_degree(u);
                     continue;
                 }
                 if (compact_software_fused_on) {
@@ -776,10 +782,12 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                         incoming_total += delivered;
                     }
                     const ScoreT old_score = scores[u];
-                    scores[u] = base_score + kDamp * incoming_total;
-                    error += fabs(scores[u] - old_score);
+                    const ScoreT new_score =
+                        base_score + kDamp * incoming_total;
+                    scores[u] = new_score;
+                    error += fabs(new_score - old_score);
                     outgoing_contrib[u] =
-                        scores[u] / g.out_degree(u);
+                        new_score / g.out_degree(u);
                     continue;
                 }
                 if (wide_fused_on) {
@@ -797,10 +805,12 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                         incoming_total += delivered;
                     }
                     const ScoreT old_score = scores[u];
-                    scores[u] = base_score + kDamp * incoming_total;
-                    error += fabs(scores[u] - old_score);
+                    const ScoreT new_score =
+                        base_score + kDamp * incoming_total;
+                    scores[u] = new_score;
+                    error += fabs(new_score - old_score);
                     outgoing_contrib[u] =
-                        scores[u] / g.out_degree(u);
+                        new_score / g.out_degree(u);
                     continue;
                 }
                 if (compact_isa_on) {
@@ -831,9 +841,11 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                         }
                     }
                     const ScoreT old_score = scores[u];
-                    scores[u] = base_score + kDamp * incoming_total;
-                    error += fabs(scores[u] - old_score);
-                    outgoing_contrib[u] = scores[u] / g.out_degree(u);
+                    const ScoreT new_score =
+                        base_score + kDamp * incoming_total;
+                    scores[u] = new_score;
+                    error += fabs(new_score - old_score);
+                    outgoing_contrib[u] = new_score / g.out_degree(u);
                     continue;
                 }
                 for (uint64_t pos = begin; pos < end; ++pos) {
@@ -882,9 +894,11 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     gem5_ecg_clear_extract2_hint();
                 }
                 const ScoreT old_score = scores[u];
-                scores[u] = base_score + kDamp * incoming_total;
-                error += fabs(scores[u] - old_score);
-                outgoing_contrib[u] = scores[u] / g.out_degree(u);
+                const ScoreT new_score =
+                    base_score + kDamp * incoming_total;
+                scores[u] = new_score;
+                error += fabs(new_score - old_score);
+                outgoing_contrib[u] = new_score / g.out_degree(u);
                 continue;
             }
 
@@ -904,9 +918,11 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     incoming_total += outgoing_contrib[v];
                 }
                 const ScoreT old_score = scores[u];
-                scores[u] = base_score + kDamp * incoming_total;
-                error += fabs(scores[u] - old_score);
-                outgoing_contrib[u] = scores[u] / g.out_degree(u);
+                const ScoreT new_score =
+                    base_score + kDamp * incoming_total;
+                scores[u] = new_score;
+                error += fabs(new_score - old_score);
+                outgoing_contrib[u] = new_score / g.out_degree(u);
                 continue;
             }
 
@@ -1067,10 +1083,12 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                         incoming_total += outgoing_contrib[v];
                     }
                 }
-                ScoreT old_score = scores[u];
-                scores[u] = base_score + kDamp * incoming_total;
-                error += fabs(scores[u] - old_score);
-                outgoing_contrib[u] = scores[u] / g.out_degree(u);
+                const ScoreT old_score = scores[u];
+                const ScoreT new_score =
+                    base_score + kDamp * incoming_total;
+                scores[u] = new_score;
+                error += fabs(new_score - old_score);
+                outgoing_contrib[u] = new_score / g.out_degree(u);
                 continue;
             }
 
@@ -1130,10 +1148,12 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     }
                 }
             }
-            ScoreT old_score = scores[u];
-            scores[u] = base_score + kDamp * incoming_total;
-            error += fabs(scores[u] - old_score);
-            outgoing_contrib[u] = scores[u] / g.out_degree(u);
+            const ScoreT old_score = scores[u];
+            const ScoreT new_score =
+                base_score + kDamp * incoming_total;
+            scores[u] = new_score;
+            error += fabs(new_score - old_score);
+            outgoing_contrib[u] = new_score / g.out_degree(u);
         }
         if (error < epsilon) break;
     }

@@ -257,10 +257,12 @@ pvector<ScoreT> PageRankPullGS_Sniper(const Graph &g, int max_iters,
                     }
                     incoming_total += outgoing_contrib[v];
                 }
-                ScoreT old_score = scores[u];
-                scores[u] = base_score + kDamp * incoming_total;
-                error += fabs(scores[u] - old_score);
-                outgoing_contrib[u] = scores[u] / g.out_degree(u);
+                const ScoreT old_score = scores[u];
+                const ScoreT new_score =
+                    base_score + kDamp * incoming_total;
+                scores[u] = new_score;
+                error += fabs(new_score - old_score);
+                outgoing_contrib[u] = new_score / g.out_degree(u);
                 continue;
             }
 
@@ -329,10 +331,12 @@ pvector<ScoreT> PageRankPullGS_Sniper(const Graph &g, int max_iters,
                     }
                 }
             }
-            ScoreT old_score = scores[u];
-            scores[u] = base_score + kDamp * incoming_total;
-            error += fabs(scores[u] - old_score);
-            outgoing_contrib[u] = scores[u] / g.out_degree(u);
+            const ScoreT old_score = scores[u];
+            const ScoreT new_score =
+                base_score + kDamp * incoming_total;
+            scores[u] = new_score;
+            error += fabs(new_score - old_score);
+            outgoing_contrib[u] = new_score / g.out_degree(u);
             }
         }
         if (error < epsilon) break;

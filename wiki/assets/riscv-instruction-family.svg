@@ -1,26 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="620" viewBox="0 0 1400 620" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="620" viewBox="0 0 1400 620" role="img" aria-labelledby="title desc" fill="#27313A">
   <title id="title">ECG Next experimental RISC-V instruction family</title>
   <desc id="desc">Four cards separate ReusePlan record acquisition, FlowThrough record placement, computed-address ReuseBind property loads, and indexed ReuseBind property loads.</desc>
   <style>
-    .title{font:700 30px Arial,sans-serif;fill:#17324d}
-    .subtitle{font:400 15px Arial,sans-serif;fill:#607487}
-    .group{font:700 18px Arial,sans-serif;fill:#17324d}
-    .mnemonic{font:700 17px 'Courier New',monospace;fill:#17324d}
-    .box-title{font:700 15px Arial,sans-serif;fill:#17324d}
-    .body{font:400 11px Arial,sans-serif;fill:#405568}
-    .note{font:400 11px Arial,sans-serif;fill:#506679}
+    :root{color-scheme:light dark}
+    @media(prefers-color-scheme:dark){
+      [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+      [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
+      [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
+      [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
+      [stroke="#9AA3AD"]{stroke:#747D86}
+    }
+    .title{font:700 30px Arial,sans-serif;fill:#27313A}
+    .subtitle{font:400 15px Arial,sans-serif;fill:#27313A}
+    .group{font:700 18px Arial,sans-serif;fill:#27313A}
+    .mnemonic{font:700 17px 'Courier New',monospace;fill:#27313A}
+    .box-title{font:700 15px Arial,sans-serif;fill:#27313A}
+    .body{font:400 11px Arial,sans-serif;fill:#27313A}
+    .note{font:400 11px Arial,sans-serif;fill:#27313A}
   </style>
 
-  <rect width="1400" height="560" fill="#ffffff"/>
+  <rect width="1400" height="620" fill="#FFFFFF"/>
   <text x="42" y="45" class="title">Experimental RISC-V custom-0 instruction family</text>
   <text x="42" y="72" class="subtitle">The instruction names describe request roles; the implementation uses raw .insn encodings in gem5 RISC-V guest code.</text>
 
-  <rect x="35" y="105" width="650" height="410" rx="18" fill="#f5f8fb" stroke="#b9c8d4"/>
-  <rect x="715" y="105" width="650" height="410" rx="18" fill="#f5f8fb" stroke="#b9c8d4"/>
+  <rect x="35" y="105" width="650" height="410" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
+  <rect x="715" y="105" width="650" height="410" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="60" y="137" class="group">ReusePlan record acquisition</text>
   <text x="740" y="137" class="group">ReuseBind property access</text>
 
-  <rect x="60" y="165" width="285" height="315" rx="14" fill="#eef4fa" stroke="#7f9fbb"/>
+  <rect x="60" y="165" width="285" height="315" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
   <text x="82" y="198" class="mnemonic">ecg.plan.load*</text>
   <text x="82" y="227" class="box-title">Ordinary record placement</text>
   <text x="82" y="256" class="body">Input: rs1 = record address</text>
@@ -32,7 +40,7 @@
   <text x="82" y="410" class="note">Use for ordinary</text>
   <text x="82" y="432" class="note">cache placement.</text>
 
-  <rect x="375" y="165" width="285" height="315" rx="14" fill="#fff0eb" stroke="#df8b75"/>
+  <rect x="375" y="165" width="285" height="315" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="3"/>
   <text x="397" y="198" class="mnemonic">ecg.flow.load*</text>
   <text x="397" y="227" class="box-title">FlowThrough record placement</text>
   <text x="397" y="256" class="body">Input: rs1 = record address</text>
@@ -45,7 +53,7 @@
   <text x="397" y="422" class="note">LLC miss: returning record</text>
   <text x="397" y="444" class="note">skips LLC insertion.</text>
 
-  <rect x="740" y="165" width="285" height="315" rx="14" fill="#e8f6f3" stroke="#5aaea2"/>
+  <rect x="740" y="165" width="285" height="315" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
   <text x="762" y="198" class="mnemonic">ecg.bind.load.*</text>
   <text x="762" y="227" class="box-title">Computed-address ReuseBind</text>
   <text x="762" y="256" class="body">Input: rs1 = property address</text>
@@ -57,7 +65,7 @@
   <text x="762" y="410" class="note">Widths: U32, S32, U64,</text>
   <text x="762" y="432" class="note">F32, and weighted forms.</text>
 
-  <rect x="1055" y="165" width="285" height="315" rx="14" fill="#fff7e8" stroke="#d0a443"/>
+  <rect x="1055" y="165" width="285" height="315" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
   <text x="1077" y="198" class="mnemonic">ecg.bind.iload.*</text>
   <text x="1077" y="227" class="box-title">Indexed ReuseBind</text>
   <text x="1077" y="256" class="body">Input: rs1 = property-array base</text>
@@ -70,7 +78,7 @@
   <text x="1077" y="422" class="note">Fuses address generation</text>
   <text x="1077" y="444" class="note">with metadata binding.</text>
 
-  <rect x="35" y="540" width="1330" height="58" rx="10" fill="#eef2f5"/>
+  <rect x="35" y="540" width="1330" height="58" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="700" y="565" text-anchor="middle" class="note">Research implementation: custom-0 encoding in gem5 RISC-V.</text>
   <text x="700" y="585" text-anchor="middle" class="note">Not a ratified RISC-V extension or a fabricated processor.</text>
 </svg>

@@ -53,6 +53,10 @@ simulators.
   ReuseBind, FlowThrough, and the request path.
 - [RISC-V instruction path](wiki/RISC-V-Instruction-Path.md) follows each
   custom load through decode, rename, issue, the LSQ, caches, and completion.
+- [Property-to-cache walkthrough](wiki/Property-to-Cache-Walkthrough.md)
+  follows one numeric example through every stage and mode.
+- [Related work](wiki/Related-Work.md) identifies direct baselines and the
+  cache-policy and graph-locality foundations.
 - [Evaluation methodology](wiki/Evaluation-Methodology.md) defines workloads,
   baselines, metrics, and simulator roles.
 - [Build and reproduction](wiki/Reproduction.md) covers datasets, simulator

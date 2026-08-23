@@ -13,15 +13,14 @@
 // in wiki/ReusePlan-FlowThrough.md. Summary:
 //   - epoch is PROPERTY-ONLY; record (non-property) lines never carry a usable
 //     epoch and are ranked by recency / set order.
-//   - "recency" is normalised so SMALLER == older == evict-first. cache_sim and
-//     gem5 pass last_access / lastTouchTick directly; Sniper, which has no
-//     per-line timestamp, passes a monotone-decreasing function of its RRIP age
-//     so the oldest-by-RRIP line is evicted first (consistent across variants).
+//   - "recency" is normalised so SMALLER == older == evict-first. cache_sim,
+//     gem5, and Sniper pass last_access, lastTouchTick, and m_last_touch.
 //   - rrpv is aged in place (the SRRIP state update); the caller must write the
 //     possibly-incremented rrpv back to its native lines.
 #ifndef ECG_VICTIM_POLICY_H
 #define ECG_VICTIM_POLICY_H
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -467,6 +466,19 @@ inline uint8_t graspTierRRPV(uint32_t tier, uint8_t rrpvMax) {
     if (tier == 1) return 1;
     if (tier == 2) return (rrpvMax > 1) ? static_cast<uint8_t>(rrpvMax - 1) : rrpvMax;
     return rrpvMax;
+}
+
+inline uint8_t combinedInsertionRRPV(
+        uint32_t tier, uint32_t distance_hint, uint32_t hint_max,
+        uint8_t rrpvMax) {
+    const uint8_t dbg = graspTierRRPV(tier, rrpvMax);
+    const uint32_t denominator = std::max<uint32_t>(1, hint_max);
+    const uint8_t future = static_cast<uint8_t>(std::min<uint32_t>(
+        rrpvMax, (distance_hint * rrpvMax) / denominator));
+    uint8_t combined = static_cast<uint8_t>(
+        (static_cast<uint32_t>(dbg) + future) / 2);
+    if (combined == 0 && dbg > 0) combined = 1;
+    return std::min<uint8_t>(combined, rrpvMax);
 }
 
 // GRASP degree tier of vertex v by its POSITION in the (DBG-reordered) property

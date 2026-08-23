@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="820" viewBox="0 0 1600 820" role="img" aria-labelledby="title desc" fill="#27313A">
+  <title id="title">Concrete ECG property request walkthrough</title>
+  <desc id="desc">A concrete edge record for destination 42 moves through record acquisition, address generation, ReuseBind request construction, the cache hierarchy, line metadata update, and instruction completion.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 13 11" markerWidth="13" markerHeight="11" refX="13" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 L13 5.5 L0 11 Z" fill="#1769C2"/>
+    </marker>
+    <style>
+      :root{color-scheme:light dark}
+      @media(prefers-color-scheme:dark){
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#9AA3AD"]{stroke:#747D86}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}.mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:38px;font-weight:700}.subtitle{font-size:19px}
+      .domain{font-size:14px;font-weight:700;letter-spacing:1.2px}
+      .heading{font-size:22px;font-weight:700}.label{font-size:17px;font-weight:700}
+      .body{font-size:16px}.small{font-size:14px}.tiny{font-size:12px}
+      .arrow{fill:none;stroke:#1769C2;stroke-width:3;marker-end:url(#arrow)}
+    </style>
+  </defs>
+
+  <rect width="1600" height="820" fill="#FFFFFF"/>
+  <text x="45" y="55" class="sans title">One property access, end to end</text>
+  <text x="45" y="87" class="sans subtitle">Example: destination 42, tier 2, future epochs 12 and 40, current epoch 10, 4-byte property values.</text>
+  <line x1="45" y1="112" x2="1555" y2="112" stroke="#27313A" stroke-width="2"/>
+
+  <rect x="35" y="138" width="285" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
+  <text x="52" y="164" class="sans domain">GRAPH AND RECORD</text>
+  <rect x="55" y="185" width="245" height="185" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
+  <text x="177" y="220" text-anchor="middle" class="sans heading">Property line</text>
+  <text x="78" y="258" class="sans body">array base = 0x8000_0000</text>
+  <text x="78" y="292" class="sans body">element = 4 bytes</text>
+  <text x="78" y="326" class="mono body">addr(42) = base + 42 x 4</text>
+  <text x="177" y="353" text-anchor="middle" class="mono small">0x8000_00A8; line 0x8000_0080</text>
+
+  <rect x="55" y="405" width="245" height="220" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
+  <text x="177" y="440" text-anchor="middle" class="sans heading">Compact record</text>
+  <text x="78" y="480" class="mono body">dest = 42</text>
+  <text x="78" y="512" class="mono body">tier = 2</text>
+  <text x="78" y="544" class="mono body">epoch1 = 12</text>
+  <text x="78" y="576" class="mono body">epoch2 = 40</text>
+  <text x="177" y="606" text-anchor="middle" class="sans small">loaded from the edge stream</text>
+
+  <rect x="350" y="138" width="350" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
+  <text x="367" y="164" class="sans domain">INSTRUCTION PAIR</text>
+  <rect x="370" y="185" width="310" height="185" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="3"/>
+  <text x="525" y="220" text-anchor="middle" class="sans heading">1. Record request</text>
+  <text x="395" y="260" class="mono body">ecg.flow.load.compact</text>
+  <text x="395" y="296" class="sans body">returns the packed record</text>
+  <text x="395" y="330" class="sans body">sets the FlowThrough flag</text>
+  <text x="525" y="354" text-anchor="middle" class="sans small">record miss: fill private cache, skip LLC insert</text>
+
+  <rect x="370" y="405" width="310" height="220" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
+  <text x="525" y="440" text-anchor="middle" class="sans heading">2. Property request</text>
+  <text x="395" y="480" class="mono body">ecg.bind.load.f32</text>
+  <text x="395" y="516" class="sans body">rs1 = 0x8000_00A8</text>
+  <text x="395" y="550" class="sans body">rs2 = packed ReusePlan</text>
+  <text x="395" y="584" class="sans body">waits for both operands</text>
+  <text x="525" y="608" text-anchor="middle" class="sans small">one dynamic load owns the address and metadata</text>
+
+  <rect x="730" y="138" width="350" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
+  <text x="747" y="164" class="sans domain">O3 REQUEST CONSTRUCTION</text>
+  <rect x="750" y="185" width="310" height="185" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
+  <text x="905" y="220" text-anchor="middle" class="sans heading">AGU and LSQ</text>
+  <text x="775" y="260" class="sans body">translate and check ordering</text>
+  <text x="775" y="294" class="sans body">create the ordinary load Request</text>
+  <text x="775" y="328" class="sans body">preserve normal replay semantics</text>
+
+  <rect x="750" y="405" width="310" height="220" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
+  <text x="905" y="440" text-anchor="middle" class="sans heading">ReuseBind extension</text>
+  <text x="775" y="480" class="mono body">dest=42, tier=2</text>
+  <text x="775" y="512" class="mono body">epochs=(12,40)</text>
+  <text x="775" y="544" class="mono body">current=10, context=k</text>
+  <text x="775" y="576" class="sans body">attached before the cache hierarchy</text>
+  <text x="905" y="608" text-anchor="middle" class="sans small">MSHR merges retain it only when metadata agrees</text>
+
+  <rect x="1110" y="138" width="455" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
+  <text x="1127" y="164" class="sans domain">CACHE AND COMPLETION</text>
+  <rect x="1130" y="185" width="415" height="185" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
+  <text x="1337" y="220" text-anchor="middle" class="sans heading">L1D / L2 / LLC</text>
+  <text x="1155" y="260" class="sans body">private hits return normally</text>
+  <text x="1155" y="294" class="sans body">LLC hit or fill consumes ReuseBind</text>
+  <text x="1155" y="328" class="sans body">line 0x8000_0080 receives tier and epochs</text>
+
+  <rect x="1130" y="405" width="415" height="220" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="3"/>
+  <text x="1337" y="440" text-anchor="middle" class="sans heading">Return and later replacement</text>
+  <text x="1155" y="480" class="sans body">property value writes back to fd</text>
+  <text x="1155" y="514" class="sans body">ROB entry completes and retires</text>
+  <text x="1155" y="548" class="mono body">distance = min(2, 30) = 2</text>
+  <text x="1155" y="582" class="sans body">a later LLC victim decision may use distance 2</text>
+  <text x="1337" y="608" text-anchor="middle" class="sans small">the property request is never bypassed</text>
+
+  <path d="M320 515 H350" class="arrow"/>
+  <path d="M700 515 H730" class="arrow"/>
+  <path d="M1080 515 H1110" class="arrow"/>
+
+  <rect x="55" y="720" width="1490" height="62" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="80" y="747" class="sans label">Boundary between mechanisms</text>
+  <text x="80" y="771" class="sans body">FlowThrough changes only record allocation. ReuseBind changes only property-line metadata. The loaded property value and architectural completion remain ordinary.</text>
+</svg>

@@ -1,36 +1,41 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc" fill="#27313A">
   <title id="title">ReusePlan general and compact record layouts</title>
   <desc id="desc">A 64-bit ReusePlan record with destination, tier, and two epochs, followed by the compact-record sizing rule and a 32-bit example.</desc>
   <defs>
-    <filter id="shadow" x="-20%" y="-30%" width="140%" height="170%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#17324d" flood-opacity="0.12"/>
-    </filter>
     <clipPath id="record-clip">
       <rect x="70" y="145" width="1060" height="88" rx="14"/>
     </clipPath>
     <style>
-      .title{font:700 28px Arial,sans-serif;fill:#17324d}
-      .subtitle{font:400 15px Arial,sans-serif;fill:#607487}
-      .label{font:700 16px Arial,sans-serif;fill:#17324d}
-      .field{font:700 15px Arial,sans-serif;fill:#17324d}
-      .bits{font:400 13px Arial,sans-serif;fill:#506679}
-      .formula{font:700 22px 'Courier New',monospace;fill:#17324d}
-      .body{font:400 14px Arial,sans-serif;fill:#405568}
+      :root{color-scheme:light dark}
+      @media(prefers-color-scheme:dark){
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}
+      }
+      .title{font:700 28px Arial,sans-serif;fill:#27313A}
+      .subtitle{font:400 15px Arial,sans-serif;fill:#27313A}
+      .label{font:700 16px Arial,sans-serif;fill:#27313A}
+      .field{font:700 15px Arial,sans-serif;fill:#27313A}
+      .bits{font:400 13px Arial,sans-serif;fill:#27313A}
+      .formula{font:700 22px 'Courier New',monospace;fill:#27313A}
+      .body{font:400 14px Arial,sans-serif;fill:#27313A}
     </style>
   </defs>
-  <rect width="1200" height="430" fill="#ffffff"/>
+  <rect width="1200" height="430" fill="#FFFFFF"/>
   <text x="60" y="48" class="title">ReusePlan record encoding</text>
   <text x="60" y="75" class="subtitle">The general layout is fixed; the compact layout trades identifier width for epoch resolution.</text>
 
   <text x="70" y="125" class="label">General 64-bit record</text>
-  <g filter="url(#shadow)" clip-path="url(#record-clip)">
-    <rect x="70" y="145" width="530" height="88" fill="#d9efeb"/>
-    <rect x="600" y="145" width="33" height="88" fill="#f7dca0"/>
-    <rect x="633" y="145" width="248" height="88" fill="#f5b7a9"/>
-    <rect x="881" y="145" width="249" height="88" fill="#dfe8f0"/>
+  <g clip-path="url(#record-clip)">
+    <rect x="70" y="145" width="530" height="88" fill="#EDF5FF"/>
+    <rect x="600" y="145" width="33" height="88" fill="#E7F7EA"/>
+    <rect x="633" y="145" width="248" height="88" fill="#FFF0D8"/>
+    <rect x="881" y="145" width="249" height="88" fill="#EEE9FF"/>
   </g>
-  <rect x="70" y="145" width="1060" height="88" rx="14" fill="none" stroke="#b9c8d4"/>
-  <path d="M600 145 V233 M633 145 V233 M881 145 V233" stroke="#ffffff" stroke-width="2"/>
+  <rect x="70" y="145" width="1060" height="88" rx="10" fill="none" stroke="#27313A" stroke-width="3"/>
+  <path d="M600 145 V233 M633 145 V233 M881 145 V233" stroke="#27313A" stroke-width="2"/>
   <text x="335" y="181" text-anchor="middle" class="field">destination</text>
   <text x="335" y="207" text-anchor="middle" class="bits">32 bits</text>
   <text x="617" y="181" text-anchor="middle" class="field">tier</text>
@@ -40,12 +45,12 @@
   <text x="1005" y="181" text-anchor="middle" class="field">epoch 2</text>
   <text x="1005" y="207" text-anchor="middle" class="bits">15 bits</text>
 
-  <rect x="70" y="278" width="500" height="105" rx="16" fill="#f5f8fb" stroke="#c9d5df"/>
+  <rect x="70" y="278" width="500" height="105" rx="10" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="96" y="308" class="label">Compact-record condition</text>
   <text x="96" y="346" class="formula">id + 2 + 2 x epoch &lt;= 32</text>
   <text x="96" y="372" class="body">The tier always consumes two bits.</text>
 
-  <rect x="610" y="278" width="520" height="105" rx="16" fill="#eef8f6" stroke="#9bcfc6"/>
+  <rect x="610" y="278" width="520" height="105" rx="10" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
   <text x="636" y="308" class="label">Illustrative 32-bit packing</text>
   <text x="636" y="342" class="formula">16 + 2 + 5 + 5 = 28 bits</text>
   <text x="636" y="372" class="body">Four bits remain available for alignment or future encoding.</text>

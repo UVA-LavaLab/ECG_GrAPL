@@ -116,7 +116,7 @@ GEM5_GUEST_CLEAN_ENV := env -i PATH=/usr/bin:/bin HOME=/tmp TMPDIR=/tmp \
 	LC_ALL=C LANG=C
 RISCV_CXX_RESOLVED := $(shell command -v $(RISCV_CXX) 2>/dev/null)
 
-CXXFLAGS_GEM5 := -std=c++17 -O1 -Wall -g -DNDEBUG -DNO_M5OPS -fopenmp
+CXXFLAGS_GEM5 := -std=c++17 -O3 -Wall -g -DNDEBUG -DNO_M5OPS -fopenmp
 CXXFLAGS_GEM5_M5OPS := $(filter-out -DNO_M5OPS,$(CXXFLAGS_GEM5)) \
 	-I$(GEM5_DIR)/include
 CXXFLAGS_GEM5_RISCV := $(CXXFLAGS_GEM5_M5OPS) -funswitch-loops -static -mno-relax

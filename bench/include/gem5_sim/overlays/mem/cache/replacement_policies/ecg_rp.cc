@@ -119,6 +119,8 @@ GraphEcgRP::GraphEcgRP(const Params &p)
                   << " variant=" << (var ? var : "rrip_first")
                   << " llc=" << llcSize << "B]\n";
     }
+    std::cerr << "[ECG-MODE-RECEIPT sim=gem5 requested=" << p.ecg_mode
+              << " effective=" << graph::ecgModeToString(ecgMode) << "]\n";
 }
 
 
@@ -561,18 +563,12 @@ GraphEcgRP::reset(
                 data->rrpv = 2;
             }
         } else if (ecgMode == graph::ECGMode::ECG_COMBINED) {
-            uint8_t dbgRrpv = mRrip;
+            uint32_t tier = 3;
             if (data->is_property_data && ctx.loaded) {
-                uint32_t tier = ecgGraspTier(ctx, addr, llcSize);
-                if (tier == 1) dbgRrpv = pRrip;
-                else if (tier == 2) dbgRrpv = iRrip;
+                tier = ecgGraspTier(ctx, addr, llcSize);
             }
-            uint8_t poptRrpv = static_cast<uint8_t>(
-                (uint32_t(data->ecg_popt_hint) * rrpvMax) / 15u);
-            uint8_t combined = static_cast<uint8_t>(
-                (uint32_t(dbgRrpv) + uint32_t(poptRrpv)) / 2u);
-            if (combined == 0 && dbgRrpv > 0) combined = 1;
-            data->rrpv = std::min<uint8_t>(combined, rrpvMax);
+            data->rrpv = ecg_policy::combinedInsertionRRPV(
+                tier, data->ecg_popt_hint, 15, rrpvMax);
         } else if (data->is_property_data && ctx.loaded) {
             uint32_t tier = ecgGraspTier(ctx, addr, llcSize);
             if (tier == 1) data->rrpv = pRrip;

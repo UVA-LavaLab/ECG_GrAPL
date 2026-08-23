@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "ecg_mode.h"
+
 namespace graphbrew {
 namespace sniper {
 
@@ -80,14 +82,7 @@ void beginEcgContext();
 void endEcgContext();
 uint16_t currentEcgContextId();
 
-enum class ECGMode : uint8_t {
-    DBG_PRIMARY,
-    POPT_PRIMARY,
-    DBG_ONLY,
-    ECG_EMBEDDED,
-    ECG_COMBINED,
-    ECG_GRASP_POPT,
-};
+using ECGMode = ecg_mode::Mode;
 
 ECGMode stringToECGMode(const std::string& text);
 std::string ecgModeToString(ECGMode mode);

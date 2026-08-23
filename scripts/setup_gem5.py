@@ -70,6 +70,8 @@ OVERLAY_FILE_MAP = {
         "mem/cache/replacement_policies/ecg_rp.cc",
     "mem/cache/replacement_policies/ecg_victim_policy.hh":
         "mem/cache/replacement_policies/ecg_victim_policy.hh",
+    "mem/cache/replacement_policies/ecg_mode.hh":
+        "mem/cache/replacement_policies/ecg_mode.hh",
     "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh":
         "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh",
     "mem/cache/replacement_policies/graph_cache_context_gem5.hh":

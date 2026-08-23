@@ -96,8 +96,10 @@ the memory Request:
 - FlowThrough loads set the `ECG_FLOWTHROUGH` request flag.
 - Ordinary ReusePlan loads attach neither placement nor property metadata.
 
-MSHR merges preserve the ReuseBind extension only when merged requests agree;
-conflicting metadata is explicitly marked invalid.
+MSHR merges require the same requestor and ECG context. For that context, the
+newest dynamic sequence supplies the representative metadata. Equal-sequence
+payload disagreement, mixed governed/ungoverned targets, or context
+disagreement marks the merged metadata invalid.
 
 ### 7. Cache hierarchy
 

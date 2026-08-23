@@ -1,37 +1,41 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc" fill="#27313A">
   <title id="title">FlowThrough cache path</title>
   <desc id="desc">A record request travels from the CPU through private caches to the LLC. LLC hits are preserved; LLC misses fetch from memory and fill private caches without inserting into the LLC.</desc>
   <defs>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
-      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#17324d" flood-opacity="0.12"/>
-    </filter>
     <marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="6" refX="6.2" refY="3" orient="auto">
-      <path d="M0,0 L7,3 L0,6 Z" fill="#49657a"/>
+      <path d="M0,0 L7,3 L0,6 Z" fill="#1769C2"/>
     </marker>
     <marker id="green-arrow" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="6" refX="6.2" refY="3" orient="auto">
-      <path d="M0,0 L7,3 L0,6 Z" fill="#2a9d8f"/>
+      <path d="M0,0 L7,3 L0,6 Z" fill="#1769C2"/>
     </marker>
     <marker id="coral-arrow" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="6" refX="6.2" refY="3" orient="auto">
-      <path d="M0,0 L7,3 L0,6 Z" fill="#e76f51"/>
+      <path d="M0,0 L7,3 L0,6 Z" fill="#1769C2"/>
     </marker>
     <style>
-      .title{font:700 28px Arial,sans-serif;fill:#17324d}
-      .subtitle{font:400 15px Arial,sans-serif;fill:#607487}
-      .box-title{font:700 18px Arial,sans-serif;fill:#17324d}
-      .body{font:400 14px Arial,sans-serif;fill:#405568}
-      .path-title{font:700 15px Arial,sans-serif;fill:#17324d}
-      .small{font:400 13px Arial,sans-serif;fill:#506679}
+      :root{color-scheme:light dark}
+      @media(prefers-color-scheme:dark){
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
+      }
+      .title{font:700 28px Arial,sans-serif;fill:#27313A}
+      .subtitle{font:400 15px Arial,sans-serif;fill:#27313A}
+      .box-title{font:700 18px Arial,sans-serif;fill:#27313A}
+      .body{font:400 14px Arial,sans-serif;fill:#27313A}
+      .path-title{font:700 15px Arial,sans-serif;fill:#27313A}
+      .small{font:400 13px Arial,sans-serif;fill:#27313A}
     </style>
   </defs>
-  <rect width="1200" height="520" fill="#ffffff"/>
+  <rect width="1200" height="520" fill="#FFFFFF"/>
   <text x="60" y="48" class="title">FlowThrough preserves useful paths and removes only LLC insertion</text>
   <text x="60" y="75" class="subtitle">The placement bit belongs to the streamed record request, not the property request.</text>
 
-  <g filter="url(#shadow)">
-    <rect x="65" y="135" width="190" height="100" rx="18" fill="#f5f8fb" stroke="#c9d5df"/>
-    <rect x="345" y="135" width="220" height="100" rx="18" fill="#eef8f6" stroke="#9bcfc6"/>
-    <rect x="655" y="135" width="220" height="100" rx="18" fill="#fff7e8" stroke="#e8c982"/>
-    <rect x="965" y="135" width="170" height="100" rx="18" fill="#f5f8fb" stroke="#c9d5df"/>
+  <g stroke="#27313A" stroke-width="3">
+    <rect x="65" y="135" width="190" height="100" rx="12" fill="#EDF5FF"/>
+    <rect x="345" y="135" width="220" height="100" rx="12" fill="#E7F7EA"/>
+    <rect x="655" y="135" width="220" height="100" rx="12" fill="#FFF0D8"/>
+    <rect x="965" y="135" width="170" height="100" rx="12" fill="#EEE9FF"/>
   </g>
   <text x="160" y="178" text-anchor="middle" class="box-title">CPU</text>
   <text x="160" y="205" text-anchor="middle" class="body">record load</text>
@@ -42,26 +46,26 @@
   <text x="1050" y="178" text-anchor="middle" class="box-title">Memory</text>
   <text x="1050" y="205" text-anchor="middle" class="body">miss service</text>
 
-  <line x1="255" y1="185" x2="341" y2="185" stroke="#49657a" stroke-width="2.2" marker-end="url(#arrow)"/>
-  <line x1="565" y1="185" x2="651" y2="185" stroke="#49657a" stroke-width="2.2" marker-end="url(#arrow)"/>
+  <line x1="255" y1="185" x2="341" y2="185" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="565" y1="185" x2="651" y2="185" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow)"/>
 
-  <rect x="125" y="300" width="400" height="130" rx="18" fill="#edf7f5" stroke="#8fc8be"/>
-  <circle cx="165" cy="338" r="20" fill="#2a9d8f"/>
+  <rect x="125" y="300" width="400" height="130" rx="12" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
+  <circle cx="165" cy="338" r="20" fill="#27313A"/>
   <path d="M156 338 L164 346 L176 329" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
   <text x="198" y="336" class="path-title">LLC hit</text>
   <text x="198" y="361" class="body">Return the existing line normally.</text>
   <text x="198" y="386" class="body">No behavior is bypassed.</text>
-  <polyline points="765,235 765,270 510,270 510,296" fill="none" stroke="#2a9d8f" stroke-width="2.2" marker-end="url(#green-arrow)"/>
+  <polyline points="765,235 765,270 510,270 510,296" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#green-arrow)"/>
 
-  <rect x="600" y="300" width="535" height="130" rx="18" fill="#fff4f0" stroke="#e7a392"/>
-  <circle cx="640" cy="338" r="20" fill="#e76f51"/>
+  <rect x="600" y="300" width="535" height="130" rx="12" fill="#F7DEDC" stroke="#27313A" stroke-width="3"/>
+  <circle cx="640" cy="338" r="20" fill="#27313A"/>
   <path d="M631 338 H649" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
   <text x="675" y="336" class="path-title">LLC miss</text>
   <text x="675" y="361" class="body">Fetch from memory and fill L1/L2.</text>
   <text x="675" y="386" class="body">Do not insert the returning record into the LLC.</text>
-  <path d="M875 185 H961" fill="none" stroke="#49657a" stroke-width="2.2" marker-end="url(#arrow)"/>
-  <polyline points="1050,235 1050,270 925,270 925,296" fill="none" stroke="#e76f51" stroke-width="2.2" marker-end="url(#coral-arrow)"/>
+  <path d="M875 185 H961" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow)"/>
+  <polyline points="1050,235 1050,270 925,270 925,296" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#coral-arrow)"/>
 
-  <rect x="315" y="457" width="570" height="38" rx="19" fill="#dfe8f0"/>
+  <rect x="315" y="457" width="570" height="38" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="600" y="481" text-anchor="middle" class="small">Property loads remain ordinary cacheable requests carrying ReusePlan metadata.</text>
 </svg>

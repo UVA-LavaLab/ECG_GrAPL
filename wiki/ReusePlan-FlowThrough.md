@@ -133,6 +133,8 @@ through every processor stage without crossing connectors.
 The [detailed RISC-V instruction path](RISC-V-Instruction-Path) explains the
 operand dependencies, address generation, LSQ state, request extensions,
 cache actions, and completion rules shown in these figures.
+The [property-to-cache walkthrough](Property-to-Cache-Walkthrough) follows one
+numeric example through the same path and then shows where every mode differs.
 
 The canonical computed-address path has separate record and property loads:
 
@@ -215,5 +217,7 @@ bound, not a realistic P-OPT timing implementation.
 ## 10. Continue reading
 
 - [Evaluation methodology](Evaluation-Methodology)
+- [Property-to-cache walkthrough](Property-to-Cache-Walkthrough)
+- [Related work roster](Related-Work)
 - [Build and reproduction guide](Reproduction)
 - [Exact PageRank experiment specification](https://github.com/UVA-LavaLab/ECG_GrAPL/blob/main/scripts/experiments/ecg/configs/pagerank_study.json)

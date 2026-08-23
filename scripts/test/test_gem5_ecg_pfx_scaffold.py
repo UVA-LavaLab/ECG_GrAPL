@@ -597,8 +597,20 @@ def test_reuse_plan_computed_address_variant_is_distinct_from_indexed_load():
 
 def test_riscv_gem5_build_unswitches_runtime_policy_loops():
     makefile = read("Makefile")
+    common_flags = makefile.split(
+        "CXXFLAGS_GEM5 :=", 1)[1].splitlines()[0]
     flags = makefile.split("CXXFLAGS_GEM5_RISCV :=", 1)[1].splitlines()[0]
+    assert "-O3" in common_flags
+    assert "-O1" not in common_flags
     assert "-funswitch-loops" in flags
+
+
+def test_pagerank_updates_do_not_reload_just_stored_scores():
+    for source in ("bench/src_gem5/pr.cc", "bench/src_sniper/pr.cc"):
+        text = read(source)
+        assert "fabs(scores[u] - old_score)" not in text
+        assert "outgoing_contrib[u] = scores[u]" not in text
+        assert "const ScoreT new_score" in text
 
 
 def test_fused_compact_load_is_architectural_and_fail_closed():

@@ -396,6 +396,16 @@ CacheSetECG::CacheSetECG(
                    m ? m : "DBG_PRIMARY", var ? var : "rrip_first",
                    (unsigned long long)m_llc_size_bytes);
    }
+   static const bool mode_receipt = [&]() {
+      const char* requested = std::getenv("SNIPER_ECG_MODE");
+      std::fprintf(
+            stderr,
+            "[ECG-MODE-RECEIPT sim=sniper requested=%s effective=%s]\n",
+            requested ? requested : "DBG_PRIMARY",
+            graphbrew::sniper::ecgModeToString(m_mode).c_str());
+      return true;
+   }();
+   (void)mode_receipt;
 }
 
 CacheSetECG::~CacheSetECG()
@@ -417,8 +427,15 @@ void
 CacheSetECG::tryLoadContext()
 {
    auto& context = graphbrew::sniper::globalContext();
+   const bool extract = sniperEcgExtractEnabled();
+   const bool needs_rereference =
+      m_mode == graphbrew::sniper::ECGMode::DBG_PRIMARY ||
+      m_mode == graphbrew::sniper::ECGMode::POPT_PRIMARY ||
+      m_mode == graphbrew::sniper::ECGMode::ECG_EMBEDDED ||
+      m_mode == graphbrew::sniper::ECGMode::ECG_COMBINED ||
+      (m_mode == graphbrew::sniper::ECGMode::ECG_GRASP_POPT && !extract);
    if (context.loaded &&
-       (sniperEcgExtractEnabled() || context.rereference.enabled)) return;
+       (!needs_rereference || extract || context.rereference.enabled)) return;
    if (m_context_load_attempted) return;
    m_context_load_attempted = true;
    context.setCacheLineSize(m_blocksize);
@@ -427,7 +444,7 @@ CacheSetECG::tryLoadContext()
    }
    // The faithful ECG_GRASP_POPT path consumes the delivered per-edge epoch.
    // Load the live P-OPT oracle only for explicit non-delivery diagnostics.
-   if (!sniperEcgExtractEnabled() && !context.rereference.enabled &&
+   if (needs_rereference && !extract && !context.rereference.enabled &&
        context.loadRereferenceMatrix(m_popt_matrix_path) &&
        context.num_regions > 0) {
       context.rereference.base_address = context.regions[0].base_address;
@@ -663,11 +680,14 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
       if (m_mode == graphbrew::sniper::ECGMode::POPT_PRIMARY) {
          m_rrip_bits[way] = m_rrip_insert;
       } else if (m_mode == graphbrew::sniper::ECGMode::ECG_COMBINED) {
-         UInt8 dbg_rrpv = graspInsertionRRPV(m_pending_insert_addr);
-         UInt8 popt_rrpv = static_cast<UInt8>((UInt32(m_popt_hints[way]) * m_rrip_max) / 15u);
-         UInt8 combined = static_cast<UInt8>((UInt32(dbg_rrpv) + UInt32(popt_rrpv)) / 2u);
-         if (combined == 0 && dbg_rrpv > 0) combined = 1;
-         m_rrip_bits[way] = std::min<UInt8>(combined, m_rrip_max);
+         const auto& context = graphbrew::sniper::globalContext();
+         const UInt64 llc_size = m_llc_size_bytes
+            ? m_llc_size_bytes : UInt64(m_associativity) * m_blocksize;
+         const UInt32 tier = ecgGraspTier(
+               context, static_cast<uint64_t>(m_pending_insert_addr),
+               llc_size);
+         m_rrip_bits[way] = ecg_policy::combinedInsertionRRPV(
+               tier, m_popt_hints[way], 15, m_rrip_max);
       } else if (
             m_mode == graphbrew::sniper::ECGMode::ECG_GRASP_POPT &&
             reuseAdmissionEnabled() && m_ecg_epoch_valid[way]) {

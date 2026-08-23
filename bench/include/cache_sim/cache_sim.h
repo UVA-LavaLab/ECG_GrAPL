@@ -358,7 +358,8 @@ inline EvictionPolicy StringToPolicy(const std::string& s) {
     if (s == "GRASP" || s == "grasp") return EvictionPolicy::GRASP;
     if (s == "POPT" || s == "popt" || s == "P-OPT" || s == "p-opt") return EvictionPolicy::POPT;
     if (s == "ECG" || s == "ecg") return EvictionPolicy::ECG;
-    return EvictionPolicy::LRU;  // Default
+    std::fprintf(stderr, "[FATAL] unknown cache policy '%s'\n", s.c_str());
+    std::abort();
 }
 
 inline EvictionPolicy GetEnvPolicy(const char* name, EvictionPolicy default_policy) {
@@ -1212,38 +1213,25 @@ public:
                 // Match P-OPT insertion: uniform RRPV=6 for all lines
                 set[victim_idx].rrpv = 6;
             } else if (mode == ECGMode::ECG_COMBINED) {
-                // Hawkeye-inspired: combine DBG tier + P-OPT hint into
-                // unified insertion RRPV. Both signals affect every insertion.
-                //
-                // Theory: Insertion RRPV is the dominant lever (Hawkeye ISCA'16).
-                // Using both degree (reuse frequency) and rereference distance
-                // (reuse timing) at insertion captures more information than
-                // either signal alone.
-                //
-                // Formula: RRPV = max(0, min(7, dbg_rrpv + popt_rrpv) / 2))
-                //   dbg_rrpv:  1 (hub) to 7 (cold) from GRASP 3-tier
-                //   popt_rrpv: 0 (near) to 7 (far) from stored P-OPT hint
-                //   Combined:  average → smooth 8-level priority
-                uint8_t dbg_rrpv = 7;
-                if (graph_ctx_) {
-                    uint32_t tier = graph_ctx_->classifyGRASP(address, size_bytes_);
-                    if (tier == 1)      dbg_rrpv = 1;
-                    else if (tier == 2) dbg_rrpv = 4;
-                    else                dbg_rrpv = 7;
-                }
-                uint8_t popt_rrpv = 6;  // default: assume distant
+                uint32_t tier = 3;
+                uint32_t hint15 = 0;
                 if (graph_ctx_ && graph_ctx_->mask_array.enabled) {
+                    tier = graph_ctx_->classifyGRASP(address, size_bytes_);
                     uint32_t mask_entry = graph_ctx_->hints_for_thread().mask;
-                    uint8_t hint = graph_ctx_->mask_config.decodePOPT(mask_entry);
-                    uint8_t popt_max = graph_ctx_->mask_config.popt_bits > 0
+                    const uint32_t hint =
+                        graph_ctx_->mask_config.decodePOPT(mask_entry);
+                    const uint32_t popt_max =
+                        graph_ctx_->mask_config.popt_bits > 0
                         ? ((1 << graph_ctx_->mask_config.popt_bits) - 1) : 1;
-                    // Map hint (0=near, max=far) to RRPV (0=keep, 7=evict)
-                    popt_rrpv = static_cast<uint8_t>((uint32_t(hint) * 7) / std::max(uint8_t(1), popt_max));
+                    hint15 = (hint * 15u) / std::max<uint32_t>(1, popt_max);
+                } else if (graph_ctx_) {
+                    tier = graph_ctx_->classifyGRASP(address, size_bytes_);
+                    hint15 = std::min<uint32_t>(
+                        graph_ctx_->findNextRef(address), 127u) >> 3;
                 }
-                // Weighted combination: both signals contribute equally
-                uint8_t combined = static_cast<uint8_t>((uint32_t(dbg_rrpv) + uint32_t(popt_rrpv)) / 2);
-                if (combined == 0 && dbg_rrpv > 0) combined = 1;  // Reserve 0 for hits
-                set[victim_idx].rrpv = combined;
+                set[victim_idx].rrpv =
+                    ecg_policy::combinedInsertionRRPV(
+                        tier, hint15, 15, 7);
             } else if (
                     reuseAdmissionEnabled() &&
                     mode == ECGMode::ECG_GRASP_POPT && graph_ctx_ &&
@@ -1354,6 +1342,12 @@ public:
     size_t getAssociativity() const { return associativity_; }
     size_t getNumSets() const { return num_sets_; }
     EvictionPolicy getPolicy() const { return policy_; }
+    std::string getEcgMode() const {
+        if (policy_ != EvictionPolicy::ECG) return "";
+        const ECGMode mode = graph_ctx_
+            ? graph_ctx_->mask_config.ecg_mode : ECGMode::DBG_PRIMARY;
+        return ECGModeToString(mode);
+    }
     uint32_t getDuelingSetOffset() const { return dueling_set_offset_; }
     uint8_t getDuelingWinnerArm() const {
         return dueling_selector_.winnerArm();
@@ -3151,6 +3145,8 @@ public:
         ss << "  \"total_memory_traffic\": " << getTotalMemoryTraffic() << ",\n";
         ss << "  \"llc_writebacks\": " << getWritebackTraffic() << ",\n";
         ss << "  \"total_offchip_traffic\": " << getTotalOffChipTraffic() << ",\n";
+        ss << "  \"ecg_mode_effective\": \"" << l3_->getEcgMode()
+           << "\",\n";
         ss << "  \"ecg_dueling_set_offset\": "
            << l3_->getDuelingSetOffset() << ",\n";
         ss << "  \"ecg_dueling_final_winner_arm\": "

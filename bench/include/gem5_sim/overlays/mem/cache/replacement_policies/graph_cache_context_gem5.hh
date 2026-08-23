@@ -34,6 +34,7 @@
 #include <string>
 #include <vector>
 
+#include "mem/cache/replacement_policies/ecg_mode.hh"
 // Shared GRASP insertion-tier classifier.
 #include "mem/cache/replacement_policies/ecg_victim_policy.hh"
 
@@ -559,43 +560,21 @@ inline uint32_t addressToVertex(uint64_t addr,
 // ============================================================================
 // ECGMode: Controls eviction tiebreaker priority
 // ============================================================================
-enum class ECGMode : uint8_t {
-    DBG_PRIMARY,    // SRRIP -> DBG tier -> dynamic P-OPT
-    POPT_PRIMARY,   // P-OPT exact 3-phase (bypasses SRRIP aging) -> DBG
-    ECG_GRASP_POPT, // GRASP insertion + stored absolute next-ref epoch eviction
-    DBG_ONLY,       // GRASP-faithful DBG insertion/hit, plain SRRIP victim
-    ECG_EMBEDDED,   // SRRIP -> stored P-OPT hint -> DBG (zero LLC overhead)
-    ECG_COMBINED    // Pure SRRIP aging; insertion RRPV combines DBG+P-OPT
-};
+using ECGMode = ecg_mode::Mode;
 
 inline ECGMode stringToECGMode(const std::string& s) {
-    if (s == "POPT_PRIMARY" || s == "popt_primary" || s == "popt") return ECGMode::POPT_PRIMARY;
-    if (s == "ECG_GRASP_POPT" || s == "GRASP_POPT" || s == "ecg_grasp_popt" ||
-        s == "grasp_popt") return ECGMode::ECG_GRASP_POPT;
-    if (s == "DBG_ONLY" || s == "dbg_only" || s == "dbg") return ECGMode::DBG_ONLY;
-    if (s == "ECG_EMBEDDED" || s == "ecg_embedded" || s == "embedded") return ECGMode::ECG_EMBEDDED;
-    if (s == "ECG_COMBINED" || s == "ecg_combined" || s == "combined") return ECGMode::ECG_COMBINED;
-    if (s.empty() || s == "DBG_PRIMARY" || s == "dbg_primary") return ECGMode::DBG_PRIMARY;
-    // Fail fast instead of silently aliasing an unknown/typo'd mode to
-    // DBG_PRIMARY (which would mislabel result rows). POPT_TIE and
-    // ECG_EPOCH_EMBEDDED are cache_sim-only experimental modes.
-    std::fprintf(stderr,
-        "[graphctx] FATAL: unsupported ECG mode '%s' for gem5. Supported: "
-        "DBG_PRIMARY, POPT_PRIMARY, ECG_GRASP_POPT, DBG_ONLY, ECG_EMBEDDED, ECG_COMBINED "
-        "(POPT_TIE / ECG_EPOCH_EMBEDDED are cache_sim-only).\n", s.c_str());
-    std::abort();
+    const ECGMode mode = ecg_mode::parse(s);
+    if (!ecg_mode::supportedByAllBackends(mode)) {
+        std::fprintf(
+            stderr, "[graphctx] FATAL: ECG mode '%s' is cache_sim-only\n",
+            ecg_mode::name(mode));
+        std::abort();
+    }
+    return mode;
 }
 
 inline std::string ecgModeToString(ECGMode mode) {
-    switch (mode) {
-        case ECGMode::DBG_PRIMARY:  return "DBG_PRIMARY";
-        case ECGMode::POPT_PRIMARY: return "POPT_PRIMARY";
-        case ECGMode::ECG_GRASP_POPT: return "ECG_GRASP_POPT";
-        case ECGMode::DBG_ONLY:     return "DBG_ONLY";
-        case ECGMode::ECG_EMBEDDED: return "ECG_EMBEDDED";
-        case ECGMode::ECG_COMBINED: return "ECG_COMBINED";
-        default:                    return "UNKNOWN";
-    }
+    return ecg_mode::name(mode);
 }
 
 // ============================================================================

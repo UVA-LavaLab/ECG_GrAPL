@@ -49,6 +49,7 @@
 #endif
 
 #include "../ecg_mode6_builder.h"
+#include "../ecg_mode.h"
 #include "../ecg_reuse_plan_builder.h"
 #include "../ecg_victim_policy.h"
 
@@ -177,64 +178,21 @@ static constexpr uint32_t MAX_PROPERTY_REGIONS = 8;
 //   ECG_EMBEDDED:           Stored P-OPT hint as primary, DBG as secondary
 //   ECG_EPOCH_EMBEDDED:     Current-epoch compact P-OPT hint, DBG as secondary
 //   ECG_COMBINED:           Both DBG + P-OPT hint → unified insertion RRPV (Hawkeye-inspired)
-// ECG mode taxonomy. Enum values are serialized; do not reorder them.
+// ECG mode taxonomy is defined once in ecg_mode.h. cache_sim implements the
+// common architectural modes plus the diagnostic-only modes listed below.
 //   [PRIMARY]      the primary ECG policy .................... ECG_GRASP_POPT
 //   [BASELINE]     primary-matrix + cross-simulator baselines  DBG_PRIMARY, POPT_PRIMARY,
 //                  DBG_ONLY
 //   [ARCHIVE]      compatibility and diagnostic modes used by proof_matrix and
 //                  the gem5/Sniper overlays.
-enum class ECGMode {
-    DBG_PRIMARY,   // [BASELINE] DBG tier is primary tiebreaker, P-OPT is secondary
-    POPT_PRIMARY,  // [BASELINE] Dynamic P-OPT is primary tiebreaker, DBG is secondary
-    POPT_TIE,      // [ARCHIVE] SRRIP narrows candidates, dynamic P-OPT picks among ties
-    DBG_ONLY,      // [BASELINE] GRASP-equivalent insertion/hit hints, no eviction tiebreak
-    ECG_EMBEDDED,  // [ARCHIVE] Stored P-OPT hint primary, DBG tier secondary
-    ECG_EPOCH_EMBEDDED, // [ARCHIVE] Current-epoch P-OPT hint primary, DBG tier secondary
-    ECG_COMBINED,  // [ARCHIVE] Combined DBG and P-OPT insertion RRPV
-    ECG_EXACT,     // [ARCHIVE] Live position-indexed next-reference eviction
-    ECG_EXACT_STORED, // [ARCHIVE] Access-time exact stamps with all-way selection
-    ECG_EXACT_MASK,   // [ARCHIVE] Precomputed 5-bit per-edge exact mask
-    ECG_GRASP_POPT    // [PRIMARY] GRASP insertion with stored next-reference epochs
-};
+using ECGMode = ecg_mode::Mode;
 
 inline std::string ECGModeToString(ECGMode mode) {
-    switch (mode) {
-        case ECGMode::DBG_PRIMARY:  return "DBG_PRIMARY";
-        case ECGMode::POPT_PRIMARY: return "POPT_PRIMARY";
-        case ECGMode::POPT_TIE:     return "POPT_TIE";
-        case ECGMode::DBG_ONLY:     return "DBG_ONLY";
-        case ECGMode::ECG_EMBEDDED: return "ECG_EMBEDDED";
-        case ECGMode::ECG_EPOCH_EMBEDDED: return "ECG_EPOCH_EMBEDDED";
-        case ECGMode::ECG_COMBINED: return "ECG_COMBINED";
-        case ECGMode::ECG_EXACT: return "ECG_EXACT";
-        case ECGMode::ECG_EXACT_STORED: return "ECG_EXACT_STORED";
-        case ECGMode::ECG_EXACT_MASK: return "ECG_EXACT_MASK";
-        case ECGMode::ECG_GRASP_POPT: return "ECG_GRASP_POPT";
-        default:                    return "UNKNOWN";
-    }
+    return ecg_mode::name(mode);
 }
 
 inline ECGMode StringToECGMode(const std::string& s) {
-    if (s.empty()) return ECGMode::DBG_PRIMARY;  // unset/empty env -> default (parity with gem5/Sniper)
-    if (s == "DBG_PRIMARY" || s == "dbg_primary") return ECGMode::DBG_PRIMARY;
-    if (s == "POPT_PRIMARY" || s == "popt_primary" || s == "popt") return ECGMode::POPT_PRIMARY;
-    if (s == "POPT_TIE" || s == "popt_tie" || s == "popt_tiebreak") return ECGMode::POPT_TIE;
-    if (s == "DBG_ONLY" || s == "dbg_only" || s == "dbg") return ECGMode::DBG_ONLY;
-    if (s == "ECG_EMBEDDED" || s == "ecg_embedded" || s == "embedded") return ECGMode::ECG_EMBEDDED;
-    if (s == "ECG_EPOCH_EMBEDDED" || s == "ecg_epoch_embedded" || s == "epoch_embedded") return ECGMode::ECG_EPOCH_EMBEDDED;
-    if (s == "ECG_COMBINED" || s == "ecg_combined" || s == "combined") return ECGMode::ECG_COMBINED;
-    if (s == "ECG_EXACT" || s == "ecg_exact" || s == "exact") return ECGMode::ECG_EXACT;
-    if (s == "ECG_EXACT_STORED" || s == "ecg_exact_stored" || s == "exact_stored") return ECGMode::ECG_EXACT_STORED;
-    if (s == "ECG_EXACT_MASK" || s == "ecg_exact_mask" || s == "exact_mask") return ECGMode::ECG_EXACT_MASK;
-    if (s == "ECG_GRASP_POPT" || s == "ecg_grasp_popt" || s == "grasp_popt") return ECGMode::ECG_GRASP_POPT;
-    // HARD FAIL on an unrecognized mode. Silently defaulting to DBG_PRIMARY would
-    // run a DIFFERENT policy than requested (a typo, or a removed mode) while the
-    // run still LABELS itself as the requested mode -> fraudulent-looking results.
-    std::cerr << "[FATAL] ECG_MODE='" << s << "' is not a recognized ECG mode. "
-                 "Valid: DBG_PRIMARY, POPT_PRIMARY, POPT_TIE, DBG_ONLY, ECG_EMBEDDED, "
-                 "ECG_EPOCH_EMBEDDED, ECG_COMBINED, ECG_EXACT, ECG_EXACT_STORED, "
-                 "ECG_EXACT_MASK, ECG_GRASP_POPT." << std::endl;
-    std::exit(2);
+    return ecg_mode::parse(s);
 }
 
 // ============================================================================

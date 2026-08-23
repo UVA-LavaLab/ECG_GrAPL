@@ -20,6 +20,9 @@ design result, until the same rule is tested in gem5 O3. Sniper uses a coarser
 delivery model than gem5's request-bound O3 path, so its time is not used as a
 ReuseBind speedup.
 
+Measured RISC-V guests are compiled with `-O3`; the exact compiler, flags,
+dependencies, and binary hash are sealed in the guest build receipt.
+
 ReusePlan records are graph-derived immutable inputs, not measured graph work.
 The gem5 PageRank flow generates each record sidecar once with the native
 builder, keys it by the reordered graph and mechanism configuration, and then
@@ -29,6 +32,10 @@ mismatch. Detailed O3 simulation never recomputes the sidecar.
 
 Absolute miss rates are not compared across simulators. Each simulator is
 compared with its own matching baseline.
+
+Sniper disables Query-Based Selection for the controlled policy comparison by
+setting the QBS attempt count to one. This prevents LRU/GRASP from consulting
+lower caches while the shared ECG selector does not.
 
 Online-selector diagnostics report per-arm leader samples, winning windows,
 and follower selections, plus the scalar final winning arm. Stability studies
@@ -94,6 +101,11 @@ required for this attribution.
 IPC is derived from instruction count and execution time; it is not an
 independent corroborating quantity. Counterfactual instruction normalization
 is a sensitivity study, not a measured result.
+
+gem5 memory-order violations, memory-dependence conflicts, and squashed
+instructions are reported as O3 path diagnostics. They describe recovered
+speculation, not architectural correctness; semantic result receipts remain
+the correctness gate.
 
 ## P-OPT accounting
 

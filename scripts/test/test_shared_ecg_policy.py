@@ -19,6 +19,11 @@ COPIES = [
     ROOT / "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_victim_policy.hh",
     ROOT / "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/ecg_victim_policy.h",
 ]
+MODE_CANONICAL = ROOT / "bench/include/ecg_mode.h"
+MODE_COPIES = [
+    ROOT / "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_mode.hh",
+    ROOT / "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/ecg_mode.h",
+]
 
 
 def _sha(p: Path) -> str:
@@ -38,6 +43,29 @@ def test_all_copies_byte_identical():
             f"All simulators must share the identical eviction decision; re-copy "
             f"bench/include/ecg_victim_policy.h into the overlay trees."
         )
+
+
+def test_ecg_mode_is_one_byte_identical_definition():
+    want = _sha(MODE_CANONICAL)
+    for copy in MODE_COPIES:
+        assert _sha(copy) == want, (
+            f"ECG mode drift: {copy} differs from {MODE_CANONICAL}")
+    text = MODE_CANONICAL.read_text()
+    expected = {
+        "DBG_PRIMARY": 0,
+        "POPT_PRIMARY": 1,
+        "POPT_TIE": 2,
+        "DBG_ONLY": 3,
+        "ECG_EMBEDDED": 4,
+        "ECG_EPOCH_EMBEDDED": 5,
+        "ECG_COMBINED": 6,
+        "ECG_EXACT": 7,
+        "ECG_EXACT_STORED": 8,
+        "ECG_EXACT_MASK": 9,
+        "ECG_GRASP_POPT": 10,
+    }
+    for name, value in expected.items():
+        assert re.search(rf"\b{name}\s*=\s*{value}\b", text)
 
 
 def test_calls_present_in_each_simulator():
@@ -67,6 +95,17 @@ def test_reuse_admission_mapping_is_shared_across_backends():
         assert "ECG_REUSE_ADMISSION" in text
     builder = (ROOT / "bench/include/ecg_reuse_plan_builder.h").read_text()
     assert builder.count("quantizedFutureEpoch(") >= 3
+
+
+def test_combined_insertion_mapping_is_shared_across_backends():
+    callers = (
+        "bench/include/cache_sim/cache_sim.h",
+        "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_rp.cc",
+        "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/cache_set_ecg.cc",
+    )
+    for rel in callers:
+        assert "ecg_policy::combinedInsertionRRPV" in (
+            ROOT / rel).read_text(errors="ignore")
 
 
 def test_grasp_insertion_classifier_is_shared():

@@ -295,6 +295,12 @@ GEM5_STAT_KEYS = {
     "l1_accesses": "system.cpu.dcache.overallAccesses::total",
     "l2_accesses": "system.l2cache.overallAccesses::total",
     "l3_accesses": "system.l3cache.overallAccesses::total",
+    "gem5_mem_order_violations":
+        "system.cpu.lsq0.memOrderViolation",
+    "gem5_memdep_conflicting_loads":
+        "system.cpu.MemDepUnit__0.conflictingLoads",
+    "gem5_commit_squashed_insts":
+        "system.cpu.commit.commitSquashedInsts",
     "grasp_hot_property_accesses":
         "system.l3cache.replacement_policy.hotPropertyAccesses",
     "popt_roi_rereference_queries":
@@ -2280,6 +2286,12 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
 
     data = json.loads(json_path.read_text())
     log_text = log_path.read_text(errors="ignore")
+    transport = ecg_transport_for(spec, args.benchmark)
+    row.update({
+        "status": "ok",
+        "total_accesses": data.get("total_accesses"),
+        "memory_accesses": data.get("memory_accesses"),
+    })
     metadata_receipt = re.search(
         r"\[ECG-METADATA [^\]]*record_bytes=(\d+)"
         r"[^\]]*bytes_per_edge=([0-9.]+)[^\]]*\]",
@@ -2297,11 +2309,54 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         else:
             row["edge_stream_bytes_per_edge"] = (
                 int(row.get("graph_edge_bytes") or 0) + record_bytes)
-    row.update({
-        "status": "ok",
-        "total_accesses": data.get("total_accesses"),
-        "memory_accesses": data.get("memory_accesses"),
-    })
+    elif transport.reuse_plan_depth > 0:
+        mark_row_error(
+            row, "ReusePlan row emitted no ECG-METADATA record-width receipt")
+
+    expected_levels = {
+        "L1": (
+            parse_size_bytes(args.l1d_size), int(args.l1d_ways), "LRU"),
+        "L2": (
+            parse_size_bytes(args.l2_size), int(args.l2_ways), "LRU"),
+        "L3": (
+            parse_size_bytes(effective_l3_size),
+            int(effective_l3_ways), spec.policy),
+    }
+    geometry_valid = True
+    policy_valid = True
+    for level, (expected_size, expected_ways, expected_policy) in (
+            expected_levels.items()):
+        actual = data.get(level)
+        if not isinstance(actual, dict):
+            geometry_valid = False
+            policy_valid = False
+            mark_row_error(row, f"cache_sim JSON omitted {level} geometry")
+            continue
+        if (
+                int(actual.get("size_bytes") or 0) != expected_size or
+                int(actual.get("ways") or 0) != expected_ways or
+                int(actual.get("line_size") or 0) !=
+                    parse_size_bytes(args.line_size)):
+            geometry_valid = False
+            mark_row_error(
+                row,
+                f"cache_sim realized {level} geometry differs from request")
+        if str(actual.get("policy") or "").upper() != expected_policy.upper():
+            policy_valid = False
+            mark_row_error(
+                row,
+                f"cache_sim realized {level} policy differs from "
+                f"{expected_policy}")
+    row["cache_runtime_geometry_valid"] = int(geometry_valid)
+    row["cache_runtime_policy_valid"] = int(policy_valid)
+    row["cache_ecg_mode_effective"] = str(
+        data.get("ecg_mode_effective") or "")
+    if (
+            spec.policy == "ECG" and
+            row["cache_ecg_mode_effective"] != (spec.ecg_mode or "DBG_PRIMARY")):
+        mark_row_error(
+            row,
+            "cache_sim effective ECG mode differs from requested mode")
     for key in (
         "prefetch_requests",
         "prefetch_cache_hits",
@@ -2383,7 +2438,6 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         else:
             row[f"{prefix}_prop_miss_rate"] = None
             row[f"{prefix}_struct_misses"] = None
-    transport = ecg_transport_for(spec, args.benchmark)
     log_text = log_path.read_text(errors="ignore")
     if "[ECG_COMPACT_REUSE_PLAN_WEIGHTED64]" in log_text:
         row.update({
@@ -2972,6 +3026,24 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         apply_gem5_variant_receipt(
             base, log_text, ecg_variant, required=is_reuse_plan_ecg,
             expected_dueling=int(transport.set_dueling))
+        if spec.policy == "ECG":
+            mode_receipt = re.search(
+                r"\[ECG-MODE-RECEIPT sim=gem5 requested=([^ ]+) "
+                r"effective=([^\]]+)\]",
+                log_text)
+            expected_mode = spec.ecg_mode or "DBG_PRIMARY"
+            base["gem5_ecg_mode_requested_receipt"] = (
+                mode_receipt.group(1) if mode_receipt else "")
+            base["gem5_ecg_mode_effective_receipt"] = (
+                mode_receipt.group(2) if mode_receipt else "")
+            if (
+                    mode_receipt is None or
+                    mode_receipt.group(1) != expected_mode or
+                    mode_receipt.group(2) != expected_mode):
+                mark_row_error(
+                    base,
+                    "gem5 ECG mode receipt missing or mismatched: "
+                    f"expected {expected_mode}")
         # ecg_record_bytes above is a NOMINAL value derived from the schedule,
         # so it read 8 for every two-epoch ReusePlan row even when the guest streamed a
         # compact 4-byte record. Anyone re-parsing the combined CSV would have
@@ -3153,10 +3225,6 @@ def sniper_policy_name(args: argparse.Namespace, spec: PolicySpec) -> str | None
     if spec.policy in SNIPER_POLICY_MAP:
         return SNIPER_POLICY_MAP[spec.policy]
     if spec.policy == "ECG" and sniper_graph_policies_enabled(args):
-        if spec.ecg_mode == "DBG_ONLY":
-            return "grasp"
-        if spec.ecg_mode == "POPT_PRIMARY":
-            return "popt"
         return "ecg"
     if sniper_graph_policies_enabled(args):
         return SNIPER_GRAPH_POLICY_MAP.get(spec.policy)
@@ -3236,9 +3304,6 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     })
     if unsafe_sniper_workload:
         row["sniper_memory_limit_gb"] = args.sniper_memory_limit_gb
-
-    if spec.policy == "ECG" and spec.ecg_mode in ("DBG_ONLY", "POPT_PRIMARY"):
-        row["sniper_policy_alias_for"] = spec.ecg_mode
 
     if args.sniper_workload == "benchmark" and not args.allow_sniper_benchmark_workload:
         row.update({
@@ -3469,7 +3534,11 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         env.pop("OMP_WAIT_POLICY", None)
     env["SNIPER_GRAPHBREW_CTX"] = str(sidebands["context"])
     env["SNIPER_POPT_MATRIX"] = str(sidebands["popt_matrix"])
-    requires_popt_matrix = policy_name == "popt"
+    requires_popt_matrix = (
+        policy_name == "popt" or
+        (policy_name == "ecg" and spec.ecg_mode in (
+            "DBG_PRIMARY", "POPT_PRIMARY", "ECG_EMBEDDED",
+            "ECG_COMBINED")))
     row["sniper_popt_matrix_required"] = int(requires_popt_matrix)
     if requires_popt_matrix:
         env["SNIPER_REQUIRE_POPT_MATRIX"] = "1"
@@ -3721,14 +3790,19 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             return [row]
         reref_loaded = int(context_marker.group(2))
         row["sniper_rereference_loaded"] = reref_loaded
-        if policy_name == "popt" and reref_loaded != 1:
+        if requires_popt_matrix and reref_loaded != 1:
+            matrix_error = (
+                "Sniper P-OPT completed without a loaded rereference matrix"
+                if policy_name == "popt" else
+                "Sniper ECG mode completed without its required "
+                "rereference matrix")
             clear_sniper_reuse_plan_sidebands(sidebands)
             row.update({
                 "status": "error",
-                "error": "Sniper P-OPT completed without a loaded rereference matrix",
+                "error": matrix_error,
             })
             return [row]
-        if (args.ecg_isa_variant == "computed" and policy_name != "popt"
+        if (args.ecg_isa_variant == "computed" and not requires_popt_matrix
                 and reref_loaded != 0):
             clear_sniper_reuse_plan_sidebands(sidebands)
             row.update({
@@ -3738,6 +3812,28 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
                     "rereference matrix"),
             })
             return [row]
+        if policy_name == "ecg":
+            mode_receipt = re.search(
+                r"\[ECG-MODE-RECEIPT sim=sniper requested=([^ ]+) "
+                r"effective=([^\]]+)\]",
+                log_text)
+            expected_mode = spec.ecg_mode or "DBG_PRIMARY"
+            row["sniper_ecg_mode_requested_receipt"] = (
+                mode_receipt.group(1) if mode_receipt else "")
+            row["sniper_ecg_mode_effective_receipt"] = (
+                mode_receipt.group(2) if mode_receipt else "")
+            if (
+                    mode_receipt is None or
+                    mode_receipt.group(1) != expected_mode or
+                    mode_receipt.group(2) != expected_mode):
+                clear_sniper_reuse_plan_sidebands(sidebands)
+                row.update({
+                    "status": "error",
+                    "error": (
+                        "Sniper ECG mode receipt missing or mismatched: "
+                        f"expected {expected_mode}"),
+                })
+                return [row]
         if is_reuse_plan_ecg:
             apply_sniper_variant_receipt(
                 row, log_text, ecg_variant, required=True,

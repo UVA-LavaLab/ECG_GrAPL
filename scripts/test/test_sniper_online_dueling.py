@@ -40,6 +40,15 @@ def _validate_sniper(row, required):
         leader_samples_field="sniper_reuse_plan_dueling_leader_samples")
 
 
+def test_sniper_ecg_modes_use_the_ecg_policy_adapter():
+    args = argparse.Namespace(sniper_enable_graph_policies=True)
+    for mode in (
+            "DBG_PRIMARY", "POPT_PRIMARY", "DBG_ONLY",
+            "ECG_EMBEDDED", "ECG_COMBINED", "ECG_GRASP_POPT"):
+        spec = roi_matrix.parse_policy_spec(f"ECG:{mode}")
+        assert roi_matrix.sniper_policy_name(args, spec) == "ecg"
+
+
 def test_sniper_online_dueling_activity_accepts_full_roi_window():
     row = valid_sniper_row()
     assert _validate_sniper(row, required=True)
@@ -326,7 +335,10 @@ def _run_sniper_end_to_end(monkeypatch, tmp_path, log_text, write_matching_geome
     def fake_run_command(cmd, cwd, env, timeout, stdout_path, dry_run, pass_fds=()):
         import subprocess
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
-        stdout_path.write_text(log_text)
+        stdout_path.write_text(
+            "[ECG-MODE-RECEIPT sim=sniper "
+            "requested=ECG_GRASP_POPT effective=ECG_GRASP_POPT]\n" +
+            log_text)
         return subprocess.CompletedProcess(cmd, 0)
 
     monkeypatch.setattr(roi_matrix, "run_command", fake_run_command)
