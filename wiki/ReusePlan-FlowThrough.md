@@ -29,6 +29,11 @@ private caches without occupying the LLC after a miss.
 
 ![ReusePlan tier and epoch construction](assets/reuseplan-construction.svg)
 
+The figures use one stage map throughout: **1** graph/CSR mask construction,
+**2** record load, **3** decode and register dependency, **4** property
+instruction, **5** exact Request binding and cache path, and **6** LLC metadata
+and victim selection.
+
 The implementation ranks vertices by the number of property readers in the
 selected kernel direction. With the default 15% hot fraction, the top 15% are
 tier 1 (hot), the next 15% are tier 2 (moderate), and the remainder are tier 3

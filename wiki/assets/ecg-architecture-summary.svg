@@ -47,7 +47,7 @@
   <text x="70" y="198" class="sans body">CSR edge ID 42 selects property[42].</text>
   <text x="70" y="224" class="sans body">The address is irregular, so the ID alone</text>
   <text x="70" y="248" class="sans body">does not describe when the line returns.</text>
-  <rect x="70" y="268" width="300" height="58" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <rect x="70" y="268" width="300" height="58" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
   <text x="220" y="292" text-anchor="middle" class="mono small">dest 42 | tier 2</text>
   <text x="220" y="315" text-anchor="middle" class="mono small">e1 12 | e2 40</text>
   <text x="70" y="349" class="sans small">The graph pass packs guidance with the ID.</text>
@@ -69,7 +69,7 @@
   <text x="862" y="162" class="sans heading">Decode + dependency</text>
   <text x="830" y="198" class="sans body">custom-0 decode identifies the record load,</text>
   <text x="830" y="222" class="sans body">destination register, and source address.</text>
-  <rect x="830" y="244" width="300" height="62" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <rect x="830" y="244" width="300" height="62" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
   <text x="980" y="270" text-anchor="middle" class="sans label">ReusePlan register</text>
   <text x="980" y="294" text-anchor="middle" class="mono small">dest 42 | tier 2 | e1 12 | e2 40</text>
   <text x="830" y="333" class="sans body">The property instruction names this value</text>
@@ -106,7 +106,7 @@
   <text x="862" y="457" class="sans heading">Use epochs at the LLC</text>
   <text x="830" y="493" class="sans body">A hit or fill stores tier and epochs beside</text>
   <text x="830" y="517" class="sans body">resident property line 0x8000_0080.</text>
-  <rect x="830" y="540" width="300" height="94" rx="8" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <rect x="830" y="540" width="300" height="94" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
   <text x="850" y="566" class="mono small">d1 = (e1 - current) mod N</text>
   <text x="850" y="591" class="mono small">d2 = (e2 - current) mod N</text>
   <text x="850" y="616" class="mono small">nearest = min(d1, d2)</text>

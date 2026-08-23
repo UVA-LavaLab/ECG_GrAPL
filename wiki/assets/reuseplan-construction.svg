@@ -34,19 +34,19 @@
   <g stroke="#27313A" stroke-width="3">
     <rect x="35" y="120" width="340" height="300" rx="11" fill="#EDF5FF"/>
     <rect x="405" y="120" width="395" height="300" rx="11" fill="#FFF0D8"/>
-    <rect x="830" y="120" width="335" height="300" rx="11" fill="#EEE9FF"/>
+    <rect x="830" y="120" width="335" height="300" rx="11" fill="#F8F6EC"/>
   </g>
 
   <!-- Tier construction -->
-  <text x="205" y="155" text-anchor="middle" class="sans heading">1. Construct the reuse tier</text>
+  <text x="205" y="155" text-anchor="middle" class="sans heading">1a. Construct the reuse tier</text>
   <text x="60" y="185" class="sans small">Count readers in the selected kernel direction.</text>
   <g class="sans small">
     <text x="60" y="222">property 7</text>
     <rect x="145" y="205" width="210" height="24" rx="5" fill="#E7F7EA" stroke="#27313A"/>
-    <text x="154" y="222">9 readers · T1 HOT</text>
+    <text x="154" y="222">4 readers · T1 HOT</text>
     <text x="60" y="258">property 42</text>
     <rect x="145" y="241" width="210" height="24" rx="5" fill="#FFF0D8" stroke="#27313A"/>
-    <text x="154" y="258">4 readers · T2 MODERATE</text>
+    <text x="154" y="258">3 readers · T2 MODERATE</text>
     <text x="60" y="294">property 91</text>
     <rect x="145" y="277" width="210" height="24" rx="5" fill="#F7DEDC" stroke="#27313A"/>
     <text x="154" y="294">1 reader · T3 COLD</text>
@@ -57,7 +57,7 @@
   <text x="60" y="405" class="sans small">A property line receives its hottest vertex tier.</text>
 
   <!-- Epoch construction -->
-  <text x="602" y="155" text-anchor="middle" class="sans heading">2. Construct two future epochs</text>
+  <text x="602" y="155" text-anchor="middle" class="sans heading">1b. Construct two future epochs</text>
   <text x="430" y="185" class="sans small">Sorted readers for the governed property line:</text>
   <line x1="445" y1="236" x2="760" y2="236" stroke="#27313A" stroke-width="2"/>
   <circle cx="475" cy="236" r="13" fill="#27313A"/>
@@ -77,21 +77,21 @@
   <text x="602" y="390" text-anchor="middle" class="sans small">example N = |V| = 64 → e1 12, e2 40</text>
 
   <!-- Packing -->
-  <text x="997" y="155" text-anchor="middle" class="sans heading">3. Mask the CSR ID</text>
+  <text x="997" y="155" text-anchor="middle" class="sans heading">1c. Mask the CSR ID</text>
   <text x="855" y="185" class="sans small">Logical record for edge position i:</text>
   <g transform="translate(855 205)" text-anchor="middle">
-    <rect x="0" y="0" width="140" height="68" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
-    <rect x="140" y="0" width="45" height="68" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-    <rect x="185" y="0" width="62" height="68" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
-    <rect x="247" y="0" width="62" height="68" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-    <text x="70" y="29" class="sans label">dest 42</text>
-    <text x="70" y="51" class="sans small">ID bits</text>
-    <text x="162" y="29" class="sans label">2</text>
-    <text x="162" y="51" class="sans small">tier</text>
-    <text x="216" y="29" class="sans label">12</text>
-    <text x="216" y="51" class="sans small">e1</text>
-    <text x="278" y="29" class="sans label">40</text>
-    <text x="278" y="51" class="sans small">e2</text>
+    <rect x="0" y="0" width="120" height="68" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <rect x="120" y="0" width="45" height="68" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+    <rect x="165" y="0" width="60" height="68" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+    <rect x="225" y="0" width="60" height="68" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+    <text x="60" y="29" class="sans label">dest 42</text>
+    <text x="60" y="51" class="sans small">ID bits</text>
+    <text x="142" y="29" class="sans label">2</text>
+    <text x="142" y="51" class="sans small">tier</text>
+    <text x="195" y="29" class="sans label">12</text>
+    <text x="195" y="51" class="sans small">e1</text>
+    <text x="255" y="29" class="sans label">40</text>
+    <text x="255" y="51" class="sans small">e2</text>
   </g>
   <text x="855" y="306" class="mono small">id_bits + 2 + 2 × epoch_bits &lt;= 32</text>
   <text x="855" y="334" class="sans body">Fits: one 4-byte masked record replaces</text>
@@ -104,22 +104,22 @@
 
   <!-- Runtime path -->
   <rect x="35" y="450" width="1130" height="205" rx="11" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <text x="60" y="480" class="sans heading">4. Consume the masked record</text>
+  <text x="60" y="480" class="sans heading">Stages 2–6. Consume the masked record</text>
 
   <rect x="60" y="505" width="275" height="112" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="197" y="532" text-anchor="middle" class="mono label">ecg.flow.load.compact</text>
-  <text x="80" y="562" class="sans body">streams record[i] from CSR order</text>
-  <text x="80" y="586" class="sans body">returns dest, tier, e1, e2 in rd</text>
-  <text x="80" y="608" class="sans small">FlowThrough affects this record request</text>
+  <text x="197" y="532" text-anchor="middle" class="mono label">2. ecg.flow.load.compact</text>
+  <text x="80" y="558" class="sans body">streams record[i] in CSR order</text>
+  <text x="80" y="582" class="sans body">returns dest, tier, e1, e2 in rd</text>
+  <text x="80" y="608" class="sans small">3. decode: rd becomes property rs2</text>
 
   <rect x="395" y="505" width="335" height="112" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="562" y="532" text-anchor="middle" class="mono label">ecg.bind.load.f32</text>
+  <text x="562" y="532" text-anchor="middle" class="mono label">4. ecg.bind.load.f32</text>
   <text x="415" y="562" class="sans body">rs1 = property address 0x8000_00A8</text>
   <text x="415" y="586" class="sans body">rs2 = decoded ReusePlan record</text>
-  <text x="415" y="608" class="sans small">one property Request carries ReuseBind</text>
+  <text x="415" y="608" class="sans small">5. one property Request carries ReuseBind</text>
 
   <rect x="790" y="505" width="345" height="112" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="962" y="532" text-anchor="middle" class="sans label">LLC replacement use</text>
+  <text x="962" y="532" text-anchor="middle" class="sans label">6. LLC replacement use</text>
   <text x="810" y="559" class="mono small">d1 = 12 - 10 = 2</text>
   <text x="810" y="581" class="mono small">d2 = 40 - 10 = 30; nearest = 2</text>
   <text x="810" y="608" class="sans small">RRIP eligible → evict farthest nearest reuse</text>

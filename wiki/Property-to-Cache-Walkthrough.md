@@ -38,6 +38,11 @@ keeps a parallel mask array.
 
 ![Concrete property request walkthrough](assets/property-request-walkthrough.svg)
 
+The figures share one stage map: **1** graph/CSR mask construction, **2** record
+load, **3** decode and register dependency, **4** property instruction,
+**5** exact Request binding and cache path, and **6** LLC metadata and victim
+selection.
+
 ## Representative architecture
 
 The compact walkthrough above emphasizes sequence. The detailed view below

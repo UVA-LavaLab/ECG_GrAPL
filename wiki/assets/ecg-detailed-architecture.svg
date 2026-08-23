@@ -31,7 +31,7 @@
 
   <rect width="1800" height="1080" fill="#FFFFFF"/>
   <text x="42" y="52" class="sans title">ECG: edge record to property-line replacement state</text>
-  <text x="42" y="82" class="sans subtitle">Representative out-of-order core and cache path. Blue arrows carry requests or data; the dashed red path is FlowThrough no-allocate.</text>
+  <text x="42" y="82" class="sans subtitle">Representative out-of-order core and cache path. Stage numbers match the README flow; blue is request/data and dashed red is FlowThrough.</text>
   <line x1="42" y1="108" x2="1758" y2="108" stroke="#27313A" stroke-width="2"/>
 
   <!-- Graph data -->
@@ -39,12 +39,13 @@
   <text x="46" y="161" class="sans domain">GRAPH DATA</text>
 
   <rect x="50" y="185" width="280" height="280" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
-  <text x="190" y="218" text-anchor="middle" class="sans heading">4-byte edge records</text>
+  <circle cx="75" cy="213" r="16" fill="#27313A"/><text x="75" y="219" text-anchor="middle" fill="#FFFFFF" class="sans label">1</text>
+  <text x="205" y="220" text-anchor="middle" class="sans heading">CSR mask stream</text>
   <text x="72" y="248" class="sans small">CSR edge stream</text>
   <text x="72" y="269" class="sans small">replaces one edge ID</text>
   <g class="mono small">
     <rect x="72" y="288" width="236" height="28" class="slot"/><text x="84" y="307">… previous edge</text>
-    <rect x="72" y="316" width="236" height="64" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+    <rect x="72" y="316" width="236" height="64" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
     <text x="84" y="341">dest 42 | tier 2</text>
     <text x="84" y="366">e1 12 | e2 40</text>
     <rect x="72" y="380" width="236" height="28" class="slot"/><text x="84" y="399">… next edge</text>
@@ -100,9 +101,10 @@
   </g>
 
   <rect x="600" y="200" width="180" height="92" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
-  <text x="690" y="230" text-anchor="middle" class="sans label">Decode + rename</text>
-  <text x="690" y="255" text-anchor="middle" class="sans small">custom-0 role; rd / fd</text>
-  <text x="690" y="275" text-anchor="middle" class="sans small">rs1 / rs2 dependencies</text>
+  <circle cx="621" cy="221" r="14" fill="#27313A"/><text x="621" y="227" text-anchor="middle" fill="#FFFFFF" class="sans label">3</text>
+  <text x="720" y="227" text-anchor="middle" class="sans label">Decode / rename</text>
+  <text x="690" y="253" text-anchor="middle" class="sans small">custom-0 role; rd / fd</text>
+  <text x="690" y="276" text-anchor="middle" class="sans small">rs1 / rs2 dependencies</text>
 
   <text x="800" y="195" class="sans label">Issue queue</text>
   <g transform="translate(800 210)" class="mono tiny">
@@ -125,7 +127,7 @@
 
   <!-- Record execution lane -->
   <rect x="410" y="345" width="705" height="220" rx="10" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <circle cx="438" cy="375" r="16" fill="#27313A"/><text x="438" y="381" text-anchor="middle" fill="#FFFFFF" class="sans label">1</text>
+  <circle cx="438" cy="375" r="16" fill="#27313A"/><text x="438" y="381" text-anchor="middle" fill="#FFFFFF" class="sans label">2</text>
   <text x="465" y="381" class="sans heading">Record-load lane</text>
 
   <polygon points="450,420 575,420 600,465 575,510 450,510 425,465" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
@@ -138,7 +140,7 @@
   <text x="638" y="489" class="mono small">size=4, FT=1</text>
   <text x="638" y="512" class="mono small">seq=…</text>
 
-  <rect x="850" y="410" width="225" height="110" rx="7" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <rect x="850" y="410" width="225" height="110" rx="7" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
   <text x="962" y="438" text-anchor="middle" class="sans label">ReusePlan register</text>
   <text x="870" y="470" class="mono small">dest=42 | tier=2</text>
   <text x="870" y="495" class="mono small">epochs=(12,40)</text>
@@ -148,7 +150,7 @@
 
   <!-- Property execution lane -->
   <rect x="410" y="600" width="705" height="260" rx="10" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <circle cx="438" cy="630" r="16" fill="#27313A"/><text x="438" y="636" text-anchor="middle" fill="#FFFFFF" class="sans label">2</text>
+  <circle cx="438" cy="630" r="16" fill="#27313A"/><text x="438" y="636" text-anchor="middle" fill="#FFFFFF" class="sans label">4</text>
   <text x="465" y="636" class="sans heading">Property-load lane</text>
 
   <polygon points="450,680 575,680 600,725 575,770 450,770 425,725" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
@@ -179,7 +181,7 @@
   <rect x="1170" y="135" width="600" height="850" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="1188" y="161" class="sans domain">CACHE HIERARCHY AND MEMORY</text>
 
-  <circle cx="1208" cy="223" r="16" fill="#27313A"/><text x="1208" y="229" text-anchor="middle" fill="#FFFFFF" class="sans label">3</text>
+  <circle cx="1208" cy="223" r="16" fill="#27313A"/><text x="1208" y="229" text-anchor="middle" fill="#FFFFFF" class="sans label">5</text>
   <rect x="1235" y="195" width="115" height="70" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="1292" y="223" text-anchor="middle" class="sans label">D-TLB</text>
   <text x="1292" y="246" text-anchor="middle" class="sans small">VA → PA</text>
@@ -208,7 +210,7 @@
   </g>
 
   <rect x="1530" y="325" width="210" height="380" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
-  <circle cx="1557" cy="355" r="16" fill="#27313A"/><text x="1557" y="361" text-anchor="middle" fill="#FFFFFF" class="sans label">4</text>
+  <circle cx="1557" cy="355" r="16" fill="#27313A"/><text x="1557" y="361" text-anchor="middle" fill="#FFFFFF" class="sans label">6</text>
   <text x="1635" y="361" text-anchor="middle" class="sans heading">LLC set</text>
   <text x="1550" y="389" class="sans small">data and metadata</text>
   <text x="1550" y="408" class="sans small">stored as separate fields</text>
@@ -219,7 +221,7 @@
     <rect x="0" y="30" width="174" height="50" class="slot"/>
     <text x="8" y="51">way 0 · line …0040</text>
     <text x="8" y="71">RRPV 5 · tier 1</text>
-    <rect x="0" y="80" width="174" height="74" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+    <rect x="0" y="80" width="174" height="74" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
     <text x="8" y="102">way 1 · line …0080</text>
     <text x="8" y="123">RRPV 6 · tier 2</text>
     <text x="8" y="144">epochs 12, 40</text>
@@ -242,8 +244,8 @@
     <text x="90" y="70" text-anchor="middle" class="sans body">services LLC miss</text>
   </g>
 
-  <circle cx="1208" cy="585" r="16" fill="#27313A"/><text x="1208" y="591" text-anchor="middle" fill="#FFFFFF" class="sans label">5</text>
-  <text x="1234" y="591" class="sans label">Response path</text>
+  <circle cx="1208" cy="585" r="5" fill="#1769C2"/>
+  <text x="1223" y="591" class="sans label">Return path</text>
   <path d="M1320 730 V620 H1178 V918 H1049" class="arrow"/>
   <text x="1200" y="646" class="sans small">property data returns through L1D and L2</text>
 
@@ -253,9 +255,8 @@
   <text x="1530" y="770" class="sans small" fill="#A8403A">no LLC insertion</text>
 
   <rect x="1195" y="875" width="540" height="65" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <circle cx="1225" cy="907" r="16" fill="#27313A"/><text x="1225" y="913" text-anchor="middle" fill="#FFFFFF" class="sans label">6</text>
-  <text x="1253" y="902" class="sans label">Resident line retains tier and future epochs</text>
-  <text x="1253" y="925" class="sans small">later replacement reads the shared metadata fields</text>
+  <text x="1218" y="902" class="sans label">Resident line retains tier and future epochs</text>
+  <text x="1218" y="925" class="sans small">later replacement reads the shared metadata fields</text>
 
   <rect x="50" y="1010" width="1690" height="45" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <text x="72" y="1038" class="sans body">Architectural contract: one edge-record load, one property load, precise retirement. FlowThrough changes only record allocation; ReuseBind changes only property-line metadata.</text>

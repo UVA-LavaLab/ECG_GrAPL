@@ -29,7 +29,7 @@
   <line x1="45" y1="112" x2="1555" y2="112" stroke="#27313A" stroke-width="2"/>
 
   <rect x="35" y="138" width="285" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
-  <text x="52" y="164" class="sans domain">GRAPH AND RECORD</text>
+  <text x="52" y="164" class="sans domain">1. GRAPH AND RECORD</text>
   <rect x="55" y="185" width="245" height="195" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
   <text x="177" y="220" text-anchor="middle" class="sans heading">Property line</text>
   <text x="78" y="252" class="mono small">base = 0x8000_0000</text>
@@ -39,7 +39,7 @@
   <text x="78" y="350" class="mono small">word = 0x8000_00A8</text>
   <text x="78" y="372" class="mono small">line = 0x8000_0080</text>
 
-  <rect x="55" y="405" width="245" height="220" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
+  <rect x="55" y="405" width="245" height="220" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
   <text x="177" y="440" text-anchor="middle" class="sans heading">Compact record</text>
   <text x="78" y="480" class="mono body">dest = 42</text>
   <text x="78" y="512" class="mono body">tier = 2</text>
@@ -50,7 +50,7 @@
   <rect x="350" y="138" width="350" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="367" y="164" class="sans domain">INSTRUCTION PAIR</text>
   <rect x="370" y="185" width="310" height="195" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="3"/>
-  <text x="525" y="220" text-anchor="middle" class="sans heading">1. Record request</text>
+  <text x="525" y="220" text-anchor="middle" class="sans heading">2. Record load</text>
   <text x="395" y="260" class="mono body">ecg.flow.load.compact</text>
   <text x="395" y="296" class="sans body">returns the packed record</text>
   <text x="395" y="330" class="sans body">sets the FlowThrough flag</text>
@@ -58,17 +58,17 @@
   <text x="525" y="369" text-anchor="middle" class="sans tiny">skip LLC insertion</text>
 
   <rect x="370" y="405" width="310" height="220" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
-  <text x="525" y="440" text-anchor="middle" class="sans heading">2. Property request</text>
+  <text x="525" y="440" text-anchor="middle" class="sans heading">4. Property load</text>
   <text x="395" y="480" class="mono body">ecg.bind.load.f32</text>
   <text x="395" y="516" class="sans body">rs1 = 0x8000_00A8</text>
   <text x="395" y="550" class="sans body">rs2 = packed ReusePlan</text>
-  <text x="395" y="584" class="sans body">waits for both operands</text>
-  <text x="525" y="610" text-anchor="middle" class="sans small">one dynamic load owns both inputs</text>
+  <text x="395" y="580" class="sans small">3. decoded rd becomes property rs2</text>
+  <text x="525" y="610" text-anchor="middle" class="sans tiny">issue waits; one property load owns both inputs</text>
 
   <rect x="730" y="138" width="350" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="747" y="164" class="sans domain">O3 REQUEST CONSTRUCTION</text>
   <rect x="750" y="185" width="310" height="195" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
-  <text x="905" y="220" text-anchor="middle" class="sans heading">AGU and LSQ</text>
+  <text x="905" y="220" text-anchor="middle" class="sans heading">5. AGU and LSQ</text>
   <text x="775" y="260" class="sans body">translate and check ordering</text>
   <text x="775" y="294" class="sans body">create ordinary load Request</text>
   <text x="775" y="328" class="sans body">preserve replay semantics</text>
@@ -85,7 +85,7 @@
   <rect x="1110" y="138" width="455" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="1127" y="164" class="sans domain">CACHE AND COMPLETION</text>
   <rect x="1130" y="185" width="415" height="195" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
-  <text x="1337" y="220" text-anchor="middle" class="sans heading">L1D / L2 / LLC</text>
+  <text x="1337" y="220" text-anchor="middle" class="sans heading">5–6. L1D / L2 / LLC</text>
   <text x="1155" y="260" class="sans body">private hits return normally</text>
   <text x="1155" y="294" class="sans body">LLC hit or fill consumes ReuseBind</text>
   <text x="1155" y="326" class="sans body">line 0x8000_0080 stores</text>
