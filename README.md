@@ -15,6 +15,8 @@ last-level-cache replacement and placement.
 - **FlowThrough** prevents one-touch edge records from occupying the shared
   LLC after a miss while preserving private-cache fills and LLC hits.
 
+![ECG architecture at a glance](wiki/assets/ecg-architecture-summary.svg)
+
 The shared implementation covers PageRank, BFS, SSSP, Betweenness Centrality,
 and Connected Components.
 

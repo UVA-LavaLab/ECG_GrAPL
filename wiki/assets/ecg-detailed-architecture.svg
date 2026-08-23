@@ -19,9 +19,9 @@
       }
       .sans{font-family:Arial,Helvetica,sans-serif}.mono{font-family:"SFMono-Regular",Consolas,monospace}
       .title{font-size:38px;font-weight:700}.subtitle{font-size:18px}
-      .domain{font-size:14px;font-weight:700;letter-spacing:1.2px}
-      .heading{font-size:21px;font-weight:700}.label{font-size:16px;font-weight:700}
-      .body{font-size:14px}.small{font-size:12px}.tiny{font-size:10px}
+      .domain{font-size:15px;font-weight:700;letter-spacing:1.2px}
+      .heading{font-size:24px;font-weight:700}.label{font-size:18px;font-weight:700}
+      .body{font-size:17px}.small{font-size:15px}.tiny{font-size:14px}
       .arrow{fill:none;stroke:#1769C2;stroke-width:3;marker-end:url(#arrow)}
       .thin-arrow{fill:none;stroke:#1769C2;stroke-width:2.2;marker-end:url(#arrow)}
       .flow-arrow{fill:none;stroke:#A8403A;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
@@ -38,52 +38,54 @@
   <rect x="28" y="135" width="325" height="850" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="46" y="161" class="sans domain">GRAPH DATA</text>
 
-  <rect x="50" y="185" width="280" height="255" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
+  <rect x="50" y="185" width="280" height="280" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
   <text x="190" y="218" text-anchor="middle" class="sans heading">4-byte edge records</text>
-  <text x="72" y="245" class="sans small">CSR stream; one record replaces one edge ID</text>
+  <text x="72" y="248" class="sans small">CSR edge stream</text>
+  <text x="72" y="269" class="sans small">one record replaces one edge ID</text>
   <g class="mono small">
-    <rect x="72" y="270" width="236" height="28" class="slot"/><text x="84" y="289">…</text>
-    <rect x="72" y="298" width="236" height="38" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-    <text x="84" y="322">dest 42 | tier 2 | e1 12 | e2 40</text>
-    <rect x="72" y="336" width="236" height="28" class="slot"/><text x="84" y="355">dest 91 | tier 3 | e1 27 | e2 63</text>
-    <rect x="72" y="364" width="236" height="28" class="slot"/><text x="84" y="383">…</text>
+    <rect x="72" y="288" width="236" height="28" class="slot"/><text x="84" y="307">… previous edge</text>
+    <rect x="72" y="316" width="236" height="64" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+    <text x="84" y="341">dest 42 | tier 2</text>
+    <text x="84" y="366">e1 12 | e2 40</text>
+    <rect x="72" y="380" width="236" height="28" class="slot"/><text x="84" y="399">… next edge</text>
   </g>
-  <text x="72" y="417" class="sans small">highlighted record governs property vertex 42</text>
+  <text x="72" y="435" class="sans small">highlighted record governs</text>
+  <text x="72" y="456" class="sans small">property vertex 42</text>
 
-  <rect x="50" y="470" width="280" height="425" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
-  <text x="190" y="503" text-anchor="middle" class="sans heading">Property array</text>
-  <text x="72" y="531" class="mono small">base = 0x8000_0000, float[ ]</text>
-  <text x="72" y="559" class="sans label">64-byte line 0x8000_0080</text>
-  <text x="72" y="582" class="sans small">vertices 32–47; 16 words</text>
+  <rect x="50" y="490" width="280" height="405" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
+  <text x="190" y="525" text-anchor="middle" class="sans heading">Property array</text>
+  <text x="72" y="555" class="mono small">base = 0x8000_0000</text>
+  <text x="72" y="584" class="sans label">64-byte line 0x8000_0080</text>
+  <text x="72" y="610" class="sans small">vertices 32–47; 16 words</text>
 
-  <g transform="translate(70 610)">
+  <g transform="translate(70 635)">
     <g class="mono tiny" text-anchor="middle">
       <rect x="0" y="0" width="15" height="58" class="slot"/><text x="7.5" y="23">32</text>
-      <rect x="15" y="0" width="15" height="58" class="slot"/><text x="22.5" y="23">33</text>
-      <rect x="30" y="0" width="15" height="58" class="slot"/><text x="37.5" y="23">34</text>
-      <rect x="45" y="0" width="15" height="58" class="slot"/><text x="52.5" y="23">35</text>
-      <rect x="60" y="0" width="15" height="58" class="slot"/><text x="67.5" y="23">36</text>
-      <rect x="75" y="0" width="15" height="58" class="slot"/><text x="82.5" y="23">37</text>
-      <rect x="90" y="0" width="15" height="58" class="slot"/><text x="97.5" y="23">38</text>
-      <rect x="105" y="0" width="15" height="58" class="slot"/><text x="112.5" y="23">39</text>
-      <rect x="120" y="0" width="15" height="58" class="slot"/><text x="127.5" y="23">40</text>
-      <rect x="135" y="0" width="15" height="58" class="slot"/><text x="142.5" y="23">41</text>
+      <rect x="15" y="0" width="15" height="58" class="slot"/>
+      <rect x="30" y="0" width="15" height="58" class="slot"/>
+      <rect x="45" y="0" width="15" height="58" class="slot"/>
+      <rect x="60" y="0" width="15" height="58" class="slot"/>
+      <rect x="75" y="0" width="15" height="58" class="slot"/>
+      <rect x="90" y="0" width="15" height="58" class="slot"/>
+      <rect x="105" y="0" width="15" height="58" class="slot"/>
+      <rect x="120" y="0" width="15" height="58" class="slot"/>
+      <rect x="135" y="0" width="15" height="58" class="slot"/>
       <rect x="150" y="0" width="15" height="58" fill="#FFF0D8" stroke="#27313A" stroke-width="2.5"/><text x="157.5" y="23">42</text><text x="157.5" y="46">x</text>
-      <rect x="165" y="0" width="15" height="58" class="slot"/><text x="172.5" y="23">43</text>
-      <rect x="180" y="0" width="15" height="58" class="slot"/><text x="187.5" y="23">44</text>
-      <rect x="195" y="0" width="15" height="58" class="slot"/><text x="202.5" y="23">45</text>
-      <rect x="210" y="0" width="15" height="58" class="slot"/><text x="217.5" y="23">46</text>
+      <rect x="165" y="0" width="15" height="58" class="slot"/>
+      <rect x="180" y="0" width="15" height="58" class="slot"/>
+      <rect x="195" y="0" width="15" height="58" class="slot"/>
+      <rect x="210" y="0" width="15" height="58" class="slot"/>
       <rect x="225" y="0" width="15" height="58" class="slot"/><text x="232.5" y="23">47</text>
     </g>
   </g>
-  <path d="M227 675 V702" class="thin-arrow"/>
-  <text x="72" y="728" class="mono body">addr(42) = base + 42 × 4</text>
-  <text x="72" y="755" class="mono body">= 0x8000_00A8</text>
+  <path d="M227 700 V725" class="thin-arrow"/>
+  <text x="72" y="752" class="mono body">addr(42) = base + 42 × 4</text>
+  <text x="72" y="780" class="mono body">= 0x8000_00A8</text>
 
-  <rect x="70" y="790" width="240" height="70" rx="7" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="82" y="813" class="sans label">LLC metadata</text>
-  <text x="82" y="836" class="sans small">after ReuseBind</text>
-  <text x="82" y="854" class="mono small">valid=1 | tier=2 | e1=12 | e2=40</text>
+  <rect x="70" y="812" width="240" height="70" rx="7" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="82" y="836" class="sans label">LLC metadata</text>
+  <text x="82" y="858" class="mono small">valid 1 | tier 2</text>
+  <text x="82" y="878" class="mono small">e1 12 | e2 40</text>
 
   <!-- Core -->
   <rect x="380" y="135" width="765" height="850" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
@@ -94,7 +96,7 @@
     <rect x="0" y="0" width="150" height="33" class="slot"/>
     <rect x="8" y="8" width="150" height="33" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
     <rect x="16" y="16" width="150" height="33" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
-    <text x="91" y="39" text-anchor="middle" class="sans small">fetch / decode queue</text>
+    <text x="91" y="39" text-anchor="middle" class="sans small">fetch / decode</text>
   </g>
 
   <rect x="600" y="200" width="180" height="92" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
@@ -104,8 +106,8 @@
 
   <text x="800" y="195" class="sans label">Issue queue</text>
   <g transform="translate(800 210)" class="mono tiny">
-    <rect x="0" y="0" width="165" height="26" class="slot"/><text x="8" y="18">record load : ready</text>
-    <rect x="0" y="26" width="165" height="26" fill="#FFF0D8" stroke="#27313A" stroke-width="1.5"/><text x="8" y="44">property load : wait rs2</text>
+    <rect x="0" y="0" width="165" height="26" class="slot"/><text x="8" y="18">record: ready</text>
+    <rect x="0" y="26" width="165" height="26" fill="#FFF0D8" stroke="#27313A" stroke-width="1.5"/><text x="8" y="44">property: wait rs2</text>
     <rect x="0" y="52" width="165" height="26" class="slot"/><text x="8" y="70">…</text>
   </g>
 
@@ -113,7 +115,7 @@
   <g transform="translate(1000 210)" class="mono tiny">
     <rect x="0" y="0" width="115" height="36" fill="#F7DEDC" stroke="#27313A" stroke-width="1.5"/><text x="8" y="15">flow.load</text><text x="8" y="29">done</text>
     <rect x="0" y="36" width="115" height="36" fill="#E7F7EA" stroke="#27313A" stroke-width="1.5"/><text x="8" y="51">bind.load</text><text x="8" y="65">waiting</text>
-    <rect x="0" y="72" width="115" height="36" class="slot"/><text x="8" y="94">dependent FP op</text>
+    <rect x="0" y="72" width="115" height="36" class="slot"/><text x="8" y="94">dependent op</text>
     <rect x="0" y="108" width="115" height="36" class="slot"/><text x="8" y="130">…</text>
   </g>
 
@@ -198,11 +200,11 @@
   <rect x="1200" y="335" width="300" height="190" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
   <text x="1350" y="368" text-anchor="middle" class="sans heading">MSHR entry</text>
   <g class="mono small">
-    <text x="1225" y="401">line = 0x8000_0080</text>
-    <text x="1225" y="428">targets = {property load s, …}</text>
-    <text x="1225" y="455">requestor/context must agree</text>
-    <text x="1225" y="482">newest sequence supplies metadata</text>
-    <text x="1225" y="509">conflict → invalidate ReuseBind</text>
+    <text x="1225" y="401">line 0x8000_0080</text>
+    <text x="1225" y="428">target: property load s</text>
+    <text x="1225" y="455">requestor + context agree</text>
+    <text x="1225" y="482">newest sequence owns hint</text>
+    <text x="1225" y="509">conflict invalidates hint</text>
   </g>
 
   <rect x="1530" y="325" width="210" height="380" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
@@ -211,16 +213,23 @@
   <text x="1550" y="389" class="sans small">data and metadata</text>
   <text x="1550" y="408" class="sans small">stored as separate fields</text>
 
-  <g transform="translate(1548 425)" class="mono tiny">
-    <rect x="0" y="0" width="174" height="32" fill="#F8F6EC" stroke="#27313A"/>
-    <text x="5" y="20">way  line       R  T  e1 e2</text>
-    <rect x="0" y="32" width="174" height="42" class="slot"/><text x="5" y="58">0    …0040      5  1   9 31</text>
-    <rect x="0" y="74" width="174" height="42" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/><text x="5" y="100">1    …0080      6  2  12 40</text>
-    <rect x="0" y="116" width="174" height="42" class="slot"/><text x="5" y="142">2    …00C0      7  3  20 30</text>
-    <rect x="0" y="158" width="174" height="42" class="slot"/><text x="5" y="184">3    record     7  -   -  -</text>
-    <rect x="0" y="200" width="174" height="42" class="slot"/><text x="5" y="226">…</text>
+  <g transform="translate(1548 425)" class="sans small">
+    <rect x="0" y="0" width="174" height="30" fill="#F8F6EC" stroke="#27313A"/>
+    <text x="8" y="21" class="sans label">Resident ways</text>
+    <rect x="0" y="30" width="174" height="50" class="slot"/>
+    <text x="8" y="51">way 0 · line …0040</text>
+    <text x="8" y="71">RRPV 5 · tier 1</text>
+    <rect x="0" y="80" width="174" height="74" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+    <text x="8" y="102">way 1 · line …0080</text>
+    <text x="8" y="123">RRPV 6 · tier 2</text>
+    <text x="8" y="144">epochs 12, 40</text>
+    <rect x="0" y="154" width="174" height="50" class="slot"/>
+    <text x="8" y="175">way 2 · line …00C0</text>
+    <text x="8" y="195">RRPV 7 · tier 3</text>
+    <rect x="0" y="204" width="174" height="36" class="slot"/><text x="8" y="228">…</text>
   </g>
-  <text x="1550" y="684" class="sans small">later: shared policy selects a victim</text>
+  <text x="1550" y="682" class="sans small">later replacement uses</text>
+  <text x="1550" y="701" class="sans small">the shared victim policy</text>
 
   <path d="M1075 760 H1158 V455 H1196" class="arrow"/>
   <path d="M1500 430 H1526" class="arrow"/>
