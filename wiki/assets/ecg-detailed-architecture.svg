@@ -41,7 +41,7 @@
   <rect x="50" y="185" width="280" height="280" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
   <text x="190" y="218" text-anchor="middle" class="sans heading">4-byte edge records</text>
   <text x="72" y="248" class="sans small">CSR edge stream</text>
-  <text x="72" y="269" class="sans small">one record replaces one edge ID</text>
+  <text x="72" y="269" class="sans small">replaces one edge ID</text>
   <g class="mono small">
     <rect x="72" y="288" width="236" height="28" class="slot"/><text x="84" y="307">… previous edge</text>
     <rect x="72" y="316" width="236" height="64" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
