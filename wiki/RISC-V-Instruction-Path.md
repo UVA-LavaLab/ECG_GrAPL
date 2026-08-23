@@ -33,6 +33,10 @@ The figure uses one lane per request. Arrows remain inside their lane until the
 common cache path, avoiding the ambiguity of drawing metadata, data, and
 control on the same connector.
 
+For a structure-level view of the frontend FIFO, issue queue, ROB, load queue,
+MSHR, LLC ways, property-line words, and metadata fields, see the
+[property-to-cache walkthrough](Property-to-Cache-Walkthrough).
+
 ### 1. Fetch
 
 The custom-0 instruction follows the normal frontend path. Fetch, prediction,

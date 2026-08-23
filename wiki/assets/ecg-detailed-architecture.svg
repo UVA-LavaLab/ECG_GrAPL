@@ -1,0 +1,251 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1080" viewBox="0 0 1800 1080" role="img" aria-labelledby="title desc" fill="#27313A">
+  <title id="title">Detailed ECG processor and cache architecture</title>
+  <desc id="desc">An edge-carried ReusePlan moves through FIFO frontend structures, issue queues, address generation, load queue entries, a typed request extension, MSHR state, and an LLC set where metadata is stored beside a concrete 64-byte property line.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 13 11" markerWidth="13" markerHeight="11" refX="13" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 L13 5.5 L0 11 Z" fill="#1769C2"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 13 11" markerWidth="13" markerHeight="11" refX="13" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 L13 5.5 L0 11 Z" fill="#A8403A"/>
+    </marker>
+    <style>
+      :root{color-scheme:light dark}
+      @media(prefers-color-scheme:dark){
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#9AA3AD"]{stroke:#747D86}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}.mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:38px;font-weight:700}.subtitle{font-size:18px}
+      .domain{font-size:14px;font-weight:700;letter-spacing:1.2px}
+      .heading{font-size:21px;font-weight:700}.label{font-size:16px;font-weight:700}
+      .body{font-size:14px}.small{font-size:12px}.tiny{font-size:10px}
+      .arrow{fill:none;stroke:#1769C2;stroke-width:3;marker-end:url(#arrow)}
+      .thin-arrow{fill:none;stroke:#1769C2;stroke-width:2.2;marker-end:url(#arrow)}
+      .flow-arrow{fill:none;stroke:#A8403A;stroke-width:2.5;stroke-dasharray:8 6;marker-end:url(#arrow-red)}
+      .slot{fill:#FFFFFF;stroke:#27313A;stroke-width:1.5}
+    </style>
+  </defs>
+
+  <rect width="1800" height="1080" fill="#FFFFFF"/>
+  <text x="42" y="52" class="sans title">ECG: edge record to property-line replacement state</text>
+  <text x="42" y="82" class="sans subtitle">Representative out-of-order core and cache path. Blue arrows carry requests or data; the dashed red path is FlowThrough no-allocate.</text>
+  <line x1="42" y1="108" x2="1758" y2="108" stroke="#27313A" stroke-width="2"/>
+
+  <!-- Graph data -->
+  <rect x="28" y="135" width="325" height="850" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
+  <text x="46" y="161" class="sans domain">GRAPH DATA</text>
+
+  <rect x="50" y="185" width="280" height="255" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
+  <text x="190" y="218" text-anchor="middle" class="sans heading">4-byte edge records</text>
+  <text x="72" y="245" class="sans small">CSR stream; one record replaces one edge ID</text>
+  <g class="mono small">
+    <rect x="72" y="270" width="236" height="28" class="slot"/><text x="84" y="289">…</text>
+    <rect x="72" y="298" width="236" height="38" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+    <text x="84" y="322">dest 42 | tier 2 | e1 12 | e2 40</text>
+    <rect x="72" y="336" width="236" height="28" class="slot"/><text x="84" y="355">dest 91 | tier 3 | e1 27 | e2 63</text>
+    <rect x="72" y="364" width="236" height="28" class="slot"/><text x="84" y="383">…</text>
+  </g>
+  <text x="72" y="417" class="sans small">highlighted record governs property vertex 42</text>
+
+  <rect x="50" y="470" width="280" height="425" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
+  <text x="190" y="503" text-anchor="middle" class="sans heading">Property array</text>
+  <text x="72" y="531" class="mono small">base = 0x8000_0000, float[ ]</text>
+  <text x="72" y="559" class="sans label">64-byte line 0x8000_0080</text>
+  <text x="72" y="582" class="sans small">vertices 32–47; 16 words</text>
+
+  <g transform="translate(70 610)">
+    <g class="mono tiny" text-anchor="middle">
+      <rect x="0" y="0" width="15" height="58" class="slot"/><text x="7.5" y="23">32</text>
+      <rect x="15" y="0" width="15" height="58" class="slot"/><text x="22.5" y="23">33</text>
+      <rect x="30" y="0" width="15" height="58" class="slot"/><text x="37.5" y="23">34</text>
+      <rect x="45" y="0" width="15" height="58" class="slot"/><text x="52.5" y="23">35</text>
+      <rect x="60" y="0" width="15" height="58" class="slot"/><text x="67.5" y="23">36</text>
+      <rect x="75" y="0" width="15" height="58" class="slot"/><text x="82.5" y="23">37</text>
+      <rect x="90" y="0" width="15" height="58" class="slot"/><text x="97.5" y="23">38</text>
+      <rect x="105" y="0" width="15" height="58" class="slot"/><text x="112.5" y="23">39</text>
+      <rect x="120" y="0" width="15" height="58" class="slot"/><text x="127.5" y="23">40</text>
+      <rect x="135" y="0" width="15" height="58" class="slot"/><text x="142.5" y="23">41</text>
+      <rect x="150" y="0" width="15" height="58" fill="#FFF0D8" stroke="#27313A" stroke-width="2.5"/><text x="157.5" y="23">42</text><text x="157.5" y="46">x</text>
+      <rect x="165" y="0" width="15" height="58" class="slot"/><text x="172.5" y="23">43</text>
+      <rect x="180" y="0" width="15" height="58" class="slot"/><text x="187.5" y="23">44</text>
+      <rect x="195" y="0" width="15" height="58" class="slot"/><text x="202.5" y="23">45</text>
+      <rect x="210" y="0" width="15" height="58" class="slot"/><text x="217.5" y="23">46</text>
+      <rect x="225" y="0" width="15" height="58" class="slot"/><text x="232.5" y="23">47</text>
+    </g>
+  </g>
+  <path d="M227 675 V702" class="thin-arrow"/>
+  <text x="72" y="728" class="mono body">addr(42) = base + 42 × 4</text>
+  <text x="72" y="755" class="mono body">= 0x8000_00A8</text>
+
+  <rect x="70" y="790" width="240" height="70" rx="7" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="82" y="813" class="sans label">LLC metadata</text>
+  <text x="82" y="836" class="sans small">after ReuseBind</text>
+  <text x="82" y="854" class="mono small">valid=1 | tier=2 | e1=12 | e2=40</text>
+
+  <!-- Core -->
+  <rect x="380" y="135" width="765" height="850" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
+  <text x="398" y="161" class="sans domain">OUT-OF-ORDER CORE</text>
+
+  <text x="414" y="195" class="sans label">Frontend FIFO</text>
+  <g transform="translate(410 215)">
+    <rect x="0" y="0" width="150" height="33" class="slot"/>
+    <rect x="8" y="8" width="150" height="33" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <rect x="16" y="16" width="150" height="33" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <text x="91" y="39" text-anchor="middle" class="sans small">fetch / decode queue</text>
+  </g>
+
+  <rect x="605" y="205" width="160" height="82" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
+  <text x="685" y="236" text-anchor="middle" class="sans label">Decode + rename</text>
+  <text x="685" y="260" text-anchor="middle" class="sans small">custom-0 role, rd/fd, rs1/rs2</text>
+
+  <text x="800" y="195" class="sans label">Issue queue</text>
+  <g transform="translate(800 210)" class="mono tiny">
+    <rect x="0" y="0" width="165" height="26" class="slot"/><text x="8" y="18">record load : ready</text>
+    <rect x="0" y="26" width="165" height="26" fill="#FFF0D8" stroke="#27313A" stroke-width="1.5"/><text x="8" y="44">property load : wait rs2</text>
+    <rect x="0" y="52" width="165" height="26" class="slot"/><text x="8" y="70">…</text>
+  </g>
+
+  <text x="1000" y="195" class="sans label">ROB</text>
+  <g transform="translate(1000 210)" class="mono tiny">
+    <rect x="0" y="0" width="115" height="36" fill="#F7DEDC" stroke="#27313A" stroke-width="1.5"/><text x="8" y="15">flow.load</text><text x="8" y="29">done</text>
+    <rect x="0" y="36" width="115" height="36" fill="#E7F7EA" stroke="#27313A" stroke-width="1.5"/><text x="8" y="51">bind.load</text><text x="8" y="65">waiting</text>
+    <rect x="0" y="72" width="115" height="36" class="slot"/><text x="8" y="94">dependent FP op</text>
+    <rect x="0" y="108" width="115" height="36" class="slot"/><text x="8" y="130">…</text>
+  </g>
+
+  <path d="M575 246 H601" class="arrow"/>
+  <path d="M765 246 H796" class="arrow"/>
+  <path d="M965 246 H996" class="arrow"/>
+
+  <!-- Record execution lane -->
+  <rect x="410" y="345" width="705" height="220" rx="10" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <circle cx="438" cy="375" r="16" fill="#27313A"/><text x="438" y="381" text-anchor="middle" fill="#FFFFFF" class="sans label">1</text>
+  <text x="465" y="381" class="sans heading">Record-load lane</text>
+
+  <polygon points="430,420 555,420 580,465 555,510 430,510 405,465" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="493" y="456" text-anchor="middle" class="sans label">record AGU</text>
+  <text x="493" y="480" text-anchor="middle" class="mono small">EA = edge_ptr</text>
+
+  <rect x="620" y="410" width="190" height="110" rx="7" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="715" y="438" text-anchor="middle" class="sans label">Load queue entry</text>
+  <text x="638" y="466" class="mono small">addr=edge line</text>
+  <text x="638" y="489" class="mono small">size=4, FT=1</text>
+  <text x="638" y="512" class="mono small">seq=…</text>
+
+  <rect x="850" y="410" width="225" height="110" rx="7" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="962" y="438" text-anchor="middle" class="sans label">ReusePlan register</text>
+  <text x="870" y="470" class="mono small">dest=42 | tier=2</text>
+  <text x="870" y="495" class="mono small">epochs=(12,40)</text>
+
+  <path d="M580 465 H616" class="arrow"/>
+  <path d="M810 465 H846" class="arrow"/>
+
+  <!-- Property execution lane -->
+  <rect x="410" y="600" width="705" height="260" rx="10" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <circle cx="438" cy="630" r="16" fill="#27313A"/><text x="438" y="636" text-anchor="middle" fill="#FFFFFF" class="sans label">2</text>
+  <text x="465" y="636" class="sans heading">Property-load lane</text>
+
+  <polygon points="430,680 555,680 580,725 555,770 430,770 405,725" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="493" y="714" text-anchor="middle" class="sans label">property AGU</text>
+  <text x="493" y="738" text-anchor="middle" class="mono small">EA=0x8000_00A8</text>
+
+  <rect x="620" y="670" width="190" height="125" rx="7" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="715" y="698" text-anchor="middle" class="sans label">Load queue entry</text>
+  <text x="638" y="726" class="mono small">addr=property word</text>
+  <text x="638" y="749" class="mono small">size=4, FT=0</text>
+  <text x="638" y="772" class="mono small">ext=ReuseBind</text>
+
+  <rect x="850" y="670" width="225" height="125" rx="7" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="962" y="698" text-anchor="middle" class="sans label">Typed request extension</text>
+  <text x="870" y="726" class="mono small">tier=2, epochs=(12,40)</text>
+  <text x="870" y="749" class="mono small">current=10, context=k</text>
+  <text x="870" y="772" class="mono small">dest=42, sequence=s</text>
+
+  <path d="M962 520 V666" class="thin-arrow"/>
+  <path d="M580 725 H616" class="arrow"/>
+  <path d="M810 733 H846" class="arrow"/>
+
+  <rect x="555" y="895" width="490" height="55" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="800" y="920" text-anchor="middle" class="sans label">Writeback → destination register → ROB complete</text>
+  <text x="800" y="940" text-anchor="middle" class="sans small">retirement remains precise and in program order</text>
+
+  <!-- Cache hierarchy -->
+  <rect x="1170" y="135" width="600" height="850" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
+  <text x="1188" y="161" class="sans domain">CACHE HIERARCHY AND MEMORY</text>
+
+  <circle cx="1208" cy="208" r="16" fill="#27313A"/><text x="1208" y="214" text-anchor="middle" fill="#FFFFFF" class="sans label">3</text>
+  <rect x="1235" y="180" width="115" height="70" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="1292" y="208" text-anchor="middle" class="sans label">D-TLB</text>
+  <text x="1292" y="231" text-anchor="middle" class="sans small">VA → PA</text>
+
+  <g transform="translate(1390 178)">
+    <text x="65" y="-8" text-anchor="middle" class="sans label">L1D</text>
+    <rect x="0" y="0" width="130" height="80" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <path d="M0 20 H130 M0 40 H130 M0 60 H130 M32 0 V80 M65 0 V80 M98 0 V80" stroke="#27313A" stroke-width="1"/>
+  </g>
+  <g transform="translate(1580 178)">
+    <text x="65" y="-8" text-anchor="middle" class="sans label">L2</text>
+    <rect x="0" y="0" width="130" height="80" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <path d="M0 20 H130 M0 40 H130 M0 60 H130 M32 0 V80 M65 0 V80 M98 0 V80" stroke="#27313A" stroke-width="1"/>
+  </g>
+  <path d="M1350 215 H1386" class="arrow"/>
+  <path d="M1520 215 H1576" class="arrow"/>
+
+  <rect x="1200" y="335" width="300" height="190" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
+  <text x="1350" y="368" text-anchor="middle" class="sans heading">MSHR entry</text>
+  <g class="mono small">
+    <text x="1225" y="401">line = 0x8000_0080</text>
+    <text x="1225" y="428">targets = {property load s, …}</text>
+    <text x="1225" y="455">requestor/context must agree</text>
+    <text x="1225" y="482">newest sequence supplies metadata</text>
+    <text x="1225" y="509">conflict → invalidate ReuseBind</text>
+  </g>
+
+  <rect x="1530" y="310" width="210" height="380" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
+  <circle cx="1557" cy="340" r="16" fill="#27313A"/><text x="1557" y="346" text-anchor="middle" fill="#FFFFFF" class="sans label">4</text>
+  <text x="1640" y="346" text-anchor="middle" class="sans heading">LLC set</text>
+  <text x="1550" y="375" class="sans small">data and metadata are separate fields</text>
+
+  <g transform="translate(1548 398)" class="mono tiny">
+    <rect x="0" y="0" width="174" height="32" fill="#F8F6EC" stroke="#27313A"/>
+    <text x="5" y="20">way  data line       R  tier e1 e2</text>
+    <rect x="0" y="32" width="174" height="42" class="slot"/><text x="5" y="58">0    0x…0040        5   1   9 31</text>
+    <rect x="0" y="74" width="174" height="42" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/><text x="5" y="100">1    0x8000_0080   6   2  12 40</text>
+    <rect x="0" y="116" width="174" height="42" class="slot"/><text x="5" y="142">2    0x…00C0        7   3  20 30</text>
+    <rect x="0" y="158" width="174" height="42" class="slot"/><text x="5" y="184">3    record line    7   -   -  -</text>
+    <rect x="0" y="200" width="174" height="42" class="slot"/><text x="5" y="226">…</text>
+  </g>
+  <text x="1550" y="665" class="sans small">later: shared policy selects a victim</text>
+
+  <path d="M1115 733 H1196 V430" class="arrow"/>
+  <path d="M1500 430 H1526" class="arrow"/>
+
+  <g transform="translate(1230 730)">
+    <rect x="16" y="16" width="180" height="100" rx="8" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+    <rect x="8" y="8" width="180" height="100" rx="8" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+    <rect x="0" y="0" width="180" height="100" rx="8" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+    <text x="90" y="42" text-anchor="middle" class="sans heading">Memory</text>
+    <text x="90" y="70" text-anchor="middle" class="sans body">services LLC miss</text>
+  </g>
+
+  <circle cx="1208" cy="585" r="16" fill="#27313A"/><text x="1208" y="591" text-anchor="middle" fill="#FFFFFF" class="sans label">5</text>
+  <path d="M1320 730 V620 H1160 V918 H1049" class="arrow"/>
+  <text x="1185" y="650" class="sans small">property response returns through caches</text>
+
+  <path d="M715 520 V555 H1460 V780 H1420" class="flow-arrow"/>
+  <text x="1010" y="546" text-anchor="middle" class="sans small" fill="#A8403A">FlowThrough: fetch + private fill; no LLC insert</text>
+  <line x1="1514" y1="552" x2="1540" y2="578" stroke="#A8403A" stroke-width="4"/>
+  <line x1="1540" y1="552" x2="1514" y2="578" stroke="#A8403A" stroke-width="4"/>
+  <text x="1488" y="605" text-anchor="end" class="sans small" fill="#A8403A">no LLC allocation</text>
+
+  <rect x="1195" y="875" width="540" height="65" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <circle cx="1225" cy="907" r="16" fill="#27313A"/><text x="1225" y="913" text-anchor="middle" fill="#FFFFFF" class="sans label">6</text>
+  <text x="1253" y="902" class="sans label">Resident line retains tier and future epochs</text>
+  <text x="1253" y="925" class="sans small">later replacement reads the shared metadata fields</text>
+
+  <rect x="50" y="1010" width="1690" height="45" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="72" y="1038" class="sans body">Architectural contract: one edge-record load, one property load, precise retirement. FlowThrough changes only record allocation; ReuseBind changes only property-line metadata.</text>
+</svg>

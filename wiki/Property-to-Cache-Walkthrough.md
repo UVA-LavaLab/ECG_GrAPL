@@ -26,6 +26,20 @@ The nearest delivered reuse distance is
 
 ![Concrete property request walkthrough](assets/property-request-walkthrough.svg)
 
+## Representative architecture
+
+The compact walkthrough above emphasizes sequence. The detailed view below
+shows the same access in representative processor structures: frontend FIFO,
+issue queue, ROB, record and property load-queue entries, the ReusePlan
+register dependency, typed request metadata, MSHR merge state, and an LLC set
+with line-local replacement metadata.
+
+![Detailed ECG processor and cache architecture](assets/ecg-detailed-architecture.svg)
+
+The drawing is representative rather than a complete processor floorplan.
+It shows the structures and state transitions implemented by ECG without
+implying a particular commercial core width or cache-bank organization.
+
 ## Common lifecycle
 
 The first eight steps are shared by the primary ReusePlan modes.
