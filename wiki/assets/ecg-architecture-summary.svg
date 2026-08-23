@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc" fill="#27313A">
-  <title id="title">ECG architecture at a glance</title>
-  <desc id="desc">A four-stage overview showing an edge-carried ReusePlan, dependent record and property loads, request-bound metadata, and a shared-cache replacement decision. FlowThrough changes only record placement.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="780" viewBox="0 0 1200 780" role="img" aria-labelledby="title desc" fill="#27313A">
+  <title id="title">ECG transformation from graph IDs to LLC replacement</title>
+  <desc id="desc">Six stages show why destination IDs need reuse guidance, how a graph pass encodes a ReusePlan, how the streamed record is loaded and decoded, how the property instruction consumes it as an operand, how metadata binds to the exact cache request, and how future epochs guide LLC replacement.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
       <path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/>
@@ -12,7 +12,7 @@
         [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
         [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
         [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
-        [fill="#EEE9FF"]{fill:#302C3C}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#9AA3AD"]{stroke:#747D86}
       }
       .sans{font-family:Arial,Helvetica,sans-serif}
       .mono{font-family:"SFMono-Regular",Consolas,monospace}
@@ -26,74 +26,99 @@
     </style>
   </defs>
 
-  <rect width="1200" height="520" fill="#FFFFFF"/>
-  <text x="45" y="48" class="sans title">ECG architecture at a glance</text>
+  <rect width="1200" height="780" fill="#FFFFFF"/>
+  <text x="45" y="48" class="sans title">From graph IDs to an LLC replacement decision</text>
   <text x="45" y="76" class="sans subtitle">Concrete example: destination 42, current epoch 10, and 4-byte property values.</text>
   <line x1="45" y1="98" x2="1155" y2="98" stroke="#27313A" stroke-width="2"/>
 
   <g stroke="#27313A" stroke-width="3">
-    <rect x="45" y="125" width="245" height="280" rx="11" fill="#EDF5FF"/>
-    <rect x="325" y="125" width="245" height="280" rx="11" fill="#FFF0D8"/>
-    <rect x="605" y="125" width="245" height="280" rx="11" fill="#E7F7EA"/>
-    <rect x="885" y="125" width="270" height="280" rx="11" fill="#EEE9FF"/>
+    <rect x="45" y="125" width="350" height="240" rx="11" fill="#EDF5FF"/>
+    <rect x="425" y="125" width="350" height="240" rx="11" fill="#F7DEDC"/>
+    <rect x="805" y="125" width="350" height="240" rx="11" fill="#FFF0D8"/>
+    <rect x="45" y="420" width="350" height="280" rx="11" fill="#E7F7EA"/>
+    <rect x="425" y="420" width="350" height="280" rx="11" fill="#EDF5FF"/>
+    <rect x="805" y="420" width="350" height="280" rx="11" fill="#EEE9FF"/>
   </g>
 
+  <!-- 1. Graph IDs and encoding -->
   <circle cx="75" cy="155" r="17" fill="#27313A"/>
   <text x="75" y="161" text-anchor="middle" fill="#FFFFFF" class="sans label">1</text>
-  <text x="102" y="162" class="sans heading">Edge record</text>
-  <rect x="70" y="188" width="195" height="104" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
-  <text x="167" y="214" text-anchor="middle" class="sans label">4-byte record</text>
-  <text x="167" y="244" text-anchor="middle" class="mono small">dest 42 | tier 2</text>
-  <text x="167" y="271" text-anchor="middle" class="mono small">e1 12 | e2 40</text>
-  <text x="70" y="326" class="sans body">One record replaces</text>
-  <text x="70" y="350" class="sans body">one 4-byte edge ID.</text>
-  <text x="70" y="376" class="sans small">Loaded from the CSR</text>
-  <text x="70" y="398" class="sans small">edge stream.</text>
+  <text x="102" y="162" class="sans heading">Graph IDs become ReusePlan</text>
+  <text x="70" y="198" class="sans body">CSR edge ID 42 selects property[42].</text>
+  <text x="70" y="224" class="sans body">The address is irregular, so the ID alone</text>
+  <text x="70" y="248" class="sans body">does not describe when the line returns.</text>
+  <rect x="70" y="268" width="300" height="58" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="220" y="292" text-anchor="middle" class="mono small">dest 42 | tier 2</text>
+  <text x="220" y="315" text-anchor="middle" class="mono small">e1 12 | e2 40</text>
+  <text x="70" y="349" class="sans small">The graph pass packs guidance with the ID.</text>
 
-  <circle cx="355" cy="155" r="17" fill="#27313A"/>
-  <text x="355" y="161" text-anchor="middle" fill="#FFFFFF" class="sans label">2</text>
-  <text x="382" y="162" class="sans heading">Two loads</text>
-  <rect x="350" y="188" width="195" height="48" rx="8" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="447" y="218" text-anchor="middle" class="sans label">record load</text>
-  <text x="447" y="260" text-anchor="middle" class="sans small">returns the ReusePlan</text>
-  <path d="M447 266 V282" class="arrow"/>
-  <rect x="350" y="288" width="195" height="48" rx="8" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="447" y="318" text-anchor="middle" class="sans label">property load</text>
-  <text x="447" y="362" text-anchor="middle" class="sans small">waits on the record</text>
-  <text x="447" y="385" text-anchor="middle" class="sans small">one dynamic access</text>
+  <!-- 2. Streaming record load -->
+  <circle cx="455" cy="155" r="17" fill="#27313A"/>
+  <text x="455" y="161" text-anchor="middle" fill="#FFFFFF" class="sans label">2</text>
+  <text x="482" y="162" class="sans heading">Stream the record</text>
+  <text x="450" y="198" class="sans body">CSR traversal reads records in edge order.</text>
+  <rect x="450" y="220" width="300" height="52" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="600" y="252" text-anchor="middle" class="mono label">ecg.flow.load.compact</text>
+  <text x="450" y="301" class="sans body">The load returns one ReusePlan in rd.</text>
+  <text x="450" y="327" class="sans small">On a record miss, FlowThrough fills private</text>
+  <text x="450" y="349" class="sans small">caches but skips the new LLC insertion.</text>
 
-  <circle cx="635" cy="155" r="17" fill="#27313A"/>
-  <text x="635" y="161" text-anchor="middle" fill="#FFFFFF" class="sans label">3</text>
-  <text x="662" y="162" class="sans heading">Request binding</text>
-  <rect x="630" y="188" width="195" height="150" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <text x="727" y="215" text-anchor="middle" class="sans label">Property Request</text>
-  <text x="727" y="243" text-anchor="middle" class="mono small">addr 0x8000_00A8</text>
-  <line x1="650" y1="257" x2="805" y2="257" stroke="#27313A"/>
-  <text x="727" y="282" text-anchor="middle" class="mono small">tier 2 | e1 12 | e2 40</text>
-  <text x="727" y="307" text-anchor="middle" class="mono small">current 10 | context k</text>
-  <text x="727" y="330" text-anchor="middle" class="sans small">sequence remains bound</text>
-  <text x="630" y="370" class="sans body">Ordinary ordering, replay,</text>
-  <text x="630" y="394" class="sans body">return, and retirement.</text>
+  <!-- 3. Decode and dependency -->
+  <circle cx="835" cy="155" r="17" fill="#27313A"/>
+  <text x="835" y="161" text-anchor="middle" fill="#FFFFFF" class="sans label">3</text>
+  <text x="862" y="162" class="sans heading">Decode + dependency</text>
+  <text x="830" y="198" class="sans body">custom-0 decode identifies the record load,</text>
+  <text x="830" y="222" class="sans body">destination register, and source address.</text>
+  <rect x="830" y="244" width="300" height="62" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="980" y="270" text-anchor="middle" class="sans label">ReusePlan register</text>
+  <text x="980" y="294" text-anchor="middle" class="mono small">dest 42 | tier 2 | e1 12 | e2 40</text>
+  <text x="830" y="333" class="sans body">The property instruction names this value</text>
+  <text x="830" y="355" class="sans body">as rs2, so issue waits for the record.</text>
 
-  <circle cx="915" cy="155" r="17" fill="#27313A"/>
-  <text x="915" y="161" text-anchor="middle" fill="#FFFFFF" class="sans label">4</text>
-  <text x="942" y="162" class="sans heading">Shared LLC</text>
-  <rect x="910" y="188" width="220" height="150" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="1020" y="215" text-anchor="middle" class="sans label">resident property line</text>
-  <text x="1020" y="243" text-anchor="middle" class="mono small">line 0x8000_0080</text>
-  <line x1="930" y1="257" x2="1110" y2="257" stroke="#27313A"/>
-  <text x="1020" y="282" text-anchor="middle" class="mono small">tier 2 | e1 12 | e2 40</text>
-  <text x="1020" y="307" text-anchor="middle" class="sans small">stored on an LLC hit or fill</text>
-  <text x="910" y="370" class="sans body">RRIP selects eligible lines;</text>
-  <text x="910" y="394" class="sans body">nearest reuse ranks them.</text>
+  <!-- 4. Property instruction -->
+  <circle cx="75" cy="450" r="17" fill="#27313A"/>
+  <text x="75" y="456" text-anchor="middle" fill="#FFFFFF" class="sans label">4</text>
+  <text x="102" y="457" class="sans heading">Property instruction</text>
+  <rect x="70" y="482" width="300" height="52" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="220" y="514" text-anchor="middle" class="mono label">ecg.bind.load.f32</text>
+  <text x="70" y="566" class="sans body">rs1 = property address 0x8000_00A8</text>
+  <text x="70" y="592" class="sans body">rs2 = the decoded ReusePlan</text>
+  <text x="70" y="625" class="sans body">The record becomes an instruction operand;</text>
+  <text x="70" y="649" class="sans body">the record and property remain two loads.</text>
+  <text x="70" y="681" class="sans small">The property instruction owns one data access.</text>
 
-  <path d="M290 235 H321" class="arrow"/>
-  <path d="M570 235 H601" class="arrow"/>
-  <path d="M850 235 H881" class="arrow"/>
+  <!-- 5. Exact Request binding -->
+  <circle cx="455" cy="450" r="17" fill="#27313A"/>
+  <text x="455" y="456" text-anchor="middle" fill="#FFFFFF" class="sans label">5</text>
+  <text x="482" y="457" class="sans heading">Bind exact Request</text>
+  <text x="450" y="493" class="sans body">The AGU forms 0x8000_00A8; the LSQ</text>
+  <text x="450" y="517" class="sans body">applies normal ordering and replay checks.</text>
+  <rect x="450" y="540" width="300" height="94" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="600" y="566" text-anchor="middle" class="sans label">ReuseBind extension</text>
+  <text x="600" y="591" text-anchor="middle" class="mono small">tier 2 | e1 12 | e2 40</text>
+  <text x="600" y="615" text-anchor="middle" class="mono small">current 10 | context k | sequence s</text>
+  <text x="450" y="660" class="sans body">Metadata follows that Request through the</text>
+  <text x="450" y="684" class="sans body">cache hierarchy and MSHR merge rules.</text>
 
-  <rect x="45" y="435" width="1110" height="60" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <circle cx="76" cy="465" r="15" fill="#A8403A"/>
-  <path d="M69 465 L75 471 L84 459" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="102" y="460" class="sans label">FlowThrough changes only the record miss:</text>
-  <text x="102" y="484" class="sans body">fill private caches, preserve LLC hits, and skip only the new LLC insertion.</text>
+  <!-- 6. LLC epoch use -->
+  <circle cx="835" cy="450" r="17" fill="#27313A"/>
+  <text x="835" y="456" text-anchor="middle" fill="#FFFFFF" class="sans label">6</text>
+  <text x="862" y="457" class="sans heading">Use epochs at the LLC</text>
+  <text x="830" y="493" class="sans body">A hit or fill stores tier and epochs beside</text>
+  <text x="830" y="517" class="sans body">resident property line 0x8000_0080.</text>
+  <rect x="830" y="540" width="300" height="94" rx="8" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="850" y="566" class="mono small">d1 = (e1 - current) mod N</text>
+  <text x="850" y="591" class="mono small">d2 = (e2 - current) mod N</text>
+  <text x="850" y="616" class="mono small">nearest = min(d1, d2)</text>
+  <text x="830" y="660" class="sans body">RRIP selects eligible lines; ReusePlan</text>
+  <text x="830" y="684" class="sans body">evicts the farthest nearest future reuse.</text>
+
+  <path d="M395 245 H421" class="arrow"/>
+  <path d="M775 245 H801" class="arrow"/>
+  <path d="M980 365 V392 H220 V416" class="arrow"/>
+  <path d="M395 560 H421" class="arrow"/>
+  <path d="M775 560 H801" class="arrow"/>
+
+  <rect x="175" y="725" width="850" height="38" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="600" y="750" text-anchor="middle" class="sans small">Two memory accesses, one explicit register dependency, and one request-bound property load.</text>
 </svg>

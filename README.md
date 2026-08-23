@@ -1,4 +1,4 @@
-<img src="wiki/assets/logo.png" alt="ECG graph logo" width="140">
+<p align="center"><img src="wiki/assets/logo.png" alt="ECG graph logo" width="140"></p>
 
 # ECG Next
 
@@ -17,6 +17,22 @@ last-level-cache replacement and placement.
 
 ![ECG architecture at a glance](wiki/assets/ecg-architecture-summary.svg)
 
+### Why carry reuse with graph IDs?
+
+CSR stores destination vertex IDs in traversal order. Each destination selects
+an irregular property access such as `score[dest]`, but the ID alone says
+nothing about when that property line will be used again. A graph pass derives
+a coarse reuse tier and two future-use epochs for that destination. When the
+fields fit, the compact ReusePlan replaces the original 4-byte edge ID; the
+destination remains available for address generation while the extra fields
+carry reuse guidance.
+
+Record loads follow CSR traversal order and are therefore streaming within an
+adjacency run. FlowThrough keeps their private-cache behavior and LLC hits
+normal, but prevents a returning record miss from allocating a new LLC line.
+This separates the low-reuse record stream from the irregular property lines
+that the replacement policy is trying to retain.
+
 ### Access lifecycle
 
 1. A graph pass emits a compact ReusePlan for each governed edge. The record
@@ -32,6 +48,18 @@ last-level-cache replacement and placement.
 6. Later replacement first applies the shared RRIP eligibility rule, then uses
    the nearest future reuse to rank eligible property lines. Load return,
    writeback, and retirement remain ordinary.
+
+The record and property accesses remain two architectural loads. The record
+load writes a ReusePlan register; the property-load instruction names that
+register as an operand. Decode, rename, and issue therefore enforce the
+dependency, while the resulting property load remains one ordinary data
+Request carrying its ReuseBind extension.
+
+At the LLC, current epoch `c` and future epochs `e1` and `e2` produce circular
+distances `(e1 - c) mod N` and `(e2 - c) mod N`. ECG uses the nearer of those
+two future uses. RRIP first determines which lines are eligible; among
+eligible governed property lines, the line whose nearest reuse is farthest in
+the future is the preferred victim.
 
 ### Mechanism boundaries
 
