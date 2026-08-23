@@ -714,6 +714,15 @@ def test_proposal_compact_reuse_bind_flowthrough_is_fail_closed():
     assert "in_edge_pair32_flat.size() * sizeof(uint32_t)" in guest
     assert "GEM5_ECG_COMPACT_REUSE_BIND_FLOW=1 but" in guest
     assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" in guest
+    assert "reusePlanOffsetsMatchInCsr" in guest
+    assert "[ECG-CSR-SUBSTITUTION active=1" in guest
+    measured_roi = guest.split(
+        "GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE)", 1)[1].split(
+            "GEM5_WORK_END(GEM5_WORK_COMPUTE)", 1)[0]
+    assert not re.search(r"\bpair_off\b", measured_roi)
+    assert "g.in_offset(0)" in measured_roi
+    assert "g.in_offset(u + 1)" in measured_roi
+    assert "csr_pair_begin = end" in measured_roi
     assert "GEM5_ECG_COMPACT_REUSE_BIND_FLOW" in graph_se
 
     active = {"timing_valid_for_speedup": "1"}
@@ -768,6 +777,66 @@ def test_proposal_compact_reuse_bind_flowthrough_is_fail_closed():
         requested=True)
     assert wrong_width["status"] == "error"
     assert "4-byte request-flag record requests" in wrong_width["error"]
+
+
+def test_gem5_csr_substitution_receipt_is_fail_closed():
+    receipt = (
+        "[ECG-CSR-SUBSTITUTION active=1 valid=1 "
+        "offset_source=csr rows=256 records=4096]")
+    row = {"timing_valid_for_speedup": "1"}
+    assert roi_matrix.apply_gem5_csr_substitution_receipt(
+        row, receipt, required=True)
+    assert row["ecg_csr_substitution_receipt_count"] == 1
+    assert row["ecg_csr_substitution_active"] == 1
+    assert row["ecg_csr_substitution_valid"] == 1
+    assert row["ecg_offset_source"] == "csr"
+    assert row["ecg_csr_substitution_rows"] == 256
+    assert row["ecg_csr_substitution_records"] == 4096
+    assert "error" not in row
+
+    missing = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_gem5_csr_substitution_receipt(
+        missing, "", required=True)
+    assert missing["status"] == "error"
+
+    duplicate = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_gem5_csr_substitution_receipt(
+        duplicate, f"{receipt}\n{receipt}", required=True)
+    assert duplicate["status"] == "error"
+
+    invalid = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_gem5_csr_substitution_receipt(
+        invalid,
+        "[ECG-CSR-SUBSTITUTION active=1 valid=0 "
+        "offset_source=csr rows=256 records=4096]",
+        required=True)
+    assert invalid["status"] == "error"
+    assert invalid["timing_valid_for_speedup"] == "0"
+
+    wrong_record_count = {
+        "timing_valid_for_speedup": "1",
+        "gem5_reuse_plan_sidecar_records": 4095,
+    }
+    assert not roi_matrix.apply_gem5_csr_substitution_receipt(
+        wrong_record_count, receipt, required=True)
+    assert wrong_record_count["status"] == "error"
+    assert wrong_record_count["timing_valid_for_speedup"] == "0"
+
+    optional_invalid = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_gem5_csr_substitution_receipt(
+        optional_invalid,
+        "[ECG-CSR-SUBSTITUTION active=0 valid=0 "
+        "offset_source=pair rows=256 records=4096]",
+        required=False)
+    assert "error" not in optional_invalid
+    assert optional_invalid["timing_valid_for_speedup"] == "1"
+
+    optional_duplicate = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_gem5_csr_substitution_receipt(
+        optional_duplicate, f"{receipt}\n{receipt}", required=False)
+    assert optional_duplicate["ecg_csr_substitution_receipt_count"] == 2
+    assert "error" not in optional_duplicate
+    assert optional_duplicate["timing_valid_for_speedup"] == "1"
 
 
 def test_proposal_compact_reuse_bind_flowthrough_cli_guards():
@@ -1240,7 +1309,7 @@ def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
     compact = subprocess.run(
         [
             str(binary), "-g", "8", "-k", "2", "-o", "0",
-            "-n", "1", "-i", "1",
+            "-n", "2", "-i", "1",
         ],
         cwd=PROJECT_ROOT, env=compact_env,
         capture_output=True, text=True,
@@ -1248,6 +1317,16 @@ def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
     compact_text = compact.stdout + compact.stderr
     assert compact.returncode == 0, compact_text
     assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" in compact_text
+    assert (
+        "[ECG-CSR-SUBSTITUTION active=1 valid=1 "
+        "offset_source=csr"
+    ) in compact_text
+    compact_csr = {"timing_valid_for_speedup": "1"}
+    assert roi_matrix.apply_gem5_csr_substitution_receipt(
+        compact_csr, compact_text, required=True)
+    assert compact_csr["ecg_csr_substitution_receipt_count"] == 1
+    assert compact_csr["ecg_csr_substitution_rows"] == 256
+    assert compact_csr["ecg_csr_substitution_records"] > 0
     assert "[ECG-METADATA-FATAL]" not in compact_text
 
     wide_env = dict(compact_env)
@@ -1273,6 +1352,16 @@ def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
         "+ FlowThrough record load ACTIVE"
     ) in wide_text
     assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" not in wide_text
+    assert (
+        "[ECG-CSR-SUBSTITUTION active=1 valid=1 "
+        "offset_source=csr"
+    ) in wide_text
+    wide_csr = {"timing_valid_for_speedup": "1"}
+    assert roi_matrix.apply_gem5_csr_substitution_receipt(
+        wide_csr, wide_text, required=True)
+    assert wide_csr["ecg_csr_substitution_receipt_count"] == 1
+    assert wide_csr["ecg_csr_substitution_rows"] == 256
+    assert wide_csr["ecg_csr_substitution_records"] > 0
     assert "[ECG-METADATA-FATAL]" not in wide_text
 
     receipt = re.compile(

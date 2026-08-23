@@ -1593,6 +1593,43 @@ def apply_gem5_compact_fused_receipt(
     return active
 
 
+def apply_gem5_csr_substitution_receipt(
+        row: dict[str, Any], log_text: str, required: bool) -> bool:
+    matches = re.findall(
+        r"\[ECG-CSR-SUBSTITUTION active=(\d+) valid=(\d+) "
+        r"offset_source=([A-Za-z0-9_-]+) rows=(\d+) records=(\d+)\]",
+        log_text)
+    row["ecg_csr_substitution_receipt_count"] = len(matches)
+    row["ecg_csr_substitution_active"] = 0
+    row["ecg_csr_substitution_valid"] = 0
+    if len(matches) != 1:
+        if required:
+            mark_row_error(row, (
+                "gem5 CSR substitution receipt missing or duplicated: "
+                f"count={len(matches)}"))
+        return False
+    active, valid, offset_source, rows, records = matches[0]
+    row["ecg_csr_substitution_active"] = int(active)
+    row["ecg_csr_substitution_valid"] = int(valid)
+    row["ecg_offset_source"] = offset_source
+    row["ecg_csr_substitution_rows"] = int(rows)
+    row["ecg_csr_substitution_records"] = int(records)
+    expected_records = row.get("gem5_reuse_plan_sidecar_records")
+    records_match = (
+        expected_records in (None, "") or
+        int(records) == int(expected_records))
+    receipt_valid = (
+        int(active) == 1 and int(valid) == 1 and
+        offset_source == "csr" and int(rows) > 0 and records_match)
+    if required and not receipt_valid:
+        mark_row_error(row, (
+            "gem5 CSR substitution receipt is invalid: "
+            f"active={active} valid={valid} source={offset_source} "
+            f"rows={rows} records={records} "
+            f"sidecar_records={expected_records}"))
+    return receipt_valid
+
+
 def apply_gem5_popt_receipt(
         row: dict[str, Any], log_text: str, required: bool) -> bool:
     match = re.search(
@@ -2963,6 +3000,22 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             effective_l3_size, effective_l3_ways)
         apply_gem5_compact_fused_receipt(
             base, log_text, compact_fused_cell_requested)
+        apply_gem5_csr_substitution_receipt(
+            base, log_text, required=(
+                args.benchmark == "pr" and is_reuse_plan_ecg and
+                transport.reuse_plan_depth == 2 and
+                int(base.get("ecg_record_replaces_edge") or 0) == 1))
+        if (
+                args.benchmark != "pr" and is_reuse_plan_ecg and
+                transport.reuse_plan_depth == 2 and
+                int(base.get("ecg_record_replaces_edge") or 0) == 1):
+            caveat = str(base.get("timing_caveat") or "").strip()
+            csr_caveat = (
+                "This non-PageRank Schedule-2 guest replaces the edge payload "
+                "but still reads a separate record-offset stream; canonical "
+                "CSR-offset substitution is not active.")
+            base["timing_caveat"] = " ".join(
+                part for part in (caveat, csr_caveat) if part)
         apply_gem5_compact_reuse_bind_flowthrough_receipt(
             base, log_text, compact_reuse_bind_flowthrough_cell_requested,
             require_trace_receipts=compact_reuse_bind_verify_requested,

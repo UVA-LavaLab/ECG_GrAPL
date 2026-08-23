@@ -202,6 +202,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     uint32_t pair32_id_bits = 1, pair32_epoch_bits = 1;
     bool use_compact_pair = false;
     vector<uint64_t> pair_off;
+    uint64_t pair_record_count = 0;
+    bool pair_offsets_match_csr = false;
     uint32_t pack_id_bits = 1, pack_id_mask = 1;
     bool packed_ok = false;
     bool pair_ok = false;
@@ -273,6 +275,24 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
             ::ecg_metadata::enforceExpectedBytesPerEdge(ecg_meta, "gem5-pr");
         }
         if (ecg_reuse_plan_depth == 2) {
+            auto require_csr_pair_offsets =
+                [&](uint64_t record_count) {
+                    pair_record_count = record_count;
+                    pair_offsets_match_csr =
+                        ecg_reuse_plan::reusePlanOffsetsMatchInCsr(
+                            g, pair_off, pair_record_count);
+                    if (!pair_offsets_match_csr) {
+                        fprintf(stderr,
+                                "[ECG-METADATA-FATAL] ReusePlan records do "
+                                "not align with canonical incoming CSR "
+                                "offsets (rows=%llu records=%llu "
+                                "offsets=%llu)\n",
+                                (unsigned long long)g.num_nodes(),
+                                (unsigned long long)pair_record_count,
+                                (unsigned long long)pair_off.size());
+                        std::abort();
+                    }
+                };
             const char* sidecar_path =
                 std::getenv("GEM5_REUSE_PLAN_SIDECAR");
             const bool sidecar_required =
@@ -317,6 +337,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                         pair_off, pair32);
             }
             if (use_compact_pair && compact_ready) {
+                require_csr_pair_offsets(
+                    static_cast<uint64_t>(pair32.size()));
                 in_edge_pair32_flat = pvector<uint32_t>(
                     pair32.size(), uint32_t(0), kDataAlign);
                 std::copy(pair32.begin(), pair32.end(),
@@ -363,6 +385,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                         g, kNumVtxPerLine, edge_epoch_count, true,
                         pair_off, pair_records);
                 }
+                require_csr_pair_offsets(
+                    static_cast<uint64_t>(pair_records.size()));
                 in_edge_pair_flat = pvector<uint64_t>(
                     pair_records.size(), uint64_t(0), kDataAlign);
                 std::copy(
@@ -614,6 +638,16 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                 (int)ecg_bind_computed_address_on, (int)ecg_plan_load_on);
         std::abort();
     }
+    static bool csr_substitution_receipt_emitted = false;
+    if (pair_extract_only && !csr_substitution_receipt_emitted) {
+        fprintf(stderr,
+                "[ECG-CSR-SUBSTITUTION active=1 valid=%d "
+                "offset_source=csr rows=%llu records=%llu]\n",
+                (int)pair_offsets_match_csr,
+                (unsigned long long)g.num_nodes(),
+                (unsigned long long)pair_record_count);
+        csr_substitution_receipt_emitted = true;
+    }
     if (pair32_ok) {
         gem5_ecg_write_record_format_csr(
             pair32_id_bits, pair32_epoch_bits);
@@ -672,14 +706,18 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
         if (gem5_ecg_epoch_csr_enabled()) {
             epoch_cursor.reset(g.num_nodes(), edge_epoch_count);
         }
+        uint64_t csr_pair_begin = pair_extract_only
+            ? static_cast<uint64_t>(g.in_offset(0))
+            : 0;
         for (NodeID u = 0; u < g.num_nodes(); u++) {
             GEM5_SET_MONOTONIC_VERTEX_EPOCH(epoch_cursor, u);
             ScoreT incoming_total = 0;
 
-            if (pair_extract_only &&
-                static_cast<size_t>(u + 1) < pair_off.size()) {
-                const uint64_t begin = pair_off[u];
-                const uint64_t end = pair_off[u + 1];
+            if (pair_extract_only) {
+                const uint64_t begin = csr_pair_begin;
+                const uint64_t end =
+                    static_cast<uint64_t>(g.in_offset(u + 1));
+                csr_pair_begin = end;
                 if (compact_reuse_bind_flowthrough_on) {
                     const uint32_t* record_ptr =
                         in_edge_pair32_flat.data() + begin;

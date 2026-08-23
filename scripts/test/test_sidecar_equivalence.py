@@ -535,14 +535,18 @@ def test_compact_records_decode_identically_to_the_64_bit_form():
     """
     binary = ROOT / "bench/bin_sim/test_ecg_reuse_plan32"
     graph = ROOT / "results/graphs/web-Google-n16/web-Google-n16.sg"
-    if not (binary.exists() and graph.exists()):
-        pytest.skip("ReusePlan equivalence harness or graph fixture missing")
+    assert binary.exists(), "ReusePlan equivalence harness was not built"
     env = dict(os.environ, OMP_NUM_THREADS="4")
-    proc = subprocess.run([str(binary), "-f", str(graph)],
+    command = (
+        [str(binary), "-f", str(graph)]
+        if graph.exists()
+        else [str(binary), "-g", "12", "-k", "4", "-o", "0"])
+    proc = subprocess.run(command,
                           env=env, capture_output=True, text=True, timeout=900)
     out = proc.stdout + proc.stderr
     assert proc.returncode == 0, f"compact/64-bit records diverge:\n{out[-2000:]}"
     assert "ALL EQUIVALENT" in out, out[-2000:]
+    assert "CSR OFFSETS AND DESTINATIONS MATCH" in out, out[-2000:]
     # Guard against a vacuous pass if the builder silently refused every size.
     assert out.count("records checked") >= 3, (
         "too few epoch counts exercised; the compact builder may be refusing "
@@ -679,7 +683,7 @@ def test_the_compact_format_has_one_definition_in_three_places():
         "old one and will deliver wrong epochs without failing")
 
 
-def test_built_kernels_are_newer_than_the_headers_they_embed():
+def test_built_kernels_are_newer_than_the_sources_they_embed():
     """make reported success while leaving every binary stale.
 
     The gem5/Sniper/cache_sim build rules listed gapbs, graphbrew and external
@@ -704,48 +708,63 @@ def test_built_kernels_are_newer_than_the_headers_they_embed():
         ["git", "diff", "--cached", "--name-only"],
         cwd=ROOT, capture_output=True, text=True, check=True,
     ).stdout.splitlines())
-    material_headers = []
-    for header in headers:
-        relative = str(header.relative_to(ROOT))
+
+    def is_materially_changed(path):
+        relative = str(path.relative_to(ROOT))
         if relative not in changed:
-            continue
+            return False
         baseline = subprocess.run(
             ["git", "show", f"HEAD:{relative}"],
             cwd=ROOT, capture_output=True, text=True)
         if baseline.returncode != 0:
-            material_headers.append(header)
-            continue
+            return True
         diff = difflib.unified_diff(
             baseline.stdout.splitlines(),
-            header.read_text(errors="ignore").splitlines(),
+            path.read_text(errors="ignore").splitlines(),
         )
-        if any(
-                line.startswith(("+", "-")) and
-                not line.startswith(("+++", "---")) and
-                not line[1:].lstrip().startswith(("//", "/*", "*", "#"))
-                for line in diff):
-            material_headers.append(header)
-    if not material_headers:
-        pytest.skip("no edited ECG header requires a rebuild")
-    newest = max(h.stat().st_mtime for h in material_headers)
-    newest_name = max(
-        material_headers, key=lambda h: h.stat().st_mtime).name
+        return any(
+            line.startswith(("+", "-")) and
+            not line.startswith(("+++", "---")) and
+            not line[1:].lstrip().startswith(("//", "/*", "*"))
+            for line in diff)
 
-    stale, present = [], 0
-    for binary in (ROOT / "bench/bin_gem5" / "pr_riscv_m5ops",
-                   ROOT / "bench/bin_gem5" / "pr",
-                   ROOT / "bench/bin_sniper" / "sg_kernel"):
-        if not binary.exists():
+    pr_source = ROOT / "bench/src_gem5/pr.cc"
+    sim_pr_source = ROOT / "bench/src_sim/pr.cc"
+    sim_test_source = ROOT / "bench/src_sim/test_ecg_reuse_plan32.cc"
+    sidecar_source = ROOT / "bench/src_sim/reuse_plan_sidecar.cc"
+    sniper_source = ROOT / "bench/src_sniper/sg_kernel.cc"
+    binary_dependencies = {
+        ROOT / "bench/bin_gem5/pr_riscv_m5ops": headers + [pr_source],
+        ROOT / "bench/bin_gem5/pr_m5ops": headers + [pr_source],
+        ROOT / "bench/bin_gem5/pr": headers + [pr_source],
+        ROOT / "bench/bin_sim/pr": headers + [sim_pr_source],
+        ROOT / "bench/bin_sniper/sg_kernel": headers + [sniper_source],
+        ROOT / "bench/bin_sim/reuse_plan_sidecar":
+            headers + [sidecar_source],
+        ROOT / "bench/bin_sim/test_ecg_reuse_plan32":
+            headers + [sim_test_source],
+    }
+    stale, missing, checked = [], [], 0
+    for binary, dependencies in binary_dependencies.items():
+        material_dependencies = [
+            path for path in dependencies if is_materially_changed(path)]
+        if not material_dependencies:
             continue
-        present += 1
+        checked += 1
+        if not binary.exists():
+            missing.append(binary.name)
+            continue
+        newest = max(path.stat().st_mtime for path in material_dependencies)
         if binary.stat().st_mtime < newest:
-            stale.append(binary.name)
-    if present == 0:
-        pytest.skip("no measurement binaries built")
-    assert not stale, (
-        f"{stale} predate {newest_name}; the build rules now list the ECG "
-        "headers as prerequisites, so rebuild rather than trusting a binary "
-        "that cannot contain the change being measured")
+            newest_name = max(
+                material_dependencies,
+                key=lambda path: path.stat().st_mtime).name
+            stale.append(f"{binary.name} predates {newest_name}")
+    if checked == 0:
+        pytest.skip("no edited ECG source or header requires a rebuild")
+    assert not missing and not stale, (
+        f"missing={missing}, stale={stale}; rebuild every affected artifact "
+        "rather than trusting a binary that cannot contain the measured code")
 
 
 def test_row_cannot_contradict_itself_about_stream_width():
