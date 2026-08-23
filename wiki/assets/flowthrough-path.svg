@@ -1,15 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc" fill="#27313A">
-  <title id="title">FlowThrough cache path</title>
-  <desc id="desc">A record request travels from the CPU through private caches to the LLC. LLC hits are preserved; LLC misses fetch from memory and fill private caches without inserting into the LLC.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="750" viewBox="0 0 1400 750" role="img" aria-labelledby="title desc" fill="#27313A">
+  <title id="title">Detailed FlowThrough architecture with selective LLC zoom</title>
+  <desc id="desc">The upper path shows a FlowThrough record Request through the load queue, translation, private caches, MSHR, LLC, and memory. Lower zoom panels separate normal LLC hits, LLC misses with a blocked insertion gate, and a property Request that is never bypassed.</desc>
   <defs>
-    <marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="6" refX="6.2" refY="3" orient="auto">
-      <path d="M0,0 L7,3 L0,6 Z" fill="#1769C2"/>
-    </marker>
-    <marker id="green-arrow" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="6" refX="6.2" refY="3" orient="auto">
-      <path d="M0,0 L7,3 L0,6 Z" fill="#1769C2"/>
-    </marker>
-    <marker id="coral-arrow" markerUnits="userSpaceOnUse" markerWidth="7" markerHeight="6" refX="6.2" refY="3" orient="auto">
-      <path d="M0,0 L7,3 L0,6 Z" fill="#1769C2"/>
+    <marker id="arrow" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/>
     </marker>
     <style>
       :root{color-scheme:light dark}
@@ -18,54 +12,142 @@
         [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
         [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
         [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#9AA3AD"]{stroke:#747D86}
       }
-      .title{font:700 30px Arial,sans-serif}
-      .subtitle{font:400 17px Arial,sans-serif}
-      .box-title{font:700 20px Arial,sans-serif}
-      .body{font:400 16px Arial,sans-serif}
-      .path-title{font:700 17px Arial,sans-serif}
-      .small{font:400 15px Arial,sans-serif}
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:17px}
+      .domain{font-size:15px;font-weight:700;letter-spacing:1.2px}
+      .heading{font-size:21px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:15px}
+      .small{font-size:14px}
+      .arrow{fill:none;stroke:#1769C2;stroke-width:3;marker-end:url(#arrow)}
+      .zoom{fill:none;stroke:#9AA3AD;stroke-width:2;stroke-dasharray:7 6}
+      .slot{fill:#FFFFFF;stroke:#27313A;stroke-width:2}
     </style>
   </defs>
-  <rect width="1200" height="520" fill="#FFFFFF"/>
-  <text x="60" y="48" class="title">FlowThrough preserves useful paths and removes only LLC insertion</text>
-  <text x="60" y="75" class="subtitle">The placement bit belongs to the streamed record request, not the property request.</text>
 
-  <g stroke="#27313A" stroke-width="3">
-    <rect x="65" y="135" width="190" height="100" rx="12" fill="#EDF5FF"/>
-    <rect x="345" y="135" width="220" height="100" rx="12" fill="#E7F7EA"/>
-    <rect x="655" y="135" width="220" height="100" rx="12" fill="#FFF0D8"/>
-    <rect x="965" y="135" width="170" height="100" rx="12" fill="#EEE9FF"/>
+  <rect width="1400" height="750" fill="#FFFFFF"/>
+  <text x="40" y="48" class="sans title">FlowThrough: detailed cache path and selective LLC zoom</text>
+  <text x="40" y="77" class="sans subtitle">One request bit changes only allocation after a record misses in the LLC.</text>
+  <line x1="40" y1="102" x2="1360" y2="102" stroke="#27313A" stroke-width="2"/>
+
+  <!-- Full architecture path -->
+  <rect x="30" y="125" width="1340" height="225" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
+  <circle cx="58" cy="154" r="16" fill="#27313A"/>
+  <text x="58" y="160" text-anchor="middle" fill="#FFFFFF" class="sans label">2</text>
+  <text x="84" y="160" class="sans heading">FlowThrough record Request through the shared hierarchy</text>
+
+  <g text-anchor="middle">
+    <rect x="50" y="190" width="150" height="86" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+    <text x="125" y="219" class="sans label">CPU</text>
+    <text x="125" y="244" class="mono small">ecg.flow.load</text>
+    <text x="125" y="265" class="mono small">.compact</text>
+
+    <rect x="235" y="190" width="160" height="86" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+    <text x="315" y="219" class="sans label">Load queue</text>
+    <text x="315" y="244" class="mono small">size 4 · FT 1</text>
+    <text x="315" y="265" class="sans small">ordering + replay</text>
+
+    <rect x="430" y="190" width="110" height="86" rx="9" class="slot"/>
+    <text x="485" y="219" class="sans label">D-TLB</text>
+    <text x="485" y="251" class="sans small">VA → PA</text>
+
+    <rect x="575" y="190" width="110" height="86" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <text x="630" y="219" class="sans label">L1D</text>
+    <text x="630" y="251" class="sans small">lookup / fill</text>
+
+    <rect x="720" y="190" width="110" height="86" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <text x="775" y="219" class="sans label">L2</text>
+    <text x="775" y="251" class="sans small">lookup / fill</text>
+
+    <rect x="865" y="190" width="120" height="86" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+    <text x="925" y="219" class="sans label">MSHR</text>
+    <text x="925" y="244" class="sans small">retains FT flag</text>
+    <text x="925" y="265" class="sans small">until fill</text>
+
+    <rect x="1020" y="180" width="140" height="106" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
+    <text x="1090" y="211" class="sans label">LLC</text>
+    <text x="1090" y="236" class="sans small">tag lookup</text>
+    <rect x="1040" y="248" width="100" height="24" rx="5" fill="#F7DEDC" stroke="#27313A"/>
+    <text x="1090" y="265" class="sans small">insertion gate</text>
+
+    <rect x="1210" y="190" width="140" height="86" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+    <text x="1280" y="219" class="sans label">Memory</text>
+    <text x="1280" y="251" class="sans small">miss service</text>
   </g>
-  <text x="160" y="178" text-anchor="middle" class="box-title">CPU</text>
-  <text x="160" y="205" text-anchor="middle" class="body">record load</text>
-  <text x="455" y="178" text-anchor="middle" class="box-title">L1 / L2</text>
-  <text x="455" y="205" text-anchor="middle" class="body">normal lookup and fill</text>
-  <text x="765" y="178" text-anchor="middle" class="box-title">LLC</text>
-  <text x="765" y="205" text-anchor="middle" class="body">tag lookup always occurs</text>
-  <text x="1050" y="178" text-anchor="middle" class="box-title">Memory</text>
-  <text x="1050" y="205" text-anchor="middle" class="body">miss service</text>
 
-  <line x1="255" y1="185" x2="341" y2="185" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow)"/>
-  <line x1="565" y1="185" x2="651" y2="185" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M200 233 H231" class="arrow"/>
+  <path d="M395 233 H426" class="arrow"/>
+  <path d="M540 233 H571" class="arrow"/>
+  <path d="M685 233 H716" class="arrow"/>
+  <path d="M830 233 H861" class="arrow"/>
+  <path d="M985 233 H1016" class="arrow"/>
+  <path d="M1160 233 H1206" class="arrow"/>
 
-  <rect x="125" y="300" width="400" height="130" rx="12" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
-  <circle cx="165" cy="338" r="20" fill="#27313A"/>
-  <path d="M156 338 L164 346 L176 329" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="198" y="336" class="path-title">LLC hit</text>
-  <text x="198" y="361" class="body">Return the existing line normally.</text>
-  <text x="198" y="386" class="body">No behavior is bypassed.</text>
-  <polyline points="765,235 765,270 510,270 510,296" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#green-arrow)"/>
+  <text x="315" y="315" text-anchor="middle" class="sans small">Request type: record · allocation hint: FlowThrough</text>
+  <text x="1090" y="315" text-anchor="middle" class="sans small">LLC tag lookup always occurs before the split below</text>
+  <line x1="1035" y1="286" x2="1035" y2="375" class="zoom"/>
+  <line x1="1145" y1="286" x2="1145" y2="375" class="zoom"/>
+  <text x="1090" y="344" text-anchor="middle" class="sans small">selective zoom</text>
 
-  <rect x="600" y="300" width="535" height="130" rx="12" fill="#F7DEDC" stroke="#27313A" stroke-width="3"/>
-  <circle cx="640" cy="338" r="20" fill="#27313A"/>
-  <path d="M631 338 H649" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
-  <text x="675" y="336" class="path-title">LLC miss</text>
-  <text x="675" y="361" class="body">Fetch from memory and fill L1/L2.</text>
-  <text x="675" y="386" class="body">Do not insert the returning record into the LLC.</text>
-  <path d="M875 185 H961" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow)"/>
-  <polyline points="1050,235 1050,270 925,270 925,296" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#coral-arrow)"/>
+  <!-- LLC hit zoom -->
+  <rect x="30" y="390" width="350" height="260" rx="11" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
+  <text x="55" y="425" class="sans heading">Zoom A · LLC hit</text>
+  <g text-anchor="middle">
+    <rect x="55" y="455" width="85" height="62" rx="8" class="slot"/>
+    <rect x="165" y="455" width="85" height="62" rx="8" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <rect x="275" y="455" width="80" height="62" rx="8" class="slot"/>
+    <text x="97" y="481" class="sans label">LLC</text><text x="97" y="503" class="sans small">tag hit</text>
+    <text x="207" y="481" class="sans label">L2/L1</text><text x="207" y="503" class="sans small">response</text>
+    <text x="315" y="481" class="sans label">rd</text><text x="315" y="503" class="sans small">record</text>
+  </g>
+  <path d="M140 486 H161" class="arrow"/>
+  <path d="M250 486 H271" class="arrow"/>
+  <text x="55" y="554" class="sans body">The existing LLC line returns normally.</text>
+  <text x="55" y="581" class="sans body">Memory is not accessed.</text>
+  <text x="55" y="608" class="sans body">No allocation decision is needed.</text>
+  <text x="55" y="632" class="sans small">FlowThrough never bypasses an LLC hit.</text>
 
-  <rect x="220" y="457" width="760" height="38" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <text x="600" y="481" text-anchor="middle" class="small">Property loads remain ordinary cacheable requests carrying ReusePlan metadata.</text>
+  <!-- LLC miss zoom -->
+  <rect x="405" y="390" width="640" height="260" rx="11" fill="#F7DEDC" stroke="#27313A" stroke-width="3"/>
+  <text x="430" y="425" class="sans heading">Zoom B · LLC miss and returning fill</text>
+  <g text-anchor="middle">
+    <rect x="430" y="455" width="110" height="62" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+    <rect x="575" y="455" width="110" height="62" rx="8" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+    <rect x="720" y="455" width="120" height="62" rx="8" class="slot"/>
+    <rect x="885" y="455" width="130" height="62" rx="8" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <text x="485" y="481" class="sans label">MSHR</text><text x="485" y="503" class="sans small">miss state</text>
+    <text x="630" y="481" class="sans label">Memory</text><text x="630" y="503" class="sans small">fetch line</text>
+    <text x="780" y="481" class="sans label">Return</text><text x="780" y="503" class="sans small">record line</text>
+    <text x="950" y="481" class="sans label">L2 / L1</text><text x="950" y="503" class="sans small">private fill</text>
+  </g>
+  <path d="M540 486 H571" class="arrow"/>
+  <path d="M685 486 H716" class="arrow"/>
+  <path d="M840 486 H881" class="arrow"/>
+
+  <path d="M780 517 V539" class="arrow"/>
+  <rect x="655" y="545" width="250" height="62" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="780" y="571" text-anchor="middle" class="sans label">LLC insertion gate</text>
+  <text x="780" y="596" text-anchor="middle" class="mono body">FT = 1 → do not allocate</text>
+  <circle cx="925" cy="576" r="15" fill="#A8403A"/>
+  <path d="M917 576 H933" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+  <text x="430" y="631" class="sans small">The line returns and fills private caches; only LLC allocation is suppressed.</text>
+
+  <!-- Property contrast -->
+  <rect x="1070" y="390" width="300" height="260" rx="11" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
+  <text x="1095" y="425" class="sans heading">Contrast · property Request</text>
+  <rect x="1095" y="452" width="250" height="84" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="1220" y="480" text-anchor="middle" class="sans label">FT = 0 · ReuseBind valid</text>
+  <text x="1220" y="506" text-anchor="middle" class="mono small">T2 | e1 12 | e2 40</text>
+  <path d="M1220 536 V558" class="arrow"/>
+  <rect x="1095" y="564" width="250" height="58" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="1220" y="588" text-anchor="middle" class="sans label">LLC hit or fill</text>
+  <text x="1220" y="611" text-anchor="middle" class="sans small">store metadata; return property</text>
+  <text x="1095" y="642" class="sans small">Property requests are never FlowThrough.</text>
+
+  <rect x="155" y="682" width="1090" height="42" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="700" y="709" text-anchor="middle" class="sans body">Selective change: preserve translation, lookup, miss service, response, and private fills; suppress only LLC insertion.</text>
 </svg>
