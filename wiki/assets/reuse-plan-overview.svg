@@ -73,8 +73,8 @@
   <text x="911" y="148" text-anchor="middle" class="number">4</text>
   <text x="937" y="149" class="card-title">LLC decision</text>
   <text x="910" y="187" class="body">RRIP selects eligible lines.</text>
-  <text x="910" y="215" class="body">ReusePlan ranks eligible properties by</text>
-  <text x="910" y="237" class="body">their nearest future reuse.</text>
+  <text x="910" y="211" class="body">ReusePlan ranks eligible</text>
+  <text x="910" y="233" class="body">property lines by nearest reuse.</text>
   <rect x="910" y="257" width="203" height="30" rx="8" fill="#EDF5FF" stroke="#27313A"/>
   <text x="1012" y="277" text-anchor="middle" class="body">evict farthest future use</text>
 

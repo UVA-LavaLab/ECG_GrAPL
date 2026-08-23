@@ -60,7 +60,7 @@
   <text x="395" y="516" class="sans body">rs1 = 0x8000_00A8</text>
   <text x="395" y="550" class="sans body">rs2 = packed ReusePlan</text>
   <text x="395" y="584" class="sans body">waits for both operands</text>
-  <text x="525" y="608" text-anchor="middle" class="sans small">one dynamic load owns the address and metadata</text>
+  <text x="525" y="610" text-anchor="middle" class="sans small">one dynamic load owns both inputs</text>
 
   <rect x="730" y="138" width="350" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="747" y="164" class="sans domain">O3 REQUEST CONSTRUCTION</text>
@@ -76,7 +76,7 @@
   <text x="775" y="512" class="mono body">epochs=(12,40)</text>
   <text x="775" y="544" class="mono body">current=10, context=k</text>
   <text x="775" y="576" class="sans body">attached before the cache hierarchy</text>
-  <text x="905" y="608" text-anchor="middle" class="sans small">MSHR merges retain it only when metadata agrees</text>
+  <text x="905" y="610" text-anchor="middle" class="sans small">merge rules protect extension consistency</text>
 
   <rect x="1110" y="138" width="455" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="1127" y="164" class="sans domain">CACHE AND COMPLETION</text>
