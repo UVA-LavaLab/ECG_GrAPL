@@ -97,9 +97,10 @@
     <text x="91" y="39" text-anchor="middle" class="sans small">fetch / decode queue</text>
   </g>
 
-  <rect x="605" y="205" width="160" height="82" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
-  <text x="685" y="236" text-anchor="middle" class="sans label">Decode + rename</text>
-  <text x="685" y="260" text-anchor="middle" class="sans small">custom-0 role, rd/fd, rs1/rs2</text>
+  <rect x="600" y="200" width="180" height="92" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
+  <text x="690" y="230" text-anchor="middle" class="sans label">Decode + rename</text>
+  <text x="690" y="255" text-anchor="middle" class="sans small">custom-0 role; rd / fd</text>
+  <text x="690" y="275" text-anchor="middle" class="sans small">rs1 / rs2 dependencies</text>
 
   <text x="800" y="195" class="sans label">Issue queue</text>
   <g transform="translate(800 210)" class="mono tiny">
@@ -116,8 +117,8 @@
     <rect x="0" y="108" width="115" height="36" class="slot"/><text x="8" y="130">…</text>
   </g>
 
-  <path d="M575 246 H601" class="arrow"/>
-  <path d="M765 246 H796" class="arrow"/>
+  <path d="M575 246 H596" class="arrow"/>
+  <path d="M780 246 H796" class="arrow"/>
   <path d="M965 246 H996" class="arrow"/>
 
   <!-- Record execution lane -->
@@ -125,9 +126,9 @@
   <circle cx="438" cy="375" r="16" fill="#27313A"/><text x="438" y="381" text-anchor="middle" fill="#FFFFFF" class="sans label">1</text>
   <text x="465" y="381" class="sans heading">Record-load lane</text>
 
-  <polygon points="430,420 555,420 580,465 555,510 430,510 405,465" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
-  <text x="493" y="456" text-anchor="middle" class="sans label">record AGU</text>
-  <text x="493" y="480" text-anchor="middle" class="mono small">EA = edge_ptr</text>
+  <polygon points="450,420 575,420 600,465 575,510 450,510 425,465" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="513" y="456" text-anchor="middle" class="sans label">record AGU</text>
+  <text x="513" y="480" text-anchor="middle" class="mono small">EA = edge_ptr</text>
 
   <rect x="620" y="410" width="190" height="110" rx="7" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
   <text x="715" y="438" text-anchor="middle" class="sans label">Load queue entry</text>
@@ -140,7 +141,7 @@
   <text x="870" y="470" class="mono small">dest=42 | tier=2</text>
   <text x="870" y="495" class="mono small">epochs=(12,40)</text>
 
-  <path d="M580 465 H616" class="arrow"/>
+  <path d="M600 465 H616" class="arrow"/>
   <path d="M810 465 H846" class="arrow"/>
 
   <!-- Property execution lane -->
@@ -148,9 +149,9 @@
   <circle cx="438" cy="630" r="16" fill="#27313A"/><text x="438" y="636" text-anchor="middle" fill="#FFFFFF" class="sans label">2</text>
   <text x="465" y="636" class="sans heading">Property-load lane</text>
 
-  <polygon points="430,680 555,680 580,725 555,770 430,770 405,725" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
-  <text x="493" y="714" text-anchor="middle" class="sans label">property AGU</text>
-  <text x="493" y="738" text-anchor="middle" class="mono small">EA=0x8000_00A8</text>
+  <polygon points="450,680 575,680 600,725 575,770 450,770 425,725" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="513" y="714" text-anchor="middle" class="sans label">property AGU</text>
+  <text x="513" y="738" text-anchor="middle" class="mono small">EA=0x8000_00A8</text>
 
   <rect x="620" y="670" width="190" height="125" rx="7" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
   <text x="715" y="698" text-anchor="middle" class="sans label">Load queue entry</text>
@@ -165,7 +166,7 @@
   <text x="870" y="772" class="mono small">dest=42, sequence=s</text>
 
   <path d="M962 520 V666" class="thin-arrow"/>
-  <path d="M580 725 H616" class="arrow"/>
+  <path d="M600 725 H616" class="arrow"/>
   <path d="M810 733 H846" class="arrow"/>
 
   <rect x="555" y="895" width="490" height="55" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
@@ -176,23 +177,23 @@
   <rect x="1170" y="135" width="600" height="850" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="1188" y="161" class="sans domain">CACHE HIERARCHY AND MEMORY</text>
 
-  <circle cx="1208" cy="208" r="16" fill="#27313A"/><text x="1208" y="214" text-anchor="middle" fill="#FFFFFF" class="sans label">3</text>
-  <rect x="1235" y="180" width="115" height="70" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <text x="1292" y="208" text-anchor="middle" class="sans label">D-TLB</text>
-  <text x="1292" y="231" text-anchor="middle" class="sans small">VA → PA</text>
+  <circle cx="1208" cy="223" r="16" fill="#27313A"/><text x="1208" y="229" text-anchor="middle" fill="#FFFFFF" class="sans label">3</text>
+  <rect x="1235" y="195" width="115" height="70" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="1292" y="223" text-anchor="middle" class="sans label">D-TLB</text>
+  <text x="1292" y="246" text-anchor="middle" class="sans small">VA → PA</text>
 
-  <g transform="translate(1390 178)">
+  <g transform="translate(1390 193)">
     <text x="65" y="-8" text-anchor="middle" class="sans label">L1D</text>
     <rect x="0" y="0" width="130" height="80" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
     <path d="M0 20 H130 M0 40 H130 M0 60 H130 M32 0 V80 M65 0 V80 M98 0 V80" stroke="#27313A" stroke-width="1"/>
   </g>
-  <g transform="translate(1580 178)">
+  <g transform="translate(1580 193)">
     <text x="65" y="-8" text-anchor="middle" class="sans label">L2</text>
     <rect x="0" y="0" width="130" height="80" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
     <path d="M0 20 H130 M0 40 H130 M0 60 H130 M32 0 V80 M65 0 V80 M98 0 V80" stroke="#27313A" stroke-width="1"/>
   </g>
-  <path d="M1350 215 H1386" class="arrow"/>
-  <path d="M1520 215 H1576" class="arrow"/>
+  <path d="M1350 230 H1386" class="arrow"/>
+  <path d="M1520 230 H1576" class="arrow"/>
 
   <rect x="1200" y="335" width="300" height="190" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
   <text x="1350" y="368" text-anchor="middle" class="sans heading">MSHR entry</text>
@@ -204,23 +205,24 @@
     <text x="1225" y="509">conflict → invalidate ReuseBind</text>
   </g>
 
-  <rect x="1530" y="310" width="210" height="380" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
-  <circle cx="1557" cy="340" r="16" fill="#27313A"/><text x="1557" y="346" text-anchor="middle" fill="#FFFFFF" class="sans label">4</text>
-  <text x="1640" y="346" text-anchor="middle" class="sans heading">LLC set</text>
-  <text x="1550" y="375" class="sans small">data and metadata are separate fields</text>
+  <rect x="1530" y="325" width="210" height="380" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
+  <circle cx="1557" cy="355" r="16" fill="#27313A"/><text x="1557" y="361" text-anchor="middle" fill="#FFFFFF" class="sans label">4</text>
+  <text x="1635" y="361" text-anchor="middle" class="sans heading">LLC set</text>
+  <text x="1550" y="389" class="sans small">data and metadata</text>
+  <text x="1550" y="408" class="sans small">stored as separate fields</text>
 
-  <g transform="translate(1548 398)" class="mono tiny">
+  <g transform="translate(1548 425)" class="mono tiny">
     <rect x="0" y="0" width="174" height="32" fill="#F8F6EC" stroke="#27313A"/>
-    <text x="5" y="20">way  data line       R  tier e1 e2</text>
-    <rect x="0" y="32" width="174" height="42" class="slot"/><text x="5" y="58">0    0x…0040        5   1   9 31</text>
-    <rect x="0" y="74" width="174" height="42" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/><text x="5" y="100">1    0x8000_0080   6   2  12 40</text>
-    <rect x="0" y="116" width="174" height="42" class="slot"/><text x="5" y="142">2    0x…00C0        7   3  20 30</text>
-    <rect x="0" y="158" width="174" height="42" class="slot"/><text x="5" y="184">3    record line    7   -   -  -</text>
+    <text x="5" y="20">way  line       R  T  e1 e2</text>
+    <rect x="0" y="32" width="174" height="42" class="slot"/><text x="5" y="58">0    …0040      5  1   9 31</text>
+    <rect x="0" y="74" width="174" height="42" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/><text x="5" y="100">1    …0080      6  2  12 40</text>
+    <rect x="0" y="116" width="174" height="42" class="slot"/><text x="5" y="142">2    …00C0      7  3  20 30</text>
+    <rect x="0" y="158" width="174" height="42" class="slot"/><text x="5" y="184">3    record     7  -   -  -</text>
     <rect x="0" y="200" width="174" height="42" class="slot"/><text x="5" y="226">…</text>
   </g>
-  <text x="1550" y="665" class="sans small">later: shared policy selects a victim</text>
+  <text x="1550" y="684" class="sans small">later: shared policy selects a victim</text>
 
-  <path d="M1115 733 H1196 V430" class="arrow"/>
+  <path d="M1075 760 H1158 V455 H1196" class="arrow"/>
   <path d="M1500 430 H1526" class="arrow"/>
 
   <g transform="translate(1230 730)">
@@ -232,14 +234,14 @@
   </g>
 
   <circle cx="1208" cy="585" r="16" fill="#27313A"/><text x="1208" y="591" text-anchor="middle" fill="#FFFFFF" class="sans label">5</text>
-  <path d="M1320 730 V620 H1160 V918 H1049" class="arrow"/>
-  <text x="1185" y="650" class="sans small">property response returns through caches</text>
+  <text x="1234" y="591" class="sans label">Response path</text>
+  <path d="M1320 730 V620 H1178 V918 H1049" class="arrow"/>
+  <text x="1200" y="646" class="sans small">property data returns through L1D and L2</text>
 
-  <path d="M715 520 V555 H1460 V780 H1420" class="flow-arrow"/>
-  <text x="1010" y="546" text-anchor="middle" class="sans small" fill="#A8403A">FlowThrough: fetch + private fill; no LLC insert</text>
-  <line x1="1514" y1="552" x2="1540" y2="578" stroke="#A8403A" stroke-width="4"/>
-  <line x1="1540" y1="552" x2="1514" y2="578" stroke="#A8403A" stroke-width="4"/>
-  <text x="1488" y="605" text-anchor="end" class="sans small" fill="#A8403A">no LLC allocation</text>
+  <path d="M1510 600 V780 H1430" class="flow-arrow"/>
+  <text x="1530" y="730" class="sans label" fill="#A8403A">Record miss</text>
+  <text x="1530" y="751" class="sans small" fill="#A8403A">FlowThrough: private fill</text>
+  <text x="1530" y="770" class="sans small" fill="#A8403A">no LLC insertion</text>
 
   <rect x="1195" y="875" width="540" height="65" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <circle cx="1225" cy="907" r="16" fill="#27313A"/><text x="1225" y="913" text-anchor="middle" fill="#FFFFFF" class="sans label">6</text>

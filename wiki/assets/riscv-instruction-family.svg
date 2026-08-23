@@ -10,13 +10,14 @@
       [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
       [stroke="#9AA3AD"]{stroke:#747D86}
     }
-    .title{font:700 30px Arial,sans-serif;fill:#27313A}
-    .subtitle{font:400 15px Arial,sans-serif;fill:#27313A}
-    .group{font:700 18px Arial,sans-serif;fill:#27313A}
-    .mnemonic{font:700 17px 'Courier New',monospace;fill:#27313A}
-    .box-title{font:700 15px Arial,sans-serif;fill:#27313A}
-    .body{font:400 11px Arial,sans-serif;fill:#27313A}
-    .note{font:400 11px Arial,sans-serif;fill:#27313A}
+    .title{font:700 30px Arial,sans-serif}
+    .subtitle{font:400 15px Arial,sans-serif}
+    .group{font:700 18px Arial,sans-serif}
+    .mnemonic{font:700 17px 'Courier New',monospace}
+    .box-title{font:700 15px Arial,sans-serif}
+    .body{font:400 12px Arial,sans-serif}
+    .note{font:400 12px Arial,sans-serif}
+    .mono{font:700 12px 'SFMono-Regular',Consolas,monospace}
   </style>
 
   <rect width="1400" height="620" fill="#FFFFFF"/>

@@ -30,12 +30,13 @@
 
   <rect x="35" y="138" width="285" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="52" y="164" class="sans domain">GRAPH AND RECORD</text>
-  <rect x="55" y="185" width="245" height="185" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
+  <rect x="55" y="185" width="245" height="195" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
   <text x="177" y="220" text-anchor="middle" class="sans heading">Property line</text>
-  <text x="78" y="258" class="sans body">array base = 0x8000_0000</text>
-  <text x="78" y="292" class="sans body">element = 4 bytes</text>
-  <text x="78" y="326" class="mono body">addr(42) = base + 42 x 4</text>
-  <text x="177" y="353" text-anchor="middle" class="mono small">0x8000_00A8; line 0x8000_0080</text>
+  <text x="78" y="252" class="sans body">array base = 0x8000_0000</text>
+  <text x="78" y="280" class="sans body">element = 4 bytes</text>
+  <text x="78" y="308" class="mono small">addr(42) = base + 42 x 4</text>
+  <text x="78" y="334" class="mono small">word = 0x8000_00A8</text>
+  <text x="78" y="360" class="mono small">line = 0x8000_0080</text>
 
   <rect x="55" y="405" width="245" height="220" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
   <text x="177" y="440" text-anchor="middle" class="sans heading">Compact record</text>
@@ -47,12 +48,13 @@
 
   <rect x="350" y="138" width="350" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="367" y="164" class="sans domain">INSTRUCTION PAIR</text>
-  <rect x="370" y="185" width="310" height="185" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="3"/>
+  <rect x="370" y="185" width="310" height="195" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="3"/>
   <text x="525" y="220" text-anchor="middle" class="sans heading">1. Record request</text>
   <text x="395" y="260" class="mono body">ecg.flow.load.compact</text>
   <text x="395" y="296" class="sans body">returns the packed record</text>
   <text x="395" y="330" class="sans body">sets the FlowThrough flag</text>
-  <text x="525" y="354" text-anchor="middle" class="sans small">record miss: fill private cache, skip LLC insert</text>
+  <text x="525" y="352" text-anchor="middle" class="sans tiny">record miss: fill private cache</text>
+  <text x="525" y="369" text-anchor="middle" class="sans tiny">skip LLC insertion</text>
 
   <rect x="370" y="405" width="310" height="220" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
   <text x="525" y="440" text-anchor="middle" class="sans heading">2. Property request</text>
@@ -64,7 +66,7 @@
 
   <rect x="730" y="138" width="350" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="747" y="164" class="sans domain">O3 REQUEST CONSTRUCTION</text>
-  <rect x="750" y="185" width="310" height="185" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
+  <rect x="750" y="185" width="310" height="195" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
   <text x="905" y="220" text-anchor="middle" class="sans heading">AGU and LSQ</text>
   <text x="775" y="260" class="sans body">translate and check ordering</text>
   <text x="775" y="294" class="sans body">create the ordinary load Request</text>
@@ -76,11 +78,12 @@
   <text x="775" y="512" class="mono body">epochs=(12,40)</text>
   <text x="775" y="544" class="mono body">current=10, context=k</text>
   <text x="775" y="576" class="sans body">attached before the cache hierarchy</text>
-  <text x="905" y="610" text-anchor="middle" class="sans small">merge rules protect extension consistency</text>
+  <text x="905" y="601" text-anchor="middle" class="sans tiny">merge rules protect extension</text>
+  <text x="905" y="618" text-anchor="middle" class="sans tiny">consistency</text>
 
   <rect x="1110" y="138" width="455" height="535" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
   <text x="1127" y="164" class="sans domain">CACHE AND COMPLETION</text>
-  <rect x="1130" y="185" width="415" height="185" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
+  <rect x="1130" y="185" width="415" height="195" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
   <text x="1337" y="220" text-anchor="middle" class="sans heading">L1D / L2 / LLC</text>
   <text x="1155" y="260" class="sans body">private hits return normally</text>
   <text x="1155" y="294" class="sans body">LLC hit or fill consumes ReuseBind</text>
@@ -91,7 +94,7 @@
   <text x="1155" y="480" class="sans body">property value writes back to fd</text>
   <text x="1155" y="514" class="sans body">ROB entry completes and retires</text>
   <text x="1155" y="548" class="mono body">distance = min(2, 30) = 2</text>
-  <text x="1155" y="582" class="sans body">a later LLC victim decision may use distance 2</text>
+  <text x="1155" y="582" class="sans body">later victim selection may use distance 2</text>
   <text x="1337" y="608" text-anchor="middle" class="sans small">the property request is never bypassed</text>
 
   <path d="M320 515 H350" class="arrow"/>
