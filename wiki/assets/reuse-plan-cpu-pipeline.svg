@@ -1,15 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc" fill="#27313A">
-  <title id="title">ReuseBind and FlowThrough through an out-of-order RISC-V pipeline</title>
-  <desc id="desc">Two separate horizontal lanes show the stage-by-stage path of a ReuseBind property load and a ReusePlan record load with FlowThrough. A third panel shows the shared cache request and response path. Connectors remain inside their own lanes and do not cross.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="850" viewBox="0 0 1600 850" role="img" aria-labelledby="title desc" fill="#27313A">
+  <title id="title">Detailed ECG RISC-V pipeline flow</title>
+  <desc id="desc">Five large columns trace the record load, decode and dependency, property instruction, exact Request and cache path, and LLC completion using the shared ECG stage numbering.</desc>
   <defs>
-    <marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
-      <path d="M0 0 L8 3.5 L0 7 Z" fill="#1769C2"/>
-    </marker>
-    <marker id="teal-arrow" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
-      <path d="M0 0 L8 3.5 L0 7 Z" fill="#1769C2"/>
-    </marker>
-    <marker id="coral-arrow" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
-      <path d="M0 0 L8 3.5 L0 7 Z" fill="#1769C2"/>
+    <marker id="arrow" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/>
     </marker>
     <style>
       :root{color-scheme:light dark}
@@ -18,214 +12,181 @@
         [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
         [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
         [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
-        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#EEE9FF"]{fill:#302C3C}
       }
-      .title{font:700 32px Arial,sans-serif}
-      .subtitle{font:400 17px Arial,sans-serif}
-      .column{font:700 15px Arial,sans-serif}
-      .lane-title{font:700 22px Arial,sans-serif}
-      .lane-note{font:400 15px Arial,sans-serif}
-      .box-title{font:700 16px Arial,sans-serif}
-      .body{font:400 14px Arial,sans-serif}
-      .mono{font:700 14px 'Courier New',monospace}
-      .small{font:400 14px Arial,sans-serif}
-      .panel-title{font:700 20px Arial,sans-serif}
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:34px;font-weight:700}
+      .subtitle{font-size:17px}
+      .heading{font-size:20px;font-weight:700}
+      .label{font-size:16px;font-weight:700}
+      .body{font-size:15px}
+      .small{font-size:14px}
+      .arrow{fill:none;stroke:#1769C2;stroke-width:3;marker-end:url(#arrow)}
+      .slot{fill:#FFFFFF;stroke:#27313A;stroke-width:2}
     </style>
   </defs>
 
-  <rect width="1600" height="980" fill="#FFFFFF"/>
-  <text x="42" y="44" class="title">Stage-by-stage RISC-V instruction flow</text>
-  <text x="42" y="70" class="subtitle">Each colored lane owns a separate request. The common cache path is shown below on dedicated forward and response tracks.</text>
+  <rect width="1600" height="850" fill="#FFFFFF"/>
+  <text x="40" y="50" class="sans title">Detailed ECG RISC-V pipeline flow</text>
+  <text x="40" y="79" class="sans subtitle">The same stages 2–6 used by the graph and cache architecture figures.</text>
+  <line x1="40" y1="103" x2="1560" y2="103" stroke="#27313A" stroke-width="2"/>
 
-  <g fill="#F8F6EC" stroke="#27313A" stroke-width="2">
-    <rect x="35" y="102" width="160" height="54" rx="9"/>
-    <rect x="225" y="102" width="160" height="54" rx="9"/>
-    <rect x="415" y="102" width="160" height="54" rx="9"/>
-    <rect x="605" y="102" width="160" height="54" rx="9"/>
-    <rect x="795" y="102" width="160" height="54" rx="9"/>
-    <rect x="985" y="102" width="175" height="54" rx="9"/>
-    <rect x="1190" y="102" width="180" height="54" rx="9"/>
-    <rect x="1400" y="102" width="165" height="54" rx="9"/>
-  </g>
-  <g text-anchor="middle" class="column">
-    <text x="115" y="135">Fetch</text>
-    <text x="305" y="135">Decode</text>
-    <text x="495" y="135">Rename / Dispatch</text>
-    <text x="685" y="135">Issue / Read</text>
-    <text x="875" y="135">Execute / AGU</text>
-    <text x="1072" y="135">LSQ / Request</text>
-    <text x="1280" y="135">Cache action</text>
-    <text x="1482" y="135">Complete</text>
+  <g stroke="#27313A" stroke-width="3">
+    <rect x="35" y="130" width="280" height="580" rx="11" fill="#F7DEDC"/>
+    <rect x="340" y="130" width="280" height="580" rx="11" fill="#FFF0D8"/>
+    <rect x="645" y="130" width="280" height="580" rx="11" fill="#E7F7EA"/>
+    <rect x="950" y="130" width="280" height="580" rx="11" fill="#EDF5FF"/>
+    <rect x="1255" y="130" width="310" height="580" rx="11" fill="#EEE9FF"/>
   </g>
 
-  <rect x="28" y="178" width="1544" height="260" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
-  <text x="48" y="211" class="lane-title">ReuseBind property request</text>
-  <text x="48" y="233" class="lane-note">ecg.bind.load.* uses a computed address; ecg.bind.iload.* forms an indexed address from the plan.</text>
+  <!-- Stage 2 -->
+  <circle cx="63" cy="158" r="16" fill="#27313A"/>
+  <text x="63" y="164" text-anchor="middle" fill="#FFFFFF" class="sans label">2</text>
+  <text x="88" y="164" class="sans heading">Record load</text>
+  <rect x="55" y="188" width="240" height="50" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="175" y="220" text-anchor="middle" class="mono label">ecg.flow.load.compact</text>
 
-  <g fill="#E7F7EA" stroke="#27313A" stroke-width="2">
-    <rect x="35" y="255" width="160" height="145" rx="10"/>
-    <rect x="225" y="255" width="160" height="145" rx="10"/>
-    <rect x="415" y="255" width="160" height="145" rx="10"/>
-    <rect x="605" y="255" width="160" height="145" rx="10"/>
-    <rect x="795" y="255" width="160" height="145" rx="10"/>
-    <rect x="985" y="255" width="175" height="145" rx="10"/>
-    <rect x="1190" y="255" width="180" height="145" rx="10"/>
-    <rect x="1400" y="255" width="165" height="145" rx="10"/>
-  </g>
-
-  <text x="52" y="282" class="box-title">Instruction bytes</text>
-  <text x="52" y="307" class="body">fetch custom-0</text>
-  <text x="52" y="329" class="body">normal I-cache path</text>
-  <text x="52" y="351" class="body">recovery unchanged</text>
-
-  <text x="242" y="282" class="box-title">Classify operation</text>
-  <text x="242" y="307" class="mono">ecg.bind.load.*</text>
-  <text x="242" y="329" class="mono">ecg.bind.iload.*</text>
-  <text x="242" y="351" class="body">read rd / rs1 / rs2</text>
-
-  <text x="432" y="282" class="box-title">Allocate state</text>
-  <text x="432" y="307" class="body">rename rd or fd</text>
-  <text x="432" y="329" class="body">allocate ROB and LQ</text>
-  <text x="432" y="351" class="body">track both sources</text>
-
-  <text x="622" y="282" class="box-title">Wait for operands</text>
-  <text x="622" y="307" class="body">rs1: address or base</text>
-  <text x="622" y="329" class="body">rs2: ReusePlan</text>
-  <text x="622" y="351" class="body">issue when ready</text>
-
-  <text x="812" y="282" class="box-title">Form address</text>
-  <text x="812" y="307" class="mono">load: EA = rs1</text>
-  <text x="812" y="329" class="mono">iload: base +</text>
-  <text x="812" y="351" class="mono">dest x element size</text>
-  <text x="812" y="373" class="body">send both to LSQ</text>
-
-  <text x="1002" y="282" class="box-title">Build exact Request</text>
-  <text x="1002" y="307" class="body">run ordering checks</text>
-  <text x="1002" y="329" class="body">attach ReuseBind</text>
-  <text x="1002" y="351" class="body">add context + epoch</text>
-
-  <text x="1207" y="282" class="box-title">Property access</text>
-  <text x="1207" y="307" class="body">normal cache lookup</text>
-  <text x="1207" y="329" class="body">consume hint at LLC</text>
-  <text x="1207" y="351" class="body">stamp hit or fill</text>
-
-  <text x="1417" y="282" class="box-title">Return property</text>
-  <text x="1417" y="307" class="body">write integer / FP</text>
-  <text x="1417" y="329" class="body">complete ROB entry</text>
-  <text x="1417" y="351" class="body">retire in order</text>
-
-  <g stroke="#1769C2" stroke-width="3" marker-end="url(#teal-arrow)">
-    <line x1="195" y1="327" x2="221" y2="327"/>
-    <line x1="385" y1="327" x2="411" y2="327"/>
-    <line x1="575" y1="327" x2="601" y2="327"/>
-    <line x1="765" y1="327" x2="791" y2="327"/>
-    <line x1="955" y1="327" x2="981" y2="327"/>
-    <line x1="1160" y1="327" x2="1186" y2="327"/>
-    <line x1="1370" y1="327" x2="1396" y2="327"/>
-  </g>
-
-  <rect x="28" y="455" width="1544" height="260" rx="12" fill="none" stroke="#9AA3AD" stroke-width="2" stroke-dasharray="8 7"/>
-  <text x="48" y="488" class="lane-title">ReusePlan record request</text>
-  <text x="48" y="510" class="lane-note">ecg.plan.load* uses ordinary placement; ecg.flow.load* carries the FlowThrough request flag.</text>
-
-  <g fill="#F7DEDC" stroke="#27313A" stroke-width="2">
-    <rect x="35" y="532" width="160" height="145" rx="10"/>
-    <rect x="225" y="532" width="160" height="145" rx="10"/>
-    <rect x="415" y="532" width="160" height="145" rx="10"/>
-    <rect x="605" y="532" width="160" height="145" rx="10"/>
-    <rect x="795" y="532" width="160" height="145" rx="10"/>
-    <rect x="985" y="532" width="175" height="145" rx="10"/>
-    <rect x="1190" y="532" width="180" height="145" rx="10"/>
-    <rect x="1400" y="532" width="165" height="145" rx="10"/>
-  </g>
-
-  <text x="52" y="559" class="box-title">Instruction bytes</text>
-  <text x="52" y="584" class="body">fetch custom-0</text>
-  <text x="52" y="606" class="body">normal I-cache path</text>
-  <text x="52" y="628" class="body">frontend unchanged</text>
-
-  <text x="242" y="559" class="box-title">Choose placement</text>
-  <text x="242" y="584" class="mono">ecg.plan.load*</text>
-  <text x="242" y="606" class="mono">ecg.flow.load*</text>
-  <text x="242" y="628" class="body">read rd + rs1</text>
-
-  <text x="432" y="559" class="box-title">Allocate state</text>
-  <text x="432" y="584" class="body">rename rd</text>
-  <text x="432" y="606" class="body">allocate ROB and LQ</text>
-  <text x="432" y="628" class="body">track record address</text>
-
-  <text x="622" y="559" class="box-title">Wait for address</text>
-  <text x="622" y="584" class="body">rs1: record address</text>
-  <text x="622" y="606" class="body">no plan operand</text>
-  <text x="622" y="628" class="body">issue when ready</text>
-
-  <text x="812" y="559" class="box-title">Form record EA</text>
-  <text x="812" y="584" class="mono">EA = rs1 + imm</text>
-  <text x="812" y="606" class="body">compact form widens</text>
-  <text x="812" y="628" class="body">send request to LSQ</text>
-
-  <text x="1002" y="559" class="box-title">Build Request</text>
-  <text x="1002" y="584" class="body">run ordering checks</text>
-  <text x="1002" y="606" class="body">flow sets FT flag</text>
-  <text x="1002" y="628" class="body">plan clears FT flag</text>
-
-  <text x="1207" y="559" class="box-title">Record access</text>
-  <text x="1207" y="584" class="body">all hits remain normal</text>
-  <text x="1207" y="606" class="body">private fill on miss</text>
-  <text x="1207" y="628" class="body">flow skips LLC insert</text>
-
-  <text x="1417" y="559" class="box-title">Return record</text>
-  <text x="1417" y="584" class="body">write plan to rd</text>
-  <text x="1417" y="606" class="body">complete ROB entry</text>
-  <text x="1417" y="628" class="body">retire in order</text>
-
-  <g stroke="#1769C2" stroke-width="3" marker-end="url(#coral-arrow)">
-    <line x1="195" y1="604" x2="221" y2="604"/>
-    <line x1="385" y1="604" x2="411" y2="604"/>
-    <line x1="575" y1="604" x2="601" y2="604"/>
-    <line x1="765" y1="604" x2="791" y2="604"/>
-    <line x1="955" y1="604" x2="981" y2="604"/>
-    <line x1="1160" y1="604" x2="1186" y2="604"/>
-    <line x1="1370" y1="604" x2="1396" y2="604"/>
-  </g>
-
-  <rect x="110" y="747" width="1380" height="185" rx="12" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <text x="135" y="778" class="panel-title">Common cache path used by both requests</text>
-  <text x="135" y="799" class="small">Forward requests use the upper track; data and fill responses return on the lower track.</text>
-
-  <g fill="#EDF5FF" stroke="#27313A" stroke-width="2">
-    <rect x="285" y="815" width="150" height="72" rx="10"/>
-    <rect x="505" y="815" width="150" height="72" rx="10"/>
-    <rect x="725" y="815" width="150" height="72" rx="10"/>
-    <rect x="945" y="815" width="150" height="72" rx="10"/>
-    <rect x="1165" y="815" width="150" height="72" rx="10"/>
-  </g>
   <g text-anchor="middle">
-    <text x="360" y="842" class="box-title">D-TLB</text>
-    <text x="360" y="864" class="body">translate VA to PA</text>
-    <text x="580" y="842" class="box-title">L1D / L2</text>
-    <text x="580" y="864" class="body">normal hit and fill</text>
-    <text x="800" y="842" class="box-title">MSHR / fill</text>
-    <text x="800" y="864" class="body">merge request state</text>
-    <text x="1020" y="842" class="box-title">LLC</text>
-    <text x="1020" y="864" class="body">consume ReuseBind</text>
-    <text x="1240" y="842" class="box-title">Memory</text>
-    <text x="1240" y="864" class="body">service miss</text>
+    <rect x="55" y="270" width="48" height="58" rx="7" class="slot"/>
+    <rect x="117" y="270" width="48" height="58" rx="7" class="slot"/>
+    <rect x="179" y="270" width="48" height="58" rx="7" class="slot"/>
+    <rect x="241" y="270" width="48" height="58" rx="7" class="slot"/>
+    <text x="79" y="295" class="sans small">Fetch</text><text x="79" y="316" class="sans small">I$</text>
+    <text x="141" y="295" class="sans small">Decode</text><text x="141" y="316" class="sans small">role</text>
+    <text x="203" y="295" class="sans small">AGU</text><text x="203" y="316" class="sans small">edge EA</text>
+    <text x="265" y="295" class="sans small">LQ</text><text x="265" y="316" class="sans small">FT = 1</text>
   </g>
+  <path d="M103 299 H113" class="arrow"/>
+  <path d="M165 299 H175" class="arrow"/>
+  <path d="M227 299 H237" class="arrow"/>
 
-  <g stroke="#1769C2" stroke-width="3" marker-end="url(#arrow)">
-    <line x1="435" y1="833" x2="501" y2="833"/>
-    <line x1="655" y1="833" x2="721" y2="833"/>
-    <line x1="875" y1="833" x2="941" y2="833"/>
-    <line x1="1095" y1="833" x2="1161" y2="833"/>
-    <line x1="1165" y1="874" x2="1099" y2="874"/>
-    <line x1="945" y1="874" x2="879" y2="874"/>
-    <line x1="725" y1="874" x2="659" y2="874"/>
-    <line x1="505" y1="874" x2="439" y2="874"/>
+  <rect x="55" y="360" width="240" height="120" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="75" y="388" class="sans label">Record Request</text>
+  <text x="75" y="415" class="mono small">addr = edge line</text>
+  <text x="75" y="438" class="mono small">size 4 | FT 1 | sequence s</text>
+  <text x="75" y="463" class="sans small">normal ordering and replay</text>
+
+  <rect x="55" y="510" width="240" height="82" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="175" y="539" text-anchor="middle" class="sans label">Record response → rd</text>
+  <text x="175" y="566" text-anchor="middle" class="mono small">dest 42 | T2 | e1 12 | e2 40</text>
+  <text x="175" y="638" text-anchor="middle" class="sans small">FlowThrough changes only</text>
+  <text x="175" y="660" text-anchor="middle" class="sans small">record placement.</text>
+
+  <!-- Stage 3 -->
+  <circle cx="368" cy="158" r="16" fill="#27313A"/>
+  <text x="368" y="164" text-anchor="middle" fill="#FFFFFF" class="sans label">3</text>
+  <text x="393" y="164" class="sans heading">Decode + dependency</text>
+
+  <rect x="360" y="188" width="240" height="90" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="480" y="216" text-anchor="middle" class="sans label">custom-0 decode</text>
+  <text x="380" y="245" class="sans body">role · width · rd/fd · rs1/rs2</text>
+  <text x="380" y="267" class="sans small">format and context CSRs already set</text>
+
+  <rect x="360" y="305" width="240" height="86" rx="8" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="480" y="334" text-anchor="middle" class="sans label">ReusePlan physical register</text>
+  <text x="480" y="363" text-anchor="middle" class="mono small">42 | T2 | 12 | 40</text>
+
+  <rect x="360" y="420" width="240" height="100" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="480" y="449" text-anchor="middle" class="sans label">Issue queue</text>
+  <rect x="378" y="463" width="204" height="23" fill="#F7DEDC" stroke="#27313A"/>
+  <rect x="378" y="486" width="204" height="23" fill="#E7F7EA" stroke="#27313A"/>
+  <text x="388" y="480" class="mono small">record load: done</text>
+  <text x="388" y="503" class="mono small">property load: wait both</text>
+
+  <rect x="360" y="550" width="240" height="82" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="480" y="579" text-anchor="middle" class="sans body">record rd becomes property rs2</text>
+  <text x="480" y="605" text-anchor="middle" class="sans small">ROB and rename preserve pairing</text>
+
+  <!-- Stage 4 -->
+  <circle cx="673" cy="158" r="16" fill="#27313A"/>
+  <text x="673" y="164" text-anchor="middle" fill="#FFFFFF" class="sans label">4</text>
+  <text x="698" y="164" class="sans heading">Property instruction</text>
+
+  <rect x="665" y="188" width="240" height="92" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="785" y="216" text-anchor="middle" class="mono label">ecg.bind.load.f32</text>
+  <text x="685" y="245" class="sans body">rs1 = computed address</text>
+  <text x="685" y="267" class="sans body">rs2 = ReusePlan</text>
+
+  <rect x="665" y="305" width="240" height="112" rx="8" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="785" y="333" text-anchor="middle" class="mono label">ecg.bind.iload.*</text>
+  <text x="685" y="362" class="sans body">rs1 = property base</text>
+  <text x="685" y="384" class="sans body">rs2 contains destination</text>
+  <text x="685" y="406" class="sans small">EA = base + dest × element size</text>
+
+  <rect x="665" y="445" width="240" height="82" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="785" y="474" text-anchor="middle" class="sans label">AGU + load queue</text>
+  <text x="685" y="500" class="sans body">property EA · size 4 · FT 0</text>
+
+  <rect x="665" y="555" width="240" height="82" rx="8" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="785" y="584" text-anchor="middle" class="sans label">Typed property load</text>
+  <text x="785" y="607" text-anchor="middle" class="sans small">one property instruction</text>
+  <text x="785" y="628" text-anchor="middle" class="sans small">owns both inputs</text>
+
+  <!-- Stage 5 -->
+  <circle cx="978" cy="158" r="16" fill="#27313A"/>
+  <text x="978" y="164" text-anchor="middle" fill="#FFFFFF" class="sans label">5</text>
+  <text x="1003" y="164" class="sans heading">Request + cache path</text>
+
+  <rect x="970" y="188" width="240" height="88" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="1090" y="216" text-anchor="middle" class="sans label">LSQ Request</text>
+  <text x="990" y="245" class="sans body">ordering + replay checks</text>
+  <text x="990" y="267" class="sans small">one exact dynamic sequence</text>
+
+  <rect x="970" y="302" width="240" height="112" rx="8" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="1090" y="330" text-anchor="middle" class="sans label">ReuseBind extension</text>
+  <text x="1090" y="357" text-anchor="middle" class="mono small">dest 42 | T2 | e1 12 | e2 40</text>
+  <text x="1090" y="381" text-anchor="middle" class="mono small">current 10 | ctx k | seq s</text>
+  <text x="1090" y="403" text-anchor="middle" class="sans small">travels on the same Request</text>
+
+  <g text-anchor="middle">
+    <rect x="970" y="445" width="50" height="62" rx="7" class="slot"/>
+    <rect x="1032" y="445" width="50" height="62" rx="7" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <rect x="1094" y="445" width="50" height="62" rx="7" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <rect x="1156" y="445" width="54" height="62" rx="7" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+    <text x="995" y="471" class="sans small">TLB</text><text x="995" y="493" class="sans small">VA/PA</text>
+    <text x="1057" y="471" class="sans small">L1D</text><text x="1057" y="493" class="sans small">hit</text>
+    <text x="1119" y="471" class="sans small">L2</text><text x="1119" y="493" class="sans small">hit</text>
+    <text x="1183" y="471" class="sans small">MSHR</text><text x="1183" y="493" class="sans small">merge</text>
   </g>
+  <path d="M1020 476 H1028" class="arrow"/>
+  <path d="M1082 476 H1090" class="arrow"/>
+  <path d="M1144 476 H1152" class="arrow"/>
 
-  <circle cx="135" cy="949" r="5" fill="#1769C2"/>
-  <text x="148" y="953" class="small">ReuseBind metadata belongs only to the property request.</text>
-  <circle cx="600" cy="949" r="5" fill="#1769C2"/>
-  <text x="613" y="953" class="small">FlowThrough placement belongs only to the record request.</text>
+  <rect x="970" y="545" width="240" height="90" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="990" y="573" class="sans body">same requestor + context</text>
+  <text x="990" y="597" class="sans body">newest sequence owns metadata</text>
+  <text x="990" y="621" class="sans small">conflict invalidates ReuseBind</text>
+
+  <!-- Stage 6 -->
+  <circle cx="1283" cy="158" r="16" fill="#27313A"/>
+  <text x="1283" y="164" text-anchor="middle" fill="#FFFFFF" class="sans label">6</text>
+  <text x="1308" y="164" class="sans heading">LLC + completion</text>
+
+  <rect x="1275" y="188" width="270" height="190" rx="8" fill="#FFFFFF" stroke="#27313A" stroke-width="2"/>
+  <text x="1410" y="216" text-anchor="middle" class="sans label">LLC property line</text>
+  <rect x="1295" y="236" width="230" height="68" fill="#FFF0D8" stroke="#1769C2" stroke-width="3"/>
+  <text x="1310" y="262" class="sans body">line 0x8000_0080 · RRPV 7</text>
+  <text x="1310" y="287" class="sans body">T2 · e1 12 · e2 40</text>
+  <text x="1295" y="334" class="mono small">d1 2 | d2 30 | nearest 2</text>
+  <text x="1295" y="360" class="sans small">RRIP eligible → farthest reuse victim</text>
+
+  <rect x="1275" y="405" width="270" height="112" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="1410" y="434" text-anchor="middle" class="sans label">Request-specific action</text>
+  <text x="1295" y="463" class="sans body">property: store metadata on hit/fill</text>
+  <text x="1295" y="487" class="sans body">record: FlowThrough skips miss insert</text>
+  <text x="1295" y="509" class="sans small">all hits and private fills remain normal</text>
+
+  <rect x="1275" y="545" width="270" height="90" rx="8" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="1410" y="574" text-anchor="middle" class="sans label">Completion</text>
+  <text x="1295" y="602" class="sans body">data → integer/FP destination</text>
+  <text x="1295" y="624" class="sans small">ROB complete → in-order retirement</text>
+
+  <path d="M315 420 H336" class="arrow"/>
+  <path d="M620 420 H641" class="arrow"/>
+  <path d="M925 420 H946" class="arrow"/>
+  <path d="M1230 420 H1251" class="arrow"/>
+
+  <rect x="170" y="745" width="1260" height="55" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="800" y="778" text-anchor="middle" class="sans body">Architectural contract: two loads, one explicit rd→rs2 dependency, no metadata mailbox, and one request-bound property access.</text>
 </svg>

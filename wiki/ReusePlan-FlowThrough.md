@@ -145,8 +145,9 @@ separate request roles.
 
 ![ReuseBind and FlowThrough through the O3 pipeline](assets/reuse-plan-cpu-pipeline.svg)
 
-**Figure 4B.** Separate lanes follow the property request and record request
-through every processor stage without crossing connectors.
+**Figure 4B.** Five correlated columns follow the record result through decode,
+the property instruction, exact Request construction, LLC metadata, and
+completion.
 
 The [detailed RISC-V instruction path](RISC-V-Instruction-Path) explains the
 operand dependencies, address generation, LSQ state, request extensions,

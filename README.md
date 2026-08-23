@@ -95,6 +95,12 @@ provides the numeric example and structure-level processor view.
 ECG Next includes an experimental RISC-V custom-0 implementation in gem5 and
 build support for matching RISC-V graph-kernel binaries:
 
+![Basic ECG RISC-V instruction flow](wiki/assets/riscv-basic-flow.svg)
+
+The record and property remain two loads. Decode and rename make the record
+result an explicit `rs2` dependency of the property instruction; the LSQ then
+binds metadata to that one property Request.
+
 | Instruction family | Role |
 |---|---|
 | `ecg.plan.load*` | Load a ReusePlan record with ordinary placement |

@@ -7,6 +7,16 @@ measured guest executes the same operations decoded by the simulator.
 This is a research ISA extension. It is not a ratified RISC-V extension, an
 upstream gem5 ISA feature, or a claim of fabricated processor support.
 
+## Basic request flow
+
+![Basic ECG RISC-V instruction flow](assets/riscv-basic-flow.svg)
+
+The basic flow uses the same stages as the graph and cache figures: **2**
+record load, **3** decode and dependency, **4** property instruction, **5**
+exact Request and cache path, and **6** LLC metadata and completion. The record
+and property remain two loads; the record result becomes the property
+instruction's explicit `rs2` operand.
+
 ## Instruction family
 
 ![ECG Next experimental RISC-V instruction family](assets/riscv-instruction-family.svg)
@@ -25,24 +35,25 @@ and the bit-preserving floating-point PageRank load. They share the same
 semantic fields: destination, reuse tier, two future epochs, current epoch, and
 execution context.
 
-## Stage-by-stage flow
+## Detailed pipeline flow
 
 ![ReuseBind and FlowThrough through an out-of-order RISC-V pipeline](assets/reuse-plan-cpu-pipeline.svg)
 
-The figure uses one lane per request. Arrows remain inside their lane until the
-common cache path, avoiding the ambiguity of drawing metadata, data, and
-control on the same connector.
+The five columns preserve the same stages 2–6. Each column shows only the
+architectural state introduced at that handoff, so the ReusePlan can be
+followed from `rd`, through the property instruction's `rs2`, into the exact
+Request, and finally into LLC metadata.
 
 For a structure-level view of the frontend FIFO, issue queue, ROB, load queue,
 MSHR, LLC ways, property-line words, and metadata fields, see the
 [property-to-cache walkthrough](Property-to-Cache-Walkthrough).
 
-### 1. Fetch
+### Fetch
 
 The custom-0 instruction follows the normal frontend path. Fetch, prediction,
 I-cache access, branch recovery, and instruction buffering are unchanged.
 
-### 2. Decode
+### Decode
 
 Decode identifies one of four roles:
 
@@ -61,7 +72,7 @@ vertices in the same epoch reuse the existing architectural value. This
 preserves exact Request metadata without serializing the O3 pipeline on every
 vertex.
 
-### 3. Rename and dispatch
+### Rename and dispatch
 
 The destination register is renamed normally. The instruction allocates its
 reorder-buffer and load-queue state:
@@ -72,14 +83,14 @@ reorder-buffer and load-queue state:
 
 No shared metadata mailbox is required for the O3 path.
 
-### 4. Issue and register read
+### Issue and register read
 
 A record load issues when its address source is ready. A ReuseBind property
 load waits for both the address/base operand and the ReusePlan operand. This
 dependency keeps the plan paired with the dynamic property-load instruction
 through out-of-order scheduling.
 
-### 5. Execute and address generation
+### Execute and address generation
 
 The address-generation unit computes:
 
@@ -90,7 +101,7 @@ The address-generation unit computes:
 The instruction encoding and effective-address calculation are fixed before
 the request enters the load/store queue.
 
-### 6. Load/store queue and Request construction
+### Load/store queue and Request construction
 
 The load/store queue performs normal ordering and replay checks. It then builds
 the memory Request:
@@ -105,7 +116,7 @@ newest dynamic sequence supplies the representative metadata. Equal-sequence
 payload disagreement, mixed governed/ungoverned targets, or context
 disagreement marks the merged metadata invalid.
 
-### 7. Cache hierarchy
+### Cache hierarchy
 
 All requests use normal address translation and private-cache lookup.
 
@@ -124,7 +135,7 @@ For a FlowThrough record request:
 
 The property request is never bypassed.
 
-### 8. Completion and retirement
+### Completion and retirement
 
 Loaded data returns through the normal response path. Integer and
 floating-point destinations write back normally, the reorder-buffer entry is
