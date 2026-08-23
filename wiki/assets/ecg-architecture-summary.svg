@@ -21,7 +21,7 @@
       .heading{font-size:20px;font-weight:700}
       .label{font-size:16px;font-weight:700}
       .body{font-size:15px}
-      .small{font-size:13px}
+      .small{font-size:14px}
       .arrow{fill:none;stroke:#1769C2;stroke-width:3;marker-end:url(#arrow)}
     </style>
   </defs>
@@ -64,7 +64,7 @@
   <line x1="650" y1="233" x2="805" y2="233" stroke="#27313A"/>
   <text x="727" y="257" text-anchor="middle" class="sans body">address + tier</text>
   <text x="727" y="280" text-anchor="middle" class="sans body">+ future epochs</text>
-  <text x="727" y="328" text-anchor="middle" class="sans small">metadata stays request-bound</text>
+  <text x="727" y="328" text-anchor="middle" class="sans small">request-bound metadata</text>
 
   <circle cx="915" cy="155" r="17" fill="#27313A"/>
   <text x="915" y="161" text-anchor="middle" fill="#FFFFFF" class="sans label">4</text>

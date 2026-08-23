@@ -10,12 +10,12 @@
         [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
         [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
       }
-      .title{font:700 28px Arial,sans-serif;fill:#27313A}
-      .subtitle{font:400 15px Arial,sans-serif;fill:#27313A}
-      .epoch{font:700 14px Arial,sans-serif;fill:#27313A}
-      .line-name{font:700 20px Arial,sans-serif;fill:#27313A}
-      .body{font:400 14px Arial,sans-serif;fill:#27313A}
-      .distance{font:700 18px Arial,sans-serif;fill:#27313A}
+      .title{font:700 30px Arial,sans-serif}
+      .subtitle{font:400 17px Arial,sans-serif}
+      .epoch{font:700 15px Arial,sans-serif}
+      .line-name{font:700 22px Arial,sans-serif}
+      .body{font:400 16px Arial,sans-serif}
+      .distance{font:700 20px Arial,sans-serif}
       .result{font:700 18px Arial,sans-serif;fill:#ffffff}
     </style>
   </defs>

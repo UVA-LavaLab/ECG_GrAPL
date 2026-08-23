@@ -20,16 +20,16 @@
         [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
         [fill="#EEE9FF"]{fill:#302C3C}[stroke="#9AA3AD"]{stroke:#747D86}
       }
-      .title{font:700 30px Arial,sans-serif;fill:#27313A}
-      .subtitle{font:400 15px Arial,sans-serif;fill:#27313A}
-      .column{font:700 14px Arial,sans-serif;fill:#27313A}
-      .lane-title{font:700 20px Arial,sans-serif;fill:#27313A}
-      .lane-note{font:400 13px Arial,sans-serif;fill:#27313A}
-      .box-title{font:700 14px Arial,sans-serif;fill:#27313A}
-      .body{font:400 11px Arial,sans-serif;fill:#27313A}
-      .mono{font:700 11px 'Courier New',monospace;fill:#27313A}
-      .small{font:400 11px Arial,sans-serif;fill:#27313A}
-      .panel-title{font:700 18px Arial,sans-serif;fill:#27313A}
+      .title{font:700 32px Arial,sans-serif}
+      .subtitle{font:400 17px Arial,sans-serif}
+      .column{font:700 15px Arial,sans-serif}
+      .lane-title{font:700 22px Arial,sans-serif}
+      .lane-note{font:400 15px Arial,sans-serif}
+      .box-title{font:700 16px Arial,sans-serif}
+      .body{font:400 14px Arial,sans-serif}
+      .mono{font:700 14px 'Courier New',monospace}
+      .small{font:400 14px Arial,sans-serif}
+      .panel-title{font:700 20px Arial,sans-serif}
     </style>
   </defs>
 
@@ -74,14 +74,14 @@
   </g>
 
   <text x="52" y="282" class="box-title">Instruction bytes</text>
-  <text x="52" y="307" class="body">fetch custom-0 opcode</text>
+  <text x="52" y="307" class="body">fetch custom-0</text>
   <text x="52" y="329" class="body">normal I-cache path</text>
-  <text x="52" y="351" class="body">branch recovery unchanged</text>
+  <text x="52" y="351" class="body">recovery unchanged</text>
 
   <text x="242" y="282" class="box-title">Classify operation</text>
   <text x="242" y="307" class="mono">ecg.bind.load.*</text>
   <text x="242" y="329" class="mono">ecg.bind.iload.*</text>
-  <text x="242" y="351" class="body">read rd, rs1, rs2 fields</text>
+  <text x="242" y="351" class="body">read rd / rs1 / rs2</text>
 
   <text x="432" y="282" class="box-title">Allocate state</text>
   <text x="432" y="307" class="body">rename rd or fd</text>
@@ -90,29 +90,29 @@
 
   <text x="622" y="282" class="box-title">Wait for operands</text>
   <text x="622" y="307" class="body">rs1: address or base</text>
-  <text x="622" y="329" class="body">rs2: ReusePlan record</text>
-  <text x="622" y="351" class="body">issue when both are ready</text>
+  <text x="622" y="329" class="body">rs2: ReusePlan</text>
+  <text x="622" y="351" class="body">issue when ready</text>
 
   <text x="812" y="282" class="box-title">Form address</text>
   <text x="812" y="307" class="mono">load: EA = rs1</text>
   <text x="812" y="329" class="mono">iload: base +</text>
   <text x="812" y="351" class="mono">dest x element size</text>
-  <text x="812" y="373" class="body">send EA and plan to LSQ</text>
+  <text x="812" y="373" class="body">send both to LSQ</text>
 
   <text x="1002" y="282" class="box-title">Build exact Request</text>
   <text x="1002" y="307" class="body">run ordering checks</text>
-  <text x="1002" y="329" class="body">attach ReuseBind extension</text>
-  <text x="1002" y="351" class="body">include context and epoch</text>
+  <text x="1002" y="329" class="body">attach ReuseBind</text>
+  <text x="1002" y="351" class="body">add context + epoch</text>
 
   <text x="1207" y="282" class="box-title">Property access</text>
-  <text x="1207" y="307" class="body">normal L1/L2/LLC lookup</text>
-  <text x="1207" y="329" class="body">consume extension at LLC</text>
-  <text x="1207" y="351" class="body">stamp property hit or fill</text>
+  <text x="1207" y="307" class="body">normal cache lookup</text>
+  <text x="1207" y="329" class="body">consume hint at LLC</text>
+  <text x="1207" y="351" class="body">stamp hit or fill</text>
 
   <text x="1417" y="282" class="box-title">Return property</text>
-  <text x="1417" y="307" class="body">write integer or FP result</text>
-  <text x="1417" y="329" class="body">mark ROB entry complete</text>
-  <text x="1417" y="351" class="body">retire in program order</text>
+  <text x="1417" y="307" class="body">write integer / FP</text>
+  <text x="1417" y="329" class="body">complete ROB entry</text>
+  <text x="1417" y="351" class="body">retire in order</text>
 
   <g stroke="#1769C2" stroke-width="3" marker-end="url(#teal-arrow)">
     <line x1="195" y1="327" x2="221" y2="327"/>
@@ -140,14 +140,14 @@
   </g>
 
   <text x="52" y="559" class="box-title">Instruction bytes</text>
-  <text x="52" y="584" class="body">fetch custom-0 opcode</text>
+  <text x="52" y="584" class="body">fetch custom-0</text>
   <text x="52" y="606" class="body">normal I-cache path</text>
-  <text x="52" y="628" class="body">no frontend special case</text>
+  <text x="52" y="628" class="body">frontend unchanged</text>
 
   <text x="242" y="559" class="box-title">Choose placement</text>
   <text x="242" y="584" class="mono">ecg.plan.load*</text>
   <text x="242" y="606" class="mono">ecg.flow.load*</text>
-  <text x="242" y="628" class="body">read rd and rs1 fields</text>
+  <text x="242" y="628" class="body">read rd + rs1</text>
 
   <text x="432" y="559" class="box-title">Allocate state</text>
   <text x="432" y="584" class="body">rename rd</text>
@@ -156,28 +156,28 @@
 
   <text x="622" y="559" class="box-title">Wait for address</text>
   <text x="622" y="584" class="body">rs1: record address</text>
-  <text x="622" y="606" class="body">no plan operand needed</text>
-  <text x="622" y="628" class="body">issue when rs1 is ready</text>
+  <text x="622" y="606" class="body">no plan operand</text>
+  <text x="622" y="628" class="body">issue when ready</text>
 
   <text x="812" y="559" class="box-title">Form record EA</text>
-  <text x="812" y="584" class="mono">EA = rs1 + immediate</text>
-  <text x="812" y="606" class="body">compact form widens result</text>
+  <text x="812" y="584" class="mono">EA = rs1 + imm</text>
+  <text x="812" y="606" class="body">compact form widens</text>
   <text x="812" y="628" class="body">send request to LSQ</text>
 
-  <text x="1002" y="559" class="box-title">Build record Request</text>
+  <text x="1002" y="559" class="box-title">Build Request</text>
   <text x="1002" y="584" class="body">run ordering checks</text>
-  <text x="1002" y="606" class="body">flow form sets request flag</text>
-  <text x="1002" y="628" class="body">plan form sets no flag</text>
+  <text x="1002" y="606" class="body">flow sets FT flag</text>
+  <text x="1002" y="628" class="body">plan clears FT flag</text>
 
   <text x="1207" y="559" class="box-title">Record access</text>
-  <text x="1207" y="584" class="body">private and LLC hits normal</text>
-  <text x="1207" y="606" class="body">private fill on a miss</text>
-  <text x="1207" y="628" class="body">flow form skips LLC insert</text>
+  <text x="1207" y="584" class="body">all hits remain normal</text>
+  <text x="1207" y="606" class="body">private fill on miss</text>
+  <text x="1207" y="628" class="body">flow skips LLC insert</text>
 
   <text x="1417" y="559" class="box-title">Return record</text>
-  <text x="1417" y="584" class="body">write packed plan to rd</text>
-  <text x="1417" y="606" class="body">mark ROB entry complete</text>
-  <text x="1417" y="628" class="body">retire in program order</text>
+  <text x="1417" y="584" class="body">write plan to rd</text>
+  <text x="1417" y="606" class="body">complete ROB entry</text>
+  <text x="1417" y="628" class="body">retire in order</text>
 
   <g stroke="#1769C2" stroke-width="3" marker-end="url(#coral-arrow)">
     <line x1="195" y1="604" x2="221" y2="604"/>
@@ -208,7 +208,7 @@
     <text x="800" y="842" class="box-title">MSHR / fill</text>
     <text x="800" y="864" class="body">merge request state</text>
     <text x="1020" y="842" class="box-title">LLC</text>
-    <text x="1020" y="864" class="body">consume typed metadata</text>
+    <text x="1020" y="864" class="body">consume ReuseBind</text>
     <text x="1240" y="842" class="box-title">Memory</text>
     <text x="1240" y="864" class="body">service miss</text>
   </g>

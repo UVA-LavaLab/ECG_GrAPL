@@ -1,8 +1,8 @@
-<p align="center"><img src="wiki/assets/logo.png" alt="ECG graph logo" width="180"></p>
+<img src="wiki/assets/logo.png" alt="ECG graph logo" width="140">
 
-<h1 align="center">ECG Next</h1>
+# ECG Next
 
-<p align="center"><strong>ReusePlan and FlowThrough cache architecture for irregular graph analytics</strong></p>
+**ReusePlan and FlowThrough cache architecture for irregular graph analytics**
 
 ECG Next carries compact reuse metadata with streamed graph records, binds that
 metadata to the corresponding property request, and uses it to guide
@@ -17,8 +17,35 @@ last-level-cache replacement and placement.
 
 ![ECG architecture at a glance](wiki/assets/ecg-architecture-summary.svg)
 
+### Access lifecycle
+
+1. A graph pass emits a compact ReusePlan for each governed edge. The record
+   carries the destination, reuse tier, and two quantized future-use epochs.
+2. The kernel loads that record with ordinary placement or FlowThrough.
+   FlowThrough changes only what happens after a record misses in the LLC.
+3. The property load waits for the ReusePlan as a register dependency.
+   Computed-address and indexed forms share the same request-bound semantics.
+4. The load-store queue creates an ordinary property Request and attaches the
+   ReuseBind fields before the request enters the cache hierarchy.
+5. An LLC hit or fill stores the tier and future epochs beside the resident
+   property line. MSHR merge rules reject conflicting metadata.
+6. Later replacement first applies the shared RRIP eligibility rule, then uses
+   the nearest future reuse to rank eligible property lines. Load return,
+   writeback, and retirement remain ordinary.
+
+### Mechanism boundaries
+
+| Mechanism | Changes | Preserves |
+|---|---|---|
+| **ReusePlan** | Metadata used to rank eligible LLC victims | Graph result and property address |
+| **ReuseBind** | Metadata carried by one exact property Request | Load ordering, replay, response, and retirement |
+| **FlowThrough** | LLC insertion after a record miss | Private-cache fills, LLC hits, and all property requests |
+
 The shared implementation covers PageRank, BFS, SSSP, Betweenness Centrality,
 and Connected Components.
+
+The [property-to-cache walkthrough](wiki/Property-to-Cache-Walkthrough.md)
+provides the numeric example and structure-level processor view.
 
 ## RISC-V instruction support
 

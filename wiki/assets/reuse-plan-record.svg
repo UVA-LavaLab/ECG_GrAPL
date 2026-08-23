@@ -14,13 +14,13 @@
         [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
         [fill="#EEE9FF"]{fill:#302C3C}
       }
-      .title{font:700 28px Arial,sans-serif;fill:#27313A}
-      .subtitle{font:400 15px Arial,sans-serif;fill:#27313A}
-      .label{font:700 16px Arial,sans-serif;fill:#27313A}
-      .field{font:700 15px Arial,sans-serif;fill:#27313A}
-      .bits{font:400 13px Arial,sans-serif;fill:#27313A}
-      .formula{font:700 22px 'Courier New',monospace;fill:#27313A}
-      .body{font:400 14px Arial,sans-serif;fill:#27313A}
+      .title{font:700 30px Arial,sans-serif}
+      .subtitle{font:400 17px Arial,sans-serif}
+      .label{font:700 18px Arial,sans-serif}
+      .field{font:700 17px Arial,sans-serif}
+      .bits{font:400 15px Arial,sans-serif}
+      .formula{font:700 24px 'Courier New',monospace}
+      .body{font:400 16px Arial,sans-serif}
     </style>
   </defs>
   <rect width="1200" height="430" fill="#FFFFFF"/>
@@ -53,5 +53,5 @@
   <rect x="610" y="278" width="520" height="105" rx="10" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
   <text x="636" y="308" class="label">Illustrative 32-bit packing</text>
   <text x="636" y="342" class="formula">16 + 2 + 5 + 5 = 28 bits</text>
-  <text x="636" y="372" class="body">Four bits remain available for alignment or future encoding.</text>
+  <text x="636" y="372" class="body">Four bits remain for alignment or future use.</text>
 </svg>

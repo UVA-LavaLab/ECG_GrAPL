@@ -16,9 +16,9 @@
       }
       .sans{font-family:Arial,Helvetica,sans-serif}.mono{font-family:"SFMono-Regular",Consolas,monospace}
       .title{font-size:38px;font-weight:700}.subtitle{font-size:19px}
-      .domain{font-size:14px;font-weight:700;letter-spacing:1.2px}
-      .heading{font-size:22px;font-weight:700}.label{font-size:17px;font-weight:700}
-      .body{font-size:16px}.small{font-size:14px}.tiny{font-size:12px}
+      .domain{font-size:15px;font-weight:700;letter-spacing:1.2px}
+      .heading{font-size:24px;font-weight:700}.label{font-size:19px;font-weight:700}
+      .body{font-size:18px}.small{font-size:16px}.tiny{font-size:14px}
       .arrow{fill:none;stroke:#1769C2;stroke-width:3;marker-end:url(#arrow)}
     </style>
   </defs>
@@ -32,11 +32,12 @@
   <text x="52" y="164" class="sans domain">GRAPH AND RECORD</text>
   <rect x="55" y="185" width="245" height="195" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
   <text x="177" y="220" text-anchor="middle" class="sans heading">Property line</text>
-  <text x="78" y="252" class="sans body">array base = 0x8000_0000</text>
+  <text x="78" y="252" class="mono small">base = 0x8000_0000</text>
   <text x="78" y="280" class="sans body">element = 4 bytes</text>
-  <text x="78" y="308" class="mono small">addr(42) = base + 42 x 4</text>
-  <text x="78" y="334" class="mono small">word = 0x8000_00A8</text>
-  <text x="78" y="360" class="mono small">line = 0x8000_0080</text>
+  <text x="78" y="306" class="mono small">addr(42) = base +</text>
+  <text x="78" y="328" class="mono small">42 x 4</text>
+  <text x="78" y="350" class="mono small">word = 0x8000_00A8</text>
+  <text x="78" y="372" class="mono small">line = 0x8000_0080</text>
 
   <rect x="55" y="405" width="245" height="220" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="3"/>
   <text x="177" y="440" text-anchor="middle" class="sans heading">Compact record</text>
@@ -69,8 +70,8 @@
   <rect x="750" y="185" width="310" height="195" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
   <text x="905" y="220" text-anchor="middle" class="sans heading">AGU and LSQ</text>
   <text x="775" y="260" class="sans body">translate and check ordering</text>
-  <text x="775" y="294" class="sans body">create the ordinary load Request</text>
-  <text x="775" y="328" class="sans body">preserve normal replay semantics</text>
+  <text x="775" y="294" class="sans body">create ordinary load Request</text>
+  <text x="775" y="328" class="sans body">preserve replay semantics</text>
 
   <rect x="750" y="405" width="310" height="220" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="3"/>
   <text x="905" y="440" text-anchor="middle" class="sans heading">ReuseBind extension</text>
@@ -87,7 +88,8 @@
   <text x="1337" y="220" text-anchor="middle" class="sans heading">L1D / L2 / LLC</text>
   <text x="1155" y="260" class="sans body">private hits return normally</text>
   <text x="1155" y="294" class="sans body">LLC hit or fill consumes ReuseBind</text>
-  <text x="1155" y="328" class="sans body">line 0x8000_0080 receives tier and epochs</text>
+  <text x="1155" y="326" class="sans body">line 0x8000_0080 stores</text>
+  <text x="1155" y="350" class="sans body">tier and epochs</text>
 
   <rect x="1130" y="405" width="415" height="220" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="3"/>
   <text x="1337" y="440" text-anchor="middle" class="sans heading">Return and later replacement</text>
