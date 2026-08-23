@@ -17,6 +17,8 @@ last-level-cache replacement and placement.
 
 ![Graph to CSR and edge-aligned ReusePlan masks](wiki/assets/graph-to-csr-reuseplan.svg)
 
+![ReusePlan tier and epoch construction](wiki/assets/reuseplan-construction.svg)
+
 ![ECG architecture at a glance](wiki/assets/ecg-architecture-summary.svg)
 
 ### Why carry reuse with graph IDs?

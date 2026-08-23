@@ -34,6 +34,8 @@ keeps a parallel mask array.
 
 ![Graph to CSR and edge-aligned ReusePlan masks](assets/graph-to-csr-reuseplan.svg)
 
+![ReusePlan tier and epoch construction](assets/reuseplan-construction.svg)
+
 ![Concrete property request walkthrough](assets/property-request-walkthrough.svg)
 
 ## Representative architecture

@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc" fill="#27313A">
+  <title id="title">Constructing and consuming one ReusePlan record</title>
+  <desc id="desc">Reader counts determine hot, moderate, and cold tiers. Sorted future readers determine two quantized epochs. Destination, tier, and epochs are packed into an edge-aligned record, loaded by an ECG record instruction, bound to one property request, and used by LLC replacement.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/>
+    </marker>
+    <style>
+      :root{color-scheme:light dark}
+      @media(prefers-color-scheme:dark){
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#FFFFFF"]{fill:#1E2327}[fill="#F8F6EC"]{fill:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[fill="#E7F7EA"]{fill:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[fill="#F7DEDC"]{fill:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#9AA3AD"]{stroke:#747D86}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:30px;font-weight:700}
+      .subtitle{font-size:16px}
+      .heading{font-size:20px;font-weight:700}
+      .label{font-size:16px;font-weight:700}
+      .body{font-size:15px}
+      .small{font-size:14px}
+      .arrow{fill:none;stroke:#1769C2;stroke-width:3;marker-end:url(#arrow)}
+    </style>
+  </defs>
+
+  <rect width="1200" height="700" fill="#FFFFFF"/>
+  <text x="45" y="48" class="sans title">Constructing and consuming one ReusePlan record</text>
+  <text x="45" y="76" class="sans subtitle">Reader-count tiering, next-reader epochs, ID masking, ECG loads, and LLC use.</text>
+  <line x1="45" y1="98" x2="1155" y2="98" stroke="#27313A" stroke-width="2"/>
+
+  <g stroke="#27313A" stroke-width="3">
+    <rect x="35" y="120" width="340" height="300" rx="11" fill="#EDF5FF"/>
+    <rect x="405" y="120" width="395" height="300" rx="11" fill="#FFF0D8"/>
+    <rect x="830" y="120" width="335" height="300" rx="11" fill="#EEE9FF"/>
+  </g>
+
+  <!-- Tier construction -->
+  <text x="205" y="155" text-anchor="middle" class="sans heading">1. Construct the reuse tier</text>
+  <text x="60" y="185" class="sans small">Count readers in the selected kernel direction.</text>
+  <g class="sans small">
+    <text x="60" y="222">property 7</text>
+    <rect x="145" y="205" width="210" height="24" rx="5" fill="#E7F7EA" stroke="#27313A"/>
+    <text x="154" y="222">9 readers · T1 HOT</text>
+    <text x="60" y="258">property 42</text>
+    <rect x="145" y="241" width="210" height="24" rx="5" fill="#FFF0D8" stroke="#27313A"/>
+    <text x="154" y="258">4 readers · T2 MODERATE</text>
+    <text x="60" y="294">property 91</text>
+    <rect x="145" y="277" width="210" height="24" rx="5" fill="#F7DEDC" stroke="#27313A"/>
+    <text x="154" y="294">1 reader · T3 COLD</text>
+  </g>
+  <text x="60" y="330" class="sans body">Sort all vertices by reader count:</text>
+  <text x="60" y="354" class="sans small">top 15% → hot; next 15% → moderate;</text>
+  <text x="60" y="376" class="sans small">remaining vertices → cold.</text>
+  <text x="60" y="405" class="sans small">A property line receives its hottest vertex tier.</text>
+
+  <!-- Epoch construction -->
+  <text x="602" y="155" text-anchor="middle" class="sans heading">2. Construct two future epochs</text>
+  <text x="430" y="185" class="sans small">Sorted readers for the governed property line:</text>
+  <line x1="445" y1="236" x2="760" y2="236" stroke="#27313A" stroke-width="2"/>
+  <circle cx="475" cy="236" r="13" fill="#27313A"/>
+  <text x="475" y="241" text-anchor="middle" fill="#FFFFFF" class="sans small">10</text>
+  <text x="475" y="211" text-anchor="middle" class="sans small">current</text>
+  <circle cx="545" cy="236" r="10" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="545" y="241" text-anchor="middle" class="sans small">12</text>
+  <text x="545" y="269" text-anchor="middle" class="sans small">first reader</text>
+  <path d="M620 228 L630 244 M636 228 L646 244" stroke="#9AA3AD" stroke-width="3"/>
+  <circle cx="715" cy="236" r="10" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="715" y="241" text-anchor="middle" class="sans small">40</text>
+  <text x="715" y="269" text-anchor="middle" class="sans small">second reader</text>
+  <text x="430" y="306" class="sans body">Choose the two nearest readers after current;</text>
+  <text x="430" y="330" class="sans body">wrap to the next traversal when necessary.</text>
+  <rect x="430" y="350" width="345" height="48" rx="8" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="602" y="371" text-anchor="middle" class="mono small">epoch = floor(reader × N / |V|)</text>
+  <text x="602" y="390" text-anchor="middle" class="sans small">example N = |V| = 64 → e1 12, e2 40</text>
+
+  <!-- Packing -->
+  <text x="997" y="155" text-anchor="middle" class="sans heading">3. Mask the CSR ID</text>
+  <text x="855" y="185" class="sans small">Logical record for edge position i:</text>
+  <g transform="translate(855 205)" text-anchor="middle">
+    <rect x="0" y="0" width="140" height="68" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+    <rect x="140" y="0" width="45" height="68" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+    <rect x="185" y="0" width="62" height="68" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+    <rect x="247" y="0" width="62" height="68" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+    <text x="70" y="29" class="sans label">dest 42</text>
+    <text x="70" y="51" class="sans small">ID bits</text>
+    <text x="162" y="29" class="sans label">2</text>
+    <text x="162" y="51" class="sans small">tier</text>
+    <text x="216" y="29" class="sans label">12</text>
+    <text x="216" y="51" class="sans small">e1</text>
+    <text x="278" y="29" class="sans label">40</text>
+    <text x="278" y="51" class="sans small">e2</text>
+  </g>
+  <text x="855" y="306" class="mono small">id_bits + 2 + 2 × epoch_bits &lt;= 32</text>
+  <text x="855" y="334" class="sans body">Fits: one 4-byte masked record replaces</text>
+  <text x="855" y="358" class="sans body">the ordinary CSR destination ID.</text>
+  <text x="855" y="386" class="sans small">Does not fit: keep col_idx[i] and place the</text>
+  <text x="855" y="406" class="sans small">tier/epoch mask in a parallel sidecar.</text>
+
+  <path d="M375 270 H401" class="arrow"/>
+  <path d="M800 270 H826" class="arrow"/>
+
+  <!-- Runtime path -->
+  <rect x="35" y="450" width="1130" height="205" rx="11" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="60" y="480" class="sans heading">4. Consume the masked record</text>
+
+  <rect x="60" y="505" width="275" height="112" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="197" y="532" text-anchor="middle" class="mono label">ecg.flow.load.compact</text>
+  <text x="80" y="562" class="sans body">streams record[i] from CSR order</text>
+  <text x="80" y="586" class="sans body">returns dest, tier, e1, e2 in rd</text>
+  <text x="80" y="608" class="sans small">FlowThrough affects this record request</text>
+
+  <rect x="395" y="505" width="335" height="112" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="562" y="532" text-anchor="middle" class="mono label">ecg.bind.load.f32</text>
+  <text x="415" y="562" class="sans body">rs1 = property address 0x8000_00A8</text>
+  <text x="415" y="586" class="sans body">rs2 = decoded ReusePlan record</text>
+  <text x="415" y="608" class="sans small">one property Request carries ReuseBind</text>
+
+  <rect x="790" y="505" width="345" height="112" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="962" y="532" text-anchor="middle" class="sans label">LLC replacement use</text>
+  <text x="810" y="559" class="mono small">d1 = 12 - 10 = 2</text>
+  <text x="810" y="581" class="mono small">d2 = 40 - 10 = 30; nearest = 2</text>
+  <text x="810" y="608" class="sans small">RRIP eligible → evict farthest nearest reuse</text>
+
+  <path d="M335 561 H391" class="arrow"/>
+  <path d="M730 561 H786" class="arrow"/>
+
+  <text x="600" y="680" text-anchor="middle" class="sans small">Tier and epochs do not change the property value; they change only LLC replacement metadata and victim ranking.</text>
+</svg>

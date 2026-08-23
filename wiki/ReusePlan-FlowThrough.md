@@ -27,6 +27,19 @@ request, and the LLC stores them as replacement metadata. FlowThrough applies
 separately to the edge-record request so a one-touch record can still fill the
 private caches without occupying the LLC after a miss.
 
+![ReusePlan tier and epoch construction](assets/reuseplan-construction.svg)
+
+The implementation ranks vertices by the number of property readers in the
+selected kernel direction. With the default 15% hot fraction, the top 15% are
+tier 1 (hot), the next 15% are tier 2 (moderate), and the remainder are tier 3
+(cold). A cache line receives the hottest tier among the vertices it contains.
+
+For epochs, the builder sorts each property's readers, starts after the current
+traversal position, and selects the two nearest future readers across the
+property line. A reader position is quantized as
+`floor(reader x epoch_count / vertex_count)`; the search wraps to the next
+traversal when required.
+
 ## 2. ReusePlan record
 
 ![ReusePlan record layouts](assets/reuse-plan-record.svg)
