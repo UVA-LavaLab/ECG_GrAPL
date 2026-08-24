@@ -37,7 +37,6 @@ inline void RelaxEdges_Gem5(const WGraph &g, NodeID u, WeightT delta,
                             pvector<WeightT> &dist,
                             vector<vector<NodeID>> &local_bins,
                             const vector<vector<uint16_t>>* out_edge_epochs,
-                            const vector<uint64_t>* pair_off,
                             const pvector<uint64_t>* pair_flat,
                             const pvector<uint32_t>* pair_sidecars,
                             const pvector<uint64_t>* pair_compact,
@@ -55,10 +54,15 @@ inline void RelaxEdges_Gem5(const WGraph &g, NodeID u, WeightT delta,
     const vector<uint16_t>* u_epochs =
         (out_edge_epochs && static_cast<size_t>(u) < out_edge_epochs->size())
             ? &(*out_edge_epochs)[u] : nullptr;
-    if (compact_pair_ok && ecg_bind_iload_on && pair_off && pair_compact &&
-        static_cast<size_t>(u + 1) < pair_off->size() &&
+    const uint64_t pair_row_begin = pair_flat
+        ? static_cast<uint64_t>(g.out_offset(u))
+        : 0;
+    if (compact_pair_ok && ecg_bind_iload_on && pair_compact &&
         pfx_lookahead == 0) {
-        for (uint64_t pos = (*pair_off)[u]; pos < (*pair_off)[u + 1]; ++pos) {
+        const uint64_t begin = pair_row_begin;
+        const uint64_t end =
+            static_cast<uint64_t>(g.out_offset(u + 1));
+        for (uint64_t pos = begin; pos < end; ++pos) {
             const uint64_t record = ecg_flow_load_on
                 ? gem5_ecg_flow_load_instruction(&(*pair_compact)[pos])
                 : (*pair_compact)[pos];
@@ -104,9 +108,8 @@ inline void RelaxEdges_Gem5(const WGraph &g, NodeID u, WeightT delta,
         // line with wn.v's next-ref epoch (push_out_edges=true transpose matches the out-edge
         // relax) in one custom-0 op, so ECG_GRASP_POPT ranks dist[] by next-reference.
         WeightT old_dist;
-        if (pair_off && pair_flat && pair_sidecars &&
-            static_cast<size_t>(u + 1) < pair_off->size()) {
-            const uint64_t pos = (*pair_off)[u] + edge_pos;
+        if (pair_flat && pair_sidecars) {
+            const uint64_t pos = pair_row_begin + edge_pos;
             // The sidecar supplies the upper 32 mask bits. The masked property
             // load combines them with the edge destination and attaches the ReusePlan
             // pair to the exact dist[dest] request. FlowThrough remains on the
@@ -254,6 +257,9 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
             g, static_cast<uint32_t>(kNumVtxPerLine),
             edge_epoch_count, /*linemin=*/true,
             pair_off, pair_records, /*push_out_edges=*/true);
+        gem5_require_canonical_reuse_plan_offsets(
+            g, pair_off, pair_records.size(),
+            /*push_out_edges=*/true, "sssp");
         pair_flat = pvector<uint64_t>(
             pair_records.size(), uint64_t(0), 4096);
         std::copy(pair_records.begin(), pair_records.end(), pair_flat.begin());
@@ -380,7 +386,6 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
                 NodeID u = frontier[i];
                 if (dist[u] >= delta * static_cast<WeightT>(curr_bin_index))
                     RelaxEdges_Gem5(g, u, delta, dist, local_bins, &out_edge_epochs,
-                                    pair_ok ? &pair_off : nullptr,
                                     pair_ok ? &pair_flat : nullptr,
                                     pair_ok ? &pair_sidecars : nullptr,
                                     compact_pair_ok ? &pair_compact : nullptr,
@@ -397,7 +402,6 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
                 local_bins[curr_bin_index].resize(0);
                 for (NodeID u : curr_bin_copy)
                     RelaxEdges_Gem5(g, u, delta, dist, local_bins, &out_edge_epochs,
-                                    pair_ok ? &pair_off : nullptr,
                                     pair_ok ? &pair_flat : nullptr,
                                     pair_ok ? &pair_sidecars : nullptr,
                                     compact_pair_ok ? &pair_compact : nullptr,

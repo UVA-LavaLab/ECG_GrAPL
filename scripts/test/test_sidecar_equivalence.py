@@ -571,7 +571,8 @@ def test_compact_records_decode_identically_to_the_64_bit_form():
     out = proc.stdout + proc.stderr
     assert proc.returncode == 0, f"compact/64-bit records diverge:\n{out[-2000:]}"
     assert "ALL EQUIVALENT" in out, out[-2000:]
-    assert "CSR OFFSETS AND DESTINATIONS MATCH" in out, out[-2000:]
+    assert "IN CSR OFFSETS AND DESTINATIONS MATCH" in out, out[-2000:]
+    assert "OUT CSR OFFSETS AND DESTINATIONS MATCH" in out, out[-2000:]
     # Guard against a vacuous pass if the builder silently refused every size.
     assert out.count("records checked") >= 3, (
         "too few epoch counts exercised; the compact builder may be refusing "
@@ -720,11 +721,16 @@ def test_built_kernels_are_newer_than_the_sources_they_embed():
     Timestamps are the only thing that can catch this, because the stale binary
     is otherwise perfectly valid.
     """
-    headers = sorted(
+    shared_headers = sorted(
         list((ROOT / "bench/include").glob("ecg_*.h"))
-        + list((ROOT / "bench/include/gem5_sim").glob("*.h"))
         + [ROOT / "bench/include/external/gapbs/graph.h"])
-    if not headers:
+    gem5_headers = shared_headers + sorted(
+        (ROOT / "bench/include/gem5_sim").glob("*.h"))
+    sniper_headers = shared_headers + sorted(
+        (ROOT / "bench/include/sniper_sim").glob("*.h"))
+    sim_headers = shared_headers + sorted(
+        (ROOT / "bench/include/cache_sim").glob("*.h"))
+    if not shared_headers:
         pytest.skip("ECG headers not found")
     changed = set(subprocess.run(
         ["git", "diff", "--name-only"],
@@ -754,22 +760,27 @@ def test_built_kernels_are_newer_than_the_sources_they_embed():
             not line[1:].lstrip().startswith(("//", "/*", "*"))
             for line in diff)
 
-    pr_source = ROOT / "bench/src_gem5/pr.cc"
-    sim_pr_source = ROOT / "bench/src_sim/pr.cc"
-    sim_test_source = ROOT / "bench/src_sim/test_ecg_reuse_plan32.cc"
-    sidecar_source = ROOT / "bench/src_sim/reuse_plan_sidecar.cc"
-    sniper_source = ROOT / "bench/src_sniper/sg_kernel.cc"
-    binary_dependencies = {
-        ROOT / "bench/bin_gem5/pr_riscv_m5ops": headers + [pr_source],
-        ROOT / "bench/bin_gem5/pr_m5ops": headers + [pr_source],
-        ROOT / "bench/bin_gem5/pr": headers + [pr_source],
-        ROOT / "bench/bin_sim/pr": headers + [sim_pr_source],
-        ROOT / "bench/bin_sniper/sg_kernel": headers + [sniper_source],
-        ROOT / "bench/bin_sim/reuse_plan_sidecar":
-            headers + [sidecar_source],
-        ROOT / "bench/bin_sim/test_ecg_reuse_plan32":
-            headers + [sim_test_source],
-    }
+    binary_dependencies = {}
+    for kernel in (
+            "pr", "pr_spmv", "bfs", "bc", "cc", "cc_sv", "sssp", "tc",
+            "ecg_preprocess", "reuse_plan_sidecar",
+            "test_ecg_reuse_plan32"):
+        source = ROOT / f"bench/src_sim/{kernel}.cc"
+        binary_dependencies[ROOT / f"bench/bin_sim/{kernel}"] = (
+            sim_headers + [source])
+    for kernel in ("pr", "bfs", "bc", "cc", "sssp"):
+        source = ROOT / f"bench/src_gem5/{kernel}.cc"
+        for suffix in ("", "_m5ops", "_riscv_m5ops"):
+            binary_dependencies[
+                ROOT / f"bench/bin_gem5/{kernel}{suffix}"] = (
+                    gem5_headers + [source])
+    for kernel in (
+            "sg_kernel", "pr", "bfs", "sssp", "bc", "cc", "cc_sv",
+            "pr_kernel_smoke", "bfs_kernel_smoke", "sssp_kernel_smoke",
+            "hello_roi"):
+        source = ROOT / f"bench/src_sniper/{kernel}.cc"
+        binary_dependencies[ROOT / f"bench/bin_sniper/{kernel}"] = (
+            sniper_headers + [source])
     stale, missing, checked = [], [], 0
     for binary, dependencies in binary_dependencies.items():
         material_dependencies = [

@@ -365,6 +365,9 @@ bool build_reuse_plan_pair_stream(
                 stream.compact_id_bits,
                 stream.compact_epoch_bits);
         }
+        graphbrew_sniper::require_canonical_reuse_plan_offsets(
+            graph, stream.offsets, stream.compact_records.size(),
+            push_out_edges, kernel);
         return true;
     }
 
@@ -372,6 +375,9 @@ bool build_reuse_plan_pair_stream(
         graph, vertices_per_line, epoch_count,
         /*linemin=*/true, stream.offsets,
         stream.wide_records, push_out_edges);
+    graphbrew_sniper::require_canonical_reuse_plan_offsets(
+        graph, stream.offsets, stream.wide_records.size(),
+        push_out_edges, kernel);
     return true;
 }
 
@@ -507,6 +513,10 @@ int run_pr(const Graph& graph, int max_iters) {
                 }
             }
             epoch_packed_ok = true;
+            graphbrew_sniper::require_canonical_reuse_plan_offsets(
+                graph, epoch_packed_off, epoch_packed_flat.size(),
+                /*push_out_edges=*/false, "pr",
+                /*emit_receipt=*/false);
         }
         if (sniper_pair_requested) {
             // Prefer the COMPACT 32-bit two-stamp record when the fields fit:
@@ -534,6 +544,9 @@ int run_pr(const Graph& graph, int max_iters) {
             ecg_reuse_plan::buildInEdgeReusePlanRecords(
                 graph, num_vtx_per_line, ecg_epoch_count,
                 /*linemin=*/true, reuse_plan_off, reuse_plan_flat);
+            graphbrew_sniper::require_canonical_reuse_plan_offsets(
+                graph, reuse_plan_off, reuse_plan_flat.size(),
+                /*push_out_edges=*/false, "pr");
             reuse_plan_ok = true;
         }
 
@@ -739,10 +752,11 @@ int run_pr(const Graph& graph, int max_iters) {
             SNIPER_SET_VERTEX(node);
             ScoreT incoming_total = 0.0f;
 
-            if (reuse_plan_ok && !ecg_enabled && packed_stream_compatible &&
-                static_cast<size_t>(node + 1) < reuse_plan_off.size()) {
-                const uint64_t begin = reuse_plan_off[node];
-                const uint64_t end = reuse_plan_off[node + 1];
+            if (reuse_plan_ok && !ecg_enabled && packed_stream_compatible) {
+                const uint64_t begin =
+                    static_cast<uint64_t>(graph.in_offset(node));
+                const uint64_t end =
+                    static_cast<uint64_t>(graph.in_offset(node + 1));
                 if (no_delivery_pair_loop) {
                     for (uint64_t pos = begin; pos < end; ++pos) {
                         consume_edge();
@@ -782,10 +796,11 @@ int run_pr(const Graph& graph, int max_iters) {
                 continue;
             }
 
-            if (epoch_packed_ok && !ecg_enabled && packed_stream_compatible &&
-                static_cast<size_t>(node + 1) < epoch_packed_off.size()) {
-                const uint64_t begin = epoch_packed_off[node];
-                const uint64_t end = epoch_packed_off[node + 1];
+            if (epoch_packed_ok && !ecg_enabled && packed_stream_compatible) {
+                const uint64_t begin =
+                    static_cast<uint64_t>(graph.in_offset(node));
+                const uint64_t end =
+                    static_cast<uint64_t>(graph.in_offset(node + 1));
                 for (uint64_t pos = begin; pos < end; ++pos) {
                     consume_edge();
                     const uint32_t rec = epoch_packed_flat[pos];
@@ -1070,6 +1085,10 @@ int run_bfs(const Graph& graph, NodeID source) {
                 }
             }
             bfs_packed_ok = true;
+            graphbrew_sniper::require_canonical_reuse_plan_offsets(
+                graph, bfs_packed_off, bfs_packed_flat.size(),
+                /*push_out_edges=*/true, "bfs",
+                /*emit_receipt=*/false);
             if (std::getenv("ECG_DEBUG")) {
                 std::fprintf(stderr,
                              "[ECG_PACKED4 sim=sniper kernel=bfs records=%llu "
@@ -1130,10 +1149,11 @@ int run_bfs(const Graph& graph, NodeID source) {
             SNIPER_ECG_PFX_TARGET(frontier.front());
         }
         if (bfs_pair_ok && !ecg_pfx_hints_on &&
-            packed_stream_compatible &&
-            static_cast<size_t>(node + 1) < bfs_pairs.offsets.size()) {
-            const uint64_t begin = bfs_pairs.offsets[node];
-            const uint64_t end = bfs_pairs.offsets[node + 1];
+            packed_stream_compatible) {
+            const uint64_t begin =
+                static_cast<uint64_t>(graph.out_offset(node));
+            const uint64_t end =
+                static_cast<uint64_t>(graph.out_offset(node + 1));
             if (no_delivery_pair_loop) {
                 for (uint64_t pos = begin; pos < end; ++pos) {
                     consume_edge();
@@ -1170,10 +1190,11 @@ int run_bfs(const Graph& graph, NodeID source) {
             continue;
         }
         if (bfs_packed_ok && !ecg_pfx_hints_on &&
-            packed_stream_compatible &&
-            static_cast<size_t>(node + 1) < bfs_packed_off.size()) {
-            const uint64_t begin = bfs_packed_off[node];
-            const uint64_t end = bfs_packed_off[node + 1];
+            packed_stream_compatible) {
+            const uint64_t begin =
+                static_cast<uint64_t>(graph.out_offset(node));
+            const uint64_t end =
+                static_cast<uint64_t>(graph.out_offset(node + 1));
             for (uint64_t pos = begin; pos < end; ++pos) {
                 consume_edge();
                 const uint32_t rec = bfs_packed_flat[pos];
@@ -1295,6 +1316,9 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
             graph, kNumVtxPerLine, ecg_epoch_count,
             /*linemin=*/true, pair_off, pair_flat,
             /*push_out_edges=*/true);
+        graphbrew_sniper::require_canonical_reuse_plan_offsets(
+            graph, pair_off, pair_flat.size(),
+            /*push_out_edges=*/true, "sssp");
         pair_sidecars = pvector<uint32_t>(
             pair_flat.size(), uint32_t(0), kPropAlign);
         for (size_t i = 0; i < pair_flat.size(); ++i) {
@@ -1424,8 +1448,11 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
         }
     };
     auto relax_compact_edges = [&](NodeID node, WeightT source_dist) {
-        for (uint64_t pos = pair_off[node];
-             pos < pair_off[node + 1]; ++pos) {
+        const uint64_t begin =
+            static_cast<uint64_t>(graph.out_offset(node));
+        const uint64_t end =
+            static_cast<uint64_t>(graph.out_offset(node + 1));
+        for (uint64_t pos = begin; pos < end; ++pos) {
             consume_edge();
             const uint64_t record = pair_compact[pos];
             const NodeID dest = static_cast<NodeID>(
@@ -1461,7 +1488,8 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
         if (fused_reuse_plan_model && pair_ok && compact_pair_ok) {
             relax_compact_edges(node, source_dist);
         } else if (fused_reuse_plan_model && pair_ok) {
-            uint64_t pair_pos = pair_off[node];
+            uint64_t pair_pos =
+                static_cast<uint64_t>(graph.out_offset(node));
             if (software_reuse_plan_delivery) {
                 relax_edges(
                     node, source_dist,
@@ -1497,13 +1525,15 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
                     ? &out_edge_epochs[node] : nullptr;
             uint64_t delivered_reuse_plan_record = 0;
             bool delivered_reuse_plan = false;
+            const uint64_t pair_row_begin = pair_ok
+                ? static_cast<uint64_t>(graph.out_offset(node))
+                : 0;
             relax_edges(
                 node, source_dist,
                 [&](WNode edge, size_t edge_pos) {
-                if (pair_ok &&
-                    static_cast<size_t>(node + 1) < pair_off.size()) {
+                if (pair_ok) {
                     delivered_reuse_plan_record =
-                        pair_flat[pair_off[node] + edge_pos];
+                        pair_flat[pair_row_begin + edge_pos];
                     if (software_reuse_plan_delivery) {
                         deliver_reuse_plan_record(
                             delivered_reuse_plan_record, fused_reuse_plan_model);
@@ -1737,11 +1767,13 @@ int run_bc(const Graph& graph, int num_iters) {
                     if (depth_v == cur_level + 1)
                         path_counts[v] += source_paths;
                 };
-                if (pair_ok &&
-                    static_cast<size_t>(u + 1) < pairs.offsets.size()) {
+                if (pair_ok) {
+                    const uint64_t begin =
+                        static_cast<uint64_t>(graph.out_offset(u));
+                    const uint64_t end =
+                        static_cast<uint64_t>(graph.out_offset(u + 1));
                     if (no_delivery_pair_loop) {
-                        for (uint64_t pos = pairs.offsets[u];
-                             pos < pairs.offsets[u + 1]; ++pos) {
+                        for (uint64_t pos = begin; pos < end; ++pos) {
                             consume_edge();
                             const uint64_t record = pairs.record(pos);
                             const NodeID v = static_cast<NodeID>(
@@ -1761,8 +1793,7 @@ int run_bc(const Graph& graph, int num_iters) {
                             }
                         }
                     } else {
-                        for (uint64_t pos = pairs.offsets[u];
-                             pos < pairs.offsets[u + 1]; ++pos) {
+                        for (uint64_t pos = begin; pos < end; ++pos) {
                             consume_edge();
                             const uint64_t record = pairs.record(pos);
                             const NodeID v = static_cast<NodeID>(
@@ -1956,14 +1987,15 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
     for (int r = 0; r < neighbor_rounds; r++) {
         for (NodeID u = 0; u < graph.num_nodes(); u++) {
             SNIPER_SET_VERTEX(u);
+            const uint64_t row_begin =
+                static_cast<uint64_t>(graph.out_offset(u));
+            const uint64_t row_end =
+                static_cast<uint64_t>(graph.out_offset(u + 1));
             if (pair_ok &&
-                static_cast<size_t>(u + 1) < pairs.offsets.size() &&
-                pairs.offsets[u] + static_cast<uint64_t>(r) <
-                    pairs.offsets[u + 1]) {
+                row_begin + static_cast<uint64_t>(r) < row_end) {
                 consume_edge();
                 const uint64_t record =
-                    pairs.record(
-                        pairs.offsets[u] + static_cast<uint64_t>(r));
+                    pairs.record(row_begin + static_cast<uint64_t>(r));
                 const NodeID v = static_cast<NodeID>(
                     ecg_reuse_plan::extractReusePlanDest(record));
                 if (no_delivery_pair_loop) {
@@ -2006,10 +2038,13 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
     for (NodeID u = 0; u < graph.num_nodes(); u++) {
         if (comp[u] == largest) continue;
         SNIPER_SET_VERTEX(u);
-        if (pair_ok && static_cast<size_t>(u + 1) < pairs.offsets.size()) {
+        if (pair_ok) {
+            const uint64_t begin =
+                static_cast<uint64_t>(graph.out_offset(u));
+            const uint64_t end =
+                static_cast<uint64_t>(graph.out_offset(u + 1));
             if (no_delivery_pair_loop) {
-                for (uint64_t pos = pairs.offsets[u];
-                     pos < pairs.offsets[u + 1]; ++pos) {
+                for (uint64_t pos = begin; pos < end; ++pos) {
                     consume_edge();
                     const uint64_t record = pairs.record(pos);
                     const NodeID v = static_cast<NodeID>(
@@ -2019,8 +2054,7 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
                     cc_link_loaded(u, v, delivered_comp, comp);
                 }
             } else {
-                for (uint64_t pos = pairs.offsets[u];
-                     pos < pairs.offsets[u + 1]; ++pos) {
+                for (uint64_t pos = begin; pos < end; ++pos) {
                     consume_edge();
                     const uint64_t record = pairs.record(pos);
                     const NodeID v = static_cast<NodeID>(

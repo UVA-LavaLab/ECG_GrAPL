@@ -35,7 +35,6 @@ inline void RelaxEdges_Sniper(const WGraph &g, NodeID u, WeightT delta,
                               pvector<WeightT> &dist,
                               vector<vector<NodeID>> &local_bins,
                               const vector<vector<uint16_t>>* out_edge_epochs,
-                              const vector<uint64_t>* pair_off,
                               const vector<uint64_t>* pair_flat,
                               uint32_t edge_epoch_count) {
     SNIPER_SET_VERTEX(u);
@@ -47,6 +46,12 @@ inline void RelaxEdges_Sniper(const WGraph &g, NodeID u, WeightT delta,
     const vector<uint16_t>* epochs =
         (out_edge_epochs && static_cast<size_t>(u) < out_edge_epochs->size())
             ? &(*out_edge_epochs)[u] : nullptr;
+    const uint64_t pair_row_begin = pair_flat
+        ? static_cast<uint64_t>(g.out_offset(u))
+        : 0;
+    const uint64_t pair_row_end = pair_flat
+        ? static_cast<uint64_t>(g.out_offset(u + 1))
+        : 0;
     size_t edge_pos = 0;
     for (auto it = out_neigh.begin(); it != out_neigh.end();
          ++it, ++edge_pos) {
@@ -62,10 +67,9 @@ inline void RelaxEdges_Sniper(const WGraph &g, NodeID u, WeightT delta,
         } else {
             SNIPER_ECG_PFX_TARGET(wn.v);
         }
-        if (pair_off && pair_flat &&
-            static_cast<size_t>(u + 1) < pair_off->size()) {
-            const uint64_t pos = (*pair_off)[u] + edge_pos;
-            if (pos >= (*pair_off)[u + 1] || pos >= pair_flat->size()) {
+        if (pair_flat) {
+            const uint64_t pos = pair_row_begin + edge_pos;
+            if (pos >= pair_row_end || pos >= pair_flat->size()) {
                 std::fprintf(stderr,
                     "Sniper standalone SSSP ReusePlan index out of range: "
                     "u=%d edge=%zu\n", static_cast<int>(u), edge_pos);
@@ -90,7 +94,7 @@ inline void RelaxEdges_Sniper(const WGraph &g, NodeID u, WeightT delta,
             SNIPER_ECG_EXTRACT(wn.v, epoch);
         }
         WeightT old_dist = dist[wn.v];
-        if (pair_off && pair_flat)
+        if (pair_flat)
             SNIPER_ECG_CLEAR_EXTRACT2(wn.v);
         WeightT new_dist = dist[u] + wn.w;
         while (new_dist < old_dist) {
@@ -159,6 +163,9 @@ pvector<WeightT> DeltaStep_Sniper(const WGraph &g, NodeID source, WeightT delta)
             g, kNumVtxPerLine, ecg_epoch_count,
             /*linemin=*/true, pair_off, pair_flat,
             /*push_out_edges=*/true);
+        graphbrew_sniper::require_canonical_reuse_plan_offsets(
+            g, pair_off, pair_flat.size(),
+            /*push_out_edges=*/true, "sssp");
         pair_ok = true;
     } else if (ecg_extract_on) {
         ecg_reuse_plan::buildInEdgeEpochs(
@@ -191,7 +198,6 @@ pvector<WeightT> DeltaStep_Sniper(const WGraph &g, NodeID source, WeightT delta)
                 if (dist[u] >= delta * static_cast<WeightT>(curr_bin_index)) {
                     RelaxEdges_Sniper(
                         g, u, delta, dist, local_bins, &out_edge_epochs,
-                        pair_ok ? &pair_off : nullptr,
                         pair_ok ? &pair_flat : nullptr, ecg_epoch_count);
                 }
             }
@@ -204,7 +210,6 @@ pvector<WeightT> DeltaStep_Sniper(const WGraph &g, NodeID source, WeightT delta)
                 for (NodeID u : curr_bin_copy) {
                     RelaxEdges_Sniper(
                         g, u, delta, dist, local_bins, &out_edge_epochs,
-                        pair_ok ? &pair_off : nullptr,
                         pair_ok ? &pair_flat : nullptr, ecg_epoch_count);
                 }
             }

@@ -112,6 +112,9 @@ pvector<NodeID> BFS_Gem5(const Graph &g, NodeID source) {
             g, static_cast<uint32_t>(kNumVtxPerLine),
             edge_epoch_count, /*linemin=*/true,
             pair_off, pair_records, /*push_out_edges=*/true);
+        gem5_require_canonical_reuse_plan_offsets(
+            g, pair_off, pair_records.size(),
+            /*push_out_edges=*/true, "bfs");
         pair_flat = pvector<uint64_t>(
             pair_records.size(), uint64_t(0), 4096);
         std::copy(
@@ -156,6 +159,10 @@ pvector<NodeID> BFS_Gem5(const Graph &g, NodeID source) {
                 }
             }
             epoch_packed_ok = true;
+            gem5_require_canonical_reuse_plan_offsets(
+                g, epoch_packed_off, epoch_packed_flat.size(),
+                /*push_out_edges=*/true, "bfs",
+                /*emit_receipt=*/false);
         }
     }
     gem5_export_context(
@@ -238,10 +245,11 @@ pvector<NodeID> BFS_Gem5(const Graph &g, NodeID source) {
         const std::vector<uint16_t>* u_epochs =
             (ecg_extract_on && static_cast<size_t>(u) < out_edge_epochs.size())
                 ? &out_edge_epochs[u] : nullptr;
-        if (pair_extract_only &&
-            static_cast<size_t>(u + 1) < pair_off.size()) {
-            const uint64_t begin = pair_off[u];
-            const uint64_t end = pair_off[u + 1];
+        if (pair_extract_only) {
+            const uint64_t begin =
+                static_cast<uint64_t>(g.out_offset(u));
+            const uint64_t end =
+                static_cast<uint64_t>(g.out_offset(u + 1));
             for (uint64_t pos = begin; pos < end; ++pos) {
                 const uint64_t rec = ecg_flow_load_on
                     ? gem5_ecg_flow_load_instruction(&pair_flat[pos])
@@ -275,10 +283,11 @@ pvector<NodeID> BFS_Gem5(const Graph &g, NodeID source) {
         }
         if (epoch_packed_ok && epoch_pack_id_bits <= 24 &&
             !gem5_ecg_pfx_hints_enabled() &&
-            packed_stream_compatible &&
-            static_cast<size_t>(u + 1) < epoch_packed_off.size()) {
-            const uint64_t begin = epoch_packed_off[u];
-            const uint64_t end = epoch_packed_off[u + 1];
+            packed_stream_compatible) {
+            const uint64_t begin =
+                static_cast<uint64_t>(g.out_offset(u));
+            const uint64_t end =
+                static_cast<uint64_t>(g.out_offset(u + 1));
             for (uint64_t pos = begin; pos < end; ++pos) {
                 const uint32_t rec = epoch_packed_flat[pos];
                 const NodeID v =

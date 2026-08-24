@@ -118,11 +118,62 @@ int main(int argc, char* argv[]) {
                ne, (unsigned long long)checked, (unsigned long long)bad, idb, epb);
         if (bad) return 1;
     }
+    {
+        std::vector<uint64_t> out_off;
+        std::vector<uint64_t> out_records;
+        std::vector<uint64_t> out32_off;
+        std::vector<uint32_t> out32_records;
+        ecg_reuse_plan::buildInEdgeReusePlanRecords(
+            g, 16, 32, true, out_off, out_records,
+            /*push_out_edges=*/true);
+        if (!ecg_reuse_plan::buildInEdgeReusePlanRecords32(
+                g, 16, 32, true, out32_off, out32_records,
+                /*push_out_edges=*/true)) {
+            printf("OUT COMPACT RECORD CONSTRUCTION FAILED\n");
+            return 1;
+        }
+        if (!ecg_reuse_plan::reusePlanOffsetsMatchCsr(
+                g, out_off, static_cast<uint64_t>(out_records.size()),
+                /*push_out_edges=*/true) ||
+            !ecg_reuse_plan::reusePlanOffsetsMatchCsr(
+                g, out32_off, static_cast<uint64_t>(out32_records.size()),
+                /*push_out_edges=*/true)) {
+            printf("OUT CSR OFFSET MISMATCH\n");
+            return 1;
+        }
+        const uint32_t out_id_bits =
+            ecg_reuse_plan::reusePlan32IdBits(n);
+        uint64_t checked = 0;
+        for (uint32_t u = 0; u < n; ++u) {
+            uint64_t pos = out_off[u];
+            for (auto v_raw : g.out_neigh(u)) {
+                if (ecg_reuse_plan::extractReusePlanDest(
+                        out_records[pos++]) !=
+                        static_cast<uint32_t>(v_raw) ||
+                    ecg_reuse_plan::extractReusePlan32Dest(
+                        out32_records[pos - 1], out_id_bits) !=
+                        static_cast<uint32_t>(v_raw)) {
+                    printf("OUT CSR DESTINATION MISMATCH row=%u\n", u);
+                    return 1;
+                }
+                ++checked;
+            }
+            if (pos != out_off[u + 1]) {
+                printf("OUT CSR ROW LENGTH MISMATCH row=%u\n", u);
+                return 1;
+            }
+        }
+        if (checked == 0 || checked != out_records.size()) {
+            printf("OUT CSR RECORD COUNT MISMATCH\n");
+            return 1;
+        }
+    }
     if (total_csr_checked == 0) {
         printf("NO CSR DESTINATIONS CHECKED\n");
         return 1;
     }
-    printf("CSR OFFSETS AND DESTINATIONS MATCH\n");
+    printf("OUT CSR OFFSETS AND DESTINATIONS MATCH\n");
+    printf("IN CSR OFFSETS AND DESTINATIONS MATCH\n");
     printf("ALL EQUIVALENT\n");
     return 0;
 }

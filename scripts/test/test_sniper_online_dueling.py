@@ -410,6 +410,8 @@ def test_sniper_valid_variant_receipt_still_reaches_status_ok(monkeypatch, tmp_p
         "[ECG-CONTEXT-READY sim=sniper loaded=1 regions=3 reref=0]\n"
         "[ECG-VARIANT-RECEIPT sim=sniper requested=lru_only "
         "effective=6 dueling=0]\n"
+        "[ECG-CSR-SUBSTITUTION sim=sniper kernel=pr active=1 valid=1 "
+        "offset_source=csr direction=in rows=256 records=4096]\n"
     )
     row = _run_sniper_end_to_end(monkeypatch, tmp_path, log_text)
 

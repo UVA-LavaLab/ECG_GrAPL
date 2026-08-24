@@ -501,6 +501,10 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     }
                 }
                 packed_ok = true;
+                gem5_require_canonical_reuse_plan_offsets(
+                    g, packed_off, in_edge_packed_flat.size(),
+                    /*push_out_edges=*/false, "pr",
+                    /*emit_receipt=*/false);
                 printf("[gem5 ECG mode 6] single-stream packed record ON: "
                        "id_bits=%u epoch_bits=%u (4-byte contiguous, no separate "
                        "mask array)\n", pack_id_bits, epoch_bits);
@@ -646,8 +650,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     static bool csr_substitution_receipt_emitted = false;
     if (pair_extract_only && !csr_substitution_receipt_emitted) {
         fprintf(stderr,
-                "[ECG-CSR-SUBSTITUTION active=1 valid=%d "
-                "offset_source=csr rows=%llu records=%llu]\n",
+                "[ECG-CSR-SUBSTITUTION sim=gem5 kernel=pr active=1 valid=%d "
+                "offset_source=csr direction=in rows=%llu records=%llu]\n",
                 (int)pair_offsets_match_csr,
                 (unsigned long long)g.num_nodes(),
                 (unsigned long long)pair_record_count);
@@ -945,10 +949,11 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                 continue;
             }
 
-            if (packed_extract_only &&
-                static_cast<size_t>(u + 1) < packed_off.size()) {
-                const uint64_t begin = packed_off[u];
-                const uint64_t end = packed_off[u + 1];
+            if (packed_extract_only) {
+                const uint64_t begin =
+                    static_cast<uint64_t>(g.in_offset(u));
+                const uint64_t end =
+                    static_cast<uint64_t>(g.in_offset(u + 1));
                 for (uint64_t pos = begin; pos < end; ++pos) {
                     const uint32_t rec = in_edge_packed_flat[pos];
                     const NodeID v = static_cast<NodeID>(rec & pack_id_mask);
@@ -1007,6 +1012,9 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     }
                 }
                 size_t edge_pos = 0;
+                const uint64_t packed_row_begin = packed_ok
+                    ? static_cast<uint64_t>(g.in_offset(u))
+                    : 0;
                 for (auto it = in_neigh.begin(); it != in_neigh.end(); ++it, ++edge_pos) {
                     uint64_t mask;
                     NodeID v;
@@ -1030,7 +1038,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                         // separate scattered mask array polluting the LLC). The
                         // 4-byte record holds dest+epoch only, which is all the
                         // ECG_RP eviction path needs.
-                        uint32_t rec = in_edge_packed_flat[packed_off[u] + edge_pos];
+                        uint32_t rec = in_edge_packed_flat[
+                            packed_row_begin + edge_pos];
                         v = static_cast<NodeID>(rec & pack_id_mask);
                         uint16_t ep = static_cast<uint16_t>(rec >> pack_id_bits);
                         // Rebuild the 64-bit WIDE layout ecg.extract decodes
@@ -1069,7 +1078,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                             if (cand < 0) continue;
                             uint16_t cand_ep = packed_ok
                                 ? static_cast<uint16_t>(
-                                      in_edge_packed_flat[packed_off[u] + cpos]
+                                      in_edge_packed_flat[
+                                              packed_row_begin + cpos]
                                           >> pack_id_bits)
                                 : (cpos < src_masks.size()
                                        ? static_cast<uint16_t>(

@@ -31,6 +31,36 @@
 
 namespace graphbrew_sniper {
 
+template <typename GraphT, typename OffsetContainer>
+inline void require_canonical_reuse_plan_offsets(
+        const GraphT& graph, const OffsetContainer& offsets,
+        uint64_t record_count, bool push_out_edges,
+        const char* kernel, bool emit_receipt = true) {
+    const bool valid = ecg_reuse_plan::reusePlanOffsetsMatchCsr(
+        graph, offsets, record_count, push_out_edges);
+    static bool receipt_emitted = false;
+    if (emit_receipt && !receipt_emitted) {
+        std::fprintf(
+            stderr,
+            "[ECG-CSR-SUBSTITUTION sim=sniper kernel=%s active=1 valid=%d "
+            "offset_source=csr direction=%s rows=%llu records=%llu]\n",
+            kernel ? kernel : "unknown", valid ? 1 : 0,
+            push_out_edges ? "out" : "in",
+            static_cast<unsigned long long>(graph.num_nodes()),
+            static_cast<unsigned long long>(record_count));
+        receipt_emitted = true;
+    }
+    if (!valid) {
+        std::fprintf(
+            stderr,
+            "Sniper ReusePlan records do not align with canonical %s-CSR "
+            "offsets for kernel=%s\n",
+            push_out_edges ? "outgoing" : "incoming",
+            kernel ? kernel : "unknown");
+        std::abort();
+    }
+}
+
 constexpr uint64_t GRAPHBREW_SNIPER_USER_SET_VERTEX = 0x47525654ULL;  // "GRVT"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_CONTEXT_READY = 0x47524358ULL;  // "GRCX"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_POPT_READY = 0x47504f50ULL;  // "GPOP"

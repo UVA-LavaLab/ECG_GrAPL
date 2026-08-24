@@ -737,11 +737,11 @@ def test_proposal_compact_reuse_bind_flowthrough_is_fail_closed():
     assert "GEM5_ECG_COMPACT_REUSE_BIND_FLOW=1 but" in guest
     assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" in guest
     assert "reusePlanOffsetsMatchInCsr" in guest
-    assert "[ECG-CSR-SUBSTITUTION active=1" in guest
+    assert "[ECG-CSR-SUBSTITUTION sim=gem5 kernel=pr active=1" in guest
     measured_roi = guest.split(
         "GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE)", 1)[1].split(
             "GEM5_WORK_END(GEM5_WORK_COMPUTE)", 1)[0]
-    assert not re.search(r"\bpair_off\b", measured_roi)
+    assert not re.search(r"\b\w*_off\s*\[", measured_roi)
     assert "g.in_offset(0)" in measured_roi
     assert "g.in_offset(u + 1)" in measured_roi
     assert "csr_pair_begin = end" in measured_roi
@@ -803,11 +803,11 @@ def test_proposal_compact_reuse_bind_flowthrough_is_fail_closed():
 
 def test_gem5_csr_substitution_receipt_is_fail_closed():
     receipt = (
-        "[ECG-CSR-SUBSTITUTION active=1 valid=1 "
-        "offset_source=csr rows=256 records=4096]")
+        "[ECG-CSR-SUBSTITUTION sim=gem5 kernel=pr active=1 valid=1 "
+        "offset_source=csr direction=in rows=256 records=4096]")
     row = {"timing_valid_for_speedup": "1"}
     assert roi_matrix.apply_gem5_csr_substitution_receipt(
-        row, receipt, required=True)
+        row, receipt, "pr", required=True)
     assert row["ecg_csr_substitution_receipt_count"] == 1
     assert row["ecg_csr_substitution_active"] == 1
     assert row["ecg_csr_substitution_valid"] == 1
@@ -818,47 +818,73 @@ def test_gem5_csr_substitution_receipt_is_fail_closed():
 
     missing = {"timing_valid_for_speedup": "1"}
     assert not roi_matrix.apply_gem5_csr_substitution_receipt(
-        missing, "", required=True)
+        missing, "", "pr", required=True)
     assert missing["status"] == "error"
 
     duplicate = {"timing_valid_for_speedup": "1"}
     assert not roi_matrix.apply_gem5_csr_substitution_receipt(
-        duplicate, f"{receipt}\n{receipt}", required=True)
+        duplicate, f"{receipt}\n{receipt}", "pr", required=True)
     assert duplicate["status"] == "error"
 
     invalid = {"timing_valid_for_speedup": "1"}
     assert not roi_matrix.apply_gem5_csr_substitution_receipt(
         invalid,
-        "[ECG-CSR-SUBSTITUTION active=1 valid=0 "
-        "offset_source=csr rows=256 records=4096]",
-        required=True)
+        "[ECG-CSR-SUBSTITUTION sim=gem5 kernel=pr active=1 valid=0 "
+        "offset_source=csr direction=in rows=256 records=4096]",
+        "pr", required=True)
     assert invalid["status"] == "error"
     assert invalid["timing_valid_for_speedup"] == "0"
+
+    empty = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_gem5_csr_substitution_receipt(
+        empty, receipt.replace("records=4096", "records=0"),
+        "pr", required=True)
+    assert empty["status"] == "error"
 
     wrong_record_count = {
         "timing_valid_for_speedup": "1",
         "gem5_reuse_plan_sidecar_records": 4095,
     }
     assert not roi_matrix.apply_gem5_csr_substitution_receipt(
-        wrong_record_count, receipt, required=True)
+        wrong_record_count, receipt, "pr", required=True)
     assert wrong_record_count["status"] == "error"
     assert wrong_record_count["timing_valid_for_speedup"] == "0"
 
     optional_invalid = {"timing_valid_for_speedup": "1"}
     assert not roi_matrix.apply_gem5_csr_substitution_receipt(
         optional_invalid,
-        "[ECG-CSR-SUBSTITUTION active=0 valid=0 "
-        "offset_source=pair rows=256 records=4096]",
-        required=False)
+        "[ECG-CSR-SUBSTITUTION sim=gem5 kernel=pr active=0 valid=0 "
+        "offset_source=pair direction=in rows=256 records=4096]",
+        "pr", required=False)
     assert "error" not in optional_invalid
     assert optional_invalid["timing_valid_for_speedup"] == "1"
 
     optional_duplicate = {"timing_valid_for_speedup": "1"}
     assert not roi_matrix.apply_gem5_csr_substitution_receipt(
-        optional_duplicate, f"{receipt}\n{receipt}", required=False)
+        optional_duplicate, f"{receipt}\n{receipt}", "pr", required=False)
     assert optional_duplicate["ecg_csr_substitution_receipt_count"] == 2
     assert "error" not in optional_duplicate
     assert optional_duplicate["timing_valid_for_speedup"] == "1"
+
+
+def test_gem5_non_pr_reuse_plan_uses_canonical_out_csr_offsets():
+    for kernel in ("bfs", "bc", "cc", "sssp"):
+        guest = read(f"bench/src_gem5/{kernel}.cc")
+        assert "gem5_require_canonical_reuse_plan_offsets" in guest
+        measured_roi = guest.split(
+            "GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE)", 1)[1].split(
+                "GEM5_WORK_END(GEM5_WORK_COMPUTE)", 1)[0]
+        assert not re.search(r"\b\w*_off\s*\[", measured_roi), kernel
+        if kernel == "sssp":
+            assert "RelaxEdges_Gem5(" in measured_roi
+            helper = guest.split(
+                "inline void RelaxEdges_Gem5", 1)[1].split(
+                    "pvector<WeightT> DeltaStep", 1)[0]
+            assert "pair_off" not in helper
+            assert not re.search(r"\b\w*_off\s*\[", helper)
+            assert "g.out_offset(" in helper
+        else:
+            assert "g.out_offset(" in measured_roi, kernel
 
 
 def test_gem5_array_attribution_is_per_requestor_and_fail_closed():
@@ -1564,12 +1590,12 @@ def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
     assert compact.returncode == 0, compact_text
     assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" in compact_text
     assert (
-        "[ECG-CSR-SUBSTITUTION active=1 valid=1 "
-        "offset_source=csr"
+        "[ECG-CSR-SUBSTITUTION sim=gem5 kernel=pr active=1 valid=1 "
+        "offset_source=csr direction=in"
     ) in compact_text
     compact_csr = {"timing_valid_for_speedup": "1"}
     assert roi_matrix.apply_gem5_csr_substitution_receipt(
-        compact_csr, compact_text, required=True)
+        compact_csr, compact_text, "pr", required=True)
     assert compact_csr["ecg_csr_substitution_receipt_count"] == 1
     assert compact_csr["ecg_csr_substitution_rows"] == 256
     assert compact_csr["ecg_csr_substitution_records"] > 0
@@ -1609,12 +1635,12 @@ def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
     ) in wide_text
     assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" not in wide_text
     assert (
-        "[ECG-CSR-SUBSTITUTION active=1 valid=1 "
-        "offset_source=csr"
+        "[ECG-CSR-SUBSTITUTION sim=gem5 kernel=pr active=1 valid=1 "
+        "offset_source=csr direction=in"
     ) in wide_text
     wide_csr = {"timing_valid_for_speedup": "1"}
     assert roi_matrix.apply_gem5_csr_substitution_receipt(
-        wide_csr, wide_text, required=True)
+        wide_csr, wide_text, "pr", required=True)
     assert wide_csr["ecg_csr_substitution_receipt_count"] == 1
     assert wide_csr["ecg_csr_substitution_rows"] == 256
     assert wide_csr["ecg_csr_substitution_records"] > 0

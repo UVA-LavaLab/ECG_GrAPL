@@ -188,6 +188,8 @@ $(BIN_GEM5_DIR)/%_m5ops: $(BENCH_DIR)/src_gem5/%.cc $(DEP_GAPBS) \
 	$(CXX) $(CXXFLAGS_GEM5_M5OPS) $(INCLUDES) $< \
 		$(GEM5_M5_LIB) $(LDLIBS) -o $@
 
+.PRECIOUS: $(BIN_GEM5_DIR)/%_m5ops
+
 $(BIN_GEM5_DIR)/%_riscv_m5ops \
 $(BIN_GEM5_DIR)/%_riscv_m5ops.d \
 $(BIN_GEM5_DIR)/%_riscv_m5ops.build.json &: \

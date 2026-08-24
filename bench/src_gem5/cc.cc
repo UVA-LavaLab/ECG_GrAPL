@@ -142,6 +142,9 @@ pvector<NodeID> Afforest_Gem5(const Graph &g, int32_t neighbor_rounds = 2) {
             g, static_cast<uint32_t>(kNumVtxPerLine),
             edge_epoch_count, /*linemin=*/true,
             pair_off, pair_records, /*push_out_edges=*/true);
+        gem5_require_canonical_reuse_plan_offsets(
+            g, pair_off, pair_records.size(),
+            /*push_out_edges=*/true, "cc");
         pair_flat = pvector<uint64_t>(
             pair_records.size(), uint64_t(0), 4096);
         std::copy(pair_records.begin(), pair_records.end(), pair_flat.begin());
@@ -202,10 +205,14 @@ pvector<NodeID> Afforest_Gem5(const Graph &g, int32_t neighbor_rounds = 2) {
     for (int32_t r = 0; r < neighbor_rounds; r++) {
         for (NodeID u = 0; u < g.num_nodes(); u++) {
             GEM5_SET_QUANTIZED_VERTEX_EPOCH(epoch_quantizer, u);
+            const uint64_t row_begin =
+                static_cast<uint64_t>(g.out_offset(u));
+            const uint64_t row_end =
+                static_cast<uint64_t>(g.out_offset(u + 1));
             if (pair_ok &&
-                static_cast<size_t>(u + 1) < pair_off.size() &&
-                pair_off[u] + static_cast<uint64_t>(r) < pair_off[u + 1]) {
-                const uint64_t pos = pair_off[u] + static_cast<uint64_t>(r);
+                row_begin + static_cast<uint64_t>(r) < row_end) {
+                const uint64_t pos =
+                    row_begin + static_cast<uint64_t>(r);
                 const uint64_t record = ecg_flow_load_on
                     ? gem5_ecg_flow_load_instruction(&pair_flat[pos])
                     : ecg_plan_load_on
@@ -260,8 +267,12 @@ pvector<NodeID> Afforest_Gem5(const Graph &g, int32_t neighbor_rounds = 2) {
     for (NodeID u = 0; u < g.num_nodes(); u++) {
         GEM5_SET_QUANTIZED_VERTEX_EPOCH(epoch_quantizer, u);
         if (comp[u] == largest) continue;
-        if (pair_ok && static_cast<size_t>(u + 1) < pair_off.size()) {
-            for (uint64_t pos = pair_off[u]; pos < pair_off[u + 1]; ++pos) {
+        if (pair_ok) {
+            const uint64_t begin =
+                static_cast<uint64_t>(g.out_offset(u));
+            const uint64_t end =
+                static_cast<uint64_t>(g.out_offset(u + 1));
+            for (uint64_t pos = begin; pos < end; ++pos) {
                 const uint64_t record = ecg_flow_load_on
                     ? gem5_ecg_flow_load_instruction(&pair_flat[pos])
                     : ecg_plan_load_on

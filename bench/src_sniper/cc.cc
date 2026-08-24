@@ -120,6 +120,9 @@ pvector<NodeID> Afforest_Sniper(const Graph &g, int32_t neighbor_rounds = 2) {
             g, kNumVtxPerLine, ecg_epoch_count,
             /*linemin=*/true, pair_off, pair_flat,
             /*push_out_edges=*/true);
+        graphbrew_sniper::require_canonical_reuse_plan_offsets(
+            g, pair_off, pair_flat.size(),
+            /*push_out_edges=*/true, "cc");
         pair_ok = true;
     }
     sniper_export_context(
@@ -140,11 +143,14 @@ pvector<NodeID> Afforest_Sniper(const Graph &g, int32_t neighbor_rounds = 2) {
         #pragma omp parallel for schedule(dynamic, 1024)
         for (NodeID u = 0; u < g.num_nodes(); u++) {
             SNIPER_SET_VERTEX(u);
+            const uint64_t row_begin =
+                static_cast<uint64_t>(g.out_offset(u));
+            const uint64_t row_end =
+                static_cast<uint64_t>(g.out_offset(u + 1));
             if (pair_ok &&
-                static_cast<size_t>(u + 1) < pair_off.size() &&
-                pair_off[u] + static_cast<uint64_t>(r) < pair_off[u + 1]) {
+                row_begin + static_cast<uint64_t>(r) < row_end) {
                 const uint64_t record =
-                    pair_flat[pair_off[u] + static_cast<uint64_t>(r)];
+                    pair_flat[row_begin + static_cast<uint64_t>(r)];
                 const NodeID v = static_cast<NodeID>(
                     ecg_reuse_plan::extractReusePlanDest(record));
                 SNIPER_ECG_EXTRACT2(
@@ -180,8 +186,12 @@ pvector<NodeID> Afforest_Sniper(const Graph &g, int32_t neighbor_rounds = 2) {
     for (NodeID u = 0; u < g.num_nodes(); u++) {
         if (comp[u] == largest) continue;
         SNIPER_SET_VERTEX(u);
-        if (pair_ok && static_cast<size_t>(u + 1) < pair_off.size()) {
-            for (uint64_t pos = pair_off[u]; pos < pair_off[u + 1]; ++pos) {
+        if (pair_ok) {
+            const uint64_t begin =
+                static_cast<uint64_t>(g.out_offset(u));
+            const uint64_t end =
+                static_cast<uint64_t>(g.out_offset(u + 1));
+            for (uint64_t pos = begin; pos < end; ++pos) {
                 const uint64_t record = pair_flat[pos];
                 const NodeID v = static_cast<NodeID>(
                     ecg_reuse_plan::extractReusePlanDest(record));

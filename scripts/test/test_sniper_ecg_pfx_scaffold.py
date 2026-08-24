@@ -3,6 +3,8 @@ from pathlib import Path
 import shutil
 import subprocess
 
+from scripts.experiments.ecg import roi_matrix
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -300,6 +302,30 @@ def test_sniper_computed_address_uses_transport_matched_loops():
         "reuse_plan_transport_matched_enabled();") == 5
     assert source.count("[REUSE_PLAN_TRANSPORT_MATCHED]") == 6
     assert "reuse_plan_transport_matched && !reuse_plan_trace_on" in source
+    assert "require_canonical_reuse_plan_offsets" in source
+    assert source.count("pair_off[") == 1  # pre-ROI weighted-record packing
+    assert "reuse_plan_off[" not in source
+    assert "bfs_pairs.offsets[" not in source
+    assert "pairs.offsets[" not in source
+    assert "const uint64_t begin = epoch_packed_off" not in source
+    assert "const uint64_t begin = bfs_packed_off" not in source
+    pr_window = source.split("int run_pr(", 1)[1].split("int run_bfs(", 1)[0]
+    bfs_window = source.split("int run_bfs(", 1)[1].split("int run_sssp(", 1)[0]
+    sssp_window = source.split("int run_sssp(", 1)[1].split("int run_bc(", 1)[0]
+    bc_window = source.split("int run_bc(", 1)[1].split("int run_cc(", 1)[0]
+    cc_window = source.split("int run_cc(", 1)[1]
+    assert "graph.in_offset(node)" in pr_window
+    assert "graph.out_offset(node)" not in pr_window
+    for window in (bfs_window, sssp_window, bc_window, cc_window):
+        assert "graph.out_offset(" in window
+        assert "graph.in_offset(" not in window
+    for path in (
+            "bench/src_sniper/bc.cc",
+            "bench/src_sniper/cc.cc",
+            "bench/src_sniper/sssp.cc"):
+        standalone = read(path)
+        assert "require_canonical_reuse_plan_offsets" in standalone
+        assert "pair_off[" not in standalone
     assert 'env["SNIPER_REUSE_PLAN_TRANSPORT_MATCHED"] = "1"' in runner
     assert 'env["SNIPER_ENABLE_ECG_EXTRACT"] = "1"' in runner
     assert "transport_record_bytes = explicit_ecg_record_bytes(8)" in runner
@@ -345,6 +371,54 @@ def test_sniper_computed_address_uses_transport_matched_loops():
     assert '"sniper_reuse_bind_certified_prefixes"' in runner
     assert '"sniper_reuse_bind_certified_fallbacks"' in runner
     assert "certified ReuseBind prefix did not transition" in runner
+
+
+def test_sniper_csr_substitution_receipt_is_fail_closed():
+    receipt = (
+        "[ECG-CSR-SUBSTITUTION sim=sniper kernel=pr active=1 valid=1 "
+        "offset_source=csr direction=in rows=256 records=4096]")
+    row = {"timing_valid_for_speedup": "1"}
+    assert roi_matrix.apply_sniper_csr_substitution_receipt(
+        row, receipt, "pr", required=True)
+    assert row["sniper_csr_substitution_receipt_count"] == 1
+    assert row["sniper_csr_substitution_active"] == 1
+    assert row["sniper_csr_substitution_direction"] == "in"
+    assert row["sniper_csr_substitution_records"] == 4096
+    assert "error" not in row
+
+    missing = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_sniper_csr_substitution_receipt(
+        missing, "", "pr", required=True)
+    assert missing["status"] == "error"
+
+    wrong_direction = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_sniper_csr_substitution_receipt(
+        wrong_direction,
+        receipt.replace("direction=in", "direction=out"),
+        "pr", required=True)
+    assert wrong_direction["status"] == "error"
+
+    duplicate = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_sniper_csr_substitution_receipt(
+        duplicate, f"{receipt}\n{receipt}", "pr", required=True)
+    assert duplicate["status"] == "error"
+
+    invalid = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_sniper_csr_substitution_receipt(
+        invalid, receipt.replace("valid=1", "valid=0"),
+        "pr", required=True)
+    assert invalid["status"] == "error"
+
+    empty = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_sniper_csr_substitution_receipt(
+        empty, receipt.replace("records=4096", "records=0"),
+        "pr", required=True)
+    assert empty["status"] == "error"
+
+    optional = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_sniper_csr_substitution_receipt(
+        optional, "", "pr", required=False)
+    assert "error" not in optional
 
 
 def test_sniper_epoch_cache_and_bind_prefix_are_exact(tmp_path):

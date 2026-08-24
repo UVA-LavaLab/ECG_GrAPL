@@ -132,6 +132,9 @@ pvector<ScoreT> Brandes_Gem5(const Graph &g, int num_iters) {
             g, static_cast<uint32_t>(kNumVtxPerLine),
             edge_epoch_count, /*linemin=*/true,
             pair_off, pair_records, /*push_out_edges=*/true);
+        gem5_require_canonical_reuse_plan_offsets(
+            g, pair_off, pair_records.size(),
+            /*push_out_edges=*/true, "bc");
         pair_flat = pvector<uint64_t>(
             pair_records.size(), uint64_t(0), 4096);
         std::copy(pair_records.begin(), pair_records.end(), pair_flat.begin());
@@ -216,11 +219,13 @@ pvector<ScoreT> Brandes_Gem5(const Graph &g, int num_iters) {
                     path_counts[v] = old_paths + source_paths;
                 }
             };
-            if (pair_ok &&
-                static_cast<size_t>(u + 1) < pair_off.size()) {
+            if (pair_ok) {
                 // The packed ReusePlan record replaces the unweighted CSR edge word.
-                for (uint64_t pos = pair_off[u];
-                     pos < pair_off[u + 1]; ++pos) {
+                const uint64_t begin =
+                    static_cast<uint64_t>(g.out_offset(u));
+                const uint64_t end =
+                    static_cast<uint64_t>(g.out_offset(u + 1));
+                for (uint64_t pos = begin; pos < end; ++pos) {
                     const uint64_t record = ecg_flow_load_on
                         ? gem5_ecg_flow_load_instruction(&pair_flat[pos])
                         : ecg_plan_load_on

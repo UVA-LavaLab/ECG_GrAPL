@@ -600,9 +600,9 @@ bool buildInEdgeReusePlanRecords32(
 }
 
 template <typename GraphT, typename OffsetContainer>
-bool reusePlanOffsetsMatchInCsr(
+bool reusePlanOffsetsMatchCsr(
         const GraphT& g, const OffsetContainer& record_off,
-        uint64_t record_count) {
+        uint64_t record_count, bool push_out_edges) {
     const uint32_t n = static_cast<uint32_t>(g.num_nodes());
     if (record_off.size() != static_cast<size_t>(n) + 1 ||
         record_off.empty() || record_off.front() != 0 ||
@@ -613,13 +613,23 @@ bool reusePlanOffsetsMatchInCsr(
     for (uint32_t u = 0; u <= n; ++u) {
         if (u > 0 && record_off[u] < record_off[u - 1])
             return false;
-        const int64_t csr_offset = g.in_offset(u);
+        const int64_t csr_offset = push_out_edges
+            ? g.out_offset(u)
+            : g.in_offset(u);
         if (csr_offset < 0 ||
             record_off[u] != static_cast<uint64_t>(csr_offset)) {
             return false;
         }
     }
     return true;
+}
+
+template <typename GraphT, typename OffsetContainer>
+bool reusePlanOffsetsMatchInCsr(
+        const GraphT& g, const OffsetContainer& record_off,
+        uint64_t record_count) {
+    return reusePlanOffsetsMatchCsr(
+        g, record_off, record_count, /*push_out_edges=*/false);
 }
 
 template <typename GraphT, typename OffsetContainer, typename RecordContainer>
