@@ -61,6 +61,7 @@ POLICY_ORDER = [
     "ECG_REUSE_PLAN_LRU",
     "ECG_REUSE_PLAN_RRIP",
     "ECG_REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
     "ECG_REUSE_PLAN_ADMISSION_FLOWTHROUGH",
     "ECG_REUSE_PLAN_DEGREE",
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH",
@@ -103,6 +104,8 @@ POLICY_LABELS = {
     "ECG_REUSE_PLAN_RRIP": "ReusePlan-RRIP",
     "ECG_REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH":
         "ReusePlan-RRIP-no-epoch+FlowThrough",
+    "ECG_REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH":
+        "ReusePlan-RRIP-recency+FlowThrough",
     "ECG_REUSE_PLAN_ADMISSION_FLOWTHROUGH":
         "ReusePlan-epoch-admission+FlowThrough",
     "ECG_REUSE_PLAN_DEGREE": "ReusePlan-degree",
@@ -142,6 +145,9 @@ POLICY_DESCRIPTIONS = {
     "ECG_REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH":
         "ReusePlan RRIP-first eligibility and records-first selection with "
         "epoch ranking disabled",
+    "ECG_REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH":
+        "ReusePlan RRIP-first eligibility and records-first selection with "
+        "property recency replacing epoch ranking",
     "ECG_REUSE_PLAN_ADMISSION_FLOWTHROUGH":
         "Experimental ReusePlan future-distance admission diagnostic",
     "ECG_REUSE_PLAN_DEGREE": "ReusePlan transport with degree-first victim selection",

@@ -813,10 +813,12 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
             ++onlineDuelingStats.victimZeroStampedSelections;
 
         ecg_policy::WayState noEpochWays[64];
+        ecg_policy::WayState recencyNoEpochWays[64];
         for (size_t i = 0; i < nc; ++i) {
             noEpochWays[i] = ws[i];
             noEpochWays[i].stamped = false;
             noEpochWays[i].dist = 0;
+            recencyNoEpochWays[i] = noEpochWays[i];
         }
         ecg_policy::VictimReason selectedReason =
             ecg_policy::VictimReason::RRIP;
@@ -824,12 +826,22 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
             ws, nc, variant, rrpvMax, &selectedReason);
         const size_t noEpochVidx = ecg_policy::selectVictim(
             noEpochWays, nc, variant, rrpvMax);
+        const size_t recencyNoEpochVidx = ecg_policy::selectVictim(
+            recencyNoEpochWays, nc,
+            ecg_policy::RRIP_NO_EPOCH_RECENCY, rrpvMax);
         if (
                 victimRequestValid &&
                 ecg_policy::victimUsedEpoch(selectedReason, ws[vidx]))
             ++onlineDuelingStats.victimEpochEligibleSelections;
         if (victimRequestValid && vidx != noEpochVidx)
             ++onlineDuelingStats.victimEpochDecisiveSelections;
+        if (
+                victimRequestValid &&
+                (variant == ecg_policy::RRIP_FIRST ||
+                 variant == ecg_policy::RRIP_NO_EPOCH ||
+                 variant == ecg_policy::RRIP_NO_EPOCH_RECENCY) &&
+                vidx != recencyNoEpochVidx)
+            ++onlineDuelingStats.victimEpochVsRecencyDecisiveSelections;
         if (vidx < onlineDuelingStats.victimWaySelections.size())
             ++onlineDuelingStats.victimWaySelections[vidx];
         for (size_t i = 0; i < nc; i++) getData(candidates[i])->rrpv = ws[i].rrpv;  // persist SRRIP aging
@@ -859,6 +871,10 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
             pol = "ECG:rrip_no_epoch";
             reason = !isProp(victim) ? "max-rrpv record by recency"
                                      : "max-rrpv property fallback";
+        } else if (variant == 9) {
+            pol = "ECG:rrip_no_epoch_recency";
+            reason = !isProp(victim) ? "max-rrpv record by recency"
+                                     : "max-rrpv property by recency";
         } else {
             pol = epol;
             reason = !isProp(victim) ? "record by recency"
@@ -1060,6 +1076,9 @@ GraphEcgRP::OnlineDuelingStats::OnlineDuelingStats(
     ADD_STAT(
         victimEpochDecisiveSelections,
         "Victim selections changed by removing all epoch metadata"),
+    ADD_STAT(
+        victimEpochVsRecencyDecisiveSelections,
+        "RRIP-first victims changed versus a property-recency no-epoch shadow"),
     ADD_STAT(
         victimWaySelections,
         "Victim selections by candidate-way index")

@@ -130,7 +130,10 @@ Two attribution-only controls isolate victim-rule components:
 - `record_lru` keeps epoch-first's records-first ordering, then uses property
   recency with no epoch ranking.
 - `rrip_no_epoch` keeps RRIP-first eligibility, aging, and records-first
-  ordering, but forces property epoch distance to zero.
+  ordering, but resolves property ties by set position.
+- `rrip_no_epoch_recency` keeps the same RRIP-first mechanics and resolves
+  property ties by last-touch recency, providing the neutral epoch-information
+  control.
 
 These controls are decomposition tools, not proposed policies.
 

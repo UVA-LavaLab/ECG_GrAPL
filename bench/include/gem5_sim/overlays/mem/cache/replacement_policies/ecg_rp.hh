@@ -106,6 +106,7 @@ class GraphEcgRP : public Base
         statistics::Scalar victimAllPropertyStampedSelections;
         statistics::Scalar victimEpochEligibleSelections;
         statistics::Scalar victimEpochDecisiveSelections;
+        statistics::Scalar victimEpochVsRecencyDecisiveSelections;
         statistics::Vector victimWaySelections;
     } onlineDuelingStats;
 };

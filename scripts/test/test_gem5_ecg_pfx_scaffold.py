@@ -1035,6 +1035,7 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
             "victimAllPropertyStampedSelections",
             "victimEpochEligibleSelections",
             "victimEpochDecisiveSelections",
+            "victimEpochVsRecencyDecisiveSelections",
             "victimWaySelections"):
         stat_type = "Vector" if name == "victimWaySelections" else "Scalar"
         assert f"statistics::{stat_type} {name}" in rp_header
@@ -1043,6 +1044,9 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
     assert "++onlineDuelingStats.victimRequestInvalid;" in rp_source
     assert "++onlineDuelingStats.victimEpochEligibleSelections;" in rp_source
     assert "++onlineDuelingStats.victimEpochDecisiveSelections;" in rp_source
+    assert (
+        "++onlineDuelingStats.victimEpochVsRecencyDecisiveSelections;"
+        in rp_source)
     assert "victimUsedEpoch(selectedReason, ws[vidx])" in rp_source
     assert (
         rp_source.index("if (!getData(candidate)->valid) return candidate;")
@@ -1065,6 +1069,7 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
         "system.l3cache.replacement_policy.victimAllPropertyStampedSelections 1 #\n"
         "system.l3cache.replacement_policy.victimEpochEligibleSelections 10 #\n"
         "system.l3cache.replacement_policy.victimEpochDecisiveSelections 4 #\n"
+        "system.l3cache.replacement_policy.victimEpochVsRecencyDecisiveSelections 3 #\n"
         "system.l3cache.replacement_policy.victimWaySelections::way0 12 #\n"
         "system.l3cache.replacement_policy.victimWaySelections::way1 8 #\n"
         "---------- End Simulation Statistics   ----------\n")
@@ -1087,6 +1092,10 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
         parsed["gem5_reuse_plan_victim_epoch_eligible_selections"] == 10)
     assert (
         parsed["gem5_reuse_plan_victim_epoch_decisive_selections"] == 4)
+    assert (
+        parsed[
+            "gem5_reuse_plan_victim_epoch_vs_recency_decisive_selections"]
+        == 3)
     assert parsed["gem5_reuse_plan_victim_way_counts"] == [12, 8]
     assert parsed["gem5_reuse_plan_victim_way_max_index"] == 0
     assert roi_matrix.apply_gem5_reuse_plan_coverage(parsed, required=True)
@@ -1119,6 +1128,10 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
     assert (
         parsed["gem5_reuse_plan_victim_epoch_decisive_given_eligible"]
         == pytest.approx(0.4))
+    assert (
+        parsed[
+            "gem5_reuse_plan_victim_epoch_vs_recency_decisive_share"]
+        == pytest.approx(3 / 18))
     assert parsed["gem5_reuse_plan_victim_way_max_share"] == 0.6
     assert parsed["gem5_reuse_plan_coverage_validated"] == 1
 
@@ -1151,6 +1164,7 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
         "gem5_reuse_plan_victim_context_mismatch_ways": 0,
         "gem5_reuse_plan_victim_epoch_eligible_selections": 0,
         "gem5_reuse_plan_victim_epoch_decisive_selections": 0,
+        "gem5_reuse_plan_victim_epoch_vs_recency_decisive_selections": 0,
         "status": "ok",
     })
     zero_stamps.pop("error", None)
@@ -1185,6 +1199,30 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
         invalid_no_epoch, required=True)
     assert "must be epoch-inert" in invalid_no_epoch["error"]
 
+    invalid_recency = dict(parsed)
+    invalid_recency.update({
+        "ecg_variant_effective": "rrip_no_epoch_recency",
+        "gem5_reuse_plan_victim_epoch_eligible_selections": 0,
+        "gem5_reuse_plan_victim_epoch_decisive_selections": 0,
+        "gem5_reuse_plan_victim_epoch_vs_recency_decisive_selections": 1,
+        "status": "ok",
+    })
+    invalid_recency.pop("error", None)
+    assert not roi_matrix.apply_gem5_reuse_plan_coverage(
+        invalid_recency, required=True)
+    assert "must match its recency shadow" in invalid_recency["error"]
+
+    vacuous_rrip = dict(parsed)
+    vacuous_rrip.update({
+        "ecg_variant_effective": "rrip_first",
+        "gem5_reuse_plan_victim_epoch_vs_recency_decisive_selections": 0,
+        "status": "ok",
+    })
+    vacuous_rrip.pop("error", None)
+    assert not roi_matrix.apply_gem5_reuse_plan_coverage(
+        vacuous_rrip, required=True)
+    assert "property-recency shadow" in vacuous_rrip["error"]
+
     rrip = roi_matrix.parse_policy_spec(
         "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH")
     assert roi_matrix.requires_gem5_reuse_plan_coverage(
@@ -1216,6 +1254,15 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
         "[ECG-VARIANT-RECEIPT sim=gem5 requested=rrip_no_epoch "
         "effective=8 dueling=0]",
         "rrip_no_epoch",
+        required=True)
+    rrip_recency = roi_matrix.parse_policy_spec(
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH")
+    assert rrip_recency.ecg_variant == "rrip_no_epoch_recency"
+    assert roi_matrix.apply_gem5_variant_receipt(
+        {"timing_valid_for_speedup": "1"},
+        "[ECG-VARIANT-RECEIPT sim=gem5 "
+        "requested=rrip_no_epoch_recency effective=9 dueling=0]",
+        "rrip_no_epoch_recency",
         required=True)
 
 

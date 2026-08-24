@@ -590,6 +590,15 @@ def _select_rrip_no_epoch(ways):
     return min(way["way"] for way in candidates)
 
 
+def _select_rrip_no_epoch_recency(ways):
+    mx = max(w["rrpv"] for w in ways)
+    candidates = [way for way in ways if way["rrpv"] == mx]
+    records = [way for way in candidates if way["prop"] == 0]
+    return _first_by(
+        records if records else candidates,
+        lambda way: (way["last"],))
+
+
 def _select_degree(ways):
     mx = max(w["rrpv"] for w in ways)
     cand = [w for w in ways if w["rrpv"] == mx]
@@ -631,6 +640,7 @@ SELECTORS = {
     "ECG:epoch_only": _select_epoch,
     "ECG:rrip_first": _select_rrip,
     "ECG:rrip_no_epoch": _select_rrip_no_epoch,
+    "ECG:rrip_no_epoch_recency": _select_rrip_no_epoch_recency,
     "ECG:degree_first": _select_degree,
 }
 
@@ -1214,7 +1224,8 @@ def run_synthetic():
     ok = True
     for variant in ["tier", "dueling", "grasp_only", "epoch_only", "rrip_first",
                     "epoch_first", "degree_first", "lru_only", "record_lru",
-                    "rrip_no_epoch", "shortcircuit"]:
+                    "rrip_no_epoch", "rrip_no_epoch_recency",
+                    "shortcircuit"]:
         p = subprocess.run([str(SYNTH_BIN)], env={**os.environ, "ECG_VARIANT": variant},
                            capture_output=True, text=True, timeout=60)
         for line in p.stdout.splitlines():
@@ -1303,6 +1314,8 @@ def main(argv=None):
               ("rrip_first", {**ECG_ENV, "ECG_VARIANT": "rrip_first"}),
               ("rrip_no_epoch", {
                   **ECG_ENV, "ECG_VARIANT": "rrip_no_epoch"}),
+              ("rrip_no_epoch_recency", {
+                  **ECG_ENV, "ECG_VARIANT": "rrip_no_epoch_recency"}),
               ("epoch_first", {**ECG_ENV, "ECG_VARIANT": "epoch_first"}),
               ("degree_first", {**ECG_ENV, "ECG_VARIANT": "degree_first"}),
               ("shortcircuit", {**ECG_ENV, "ECG_VARIANT": "shortcircuit"})]
@@ -1340,6 +1353,7 @@ def main(argv=None):
     if BC.exists():
         print("\n-- cache_sim BC cross-kernel (BC evicts property -> live epoch branch + stamp invariant) --")
         for variant in ["grasp_only", "epoch_only", "rrip_first",
+                        "rrip_no_epoch", "rrip_no_epoch_recency",
                         "rrip_no_epoch", "epoch_first", "degree_first",
                         "shortcircuit"]:
             ok_all &= verify_trace(f"bc/{variant}", run_bc({**ECG_ENV, "ECG_VARIANT": variant}, COV_ENV),

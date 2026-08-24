@@ -342,6 +342,9 @@ GEM5_STAT_KEYS = {
         "system.l3cache.replacement_policy.victimEpochEligibleSelections",
     "gem5_reuse_plan_victim_epoch_decisive_selections":
         "system.l3cache.replacement_policy.victimEpochDecisiveSelections",
+    "gem5_reuse_plan_victim_epoch_vs_recency_decisive_selections":
+        "system.l3cache.replacement_policy."
+        "victimEpochVsRecencyDecisiveSelections",
     # Demand-load (cpu.data) L3 stats EXCLUDING prefetcher fills. The L2 stream
     # prefetcher otherwise dominates overall::total (>>demand). Sniper's NUCA
     # counters do not provide this split, so the pipeline treats its prefetched
@@ -2270,6 +2273,7 @@ def apply_gem5_reuse_plan_coverage(
         "gem5_reuse_plan_victim_all_property_stamped_selections",
         "gem5_reuse_plan_victim_epoch_eligible_selections",
         "gem5_reuse_plan_victim_epoch_decisive_selections",
+        "gem5_reuse_plan_victim_epoch_vs_recency_decisive_selections",
         "gem5_reuse_plan_victim_way_counts",
     )
     missing = [field for field in required_fields if field not in row]
@@ -2302,6 +2306,9 @@ def apply_gem5_reuse_plan_coverage(
         row["gem5_reuse_plan_victim_epoch_eligible_selections"])
     epoch_decisive = int(
         row["gem5_reuse_plan_victim_epoch_decisive_selections"])
+    epoch_vs_recency_decisive = int(
+        row[
+            "gem5_reuse_plan_victim_epoch_vs_recency_decisive_selections"])
     way_counts = [
         int(count)
         for count in row["gem5_reuse_plan_victim_way_counts"]
@@ -2378,6 +2385,12 @@ def apply_gem5_reuse_plan_coverage(
             "rrip_first never changed a victim relative to the "
             "metadata-disabled shadow")
     if (
+            effective_variant == "rrip_first" and
+            epoch_vs_recency_decisive <= 0):
+        errors.append(
+            "rrip_first never changed a victim relative to the "
+            "property-recency shadow")
+    if (
             effective_variant in {"epoch_first", "epoch_only"} and
             epoch_eligible != all_property_stamped_selections):
         errors.append(
@@ -2400,11 +2413,17 @@ def apply_gem5_reuse_plan_coverage(
     if (
             effective_variant in {
                 "grasp_only", "lru_only", "record_lru",
-                "rrip_no_epoch"} and
+                "rrip_no_epoch", "rrip_no_epoch_recency"} and
             (epoch_eligible != 0 or epoch_decisive != 0)):
         errors.append(
             f"{effective_variant} must be epoch-inert, got "
             f"eligible={epoch_eligible} decisive={epoch_decisive}")
+    if (
+            effective_variant == "rrip_no_epoch_recency" and
+            epoch_vs_recency_decisive != 0):
+        errors.append(
+            "rrip_no_epoch_recency must match its recency shadow, got "
+            f"{epoch_vs_recency_decisive} divergences")
     if errors:
         mark_row_error(
             row, "ReusePlan stamp-coverage identities failed: "
@@ -2439,6 +2458,8 @@ def apply_gem5_reuse_plan_coverage(
             epoch_decisive / valid,
         "gem5_reuse_plan_victim_epoch_decisive_given_eligible":
             epoch_decisive / epoch_eligible if epoch_eligible else 0.0,
+        "gem5_reuse_plan_victim_epoch_vs_recency_decisive_share":
+            epoch_vs_recency_decisive / valid,
         "gem5_reuse_plan_victim_way_max_share":
             max(way_counts) / selections,
         "gem5_reuse_plan_coverage_validated": 1,
@@ -2800,6 +2821,7 @@ def apply_gem5_variant_receipt(
         "epoch_only": 3, "shortcircuit": 4, "legacy": 4,
         "degree_first": 5, "traversal": 5, "lru_only": 6,
         "record_lru": 7, "rrip_no_epoch": 8,
+        "rrip_no_epoch_recency": 9,
     }.get(requested)
     row["gem5_variant_requested_receipt"] = actual_requested
     row["gem5_variant_effective_receipt"] = effective
@@ -2848,6 +2870,7 @@ def apply_sniper_variant_receipt(
         "epoch_only": 3, "shortcircuit": 4, "legacy": 4,
         "degree_first": 5, "traversal": 5, "lru_only": 6,
         "record_lru": 7, "rrip_no_epoch": 8,
+        "rrip_no_epoch_recency": 9,
     }.get(requested)
     row["sniper_variant_requested_receipt"] = actual_requested
     row["sniper_variant_effective_receipt"] = effective

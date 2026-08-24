@@ -9,7 +9,7 @@
 // its live eviction trace. See scripts/experiments/ecg/verify_ecg.py and
 // bench/src_sim/test_ecg_victim.cc.
 //
-// The nine variants (selected by ECG_VARIANT) and the invariants are documented
+// The ten variants (selected by ECG_VARIANT) and the invariants are documented
 // in wiki/ReusePlan-FlowThrough.md. Summary:
 //   - epoch is PROPERTY-ONLY; record (non-property) lines never carry a usable
 //     epoch and are ranked by recency / set order.
@@ -41,6 +41,7 @@ enum Variant {
     LRU_ONLY     = 6,  // oldest line regardless of metadata
     RECORD_LRU   = 7,  // records first by recency, then property LRU; no epoch
     RRIP_NO_EPOCH = 8, // rrip_first eligibility/records-first with epoch disabled
+    RRIP_NO_EPOCH_RECENCY = 9, // same, but property ties use recency
 };
 
 enum class VictimReason : uint8_t {
@@ -51,6 +52,7 @@ enum class VictimReason : uint8_t {
     DEGREE_PROPERTY,
     RECENCY_FALLBACK,
     PROPERTY_FALLBACK,
+    PROPERTY_RECENCY,
 };
 
 inline int parseVariant(const char* value) {
@@ -67,6 +69,8 @@ inline int parseVariant(const char* value) {
     if (variant == "lru_only") return LRU_ONLY;
     if (variant == "record_lru") return RECORD_LRU;
     if (variant == "rrip_no_epoch") return RRIP_NO_EPOCH;
+    if (variant == "rrip_no_epoch_recency")
+        return RRIP_NO_EPOCH_RECENCY;
     std::fprintf(stderr, "[FATAL] unknown ECG_VARIANT=%s\n", value);
     std::abort();
 }
@@ -466,20 +470,35 @@ inline size_t selectVictim(WayState* ways, size_t n, int variant,
     }
 
     // rrip_first (default): among the max-RRPV set, evict the oldest record by
-    // recency; else the farthest effective-epoch property. rrip_no_epoch keeps
-    // the same gate and records-first rule but forces every property distance
-    // to zero. Age and retry if the max-RRPV set yields no candidate.
-    const bool rripNoEpoch = variant == RRIP_NO_EPOCH;
+    // recency; else the farthest effective-epoch property. The two no-epoch
+    // controls retain the same gate and records-first rule, then use either
+    // fixed set order or true recency among property candidates.
+    const bool rripNoEpochPosition = variant == RRIP_NO_EPOCH;
+    const bool rripNoEpochRecency =
+        variant == RRIP_NO_EPOCH_RECENCY;
     for (;;) {
         size_t recIdx = n; uint64_t ro = 0;
-        size_t propIdx = n; uint32_t pb = 0;
+        size_t propIdx = n; uint32_t pb = 0; uint64_t propOldest = 0;
         for (size_t i = 0; i < n; i++) {
             if (ways[i].rrpv < rrpvMax) continue;
             if (!ways[i].prop) {
                 if (recIdx == n || ways[i].recency < ro) { recIdx = i; ro = ways[i].recency; }
             } else {
-                uint32_t d = rripNoEpoch ? 0 : effDist(ways[i]);
-                if (propIdx == n || d > pb) { propIdx = i; pb = d; }
+                if (rripNoEpochRecency) {
+                    if (
+                            propIdx == n ||
+                            ways[i].recency < propOldest) {
+                        propIdx = i;
+                        propOldest = ways[i].recency;
+                    }
+                } else {
+                    uint32_t d =
+                        rripNoEpochPosition ? 0 : effDist(ways[i]);
+                    if (propIdx == n || d > pb) {
+                        propIdx = i;
+                        pb = d;
+                    }
+                }
             }
         }
         if (recIdx != n)
@@ -487,8 +506,11 @@ inline size_t selectVictim(WayState* ways, size_t n, int variant,
         if (propIdx != n)
             return selected(
                 propIdx,
-                rripNoEpoch ? VictimReason::PROPERTY_FALLBACK
-                            : VictimReason::EPOCH_PROPERTY);
+                rripNoEpochPosition
+                    ? VictimReason::PROPERTY_FALLBACK
+                    : rripNoEpochRecency
+                        ? VictimReason::PROPERTY_RECENCY
+                        : VictimReason::EPOCH_PROPERTY);
         for (size_t i = 0; i < n; i++) if (ways[i].rrpv < rrpvMax) ways[i].rrpv++;
     }
 }

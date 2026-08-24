@@ -61,6 +61,7 @@
     "reuse_plan_shortcircuit_timing": "One cit-Patents-n18-sym i=1 O3 timing cell promoting the replay-selected shortcircuit arm against local LRU, transport control, and RRIP-first.",
     "reuse_plan_epoch_attribution": "One cit-Patents-n18-sym i=1 O3 cell measuring live ReusePlan stamp coverage and separating epoch, RRIP, and GRASP victim-rule contributions under identical compact FlowThrough transport.",
     "reuse_plan_rrip_epoch_attribution": "One cit-Patents-n18-sym i=1 O3 cell applying the metadata-disabled RRIP shadow as a real policy to isolate the end-to-end epoch contribution.",
+    "reuse_plan_rrip_recency_attribution": "One cit-Patents-n18-sym i=1 O3 cell comparing RRIP epoch ranking against neutral property recency and positional controls.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
@@ -2227,7 +2228,44 @@
         "GEM5_GRAPH_ARRAY_STATS": "1",
         "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
       },
-      "notes": "Applied epoch counterfactual. RRIP-no-epoch keeps the exact RRIP eligibility gate, records-first selection, insertion, transport, and guest work of RRIP-first while forcing property epoch distance to zero. RRIP-first versus RRIP-no-epoch is the only end-to-end epoch contrast; GRASP-only and transport-LRU remain local decomposition controls."
+      "notes": "Applied positional counterfactual. RRIP-no-epoch keeps the exact RRIP eligibility gate, records-first selection, insertion, transport, and guest work of RRIP-first while replacing epoch distance with fixed set order. This stage measures epoch-path versus positional selection; stage 66 supplies the neutral property-recency epoch-information test. GRASP-only and transport-LRU remain local decomposition controls."
+    },
+    {
+      "name": "66_gem5_rrip_recency_attribution_cit_i1",
+      "kind": "roi_matrix",
+      "profiles": [
+        "reuse_plan_rrip_recency_attribution"
+      ],
+      "suite": "gem5",
+      "graph_set": "cit_patents_n18_transport_calibration",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "ecg_isa_variant": "computed",
+      "gem5_cpu_type": "O3",
+      "gem5_compact_reuse_bind_performance": true,
+      "policy_sharding_allowed": false,
+      "out_subdir": "66_gem5_rrip_recency_attribution_cit_i1",
+      "timeout_gem5": 86400,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_TIER_BITS": "2",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "GEM5_GRAPH_ARRAY_STATS": "1",
+        "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
+      },
+      "notes": "Neutral epoch-information test. All three ReusePlan arms share RRIP eligibility, aging, records-first selection, insertion, compact transport, and guest work. The positional control chooses the first property candidate; the neutral control chooses the oldest property candidate; RRIP-first uses epoch distance. Epoch information is useful only if RRIP-first materially beats the recency control."
     },
     {
       "name": "70_gem5_pagerank_i1",

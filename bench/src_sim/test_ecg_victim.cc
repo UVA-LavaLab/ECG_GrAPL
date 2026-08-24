@@ -172,6 +172,24 @@ int main() {
     }
     {
         ecg_policy::WayState ways[2] = {
+            {true, 7, 30, 0, 1, true},
+            {true, 7, 10, 0, 31, true},
+        };
+        ecg_policy::VictimReason reason;
+        const size_t victim = ecg_policy::selectVictim(
+            ways, 2, ecg_policy::RRIP_NO_EPOCH_RECENCY, 7, &reason);
+        const bool ok = (
+            victim == 1 &&
+            reason == ecg_policy::VictimReason::PROPERTY_RECENCY &&
+            !ecg_policy::victimUsedEpoch(reason, ways[victim]));
+        printf(
+            "    %-46s expect=way1 got=way%zu  [%s]\n",
+            "rrip_no_epoch_recency uses property recency",
+            victim, ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
+    }
+    {
+        ecg_policy::WayState ways[2] = {
             {true, 7, 10, 0, 1, true},
             {true, 7, 20, 0, 5, true},
         };
@@ -290,6 +308,13 @@ int main() {
         check(L3, "all property max-rrpv -> first way, ignores epoch",
               {{paddr(0),7,1,50,0},{paddr(1),7,31,5,0},{paddr(2),7,30,10,0},{paddr(3),7,20,20,0},
                {paddr(4),7,7,30,0},{paddr(5),7,15,40,0},{paddr(6),7,2,60,0},{paddr(7),7,11,70,0}}, 0);
+        check(L3, "mixed max-rrpv -> oldest record by recency",
+              {{raddr(0),7,0,50,0},{paddr(1),7,31,1,0},{raddr(2),7,0,5,0},{paddr(3),7,20,2,0},
+               {paddr(4),7,7,3,0},{paddr(5),7,15,4,0},{paddr(6),7,2,6,0},{paddr(7),7,11,7,0}}, 2);
+    } else if (var == "rrip_no_epoch_recency") {
+        check(L3, "all property max-rrpv -> oldest recency",
+              {{paddr(0),7,31,50,0},{paddr(1),7,1,5,0},{paddr(2),7,30,10,0},{paddr(3),7,20,20,0},
+               {paddr(4),7,7,30,0},{paddr(5),7,15,40,0},{paddr(6),7,2,60,0},{paddr(7),7,11,70,0}}, 1);
         check(L3, "mixed max-rrpv -> oldest record by recency",
               {{raddr(0),7,0,50,0},{paddr(1),7,31,1,0},{raddr(2),7,0,5,0},{paddr(3),7,20,2,0},
                {paddr(4),7,7,3,0},{paddr(5),7,15,4,0},{paddr(6),7,2,6,0},{paddr(7),7,11,7,0}}, 2);
