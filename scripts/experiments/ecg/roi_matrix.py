@@ -1997,6 +1997,27 @@ def apply_gem5_array_attribution(
                 row,
                 "ReusePlan array attribution observed no record traffic")
             valid = False
+        if (
+                int(row.get("ecg_flowthrough") or 0) == 1 and
+                int(row.get("pr_iterations") or 0) == 1):
+            record_size = int(
+                row.get("gem5_array_record_size") or 0)
+            line_size = parse_size_bytes(
+                str(row.get("line_size") or "64"))
+            expected_record_lines = (
+                (record_size + line_size - 1) // line_size)
+            record_misses = int(
+                row[
+                    "gem5_array_record_demand_misses_cpu_data"])
+            row["gem5_array_expected_record_lines"] = (
+                expected_record_lines)
+            if record_misses != expected_record_lines:
+                mark_row_error(
+                    row,
+                    "FlowThrough record stream did not cold-miss exactly "
+                    f"once per line: misses={record_misses} "
+                    f"expected={expected_record_lines}")
+                valid = False
     elif str(row.get("policy") or "") == "LRU":
         if record_activity != 0:
             mark_row_error(

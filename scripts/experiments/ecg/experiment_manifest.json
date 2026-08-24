@@ -58,6 +58,7 @@
     "ecg_proposal_reuse_bind_o3_gate": "Exact O3 request-bound correctness gate for the proposal's compact FlowThrough record load plus one-for-one computed-address ReuseBind property load.",
     "reuse_plan_csr_transport_calibration": "One complete cit-Patents-n18-sym i=1 O3 cell attributing the canonical-CSR ReusePlan transport path against its local LRU denominator.",
     "reuse_plan_matched_policy_replay": "One cit-Patents-n18-sym i=1 cache replay over transport-identical ReusePlan victim arms plus exact Belady.",
+    "reuse_plan_shortcircuit_timing": "One cit-Patents-n18-sym i=1 O3 timing cell promoting the replay-selected shortcircuit arm against local LRU, transport control, and RRIP-first.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
@@ -2112,6 +2113,42 @@
         "TOPT_THREADS": "4"
       },
       "notes": "Every ReusePlan arm uses identical 4-byte FlowThrough transport. T-OPT retains the common warm prefix to establish cache state, marks the cache-stat reset as ROI start, fingerprints only ROI requests, and counts oracle hits/misses only in the ROI suffix; next-use optimization still sees the full warm+ROI sequence. The runner requires the exact six-arm ReusePlan roster to produce one identical post-L2 address/class/read-write fingerprint and Belady result, checks ROI trace accesses equal measured LLC accesses, and requires the oracle floor not exceed measured misses before comparing victim rules. LRU and native GRASP are reference rows with explicitly independent oracle-group hashes."
+    },
+    {
+      "name": "63_gem5_shortcircuit_cit_i1",
+      "kind": "roi_matrix",
+      "profiles": [
+        "reuse_plan_shortcircuit_timing"
+      ],
+      "suite": "gem5",
+      "graph_set": "cit_patents_n18_transport_calibration",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "ecg_isa_variant": "computed",
+      "gem5_cpu_type": "O3",
+      "gem5_compact_reuse_bind_performance": true,
+      "policy_sharding_allowed": false,
+      "out_subdir": "63_gem5_shortcircuit_cit_i1",
+      "timeout_gem5": 86400,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_TIER_BITS": "2",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "GEM5_GRAPH_ARRAY_STATS": "1"
+      },
+      "notes": "Single replay-promoted timing cell. The 4-byte compact record is fail-closed, per-array attribution must validate, FlowThrough records must cold-miss exactly once per line, and all comparisons use one local LRU denominator. This is one n18 sample point, not a general performance claim."
     },
     {
       "name": "70_gem5_pagerank_i1",

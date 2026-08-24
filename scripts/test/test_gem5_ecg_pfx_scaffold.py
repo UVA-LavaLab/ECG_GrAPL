@@ -919,6 +919,8 @@ def test_gem5_array_attribution_is_per_requestor_and_fail_closed():
         "benchmark": "pr",
         "policy": "ECG",
         "ecg_reuse_plan_depth": 2,
+        "ecg_flowthrough": 1,
+        "pr_iterations": 1,
         "gem5_l3_mshrs_actual": 32,
         "l3_demand_data_misses": 6,
         "l3_demand_inst_misses": 2,
@@ -942,6 +944,7 @@ def test_gem5_array_attribution_is_per_requestor_and_fail_closed():
     assert row["gem5_array_demand_misses_cpu_data"] == 6
     assert row["gem5_array_demand_read_bytes_cpu_data"] == 320
     assert row["gem5_plan_offset_roi_activity"] == 0
+    assert row["gem5_array_expected_record_lines"] == 2
     assert row["gem5_array_attribution_validated"] == 1
     assert "error" not in row
 
