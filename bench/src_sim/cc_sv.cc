@@ -43,6 +43,7 @@ pvector<NodeID> ShiloachVishkin_Sim(const Graph &g, CacheType &cache) {
 
     // Compute per-vertex ECG mask array
     graph_ctx.initMaskConfig();
+    cache.initGraphContext(&graph_ctx);
     auto vertex_masks = graph_ctx.computeVertexMasks(g);
     graph_ctx.initMaskArray32(vertex_masks.data(), vertex_masks.size());
 

@@ -92,6 +92,7 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
 
     // Compute per-vertex ECG mask array (supports 8/16/32-bit widths)
     graph_ctx.initMaskConfig();
+    cache.initGraphContext(&graph_ctx);
     auto vertex_masks = graph_ctx.computeVertexMasks(g);  // uint32_t per vertex
     graph_ctx.initMaskArray32(vertex_masks.data(), vertex_masks.size());
     graph_ctx.printSummary();

@@ -377,6 +377,143 @@ def test_csr_transport_calibration_is_one_complete_bounded_cell():
         "-o 5 -n 1 -i 1")
 
 
+def test_transport_matched_topt_trace_is_fail_closed(tmp_path):
+    log = tmp_path / "trace.log"
+    log.write_text(
+        "[T_OPT] L3 FlowThrough-aware Belady "
+        "(warm-start ROI window): accesses=100 "
+        "hits=70 misses=30 sets=16 ways=8 miss_rate=0.3\n"
+        "[T_OPT-TRACE accesses=100 property_accesses=60 "
+        "hash=abc123 line_hash=def456 sets=16 ways=8]\n")
+    parsed = roi_matrix.parse_ecg_log_stats(log)
+    assert parsed == {
+        "topt_trace_accesses": 100,
+        "topt_trace_property_accesses": 60,
+        "topt_trace_hash": "abc123",
+        "topt_trace_line_hash": "def456",
+        "topt_trace_sets": 16,
+        "topt_trace_ways": 8,
+        "topt_hits": 70,
+        "topt_misses": 30,
+        "topt_miss_rate": 0.3,
+    }
+
+    common = {
+        "simulator": "cache_sim",
+        "benchmark": "pr",
+        "options": "-g 8 -i 1",
+        "l3_size": "32kB",
+        "l3_ways": "8",
+        "ecg_reuse_plan_depth": 2,
+        "ecg_flowthrough": 1,
+        "ecg_record_replaces_edge": 1,
+        "ecg_record_bytes": 4,
+        "prefetcher": "none",
+        "topt_trace_requested": 1,
+        "topt_trace_accesses": 100,
+        "topt_trace_property_accesses": 60,
+        "topt_trace_hash": "abc123",
+        "topt_trace_line_hash": "def456",
+        "topt_trace_sets": 16,
+        "topt_trace_ways": 8,
+        "topt_misses": 30,
+        "l3_hits": 70,
+        "l3_misses": 30,
+        "timing_valid_for_speedup": "1",
+    }
+    policy_texts = [
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_GRASP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH",
+    ]
+    policies = [
+        roi_matrix.parse_policy_spec(text) for text in policy_texts]
+    rows = [
+        {**common, "policy_label": policy.label}
+        for policy in policies
+    ]
+    roi_matrix.certify_cache_sim_trace_identity(
+        rows, SimpleNamespace(suite="cache-sim"), policies)
+    assert all(row["topt_trace_matched"] == 1 for row in rows)
+
+    rows[1]["topt_trace_hash"] = "different"
+    roi_matrix.certify_cache_sim_trace_identity(
+        rows, SimpleNamespace(suite="cache-sim"), policies)
+    assert all(row["status"] == "error" for row in rows)
+
+    missing = [
+        {
+            **common,
+            "policy_label": policy.label,
+            "topt_trace_hash": "",
+        }
+        for policy in policies
+    ]
+    roi_matrix.certify_cache_sim_trace_identity(
+        missing, SimpleNamespace(suite="cache-sim"), policies)
+    assert all(row["status"] == "error" for row in missing)
+    assert all(
+        "receipts are missing" in row["error"] for row in missing)
+
+    partial_rows = rows[:2]
+    partial_policies = policies[:2]
+    for row in partial_rows:
+        row.pop("status", None)
+        row.pop("error", None)
+        row["topt_trace_hash"] = "abc123"
+    roi_matrix.certify_cache_sim_trace_identity(
+        partial_rows, SimpleNamespace(suite="cache-sim"),
+        partial_policies)
+    assert all(row["status"] == "error" for row in partial_rows)
+
+
+def test_matched_policy_replay_is_one_unsharded_cell():
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    stages = [
+        stage for stage in manifest["stages"]
+        if "reuse_plan_matched_policy_replay" in
+        stage.get("profiles", [])
+    ]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["name"] == "62_cache_sim_matched_policy_replay"
+    assert stage["suite"] == "cache-sim"
+    assert stage["graph_set"] == "cit_patents_n18_transport_calibration"
+    assert stage["benchmarks"] == ["pr"]
+    assert stage["policy_sharding_allowed"] is False
+    assert stage["prefetcher"] == "none"
+    assert stage["ecg_epochs"] == 32
+    assert stage["env"]["T_OPT"] == "1"
+    assert stage["env"]["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
+    assert stage["policies"] == [
+        "LRU",
+        "GRASP",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_GRASP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH",
+    ]
+
+
+def test_cache_sim_mode_receipt_survives_graph_context_lifetime():
+    cache = (
+        ROOT / "bench/include/cache_sim/cache_sim.h").read_text()
+    assert "ECGMode ecg_mode_snapshot_" in cache
+    assert "ecg_mode_snapshot_ = ctx->mask_config.ecg_mode" in cache
+    assert "return ECGModeToString(ecg_mode_snapshot_);" in cache
+    for kernel in (
+            "pr", "pr_spmv", "bfs", "bc", "cc", "cc_sv", "sssp", "tc"):
+        source = (ROOT / f"bench/src_sim/{kernel}.cc").read_text()
+        assert source.count("cache.initGraphContext(&graph_ctx);") >= 2
+        assert source.index("graph_ctx.initMaskConfig();") < source.rindex(
+            "cache.initGraphContext(&graph_ctx);")
+
+
 def test_final_campaign_is_role_separated():
     manifest = json.loads(MANIFEST_PATH.read_text())
     assert "reuse_plan_final_campaign" in manifest["profiles"]

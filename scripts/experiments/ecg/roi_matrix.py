@@ -419,6 +419,14 @@ GEM5_ARRAY_REQUESTORS = {
     "l2cache.prefetcher": "l2_prefetcher",
 }
 GEM5_ARRAY_OTHER_MISS_SHARE_LIMIT = 0.02
+TOPT_MATCHED_REUSE_PLAN_LABELS = frozenset({
+    "ECG_REUSE_PLAN_LRU_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_GRASP_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_RRIP_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_EPOCH_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH",
+})
 
 ECG_PFX_MODE_VALUES = {
     "degree": "1",
@@ -916,7 +924,9 @@ def run_command(
     material_env = {
         key: value for key, value in sanitize_subprocess_environment(
             env).items()
-        if key.startswith(("ECG_", "GEM5_", "GRAPHBREW_", "OMP_"))
+        if key.startswith((
+            "CACHE_", "ECG_", "GEM5_", "GRAPHBREW_", "OMP_", "TOPT_"
+        )) or key == "T_OPT"
     }
     stdout_path.with_suffix(
         stdout_path.suffix + ".env.json").write_text(
@@ -1328,6 +1338,31 @@ def parse_ecg_log_stats(
                 sidecar.group(3),
             "gem5_reuse_plan_sidecar_payload_hash":
                 sidecar.group(4),
+        })
+    trace = re.search(
+        r"\[T_OPT-TRACE accesses=(\d+) property_accesses=(\d+) "
+        r"hash=([0-9a-fA-F]+) line_hash=([0-9a-fA-F]+) "
+        r"sets=(\d+) ways=(\d+)\]",
+        text)
+    if trace:
+        stats.update({
+            "topt_trace_accesses": int(trace.group(1)),
+            "topt_trace_property_accesses": int(trace.group(2)),
+            "topt_trace_hash": trace.group(3).lower(),
+            "topt_trace_line_hash": trace.group(4).lower(),
+            "topt_trace_sets": int(trace.group(5)),
+            "topt_trace_ways": int(trace.group(6)),
+        })
+    belady = re.search(
+        r"\[T_OPT\] L3 FlowThrough-aware Belady "
+        r"\(warm-start ROI window\): "
+        r"accesses=(\d+) hits=(\d+) misses=(\d+).*?miss_rate=([0-9.eE+-]+)",
+        text)
+    if belady:
+        stats.update({
+            "topt_hits": int(belady.group(2)),
+            "topt_misses": int(belady.group(3)),
+            "topt_miss_rate": float(belady.group(4)),
         })
     return stats
 
@@ -4879,6 +4914,7 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
         "ecg_pfx_delivery": args.ecg_pfx_delivery,
         # Experiment configuration recorded in every row.
         "cache_stream_prefetch_degree": args.cache_stream_prefetch_degree,
+        "topt_trace_requested": int(os.environ.get("T_OPT") is not None),
         "structure_prefetch_degree": (
             args.structure_prefetch_degree
             if args.prefetcher == "STRIDE" else 0),
@@ -4971,6 +5007,134 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
 
 def sanitize(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "", text)
+
+
+def certify_cache_sim_trace_identity(
+        rows: list[dict[str, Any]], args: argparse.Namespace,
+        policies: list[PolicySpec]) -> None:
+    if args.suite not in ("cache-sim", "both"):
+        return
+    requested_labels = {
+        spec.label for spec in policies
+        if spec.policy == "ECG" and
+        int(spec.ecg_reuse_plan_depth or 0) == 2 and
+        bool(spec.ecg_flowthrough)
+    }
+    expected_labels = set(TOPT_MATCHED_REUSE_PLAN_LABELS)
+    requested = any(
+        row.get("simulator") == "cache_sim" and
+        int(row.get("topt_trace_requested") or 0) == 1
+        for row in rows)
+    for row in rows:
+        if row.get("simulator") == "cache_sim":
+            row["topt_trace_matched"] = 0
+            row["topt_trace_match_scope"] = "not_applicable"
+            row["topt_oracle_scope"] = "independent_stream"
+            row["topt_oracle_group_hash"] = str(
+                row.get("topt_trace_hash") or "")
+    if not requested:
+        return
+
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        if (
+                row.get("simulator") != "cache_sim" or
+                int(row.get("topt_trace_requested") or 0) != 1 or
+                int(row.get("ecg_reuse_plan_depth") or 0) != 2 or
+                int(row.get("ecg_flowthrough") or 0) != 1 or
+                int(row.get("ecg_record_replaces_edge") or 0) != 1):
+            continue
+        key = (
+            row.get("benchmark"),
+            row.get("options"),
+            row.get("l3_size"),
+            row.get("l3_ways"),
+            row.get("ecg_record_bytes"),
+            row.get("prefetcher"),
+            row.get("cache_stream_prefetch_degree"),
+            row.get("structure_prefetch_degree"),
+        )
+        groups.setdefault(key, []).append(row)
+
+    for group in groups.values():
+        receipts = {
+            (
+                row.get("topt_trace_hash"),
+                row.get("topt_trace_line_hash"),
+                row.get("topt_trace_accesses"),
+                row.get("topt_trace_property_accesses"),
+                row.get("topt_trace_sets"),
+                row.get("topt_trace_ways"),
+                row.get("topt_misses"),
+            )
+            for row in group
+        }
+        complete = all(
+            row.get("topt_trace_hash") and
+            row.get("topt_trace_line_hash") and
+            int(row.get("topt_trace_accesses") or 0) > 0 and
+            row.get("topt_misses") is not None
+            for row in group)
+        labels = {str(row.get("policy_label") or "") for row in group}
+        roster_valid = (
+            labels == expected_labels and
+            requested_labels == expected_labels)
+        count_valid = len(group) == len(expected_labels)
+        window_valid = all(
+            int(row.get("topt_trace_accesses") or 0) ==
+                int(row.get("l3_hits") or 0) +
+                int(row.get("l3_misses") or 0) and
+            int(row.get("topt_misses") or 0) <=
+                int(row.get("l3_misses") or 0)
+            for row in group)
+        matched = (
+            complete and len(receipts) == 1 and roster_valid and
+            count_valid and window_valid)
+        group_hash = str(group[0].get("topt_trace_hash") or "")
+        for row in group:
+            row["topt_trace_matched"] = int(matched)
+            row["topt_trace_group_rows"] = len(group)
+            row["topt_trace_match_scope"] = (
+                "validated_transport_matched" if matched else "invalid")
+            row["topt_oracle_scope"] = (
+                "transport_matched_stream" if matched else "invalid")
+            row["topt_oracle_group_hash"] = group_hash
+            if not matched:
+                if not complete:
+                    detail = "one or more T-OPT trace receipts are missing"
+                elif not roster_valid:
+                    detail = (
+                        f"roster={sorted(labels)} "
+                        f"expected={sorted(expected_labels)}")
+                elif not count_valid:
+                    detail = (
+                        f"group_rows={len(group)} "
+                        f"expected={len(expected_labels)}")
+                elif not window_valid:
+                    detail = (
+                        "ROI trace/access count or Belady-floor invariant "
+                        "failed")
+                else:
+                    detail = "trace fingerprints or Belady results differ"
+                mark_row_error(
+                    row,
+                    "transport-matched ReusePlan policies did not produce "
+                    f"one identical T-OPT request stream: {detail}")
+
+    grouped_rows = sum(len(group) for group in groups.values())
+    expected_rows = [
+        row for row in rows
+        if row.get("simulator") == "cache_sim" and
+        str(row.get("policy_label") or "") in expected_labels
+    ]
+    if grouped_rows != len(expected_rows):
+        for row in expected_rows:
+            if row.get("topt_trace_match_scope") == "not_applicable":
+                mark_row_error(
+                    row,
+                    "T-OPT was requested but no transport-matched trace "
+                    "identity group was formed")
+                row["topt_trace_match_scope"] = "invalid"
 
 
 def certify_gem5_pr_results(
@@ -5645,6 +5809,7 @@ def main(argv: list[str]) -> int:
                 write_outputs(out_dir, rows)
 
     certify_sniper_semantic_work(rows, args, policies)
+    certify_cache_sim_trace_identity(rows, args, policies)
     certify_gem5_pr_results(rows, args)
     if not args.dry_run:
         # Persist layered certification failures before any fail-closed

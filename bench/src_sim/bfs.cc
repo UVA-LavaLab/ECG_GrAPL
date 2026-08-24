@@ -373,6 +373,7 @@ pvector<NodeID> DOBFS_Sim(const Graph &g, NodeID source, CacheType &cache,
 
     // Compute per-vertex ECG mask array
     graph_ctx.initMaskConfig();
+    cache.initGraphContext(&graph_ctx);
     auto vertex_masks = graph_ctx.computeVertexMasks(g);
     graph_ctx.initMaskArray32(vertex_masks.data(), vertex_masks.size());
     // ECG_EDGE_MASKS (generic, single matrix knob) or ECG_BFS_EDGE_MASKS (alias):

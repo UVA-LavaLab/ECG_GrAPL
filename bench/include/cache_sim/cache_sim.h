@@ -90,10 +90,47 @@ namespace topt {
     inline std::vector<uint64_t> trace;        // ALL L3 input addresses, in order
     inline std::vector<uint64_t> trace_prop;   // property-data L3 addresses, in order
     inline std::vector<uint8_t>  trace_is_prop; // per-entry property flag (aligned with trace)
+    inline std::vector<uint8_t>  trace_bypass;  // miss bypasses LLC allocation
+    inline std::vector<uint8_t>  trace_prop_bypass;
+    inline thread_local bool current_request_bypass = false;
     inline uint32_t offset_bits = 6;
     inline uint32_t index_bits = 0;
     inline uint32_t ways = 16;
     inline bool geom_captured = false;
+    inline size_t roi_start_index = 0;
+    inline size_t roi_property_start_index = 0;
+    inline bool roi_started = false;
+    inline uint64_t trace_hash = 1469598103934665603ULL;
+    inline uint64_t trace_line_hash = 1469598103934665603ULL;
+
+    class RequestClassScope {
+      public:
+        explicit RequestClassScope(bool bypass)
+            : previous(current_request_bypass) {
+            current_request_bypass = bypass;
+        }
+        ~RequestClassScope() { current_request_bypass = previous; }
+      private:
+        bool previous;
+    };
+
+    inline void hash_byte(uint8_t value) {
+        trace_hash ^= value;
+        trace_hash *= 1099511628211ULL;
+    }
+
+    inline void hash_line_byte(uint8_t value) {
+        trace_line_hash ^= value;
+        trace_line_hash *= 1099511628211ULL;
+    }
+
+    inline void mark_roi_start() {
+        roi_start_index = trace.size();
+        roi_property_start_index = trace_prop.size();
+        roi_started = true;
+        trace_hash = 1469598103934665603ULL;
+        trace_line_hash = 1469598103934665603ULL;
+    }
 
     // Parallel next-occurrence construction — the deployable traversal-mask bottleneck.
     // next_use[i] = next index j>i with the same cache line, else INF. A line maps to
@@ -193,7 +230,10 @@ namespace topt {
     }
 
     // Offline MIN (Belady) over an address stream with the L3 set geometry.
-    inline void min_miss(const std::vector<uint64_t>& t, uint64_t& hits, uint64_t& misses) {
+    inline void min_miss(
+            const std::vector<uint64_t>& t, uint64_t& hits,
+            uint64_t& misses, size_t count_from = 0,
+            const std::vector<uint8_t>* bypasses = nullptr) {
         hits = 0; misses = 0;
         const size_t T = t.size();
         if (T == 0) return;
@@ -208,10 +248,12 @@ namespace topt {
             auto& R = resident[s];
             auto it = R.find(line);
             if (it != R.end()) {
-                ++hits;
+                if (i >= count_from) ++hits;
                 it->second = next_use[i];
             } else {
-                ++misses;
+                if (i >= count_from) ++misses;
+                if (bypasses && i < bypasses->size() && (*bypasses)[i])
+                    continue;
                 if (R.size() >= ways) {
                     auto victim = R.begin();
                     for (auto jt = R.begin(); jt != R.end(); ++jt)
@@ -230,7 +272,8 @@ namespace topt {
     // EXACT-sweep, differing ONLY in how property next-reference is derived (recorded
     // traversal order vs ID-order adjacency). The EXACT-sweep-vs-EXACT-trace gap thus
     // isolates the value of trace-derived ordering — large on frontier kernels.
-    inline void exact_trace_policy_miss(uint64_t& hits, uint64_t& misses) {
+    inline void exact_trace_policy_miss(
+            uint64_t& hits, uint64_t& misses, size_t count_from = 0) {
         hits = 0; misses = 0;
         const size_t T = trace.size();
         if (T == 0 || trace_is_prop.size() != T) return;
@@ -247,9 +290,12 @@ namespace topt {
             auto& M = res[s];
             auto it = M.find(line);
             if (it != M.end()) {
-                ++hits; it->second.nu = next_use[i]; it->second.prop = prop;
+                if (i >= count_from) ++hits;
+                it->second.nu = next_use[i]; it->second.prop = prop;
             } else {
-                ++misses;
+                if (i >= count_from) ++misses;
+                if (i < trace_bypass.size() && trace_bypass[i])
+                    continue;
                 if (M.size() >= ways) {
                     auto victim = M.end(); bool nonprop = false; uint32_t best = 0;
                     for (auto jt = M.begin(); jt != M.end(); ++jt)
@@ -271,24 +317,39 @@ namespace topt {
     }
 
     inline void compute_and_report() {
-        if (trace.empty()) { std::cerr << "[T_OPT] no L3 accesses recorded\n"; return; }
+        if (!roi_started || roi_start_index >= trace.size()) {
+            std::cerr << "[T_OPT] no ROI L3 accesses recorded\n";
+            return;
+        }
         const uint64_t num_sets = (index_bits > 0) ? (1ULL << index_bits) : 1ULL;
+        const size_t roi_accesses = trace.size() - roi_start_index;
+        const size_t roi_property_accesses =
+            trace_prop.size() - roi_property_start_index;
+        std::cerr << "[T_OPT-TRACE accesses=" << roi_accesses
+                  << " property_accesses=" << roi_property_accesses
+                  << " hash=" << std::hex << trace_hash
+                  << " line_hash=" << trace_line_hash << std::dec
+                  << " sets=" << num_sets << " ways=" << ways << "]\n";
         uint64_t h = 0, m = 0;
-        min_miss(trace, h, m);
-        std::cerr << "[T_OPT] L3 true-Belady (entire stream): accesses=" << trace.size()
+        min_miss(trace, h, m, roi_start_index, &trace_bypass);
+        std::cerr << "[T_OPT] L3 FlowThrough-aware Belady "
+                  << "(warm-start ROI window): accesses="
+                  << roi_accesses
                   << " hits=" << h << " misses=" << m
                   << " sets=" << num_sets << " ways=" << ways
                   << " miss_rate=" << (static_cast<double>(m) / static_cast<double>(h + m)) << "\n";
         if (!trace_prop.empty()) {
             uint64_t hp = 0, mp = 0;
-            min_miss(trace_prop, hp, mp);
+            min_miss(
+                trace_prop, hp, mp, roi_property_start_index,
+                &trace_prop_bypass);
             std::cerr << "[T_OPT_PROP] L3 property-only Belady (isolated, optimistic diag): accesses="
-                      << trace_prop.size() << " hits=" << hp << " misses=" << mp
+                      << roi_property_accesses << " hits=" << hp << " misses=" << mp
                       << " miss_rate=" << (static_cast<double>(mp) / static_cast<double>(hp + mp)) << "\n";
         }
         {
             uint64_t he = 0, me = 0;
-            exact_trace_policy_miss(he, me);
+            exact_trace_policy_miss(he, me, roi_start_index);
             if (he + me > 0)
                 std::cerr << "[EXACT_TRACE] L3 trace-order EXACT policy (shared cache, deployable ceiling): "
                           << "hits=" << he << " misses=" << me
@@ -305,10 +366,26 @@ namespace topt {
     inline void capture_geom(uint32_t ob, uint32_t ib, uint32_t w) {
         if (!geom_captured) { offset_bits = ob; index_bits = ib; ways = w; geom_captured = true; }
     }
-    inline void record(uint64_t address, bool is_property) {
+    inline void record(
+            uint64_t address, bool is_property, bool is_write) {
         trace.push_back(address);
         trace_is_prop.push_back(is_property ? 1 : 0);
-        if (is_property) trace_prop.push_back(address);
+        trace_bypass.push_back(current_request_bypass ? 1 : 0);
+        if (is_property) {
+            trace_prop.push_back(address);
+            trace_prop_bypass.push_back(
+                current_request_bypass ? 1 : 0);
+        }
+        if (roi_started) {
+            const uint64_t line = address >> offset_bits;
+            for (unsigned shift = 0; shift < 64; shift += 8) {
+                hash_byte(static_cast<uint8_t>(line >> shift));
+                hash_line_byte(static_cast<uint8_t>(line >> shift));
+            }
+            hash_byte(is_property ? 1 : 0);
+            hash_byte(is_write ? 1 : 0);
+            hash_byte(current_request_bypass ? 1 : 0);
+        }
     }
 }
 
@@ -943,7 +1020,7 @@ public:
         if (topt::enabled && (name_ == "L3" || name_ == "L3-Shared")) {
             topt::capture_geom(offset_bits_, index_bits_, (uint32_t)associativity_);
             bool is_prop = graph_ctx_ && graph_ctx_->isPropertyData(address);
-            topt::record(address, is_prop);
+            topt::record(address, is_prop, is_write);
         }
 
         if (is_write) {
@@ -1344,9 +1421,7 @@ public:
     EvictionPolicy getPolicy() const { return policy_; }
     std::string getEcgMode() const {
         if (policy_ != EvictionPolicy::ECG) return "";
-        const ECGMode mode = graph_ctx_
-            ? graph_ctx_->mask_config.ecg_mode : ECGMode::DBG_PRIMARY;
-        return ECGModeToString(mode);
+        return ECGModeToString(ecg_mode_snapshot_);
     }
     uint32_t getDuelingSetOffset() const { return dueling_set_offset_; }
     uint8_t getDuelingWinnerArm() const {
@@ -1424,6 +1499,7 @@ public:
     // ================================================================
     void initGraphContext(const GraphCacheContext* ctx) {
         graph_ctx_ = ctx;
+        if (ctx) ecg_mode_snapshot_ = ctx->mask_config.ecg_mode;
     }
 
     // Test hook (NOT used in the simulation path): run the policy's victim
@@ -2392,6 +2468,7 @@ private:
     POPTState popt_state_;    // P-OPT rereference matrix state (legacy, used if no GraphCacheContext)
     GRASPState grasp_state_;  // GRASP degree-aware state (legacy, used if no GraphCacheContext)
     const GraphCacheContext* graph_ctx_ = nullptr;  // Unified graph-aware context (preferred)
+    ECGMode ecg_mode_snapshot_ = ECGMode::DBG_PRIMARY;
 
     // ECG_GRASP_POPT online set dueling: five sampled leader arms
     // (RRIP-first, GRASP-only, epoch-first, degree-first, LRU) train a
@@ -2654,6 +2731,8 @@ public:
             l1_->insert(address, is_write);
             return;
         }
+        topt::RequestClassScope request_class(
+            /*bypass=*/!adaptive_flowthrough_);
         if (l3_->access(address, is_write)) {
             if (was_prefetched) markPrefetchUseful(line_addr);
             l2_->insert(address, is_write);
@@ -2791,6 +2870,7 @@ public:
 
     // Reset all statistics
     void resetStats() {
+        if (topt::enabled) topt::mark_roi_start();
         l1_->resetStats();
         l2_->resetStats();
         l3_->resetStats();
@@ -4413,11 +4493,23 @@ inline SampledCacheHierarchy& GlobalSampledCache() {
 }
 
 // Check if multi-core mode is enabled via environment
+inline bool TOptForcesAccurateMode() {
+    static const bool enabled = std::getenv("T_OPT") != nullptr;
+    static bool announced = false;
+    if (enabled && !announced) {
+        announced = true;
+        std::cerr << "[T_OPT] forcing accurate single-core cache hierarchy\n";
+    }
+    return enabled;
+}
+
 inline bool IsMultiCoreMode() {
     static int mode = -1;
     if (mode < 0) {
         const char* val = std::getenv("CACHE_MULTICORE");
-        mode = (val && (std::string(val) == "1" || std::string(val) == "true")) ? 1 : 0;
+        mode = TOptForcesAccurateMode() ? 0 :
+            (val && (std::string(val) == "1" ||
+                     std::string(val) == "true")) ? 1 : 0;
     }
     return mode == 1;
 }
@@ -4427,7 +4519,9 @@ inline bool IsSampledMode() {
     static int mode = -1;
     if (mode < 0) {
         const char* val = std::getenv("CACHE_SAMPLED");
-        mode = (val && (std::string(val) == "1" || std::string(val) == "true")) ? 1 : 0;
+        mode = TOptForcesAccurateMode() ? 0 :
+            (val && (std::string(val) == "1" ||
+                     std::string(val) == "true")) ? 1 : 0;
     }
     return mode == 1;
 }
@@ -4437,8 +4531,10 @@ inline bool IsUltraFastMode() {
     static int mode = -1;
     if (mode < 0) {
         const char* val = std::getenv("CACHE_ULTRAFAST");
-        // Default to ultrafast mode unless explicitly disabled
-        mode = (val && (std::string(val) == "0" || std::string(val) == "false")) ? 0 : 1;
+        // T-OPT requires the accurate hierarchy's complete L3 input stream.
+        mode = TOptForcesAccurateMode() ? 0 :
+            (val && (std::string(val) == "0" ||
+                     std::string(val) == "false")) ? 0 : 1;
     }
     return mode == 1;
 }
@@ -4448,7 +4544,9 @@ inline bool IsFastMode() {
     static int mode = -1;
     if (mode < 0) {
         const char* val = std::getenv("CACHE_FAST");
-        mode = (val && (std::string(val) == "1" || std::string(val) == "true")) ? 1 : 0;
+        mode = TOptForcesAccurateMode() ? 0 :
+            (val && (std::string(val) == "1" ||
+                     std::string(val) == "true")) ? 1 : 0;
     }
     return mode == 1;
 }

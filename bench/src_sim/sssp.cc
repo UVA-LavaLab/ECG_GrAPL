@@ -187,6 +187,7 @@ pvector<WeightT> DeltaStep_Sim(const WGraph &g, NodeID source,
 
     // Compute per-vertex ECG mask array
     graph_ctx.initMaskConfig();
+    cache.initGraphContext(&graph_ctx);
     auto vertex_masks = graph_ctx.computeVertexMasks(g);
     graph_ctx.initMaskArray32(vertex_masks.data(), vertex_masks.size());
     // ECG_EDGE_MASKS (generic, matrix knob) / ECG_SSSP_EDGE_MASKS (alias): build the

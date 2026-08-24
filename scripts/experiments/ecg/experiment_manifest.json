@@ -57,6 +57,7 @@
     "ecg_fused_compact_matrix": "Fused compact ReusePlan TimingSimple matrix: hardware-decoded 4B, software-widened 4B, and wide 8B controls in one build with per-stage LRU and ReusePlan-LRU; O3 request binding is a separate mechanism gate.",
     "ecg_proposal_reuse_bind_o3_gate": "Exact O3 request-bound correctness gate for the proposal's compact FlowThrough record load plus one-for-one computed-address ReuseBind property load.",
     "reuse_plan_csr_transport_calibration": "One complete cit-Patents-n18-sym i=1 O3 cell attributing the canonical-CSR ReusePlan transport path against its local LRU denominator.",
+    "reuse_plan_matched_policy_replay": "One cit-Patents-n18-sym i=1 cache replay over transport-identical ReusePlan victim arms plus exact Belady.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
@@ -2075,6 +2076,42 @@
         "GEM5_GRAPH_ARRAY_STATS": "1"
       },
       "notes": "Single bounded transport calibration. Per-array x requestor LLC attribution must reconcile exactly before comparing the ReusePlan-LRU FlowThrough control with its same-job LRU denominator; no broader stage is unlocked by this run. Scope is single-core CPU data/instruction demand traffic with prefetching disabled. Unclassified-other CPU-data demand misses must remain at or below 2%. The graph is symmetrized, so incoming and outgoing CSR edge/index storage aliases; directed-graph attribution requires exporting the outgoing index range separately."
+    },
+    {
+      "name": "62_cache_sim_matched_policy_replay",
+      "kind": "roi_matrix",
+      "profiles": [
+        "reuse_plan_matched_policy_replay"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "cit_patents_n18_transport_calibration",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_GRASP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "policy_sharding_allowed": false,
+      "out_subdir": "62_cache_sim_matched_policy_replay",
+      "timeout_cache": 3600,
+      "env": {
+        "ECG_RECORD_TIER_BITS": "2",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "T_OPT": "1",
+        "TOPT_THREADS": "4"
+      },
+      "notes": "Every ReusePlan arm uses identical 4-byte FlowThrough transport. T-OPT retains the common warm prefix to establish cache state, marks the cache-stat reset as ROI start, fingerprints only ROI requests, and counts oracle hits/misses only in the ROI suffix; next-use optimization still sees the full warm+ROI sequence. The runner requires the exact six-arm ReusePlan roster to produce one identical post-L2 address/class/read-write fingerprint and Belady result, checks ROI trace accesses equal measured LLC accesses, and requires the oracle floor not exceed measured misses before comparing victim rules. LRU and native GRASP are reference rows with explicitly independent oracle-group hashes."
     },
     {
       "name": "70_gem5_pagerank_i1",
