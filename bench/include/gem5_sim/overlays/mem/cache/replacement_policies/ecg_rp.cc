@@ -667,6 +667,7 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
         //   epoch_only(3): same eviction as epoch_first (insertion uniform, set in reset())
         //   shortcircuit(4,legacy): non-property first, then epoch among property
         //   record_lru(7): records by recency, then property recency; no epoch
+        //   rrip_no_epoch(8): rrip_first gate/records-first, epoch distance zero
         static const int configuredVariant =
             ecg_policy::parseVariant(std::getenv("ECG_VARIANT"));
         // Ungated receipt, printed once. The runner records the variant it
@@ -802,6 +803,12 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
             propertyEpochInvalidWays;
         onlineDuelingStats.victimContextMismatchWays +=
             contextMismatchWays;
+        if (victimRequestValid && propertyWays == nc)
+            ++onlineDuelingStats.victimAllPropertySelections;
+        if (
+                victimRequestValid && propertyWays == nc &&
+                stampedWays > 0)
+            ++onlineDuelingStats.victimAllPropertyStampedSelections;
         if (stampedWays == 0)
             ++onlineDuelingStats.victimZeroStampedSelections;
 
@@ -848,6 +855,10 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
             pol = "ECG:record_lru";
             reason = !isProp(victim) ? "record by recency"
                                      : "property recency fallback";
+        } else if (variant == 8) {
+            pol = "ECG:rrip_no_epoch";
+            reason = !isProp(victim) ? "max-rrpv record by recency"
+                                     : "max-rrpv property fallback";
         } else {
             pol = epol;
             reason = !isProp(victim) ? "record by recency"
@@ -1037,6 +1048,12 @@ GraphEcgRP::OnlineDuelingStats::OnlineDuelingStats(
     ADD_STAT(
         victimContextMismatchWays,
         "Sum of epoch-valid property ways rejected by context binding"),
+    ADD_STAT(
+        victimAllPropertySelections,
+        "Request-valid victim selections whose candidates are all property"),
+    ADD_STAT(
+        victimAllPropertyStampedSelections,
+        "All-property victim selections containing at least one live stamp"),
     ADD_STAT(
         victimEpochEligibleSelections,
         "Victim selections choosing a stamped property via an epoch-capable path"),

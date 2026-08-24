@@ -82,7 +82,7 @@ def test_grasp_tier_classification_pins_015_vertex_space_fraction():
     assert result.returncode == 0, (
         f"GRASP tier classification regressed:\n{result.stdout}\n"
         f"{result.stderr}")
-    assert "RESULT[tier]: 13 passed, 0 failed" in result.stdout, result.stdout
+    assert "RESULT[tier]: 14 passed, 0 failed" in result.stdout, result.stdout
 
 
 @pytestmark_skip_binary
@@ -102,7 +102,7 @@ def test_online_dueling_five_arm_selection_pins_shared_selector():
     assert result.returncode == 0, (
         f"online-dueling five-arm selection regressed:\n{result.stdout}\n"
         f"{result.stderr}")
-    assert "RESULT[dueling]: 4 passed, 0 failed" in result.stdout, (
+    assert "RESULT[dueling]: 5 passed, 0 failed" in result.stdout, (
         result.stdout)
 
 

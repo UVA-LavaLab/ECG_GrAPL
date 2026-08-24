@@ -103,6 +103,7 @@ def synthetic_rows(primary_ratio=0.94, cfg=None):
                     "gem5_cpu_type": "O3",
                     "prefetcher": "none",
                     "pr_result_matched": "1",
+                    "pr_result_group_rows_ok": "1",
                     "l3_exercised": "True",
                     "l1d_size": graph["l1d_size"],
                     "l1d_ways": str(graph["l1d_ways"]),
@@ -548,6 +549,34 @@ def test_epoch_attribution_is_one_complete_matched_transport_cell():
         "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
         "ECG:REUSE_PLAN_RECORD_LRU_FLOWTHROUGH",
         "ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH",
+    ]
+    assert stage["env"]["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
+    assert stage["env"]["GEM5_GRAPH_ARRAY_STATS"] == "1"
+    assert stage["env"]["GEM5_REUSE_PLAN_COVERAGE_REQUIRED"] == "1"
+
+
+def test_rrip_epoch_attribution_has_an_applied_no_epoch_control():
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    stages = [
+        stage for stage in manifest["stages"]
+        if "reuse_plan_rrip_epoch_attribution" in
+        stage.get("profiles", [])
+    ]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["name"] == "65_gem5_rrip_epoch_attribution_cit_i1"
+    assert stage["suite"] == "gem5"
+    assert stage["graph_set"] == "cit_patents_n18_transport_calibration"
+    assert stage["benchmarks"] == ["pr"]
+    assert stage["policy_sharding_allowed"] is False
+    assert stage["gem5_cpu_type"] == "O3"
+    assert stage["gem5_compact_reuse_bind_performance"] is True
+    assert stage["policies"] == [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_GRASP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
     ]
     assert stage["env"]["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
     assert stage["env"]["GEM5_GRAPH_ARRAY_STATS"] == "1"

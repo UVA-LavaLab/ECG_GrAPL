@@ -102,6 +102,8 @@ class GraphEcgRP : public Base
         statistics::Scalar victimPropertyWays;
         statistics::Scalar victimPropertyEpochInvalidWays;
         statistics::Scalar victimContextMismatchWays;
+        statistics::Scalar victimAllPropertySelections;
+        statistics::Scalar victimAllPropertyStampedSelections;
         statistics::Scalar victimEpochEligibleSelections;
         statistics::Scalar victimEpochDecisiveSelections;
         statistics::Vector victimWaySelections;

@@ -334,6 +334,10 @@ GEM5_STAT_KEYS = {
         "system.l3cache.replacement_policy.victimPropertyEpochInvalidWays",
     "gem5_reuse_plan_victim_context_mismatch_ways":
         "system.l3cache.replacement_policy.victimContextMismatchWays",
+    "gem5_reuse_plan_victim_all_property_selections":
+        "system.l3cache.replacement_policy.victimAllPropertySelections",
+    "gem5_reuse_plan_victim_all_property_stamped_selections":
+        "system.l3cache.replacement_policy.victimAllPropertyStampedSelections",
     "gem5_reuse_plan_victim_epoch_eligible_selections":
         "system.l3cache.replacement_policy.victimEpochEligibleSelections",
     "gem5_reuse_plan_victim_epoch_decisive_selections":
@@ -2262,6 +2266,8 @@ def apply_gem5_reuse_plan_coverage(
         "gem5_reuse_plan_victim_property_ways",
         "gem5_reuse_plan_victim_property_epoch_invalid_ways",
         "gem5_reuse_plan_victim_context_mismatch_ways",
+        "gem5_reuse_plan_victim_all_property_selections",
+        "gem5_reuse_plan_victim_all_property_stamped_selections",
         "gem5_reuse_plan_victim_epoch_eligible_selections",
         "gem5_reuse_plan_victim_epoch_decisive_selections",
         "gem5_reuse_plan_victim_way_counts",
@@ -2288,6 +2294,10 @@ def apply_gem5_reuse_plan_coverage(
         row["gem5_reuse_plan_victim_property_epoch_invalid_ways"])
     context_mismatches = int(
         row["gem5_reuse_plan_victim_context_mismatch_ways"])
+    all_property_selections = int(
+        row["gem5_reuse_plan_victim_all_property_selections"])
+    all_property_stamped_selections = int(
+        row["gem5_reuse_plan_victim_all_property_stamped_selections"])
     epoch_eligible = int(
         row["gem5_reuse_plan_victim_epoch_eligible_selections"])
     epoch_decisive = int(
@@ -2342,6 +2352,15 @@ def apply_gem5_reuse_plan_coverage(
         errors.append(
             f"epoch-decisive selections {epoch_decisive} exceed "
             f"epoch-eligible selections {epoch_eligible}")
+    if all_property_selections > valid:
+        errors.append(
+            f"all-property selections {all_property_selections} exceed "
+            f"request-valid selections {valid}")
+    if all_property_stamped_selections > all_property_selections:
+        errors.append(
+            f"stamped all-property selections "
+            f"{all_property_stamped_selections} exceed all-property "
+            f"selections {all_property_selections}")
     valid_zero_stamped = zero_stamped - invalid
     if epoch_eligible > valid - valid_zero_stamped:
         errors.append(
@@ -2349,13 +2368,43 @@ def apply_gem5_reuse_plan_coverage(
             f"request-valid selections containing stamps "
             f"{valid - valid_zero_stamped}")
     if (
-            effective_variant in {
-                "rrip_first", "epoch_first", "epoch_only",
-                "shortcircuit", "degree_first"} and
+            effective_variant in {"rrip_first", "degree_first"} and
             epoch_eligible <= 0):
         errors.append(
             f"{effective_variant} never selected a live stamped property "
             "through an epoch-capable victim path")
+    if effective_variant == "rrip_first" and epoch_decisive <= 0:
+        errors.append(
+            "rrip_first never changed a victim relative to the "
+            "metadata-disabled shadow")
+    if (
+            effective_variant in {"epoch_first", "epoch_only"} and
+            epoch_eligible != all_property_stamped_selections):
+        errors.append(
+            f"{effective_variant} epoch-path selections {epoch_eligible} "
+            f"!= stamped all-property opportunities "
+            f"{all_property_stamped_selections}")
+    if (
+            effective_variant in {
+                "epoch_first", "epoch_only", "shortcircuit"} and
+            all_property_stamped_selections <= 0):
+        errors.append(
+            f"{effective_variant} had no all-property victim set containing "
+            "a live stamp, so its epoch path was not exercised")
+    if (
+            effective_variant == "shortcircuit" and
+            epoch_eligible <= 0):
+        errors.append(
+            "shortcircuit never selected a live stamped property through "
+            "its epoch path")
+    if (
+            effective_variant in {
+                "grasp_only", "lru_only", "record_lru",
+                "rrip_no_epoch"} and
+            (epoch_eligible != 0 or epoch_decisive != 0)):
+        errors.append(
+            f"{effective_variant} must be epoch-inert, got "
+            f"eligible={epoch_eligible} decisive={epoch_decisive}")
     if errors:
         mark_row_error(
             row, "ReusePlan stamp-coverage identities failed: "
@@ -2380,6 +2429,10 @@ def apply_gem5_reuse_plan_coverage(
         "gem5_reuse_plan_victim_context_mismatch_share":
             (context_mismatches / property_ways
              if property_ways else 0.0),
+        "gem5_reuse_plan_victim_all_property_share":
+            all_property_selections / valid,
+        "gem5_reuse_plan_victim_all_property_stamped_share":
+            all_property_stamped_selections / valid,
         "gem5_reuse_plan_victim_epoch_eligible_share":
             epoch_eligible / valid,
         "gem5_reuse_plan_victim_epoch_decisive_share":
@@ -2425,6 +2478,11 @@ def mark_row_error(row: dict[str, Any], message: str) -> None:
         row["error"] = f"{existing} | {message}"
     row["status"] = "error"
     row["timing_valid_for_speedup"] = "0"
+    caveat = str(row.get("timing_caveat") or "").strip()
+    invalidation = f"Timing invalidated by validation error: {message}"
+    if invalidation not in caveat:
+        row["timing_caveat"] = " ".join(
+            part for part in (caveat, invalidation) if part)
 
 
 def apply_gem5_compact_reuse_bind_flowthrough_receipt(
@@ -2741,7 +2799,7 @@ def apply_gem5_variant_receipt(
         "grasp_only": 0, "epoch_first": 1, "rrip_first": 2,
         "epoch_only": 3, "shortcircuit": 4, "legacy": 4,
         "degree_first": 5, "traversal": 5, "lru_only": 6,
-        "record_lru": 7,
+        "record_lru": 7, "rrip_no_epoch": 8,
     }.get(requested)
     row["gem5_variant_requested_receipt"] = actual_requested
     row["gem5_variant_effective_receipt"] = effective
@@ -2789,7 +2847,7 @@ def apply_sniper_variant_receipt(
         "grasp_only": 0, "epoch_first": 1, "rrip_first": 2,
         "epoch_only": 3, "shortcircuit": 4, "legacy": 4,
         "degree_first": 5, "traversal": 5, "lru_only": 6,
-        "record_lru": 7,
+        "record_lru": 7, "rrip_no_epoch": 8,
     }.get(requested)
     row["sniper_variant_requested_receipt"] = actual_requested
     row["sniper_variant_effective_receipt"] = effective
@@ -5364,7 +5422,7 @@ def certify_cache_sim_trace_identity(
 
 def certify_gem5_pr_results(
         rows: list[dict[str, Any]], args: argparse.Namespace) -> None:
-    """Fail closed unless every gem5 PR policy produced the same one-sweep state."""
+    """Fail closed on missing/divergent PR receipts, independently of row status."""
     if args.benchmark != "pr" or args.suite not in ("gem5", "both"):
         return
     groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
@@ -5376,22 +5434,32 @@ def certify_gem5_pr_results(
             row.get("prefetcher"))
         groups.setdefault(key, []).append(row)
     for group_rows in groups.values():
-        ok_rows = [row for row in group_rows if row.get("status") == "ok"]
         receipts = {
             (
                 row.get("pr_iterations"),
                 row.get("pr_semantic_edges"),
                 row.get("pr_score_checksum"),
             )
-            for row in ok_rows
+            for row in group_rows
         }
         receipt = next(iter(receipts), (None, None, None))
-        valid = (
-            len(ok_rows) == len(group_rows) and len(receipts) == 1 and
+        matched = (
+            len(receipts) == 1 and
             all(value is not None for value in receipt))
+        group_ok = all(row.get("status") == "ok" for row in group_rows)
         for row in group_rows:
-            row["pr_result_matched"] = int(valid)
-        if valid:
+            row["pr_result_matched"] = int(matched)
+            row["pr_result_group_rows_ok"] = int(group_ok)
+            if not group_ok:
+                row["timing_valid_for_speedup"] = "0"
+                caveat = str(row.get("timing_caveat") or "").strip()
+                invalidation = (
+                    "Timing invalidated because another policy row in the "
+                    "matched PageRank group failed validation.")
+                if invalidation not in caveat:
+                    row["timing_caveat"] = " ".join(
+                        part for part in (caveat, invalidation) if part)
+        if matched:
             continue
         detail = sorted(str(value) for value in receipts)
         for row in group_rows:

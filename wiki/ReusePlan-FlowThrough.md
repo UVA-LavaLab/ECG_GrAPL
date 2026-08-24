@@ -125,6 +125,15 @@ An experimental admission diagnostic maps the first delivered future-use
 epoch monotonically into RRPV on LLC fill and hit while retaining RRIP-first
 eviction. It is not a primary policy or a performance claim.
 
+Two attribution-only controls isolate victim-rule components:
+
+- `record_lru` keeps epoch-first's records-first ordering, then uses property
+  recency with no epoch ranking.
+- `rrip_no_epoch` keeps RRIP-first eligibility, aging, and records-first
+  ordering, but forces property epoch distance to zero.
+
+These controls are decomposition tools, not proposed policies.
+
 ## 5. ReuseBind property loads
 
 ReuseBind is the instruction family that attaches a ReusePlan to the exact

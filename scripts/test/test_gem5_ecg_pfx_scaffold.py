@@ -1031,6 +1031,8 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
             "victimPropertyWays",
             "victimPropertyEpochInvalidWays",
             "victimContextMismatchWays",
+            "victimAllPropertySelections",
+            "victimAllPropertyStampedSelections",
             "victimEpochEligibleSelections",
             "victimEpochDecisiveSelections",
             "victimWaySelections"):
@@ -1059,6 +1061,8 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
         "system.l3cache.replacement_policy.victimPropertyWays 45 #\n"
         "system.l3cache.replacement_policy.victimPropertyEpochInvalidWays 2 #\n"
         "system.l3cache.replacement_policy.victimContextMismatchWays 3 #\n"
+        "system.l3cache.replacement_policy.victimAllPropertySelections 1 #\n"
+        "system.l3cache.replacement_policy.victimAllPropertyStampedSelections 1 #\n"
         "system.l3cache.replacement_policy.victimEpochEligibleSelections 10 #\n"
         "system.l3cache.replacement_policy.victimEpochDecisiveSelections 4 #\n"
         "system.l3cache.replacement_policy.victimWaySelections::way0 12 #\n"
@@ -1075,6 +1079,10 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
     assert (
         parsed["gem5_reuse_plan_victim_property_epoch_invalid_ways"] == 2)
     assert parsed["gem5_reuse_plan_victim_context_mismatch_ways"] == 3
+    assert parsed["gem5_reuse_plan_victim_all_property_selections"] == 1
+    assert (
+        parsed[
+            "gem5_reuse_plan_victim_all_property_stamped_selections"] == 1)
     assert (
         parsed["gem5_reuse_plan_victim_epoch_eligible_selections"] == 10)
     assert (
@@ -1096,6 +1104,12 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
     assert (
         parsed["gem5_reuse_plan_victim_context_mismatch_share"]
         == pytest.approx(3 / 45))
+    assert (
+        parsed["gem5_reuse_plan_victim_all_property_share"]
+        == pytest.approx(1 / 18))
+    assert (
+        parsed["gem5_reuse_plan_victim_all_property_stamped_share"]
+        == pytest.approx(1 / 18))
     assert (
         parsed["gem5_reuse_plan_victim_epoch_eligible_share"]
         == pytest.approx(10 / 18))
@@ -1145,6 +1159,32 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
     assert "no live stamped property ways" in zero_stamps["error"]
     assert "never selected a live stamped property" in zero_stamps["error"]
 
+    epoch_inert = dict(parsed)
+    epoch_inert.update({
+        "ecg_variant_effective": "epoch_first",
+        "gem5_reuse_plan_victim_all_property_selections": 0,
+        "gem5_reuse_plan_victim_all_property_stamped_selections": 0,
+        "gem5_reuse_plan_victim_epoch_eligible_selections": 0,
+        "gem5_reuse_plan_victim_epoch_decisive_selections": 0,
+        "status": "ok",
+    })
+    epoch_inert.pop("error", None)
+    assert not roi_matrix.apply_gem5_reuse_plan_coverage(
+        epoch_inert, required=True)
+    assert "had no all-property victim set" in epoch_inert["error"]
+
+    invalid_no_epoch = dict(parsed)
+    invalid_no_epoch.update({
+        "ecg_variant_effective": "rrip_no_epoch",
+        "gem5_reuse_plan_victim_epoch_eligible_selections": 1,
+        "gem5_reuse_plan_victim_epoch_decisive_selections": 1,
+        "status": "ok",
+    })
+    invalid_no_epoch.pop("error", None)
+    assert not roi_matrix.apply_gem5_reuse_plan_coverage(
+        invalid_no_epoch, required=True)
+    assert "must be epoch-inert" in invalid_no_epoch["error"]
+
     rrip = roi_matrix.parse_policy_spec(
         "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH")
     assert roi_matrix.requires_gem5_reuse_plan_coverage(
@@ -1167,6 +1207,15 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
         "[ECG-VARIANT-RECEIPT sim=gem5 requested=record_lru "
         "effective=7 dueling=0]",
         "record_lru",
+        required=True)
+    rrip_no_epoch = roi_matrix.parse_policy_spec(
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH")
+    assert rrip_no_epoch.ecg_variant == "rrip_no_epoch"
+    assert roi_matrix.apply_gem5_variant_receipt(
+        {"timing_valid_for_speedup": "1"},
+        "[ECG-VARIANT-RECEIPT sim=gem5 requested=rrip_no_epoch "
+        "effective=8 dueling=0]",
+        "rrip_no_epoch",
         required=True)
 
 
@@ -1678,6 +1727,8 @@ def test_proposal_certification_preserves_layered_errors_and_persists_first():
             "error": "proposal ReuseBind exact Request binding was not attested",
             "options": "-i 1", "l3_size": "32kB", "l3_ways": 8,
             "prefetcher": "none",
+            "pr_iterations": 1, "pr_semantic_edges": 10,
+            "pr_score_checksum": "abc",
         },
         {
             "simulator": "gem5", "status": "ok",
@@ -1690,7 +1741,12 @@ def test_proposal_certification_preserves_layered_errors_and_persists_first():
     roi_matrix.certify_gem5_pr_results(
         rows, SimpleNamespace(benchmark="pr", suite="gem5"))
     assert "exact Request binding" in rows[0]["error"]
-    assert "PageRank semantic receipt mismatch" in rows[0]["error"]
+    assert "PageRank semantic receipt mismatch" not in rows[0]["error"]
+    assert all(row["pr_result_matched"] == 1 for row in rows)
+    assert all(row["pr_result_group_rows_ok"] == 0 for row in rows)
+    assert all(row["timing_valid_for_speedup"] == "0" for row in rows)
+    assert all(
+        "another policy row" in row["timing_caveat"] for row in rows)
 
     runner = read("scripts/experiments/ecg/roi_matrix.py")
     main_tail = runner.split(
@@ -1846,6 +1902,23 @@ def test_gem5_pr_semantic_receipts_fail_closed():
     roi_matrix.certify_gem5_pr_results(rows, args)
     assert all(row["status"] == "error" for row in rows)
     assert all(row["timing_valid_for_speedup"] == "0" for row in rows)
+
+    missing = [
+        {
+            "simulator": "gem5", "status": "ok", "options": "-i 1",
+            "l3_size": "128kB", "l3_ways": 16, "prefetcher": "none",
+            "pr_iterations": 1, "pr_semantic_edges": 100,
+            "pr_score_checksum": "abc",
+        },
+        {
+            "simulator": "gem5", "status": "ok", "options": "-i 1",
+            "l3_size": "128kB", "l3_ways": 16, "prefetcher": "none",
+            "pr_iterations": 1, "pr_semantic_edges": 100,
+        },
+    ]
+    roi_matrix.certify_gem5_pr_results(missing, args)
+    assert all(row["status"] == "error" for row in missing)
+    assert all(row["pr_result_matched"] == 0 for row in missing)
 
 
 def test_gem5_variant_receipt_is_machine_validated():

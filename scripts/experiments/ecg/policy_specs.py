@@ -125,6 +125,10 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ("ECG_REUSE_PLAN_RECORD_LRU_FLOWTHROUGH", "record_lru"),
         "ECG_REUSE_PLAN_RECORD_LRU_FLOWTHROUGH":
             ("ECG_REUSE_PLAN_RECORD_LRU_FLOWTHROUGH", "record_lru"),
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH", "rrip_no_epoch"),
+        "ECG_REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH":
+            ("ECG_REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH", "rrip_no_epoch"),
         "ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH":
             ("ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
         "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH":

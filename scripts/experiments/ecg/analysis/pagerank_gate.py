@@ -130,7 +130,7 @@ def validate_common_row(
         (
             "status", "final_output_status", "timing_valid_for_speedup",
             "simulator", "gem5_cpu_type", "benchmark", "prefetcher",
-            "pr_result_matched", "l3_exercised",
+            "pr_result_matched", "pr_result_group_rows_ok", "l3_exercised",
             "l1d_size", "l1d_ways", "l2_size", "l2_ways",
             "l3_size", "l3_ways", "line_size",
             "gem5_l3_size_actual", "gem5_l3_ways_actual",
@@ -148,6 +148,7 @@ def validate_common_row(
             ("benchmark", config["benchmark"]),
             ("prefetcher", config["prefetcher"]),
             ("pr_result_matched", "1"),
+            ("pr_result_group_rows_ok", "1"),
             ("l3_exercised", "True")):
         require_text(row, field, expected)
 

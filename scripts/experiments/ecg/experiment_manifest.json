@@ -60,6 +60,7 @@
     "reuse_plan_matched_policy_replay": "One cit-Patents-n18-sym i=1 cache replay over transport-identical ReusePlan victim arms plus exact Belady.",
     "reuse_plan_shortcircuit_timing": "One cit-Patents-n18-sym i=1 O3 timing cell promoting the replay-selected shortcircuit arm against local LRU, transport control, and RRIP-first.",
     "reuse_plan_epoch_attribution": "One cit-Patents-n18-sym i=1 O3 cell measuring live ReusePlan stamp coverage and separating epoch, RRIP, and GRASP victim-rule contributions under identical compact FlowThrough transport.",
+    "reuse_plan_rrip_epoch_attribution": "One cit-Patents-n18-sym i=1 O3 cell applying the metadata-disabled RRIP shadow as a real policy to isolate the end-to-end epoch contribution.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
@@ -2189,6 +2190,44 @@
         "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
       },
       "notes": "Decisive epoch-efficacy cell. All ReusePlan arms use identical 4-byte compact FlowThrough transport. Resettable replacement-policy counters quantify request validity, live stamped ways, context mismatches, zero-stamped selections, stamped victims selected through an epoch-capable path, epoch-decisive selections from a metadata-disabled shadow decision, and victim-way concentration. Eligibility is a liveness check; only the decisive counter shows that epoch metadata changed a victim. Compare RRIP-first against GRASP-only for the combined RRIP path, and epoch-first against the records-first/property-LRU arm for an exact runtime epoch contrast. Do not infer a future-reference benefit from RRIP behavior alone."
+    },
+    {
+      "name": "65_gem5_rrip_epoch_attribution_cit_i1",
+      "kind": "roi_matrix",
+      "profiles": [
+        "reuse_plan_rrip_epoch_attribution"
+      ],
+      "suite": "gem5",
+      "graph_set": "cit_patents_n18_transport_calibration",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_GRASP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "ecg_isa_variant": "computed",
+      "gem5_cpu_type": "O3",
+      "gem5_compact_reuse_bind_performance": true,
+      "policy_sharding_allowed": false,
+      "out_subdir": "65_gem5_rrip_epoch_attribution_cit_i1",
+      "timeout_gem5": 86400,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_TIER_BITS": "2",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "GEM5_GRAPH_ARRAY_STATS": "1",
+        "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
+      },
+      "notes": "Applied epoch counterfactual. RRIP-no-epoch keeps the exact RRIP eligibility gate, records-first selection, insertion, transport, and guest work of RRIP-first while forcing property epoch distance to zero. RRIP-first versus RRIP-no-epoch is the only end-to-end epoch contrast; GRASP-only and transport-LRU remain local decomposition controls."
     },
     {
       "name": "70_gem5_pagerank_i1",

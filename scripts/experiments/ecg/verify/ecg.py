@@ -581,6 +581,15 @@ def _select_rrip(ways):
     return _first_by(cand, lambda way: (-_eff_d(way),))
 
 
+def _select_rrip_no_epoch(ways):
+    mx = max(w["rrpv"] for w in ways)
+    candidates = [way for way in ways if way["rrpv"] == mx]
+    records = [way for way in candidates if way["prop"] == 0]
+    if records:
+        return _first_by(records, lambda way: (way["last"],))
+    return min(way["way"] for way in candidates)
+
+
 def _select_degree(ways):
     mx = max(w["rrpv"] for w in ways)
     cand = [w for w in ways if w["rrpv"] == mx]
@@ -621,6 +630,7 @@ SELECTORS = {
     "ECG:epoch_first": _select_epoch,
     "ECG:epoch_only": _select_epoch,
     "ECG:rrip_first": _select_rrip,
+    "ECG:rrip_no_epoch": _select_rrip_no_epoch,
     "ECG:degree_first": _select_degree,
 }
 
@@ -1204,7 +1214,7 @@ def run_synthetic():
     ok = True
     for variant in ["tier", "dueling", "grasp_only", "epoch_only", "rrip_first",
                     "epoch_first", "degree_first", "lru_only", "record_lru",
-                    "shortcircuit"]:
+                    "rrip_no_epoch", "shortcircuit"]:
         p = subprocess.run([str(SYNTH_BIN)], env={**os.environ, "ECG_VARIANT": variant},
                            capture_output=True, text=True, timeout=60)
         for line in p.stdout.splitlines():
@@ -1227,8 +1237,10 @@ def _epoch_decided(pol, ways, v):
     if pol == "ECG:rrip_first":
         mx = max(w["rrpv"] for w in ways)
         pool = [w for w in ways if w["rrpv"] == mx and w["prop"] == 1 and w["stamped"]]
-    else:  # epoch_first / epoch_only rank all stamped property
+    elif pol in ("ECG:epoch_first", "ECG:epoch_only"):
         pool = [w for w in ways if w["prop"] == 1 and w["stamped"]]
+    else:
+        return False
     return (len(pool) >= 2 and len({w["dist"] for w in pool}) >= 2
             and ways[v]["dist"] == max(w["dist"] for w in pool))
 
@@ -1289,6 +1301,8 @@ def main(argv=None):
               ("grasp_only", {**ECG_ENV, "ECG_VARIANT": "grasp_only"}),
               ("epoch_only", {**ECG_ENV, "ECG_VARIANT": "epoch_only"}),
               ("rrip_first", {**ECG_ENV, "ECG_VARIANT": "rrip_first"}),
+              ("rrip_no_epoch", {
+                  **ECG_ENV, "ECG_VARIANT": "rrip_no_epoch"}),
               ("epoch_first", {**ECG_ENV, "ECG_VARIANT": "epoch_first"}),
               ("degree_first", {**ECG_ENV, "ECG_VARIANT": "degree_first"}),
               ("shortcircuit", {**ECG_ENV, "ECG_VARIANT": "shortcircuit"})]
@@ -1326,7 +1340,8 @@ def main(argv=None):
     if BC.exists():
         print("\n-- cache_sim BC cross-kernel (BC evicts property -> live epoch branch + stamp invariant) --")
         for variant in ["grasp_only", "epoch_only", "rrip_first",
-                        "epoch_first", "degree_first", "shortcircuit"]:
+                        "rrip_no_epoch", "epoch_first", "degree_first",
+                        "shortcircuit"]:
             ok_all &= verify_trace(f"bc/{variant}", run_bc({**ECG_ENV, "ECG_VARIANT": variant}, COV_ENV),
                                    prefix="(bc) ", reasons=live_reasons)
         # BC epoch-coverage is INFORMATIONAL (strict=False): BC's property lines carry
@@ -1361,7 +1376,8 @@ def main(argv=None):
             if args.isa_receipt_dir else None)
         print(f"\n-- gem5 (ECG_GRASP_POPT variants, {GRAPH_LABEL}/-o5) --")
         for variant in ["grasp_only", "epoch_only", "rrip_first",
-                        "epoch_first", "degree_first", "shortcircuit"]:
+                        "rrip_no_epoch", "epoch_first", "degree_first",
+                        "shortcircuit"]:
             ok_all &= verify_trace(variant, run_gem5(variant), prefix="gem5 ", reasons=live_reasons)
         print("\n-- gem5 epoch-coverage (exact rules on forced geometry; epoch-value gate informational) --")
         for variant in ["rrip_first", "epoch_first"]:

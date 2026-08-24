@@ -2231,6 +2231,10 @@ private:
                 pol = "ECG:record_lru";
                 reason = !isProp(victim) ? "record by recency"
                                          : "property recency fallback";
+            } else if (variant == 8) {
+                pol = "ECG:rrip_no_epoch";
+                reason = !isProp(victim) ? "max-rrpv record by recency"
+                                         : "max-rrpv property fallback";
             } else {
                 pol = (variant == 1) ? "ECG:epoch_first" : "ECG:epoch_only";
                 reason = !isProp(victim) ? "record by recency"
