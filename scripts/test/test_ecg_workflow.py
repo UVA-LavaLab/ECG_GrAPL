@@ -236,6 +236,7 @@ def test_reuse_plan_policy_aliases_are_first_class(monkeypatch):
     for label, variant in (
             ("ECG:REUSE_PLAN_GRASP_FLOWTHROUGH", "grasp_only"),
             ("ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH", "epoch_first"),
+            ("ECG:REUSE_PLAN_RECORD_LRU_FLOWTHROUGH", "record_lru"),
             ("ECG:REUSE_PLAN_RRIP_FLOWTHROUGH", "rrip_first"),
             ("ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
             ("ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH", "shortcircuit"),

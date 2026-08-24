@@ -2227,6 +2227,10 @@ private:
             } else if (variant == 6) {
                 pol = "ECG:lru_only";
                 reason = "oldest recency";
+            } else if (variant == 7) {
+                pol = "ECG:record_lru";
+                reason = !isProp(victim) ? "record by recency"
+                                         : "property recency fallback";
             } else {
                 pol = (variant == 1) ? "ECG:epoch_first" : "ECG:epoch_only";
                 reason = !isProp(victim) ? "record by recency"

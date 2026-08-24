@@ -95,6 +95,16 @@ class GraphEcgRP : public Base
         statistics::Scalar winnerChanges;
         statistics::Scalar followerVariantOverrides;
         statistics::Scalar reuseAdmissionUpdates;
+        statistics::Scalar victimSelections;
+        statistics::Scalar victimRequestInvalid;
+        statistics::Scalar victimZeroStampedSelections;
+        statistics::Scalar victimStampedWays;
+        statistics::Scalar victimPropertyWays;
+        statistics::Scalar victimPropertyEpochInvalidWays;
+        statistics::Scalar victimContextMismatchWays;
+        statistics::Scalar victimEpochEligibleSelections;
+        statistics::Scalar victimEpochDecisiveSelections;
+        statistics::Vector victimWaySelections;
     } onlineDuelingStats;
 };
 

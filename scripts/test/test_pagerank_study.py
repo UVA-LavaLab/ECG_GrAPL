@@ -526,6 +526,34 @@ def test_shortcircuit_timing_is_one_replay_promoted_cell():
     assert stage["env"]["GEM5_GRAPH_ARRAY_STATS"] == "1"
 
 
+def test_epoch_attribution_is_one_complete_matched_transport_cell():
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    stages = [
+        stage for stage in manifest["stages"]
+        if "reuse_plan_epoch_attribution" in stage.get("profiles", [])
+    ]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["name"] == "64_gem5_epoch_attribution_cit_i1"
+    assert stage["suite"] == "gem5"
+    assert stage["graph_set"] == "cit_patents_n18_transport_calibration"
+    assert stage["benchmarks"] == ["pr"]
+    assert stage["policy_sharding_allowed"] is False
+    assert stage["gem5_cpu_type"] == "O3"
+    assert stage["gem5_compact_reuse_bind_performance"] is True
+    assert stage["policies"] == [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_GRASP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RECORD_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH",
+    ]
+    assert stage["env"]["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
+    assert stage["env"]["GEM5_GRAPH_ARRAY_STATS"] == "1"
+    assert stage["env"]["GEM5_REUSE_PLAN_COVERAGE_REQUIRED"] == "1"
+
+
 def test_cache_sim_mode_receipt_survives_graph_context_lifetime():
     cache = (
         ROOT / "bench/include/cache_sim/cache_sim.h").read_text()

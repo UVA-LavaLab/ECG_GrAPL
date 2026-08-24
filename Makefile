@@ -88,6 +88,8 @@ $(BIN_SIM_DIR)/%: $(BENCH_DIR)/src_sim/%.cc $(DEP_GAPBS) \
 	$(DEP_GRAPH) $(DEP_EXTERNAL) $(DEP_CACHE) $(DEP_ECG) | $(BIN_SIM_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -I$(INCLUDE_CACHE) $< $(LDLIBS) -o $@
 
+.PRECIOUS: $(BIN_SIM_DIR)/%
+
 sim-%: $(BIN_SIM_DIR)/%
 	@echo "Built cache_sim kernel: $<"
 

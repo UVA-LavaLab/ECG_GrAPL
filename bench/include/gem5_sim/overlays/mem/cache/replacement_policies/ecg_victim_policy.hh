@@ -39,6 +39,16 @@ enum Variant {
     SHORTCIRCUIT = 4,  // non-property first (set order), then farthest RAW-dist property
     DEGREE_FIRST = 5,  // max-rrpv set; records, then coldest degree tier, then farthest epoch
     LRU_ONLY     = 6,  // oldest line regardless of metadata
+    RECORD_LRU   = 7,  // records first by recency, then property LRU; no epoch
+};
+
+enum class VictimReason : uint8_t {
+    RRIP,
+    LRU,
+    NON_PROPERTY,
+    EPOCH_PROPERTY,
+    DEGREE_PROPERTY,
+    RECENCY_FALLBACK,
 };
 
 inline int parseVariant(const char* value) {
@@ -53,6 +63,7 @@ inline int parseVariant(const char* value) {
     if (variant == "degree_first" || variant == "traversal")
         return DEGREE_FIRST;
     if (variant == "lru_only") return LRU_ONLY;
+    if (variant == "record_lru") return RECORD_LRU;
     std::fprintf(stderr, "[FATAL] unknown ECG_VARIANT=%s\n", value);
     std::abort();
 }
@@ -273,6 +284,13 @@ struct WayState {
     bool     stamped;  // epoch is meaningful here (property line with a live stamp)
 };
 
+inline bool victimUsedEpoch(
+        VictimReason reason, const WayState& selectedWay) {
+    return selectedWay.stamped &&
+           (reason == VictimReason::EPOCH_PROPERTY ||
+            reason == VictimReason::DEGREE_PROPERTY);
+}
+
 // Effective epoch distance: rrip_first/epoch_* treat an unstamped line as
 // distance 0 (kept), so only genuinely stamped property competes on epoch.
 inline uint32_t effDist(const WayState& w) { return w.stamped ? w.dist : 0; }
@@ -319,11 +337,19 @@ inline uint32_t reusePlanDistance(uint16_t first, uint16_t second,
 
 // Select the victim index among ways[0..n). Ages rrpv in place where the variant
 // ages. n must be >= 1.
-inline size_t selectVictim(WayState* ways, size_t n, int variant, uint8_t rrpvMax) {
+inline size_t selectVictim(WayState* ways, size_t n, int variant,
+                           uint8_t rrpvMax,
+                           VictimReason* selectedReason = nullptr) {
+    auto selected = [selectedReason](size_t index, VictimReason reason) {
+        if (selectedReason) *selectedReason = reason;
+        return index;
+    };
     // grasp_only: pure RRIP — first line at max RRPV, aging until one reaches it.
     if (variant == GRASP_ONLY) {
         for (;;) {
-            for (size_t i = 0; i < n; i++) if (ways[i].rrpv >= rrpvMax) return i;
+            for (size_t i = 0; i < n; i++)
+                if (ways[i].rrpv >= rrpvMax)
+                    return selected(i, VictimReason::RRIP);
             for (size_t i = 0; i < n; i++) if (ways[i].rrpv < rrpvMax) ways[i].rrpv++;
         }
 
@@ -338,20 +364,45 @@ inline size_t selectVictim(WayState* ways, size_t n, int variant, uint8_t rrpvMa
                 victim = i;
             }
         }
-        return victim;
+        return selected(victim, VictimReason::LRU);
+    }
+
+    if (variant == RECORD_LRU) {
+        size_t record = n;
+        uint64_t recordOldest = 0;
+        for (size_t i = 0; i < n; ++i) {
+            if (!ways[i].prop &&
+                (record == n || ways[i].recency < recordOldest)) {
+                record = i;
+                recordOldest = ways[i].recency;
+            }
+        }
+        if (record != n)
+            return selected(record, VictimReason::NON_PROPERTY);
+        size_t victim = 0;
+        uint64_t oldest = ways[0].recency;
+        for (size_t i = 1; i < n; ++i) {
+            if (ways[i].recency < oldest) {
+                oldest = ways[i].recency;
+                victim = i;
+            }
+        }
+        return selected(victim, VictimReason::RECENCY_FALLBACK);
     }
 
     // shortcircuit (legacy): evict any non-property line first (set order); if the
     // set is all property, evict the farthest effective-dist line (unstamped property
     // -> dist 0 = kept, so only genuinely stamped property competes; DBG tiebreak).
     if (variant == SHORTCIRCUIT) {
-        for (size_t i = 0; i < n; i++) if (!ways[i].prop) return i;
+        for (size_t i = 0; i < n; i++)
+            if (!ways[i].prop)
+                return selected(i, VictimReason::NON_PROPERTY);
         size_t best = 0; uint32_t bd = 0; uint8_t bdbg = 0;
         for (size_t i = 0; i < n; i++) {
             uint32_t d = effDist(ways[i]);
             if (d > bd || (d == bd && ways[i].dbg > bdbg)) { best = i; bd = d; bdbg = ways[i].dbg; }
         }
-        return best;
+        return selected(best, VictimReason::EPOCH_PROPERTY);
     }
 
     // epoch_first / epoch_only: records first by recency (no rrpv gate); else the
@@ -360,16 +411,18 @@ inline size_t selectVictim(WayState* ways, size_t n, int variant, uint8_t rrpvMa
         size_t rec = n; uint64_t ro = 0;
         for (size_t i = 0; i < n; i++) if (!ways[i].prop)
             if (rec == n || ways[i].recency < ro) { rec = i; ro = ways[i].recency; }
-        if (rec != n) return rec;
+        if (rec != n)
+            return selected(rec, VictimReason::NON_PROPERTY);
         size_t best = n; uint32_t bd = 0;
         for (size_t i = 0; i < n; i++) if (ways[i].stamped) {
             uint32_t d = ways[i].dist;
             if (best == n || d > bd) { best = i; bd = d; }
         }
-        if (best != n) return best;
+        if (best != n)
+            return selected(best, VictimReason::EPOCH_PROPERTY);
         size_t v = 0; uint64_t o = ways[0].recency;
         for (size_t i = 1; i < n; i++) if (ways[i].recency < o) { o = ways[i].recency; v = i; }
-        return v;
+        return selected(v, VictimReason::RECENCY_FALLBACK);
     }
 
     // degree_first (frontier traversal): keep RRIP's eligibility gate, then
@@ -400,8 +453,10 @@ inline size_t selectVictim(WayState* ways, size_t n, int variant, uint8_t rrpvMa
                     propOldest = ways[i].recency;
                 }
             }
-            if (recIdx != n) return recIdx;
-            if (propIdx != n) return propIdx;
+            if (recIdx != n)
+                return selected(recIdx, VictimReason::NON_PROPERTY);
+            if (propIdx != n)
+                return selected(propIdx, VictimReason::DEGREE_PROPERTY);
             for (size_t i = 0; i < n; ++i)
                 if (ways[i].rrpv < rrpvMax) ways[i].rrpv++;
         }
@@ -422,8 +477,10 @@ inline size_t selectVictim(WayState* ways, size_t n, int variant, uint8_t rrpvMa
                 if (propIdx == n || d > pb) { propIdx = i; pb = d; }
             }
         }
-        if (recIdx != n) return recIdx;
-        if (propIdx != n) return propIdx;
+        if (recIdx != n)
+            return selected(recIdx, VictimReason::NON_PROPERTY);
+        if (propIdx != n)
+            return selected(propIdx, VictimReason::EPOCH_PROPERTY);
         for (size_t i = 0; i < n; i++) if (ways[i].rrpv < rrpvMax) ways[i].rrpv++;
     }
 }

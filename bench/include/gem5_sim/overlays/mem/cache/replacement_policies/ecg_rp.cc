@@ -666,6 +666,7 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
         //                          then farthest-epoch property
         //   epoch_only(3): same eviction as epoch_first (insertion uniform, set in reset())
         //   shortcircuit(4,legacy): non-property first, then epoch among property
+        //   record_lru(7): records by recency, then property recency; no epoch
         static const int configuredVariant =
             ecg_policy::parseVariant(std::getenv("ECG_VARIANT"));
         // Ungated receipt, printed once. The runner records the variant it
@@ -751,6 +752,13 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
         // Build the per-way state and delegate the DECISION to the shared
         // ecg_policy::selectVictim (identical across cache_sim / gem5 / Sniper).
         const size_t nc = candidates.size();
+        if (nc > 64) {
+            std::fprintf(
+                stderr,
+                "[FATAL] GraphEcgRP supports at most 64 candidates, got %zu\n",
+                nc);
+            std::abort();
+        }
         ecg_policy::WayState ws[64];
         for (size_t i = 0; i < nc; i++) {
             auto dd = getData(candidates[i]);
@@ -766,7 +774,57 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
             ws[i].dist    = dist(candidates[i]);
             ws[i].stamped = stamped(candidates[i]);
         }
-        size_t vidx = ecg_policy::selectVictim(ws, nc, variant, rrpvMax);
+        ++onlineDuelingStats.victimSelections;
+        if (!victimRequestValid)
+            ++onlineDuelingStats.victimRequestInvalid;
+        uint64_t stampedWays = 0;
+        uint64_t propertyWays = 0;
+        uint64_t propertyEpochInvalidWays = 0;
+        uint64_t contextMismatchWays = 0;
+        for (size_t i = 0; i < nc; ++i) {
+            if (ws[i].stamped) ++stampedWays;
+            auto data = getData(candidates[i]);
+            if (victimRequestValid && ws[i].prop) {
+                ++propertyWays;
+                if (!data->ecg_epoch_valid)
+                    ++propertyEpochInvalidWays;
+            }
+            if (
+                    ws[i].prop && data->ecg_epoch_valid &&
+                    victimRequestValid &&
+                    data->ecg_context_id != victimContextId) {
+                ++contextMismatchWays;
+            }
+        }
+        onlineDuelingStats.victimStampedWays += stampedWays;
+        onlineDuelingStats.victimPropertyWays += propertyWays;
+        onlineDuelingStats.victimPropertyEpochInvalidWays +=
+            propertyEpochInvalidWays;
+        onlineDuelingStats.victimContextMismatchWays +=
+            contextMismatchWays;
+        if (stampedWays == 0)
+            ++onlineDuelingStats.victimZeroStampedSelections;
+
+        ecg_policy::WayState noEpochWays[64];
+        for (size_t i = 0; i < nc; ++i) {
+            noEpochWays[i] = ws[i];
+            noEpochWays[i].stamped = false;
+            noEpochWays[i].dist = 0;
+        }
+        ecg_policy::VictimReason selectedReason =
+            ecg_policy::VictimReason::RRIP;
+        size_t vidx = ecg_policy::selectVictim(
+            ws, nc, variant, rrpvMax, &selectedReason);
+        const size_t noEpochVidx = ecg_policy::selectVictim(
+            noEpochWays, nc, variant, rrpvMax);
+        if (
+                victimRequestValid &&
+                ecg_policy::victimUsedEpoch(selectedReason, ws[vidx]))
+            ++onlineDuelingStats.victimEpochEligibleSelections;
+        if (victimRequestValid && vidx != noEpochVidx)
+            ++onlineDuelingStats.victimEpochDecisiveSelections;
+        if (vidx < onlineDuelingStats.victimWaySelections.size())
+            ++onlineDuelingStats.victimWaySelections[vidx];
         for (size_t i = 0; i < nc; i++) getData(candidates[i])->rrpv = ws[i].rrpv;  // persist SRRIP aging
         ReplaceableEntry* victim = candidates[vidx];
 
@@ -786,6 +844,10 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
         } else if (variant == 6) {
             pol = "ECG:lru_only";
             reason = "oldest recency";
+        } else if (variant == 7) {
+            pol = "ECG:record_lru";
+            reason = !isProp(victim) ? "record by recency"
+                                     : "property recency fallback";
         } else {
             pol = epol;
             reason = !isProp(victim) ? "record by recency"
@@ -953,8 +1015,45 @@ GraphEcgRP::OnlineDuelingStats::OnlineDuelingStats(
         "Number of request-bound follower selections overriding static RRIP"),
     ADD_STAT(
         reuseAdmissionUpdates,
-        "Number of ReusePlan future-distance RRPV admission or refresh updates")
+        "Number of ReusePlan future-distance RRPV admission or refresh updates"),
+    ADD_STAT(
+        victimSelections,
+        "Number of ECG_GRASP_POPT victim selections"),
+    ADD_STAT(
+        victimRequestInvalid,
+        "Victim selections without request-bound current epoch/context"),
+    ADD_STAT(
+        victimZeroStampedSelections,
+        "Victim selections with zero live stamped property ways"),
+    ADD_STAT(
+        victimStampedWays,
+        "Sum of live stamped property ways across victim selections"),
+    ADD_STAT(
+        victimPropertyWays,
+        "Sum of resident property ways across request-valid victim selections"),
+    ADD_STAT(
+        victimPropertyEpochInvalidWays,
+        "Sum of request-valid property ways without a delivered epoch"),
+    ADD_STAT(
+        victimContextMismatchWays,
+        "Sum of epoch-valid property ways rejected by context binding"),
+    ADD_STAT(
+        victimEpochEligibleSelections,
+        "Victim selections choosing a stamped property via an epoch-capable path"),
+    ADD_STAT(
+        victimEpochDecisiveSelections,
+        "Victim selections changed by removing all epoch metadata"),
+    ADD_STAT(
+        victimWaySelections,
+        "Victim selections by candidate-way index")
 {
+    victimWaySelections
+        .init(64)
+        .flags(statistics::total | statistics::nonan);
+    for (size_t way = 0; way < 64; ++way) {
+        victimWaySelections.subname(
+            way, "way" + std::to_string(way));
+    }
 }
 
 } // namespace replacement_policy

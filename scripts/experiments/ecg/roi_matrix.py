@@ -292,6 +292,7 @@ GEM5_STAT_KEYS = {
     "l1_misses": "system.cpu.dcache.overallMisses::total",
     "l2_misses": "system.l2cache.overallMisses::total",
     "l3_misses": "system.l3cache.overallMisses::total",
+    "l3_replacements": "system.l3cache.replacements",
     "l1_accesses": "system.cpu.dcache.overallAccesses::total",
     "l2_accesses": "system.l2cache.overallAccesses::total",
     "l3_accesses": "system.l3cache.overallAccesses::total",
@@ -319,6 +320,24 @@ GEM5_STAT_KEYS = {
         "system.l3cache.replacement_policy.followerVariantOverrides",
     "gem5_reuse_plan_admission_updates":
         "system.l3cache.replacement_policy.reuseAdmissionUpdates",
+    "gem5_reuse_plan_victim_selections":
+        "system.l3cache.replacement_policy.victimSelections",
+    "gem5_reuse_plan_victim_request_invalid":
+        "system.l3cache.replacement_policy.victimRequestInvalid",
+    "gem5_reuse_plan_victim_zero_stamped_selections":
+        "system.l3cache.replacement_policy.victimZeroStampedSelections",
+    "gem5_reuse_plan_victim_stamped_ways":
+        "system.l3cache.replacement_policy.victimStampedWays",
+    "gem5_reuse_plan_victim_property_ways":
+        "system.l3cache.replacement_policy.victimPropertyWays",
+    "gem5_reuse_plan_victim_property_epoch_invalid_ways":
+        "system.l3cache.replacement_policy.victimPropertyEpochInvalidWays",
+    "gem5_reuse_plan_victim_context_mismatch_ways":
+        "system.l3cache.replacement_policy.victimContextMismatchWays",
+    "gem5_reuse_plan_victim_epoch_eligible_selections":
+        "system.l3cache.replacement_policy.victimEpochEligibleSelections",
+    "gem5_reuse_plan_victim_epoch_decisive_selections":
+        "system.l3cache.replacement_policy.victimEpochDecisiveSelections",
     # Demand-load (cpu.data) L3 stats EXCLUDING prefetcher fills. The L2 stream
     # prefetcher otherwise dominates overall::total (>>demand). Sniper's NUCA
     # counters do not provide this split, so the pipeline treats its prefetched
@@ -1557,6 +1576,7 @@ def scrub_cell_mechanism_env(env: dict[str, str]) -> None:
         if key in os.environ
     }
     env.pop("GEM5_GRAPH_ARRAY_STATS", None)
+    env.pop("GEM5_REUSE_PLAN_COVERAGE_REQUIRED", None)
     prefixes = (
         "ECG_",
         "GEM5_ECG_",
@@ -1646,7 +1666,10 @@ def apply_explicit_cell_mechanism_env(
     for key, value in explicit.items():
         key = str(key)
         allowed = (
-            key == "GEM5_GRAPH_ARRAY_STATS" or
+            key in {
+                "GEM5_GRAPH_ARRAY_STATS",
+                "GEM5_REUSE_PLAN_COVERAGE_REQUIRED",
+            } or
             (key.startswith((
                 "ECG_", "GEM5_ECG_", "GEM5_FORCE_ECG_",
                 "SNIPER_ECG_", "SNIPER_ENABLE_ECG_", "CACHE_ECG_"))
@@ -2225,6 +2248,162 @@ def validate_online_dueling_activity(
     return True
 
 
+def apply_gem5_reuse_plan_coverage(
+        row: dict[str, Any], required: bool) -> bool:
+    row["gem5_reuse_plan_coverage_validated"] = 0
+    if not required:
+        return False
+    required_fields = (
+        "l3_replacements",
+        "gem5_reuse_plan_victim_selections",
+        "gem5_reuse_plan_victim_request_invalid",
+        "gem5_reuse_plan_victim_zero_stamped_selections",
+        "gem5_reuse_plan_victim_stamped_ways",
+        "gem5_reuse_plan_victim_property_ways",
+        "gem5_reuse_plan_victim_property_epoch_invalid_ways",
+        "gem5_reuse_plan_victim_context_mismatch_ways",
+        "gem5_reuse_plan_victim_epoch_eligible_selections",
+        "gem5_reuse_plan_victim_epoch_decisive_selections",
+        "gem5_reuse_plan_victim_way_counts",
+    )
+    missing = [field for field in required_fields if field not in row]
+    if missing:
+        mark_row_error(
+            row,
+            "ReusePlan stamp-coverage instrumentation missing: "
+            + ", ".join(missing))
+        return False
+    selections = int(row["gem5_reuse_plan_victim_selections"])
+    if selections <= 0:
+        mark_row_error(
+            row, "ReusePlan made no instrumented victim selections in ROI")
+        return False
+    invalid = int(row["gem5_reuse_plan_victim_request_invalid"])
+    valid = selections - invalid
+    zero_stamped = int(
+        row["gem5_reuse_plan_victim_zero_stamped_selections"])
+    stamped_ways = int(row["gem5_reuse_plan_victim_stamped_ways"])
+    property_ways = int(row["gem5_reuse_plan_victim_property_ways"])
+    property_epoch_invalid_ways = int(
+        row["gem5_reuse_plan_victim_property_epoch_invalid_ways"])
+    context_mismatches = int(
+        row["gem5_reuse_plan_victim_context_mismatch_ways"])
+    epoch_eligible = int(
+        row["gem5_reuse_plan_victim_epoch_eligible_selections"])
+    epoch_decisive = int(
+        row["gem5_reuse_plan_victim_epoch_decisive_selections"])
+    way_counts = [
+        int(count)
+        for count in row["gem5_reuse_plan_victim_way_counts"]
+    ]
+    replacements = int(row["l3_replacements"])
+    errors = []
+    selection_excess = selections - replacements
+    selection_excess_limit = max(
+        64, math.ceil(max(replacements, 0) * 0.01))
+    effective_variant = str(
+        row.get("ecg_variant_effective") or
+        row.get("gem5_variant_requested_receipt") or "")
+    if valid <= 0:
+        errors.append("no request-valid victim selections")
+    if selection_excess < 0:
+        errors.append(
+            f"victim selections {selections} < LLC replacements "
+            f"{replacements}")
+    elif selection_excess > selection_excess_limit:
+        errors.append(
+            f"victim-selection retry excess {selection_excess} exceeds "
+            f"limit {selection_excess_limit}")
+    if sum(way_counts) != selections:
+        errors.append(
+            f"victim-way histogram {sum(way_counts)} != selections "
+            f"{selections}")
+    if zero_stamped < invalid:
+        errors.append(
+            f"zero-stamped selections {zero_stamped} < invalid requests "
+            f"{invalid}")
+    if stamped_ways > property_ways:
+        errors.append(
+            f"stamped ways {stamped_ways} > request-valid property ways "
+            f"{property_ways}")
+    if stamped_ways <= 0:
+        errors.append(
+            "no live stamped property ways in request-valid victim selections")
+    if property_epoch_invalid_ways > property_ways:
+        errors.append(
+            "epoch-invalid property ways exceed request-valid property ways")
+    classified_property_ways = (
+        stamped_ways + property_epoch_invalid_ways + context_mismatches)
+    if classified_property_ways != property_ways:
+        errors.append(
+            f"classified property ways {classified_property_ways} != "
+            f"request-valid property ways {property_ways}")
+    if epoch_decisive > epoch_eligible:
+        errors.append(
+            f"epoch-decisive selections {epoch_decisive} exceed "
+            f"epoch-eligible selections {epoch_eligible}")
+    valid_zero_stamped = zero_stamped - invalid
+    if epoch_eligible > valid - valid_zero_stamped:
+        errors.append(
+            f"epoch-eligible selections {epoch_eligible} exceed "
+            f"request-valid selections containing stamps "
+            f"{valid - valid_zero_stamped}")
+    if (
+            effective_variant in {
+                "rrip_first", "epoch_first", "epoch_only",
+                "shortcircuit", "degree_first"} and
+            epoch_eligible <= 0):
+        errors.append(
+            f"{effective_variant} never selected a live stamped property "
+            "through an epoch-capable victim path")
+    if errors:
+        mark_row_error(
+            row, "ReusePlan stamp-coverage identities failed: "
+            + "; ".join(errors))
+        return False
+    row.update({
+        "gem5_reuse_plan_victim_selection_retry_excess":
+            selection_excess,
+        "gem5_reuse_plan_victim_selection_retry_excess_share":
+            selection_excess / selections,
+        "gem5_reuse_plan_victim_request_valid_share":
+            valid / selections,
+        "gem5_reuse_plan_victim_valid_zero_stamped_share":
+            valid_zero_stamped / valid,
+        "gem5_reuse_plan_victim_mean_stamped_ways":
+            stamped_ways / valid,
+        "gem5_reuse_plan_victim_property_stamp_coverage":
+            stamped_ways / property_ways if property_ways else 0.0,
+        "gem5_reuse_plan_victim_property_epoch_invalid_share":
+            (property_epoch_invalid_ways / property_ways
+             if property_ways else 0.0),
+        "gem5_reuse_plan_victim_context_mismatch_share":
+            (context_mismatches / property_ways
+             if property_ways else 0.0),
+        "gem5_reuse_plan_victim_epoch_eligible_share":
+            epoch_eligible / valid,
+        "gem5_reuse_plan_victim_epoch_decisive_share":
+            epoch_decisive / valid,
+        "gem5_reuse_plan_victim_epoch_decisive_given_eligible":
+            epoch_decisive / epoch_eligible if epoch_eligible else 0.0,
+        "gem5_reuse_plan_victim_way_max_share":
+            max(way_counts) / selections,
+        "gem5_reuse_plan_coverage_validated": 1,
+    })
+    return True
+
+
+def requires_gem5_reuse_plan_coverage(
+        spec: PolicySpec, transport: EcgTransport,
+        requested: bool) -> bool:
+    return (
+        requested and
+        spec.policy == "ECG" and
+        spec.ecg_mode == "ECG_GRASP_POPT" and
+        transport.reuse_plan_depth == 2 and
+        not spec.ecg_set_dueling)
+
+
 def validate_reuse_admission_activity(
         row: dict[str, Any], required: bool,
         field: str = "gem5_reuse_plan_admission_updates") -> bool:
@@ -2562,6 +2741,7 @@ def apply_gem5_variant_receipt(
         "grasp_only": 0, "epoch_first": 1, "rrip_first": 2,
         "epoch_only": 3, "shortcircuit": 4, "legacy": 4,
         "degree_first": 5, "traversal": 5, "lru_only": 6,
+        "record_lru": 7,
     }.get(requested)
     row["gem5_variant_requested_receipt"] = actual_requested
     row["gem5_variant_effective_receipt"] = effective
@@ -2609,6 +2789,7 @@ def apply_sniper_variant_receipt(
         "grasp_only": 0, "epoch_first": 1, "rrip_first": 2,
         "epoch_only": 3, "shortcircuit": 4, "legacy": 4,
         "degree_first": 5, "traversal": 5, "lru_only": 6,
+        "record_lru": 7,
     }.get(requested)
     row["sniper_variant_requested_receipt"] = actual_requested
     row["sniper_variant_effective_receipt"] = effective
@@ -3042,6 +3223,9 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         spec.policy == "ECG" and
         spec.ecg_mode == "ECG_GRASP_POPT" and
         transport.reuse_plan_depth == 2)
+    reuse_plan_coverage_requested = requires_gem5_reuse_plan_coverage(
+        spec, transport,
+        env.get("GEM5_REUSE_PLAN_COVERAGE_REQUIRED") == "1")
     compact_fused_requested = (
         bool(args.gem5_compact_fused) or
         env.get("GEM5_ECG_COMPACT_FUSED") == "1")
@@ -3641,6 +3825,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     row.update(sections[0])
     apply_gem5_array_attribution(
         row, log_text, required=array_attribution_requested)
+    apply_gem5_reuse_plan_coverage(
+        row, required=reuse_plan_coverage_requested)
     if spec.policy == "GRASP" and int(
             row.get("grasp_hot_property_accesses") or 0) <= 0:
         mark_row_error(
@@ -4640,6 +4826,24 @@ def parse_gem5_sections(stats_path: Path) -> list[dict[str, Any]]:
                 continue
             value = match.group(1)
             stats[out_key] = parse_gem5_number(value)
+        way_counts = {
+            int(way): int(value)
+            for way, value in re.findall(
+                r"(?m)^system\.l3cache\.replacement_policy\."
+                r"victimWaySelections::way(\d+)\s+(\d+)\s",
+                section)
+        }
+        if way_counts:
+            max_way = max(way_counts, key=way_counts.get)
+            stats.update({
+                "gem5_reuse_plan_victim_way_counts": [
+                    way_counts.get(way, 0)
+                    for way in range(max(way_counts) + 1)
+                ],
+                "gem5_reuse_plan_victim_way_max_index": max_way,
+                "gem5_reuse_plan_victim_way_max_count":
+                    way_counts[max_way],
+            })
         stats.update(parse_gem5_array_stats(section))
         # Override L3 miss rate with DEMAND-LOAD (cpu.data) only, excluding L2
         # stream-prefetcher fills. Sniper's NUCA aggregate is handled separately.

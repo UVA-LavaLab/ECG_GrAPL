@@ -1015,17 +1015,178 @@ def test_gem5_array_attribution_is_per_requestor_and_fail_closed():
     assert optional["timing_valid_for_speedup"] == "1"
 
 
+def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
+        tmp_path):
+    rp_header = read(
+        "bench/include/gem5_sim/overlays/mem/cache/"
+        "replacement_policies/ecg_rp.hh")
+    rp_source = read(
+        "bench/include/gem5_sim/overlays/mem/cache/"
+        "replacement_policies/ecg_rp.cc")
+    for name in (
+            "victimSelections",
+            "victimRequestInvalid",
+            "victimZeroStampedSelections",
+            "victimStampedWays",
+            "victimPropertyWays",
+            "victimPropertyEpochInvalidWays",
+            "victimContextMismatchWays",
+            "victimEpochEligibleSelections",
+            "victimEpochDecisiveSelections",
+            "victimWaySelections"):
+        stat_type = "Vector" if name == "victimWaySelections" else "Scalar"
+        assert f"statistics::{stat_type} {name}" in rp_header
+        assert name in rp_source
+    assert "++onlineDuelingStats.victimSelections;" in rp_source
+    assert "++onlineDuelingStats.victimRequestInvalid;" in rp_source
+    assert "++onlineDuelingStats.victimEpochEligibleSelections;" in rp_source
+    assert "++onlineDuelingStats.victimEpochDecisiveSelections;" in rp_source
+    assert "victimUsedEpoch(selectedReason, ws[vidx])" in rp_source
+    assert (
+        rp_source.index("if (!getData(candidate)->valid) return candidate;")
+        < rp_source.index("++onlineDuelingStats.victimSelections;")
+        < rp_source.index("ecg_policy::selectVictim(\n"
+                          "            ws, nc, variant, rrpvMax"))
+
+    stats_path = tmp_path / "stats.txt"
+    stats_path.write_text(
+        "---------- Begin Simulation Statistics ----------\n"
+        "system.l3cache.replacements 20 #\n"
+        "system.l3cache.replacement_policy.victimSelections 20 #\n"
+        "system.l3cache.replacement_policy.victimRequestInvalid 2 #\n"
+        "system.l3cache.replacement_policy.victimZeroStampedSelections 3 #\n"
+        "system.l3cache.replacement_policy.victimStampedWays 40 #\n"
+        "system.l3cache.replacement_policy.victimPropertyWays 45 #\n"
+        "system.l3cache.replacement_policy.victimPropertyEpochInvalidWays 2 #\n"
+        "system.l3cache.replacement_policy.victimContextMismatchWays 3 #\n"
+        "system.l3cache.replacement_policy.victimEpochEligibleSelections 10 #\n"
+        "system.l3cache.replacement_policy.victimEpochDecisiveSelections 4 #\n"
+        "system.l3cache.replacement_policy.victimWaySelections::way0 12 #\n"
+        "system.l3cache.replacement_policy.victimWaySelections::way1 8 #\n"
+        "---------- End Simulation Statistics   ----------\n")
+    parsed = roi_matrix.parse_gem5_sections(stats_path)[0]
+    assert parsed["l3_replacements"] == 20
+    assert parsed["gem5_reuse_plan_victim_selections"] == 20
+    assert parsed["gem5_reuse_plan_victim_request_invalid"] == 2
+    assert (
+        parsed["gem5_reuse_plan_victim_zero_stamped_selections"] == 3)
+    assert parsed["gem5_reuse_plan_victim_stamped_ways"] == 40
+    assert parsed["gem5_reuse_plan_victim_property_ways"] == 45
+    assert (
+        parsed["gem5_reuse_plan_victim_property_epoch_invalid_ways"] == 2)
+    assert parsed["gem5_reuse_plan_victim_context_mismatch_ways"] == 3
+    assert (
+        parsed["gem5_reuse_plan_victim_epoch_eligible_selections"] == 10)
+    assert (
+        parsed["gem5_reuse_plan_victim_epoch_decisive_selections"] == 4)
+    assert parsed["gem5_reuse_plan_victim_way_counts"] == [12, 8]
+    assert parsed["gem5_reuse_plan_victim_way_max_index"] == 0
+    assert roi_matrix.apply_gem5_reuse_plan_coverage(parsed, required=True)
+    assert parsed["gem5_reuse_plan_victim_selection_retry_excess"] == 0
+    assert parsed["gem5_reuse_plan_victim_request_valid_share"] == 0.9
+    assert (
+        parsed["gem5_reuse_plan_victim_valid_zero_stamped_share"]
+        == pytest.approx(1 / 18))
+    assert (
+        parsed["gem5_reuse_plan_victim_mean_stamped_ways"]
+        == pytest.approx(40 / 18))
+    assert (
+        parsed["gem5_reuse_plan_victim_property_stamp_coverage"]
+        == pytest.approx(40 / 45))
+    assert (
+        parsed["gem5_reuse_plan_victim_context_mismatch_share"]
+        == pytest.approx(3 / 45))
+    assert (
+        parsed["gem5_reuse_plan_victim_epoch_eligible_share"]
+        == pytest.approx(10 / 18))
+    assert (
+        parsed["gem5_reuse_plan_victim_epoch_decisive_share"]
+        == pytest.approx(4 / 18))
+    assert (
+        parsed["gem5_reuse_plan_victim_epoch_decisive_given_eligible"]
+        == pytest.approx(0.4))
+    assert parsed["gem5_reuse_plan_victim_way_max_share"] == 0.6
+    assert parsed["gem5_reuse_plan_coverage_validated"] == 1
+
+    missing = dict(parsed)
+    missing.pop("gem5_reuse_plan_victim_stamped_ways")
+    assert not roi_matrix.apply_gem5_reuse_plan_coverage(
+        missing, required=True)
+    assert missing["status"] == "error"
+
+    skipped = {}
+    assert not roi_matrix.apply_gem5_reuse_plan_coverage(
+        skipped, required=False)
+    assert skipped["gem5_reuse_plan_coverage_validated"] == 0
+
+    bad_histogram = dict(parsed)
+    bad_histogram["gem5_reuse_plan_victim_way_counts"] = [11, 8]
+    bad_histogram.pop("error", None)
+    bad_histogram["status"] = "ok"
+    assert not roi_matrix.apply_gem5_reuse_plan_coverage(
+        bad_histogram, required=True)
+    assert "victim-way histogram" in bad_histogram["error"]
+
+    zero_stamps = dict(parsed)
+    zero_stamps.update({
+        "ecg_variant_effective": "rrip_first",
+        "gem5_reuse_plan_victim_zero_stamped_selections": 20,
+        "gem5_reuse_plan_victim_stamped_ways": 0,
+        "gem5_reuse_plan_victim_property_ways": 45,
+        "gem5_reuse_plan_victim_property_epoch_invalid_ways": 45,
+        "gem5_reuse_plan_victim_context_mismatch_ways": 0,
+        "gem5_reuse_plan_victim_epoch_eligible_selections": 0,
+        "gem5_reuse_plan_victim_epoch_decisive_selections": 0,
+        "status": "ok",
+    })
+    zero_stamps.pop("error", None)
+    assert not roi_matrix.apply_gem5_reuse_plan_coverage(
+        zero_stamps, required=True)
+    assert "no live stamped property ways" in zero_stamps["error"]
+    assert "never selected a live stamped property" in zero_stamps["error"]
+
+    rrip = roi_matrix.parse_policy_spec(
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH")
+    assert roi_matrix.requires_gem5_reuse_plan_coverage(
+        rrip, roi_matrix.ecg_transport_for(rrip, "pr"), requested=True)
+    assert not roi_matrix.requires_gem5_reuse_plan_coverage(
+        rrip, roi_matrix.ecg_transport_for(rrip, "pr"), requested=False)
+    lru = roi_matrix.parse_policy_spec("LRU")
+    assert not roi_matrix.requires_gem5_reuse_plan_coverage(
+        lru, roi_matrix.ecg_transport_for(lru, "pr"), requested=True)
+    online = roi_matrix.parse_policy_spec(
+        "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH")
+    assert not roi_matrix.requires_gem5_reuse_plan_coverage(
+        online, roi_matrix.ecg_transport_for(online, "pr"), requested=True)
+    record_lru = roi_matrix.parse_policy_spec(
+        "ECG:REUSE_PLAN_RECORD_LRU_FLOWTHROUGH")
+    assert record_lru.ecg_variant == "record_lru"
+    receipt_row = {"timing_valid_for_speedup": "1"}
+    assert roi_matrix.apply_gem5_variant_receipt(
+        receipt_row,
+        "[ECG-VARIANT-RECEIPT sim=gem5 requested=record_lru "
+        "effective=7 dueling=0]",
+        "record_lru",
+        required=True)
+
+
 def test_gem5_array_attribution_is_explicit_and_pr_scoped(monkeypatch):
-    env = {"GEM5_GRAPH_ARRAY_STATS": "1"}
+    env = {
+        "GEM5_GRAPH_ARRAY_STATS": "1",
+        "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1",
+    }
     roi_matrix.scrub_cell_mechanism_env(env)
     assert "GEM5_GRAPH_ARRAY_STATS" not in env
+    assert "GEM5_REUSE_PLAN_COVERAGE_REQUIRED" not in env
 
     monkeypatch.setenv(
         "GRAPHBREW_EXPLICIT_CELL_ENV",
-        '{"GEM5_GRAPH_ARRAY_STATS":"1"}')
+        '{"GEM5_GRAPH_ARRAY_STATS":"1",'
+        '"GEM5_REUSE_PLAN_COVERAGE_REQUIRED":"1"}')
     roi_matrix.apply_explicit_cell_mechanism_env(
         env, roi_matrix.parse_policy_spec("LRU"))
     assert env["GEM5_GRAPH_ARRAY_STATS"] == "1"
+    assert env["GEM5_REUSE_PLAN_COVERAGE_REQUIRED"] == "1"
 
     context = read(
         "bench/include/gem5_sim/overlays/mem/cache/"

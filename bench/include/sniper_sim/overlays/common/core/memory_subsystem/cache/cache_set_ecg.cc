@@ -1096,6 +1096,10 @@ CacheSetECG::findECGGraspPoptVictim(CacheCntlr *cntlr)
    } else if (variant == 6) {
       pol = "ECG:lru_only";
       reason = "oldest recency";
+   } else if (variant == 7) {
+      pol = "ECG:record_lru";
+      reason = !isProp(victimWay) ? "record by recency"
+                                  : "property recency fallback";
    } else {
       pol = epol;
       reason = !isProp(victimWay) ? "record by recency" : "farthest-epoch property";

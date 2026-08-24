@@ -600,6 +600,13 @@ def _select_shortcircuit(ways):
     return _first_by(ways, lambda way: (-_eff_d(way), -way["dbg"]))
 
 
+def _select_record_lru(ways):
+    records = [way for way in ways if way["prop"] == 0]
+    return _first_by(
+        records if records else ways,
+        lambda way: (way["last"],))
+
+
 SELECTORS = {
     "LRU": lambda ways: _first_by(ways, lambda way: (way["last"],)),
     "GRASP": lambda ways: _first_by(
@@ -608,6 +615,7 @@ SELECTORS = {
         ways, lambda way: (-way["rrpv"],)),
     "ECG:lru_only": lambda ways: _first_by(
         ways, lambda way: (way["last"],)),
+    "ECG:record_lru": _select_record_lru,
     "ECG:shortcircuit": _select_shortcircuit,
     "ECG:shortcircuit+epoch": _select_shortcircuit,
     "ECG:epoch_first": _select_epoch,
@@ -1195,7 +1203,8 @@ def run_synthetic():
         print("  [synthetic] FAIL: could not build test_ecg_victim"); return False
     ok = True
     for variant in ["tier", "dueling", "grasp_only", "epoch_only", "rrip_first",
-                    "epoch_first", "degree_first", "lru_only", "shortcircuit"]:
+                    "epoch_first", "degree_first", "lru_only", "record_lru",
+                    "shortcircuit"]:
         p = subprocess.run([str(SYNTH_BIN)], env={**os.environ, "ECG_VARIANT": variant},
                            capture_output=True, text=True, timeout=60)
         for line in p.stdout.splitlines():

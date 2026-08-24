@@ -108,6 +108,69 @@ int main() {
         (void)ecg_policy::parseVariant(ve);
     printf("[test_ecg_victim] ECG_VARIANT=%s\n", var.c_str());
 
+    {
+        ecg_policy::WayState stamped[2] = {
+            {true, 7, 10, 0, 1, true},
+            {true, 7, 20, 0, 5, true},
+        };
+        ecg_policy::WayState no_epoch[2] = {
+            {true, 7, 10, 0, 0, false},
+            {true, 7, 20, 0, 0, false},
+        };
+        ecg_policy::VictimReason reason;
+        const size_t epoch_victim = ecg_policy::selectVictim(
+            stamped, 2, ecg_policy::EPOCH_FIRST, 7, &reason);
+        const size_t no_epoch_victim = ecg_policy::selectVictim(
+            no_epoch, 2, ecg_policy::EPOCH_FIRST, 7);
+        const bool ok = (
+            epoch_victim == 1 && no_epoch_victim == 0 &&
+            reason == ecg_policy::VictimReason::EPOCH_PROPERTY &&
+            ecg_policy::victimUsedEpoch(reason, stamped[epoch_victim]) &&
+            !ecg_policy::victimUsedEpoch(
+                reason, no_epoch[no_epoch_victim]));
+        printf(
+            "    %-46s expect=epoch1/shadow0 got=epoch%zu/shadow%zu  [%s]\n",
+            "epoch reason + shadow decisiveness",
+            epoch_victim, no_epoch_victim, ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
+    }
+    {
+        ecg_policy::WayState ways[3] = {
+            {true, 7, 10, 0, 31, true},
+            {false, 7, 5, 0, 0, false},
+            {true, 7, 20, 0, 1, true},
+        };
+        ecg_policy::VictimReason reason;
+        const size_t victim = ecg_policy::selectVictim(
+            ways, 3, ecg_policy::RECORD_LRU, 7, &reason);
+        const bool ok = (
+            victim == 1 &&
+            reason == ecg_policy::VictimReason::NON_PROPERTY);
+        printf(
+            "    %-46s expect=way1 got=way%zu  [%s]\n",
+            "record_lru prioritizes oldest record",
+            victim, ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
+    }
+    {
+        ecg_policy::WayState ways[2] = {
+            {true, 7, 10, 3, 1, true},
+            {true, 7, 20, 3, 5, true},
+        };
+        ecg_policy::VictimReason reason;
+        const size_t victim = ecg_policy::selectVictim(
+            ways, 2, ecg_policy::DEGREE_FIRST, 7, &reason);
+        const bool ok = (
+            victim == 1 &&
+            reason == ecg_policy::VictimReason::DEGREE_PROPERTY &&
+            ecg_policy::victimUsedEpoch(reason, ways[victim]));
+        printf(
+            "    %-46s expect=way1 got=way%zu  [%s]\n",
+            "degree tie reports stamped epoch participation",
+            victim, ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
+    }
+
     // P=property line (addr in region), R=record line. epoch only meaningful for P.
     if (var == "rrip_first") {
         // max-RRPV set; records-first by recency, else farthest-epoch property.
@@ -198,6 +261,13 @@ int main() {
         check(L3, "oldest recency ignores metadata (way3)",
               {{paddr(0),7,20,40,3},{raddr(1),7,0,30,0},{paddr(2),0,1,20,1},{paddr(3),0,2,10,1},
               {paddr(4),7,31,50,3},{paddr(5),7,15,60,2},{paddr(6),7,2,70,1},{paddr(7),7,11,80,2}}, 3);
+    } else if (var == "record_lru") {
+        check(L3, "mixed -> oldest record by recency (way2)",
+              {{raddr(0),0,0,50,0},{paddr(1),0,31,1,0},{raddr(2),0,0,5,0},{paddr(3),0,20,2,0},
+               {paddr(4),0,7,3,0},{paddr(5),0,15,4,0},{paddr(6),0,2,6,0},{paddr(7),0,11,7,0}}, 2);
+        check(L3, "all property -> oldest recency, ignores epoch (way1)",
+              {{paddr(0),0,31,50,0},{paddr(1),0,1,5,0},{paddr(2),0,30,10,0},{paddr(3),0,20,20,0},
+               {paddr(4),0,7,30,0},{paddr(5),0,15,40,0},{paddr(6),0,2,60,0},{paddr(7),0,11,70,0}}, 1);
     } else if (var == "dueling") {
         ecg_policy::OnlineDuelingSelector selector;
         size_t leader[ecg_policy::DUEL_ARM_COUNT] = {};
