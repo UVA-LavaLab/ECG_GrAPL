@@ -39,6 +39,28 @@ def test_setup_gem5_installs_ecg_pfx_overlays():
     assert "mem/cache/prefetch/ecg_pfx.hh" in overlay_values
     assert "mem/cache/prefetch/ecg_pfx.cc" in overlay_values
     assert "arch/riscv/isa/formats/ecg.isa" in overlay_values
+    assert (
+        "mem/cache/array_attribution.patch", "."
+    ) in setup_gem5.UNIFIED_DIFF_PATCHES
+
+
+def test_every_required_gem5_patch_is_tracked():
+    tracked = set(subprocess.run(
+        ["git", "ls-files"],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, check=True,
+    ).stdout.splitlines())
+    for relative, _target in setup_gem5.UNIFIED_DIFF_PATCHES:
+        path = (
+            PROJECT_ROOT / "bench/include/gem5_sim/overlays" / relative)
+        repo_relative = str(path.relative_to(PROJECT_ROOT))
+        assert path.is_file(), f"required gem5 patch is missing: {relative}"
+        assert repo_relative in tracked, (
+            f"required gem5 patch is untracked: {repo_relative}")
+        if relative == "mem/cache/array_attribution.patch":
+            assert not re.search(
+                r"(?m)^@@ -\d+(?:,0)? \+\d+", path.read_text()), (
+                "array attribution patch needs real context; insertion-only "
+                "line-number hunks can silently land in the wrong function")
 
 
 def test_prefetch_sconscript_registers_ecg_pfx():
@@ -839,6 +861,230 @@ def test_gem5_csr_substitution_receipt_is_fail_closed():
     assert optional_duplicate["timing_valid_for_speedup"] == "1"
 
 
+def test_gem5_array_attribution_is_per_requestor_and_fail_closed():
+    values = {
+        ("property0", "demand_misses", "cpu.data"): 3,
+        ("record", "demand_misses", "cpu.data"): 2,
+        ("csr_offsets", "demand_misses", "cpu.data"): 1,
+        ("property0", "demand_read_mshr_misses", "cpu.data"): 3,
+        ("record", "demand_read_mshr_misses", "cpu.data"): 1,
+        ("csr_offsets", "demand_read_mshr_misses", "cpu.data"): 1,
+        ("record", "demand_nonread_mshr_misses", "cpu.data"): 1,
+        ("property0", "demand_read_bytes", "cpu.data"): 192,
+        ("record", "demand_read_bytes", "cpu.data"): 64,
+        ("csr_offsets", "demand_read_bytes", "cpu.data"): 64,
+        ("other", "demand_misses", "cpu.inst"): 2,
+        ("other", "demand_read_mshr_misses", "cpu.inst"): 2,
+        ("other", "demand_read_bytes", "cpu.inst"): 128,
+    }
+    lines = []
+    for metric, stat_name in roi_matrix.GEM5_ARRAY_STAT_METRICS.items():
+        for category in roi_matrix.GEM5_ARRAY_CATEGORIES:
+            for requestor in ("cpu.data", "cpu.inst"):
+                value = values.get((category, metric, requestor), 0)
+                lines.append(
+                    f"system.l3cache.{stat_name}_{category}::"
+                    f"{requestor} {value} # test")
+    parsed = roi_matrix.parse_gem5_array_stats("\n".join(lines))
+    row = {
+        **parsed,
+        "timing_valid_for_speedup": "1",
+        "line_size": "64",
+        "benchmark": "pr",
+        "policy": "ECG",
+        "ecg_reuse_plan_depth": 2,
+        "gem5_l3_mshrs_actual": 32,
+        "l3_demand_data_misses": 6,
+        "l3_demand_inst_misses": 2,
+        "l3_demand_mshr_data_misses": 6,
+        "l3_demand_mshr_inst_misses": 2,
+        "dram_read_bytes_cpu_data": 320,
+        "dram_read_bytes_cpu_inst": 128,
+        "ecg_csr_substitution_active": 1,
+    }
+    receipt = (
+        "[ECG-ARRAY-ATTRIBUTION active=1 schema=1 "
+        "categories=9 edge_regions_aliased=1 "
+        "p0=scores:0x1000+100 p1=contrib:0x2000+100 "
+        "record=0x3000+100 edge=0x4000+100 "
+        "edge_other=0x4000+100 csr=0x5000+100 "
+        "plan=0x6000+100]")
+    assert roi_matrix.apply_gem5_array_attribution(
+        row, receipt, required=True)
+    assert row["gem5_array_attribution_active"] == 1
+    assert row["gem5_array_edge_regions_aliased"] == 1
+    assert row["gem5_array_demand_misses_cpu_data"] == 6
+    assert row["gem5_array_demand_read_bytes_cpu_data"] == 320
+    assert row["gem5_plan_offset_roi_activity"] == 0
+    assert row["gem5_array_attribution_validated"] == 1
+    assert "error" not in row
+
+    zero_inst = dict(row)
+    for metric in roi_matrix.GEM5_ARRAY_STAT_METRICS:
+        for category in roi_matrix.GEM5_ARRAY_CATEGORIES:
+            zero_inst[
+                f"gem5_array_{category}_{metric}_cpu_inst"] = 0
+    for field in (
+            "l3_demand_inst_misses",
+            "l3_demand_mshr_inst_misses",
+            "dram_read_bytes_cpu_inst"):
+        zero_inst.pop(field, None)
+    zero_inst.pop("error", None)
+    zero_inst["timing_valid_for_speedup"] = "1"
+    assert roi_matrix.apply_gem5_array_attribution(
+        zero_inst, receipt, required=True)
+    assert zero_inst["gem5_array_demand_misses_cpu_inst"] == 0
+
+    missing_csr_range = dict(row)
+    assert not roi_matrix.apply_gem5_array_attribution(
+        missing_csr_range, receipt.replace(
+            "csr=0x5000+100", "csr=0+0"), required=True)
+    assert missing_csr_range["gem5_array_attribution_validated"] == 0
+    assert "omitted a required PR range" in missing_csr_range["error"]
+
+    missing = dict(row)
+    missing.pop("gem5_array_property0_demand_misses_cpu_data")
+    assert not roi_matrix.apply_gem5_array_attribution(
+        missing, receipt, required=True)
+    assert missing["status"] == "error"
+
+    unattributed = dict(row)
+    unattributed[
+        "gem5_array_unattributed_demand_misses_cpu_data"] = 1
+    unattributed["l3_demand_data_misses"] = 7
+    assert not roi_matrix.apply_gem5_array_attribution(
+        unattributed, receipt, required=True)
+    assert "unclassified demand traffic" in unattributed["error"]
+
+    plan_offsets = dict(row)
+    plan_offsets[
+        "gem5_array_plan_offsets_demand_read_bytes_cpu_data"] = 64
+    plan_offsets["dram_read_bytes_cpu_data"] = 384
+    assert not roi_matrix.apply_gem5_array_attribution(
+        plan_offsets, receipt, required=True)
+    assert "still accessed plan offsets" in plan_offsets["error"]
+
+    excessive_other = dict(row)
+    excessive_other["gem5_array_other_demand_misses_cpu_data"] = 1
+    excessive_other[
+        "gem5_array_other_demand_read_mshr_misses_cpu_data"] = 1
+    excessive_other["gem5_array_other_demand_read_bytes_cpu_data"] = 64
+    excessive_other["l3_demand_data_misses"] = 7
+    excessive_other["l3_demand_mshr_data_misses"] = 7
+    excessive_other["dram_read_bytes_cpu_data"] = 384
+    excessive_other.pop("error", None)
+    excessive_other["timing_valid_for_speedup"] = "1"
+    assert not roi_matrix.apply_gem5_array_attribution(
+        excessive_other, receipt, required=True)
+    assert "declared 2% attribution bound" in excessive_other["error"]
+
+    optional = {"timing_valid_for_speedup": "1"}
+    assert not roi_matrix.apply_gem5_array_attribution(
+        optional, "", required=False)
+    assert optional["gem5_array_attribution_validated"] == 0
+    assert "error" not in optional
+    assert optional["timing_valid_for_speedup"] == "1"
+
+
+def test_gem5_array_attribution_is_explicit_and_pr_scoped(monkeypatch):
+    env = {"GEM5_GRAPH_ARRAY_STATS": "1"}
+    roi_matrix.scrub_cell_mechanism_env(env)
+    assert "GEM5_GRAPH_ARRAY_STATS" not in env
+
+    monkeypatch.setenv(
+        "GRAPHBREW_EXPLICIT_CELL_ENV",
+        '{"GEM5_GRAPH_ARRAY_STATS":"1"}')
+    roi_matrix.apply_explicit_cell_mechanism_env(
+        env, roi_matrix.parse_policy_spec("LRU"))
+    assert env["GEM5_GRAPH_ARRAY_STATS"] == "1"
+
+    context = read(
+        "bench/include/gem5_sim/overlays/mem/cache/"
+        "replacement_policies/graph_cache_context_gem5.hh")
+    assert 'std::strcmp(value, "1") == 0' in context
+
+
+def test_gem5_array_context_classifies_virtual_regions(tmp_path):
+    context_path = tmp_path / "context.json"
+    context_path.write_text(json.dumps({
+        "num_vertices": 256,
+        "num_edges": 4096,
+        "edge_epoch_count": 32,
+        "flowthrough_base": 3000,
+        "flowthrough_size": 100,
+        "array_attribution_schema": 1,
+        "edge_preferred_base": 4000,
+        "edge_preferred_size": 100,
+        "edge_other_base": 4000,
+        "edge_other_size": 100,
+        "edge_regions_aliased": True,
+        "csr_offsets_base": 5000,
+        "csr_offsets_size": 100,
+        "plan_offsets_base": 6000,
+        "plan_offsets_size": 100,
+        "property_regions": [
+            {
+                "name": "scores", "base": 1000, "size": 100,
+                "count": 25, "elem_size": 4, "grasp": True,
+            },
+            {
+                "name": "contrib", "base": 2000, "size": 100,
+                "count": 25, "elem_size": 4, "grasp": True,
+            },
+        ],
+    }))
+    source = tmp_path / "array_context.cc"
+    binary = tmp_path / "array_context"
+    source.write_text(r'''
+#include <cstdlib>
+#include "mem/cache/replacement_policies/graph_cache_context_gem5.hh"
+
+int main(int argc, char** argv) {
+    using namespace gem5::replacement_policy::graph;
+    if (argc != 2) return 1;
+    setenv("GEM5_GRAPH_ARRAY_STATS", "1", 1);
+    setenv("GEM5_GRAPHBREW_CTX", argv[1], 1);
+    if (classifyEcgArray(true, 1001) != GraphArrayCategory::Property0)
+        return 2;
+    if (classifyEcgArray(true, 2001) != GraphArrayCategory::Property1)
+        return 3;
+    if (classifyEcgArray(true, 3001) != GraphArrayCategory::Record)
+        return 4;
+    if (classifyEcgArray(true, 4001) != GraphArrayCategory::EdgePreferred)
+        return 5;
+    if (classifyEcgArray(true, 5001) != GraphArrayCategory::CsrOffsets)
+        return 6;
+    if (classifyEcgArray(true, 6001) != GraphArrayCategory::PlanOffsets)
+        return 7;
+    if (classifyEcgArray(true, 7001) != GraphArrayCategory::Other)
+        return 8;
+    if (classifyEcgArray(false, 1001) != GraphArrayCategory::Unattributed)
+        return 9;
+    if (numGraphArrayCategories() != 9) return 10;
+    return 0;
+}
+''')
+    compile_result = subprocess.run(
+        [
+            "g++", "-std=c++17", "-O2",
+            "-Ibench/include/gem5_sim/overlays",
+            "-Ibench/include",
+            str(source), "-o", str(binary),
+        ],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=120)
+    assert compile_result.returncode == 0, (
+        compile_result.stdout + compile_result.stderr)
+    result = subprocess.run(
+        [str(binary), str(context_path)],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=30)
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert output.count("[ECG-ARRAY-ATTRIBUTION active=1") == 1
+    assert "schema=1 categories=9 edge_regions_aliased=1" in output
+    assert "p0=scores:0x3e8+100 p1=contrib:0x7d0+100" in output
+    assert "csr=0x1388+100 plan=0x1770+100" in output
+
+
 def test_proposal_compact_reuse_bind_flowthrough_cli_guards():
     wrong_kernel = subprocess.run(
         [
@@ -1327,6 +1573,16 @@ def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
     assert compact_csr["ecg_csr_substitution_receipt_count"] == 1
     assert compact_csr["ecg_csr_substitution_rows"] == 256
     assert compact_csr["ecg_csr_substitution_records"] > 0
+    compact_context = json.loads(
+        (tmp_path / "compact-context.json").read_text())
+    assert compact_context["array_attribution_schema"] == 1
+    assert compact_context["edge_regions_aliased"] is True
+    assert compact_context["edge_preferred_base"] == (
+        compact_context["edge_other_base"])
+    assert compact_context["csr_offsets_size"] == 257 * 8
+    assert compact_context["plan_offsets_size"] == 257 * 8
+    assert compact_context["csr_offsets_base"] != (
+        compact_context["plan_offsets_base"])
     assert "[ECG-METADATA-FATAL]" not in compact_text
 
     wide_env = dict(compact_env)
@@ -1362,6 +1618,9 @@ def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
     assert wide_csr["ecg_csr_substitution_receipt_count"] == 1
     assert wide_csr["ecg_csr_substitution_rows"] == 256
     assert wide_csr["ecg_csr_substitution_records"] > 0
+    wide_context = json.loads((tmp_path / "wide-context.json").read_text())
+    assert wide_context["csr_offsets_size"] == 257 * 8
+    assert wide_context["plan_offsets_size"] == 257 * 8
     assert "[ECG-METADATA-FATAL]" not in wide_text
 
     receipt = re.compile(

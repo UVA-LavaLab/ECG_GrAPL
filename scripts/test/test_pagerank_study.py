@@ -9,6 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from scripts.experiments.ecg import roi_matrix
+
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = (
@@ -329,6 +331,50 @@ def test_pagerank_configurations_are_explicitly_scoped():
     result = gate().evaluate(synthetic_rows(cfg=cfg), cfg)
     assert result["primary_candidate"] == "ECG_REUSE_PLAN_RRIP_FLOWTHROUGH"
     assert result["screen_passes"] is True
+
+
+def test_csr_transport_calibration_is_one_complete_bounded_cell():
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    stages = [
+        stage for stage in manifest["stages"]
+        if "reuse_plan_csr_transport_calibration" in
+        stage.get("profiles", [])
+    ]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["name"] == "61_gem5_csr_transport_cit_i1"
+    assert stage["suite"] == "gem5"
+    assert stage["graph_set"] == "cit_patents_n18_transport_calibration"
+    assert stage["benchmarks"] == ["pr"]
+    assert stage["policies"] == [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+    ]
+    assert stage["policy_sharding_allowed"] is False
+    assert stage["gem5_cpu_type"] == "O3"
+    assert stage["gem5_compact_reuse_bind_performance"] is True
+    assert stage["prefetcher"] == "none"
+    assert stage["ecg_epochs"] == 32
+    assert stage["env"]["GEM5_GRAPH_ARRAY_STATS"] == "1"
+    assert stage["env"]["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
+    assert "at or below 2%" in stage["notes"]
+    assert roi_matrix.GEM5_ARRAY_OTHER_MISS_SHARE_LIMIT == 0.02
+
+    graphs = manifest["graph_sets"][
+        "cit_patents_n18_transport_calibration"]
+    assert graphs == [{
+        "name": "cit-Patents-n18-sym",
+        "path": "results/graphs/cit-Patents-n18/cit-Patents-n18-sym.sg",
+        "options_key": "file_pr_i1_dbg",
+        "l1d_size": "32kB",
+        "l2_size": "128kB",
+        "l3_ways": "16",
+        "l3_sizes": ["512kB"],
+        "structure_prefetch_degree": 0,
+    }]
+    assert manifest["benchmark_options"]["file_pr_i1_dbg"]["pr"].endswith(
+        "-o 5 -n 1 -i 1")
 
 
 def test_final_campaign_is_role_separated():

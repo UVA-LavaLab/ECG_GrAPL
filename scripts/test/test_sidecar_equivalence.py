@@ -479,6 +479,31 @@ def test_riscv_gem5_binaries_are_not_stale_against_the_compact_record():
         "but not both; rebuild gem5 and the RISC-V guest together")
 
 
+def test_built_gem5_contains_installed_array_attribution():
+    installed_sources = [
+        ROOT / "bench/include/gem5_sim/gem5/src/mem/cache/base.cc",
+        ROOT / "bench/include/gem5_sim/gem5/src/mem/cache/base.hh",
+        ROOT / (
+            "bench/include/gem5_sim/gem5/src/mem/cache/"
+            "replacement_policies/graph_cache_context_gem5.hh"),
+    ]
+    binaries = [
+        ROOT / "bench/include/gem5_sim/gem5/build/X86/gem5.opt",
+        ROOT / "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+    ]
+    present = [binary for binary in binaries if binary.exists()]
+    if not present:
+        pytest.skip("gem5 opt binaries not built")
+    assert all(source.exists() for source in installed_sources)
+    newest_source = max(source.stat().st_mtime for source in installed_sources)
+    for binary in present:
+        assert binary.stat().st_mtime >= newest_source, (
+            f"{binary} predates the installed array-attribution sources")
+        blob = binary.read_bytes()
+        assert b"ecgArrayDemandMisses" in blob
+        assert b"ECG-ARRAY-ATTRIBUTION" in blob
+
+
 def test_guest_enforces_the_width_the_runner_intended():
     """Receipts must be enforced, not merely printed.
 
@@ -697,7 +722,8 @@ def test_built_kernels_are_newer_than_the_sources_they_embed():
     """
     headers = sorted(
         list((ROOT / "bench/include").glob("ecg_*.h"))
-        + list((ROOT / "bench/include/gem5_sim").glob("*.h")))
+        + list((ROOT / "bench/include/gem5_sim").glob("*.h"))
+        + [ROOT / "bench/include/external/gapbs/graph.h"])
     if not headers:
         pytest.skip("ECG headers not found")
     changed = set(subprocess.run(

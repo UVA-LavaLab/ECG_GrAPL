@@ -139,6 +139,7 @@ UNIFIED_DIFF_PATCHES = [
     ("mem/request_flowthrough.patch", "."),
     ("mem/cache/base_flowthrough.patch", "."),
     ("mem/cache/base_flowthrough_request_flag.patch", "."),
+    ("mem/cache/array_attribution.patch", "."),
     ("mem/cache/prefetch_flowthrough.patch", "."),
 ]
 
@@ -479,6 +480,10 @@ def apply_unified_diff_patches():
                 target / "src/mem/cache/base.cc",
                 "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND",
             ),
+            "mem/cache/array_attribution.patch": (
+                target / "src/mem/cache/base.hh",
+                "ecgArrayDemandMisses",
+            ),
             "mem/cache/prefetch_flowthrough.patch": (
                 target / "src/mem/cache/prefetch/queued.cc",
                 "pfInfo.isFlowThrough()",
@@ -708,9 +713,13 @@ def verify_installation_postconditions():
             "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND",
             "allocOnFill(pkt->cmd) && !flowthrough",
             "allocateMissBuffer(pkt, forward_time, true, !flowthrough)",
+            "recordGraphArrayMshrMiss",
+            "ecgArrayDemandReadBytes",
         ],
         GEM5_DIR / "src/mem/cache/base.hh": [
             "allow_alloc_on_fill",
+            "ecgArrayDemandMisses",
+            "recordGraphArrayDemandMiss(pkt);",
         ],
         GEM5_DIR / "src/mem/cache/prefetch/base.cc": [
             "flowThrough(pkt->req->getFlags()",

@@ -325,6 +325,16 @@ GEM5_STAT_KEYS = {
     # rows as total LLC-read traffic rather than demand-miss evidence.
     "l3_data_misses": "system.l3cache.overallMisses::cpu.data",
     "l3_data_hits": "system.l3cache.overallHits::cpu.data",
+    "l3_inst_misses": "system.l3cache.overallMisses::cpu.inst",
+    "l3_inst_hits": "system.l3cache.overallHits::cpu.inst",
+    "l3_demand_data_misses":
+        "system.l3cache.demandMisses::cpu.data",
+    "l3_demand_inst_misses":
+        "system.l3cache.demandMisses::cpu.inst",
+    "l3_demand_mshr_data_misses":
+        "system.l3cache.demandMshrMisses::cpu.data",
+    "l3_demand_mshr_inst_misses":
+        "system.l3cache.demandMshrMisses::cpu.inst",
     "l3_prefetch_misses":
         "system.l3cache.overallMisses::l2cache.prefetcher",
     "l3_prefetch_hits":
@@ -333,6 +343,14 @@ GEM5_STAT_KEYS = {
         "system.l3cache.overallAccesses::l2cache.prefetcher",
     "dram_read_bytes": "system.mem_ctrl.dram.bytesRead::total",
     "dram_write_bytes": "system.mem_ctrl.dram.bytesWritten::total",
+    "dram_read_bytes_cpu_data":
+        "system.mem_ctrl.dram.bytesRead::cpu.data",
+    "dram_read_bytes_cpu_inst":
+        "system.mem_ctrl.dram.bytesRead::cpu.inst",
+    "dram_write_bytes_cpu_data":
+        "system.mem_ctrl.dram.bytesWritten::cpu.data",
+    "dram_write_bytes_cpu_inst":
+        "system.mem_ctrl.dram.bytesWritten::cpu.inst",
     "dram_read_requests": "system.mem_ctrl.dram.numReads::total",
     "dram_write_requests": "system.mem_ctrl.dram.numWrites::total",
     "dram_prefetch_read_bytes":
@@ -377,6 +395,30 @@ GEM5_PREFETCH_STAT_KEYS = {
     "pf_span_page": "pfSpanPage",
     "pf_useful_span_page": "pfUsefulSpanPage",
 }
+
+GEM5_ARRAY_CATEGORIES = (
+    "property0",
+    "property1",
+    "record",
+    "edge_preferred",
+    "edge_other",
+    "csr_offsets",
+    "plan_offsets",
+    "other",
+    "unattributed",
+)
+GEM5_ARRAY_STAT_METRICS = {
+    "demand_misses": "ecgArrayDemandMisses",
+    "demand_read_mshr_misses": "ecgArrayDemandReadMshrMisses",
+    "demand_nonread_mshr_misses": "ecgArrayDemandNonReadMshrMisses",
+    "demand_read_bytes": "ecgArrayDemandReadBytes",
+}
+GEM5_ARRAY_REQUESTORS = {
+    "cpu.data": "cpu_data",
+    "cpu.inst": "cpu_inst",
+    "l2cache.prefetcher": "l2_prefetcher",
+}
+GEM5_ARRAY_OTHER_MISS_SHARE_LIMIT = 0.02
 
 ECG_PFX_MODE_VALUES = {
     "degree": "1",
@@ -1479,6 +1521,7 @@ def scrub_cell_mechanism_env(env: dict[str, str]) -> None:
         for key in diagnostic_keys
         if key in os.environ
     }
+    env.pop("GEM5_GRAPH_ARRAY_STATS", None)
     prefixes = (
         "ECG_",
         "GEM5_ECG_",
@@ -1568,6 +1611,7 @@ def apply_explicit_cell_mechanism_env(
     for key, value in explicit.items():
         key = str(key)
         allowed = (
+            key == "GEM5_GRAPH_ARRAY_STATS" or
             (key.startswith((
                 "ECG_", "GEM5_ECG_", "GEM5_FORCE_ECG_",
                 "SNIPER_ECG_", "SNIPER_ENABLE_ECG_", "CACHE_ECG_"))
@@ -1630,6 +1674,314 @@ def apply_gem5_csr_substitution_receipt(
     return receipt_valid
 
 
+def apply_gem5_array_attribution(
+        row: dict[str, Any], log_text: str, required: bool) -> bool:
+    row["gem5_array_attribution_validated"] = 0
+    matches = re.findall(
+        r"\[ECG-ARRAY-ATTRIBUTION active=(\d+) schema=(\d+) "
+        r"categories=(\d+) edge_regions_aliased=(\d+) "
+        r"p0=([A-Za-z0-9_-]+):((?:0x)?[0-9a-fA-F]+)\+(\d+) "
+        r"p1=([A-Za-z0-9_-]+):((?:0x)?[0-9a-fA-F]+)\+(\d+) "
+        r"record=((?:0x)?[0-9a-fA-F]+)\+(\d+) "
+        r"edge=((?:0x)?[0-9a-fA-F]+)\+(\d+) "
+        r"edge_other=((?:0x)?[0-9a-fA-F]+)\+(\d+) "
+        r"csr=((?:0x)?[0-9a-fA-F]+)\+(\d+) "
+        r"plan=((?:0x)?[0-9a-fA-F]+)\+(\d+)\]",
+        log_text)
+    row["gem5_array_attribution_receipt_count"] = len(matches)
+    row["gem5_array_attribution_active"] = 0
+    if len(matches) != 1:
+        if required:
+            mark_row_error(
+                row,
+                "gem5 array-attribution receipt missing or duplicated: "
+                f"count={len(matches)}")
+        return False
+
+    (
+        active_text, schema_text, categories_text, edge_alias_text,
+        p0_name, p0_base, p0_size,
+        p1_name, p1_base, p1_size,
+        record_base, record_size,
+        edge_base, edge_size,
+        edge_other_base, edge_other_size,
+        csr_base, csr_size,
+        plan_base, plan_size,
+    ) = matches[0]
+    active = int(active_text)
+    schema = int(schema_text)
+    categories = int(categories_text)
+    edge_alias = int(edge_alias_text)
+    ranges = {
+        "property0": (int(p0_base, 0), int(p0_size)),
+        "property1": (int(p1_base, 0), int(p1_size)),
+        "record": (int(record_base, 0), int(record_size)),
+        "edge_preferred": (int(edge_base, 0), int(edge_size)),
+        "edge_other": (int(edge_other_base, 0), int(edge_other_size)),
+        "csr_offsets": (int(csr_base, 0), int(csr_size)),
+        "plan_offsets": (int(plan_base, 0), int(plan_size)),
+    }
+    row.update({
+        "gem5_array_attribution_active": active,
+        "gem5_array_attribution_schema": schema,
+        "gem5_array_attribution_categories": categories,
+        "gem5_array_edge_regions_aliased": edge_alias,
+        "gem5_array_property0_name": p0_name,
+        "gem5_array_property1_name": p1_name,
+    })
+    for category, (base, size) in ranges.items():
+        row[f"gem5_array_{category}_base"] = base
+        row[f"gem5_array_{category}_size"] = size
+    receipt_valid = (
+        active == 1 and schema == 1 and
+        categories == len(GEM5_ARRAY_CATEGORIES) and
+        edge_alias in (0, 1))
+    if not required:
+        return receipt_valid
+    if not receipt_valid:
+        mark_row_error(
+            row,
+            "gem5 array-attribution receipt is invalid: "
+            f"active={active} schema={schema} categories={categories} "
+            f"edge_regions_aliased={edge_alias}")
+        return False
+
+    positive_ranges = (
+        "property0", "property1", "edge_preferred", "csr_offsets")
+    if any(
+            ranges[category][0] == 0 or ranges[category][1] == 0
+            for category in positive_ranges):
+        mark_row_error(
+            row,
+            "gem5 array-attribution receipt omitted a required PR range")
+        return False
+    if str(row.get("benchmark") or "") == "pr" and (
+            p0_name != "scores" or p1_name != "contrib"):
+        mark_row_error(
+            row,
+            "gem5 PageRank array-attribution property order is invalid: "
+            f"p0={p0_name} p1={p1_name}")
+        return False
+    if edge_alias and ranges["edge_other"] != ranges["edge_preferred"]:
+        mark_row_error(
+            row,
+            "gem5 array-attribution alias receipt has unequal edge ranges")
+        return False
+
+    nonempty_ranges = [
+        (name, base, base + size)
+        for name, (base, size) in ranges.items()
+        if size > 0 and not (edge_alias and name == "edge_other")
+    ]
+    for index, (name, begin, end) in enumerate(nonempty_ranges):
+        for other_name, other_begin, other_end in nonempty_ranges[index + 1:]:
+            if begin < other_end and other_begin < end:
+                mark_row_error(
+                    row,
+                    "gem5 array-attribution ranges overlap: "
+                    f"{name} and {other_name}")
+                return False
+
+    missing: list[str] = []
+    for suffix in ("cpu_data", "cpu_inst"):
+        for metric in GEM5_ARRAY_STAT_METRICS:
+            for category in GEM5_ARRAY_CATEGORIES:
+                field = f"gem5_array_{category}_{metric}_{suffix}"
+                if field not in row:
+                    missing.append(field)
+    if missing:
+        mark_row_error(
+            row,
+            "gem5 array-attribution stats are incomplete: "
+            + ", ".join(missing[:8]) +
+            (" ..." if len(missing) > 8 else ""))
+        return False
+
+    if int(row.get("ecg_reuse_plan_depth") or 0) == 2:
+        if ranges["record"][1] == 0 or ranges["plan_offsets"][1] == 0:
+            mark_row_error(
+                row,
+                "ReusePlan attribution omitted record or plan-offset storage")
+            return False
+    elif str(row.get("policy") or "") == "LRU":
+        if ranges["record"][1] != 0 or ranges["plan_offsets"][1] != 0:
+            mark_row_error(
+                row,
+                "LRU attribution unexpectedly reported ReusePlan storage")
+            return False
+
+    valid = True
+    for suffix, demand_misses_key, mshr_misses_key, dram_read_key in (
+            (
+                "cpu_data", "l3_demand_data_misses",
+                "l3_demand_mshr_data_misses",
+                "dram_read_bytes_cpu_data",
+            ),
+            (
+                "cpu_inst", "l3_demand_inst_misses",
+                "l3_demand_mshr_inst_misses",
+                "dram_read_bytes_cpu_inst",
+            )):
+        demand_misses = row.get(demand_misses_key)
+        mshr_misses = row.get(mshr_misses_key)
+        dram_read_bytes = row.get(dram_read_key)
+        if suffix == "cpu_data" and None in (
+                demand_misses, mshr_misses, dram_read_bytes):
+            mark_row_error(
+                row,
+                "gem5 array-attribution reconciliation is missing "
+                f"{suffix} aggregate stats")
+            valid = False
+            continue
+        demand_misses = int(demand_misses or 0)
+        mshr_misses = int(mshr_misses or 0)
+        dram_read_bytes = int(dram_read_bytes or 0)
+
+        array_misses = sum(
+            int(row[f"gem5_array_{category}_demand_misses_{suffix}"])
+            for category in GEM5_ARRAY_CATEGORIES)
+        read_mshr_misses = sum(
+            int(row[
+                f"gem5_array_{category}_demand_read_mshr_misses_{suffix}"])
+            for category in GEM5_ARRAY_CATEGORIES)
+        nonread_mshr_misses = sum(
+            int(row[
+                f"gem5_array_{category}_demand_nonread_mshr_misses_{suffix}"])
+            for category in GEM5_ARRAY_CATEGORIES)
+        read_bytes = sum(
+            int(row[f"gem5_array_{category}_demand_read_bytes_{suffix}"])
+            for category in GEM5_ARRAY_CATEGORIES)
+        row[f"gem5_array_demand_misses_{suffix}"] = array_misses
+        row[f"gem5_array_demand_read_mshr_misses_{suffix}"] = (
+            read_mshr_misses)
+        row[f"gem5_array_demand_nonread_mshr_misses_{suffix}"] = (
+            nonread_mshr_misses)
+        row[f"gem5_array_demand_read_bytes_{suffix}"] = read_bytes
+
+        if array_misses != demand_misses:
+            mark_row_error(
+                row,
+                "gem5 per-array demand misses do not reconcile for "
+                f"{suffix}: arrays={array_misses} "
+                f"aggregate={demand_misses}")
+            valid = False
+        if read_mshr_misses + nonread_mshr_misses != mshr_misses:
+            mark_row_error(
+                row,
+                "gem5 per-array MSHR misses do not reconcile for "
+                f"{suffix}: reads={read_mshr_misses} "
+                f"nonreads={nonread_mshr_misses} "
+                f"aggregate={mshr_misses}")
+            valid = False
+
+        line_size = parse_size_bytes(str(row.get("line_size") or "64"))
+        l3_mshrs = int(row.get("gem5_l3_mshrs_actual") or 0)
+        tolerance = 2 * l3_mshrs * line_size
+        delta = abs(read_bytes - dram_read_bytes)
+        row[f"gem5_array_dram_read_delta_{suffix}"] = delta
+        row[f"gem5_array_dram_read_tolerance_{suffix}"] = tolerance
+        if l3_mshrs <= 0 or delta > tolerance:
+            mark_row_error(
+                row,
+                "gem5 per-array downstream read bytes do not reconcile "
+                f"with DRAM for {suffix}: arrays={read_bytes} "
+                f"dram={dram_read_bytes} delta={delta} "
+                f"tolerance={tolerance}")
+            valid = False
+
+        unattributed = sum(
+            int(row[f"gem5_array_unattributed_{metric}_{suffix}"])
+            for metric in GEM5_ARRAY_STAT_METRICS)
+        row[f"gem5_array_unattributed_total_{suffix}"] = unattributed
+        if unattributed != 0:
+            mark_row_error(
+                row,
+                "gem5 array attribution observed unclassified demand traffic "
+                f"for {suffix} (missing virtual address or context loaded "
+                f"after ROI start): {unattributed}")
+            valid = False
+
+    if int(row.get("ecg_csr_substitution_active") or 0) == 1:
+        plan_activity = sum(
+            int(row[
+                f"gem5_array_plan_offsets_{metric}_cpu_data"])
+            for metric in GEM5_ARRAY_STAT_METRICS)
+        row["gem5_plan_offset_roi_activity"] = plan_activity
+        if plan_activity != 0:
+            mark_row_error(
+                row,
+                "canonical CSR substitution still accessed plan offsets "
+                f"inside the ROI: activity={plan_activity}")
+            valid = False
+        edge_activity = sum(
+            int(row[
+                f"gem5_array_edge_preferred_{metric}_cpu_data"])
+            for metric in GEM5_ARRAY_STAT_METRICS)
+        row["gem5_replaced_edge_roi_activity"] = edge_activity
+        if edge_activity != 0:
+            mark_row_error(
+                row,
+                "canonical CSR substitution still accessed the replaced "
+                f"edge stream inside the ROI: activity={edge_activity}")
+            valid = False
+
+    csr_misses = int(
+        row["gem5_array_csr_offsets_demand_misses_cpu_data"])
+    property_misses = sum(
+        int(row[f"gem5_array_{category}_demand_misses_cpu_data"])
+        for category in ("property0", "property1"))
+    record_activity = sum(
+        int(row[f"gem5_array_record_{metric}_cpu_data"])
+        for metric in GEM5_ARRAY_STAT_METRICS)
+    edge_other_activity = sum(
+        int(row[f"gem5_array_edge_other_{metric}_cpu_data"])
+        for metric in GEM5_ARRAY_STAT_METRICS)
+    other_misses = int(
+        row["gem5_array_other_demand_misses_cpu_data"])
+    total_data_misses = int(row.get("l3_demand_data_misses") or 0)
+    other_share = (
+        other_misses / total_data_misses if total_data_misses else 0.0)
+    row["gem5_array_other_miss_share_cpu_data"] = other_share
+    if csr_misses <= 0 or property_misses <= 0:
+        mark_row_error(
+            row,
+            "gem5 array attribution did not observe required CSR-offset "
+            "and property demand misses")
+        valid = False
+    if int(row.get("ecg_reuse_plan_depth") or 0) == 2:
+        if record_activity <= 0:
+            mark_row_error(
+                row,
+                "ReusePlan array attribution observed no record traffic")
+            valid = False
+    elif str(row.get("policy") or "") == "LRU":
+        if record_activity != 0:
+            mark_row_error(
+                row, "LRU array attribution observed ReusePlan record traffic")
+            valid = False
+        if int(row[
+                "gem5_array_edge_preferred_demand_misses_cpu_data"]) <= 0:
+            mark_row_error(
+                row,
+                "LRU array attribution observed no preferred-edge misses")
+            valid = False
+    if edge_alias and edge_other_activity != 0:
+        mark_row_error(
+            row,
+            "aliased edge arrays produced edge_other activity")
+        valid = False
+    if other_share > GEM5_ARRAY_OTHER_MISS_SHARE_LIMIT:
+        mark_row_error(
+            row,
+            "gem5 unclassified-other demand misses exceed the declared "
+            f"{100 * GEM5_ARRAY_OTHER_MISS_SHARE_LIMIT:.0f}% attribution "
+            f"bound: {other_misses}/{total_data_misses} "
+            f"({other_share:.6f})")
+        valid = False
+    row["gem5_array_attribution_validated"] = int(valid)
+    return valid
+
+
 def apply_gem5_popt_receipt(
         row: dict[str, Any], log_text: str, required: bool) -> bool:
     match = re.search(
@@ -1674,11 +2026,13 @@ def apply_gem5_geometry_receipt(
         l3 = config["system"]["l3cache"]
         actual_size = parse_size_bytes(str(l3["size"]))
         actual_ways = int(l3["assoc"])
+        actual_mshrs = int(l3.get("mshrs") or 0)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         mark_row_error(row, "gem5 config is missing the realized LLC geometry")
         return False
     row["gem5_l3_size_actual"] = actual_size
     row["gem5_l3_ways_actual"] = actual_ways
+    row["gem5_l3_mshrs_actual"] = actual_mshrs
     valid = (
         actual_size == parse_size_bytes(str(expected_size)) and
         actual_ways == int(expected_ways))
@@ -2575,6 +2929,9 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     apply_ecg_transport_env(env, transport)
     env["ECG_REUSE_ADMISSION"] = (
         "1" if spec.ecg_reuse_admission else "0")
+    array_attribution_requested = (
+        args.benchmark == "pr" and
+        env.get("GEM5_GRAPH_ARRAY_STATS") == "1")
     is_reuse_plan_ecg = (
         spec.policy == "ECG" and
         spec.ecg_mode == "ECG_GRASP_POPT" and
@@ -2893,6 +3250,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             compact_reuse_bind_flowthrough_cell_requested and
             compact_reuse_bind_performance_requested),
         "gem5_cpu_type": args.gem5_cpu_type,
+        "gem5_array_attribution_requested": int(
+            array_attribution_requested),
         "gem5_reuse_bind_trace_limit": int(
             env.get("ECG_REUSE_PLAN_DELIVERY_TRACE", "0") or 0),
         "gem5_flowthrough_trace_limit": int(
@@ -2959,6 +3318,7 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         "gem5_in_edges_path": str(sidebands["in_edges"]),
         "gem5_ecg_pfx_experimental": int(args.prefetcher == "ECG_PFX" and args.allow_gem5_ecg_pfx),
     })
+    log_text = ""
     if log_path.exists():
         log_text = log_path.read_text(errors="ignore")
         for benchmark_log in gem5_out.rglob("benchmark_stderr.txt"):
@@ -3184,6 +3544,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     })
     row.setdefault("status", "ok")
     row.update(sections[0])
+    apply_gem5_array_attribution(
+        row, log_text, required=array_attribution_requested)
     if spec.policy == "GRASP" and int(
             row.get("grasp_hot_property_accesses") or 0) <= 0:
         mark_row_error(
@@ -4142,6 +4504,26 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     return [row]
 
 
+def parse_gem5_array_stats(section: str) -> dict[str, Any]:
+    stats: dict[str, Any] = {}
+    if "ecgArrayDemandMisses" not in section:
+        return stats
+    for metric, gem5_stat in GEM5_ARRAY_STAT_METRICS.items():
+        for category in GEM5_ARRAY_CATEGORIES:
+            prefix = (
+                f"system.l3cache.{gem5_stat}_{category}::")
+            for requestor, suffix in GEM5_ARRAY_REQUESTORS.items():
+                match = re.search(
+                    rf"(?m)^{re.escape(prefix + requestor)}\s+"
+                    r"([0-9.eE+-]+)\s",
+                    section)
+                if match:
+                    stats[
+                        f"gem5_array_{category}_{metric}_{suffix}"
+                    ] = parse_gem5_number(match.group(1))
+    return stats
+
+
 def parse_gem5_sections(stats_path: Path) -> list[dict[str, Any]]:
     text = stats_path.read_text(errors="replace")
     raw_sections = text.split("---------- Begin Simulation Statistics ----------")[1:]
@@ -4160,6 +4542,7 @@ def parse_gem5_sections(stats_path: Path) -> list[dict[str, Any]]:
                 continue
             value = match.group(1)
             stats[out_key] = parse_gem5_number(value)
+        stats.update(parse_gem5_array_stats(section))
         # Override L3 miss rate with DEMAND-LOAD (cpu.data) only, excluding L2
         # stream-prefetcher fills. Sniper's NUCA aggregate is handled separately.
         dm = stats.get("l3_data_misses")

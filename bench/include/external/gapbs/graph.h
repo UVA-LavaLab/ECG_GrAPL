@@ -387,6 +387,23 @@ public:
             return 0;
     }
 
+    const void* in_index_storage() const
+    {
+        if constexpr (MakeInverse)
+            return static_cast<const void*>(in_index_);
+        return nullptr;
+    }
+
+    uint64_t in_index_storage_bytes() const
+    {
+        if constexpr (MakeInverse) {
+            return num_nodes_ >= 0
+                ? static_cast<uint64_t>(num_nodes_ + 1) * sizeof(*in_index_)
+                : 0;
+        }
+        return 0;
+    }
+
     Neighborhood out_neigh(NodeID_ n, OffsetT start_offset = 0) const
     {
         return Neighborhood(n, out_index_, start_offset);

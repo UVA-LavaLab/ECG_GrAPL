@@ -1340,7 +1340,11 @@ inline void gem5_export_context(
     int num_edge_regions = 0,
     uint32_t edge_epoch_count = 0,
     uint64_t flowthrough_base = 0,
-    uint64_t flowthrough_size = 0)
+    uint64_t flowthrough_size = 0,
+    const void* csr_offsets = nullptr,
+    uint64_t csr_offsets_size = 0,
+    const void* plan_offsets = nullptr,
+    uint64_t plan_offsets_size = 0)
 {
     FILE* f = fopen(path, "w");
     if (!f) {
@@ -1356,6 +1360,37 @@ inline void gem5_export_context(
             (unsigned long)flowthrough_base);
     fprintf(f, "  \"flowthrough_size\": %lu,\n",
             (unsigned long)flowthrough_size);
+    const uint64_t edge_preferred_base =
+        num_edge_regions > 0 ? edge_regions[0].base_address : 0;
+    const uint64_t edge_preferred_size =
+        num_edge_regions > 0 ? edge_regions[0].size_bytes : 0;
+    const uint64_t edge_other_base =
+        num_edge_regions > 1 ? edge_regions[1].base_address : 0;
+    const uint64_t edge_other_size =
+        num_edge_regions > 1 ? edge_regions[1].size_bytes : 0;
+    const bool edge_regions_aliased =
+        num_edge_regions > 1 &&
+        edge_preferred_base == edge_other_base &&
+        edge_preferred_size == edge_other_size;
+    fprintf(f, "  \"array_attribution_schema\": 1,\n");
+    fprintf(f, "  \"edge_preferred_base\": %lu,\n",
+            (unsigned long)edge_preferred_base);
+    fprintf(f, "  \"edge_preferred_size\": %lu,\n",
+            (unsigned long)edge_preferred_size);
+    fprintf(f, "  \"edge_other_base\": %lu,\n",
+            (unsigned long)edge_other_base);
+    fprintf(f, "  \"edge_other_size\": %lu,\n",
+            (unsigned long)edge_other_size);
+    fprintf(f, "  \"edge_regions_aliased\": %s,\n",
+            edge_regions_aliased ? "true" : "false");
+    fprintf(f, "  \"csr_offsets_base\": %lu,\n",
+            (unsigned long)reinterpret_cast<uint64_t>(csr_offsets));
+    fprintf(f, "  \"csr_offsets_size\": %lu,\n",
+            (unsigned long)csr_offsets_size);
+    fprintf(f, "  \"plan_offsets_base\": %lu,\n",
+            (unsigned long)reinterpret_cast<uint64_t>(plan_offsets));
+    fprintf(f, "  \"plan_offsets_size\": %lu,\n",
+            (unsigned long)plan_offsets_size);
     if (flowthrough_size > 0) {
         fprintf(stderr,
             "[ECG-STREAM-REGION sim=gem5 base=%#lx size=%lu]\n",

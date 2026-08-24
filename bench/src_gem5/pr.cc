@@ -529,7 +529,12 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
         pair32_ok ? in_edge_pair32_flat.size() * sizeof(uint32_t)
                 : pair_ok ? in_edge_pair_flat.size() * sizeof(uint64_t)
                 : (packed_ok
-                    ? in_edge_packed_flat.size() * sizeof(uint32_t) : 0));
+                    ? in_edge_packed_flat.size() * sizeof(uint32_t) : 0),
+        g.in_index_storage(), g.in_index_storage_bytes(),
+        pair_ok
+            ? (pair_off.empty() ? nullptr : pair_off.data())
+            : (packed_off.empty() ? nullptr : packed_off.data()),
+        (pair_ok ? pair_off.size() : packed_off.size()) * sizeof(uint64_t));
 
     for (NodeID n = 0; n < g.num_nodes(); n++)
         outgoing_contrib[n] = init_score / g.out_degree(n);

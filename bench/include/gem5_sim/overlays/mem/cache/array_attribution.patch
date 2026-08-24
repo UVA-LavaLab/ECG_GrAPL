@@ -1,0 +1,124 @@
+--- a/src/mem/cache/base.hh
++++ b/src/mem/cache/base.hh
+@@ -949,2 +949,3 @@
+     const bool isReadOnly;
++    const bool graphArrayStatsActive;
+
+@@ -1073,2 +1074,11 @@
+
++        /** Demand LLC misses by graph-array category and requestor. */
++        statistics::Vector2d ecgArrayDemandMisses;
++        /** Unique demand-read MSHR misses by category and requestor. */
++        statistics::Vector2d ecgArrayDemandReadMshrMisses;
++        /** Demand non-read MSHR misses by category and requestor. */
++        statistics::Vector2d ecgArrayDemandNonReadMshrMisses;
++        /** Bytes requested by unique demand-read MSHR misses. */
++        statistics::Vector2d ecgArrayDemandReadBytes;
++
+         /** Total number of ticks spent waiting for demand misses. */
+@@ -1307,2 +1317,5 @@
+
++    void recordGraphArrayDemandMiss(PacketPtr pkt);
++    void recordGraphArrayMshrMiss(PacketPtr pkt);
++
+     void incMissCount(PacketPtr pkt)
+@@ -1311,2 +1324,3 @@
+         stats.cmdStats(pkt).misses[pkt->req->requestorId()]++;
++        recordGraphArrayDemandMiss(pkt);
+         pkt->req->incAccessDepth();
+--- a/src/mem/cache/base.cc
++++ b/src/mem/cache/base.cc
+@@ -141,2 +141,42 @@
+
++void
++BaseCache::recordGraphArrayDemandMiss(PacketPtr pkt)
++{
++    using namespace replacement_policy::graph;
++    if (!graphArrayStatsActive ||
++        !pkt || !pkt->req || !pkt->cmd.isDemand()) {
++        return;
++    }
++    const bool has_vaddr = pkt->req->hasVaddr();
++    const auto category = classifyEcgArray(
++        has_vaddr, has_vaddr ? pkt->req->getVaddr() : 0);
++    const auto requestor = pkt->req->requestorId();
++    stats.ecgArrayDemandMisses[
++        static_cast<uint32_t>(category)][requestor]++;
++}
++
++void
++BaseCache::recordGraphArrayMshrMiss(PacketPtr pkt)
++{
++    using namespace replacement_policy::graph;
++    if (!graphArrayStatsActive ||
++        !pkt || !pkt->req || !pkt->cmd.isDemand()) {
++        return;
++    }
++    const bool has_vaddr = pkt->req->hasVaddr();
++    const auto category = classifyEcgArray(
++        has_vaddr, has_vaddr ? pkt->req->getVaddr() : 0);
++    const auto category_index = static_cast<uint32_t>(category);
++    const auto requestor = pkt->req->requestorId();
++    if (pkt->isRead()) {
++        stats.ecgArrayDemandReadMshrMisses[
++            category_index][requestor]++;
++        stats.ecgArrayDemandReadBytes[category_index][requestor] +=
++            pkt->req->isUncacheable() ? pkt->getSize() : blkSize;
++    } else {
++        stats.ecgArrayDemandNonReadMshrMisses[
++            category_index][requestor]++;
++    }
++}
++
+ BaseCache::CacheResponsePort::CacheResponsePort(const std::string &_name,
+@@ -180,2 +220,5 @@
+       isReadOnly(p.is_read_only),
++      graphArrayStatsActive(
++          replacement_policy::graph::graphArrayAttributionEnabled() &&
++          p.name.find("l3cache") != std::string::npos),
+       replaceExpansions(p.replace_expansions),
+@@ -442,2 +485,3 @@
+         stats.cmdStats(pkt).mshrMisses[pkt->req->requestorId()]++;
++        recordGraphArrayMshrMiss(pkt);
+         if (prefetcher && pkt->isDemand())
+@@ -2305,2 +2349,12 @@
+              "number of overall misses"),
++    ADD_STAT(ecgArrayDemandMisses, statistics::units::Count::get(),
++             "demand misses by graph-array category and requestor"),
++    ADD_STAT(ecgArrayDemandReadMshrMisses,
++             statistics::units::Count::get(),
++             "unique demand-read MSHR misses by category and requestor"),
++    ADD_STAT(ecgArrayDemandNonReadMshrMisses,
++             statistics::units::Count::get(),
++             "demand non-read MSHR misses by category and requestor"),
++    ADD_STAT(ecgArrayDemandReadBytes, statistics::units::Byte::get(),
++             "unique downstream demand-read bytes by category and requestor"),
+     ADD_STAT(demandMissLatency, statistics::units::Tick::get(),
+@@ -2383,2 +2437,27 @@
+
++    const auto num_array_categories =
++        replacement_policy::graph::numGraphArrayCategories();
++    for (auto* stat : {
++            &ecgArrayDemandMisses,
++            &ecgArrayDemandReadMshrMisses,
++            &ecgArrayDemandNonReadMshrMisses,
++            &ecgArrayDemandReadBytes}) {
++        stat->init(num_array_categories, max_requestors);
++        if (cache.graphArrayStatsActive) {
++            stat->flags(total | nonan);
++        } else {
++            stat->flags(total | nozero | nonan);
++        }
++        for (uint32_t category = 0;
++             category < num_array_categories; ++category) {
++            stat->subname(
++                category,
++                replacement_policy::graph::graphArrayCategoryName(category));
++        }
++        for (int requestor = 0; requestor < max_requestors; ++requestor) {
++            stat->ysubname(
++                requestor, system->getRequestorName(requestor));
++        }
++    }
++
+     for (auto &cs : cmd)

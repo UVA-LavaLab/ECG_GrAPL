@@ -581,6 +581,7 @@ inline std::string ecgModeToString(ECGMode mode) {
 // PropertyRegion: One tracked vertex data array
 // ============================================================================
 struct PropertyRegion {
+    std::string name;
     uint64_t base_address = 0;
     uint64_t upper_bound = 0;
     uint32_t num_elements = 0;
@@ -604,6 +605,49 @@ struct PropertyRegion {
         return addr >= base_address && addr < upper_bound;
     }
 };
+
+struct GraphArrayRegion {
+    uint64_t base_address = 0;
+    uint64_t upper_bound = 0;
+
+    bool contains(uint64_t addr) const {
+        return base_address < upper_bound &&
+               addr >= base_address && addr < upper_bound;
+    }
+};
+
+enum class GraphArrayCategory : uint32_t {
+    Property0 = 0,
+    Property1,
+    Record,
+    EdgePreferred,
+    EdgeOther,
+    CsrOffsets,
+    PlanOffsets,
+    Other,
+    Unattributed,
+    Count,
+};
+
+inline const char* graphArrayCategoryName(uint32_t category) {
+    switch (static_cast<GraphArrayCategory>(category)) {
+      case GraphArrayCategory::Property0: return "property0";
+      case GraphArrayCategory::Property1: return "property1";
+      case GraphArrayCategory::Record: return "record";
+      case GraphArrayCategory::EdgePreferred: return "edge_preferred";
+      case GraphArrayCategory::EdgeOther: return "edge_other";
+      case GraphArrayCategory::CsrOffsets: return "csr_offsets";
+      case GraphArrayCategory::PlanOffsets: return "plan_offsets";
+      case GraphArrayCategory::Other: return "other";
+      case GraphArrayCategory::Unattributed: return "unattributed";
+      case GraphArrayCategory::Count: break;
+    }
+    return "invalid";
+}
+
+inline constexpr uint32_t numGraphArrayCategories() {
+    return static_cast<uint32_t>(GraphArrayCategory::Count);
+}
 
 // ============================================================================
 // RereferenceMatrix: P-OPT oracle data (host-side, not in simulated memory)
@@ -795,6 +839,12 @@ struct GraphCacheContext {
     uint32_t num_regions = 0;
     uint64_t flowthrough_base = 0;
     uint64_t flowthrough_upper = 0;
+    uint32_t array_attribution_schema = 0;
+    GraphArrayRegion edge_preferred;
+    GraphArrayRegion edge_other;
+    GraphArrayRegion csr_offsets;
+    GraphArrayRegion plan_offsets;
+    bool edge_regions_aliased = false;
 
     GraphTopology topology;
     MaskConfig mask_config;
@@ -836,6 +886,30 @@ struct GraphCacheContext {
     bool isFlowThroughData(uint64_t addr) const {
         return flowthrough_base < flowthrough_upper &&
                addr >= flowthrough_base && addr < flowthrough_upper;
+    }
+
+    bool arrayAttributionReady() const {
+        return loaded && array_attribution_schema == 1 &&
+               num_regions == 2 &&
+               !regions[0].name.empty() && !regions[1].name.empty();
+    }
+
+    GraphArrayCategory classifyArray(uint64_t addr) const {
+        if (num_regions > 0 && regions[0].contains(addr))
+            return GraphArrayCategory::Property0;
+        if (num_regions > 1 && regions[1].contains(addr))
+            return GraphArrayCategory::Property1;
+        if (isFlowThroughData(addr))
+            return GraphArrayCategory::Record;
+        if (edge_preferred.contains(addr))
+            return GraphArrayCategory::EdgePreferred;
+        if (!edge_regions_aliased && edge_other.contains(addr))
+            return GraphArrayCategory::EdgeOther;
+        if (csr_offsets.contains(addr))
+            return GraphArrayCategory::CsrOffsets;
+        if (plan_offsets.contains(addr))
+            return GraphArrayCategory::PlanOffsets;
+        return GraphArrayCategory::Other;
     }
 
     bool isEcgEpochData(uint64_t addr) const {
@@ -951,6 +1025,26 @@ struct GraphCacheContext {
         uint64_t flowthrough_size =
             parseJsonUint(content, "\"flowthrough_size\"");
         flowthrough_upper = flowthrough_base + flowthrough_size;
+        array_attribution_schema = static_cast<uint32_t>(
+            parseJsonUint(content, "\"array_attribution_schema\""));
+        edge_preferred.base_address =
+            parseJsonUint(content, "\"edge_preferred_base\"");
+        edge_preferred.upper_bound = edge_preferred.base_address +
+            parseJsonUint(content, "\"edge_preferred_size\"");
+        edge_other.base_address =
+            parseJsonUint(content, "\"edge_other_base\"");
+        edge_other.upper_bound = edge_other.base_address +
+            parseJsonUint(content, "\"edge_other_size\"");
+        edge_regions_aliased =
+            parseJsonBool(content, "\"edge_regions_aliased\"");
+        csr_offsets.base_address =
+            parseJsonUint(content, "\"csr_offsets_base\"");
+        csr_offsets.upper_bound = csr_offsets.base_address +
+            parseJsonUint(content, "\"csr_offsets_size\"");
+        plan_offsets.base_address =
+            parseJsonUint(content, "\"plan_offsets_base\"");
+        plan_offsets.upper_bound = plan_offsets.base_address +
+            parseJsonUint(content, "\"plan_offsets_size\"");
         if (topology.edge_epoch_count < 2) topology.edge_epoch_count = 2;
         topology.avg_degree = (topology.num_vertices > 0)
             ? static_cast<double>(topology.num_edges) / topology.num_vertices : 0.0;
@@ -970,6 +1064,8 @@ struct GraphCacheContext {
                     if (obj_end == std::string::npos) break;
                     std::string obj = arr.substr(obj_pos, obj_end - obj_pos + 1);
 
+                    regions[num_regions].name =
+                        parseJsonString(obj, "\"name\"");
                     regions[num_regions].base_address = parseJsonUint(obj, "\"base\"");
                     uint64_t size = parseJsonUint(obj, "\"size\"");
                     regions[num_regions].upper_bound = regions[num_regions].base_address + size;
@@ -1030,7 +1126,116 @@ private:
         while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\t')) pos++;
         return json.compare(pos, 4, "true") == 0;
     }
+
+    static std::string parseJsonString(
+            const std::string& json, const std::string& key) {
+        size_t pos = json.find(key);
+        if (pos == std::string::npos) return {};
+        pos = json.find(':', pos);
+        if (pos == std::string::npos) return {};
+        pos = json.find('"', pos + 1);
+        if (pos == std::string::npos) return {};
+        const size_t end = json.find('"', pos + 1);
+        if (end == std::string::npos) return {};
+        return json.substr(pos + 1, end - pos - 1);
+    }
 };
+
+inline bool graphArrayAttributionEnabled() {
+    static const bool enabled = []() {
+        const char* value = std::getenv("GEM5_GRAPH_ARRAY_STATS");
+        return value && std::strcmp(value, "1") == 0;
+    }();
+    return enabled;
+}
+
+inline GraphCacheContext& arrayAttributionGraphContext() {
+    static GraphCacheContext context;
+    return context;
+}
+
+inline bool ensureArrayAttributionGraphContext() {
+    auto& context = arrayAttributionGraphContext();
+    if (context.loaded) return true;
+
+    // Every guest exports this sideband once, after all tracked arrays exist.
+    // Retry until that single export appears so even short ROIs cannot begin
+    // with an unclassified prefix. This observer has no simulated latency.
+
+    const char* path = std::getenv("GEM5_GRAPHBREW_CTX");
+    if (!path || !path[0]) path = "/tmp/gem5_graphbrew_ctx.json";
+    context.loaded = context.loadFromSideband(path);
+    if (context.loaded && graphArrayAttributionEnabled()) {
+        static bool announced = false;
+        if (!announced) {
+            announced = true;
+            std::fprintf(
+                stderr,
+                "[ECG-ARRAY-ATTRIBUTION active=%d schema=%u "
+                "categories=%u edge_regions_aliased=%d "
+                "p0=%s:%#llx+%llu p1=%s:%#llx+%llu "
+                "record=%#llx+%llu edge=%#llx+%llu "
+                "edge_other=%#llx+%llu csr=%#llx+%llu "
+                "plan=%#llx+%llu]\n",
+                context.arrayAttributionReady() ? 1 : 0,
+                context.array_attribution_schema,
+                numGraphArrayCategories(),
+                context.edge_regions_aliased ? 1 : 0,
+                context.num_regions > 0
+                    ? context.regions[0].name.c_str() : "missing",
+                context.num_regions > 0
+                    ? static_cast<unsigned long long>(
+                        context.regions[0].base_address) : 0ULL,
+                context.num_regions > 0
+                    ? static_cast<unsigned long long>(
+                        context.regions[0].upper_bound -
+                        context.regions[0].base_address) : 0ULL,
+                context.num_regions > 1
+                    ? context.regions[1].name.c_str() : "missing",
+                context.num_regions > 1
+                    ? static_cast<unsigned long long>(
+                        context.regions[1].base_address) : 0ULL,
+                context.num_regions > 1
+                    ? static_cast<unsigned long long>(
+                        context.regions[1].upper_bound -
+                        context.regions[1].base_address) : 0ULL,
+                static_cast<unsigned long long>(context.flowthrough_base),
+                static_cast<unsigned long long>(
+                    context.flowthrough_upper - context.flowthrough_base),
+                static_cast<unsigned long long>(
+                    context.edge_preferred.base_address),
+                static_cast<unsigned long long>(
+                    context.edge_preferred.upper_bound -
+                    context.edge_preferred.base_address),
+                static_cast<unsigned long long>(
+                    context.edge_other.base_address),
+                static_cast<unsigned long long>(
+                    context.edge_other.upper_bound -
+                    context.edge_other.base_address),
+                static_cast<unsigned long long>(
+                    context.csr_offsets.base_address),
+                static_cast<unsigned long long>(
+                    context.csr_offsets.upper_bound -
+                    context.csr_offsets.base_address),
+                static_cast<unsigned long long>(
+                    context.plan_offsets.base_address),
+                static_cast<unsigned long long>(
+                    context.plan_offsets.upper_bound -
+                    context.plan_offsets.base_address));
+        }
+    }
+    return context.loaded;
+}
+
+inline GraphArrayCategory classifyEcgArray(
+        bool has_vaddr, uint64_t vaddr) {
+    if (!ensureArrayAttributionGraphContext() || !has_vaddr)
+        return GraphArrayCategory::Unattributed;
+    const auto& context = arrayAttributionGraphContext();
+    if (!context.arrayAttributionReady())
+        return GraphArrayCategory::Unattributed;
+    return context.classifyArray(vaddr);
+}
 
 inline bool isEcgFlowThroughAddress(uint64_t addr) {
     const char* enabled = std::getenv("ECG_FLOWTHROUGH");

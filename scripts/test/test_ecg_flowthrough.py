@@ -60,6 +60,10 @@ def test_gem5_flowthrough_suppresses_only_l3_allocation():
         "bench/include/gem5_sim/overlays/mem/cache/"
         "base_flowthrough_request_flag.patch"
     )
+    attribution_patch = read(
+        "bench/include/gem5_sim/overlays/mem/cache/"
+        "array_attribution.patch"
+    )
     context = read(
         "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/"
         "graph_cache_context_gem5.hh"
@@ -86,8 +90,18 @@ def test_gem5_flowthrough_suppresses_only_l3_allocation():
     assert "pkt->req->getSize()" in flag_patch
     assert "allocOnFill(pkt->cmd) && !flowthrough" in patch
     assert "allow_alloc_on_fill" in patch
+    assert "recordGraphArrayDemandMiss(pkt);" in attribution_patch
+    assert "recordGraphArrayMshrMiss(pkt);" in attribution_patch
+    assert "pkt->req->hasVaddr()" in attribution_patch
+    assert "classifyEcgArray(" in attribution_patch
+    assert "pkt->getAddr()" not in attribution_patch
+    assert "ecgArrayDemandReadBytes" in attribution_patch
+    assert "graphArrayStatsActive" in attribution_patch
+    assert 'p.name.find("l3cache")' in attribution_patch
     assert "isEcgFlowThroughAddress" in context
     assert "flowthrough_base" in context
+    assert "arrayAttributionGraphContext" in context
+    assert "static GraphCacheContext context;" in context
     assert "ECG_FLOWTHROUGH_ADAPTIVE" in flag_patch
     assert "globalOnlinePlacementSelector" in flag_patch
     assert "ECG_FLOWTHROUGH" in request_patch

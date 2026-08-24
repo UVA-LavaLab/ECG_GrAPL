@@ -56,6 +56,7 @@
     "ecg_isa_decode_matrix": "Decode-cost matrix. Separates record WIDTH from the cost of DECODING it, with a per-stage LRU denominator so no comparison crosses runs.",
     "ecg_fused_compact_matrix": "Fused compact ReusePlan TimingSimple matrix: hardware-decoded 4B, software-widened 4B, and wide 8B controls in one build with per-stage LRU and ReusePlan-LRU; O3 request binding is a separate mechanism gate.",
     "ecg_proposal_reuse_bind_o3_gate": "Exact O3 request-bound correctness gate for the proposal's compact FlowThrough record load plus one-for-one computed-address ReuseBind property load.",
+    "reuse_plan_csr_transport_calibration": "One complete cit-Patents-n18-sym i=1 O3 cell attributing the canonical-CSR ReusePlan transport path against its local LRU denominator.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
@@ -278,6 +279,20 @@
         "name": "cit-Patents-n18-sym",
         "path": "results/graphs/cit-Patents-n18/cit-Patents-n18-sym.sg",
         "options_key": "file_all_kernels_root0",
+        "l1d_size": "32kB",
+        "l2_size": "128kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "512kB"
+        ],
+        "structure_prefetch_degree": 0
+      }
+    ],
+    "cit_patents_n18_transport_calibration": [
+      {
+        "name": "cit-Patents-n18-sym",
+        "path": "results/graphs/cit-Patents-n18/cit-Patents-n18-sym.sg",
+        "options_key": "file_pr_i1_dbg",
         "l1d_size": "32kB",
         "l2_size": "128kB",
         "l3_ways": "16",
@@ -2024,6 +2039,42 @@
         "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
       },
       "notes": "Mechanism-only gate with a width-unmatched 8-byte non-FlowThrough ReusePlan semantic anchor plus transport-matched 4-byte FlowThrough lru_only and epoch_first arms. roi_matrix forces capped 2048-event ReuseBind and FlowThrough traces; every FlowThrough row must attest only 4-byte request-flag record loads, exact same-line O3 ReuseBind Request acceptance, and multiple nonzero record-derived plans. All three rows must match PageRank semantics. The anchor is not a FlowThrough control, and this proves existence and binding rather than request-count or performance coverage."
+    },
+    {
+      "name": "61_gem5_csr_transport_cit_i1",
+      "kind": "roi_matrix",
+      "profiles": [
+        "reuse_plan_csr_transport_calibration"
+      ],
+      "suite": "gem5",
+      "graph_set": "cit_patents_n18_transport_calibration",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"
+      ],
+      "popt_reserve_model": "size_correct",
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "ecg_isa_variant": "computed",
+      "gem5_cpu_type": "O3",
+      "gem5_compact_reuse_bind_performance": true,
+      "policy_sharding_allowed": false,
+      "out_subdir": "61_gem5_csr_transport_cit_i1",
+      "timeout_gem5": 86400,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_TIER_BITS": "2",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "GEM5_GRAPH_ARRAY_STATS": "1"
+      },
+      "notes": "Single bounded transport calibration. Per-array x requestor LLC attribution must reconcile exactly before comparing the ReusePlan-LRU FlowThrough control with its same-job LRU denominator; no broader stage is unlocked by this run. Scope is single-core CPU data/instruction demand traffic with prefetching disabled. Unclassified-other CPU-data demand misses must remain at or below 2%. The graph is symmetrized, so incoming and outgoing CSR edge/index storage aliases; directed-graph attribution requires exporting the outgoing index range separately."
     },
     {
       "name": "70_gem5_pagerank_i1",
