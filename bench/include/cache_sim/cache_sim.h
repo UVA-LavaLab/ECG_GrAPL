@@ -1316,10 +1316,18 @@ public:
                     graph_ctx_->isEcgEpochData(address) &&
                     access_hints->edge_epoch_valid &&
                     access_hints->current_src != UINT32_MAX) {
-                set[victim_idx].rrpv = ecg_policy::reuseAdmissionRRPV(
-                    deliveredFirstReuseEpoch(*access_hints),
-                    currentReuseEpoch(),
-                    graph_ctx_->edge_epoch_count, 7);
+                const uint32_t tier = has_carried_tier
+                    ? access_hints->edge_grasp_tier
+                    : graph_ctx_->classifyGRASP(address, size_bytes_);
+                set[victim_idx].rrpv = combinedReuseAdmissionEnabled()
+                    ? ecg_policy::combinedReuseAdmissionRRPV(
+                        tier, deliveredFirstReuseEpoch(*access_hints),
+                        currentReuseEpoch(),
+                        graph_ctx_->edge_epoch_count, 7)
+                    : ecg_policy::reuseAdmissionRRPV(
+                        deliveredFirstReuseEpoch(*access_hints),
+                        currentReuseEpoch(),
+                        graph_ctx_->edge_epoch_count, 7);
                 ++reuse_admission_updates_;
             } else {
                 // GRASP 3-tier insertion for DBG_PRIMARY/DBG_ONLY/ECG_EMBEDDED/
@@ -1606,10 +1614,26 @@ private:
                     graph_ctx_->isEcgEpochData(set[idx].line_addr) &&
                     graph_ctx_->hints_for_thread().edge_epoch_valid &&
                     graph_ctx_->hints_for_thread().current_src != UINT32_MAX) {
-                    set[idx].rrpv = ecg_policy::reuseAdmissionRRPV(
-                        deliveredFirstReuseEpoch(
-                            graph_ctx_->hints_for_thread()),
-                        currentReuseEpoch(), graph_ctx_->edge_epoch_count, 7);
+                    const auto& hints = graph_ctx_->hints_for_thread();
+                    if (ecgTierCarried() &&
+                        hints.edge_grasp_tier_valid) {
+                        set[idx].ecg_dbg_tier = hints.edge_grasp_tier;
+                    }
+                    const uint32_t tier =
+                        set[idx].ecg_dbg_tier >= 1 &&
+                            set[idx].ecg_dbg_tier <= 3
+                        ? set[idx].ecg_dbg_tier
+                        : graph_ctx_->classifyGRASP(
+                            set[idx].line_addr, size_bytes_);
+                    set[idx].rrpv = combinedReuseAdmissionEnabled()
+                        ? ecg_policy::combinedReuseAdmissionRRPV(
+                            tier, deliveredFirstReuseEpoch(hints),
+                            currentReuseEpoch(),
+                            graph_ctx_->edge_epoch_count, 7)
+                        : ecg_policy::reuseAdmissionRRPV(
+                            deliveredFirstReuseEpoch(hints),
+                            currentReuseEpoch(),
+                            graph_ctx_->edge_epoch_count, 7);
                     ++reuse_admission_updates_;
                     admitted = true;
                 }
@@ -2515,6 +2539,12 @@ private:
     static bool reuseAdmissionEnabled() {
         static const bool enabled = ecg_policy::parseReuseAdmission(
             std::getenv("ECG_REUSE_ADMISSION"));
+        return enabled;
+    }
+
+    static bool combinedReuseAdmissionEnabled() {
+        static const bool enabled = ecg_policy::parseReuseAdmission(
+            std::getenv("ECG_REUSE_ADMISSION_COMBINED"));
         return enabled;
     }
 

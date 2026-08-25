@@ -65,6 +65,7 @@ POLICY_ORDER = [
     "ECG_REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH",
     "ECG_REUSE_PLAN_ADMISSION_FLOWTHROUGH",
     "ECG_REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+    "ECG_REUSE_PLAN_COMBINED_ADMISSION_FLOWTHROUGH",
     "ECG_REUSE_PLAN_DEGREE",
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH",
     "ECG_REUSE_PLAN_EPOCH",
@@ -114,6 +115,8 @@ POLICY_LABELS = {
         "ReusePlan-epoch-admission+FlowThrough",
     "ECG_REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH":
         "ReusePlan-future-admission+recency+FlowThrough",
+    "ECG_REUSE_PLAN_COMBINED_ADMISSION_FLOWTHROUGH":
+        "ReusePlan-tier+future-admission+FlowThrough",
     "ECG_REUSE_PLAN_DEGREE": "ReusePlan-degree",
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH": "ReusePlan-degree+FlowThrough",
     "ECG_REUSE_PLAN_EPOCH": "ReusePlan-epoch",
@@ -161,6 +164,9 @@ POLICY_DESCRIPTIONS = {
         "Experimental ReusePlan future-distance admission diagnostic",
     "ECG_REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH":
         "Future-distance admission with neutral property-recency eviction",
+    "ECG_REUSE_PLAN_COMBINED_ADMISSION_FLOWTHROUGH":
+        "Combined carried-tier and future-distance admission with "
+        "property-recency eviction",
     "ECG_REUSE_PLAN_DEGREE": "ReusePlan transport with degree-first victim selection",
     "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH":
         "ReusePlan transport with degree-first victim selection and FlowThrough",

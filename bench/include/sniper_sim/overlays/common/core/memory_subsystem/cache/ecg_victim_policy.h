@@ -608,6 +608,14 @@ inline uint8_t combinedInsertionRRPV(
     return std::min<uint8_t>(combined, rrpvMax);
 }
 
+inline uint8_t combinedReuseAdmissionRRPV(
+        uint32_t tier, uint16_t first, uint32_t current,
+        uint32_t ne, uint8_t rrpvMax) {
+    const uint32_t distance = epochDistance(first, current, ne);
+    return combinedInsertionRRPV(
+        tier, distance, ne > 1 ? ne - 1 : 1, rrpvMax);
+}
+
 // GRASP degree tier of vertex v by its POSITION in the (DBG-reordered) property
 // array: top hot_fraction = HOT(1), next hot_fraction = MODERATE(2), rest COLD(3).
 // With elem_size>0 this is BYTE-EXACT to classifyGraspTier (same floor + the +8

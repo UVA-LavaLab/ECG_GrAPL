@@ -1404,6 +1404,8 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
     apply_ecg_transport_env(env, transport)
     env["ECG_REUSE_ADMISSION"] = (
         "1" if spec.ecg_reuse_admission else "0")
+    env["ECG_REUSE_ADMISSION_COMBINED"] = (
+        "1" if spec.ecg_combined_admission else "0")
     env.update({
         "CACHE_ULTRAFAST": "0",
         "CACHE_FAST": "0",
@@ -3332,6 +3334,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     apply_ecg_transport_env(env, transport)
     env["ECG_REUSE_ADMISSION"] = (
         "1" if spec.ecg_reuse_admission else "0")
+    env["ECG_REUSE_ADMISSION_COMBINED"] = (
+        "1" if spec.ecg_combined_admission else "0")
     array_attribution_requested = (
         args.benchmark == "pr" and
         env.get("GEM5_GRAPH_ARRAY_STATS") == "1")
@@ -3425,6 +3429,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         env["ECG_VARIANT"] = ecg_variant
         env["ECG_REUSE_ADMISSION"] = (
             "1" if spec.ecg_reuse_admission else "0")
+        env["ECG_REUSE_ADMISSION_COMBINED"] = (
+            "1" if spec.ecg_combined_admission else "0")
         reuse_plan_depth = transport.reuse_plan_depth if is_reuse_plan_ecg else 0
         if reuse_plan_depth not in (0, 2):
             raise RuntimeError(
@@ -4386,6 +4392,8 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     env["ECG_VARIANT"] = ecg_variant
     env["ECG_REUSE_ADMISSION"] = (
         "1" if spec.ecg_reuse_admission else "0")
+    env["ECG_REUSE_ADMISSION_COMBINED"] = (
+        "1" if spec.ecg_combined_admission else "0")
     if args.ecg_isa_variant == "computed":
         env["SNIPER_ECG_MODE"] = "ECG_GRASP_POPT"
         env["ECG_MODE"] = "ECG_GRASP_POPT"
@@ -5288,6 +5296,7 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
         "ecg_flowthrough": int(transport.flowthrough),
         "ecg_flowthrough_adaptive": int(transport.flowthrough_adaptive),
         "ecg_reuse_admission": int(spec.ecg_reuse_admission),
+        "ecg_combined_admission": int(spec.ecg_combined_admission),
         "popt_reserve_model": args.popt_reserve_model,
         "policy_label": spec.label,
         "policy": spec.policy,

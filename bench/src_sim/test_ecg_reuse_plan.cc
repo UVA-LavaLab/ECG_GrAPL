@@ -154,11 +154,16 @@ int main()
         ecg_policy::reusePlanDistance(26, 0, 1, 27, 32) == 31 &&
         ecg_policy::reusePlanDistance(26, 0, 2, 27, 32) == 5 &&
         ecg_policy::reusePlanDistance(65, 130, 2, 0, 65535) == 65;
+    const bool combined_admission_ok =
+        ecg_policy::combinedReuseAdmissionRRPV(
+            1, 31, 0, 32, 7) == 4 &&
+        ecg_policy::combinedReuseAdmissionRRPV(
+            3, 0, 0, 32, 7) == 3;
     std::printf(
         "[test_ecg_reuse_plan] pull=%s push=%s single-reader=%s "
         "same-reader-line=%s tiers=%s "
         "single-epoch-range=%s "
-        "wire=%s distance=%s\n",
+        "wire=%s distance=%s combined-admission=%s\n",
                 pull_ok ? "OK" : "FAIL",
                 push_ok ? "OK" : "FAIL",
                 single_reader_ok ? "OK" : "FAIL",
@@ -166,9 +171,11 @@ int main()
                 tiers_ok ? "OK" : "FAIL",
                 single_epoch_range_ok ? "OK" : "FAIL",
                 wire_ok ? "OK" : "FAIL",
-                distance_ok ? "OK" : "FAIL");
+                distance_ok ? "OK" : "FAIL",
+                combined_admission_ok ? "OK" : "FAIL");
     return pull_ok && push_ok && single_reader_ok &&
         same_reader_line_ok && tiers_ok &&
-        single_epoch_range_ok && wire_ok && distance_ok
+        single_epoch_range_ok && wire_ok && distance_ok &&
+        combined_admission_ok
         ? 0 : 1;
 }

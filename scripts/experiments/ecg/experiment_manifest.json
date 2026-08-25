@@ -2327,6 +2327,7 @@
         "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
         "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH",
         "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_COMBINED_ADMISSION_FLOWTHROUGH",
         "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
         "ECG:REUSE_PLAN_ADMISSION_FLOWTHROUGH"
       ],
@@ -2342,7 +2343,7 @@
         "ECG_RECORD_VARIABLE_WIDTH": "1",
         "ECG_EXPECT_BYTES_PER_EDGE": "4"
       },
-      "notes": "Signal gate, not a novelty claim. The recency-admission treatment and recency control differ only in future-distance admission/refresh. The future-tier arm tests the intended combined mask at eviction: future distance first, carried GRASP tier on epoch ties, then recency. The admission+epoch arm completes the admission x eviction interaction. All ReusePlan arms share compact records and FlowThrough; LRU and GRASP receive the same generic structural FlowThrough opportunity. scripts/experiments/ecg/analysis/future_admission_gate.py compares each treatment to its named matched control using the unweighted geometric mean of per-graph ratios. Promote to gem5 only if a treatment reaches at most 0.97 for both LLC misses and total off-chip traffic, with neither metric above 1.02 on any graph. P-OPT/Hawkeye comparison remains mandatory before any novelty claim."
+      "notes": "Signal gate, not a novelty claim. The recency-admission treatment and recency control differ only in future-distance admission/refresh. The future-tier arm tests the intended combined mask at eviction: future distance first, carried GRASP tier on epoch ties, then recency. The combined-admission arm averages tier and future RRPV. The admission+epoch arm completes the admission x eviction interaction. All ReusePlan arms share compact records and FlowThrough; LRU and GRASP receive the same generic structural FlowThrough opportunity. scripts/experiments/ecg/analysis/future_admission_gate.py compares each treatment to its named matched control using the unweighted geometric mean of per-graph ratios. Promote to gem5 only if a treatment reaches at most 0.97 for both LLC misses and total off-chip traffic, with neither metric above 1.02 on any graph. P-OPT/Hawkeye comparison remains mandatory before any novelty claim."
     },
     {
       "name": "68_cache_sim_temporal_discrimination_i1",

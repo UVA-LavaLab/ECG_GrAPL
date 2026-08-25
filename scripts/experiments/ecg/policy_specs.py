@@ -52,6 +52,7 @@ class PolicySpec:
     ecg_transport_pinned: bool = False
     ecg_set_dueling: bool = False
     ecg_reuse_admission: bool = False
+    ecg_combined_admission: bool = False
 
     @property
     def safe_label(self) -> str:
@@ -208,6 +209,21 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ecg_variant="rrip_no_epoch_recency",
             ecg_transport_pinned=True,
             ecg_reuse_admission=True,
+        )
+    if upper in (
+        "ECG:REUSE_PLAN_COMBINED_ADMISSION_FLOWTHROUGH",
+        "ECG_REUSE_PLAN_COMBINED_ADMISSION_FLOWTHROUGH",
+    ):
+        return PolicySpec(
+            label="ECG_REUSE_PLAN_COMBINED_ADMISSION_FLOWTHROUGH",
+            policy="ECG",
+            ecg_mode="ECG_GRASP_POPT",
+            ecg_reuse_plan_depth=2,
+            ecg_flowthrough=True,
+            ecg_variant="rrip_no_epoch_recency",
+            ecg_transport_pinned=True,
+            ecg_reuse_admission=True,
+            ecg_combined_admission=True,
         )
     if upper in (
         "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",

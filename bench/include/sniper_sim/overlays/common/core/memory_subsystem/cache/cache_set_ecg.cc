@@ -261,6 +261,13 @@ bool reuseAdmissionEnabled()
    return enabled;
 }
 
+bool combinedReuseAdmissionEnabled()
+{
+   static const bool enabled = ecg_policy::parseReuseAdmission(
+         std::getenv("ECG_REUSE_ADMISSION_COMBINED"));
+   return enabled;
+}
+
 // __sync_fetch_and_add is a full-barrier GCC/Clang atomic builtin; matches
 // the increment convention already used on shared UInt64 counters elsewhere
 // in this Sniper tree (see the MULTICORE SAFETY comment above). Kept as a
@@ -693,8 +700,16 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
             reuseAdmissionEnabled() && m_ecg_epoch_valid[way]) {
          const UInt32 ne = std::max<UInt32>(
                2, graphbrew::sniper::globalContext().edge_epoch_count);
-         m_rrip_bits[way] = ecg_policy::reuseAdmissionRRPV(
-               m_ecg_epoch[way], delivered_current_epoch, ne, m_rrip_max);
+         const UInt32 tier =
+            m_dbg_tiers[way] >= 1 && m_dbg_tiers[way] <= 3
+               ? m_dbg_tiers[way] : 3;
+         m_rrip_bits[way] = combinedReuseAdmissionEnabled()
+            ? ecg_policy::combinedReuseAdmissionRRPV(
+               tier, m_ecg_epoch[way], delivered_current_epoch,
+               ne, m_rrip_max)
+            : ecg_policy::reuseAdmissionRRPV(
+               m_ecg_epoch[way], delivered_current_epoch,
+               ne, m_rrip_max);
          ensureReuseAdmissionStatsRegistered();
          incrementEvidenceCounter(reuseAdmissionEvidence().updates);
       } else {
@@ -1197,8 +1212,16 @@ CacheSetECG::updateReplacementIndex(UInt32 accessed_index)
          m_ecg_context_id[accessed_index] = context_id;
          if (reuseAdmissionEnabled() && count > 0) {
             const UInt32 ne = std::max<UInt32>(2, context.edge_epoch_count);
-            m_rrip_bits[accessed_index] = ecg_policy::reuseAdmissionRRPV(
-                  first, current_epoch, ne, m_rrip_max);
+            const UInt32 admission_tier =
+               m_dbg_tiers[accessed_index] >= 1 &&
+                   m_dbg_tiers[accessed_index] <= 3
+                  ? m_dbg_tiers[accessed_index] : 3;
+            m_rrip_bits[accessed_index] = combinedReuseAdmissionEnabled()
+               ? ecg_policy::combinedReuseAdmissionRRPV(
+                   admission_tier, first, current_epoch,
+                   ne, m_rrip_max)
+               : ecg_policy::reuseAdmissionRRPV(
+                   first, current_epoch, ne, m_rrip_max);
             ensureReuseAdmissionStatsRegistered();
             incrementEvidenceCounter(reuseAdmissionEvidence().updates);
             reuse_admitted = true;

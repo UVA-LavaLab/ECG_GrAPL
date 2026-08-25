@@ -92,6 +92,7 @@ def test_reuse_admission_mapping_is_shared_across_backends():
         text = (ROOT / rel).read_text(errors="ignore")
         assert text.count("ecg_policy::reuseAdmissionRRPV") >= 2, (
             f"{rel} must apply shared future-distance admission on fill and hit")
+        assert "ecg_policy::combinedReuseAdmissionRRPV" in text
         assert "ECG_REUSE_ADMISSION" in text
     builder = (ROOT / "bench/include/ecg_reuse_plan_builder.h").read_text()
     assert builder.count("quantizedFutureEpoch(") >= 3

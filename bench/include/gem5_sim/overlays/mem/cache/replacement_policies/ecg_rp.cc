@@ -97,6 +97,13 @@ inline bool ecgReuseAdmissionEnabled() {
         std::getenv("ECG_REUSE_ADMISSION"));
     return enabled;
 }
+
+inline bool ecgCombinedReuseAdmissionEnabled() {
+    static const bool enabled = ecg_policy::parseReuseAdmission(
+        std::getenv("ECG_REUSE_ADMISSION_COMBINED"));
+    return enabled;
+}
+
 }  // namespace
 
 GraphEcgRP::GraphEcgRP(const Params &p)
@@ -301,8 +308,18 @@ GraphEcgRP::touch(
                         isa_count > 0) {
                         const uint32_t ne = std::max<uint32_t>(
                             2u, ctx.topology.edge_epoch_count);
-                        data->rrpv = ecg_policy::reuseAdmissionRRPV(
-                            isa_epoch, isa_current_epoch, ne, rrpvMax);
+                        const uint32_t tier =
+                            data->ecg_dbg_tier >= 1 &&
+                                data->ecg_dbg_tier <= 3
+                            ? data->ecg_dbg_tier
+                            : ecgGraspTier(ctx, addr, llcSize);
+                        data->rrpv = ecgCombinedReuseAdmissionEnabled()
+                            ? ecg_policy::combinedReuseAdmissionRRPV(
+                                tier, isa_epoch, isa_current_epoch,
+                                ne, rrpvMax)
+                            : ecg_policy::reuseAdmissionRRPV(
+                                isa_epoch, isa_current_epoch,
+                                ne, rrpvMax);
                         ++onlineDuelingStats.reuseAdmissionUpdates;
                         reuse_admitted = true;
                     }
@@ -549,8 +566,13 @@ GraphEcgRP::reset(
                 if (ecgReuseAdmissionEnabled() && got_reuse_admission) {
                     const uint32_t ne = std::max<uint32_t>(
                         2u, ctx.topology.edge_epoch_count);
-                    data->rrpv = ecg_policy::reuseAdmissionRRPV(
-                        data->ecg_epoch, admission_current_epoch, ne, rrpvMax);
+                    data->rrpv = ecgCombinedReuseAdmissionEnabled()
+                        ? ecg_policy::combinedReuseAdmissionRRPV(
+                            tier, data->ecg_epoch,
+                            admission_current_epoch, ne, rrpvMax)
+                        : ecg_policy::reuseAdmissionRRPV(
+                            data->ecg_epoch,
+                            admission_current_epoch, ne, rrpvMax);
                     ++onlineDuelingStats.reuseAdmissionUpdates;
                 } else if (tier == 1) data->rrpv = pRrip;
                 else if (tier == 2) data->rrpv = iRrip;
