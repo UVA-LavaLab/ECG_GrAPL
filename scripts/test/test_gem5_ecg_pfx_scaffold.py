@@ -931,11 +931,12 @@ def test_gem5_array_attribution_is_per_requestor_and_fail_closed():
         "ecg_csr_substitution_active": 1,
     }
     receipt = (
-        "[ECG-ARRAY-ATTRIBUTION active=1 schema=1 "
-        "categories=9 edge_regions_aliased=1 "
+        "[ECG-ARRAY-ATTRIBUTION active=1 schema=2 "
+        "categories=10 edge_regions_aliased=1 "
         "p0=scores:0x1000+100 p1=contrib:0x2000+100 "
         "record=0x3000+100 edge=0x4000+100 "
         "edge_other=0x4000+100 csr=0x5000+100 "
+        "csr_other=0x5500+100 "
         "plan=0x6000+100]")
     assert roi_matrix.apply_gem5_array_attribution(
         row, receipt, required=True)
@@ -1307,7 +1308,7 @@ def test_gem5_array_context_classifies_virtual_regions(tmp_path):
         "edge_epoch_count": 32,
         "flowthrough_base": 3000,
         "flowthrough_size": 100,
-        "array_attribution_schema": 1,
+        "array_attribution_schema": 2,
         "edge_preferred_base": 4000,
         "edge_preferred_size": 100,
         "edge_other_base": 4000,
@@ -1315,6 +1316,8 @@ def test_gem5_array_context_classifies_virtual_regions(tmp_path):
         "edge_regions_aliased": True,
         "csr_offsets_base": 5000,
         "csr_offsets_size": 100,
+        "csr_offsets_other_base": 5500,
+        "csr_offsets_other_size": 100,
         "plan_offsets_base": 6000,
         "plan_offsets_size": 100,
         "property_regions": [
@@ -1349,13 +1352,15 @@ int main(int argc, char** argv) {
         return 5;
     if (classifyEcgArray(true, 5001) != GraphArrayCategory::CsrOffsets)
         return 6;
-    if (classifyEcgArray(true, 6001) != GraphArrayCategory::PlanOffsets)
+    if (classifyEcgArray(true, 5501) != GraphArrayCategory::CsrOffsetsOther)
         return 7;
-    if (classifyEcgArray(true, 7001) != GraphArrayCategory::Other)
+    if (classifyEcgArray(true, 6001) != GraphArrayCategory::PlanOffsets)
         return 8;
-    if (classifyEcgArray(false, 1001) != GraphArrayCategory::Unattributed)
+    if (classifyEcgArray(true, 7001) != GraphArrayCategory::Other)
         return 9;
-    if (numGraphArrayCategories() != 9) return 10;
+    if (classifyEcgArray(false, 1001) != GraphArrayCategory::Unattributed)
+        return 10;
+    if (numGraphArrayCategories() != 10) return 11;
     return 0;
 }
 ''')
@@ -1375,9 +1380,9 @@ int main(int argc, char** argv) {
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert output.count("[ECG-ARRAY-ATTRIBUTION active=1") == 1
-    assert "schema=1 categories=9 edge_regions_aliased=1" in output
+    assert "schema=2 categories=10 edge_regions_aliased=1" in output
     assert "p0=scores:0x3e8+100 p1=contrib:0x7d0+100" in output
-    assert "csr=0x1388+100 plan=0x1770+100" in output
+    assert "csr=0x1388+100 csr_other=0x157c+100 plan=0x1770+100" in output
 
 
 def test_proposal_compact_reuse_bind_flowthrough_cli_guards():
@@ -1877,11 +1882,12 @@ def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
     assert compact_csr["ecg_csr_substitution_records"] > 0
     compact_context = json.loads(
         (tmp_path / "compact-context.json").read_text())
-    assert compact_context["array_attribution_schema"] == 1
+    assert compact_context["array_attribution_schema"] == 2
     assert compact_context["edge_regions_aliased"] is True
     assert compact_context["edge_preferred_base"] == (
         compact_context["edge_other_base"])
     assert compact_context["csr_offsets_size"] == 257 * 8
+    assert compact_context["csr_offsets_other_size"] == 257 * 8
     assert compact_context["plan_offsets_size"] == 257 * 8
     assert compact_context["csr_offsets_base"] != (
         compact_context["plan_offsets_base"])
@@ -1922,6 +1928,7 @@ def test_proposal_compact_reuse_bind_flowthrough_native_path_is_reachable(
     assert wide_csr["ecg_csr_substitution_records"] > 0
     wide_context = json.loads((tmp_path / "wide-context.json").read_text())
     assert wide_context["csr_offsets_size"] == 257 * 8
+    assert wide_context["csr_offsets_other_size"] == 257 * 8
     assert wide_context["plan_offsets_size"] == 257 * 8
     assert "[ECG-METADATA-FATAL]" not in wide_text
 

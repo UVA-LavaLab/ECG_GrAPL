@@ -1375,7 +1375,9 @@ inline void gem5_export_context(
     const void* csr_offsets = nullptr,
     uint64_t csr_offsets_size = 0,
     const void* plan_offsets = nullptr,
-    uint64_t plan_offsets_size = 0)
+    uint64_t plan_offsets_size = 0,
+    const void* csr_offsets_other = nullptr,
+    uint64_t csr_offsets_other_size = 0)
 {
     FILE* f = fopen(path, "w");
     if (!f) {
@@ -1403,7 +1405,7 @@ inline void gem5_export_context(
         num_edge_regions > 1 &&
         edge_preferred_base == edge_other_base &&
         edge_preferred_size == edge_other_size;
-    fprintf(f, "  \"array_attribution_schema\": 1,\n");
+    fprintf(f, "  \"array_attribution_schema\": 2,\n");
     fprintf(f, "  \"edge_preferred_base\": %lu,\n",
             (unsigned long)edge_preferred_base);
     fprintf(f, "  \"edge_preferred_size\": %lu,\n",
@@ -1418,6 +1420,10 @@ inline void gem5_export_context(
             (unsigned long)reinterpret_cast<uint64_t>(csr_offsets));
     fprintf(f, "  \"csr_offsets_size\": %lu,\n",
             (unsigned long)csr_offsets_size);
+    fprintf(f, "  \"csr_offsets_other_base\": %lu,\n",
+            (unsigned long)reinterpret_cast<uint64_t>(csr_offsets_other));
+    fprintf(f, "  \"csr_offsets_other_size\": %lu,\n",
+            (unsigned long)csr_offsets_other_size);
     fprintf(f, "  \"plan_offsets_base\": %lu,\n",
             (unsigned long)reinterpret_cast<uint64_t>(plan_offsets));
     fprintf(f, "  \"plan_offsets_size\": %lu,\n",

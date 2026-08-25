@@ -623,6 +623,7 @@ enum class GraphArrayCategory : uint32_t {
     EdgePreferred,
     EdgeOther,
     CsrOffsets,
+    CsrOffsetsOther,
     PlanOffsets,
     Other,
     Unattributed,
@@ -637,6 +638,8 @@ inline const char* graphArrayCategoryName(uint32_t category) {
       case GraphArrayCategory::EdgePreferred: return "edge_preferred";
       case GraphArrayCategory::EdgeOther: return "edge_other";
       case GraphArrayCategory::CsrOffsets: return "csr_offsets";
+      case GraphArrayCategory::CsrOffsetsOther:
+        return "csr_offsets_other";
       case GraphArrayCategory::PlanOffsets: return "plan_offsets";
       case GraphArrayCategory::Other: return "other";
       case GraphArrayCategory::Unattributed: return "unattributed";
@@ -843,6 +846,7 @@ struct GraphCacheContext {
     GraphArrayRegion edge_preferred;
     GraphArrayRegion edge_other;
     GraphArrayRegion csr_offsets;
+    GraphArrayRegion csr_offsets_other;
     GraphArrayRegion plan_offsets;
     bool edge_regions_aliased = false;
 
@@ -889,7 +893,7 @@ struct GraphCacheContext {
     }
 
     bool arrayAttributionReady() const {
-        return loaded && array_attribution_schema == 1 &&
+        return loaded && array_attribution_schema == 2 &&
                num_regions == 2 &&
                !regions[0].name.empty() && !regions[1].name.empty();
     }
@@ -907,6 +911,8 @@ struct GraphCacheContext {
             return GraphArrayCategory::EdgeOther;
         if (csr_offsets.contains(addr))
             return GraphArrayCategory::CsrOffsets;
+        if (csr_offsets_other.contains(addr))
+            return GraphArrayCategory::CsrOffsetsOther;
         if (plan_offsets.contains(addr))
             return GraphArrayCategory::PlanOffsets;
         return GraphArrayCategory::Other;
@@ -1041,6 +1047,10 @@ struct GraphCacheContext {
             parseJsonUint(content, "\"csr_offsets_base\"");
         csr_offsets.upper_bound = csr_offsets.base_address +
             parseJsonUint(content, "\"csr_offsets_size\"");
+        csr_offsets_other.base_address =
+            parseJsonUint(content, "\"csr_offsets_other_base\"");
+        csr_offsets_other.upper_bound = csr_offsets_other.base_address +
+            parseJsonUint(content, "\"csr_offsets_other_size\"");
         plan_offsets.base_address =
             parseJsonUint(content, "\"plan_offsets_base\"");
         plan_offsets.upper_bound = plan_offsets.base_address +
@@ -1176,6 +1186,7 @@ inline bool ensureArrayAttributionGraphContext() {
                 "p0=%s:%#llx+%llu p1=%s:%#llx+%llu "
                 "record=%#llx+%llu edge=%#llx+%llu "
                 "edge_other=%#llx+%llu csr=%#llx+%llu "
+                "csr_other=%#llx+%llu "
                 "plan=%#llx+%llu]\n",
                 context.arrayAttributionReady() ? 1 : 0,
                 context.array_attribution_schema,
@@ -1217,6 +1228,11 @@ inline bool ensureArrayAttributionGraphContext() {
                 static_cast<unsigned long long>(
                     context.csr_offsets.upper_bound -
                     context.csr_offsets.base_address),
+                static_cast<unsigned long long>(
+                    context.csr_offsets_other.base_address),
+                static_cast<unsigned long long>(
+                    context.csr_offsets_other.upper_bound -
+                    context.csr_offsets_other.base_address),
                 static_cast<unsigned long long>(
                     context.plan_offsets.base_address),
                 static_cast<unsigned long long>(

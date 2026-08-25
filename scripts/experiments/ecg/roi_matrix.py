@@ -429,6 +429,7 @@ GEM5_ARRAY_CATEGORIES = (
     "edge_preferred",
     "edge_other",
     "csr_offsets",
+    "csr_offsets_other",
     "plan_offsets",
     "other",
     "unattributed",
@@ -1759,6 +1760,7 @@ def apply_gem5_array_attribution(
         r"edge=((?:0x)?[0-9a-fA-F]+)\+(\d+) "
         r"edge_other=((?:0x)?[0-9a-fA-F]+)\+(\d+) "
         r"csr=((?:0x)?[0-9a-fA-F]+)\+(\d+) "
+        r"csr_other=((?:0x)?[0-9a-fA-F]+)\+(\d+) "
         r"plan=((?:0x)?[0-9a-fA-F]+)\+(\d+)\]",
         log_text)
     row["gem5_array_attribution_receipt_count"] = len(matches)
@@ -1779,6 +1781,7 @@ def apply_gem5_array_attribution(
         edge_base, edge_size,
         edge_other_base, edge_other_size,
         csr_base, csr_size,
+        csr_other_base, csr_other_size,
         plan_base, plan_size,
     ) = matches[0]
     active = int(active_text)
@@ -1792,6 +1795,8 @@ def apply_gem5_array_attribution(
         "edge_preferred": (int(edge_base, 0), int(edge_size)),
         "edge_other": (int(edge_other_base, 0), int(edge_other_size)),
         "csr_offsets": (int(csr_base, 0), int(csr_size)),
+        "csr_offsets_other": (
+            int(csr_other_base, 0), int(csr_other_size)),
         "plan_offsets": (int(plan_base, 0), int(plan_size)),
     }
     row.update({
@@ -1806,7 +1811,7 @@ def apply_gem5_array_attribution(
         row[f"gem5_array_{category}_base"] = base
         row[f"gem5_array_{category}_size"] = size
     receipt_valid = (
-        active == 1 and schema == 1 and
+        active == 1 and schema == 2 and
         categories == len(GEM5_ARRAY_CATEGORIES) and
         edge_alias in (0, 1))
     if not required:
@@ -1820,7 +1825,8 @@ def apply_gem5_array_attribution(
         return False
 
     positive_ranges = (
-        "property0", "property1", "edge_preferred", "csr_offsets")
+        "property0", "property1", "edge_preferred",
+        "csr_offsets", "csr_offsets_other")
     if any(
             ranges[category][0] == 0 or ranges[category][1] == 0
             for category in positive_ranges):
@@ -1998,8 +2004,10 @@ def apply_gem5_array_attribution(
                 f"edge stream inside the ROI: activity={edge_activity}")
             valid = False
 
-    csr_misses = int(
-        row["gem5_array_csr_offsets_demand_misses_cpu_data"])
+    csr_misses = sum(
+        int(row[
+            f"gem5_array_{category}_demand_misses_cpu_data"])
+        for category in ("csr_offsets", "csr_offsets_other"))
     property_misses = sum(
         int(row[f"gem5_array_{category}_demand_misses_cpu_data"])
         for category in ("property0", "property1"))

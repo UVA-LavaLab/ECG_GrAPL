@@ -369,6 +369,18 @@ public:
         return out_index_[v] - out_index_[0];
     }
 
+    const void* out_index_storage() const
+    {
+        return static_cast<const void*>(out_index_);
+    }
+
+    uint64_t out_index_storage_bytes() const
+    {
+        return num_nodes_ >= 0
+            ? static_cast<uint64_t>(num_nodes_ + 1) * sizeof(*out_index_)
+            : 0;
+    }
+
     int64_t in_degree(NodeID_ v) const
     {
         // static_assert(MakeInverse, "Graph inversion disabled but reading inverse");
