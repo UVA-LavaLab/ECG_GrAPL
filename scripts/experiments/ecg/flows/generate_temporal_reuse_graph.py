@@ -12,11 +12,10 @@ from pathlib import Path
 def edges(vertices: int, degree: int, mode: str):
     if vertices <= degree or degree < 2:
         raise ValueError("vertices must exceed degree >= 2")
-    if mode == "spread" and (
-            vertices % degree or (vertices // degree) % 2):
+    if mode == "spread" and vertices % (4 * degree):
         raise ValueError(
-            "spread mode requires an even integral vertices/degree stride")
-    stride = vertices // degree
+            "spread mode requires vertices divisible by four times degree")
+    spread_step = vertices // (4 * degree)
     for source in range(vertices):
         if mode == "clustered":
             destinations = (
@@ -25,7 +24,7 @@ def edges(vertices: int, degree: int, mode: str):
             )
         else:
             destinations = (
-                (source + stride // 2 + offset * stride) % vertices
+                (source + (2 * offset + 1) * spread_step) % vertices
                 for offset in range(degree)
             )
         for destination in destinations:

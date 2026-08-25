@@ -48,4 +48,4 @@ def test_temporal_graphs_have_identical_degree_sequences(tmp_path):
         if source == 0
     ]
     assert clustered_readers == [1, 2, 3, 4]
-    assert spread_readers == [4, 12, 20, 28]
+    assert spread_readers == [2, 6, 10, 14]

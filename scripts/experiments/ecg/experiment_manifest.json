@@ -299,7 +299,7 @@
     "temporal_reuse_controls": [
       {
         "name": "temporal-clustered-n16",
-        "path": "results/graphs/temporal-reuse/clustered-n16.sg",
+        "path": "results/graphs/temporal-reuse/clustered-n16-sym.sg",
         "options_key": "file_all_kernels_preordered",
         "l1d_size": "16kB",
         "l2_size": "64kB",
@@ -311,7 +311,7 @@
       },
       {
         "name": "temporal-spread-n16",
-        "path": "results/graphs/temporal-reuse/spread-n16.sg",
+        "path": "results/graphs/temporal-reuse/spread-n16-sym.sg",
         "options_key": "file_all_kernels_preordered",
         "l1d_size": "16kB",
         "l2_size": "64kB",
@@ -325,7 +325,7 @@
     "temporal_spread_control": [
       {
         "name": "temporal-spread-n16",
-        "path": "results/graphs/temporal-reuse/spread-n16.sg",
+        "path": "results/graphs/temporal-reuse/spread-n16-sym.sg",
         "options_key": "file_all_kernels_preordered",
         "l1d_size": "16kB",
         "l2_size": "64kB",
@@ -2373,7 +2373,7 @@
         "ECG_RECORD_VARIABLE_WIDTH": "1",
         "ECG_EXPECT_BYTES_PER_EDGE": "4"
       },
-      "notes": "Mechanism discrimination, not a performance claim. Both graphs have 65,536 vertices, degree eight at every vertex, and 524,288 directed edges. Clustered readers are adjacent in the preserved vertex sweep; spread readers are separated by one eighth of the graph. GRASP receives the same degree distribution in both cells. This stage isolates eviction ranking; admission is evaluated on the real-graph stage because clustered reuse is absorbed by private caches and produces no LLC admission updates. A future-mask policy must respond to the timing change while preserving exact semantics and symmetric FlowThrough."
+      "notes": "Mechanism discrimination, not a performance claim. Both symmetrized graphs derive from 65,536-vertex, degree-eight directed inputs and have identical serialized counts and degree sequences. Clustered readers are adjacent in the preserved vertex sweep; spread readers are separated across the graph. GRASP receives the same degree distribution in both cells. This stage isolates eviction ranking; admission is evaluated on the real-graph stage because clustered reuse is absorbed by private caches and produces no LLC admission updates. A future-mask policy must respond to the timing change while preserving exact semantics and symmetric FlowThrough."
     },
     {
       "name": "69_gem5_temporal_admission_i1",
