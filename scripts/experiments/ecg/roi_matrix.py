@@ -2375,7 +2375,8 @@ def apply_gem5_reuse_plan_coverage(
             f"request-valid selections containing stamps "
             f"{valid - valid_zero_stamped}")
     if (
-            effective_variant in {"rrip_first", "degree_first"} and
+            effective_variant in {
+                "rrip_first", "degree_first", "future_tier_first"} and
             epoch_eligible <= 0):
         errors.append(
             f"{effective_variant} never selected a live stamped property "
@@ -2389,6 +2390,18 @@ def apply_gem5_reuse_plan_coverage(
             epoch_vs_recency_decisive <= 0):
         errors.append(
             "rrip_first never changed a victim relative to the "
+            "property-recency shadow")
+    if (
+            effective_variant == "future_tier_first" and
+            epoch_decisive <= 0):
+        errors.append(
+            "future_tier_first never changed a victim relative to its "
+            "tier-and-recency metadata-disabled shadow")
+    if (
+            effective_variant == "future_tier_first" and
+            epoch_vs_recency_decisive <= 0):
+        errors.append(
+            "future_tier_first never changed a victim relative to the "
             "property-recency shadow")
     if (
             effective_variant in {"epoch_first", "epoch_only"} and
@@ -2821,7 +2834,7 @@ def apply_gem5_variant_receipt(
         "epoch_only": 3, "shortcircuit": 4, "legacy": 4,
         "degree_first": 5, "traversal": 5, "lru_only": 6,
         "record_lru": 7, "rrip_no_epoch": 8,
-        "rrip_no_epoch_recency": 9,
+        "rrip_no_epoch_recency": 9, "future_tier_first": 10,
     }.get(requested)
     row["gem5_variant_requested_receipt"] = actual_requested
     row["gem5_variant_effective_receipt"] = effective
@@ -2870,7 +2883,7 @@ def apply_sniper_variant_receipt(
         "epoch_only": 3, "shortcircuit": 4, "legacy": 4,
         "degree_first": 5, "traversal": 5, "lru_only": 6,
         "record_lru": 7, "rrip_no_epoch": 8,
-        "rrip_no_epoch_recency": 9,
+        "rrip_no_epoch_recency": 9, "future_tier_first": 10,
     }.get(requested)
     row["sniper_variant_requested_receipt"] = actual_requested
     row["sniper_variant_effective_receipt"] = effective

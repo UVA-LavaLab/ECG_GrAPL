@@ -17,7 +17,7 @@ namespace ecg_reuse_plan {
 
 constexpr uint64_t REUSE_PLAN_SIDECAR_MAGIC = 0x3150435350524745ULL;
 constexpr uint32_t REUSE_PLAN_SIDECAR_VERSION = 1;
-constexpr uint32_t REUSE_PLAN_BUILDER_VERSION = 1;
+constexpr uint32_t REUSE_PLAN_BUILDER_VERSION = 2;
 
 struct ReusePlanSidecarHeader {
     uint64_t magic = REUSE_PLAN_SIDECAR_MAGIC;

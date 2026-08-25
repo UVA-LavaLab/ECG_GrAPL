@@ -241,6 +241,9 @@ def test_reuse_plan_policy_aliases_are_first_class(monkeypatch):
             (
                 "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
                 "rrip_no_epoch_recency"),
+            (
+                "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH",
+                "future_tier_first"),
             ("ECG:REUSE_PLAN_RRIP_FLOWTHROUGH", "rrip_first"),
             ("ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
             ("ECG:REUSE_PLAN_SHORTCIRCUIT_FLOWTHROUGH", "shortcircuit"),
@@ -255,6 +258,11 @@ def test_reuse_plan_policy_aliases_are_first_class(monkeypatch):
     assert admission.ecg_variant == "rrip_first"
     assert admission.ecg_reuse_admission is True
     assert admission.ecg_flowthrough is True
+    recency_admission = module.parse_policy_spec(
+        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH")
+    assert recency_admission.ecg_variant == "rrip_no_epoch_recency"
+    assert recency_admission.ecg_reuse_admission is True
+    assert recency_admission.ecg_flowthrough is True
     monkeypatch.setenv("ECG_VARIANT", "grasp_only")
     assert module.effective_ecg_variant(
         argparse.Namespace(benchmark="pr"), 2, reuse_plan) == "epoch_first"

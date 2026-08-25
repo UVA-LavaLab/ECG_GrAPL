@@ -611,6 +611,18 @@ def _select_degree(ways):
     )
 
 
+def _select_future_tier(ways):
+    mx = max(w["rrpv"] for w in ways)
+    candidates = [way for way in ways if way["rrpv"] == mx]
+    records = [way for way in candidates if way["prop"] == 0]
+    if records:
+        return _first_by(records, lambda way: (way["last"],))
+    return _first_by(
+        candidates,
+        lambda way: (-_eff_d(way), -way["dbg"], way["last"]),
+    )
+
+
 def _select_shortcircuit(ways):
     recs = [w for w in ways if w["prop"] == 0]
     if recs:
@@ -642,6 +654,7 @@ SELECTORS = {
     "ECG:rrip_no_epoch": _select_rrip_no_epoch,
     "ECG:rrip_no_epoch_recency": _select_rrip_no_epoch_recency,
     "ECG:degree_first": _select_degree,
+    "ECG:future_tier_first": _select_future_tier,
 }
 
 
@@ -1225,6 +1238,7 @@ def run_synthetic():
     for variant in ["tier", "dueling", "grasp_only", "epoch_only", "rrip_first",
                     "epoch_first", "degree_first", "lru_only", "record_lru",
                     "rrip_no_epoch", "rrip_no_epoch_recency",
+                    "future_tier_first",
                     "shortcircuit"]:
         p = subprocess.run([str(SYNTH_BIN)], env={**os.environ, "ECG_VARIANT": variant},
                            capture_output=True, text=True, timeout=60)
@@ -1245,7 +1259,7 @@ def _epoch_decided(pol, ways, v):
     epoch ranking is covered by the synthetic test instead.)"""
     if v is None or ways[v]["prop"] != 1 or not ways[v]["stamped"]:
         return False
-    if pol == "ECG:rrip_first":
+    if pol in ("ECG:rrip_first", "ECG:future_tier_first"):
         mx = max(w["rrpv"] for w in ways)
         pool = [w for w in ways if w["rrpv"] == mx and w["prop"] == 1 and w["stamped"]]
     elif pol in ("ECG:epoch_first", "ECG:epoch_only"):
@@ -1318,6 +1332,8 @@ def main(argv=None):
                   **ECG_ENV, "ECG_VARIANT": "rrip_no_epoch_recency"}),
               ("epoch_first", {**ECG_ENV, "ECG_VARIANT": "epoch_first"}),
               ("degree_first", {**ECG_ENV, "ECG_VARIANT": "degree_first"}),
+              ("future_tier_first", {
+                  **ECG_ENV, "ECG_VARIANT": "future_tier_first"}),
               ("shortcircuit", {**ECG_ENV, "ECG_VARIANT": "shortcircuit"})]
     ok_all = True
     live_reasons = set()
@@ -1338,7 +1354,9 @@ def main(argv=None):
     # value genuinely broke property ties. This exercises ECG's core eviction on
     # the REAL simulator end-to-end (not just the synthetic unit test).
     print("\n-- cache_sim epoch-coverage (forced property eviction; tightened exact rules) --")
-    for variant in ["rrip_first", "epoch_first", "epoch_only"]:
+    for variant in [
+            "rrip_first", "future_tier_first",
+            "epoch_first", "epoch_only"]:
         ok_all &= verify_epoch_coverage(variant, run({**ECG_ENV, "ECG_VARIANT": variant}, COV_ENV))
     # shortcircuit ranks property by RAW dist (evicts unstamped first), so its
     # stamped-epoch ranking is rarely operative live; verify its exact rule here
@@ -1354,7 +1372,8 @@ def main(argv=None):
         print("\n-- cache_sim BC cross-kernel (BC evicts property -> live epoch branch + stamp invariant) --")
         for variant in ["grasp_only", "epoch_only", "rrip_first",
                         "rrip_no_epoch", "rrip_no_epoch_recency",
-                        "rrip_no_epoch", "epoch_first", "degree_first",
+                        "epoch_first", "degree_first",
+                        "future_tier_first",
                         "shortcircuit"]:
             ok_all &= verify_trace(f"bc/{variant}", run_bc({**ECG_ENV, "ECG_VARIANT": variant}, COV_ENV),
                                    prefix="(bc) ", reasons=live_reasons)
@@ -1390,8 +1409,9 @@ def main(argv=None):
             if args.isa_receipt_dir else None)
         print(f"\n-- gem5 (ECG_GRASP_POPT variants, {GRAPH_LABEL}/-o5) --")
         for variant in ["grasp_only", "epoch_only", "rrip_first",
-                        "rrip_no_epoch", "epoch_first", "degree_first",
-                        "shortcircuit"]:
+                        "rrip_no_epoch", "rrip_no_epoch_recency",
+                        "epoch_first", "degree_first",
+                        "future_tier_first", "shortcircuit"]:
             ok_all &= verify_trace(variant, run_gem5(variant), prefix="gem5 ", reasons=live_reasons)
         print("\n-- gem5 epoch-coverage (exact rules on forced geometry; epoch-value gate informational) --")
         for variant in ["rrip_first", "epoch_first"]:
@@ -1402,7 +1422,8 @@ def main(argv=None):
         # four ECG-specific variants. Runs are memory-capped (Sniper/SDE runaway).
         print(f"\n-- sniper (ECG_GRASP_POPT variants, {GRAPH_LABEL}/-o5, guarded) --")
         for variant in ["epoch_only", "rrip_first", "epoch_first",
-                        "degree_first", "shortcircuit"]:
+                        "degree_first", "future_tier_first",
+                        "shortcircuit"]:
             ok_all &= verify_trace(variant, run_sniper(variant), prefix="sniper ", reasons=live_reasons)
 
     # Live default-geometry coverage note: that workload only ever evicts records,

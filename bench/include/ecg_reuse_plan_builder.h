@@ -394,6 +394,46 @@ inline ReusePlan nextReusePlanForLine(
     return pair;
 }
 
+inline ReusePlan nextReusePlanForAccess(
+        const std::vector<uint64_t>& off,
+        const std::vector<uint32_t>& readers,
+        const std::vector<uint8_t>& reuse_tiers,
+        uint32_t n, uint32_t src,
+        const std::vector<uint32_t>& accessed, size_t edge_pos,
+        uint32_t numVtxPerLine, uint32_t ne, bool linemin) {
+    const uint32_t dest = accessed[edge_pos];
+    ReusePlan pair = nextReusePlanForLine(
+        off, readers, reuse_tiers, n, src, dest,
+        numVtxPerLine, ne, linemin);
+    if (!linemin || numVtxPerLine == 0 || dest >= n)
+        return pair;
+
+    // Reader CSR is keyed by the outer vertex and cannot order two accesses
+    // within one adjacency list. Preserve those same-reader line hits here;
+    // otherwise upper_bound(src) skips them and falsely predicts a wrapped use.
+    const uint32_t line = dest / numVtxPerLine;
+    uint32_t same_reader_uses = 0;
+    for (size_t next = edge_pos + 1;
+         next < accessed.size() && same_reader_uses < 2; ++next) {
+        const uint32_t next_dest = accessed[next];
+        if (next_dest < n && next_dest / numVtxPerLine == line)
+            ++same_reader_uses;
+    }
+    if (same_reader_uses == 0) return pair;
+
+    const uint16_t current_epoch = static_cast<uint16_t>(
+        currentEpoch(src, n, ne));
+    if (same_reader_uses >= 2) {
+        pair.first = current_epoch;
+        pair.second = current_epoch;
+    } else {
+        pair.second = pair.first;
+        pair.first = current_epoch;
+    }
+    pair.valid = true;
+    return pair;
+}
+
 // Build one per-edge next-reference epoch. PR uses pull/in edges by default;
 // BFS/SSSP use push_out_edges=true.
 template <typename GraphT>
@@ -433,6 +473,24 @@ void buildInEdgeEpochs(const GraphT& g,
             const uint32_t v1 = linemin
                 ? std::min<uint32_t>(v0 + numVtxPerLine, n)
                 : std::min<uint32_t>(dest + 1, n);
+            if (linemin) {
+                const uint32_t line = dest / numVtxPerLine;
+                bool same_reader_use = false;
+                for (size_t next = edge_pos + 1;
+                     next < accessed.size(); ++next) {
+                    const uint32_t next_dest = accessed[next];
+                    if (next_dest < n &&
+                        next_dest / numVtxPerLine == line) {
+                        same_reader_use = true;
+                        break;
+                    }
+                }
+                if (same_reader_use) {
+                    epochs[edge_pos] = static_cast<uint16_t>(
+                        currentEpoch(src, n, ne));
+                    continue;
+                }
+            }
 
             uint32_t best_dist = std::numeric_limits<uint32_t>::max();
             uint32_t best_epoch = ne - 1;
@@ -497,8 +555,8 @@ void buildInEdgeReusePlans(const GraphT& g,
         pairs.resize(accessed.size());
 
         for (size_t edge_pos = 0; edge_pos < accessed.size(); ++edge_pos) {
-            pairs[edge_pos] = nextReusePlanForLine(
-                off, readers, reuse_tiers, n, src, accessed[edge_pos],
+            pairs[edge_pos] = nextReusePlanForAccess(
+                off, readers, reuse_tiers, n, src, accessed, edge_pos,
                 numVtxPerLine, ne, linemin);
         }
     }
@@ -539,8 +597,8 @@ void buildInEdgeReusePlanRecords(
         std::vector<uint32_t> accessed;
         accessedVertices(g, src, push_out_edges, accessed);
         for (size_t edge = 0; edge < accessed.size(); ++edge) {
-            const ReusePlan pair = nextReusePlanForLine(
-                off, readers, reuse_tiers, n, src, accessed[edge],
+            const ReusePlan pair = nextReusePlanForAccess(
+                off, readers, reuse_tiers, n, src, accessed, edge,
                 numVtxPerLine, ne, linemin);
             records[record_off[src] + edge] = packReusePlanRecord(
                 accessed[edge], pair.tier, pair.first, pair.second);
@@ -588,8 +646,8 @@ bool buildInEdgeReusePlanRecords32(
         std::vector<uint32_t> accessed;
         accessedVertices(g, src, push_out_edges, accessed);
         for (size_t edge = 0; edge < accessed.size(); ++edge) {
-            const ReusePlan pair = nextReusePlanForLine(
-                off, readers, reuse_tiers, n, src, accessed[edge],
+            const ReusePlan pair = nextReusePlanForAccess(
+                off, readers, reuse_tiers, n, src, accessed, edge,
                 numVtxPerLine, ne, linemin);
             records[record_off[src] + edge] = packReusePlanRecord32(
                 accessed[edge], pair.tier, pair.first, pair.second,

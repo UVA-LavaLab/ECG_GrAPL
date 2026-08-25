@@ -62,6 +62,8 @@
     "reuse_plan_epoch_attribution": "One cit-Patents-n18-sym i=1 O3 cell measuring live ReusePlan stamp coverage and separating epoch, RRIP, and GRASP victim-rule contributions under identical compact FlowThrough transport.",
     "reuse_plan_rrip_epoch_attribution": "One cit-Patents-n18-sym i=1 O3 cell applying the metadata-disabled RRIP shadow as a real policy to isolate the end-to-end epoch contribution.",
     "reuse_plan_rrip_recency_attribution": "One cit-Patents-n18-sym i=1 O3 cell comparing RRIP epoch ranking against neutral property recency and positional controls.",
+    "reuse_plan_future_admission_screen": "Three-graph cache_sim kill gate isolating request-bound future-distance admission from neutral recency eviction under symmetric FlowThrough.",
+    "reuse_plan_temporal_discrimination": "Degree-identical PageRank controls that separate clustered from spread reader timing so GRASP sees the same degree signal and only the future mask changes.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
@@ -289,6 +291,32 @@
         "l3_ways": "16",
         "l3_sizes": [
           "512kB"
+        ],
+        "structure_prefetch_degree": 0
+      }
+    ],
+    "temporal_reuse_controls": [
+      {
+        "name": "temporal-clustered-n16",
+        "path": "results/graphs/temporal-reuse/clustered-n16.sg",
+        "options_key": "file_all_kernels_preordered",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 0
+      },
+      {
+        "name": "temporal-spread-n16",
+        "path": "results/graphs/temporal-reuse/spread-n16.sg",
+        "options_key": "file_all_kernels_preordered",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
         ],
         "structure_prefetch_degree": 0
       }
@@ -2266,6 +2294,73 @@
         "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
       },
       "notes": "Neutral epoch-information test. All three ReusePlan arms share RRIP eligibility, aging, records-first selection, insertion, compact transport, and guest work. The positional control chooses the first property candidate; the neutral control chooses the oldest property candidate; RRIP-first uses epoch distance. Epoch information is useful only if RRIP-first materially beats the recency control."
+    },
+    {
+      "name": "67_cache_sim_future_admission_i1",
+      "kind": "roi_matrix",
+      "profiles": [
+        "reuse_plan_future_admission_screen"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "realgraph_samples",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_ADMISSION_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "flowthrough": "all",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "policy_sharding_allowed": false,
+      "out_subdir": "67_cache_sim_future_admission_i1",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_RECORD_TIER_BITS": "2",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      },
+      "notes": "Signal gate, not a novelty claim. The recency-admission treatment and recency control differ only in future-distance admission/refresh. The future-tier arm tests the intended combined mask at eviction: future distance first, carried GRASP tier on epoch ties, then recency. The admission+epoch arm completes the admission x eviction interaction. All ReusePlan arms share compact records and FlowThrough; LRU and GRASP receive the same generic structural FlowThrough opportunity. scripts/experiments/ecg/analysis/future_admission_gate.py compares each treatment to its named matched control using the unweighted geometric mean of per-graph ratios. Promote to gem5 only if a treatment reaches at most 0.97 for both LLC misses and total off-chip traffic, with neither metric above 1.02 on any graph. P-OPT/Hawkeye comparison remains mandatory before any novelty claim."
+    },
+    {
+      "name": "68_cache_sim_temporal_discrimination_i1",
+      "kind": "roi_matrix",
+      "profiles": [
+        "reuse_plan_temporal_discrimination"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "temporal_reuse_controls",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_ADMISSION_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "flowthrough": "all",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "policy_sharding_allowed": false,
+      "out_subdir": "68_cache_sim_temporal_discrimination_i1",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_RECORD_TIER_BITS": "2",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      },
+      "notes": "Mechanism discrimination, not a performance claim. Both graphs have 65,536 vertices, degree eight at every vertex, and 524,288 directed edges. Clustered readers are adjacent in the preserved vertex sweep; spread readers are separated by one eighth of the graph. GRASP receives the same degree distribution in both cells. A future-mask policy must respond to the timing change while preserving exact semantics and symmetric FlowThrough."
     },
     {
       "name": "70_gem5_pagerank_i1",

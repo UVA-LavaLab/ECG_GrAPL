@@ -9,7 +9,7 @@
 // its live eviction trace. See scripts/experiments/ecg/verify_ecg.py and
 // bench/src_sim/test_ecg_victim.cc.
 //
-// The ten variants (selected by ECG_VARIANT) and the invariants are documented
+// The eleven variants (selected by ECG_VARIANT) and the invariants are documented
 // in wiki/ReusePlan-FlowThrough.md. Summary:
 //   - epoch is PROPERTY-ONLY; record (non-property) lines never carry a usable
 //     epoch and are ranked by recency / set order.
@@ -42,6 +42,7 @@ enum Variant {
     RECORD_LRU   = 7,  // records first by recency, then property LRU; no epoch
     RRIP_NO_EPOCH = 8, // rrip_first eligibility/records-first with epoch disabled
     RRIP_NO_EPOCH_RECENCY = 9, // same, but property ties use recency
+    FUTURE_TIER_FIRST = 10, // future distance, then cold tier, then recency
 };
 
 enum class VictimReason : uint8_t {
@@ -53,6 +54,7 @@ enum class VictimReason : uint8_t {
     RECENCY_FALLBACK,
     PROPERTY_FALLBACK,
     PROPERTY_RECENCY,
+    FUTURE_TIER_PROPERTY,
 };
 
 inline int parseVariant(const char* value) {
@@ -71,6 +73,8 @@ inline int parseVariant(const char* value) {
     if (variant == "rrip_no_epoch") return RRIP_NO_EPOCH;
     if (variant == "rrip_no_epoch_recency")
         return RRIP_NO_EPOCH_RECENCY;
+    if (variant == "future_tier_first")
+        return FUTURE_TIER_FIRST;
     std::fprintf(stderr, "[FATAL] unknown ECG_VARIANT=%s\n", value);
     std::abort();
 }
@@ -295,7 +299,8 @@ inline bool victimUsedEpoch(
         VictimReason reason, const WayState& selectedWay) {
     return selectedWay.stamped &&
            (reason == VictimReason::EPOCH_PROPERTY ||
-            reason == VictimReason::DEGREE_PROPERTY);
+            reason == VictimReason::DEGREE_PROPERTY ||
+            reason == VictimReason::FUTURE_TIER_PROPERTY);
 }
 
 // Effective epoch distance: rrip_first/epoch_* treat an unstamped line as
@@ -464,6 +469,41 @@ inline size_t selectVictim(WayState* ways, size_t n, int variant,
                 return selected(recIdx, VictimReason::NON_PROPERTY);
             if (propIdx != n)
                 return selected(propIdx, VictimReason::DEGREE_PROPERTY);
+            for (size_t i = 0; i < n; ++i)
+                if (ways[i].rrpv < rrpvMax) ways[i].rrpv++;
+        }
+    }
+
+    if (variant == FUTURE_TIER_FIRST) {
+        for (;;) {
+            size_t recIdx = n; uint64_t recOldest = 0;
+            size_t propIdx = n; uint32_t farthest = 0;
+            uint8_t coldest = 0; uint64_t propOldest = 0;
+            for (size_t i = 0; i < n; ++i) {
+                if (ways[i].rrpv < rrpvMax) continue;
+                if (!ways[i].prop) {
+                    if (recIdx == n || ways[i].recency < recOldest) {
+                        recIdx = i;
+                        recOldest = ways[i].recency;
+                    }
+                    continue;
+                }
+                const uint32_t d = effDist(ways[i]);
+                if (propIdx == n || d > farthest ||
+                    (d == farthest && ways[i].dbg > coldest) ||
+                    (d == farthest && ways[i].dbg == coldest &&
+                     ways[i].recency < propOldest)) {
+                    propIdx = i;
+                    farthest = d;
+                    coldest = ways[i].dbg;
+                    propOldest = ways[i].recency;
+                }
+            }
+            if (recIdx != n)
+                return selected(recIdx, VictimReason::NON_PROPERTY);
+            if (propIdx != n)
+                return selected(
+                    propIdx, VictimReason::FUTURE_TIER_PROPERTY);
             for (size_t i = 0; i < n; ++i)
                 if (ways[i].rrpv < rrpvMax) ways[i].rrpv++;
         }

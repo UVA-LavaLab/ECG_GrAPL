@@ -609,6 +609,64 @@ def test_rrip_recency_attribution_uses_a_neutral_no_epoch_control():
     assert stage["env"]["GEM5_REUSE_PLAN_COVERAGE_REQUIRED"] == "1"
 
 
+def test_future_admission_screen_is_isolated_and_symmetric():
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    stages = [
+        stage for stage in manifest["stages"]
+        if "reuse_plan_future_admission_screen" in
+        stage.get("profiles", [])
+    ]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["name"] == "67_cache_sim_future_admission_i1"
+    assert stage["suite"] == "cache-sim"
+    assert stage["graph_set"] == "realgraph_samples"
+    assert stage["benchmarks"] == ["pr"]
+    assert stage["policy_sharding_allowed"] is False
+    assert stage["flowthrough"] == "all"
+    assert stage["policies"] == [
+        "LRU",
+        "GRASP",
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_ADMISSION_FLOWTHROUGH",
+    ]
+    assert stage["env"]["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
+    assert "at most 0.97" in stage["notes"]
+    assert "above 1.02" in stage["notes"]
+    assert "future_admission_gate.py" in stage["notes"]
+    runner = EXPERIMENT_RUN_PATH.read_text()
+    assert 'command.extend(["--flowthrough", str(settings["flowthrough"])])' in (
+        runner)
+
+
+def test_temporal_discrimination_holds_degree_constant():
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    graphs = manifest["graph_sets"]["temporal_reuse_controls"]
+    assert [graph["name"] for graph in graphs] == [
+        "temporal-clustered-n16", "temporal-spread-n16"]
+    assert all(
+        graph["options_key"] == "file_all_kernels_preordered"
+        for graph in graphs)
+    stages = [
+        stage for stage in manifest["stages"]
+        if "reuse_plan_temporal_discrimination" in
+        stage.get("profiles", [])
+    ]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["name"] == "68_cache_sim_temporal_discrimination_i1"
+    assert stage["suite"] == "cache-sim"
+    assert stage["flowthrough"] == "all"
+    assert stage["policy_sharding_allowed"] is False
+    assert "GRASP receives the same degree distribution" in stage["notes"]
+    assert "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH" in stage["policies"]
+    assert "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH" in (
+        stage["policies"])
+
+
 def test_cache_sim_mode_receipt_survives_graph_context_lifetime():
     cache = (
         ROOT / "bench/include/cache_sim/cache_sim.h").read_text()

@@ -134,6 +134,9 @@ Two attribution-only controls isolate victim-rule components:
 - `rrip_no_epoch_recency` keeps the same RRIP-first mechanics and resolves
   property ties by last-touch recency, providing the neutral epoch-information
   control.
+- `future_tier_first` is the combined-mask arm: RRIP and records-first
+  eligibility remain primary, then property candidates use future distance,
+  carried tier when epochs tie, and recency as the final fallback.
 
 These controls are decomposition tools, not proposed policies.
 

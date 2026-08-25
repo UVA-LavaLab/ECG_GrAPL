@@ -1264,6 +1264,15 @@ def test_gem5_reuse_plan_stamp_coverage_stats_are_resettable_and_parsed(
         "requested=rrip_no_epoch_recency effective=9 dueling=0]",
         "rrip_no_epoch_recency",
         required=True)
+    future_tier = roi_matrix.parse_policy_spec(
+        "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH")
+    assert future_tier.ecg_variant == "future_tier_first"
+    assert roi_matrix.apply_gem5_variant_receipt(
+        {"timing_valid_for_speedup": "1"},
+        "[ECG-VARIANT-RECEIPT sim=gem5 "
+        "requested=future_tier_first effective=10 dueling=0]",
+        "future_tier_first",
+        required=True)
 
 
 def test_gem5_array_attribution_is_explicit_and_pr_scoped(monkeypatch):

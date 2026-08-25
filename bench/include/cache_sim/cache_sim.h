@@ -2239,6 +2239,11 @@ private:
                 pol = "ECG:rrip_no_epoch_recency";
                 reason = !isProp(victim) ? "max-rrpv record by recency"
                                          : "max-rrpv property by recency";
+            } else if (variant == 10) {
+                pol = "ECG:future_tier_first";
+                reason = !isProp(victim)
+                    ? "max-rrpv record by recency"
+                    : "max-rrpv future then tier then recency";
             } else {
                 pol = (variant == 1) ? "ECG:epoch_first" : "ECG:epoch_only";
                 reason = !isProp(victim) ? "record by recency"

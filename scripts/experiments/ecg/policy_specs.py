@@ -137,6 +137,14 @@ def parse_policy_spec(text: str) -> PolicySpec:
             (
                 "ECG_REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
                 "rrip_no_epoch_recency"),
+        "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH":
+            (
+                "ECG_REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH",
+                "future_tier_first"),
+        "ECG_REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH":
+            (
+                "ECG_REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH",
+                "future_tier_first"),
         "ECG:REUSE_PLAN_DEGREE_FLOWTHROUGH":
             ("ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH", "degree_first"),
         "ECG_REUSE_PLAN_DEGREE_FLOWTHROUGH":
@@ -184,6 +192,20 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ecg_reuse_plan_depth=2,
             ecg_flowthrough=True,
             ecg_variant="rrip_first",
+            ecg_transport_pinned=True,
+            ecg_reuse_admission=True,
+        )
+    if upper in (
+        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+        "ECG_REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+    ):
+        return PolicySpec(
+            label="ECG_REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+            policy="ECG",
+            ecg_mode="ECG_GRASP_POPT",
+            ecg_reuse_plan_depth=2,
+            ecg_flowthrough=True,
+            ecg_variant="rrip_no_epoch_recency",
             ecg_transport_pinned=True,
             ecg_reuse_admission=True,
         )

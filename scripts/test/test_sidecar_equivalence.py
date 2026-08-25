@@ -415,15 +415,23 @@ def test_compact_two_stamp_record_packs_and_round_trips():
     # one, or the two widths would mean different policies.
     start = header.index("bool buildInEdgeReusePlanRecords32")
     body = header[start:start + 3000]
-    assert "nextReusePlanForLine" in body, (
+    assert "nextReusePlanForAccess" in body, (
         "the compact builder computes epochs its own way, so a width change "
         "would silently change the policy")
-
-    # And it must refuse rather than truncate when the fields do not fit.
     assert "if (!canPackReusePlan32(n, ne)) return false;" in body, (
         "the compact builder does not check feasibility, so it could silently "
         "truncate destinations or epochs")
 
+
+def test_reuse_plan_preserves_same_reader_line_order():
+    binary = ROOT / "bench/bin_sim/test_ecg_reuse_plan"
+    if not binary.is_file():
+        pytest.skip("build with make sim-test_ecg_reuse_plan")
+    result = subprocess.run(
+        [str(binary)], cwd=ROOT, capture_output=True, text=True,
+        timeout=60, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "same-reader-line=OK" in result.stdout
 
 def test_gem5_prefers_the_compact_record_and_declares_its_width():
     src = (ROOT / "bench/src_gem5/pr.cc").read_text()
@@ -764,7 +772,7 @@ def test_built_kernels_are_newer_than_the_sources_they_embed():
     for kernel in (
             "pr", "pr_spmv", "bfs", "bc", "cc", "cc_sv", "sssp", "tc",
             "ecg_preprocess", "reuse_plan_sidecar",
-            "test_ecg_reuse_plan32"):
+            "test_ecg_reuse_plan", "test_ecg_reuse_plan32"):
         source = ROOT / f"bench/src_sim/{kernel}.cc"
         binary_dependencies[ROOT / f"bench/bin_sim/{kernel}"] = (
             sim_headers + [source])

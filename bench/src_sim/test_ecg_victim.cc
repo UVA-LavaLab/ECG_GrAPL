@@ -172,6 +172,24 @@ int main() {
     }
     {
         ecg_policy::WayState ways[2] = {
+            {true, 7, 10, 1, 5, true},
+            {true, 7, 20, 3, 5, true},
+        };
+        ecg_policy::VictimReason reason;
+        const size_t victim = ecg_policy::selectVictim(
+            ways, 2, ecg_policy::FUTURE_TIER_FIRST, 7, &reason);
+        const bool ok = (
+            victim == 1 &&
+            reason == ecg_policy::VictimReason::FUTURE_TIER_PROPERTY &&
+            ecg_policy::victimUsedEpoch(reason, ways[victim]));
+        printf(
+            "    %-46s expect=way1 got=way%zu  [%s]\n",
+            "future tie uses cold tier before recency",
+            victim, ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
+    }
+    {
+        ecg_policy::WayState ways[2] = {
             {true, 7, 30, 0, 1, true},
             {true, 7, 10, 0, 31, true},
         };
@@ -318,6 +336,13 @@ int main() {
         check(L3, "mixed max-rrpv -> oldest record by recency",
               {{raddr(0),7,0,50,0},{paddr(1),7,31,1,0},{raddr(2),7,0,5,0},{paddr(3),7,20,2,0},
                {paddr(4),7,7,3,0},{paddr(5),7,15,4,0},{paddr(6),7,2,6,0},{paddr(7),7,11,7,0}}, 2);
+    } else if (var == "future_tier_first") {
+        check(L3, "future distance dominates tier (way0)",
+              {{paddr(0),7,31,10,3},{paddr(1),7,1,20,1},{paddr(2),7,30,30,3},{paddr(3),7,20,40,3},
+               {paddr(4),7,7,50,3},{paddr(5),7,15,60,3},{paddr(6),7,2,70,3},{paddr(7),7,11,80,3}}, 0);
+        check(L3, "equal future uses coldest tier (way2)",
+              {{paddr(0),7,10,10,1},{paddr(1),7,10,20,2},{paddr(2),7,10,30,3},{paddr(3),7,10,40,1},
+               {paddr(4),7,10,50,1},{paddr(5),7,10,60,1},{paddr(6),7,10,70,1},{paddr(7),7,10,80,1}}, 2);
     } else if (var == "dueling") {
         ecg_policy::OnlineDuelingSelector selector;
         size_t leader[ecg_policy::DUEL_ARM_COUNT] = {};

@@ -839,7 +839,8 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
                 victimRequestValid &&
                 (variant == ecg_policy::RRIP_FIRST ||
                  variant == ecg_policy::RRIP_NO_EPOCH ||
-                 variant == ecg_policy::RRIP_NO_EPOCH_RECENCY) &&
+                 variant == ecg_policy::RRIP_NO_EPOCH_RECENCY ||
+                 variant == ecg_policy::FUTURE_TIER_FIRST) &&
                 vidx != recencyNoEpochVidx)
             ++onlineDuelingStats.victimEpochVsRecencyDecisiveSelections;
         if (vidx < onlineDuelingStats.victimWaySelections.size())
@@ -875,6 +876,11 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
             pol = "ECG:rrip_no_epoch_recency";
             reason = !isProp(victim) ? "max-rrpv record by recency"
                                      : "max-rrpv property by recency";
+        } else if (variant == 10) {
+            pol = "ECG:future_tier_first";
+            reason = !isProp(victim)
+                ? "max-rrpv record by recency"
+                : "max-rrpv future then tier then recency";
         } else {
             pol = epol;
             reason = !isProp(victim) ? "record by recency"

@@ -704,6 +704,8 @@ def make_roi_job(
         command.append("--gem5-compact-fused")
     if settings.get("gem5_compact_reuse_bind_flowthrough"):
         command.append("--gem5-compact-reuse-bind-flowthrough")
+    if settings.get("flowthrough"):
+        command.extend(["--flowthrough", str(settings["flowthrough"])])
     if settings.get("gem5_compact_reuse_bind_performance"):
         command.append("--gem5-compact-reuse-bind-performance")
     if settings.get("gem5_cpu_type"):

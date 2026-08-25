@@ -56,11 +56,11 @@ static bool checkDirection(const TinyGraph& graph, bool push)
         }
     }
     if (push) {
-        // Edge 1->2: property line 2's readers after src=1 are reader 5,
-        // then reader 0 after wrap. NE=32,N=6 => epochs 26 then 0.
+        // Edge 1->2 is followed by edge 1->3 in the same property line,
+        // then the next outer-vertex reader is 5. NE=32,N=6 => 5 then 26.
         if (pairs[1].empty() ||
-            pairs[1][0].first != 26 ||
-            pairs[1][0].second != 0)
+            pairs[1][0].first != 5 ||
+            pairs[1][0].second != 26)
             return false;
     }
     return true;
@@ -81,6 +81,22 @@ static bool checkSingleReaderWrap()
            pairs[12][0].second == 4;
 }
 
+static bool checkSameReaderLineOrder()
+{
+    TinyGraph graph(16);
+    graph.addEdge(0, 5);
+    graph.addEdge(1, 5);
+    graph.addEdge(2, 5);
+
+    std::vector<std::vector<ecg_reuse_plan::ReusePlan>> pairs;
+    ecg_reuse_plan::buildInEdgeReusePlans(
+        graph, 16, 16, true, pairs, false);
+    return pairs.size() > 5 && pairs[5].size() == 3 &&
+           pairs[5][0].first == 5 && pairs[5][0].second == 5 &&
+           pairs[5][1].first == 5 &&
+           pairs[5][2].first == 4;
+}
+
 static bool checkReuseTiers()
 {
     const uint64_t counts[] = {10, 1, 7, 0, 3, 2, 0, 0, 0, 0};
@@ -99,8 +115,11 @@ static bool checkSingleEpochReusePlanFullRange(const TinyGraph& graph)
     std::vector<std::vector<uint16_t>> epochs;
     ecg_reuse_plan::buildInEdgeEpochs(
         graph, 2, 65535, true, epochs, true);
-    return epochs.size() > 1 && !epochs[1].empty() &&
-           epochs[1][0] > ecg_reuse_plan::kReusePlanEpochMask;
+    for (const auto& row : epochs)
+        for (uint16_t epoch : row)
+            if (epoch > ecg_reuse_plan::kReusePlanEpochMask)
+                return true;
+    return false;
 }
 
 int main()
@@ -120,6 +139,7 @@ int main()
     const bool pull_ok = checkDirection(graph, false);
     const bool push_ok = checkDirection(graph, true);
     const bool single_reader_ok = checkSingleReaderWrap();
+    const bool same_reader_line_ok = checkSameReaderLineOrder();
     const bool tiers_ok = checkReuseTiers();
     const bool single_epoch_range_ok =
         checkSingleEpochReusePlanFullRange(graph);
@@ -135,17 +155,20 @@ int main()
         ecg_policy::reusePlanDistance(26, 0, 2, 27, 32) == 5 &&
         ecg_policy::reusePlanDistance(65, 130, 2, 0, 65535) == 65;
     std::printf(
-        "[test_ecg_reuse_plan] pull=%s push=%s single-reader=%s tiers=%s "
+        "[test_ecg_reuse_plan] pull=%s push=%s single-reader=%s "
+        "same-reader-line=%s tiers=%s "
         "single-epoch-range=%s "
         "wire=%s distance=%s\n",
                 pull_ok ? "OK" : "FAIL",
                 push_ok ? "OK" : "FAIL",
                 single_reader_ok ? "OK" : "FAIL",
+                same_reader_line_ok ? "OK" : "FAIL",
                 tiers_ok ? "OK" : "FAIL",
                 single_epoch_range_ok ? "OK" : "FAIL",
                 wire_ok ? "OK" : "FAIL",
                 distance_ok ? "OK" : "FAIL");
-    return pull_ok && push_ok && single_reader_ok && tiers_ok &&
+    return pull_ok && push_ok && single_reader_ok &&
+        same_reader_line_ok && tiers_ok &&
         single_epoch_range_ok && wire_ok && distance_ok
         ? 0 : 1;
 }

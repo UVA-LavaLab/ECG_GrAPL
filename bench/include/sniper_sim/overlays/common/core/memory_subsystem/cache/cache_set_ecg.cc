@@ -1108,6 +1108,11 @@ CacheSetECG::findECGGraspPoptVictim(CacheCntlr *cntlr)
       pol = "ECG:rrip_no_epoch_recency";
       reason = !isProp(victimWay) ? "max-rrpv record by recency"
                                   : "max-rrpv property by recency";
+   } else if (variant == 10) {
+      pol = "ECG:future_tier_first";
+      reason = !isProp(victimWay)
+          ? "max-rrpv record by recency"
+          : "max-rrpv future then tier then recency";
    } else {
       pol = epol;
       reason = !isProp(victimWay) ? "record by recency" : "farthest-epoch property";

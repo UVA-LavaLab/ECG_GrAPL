@@ -447,6 +447,7 @@ def test_sniper_mask_mode_variant_matches_receipt_validator_expectation():
             "record_lru": 7,
             "rrip_no_epoch": 8,
             "rrip_no_epoch_recency": 9,
+            "future_tier_first": 10,
         }[expected]
         receipt_text = (
             f"[ECG-VARIANT-RECEIPT sim=sniper requested={exported} "
