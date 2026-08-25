@@ -783,15 +783,10 @@ struct AccessHints {
     uint8_t  mask_bits = 2;             // Number of mask bits (2=ECG default, 4/8 for finer control)
     uint8_t  _pad1 = 0;
     uint16_t edge_epoch = 0;            // ECG_GRASP_POPT: absolute next-ref epoch, carried untruncated (mask>>26 loses bit 32)
-    bool     edge_epoch_valid = true;   // is the line's stored epoch a real per-edge DELIVERY?
-                                        // Defaults TRUE so kernels that always deliver (PR pull) and
-                                        // all pre-delivery/init fills stay stamped (legacy behavior,
-                                        // keeps the primary PR path byte-identical). clearEdgeEpoch() sets
-                                        // it FALSE for a SEQUENTIAL/cleared read (BC/SSSP/BFS source
-                                        // reads) — the ONLY thing that un-stamps a fill, matching
-                                        // gem5/Sniper which stamp only on real per-edge delivery.
-                                        // Resolves the epoch==0 ambiguity (real epoch-0 delivery is
-                                        // still valid; a cleared read is not).
+    bool     edge_epoch_valid = false;  // true only after a real per-edge delivery
+                                        // Pre-delivery/setup fills must remain
+                                        // unstamped, matching gem5 and Sniper.
+                                        // A delivered epoch zero remains valid.
     // ECG_REUSE_PLAN_DEPTH: forward schedule of the next-K absolute next-ref epochs
     // (sorted ascending) delivered alongside edge_epoch. n=0 => no schedule (inert).
     uint16_t edge_epoch_sched[4] = {0, 0, 0, 0};

@@ -5958,6 +5958,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    if args.flowthrough == "all" and args.suite != "cache-sim":
+        raise SystemExit(
+            "--flowthrough all is currently implemented only for cache-sim; "
+            "gem5/Sniper native-baseline structural FlowThrough must not be "
+            "claimed until their guest/workload paths implement it")
     semantic_edge_limit = int(args.sniper_semantic_edge_limit)
     if int(args.sniper_roi_icount) > 0 and semantic_edge_limit > 0:
         raise SystemExit(

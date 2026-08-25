@@ -82,6 +82,20 @@ def test_calls_present_in_each_simulator():
             f"{rel} does not use the shared fail-closed variant parser")
 
 
+def test_epoch_stamp_defaults_are_undelivered_across_backends():
+    cache_context = (
+        ROOT / "bench/include/cache_sim/graph_cache_context.h").read_text()
+    gem5_header = (
+        ROOT / "bench/include/gem5_sim/overlays/mem/cache/"
+        "replacement_policies/ecg_rp.hh").read_text()
+    sniper_source = (
+        ROOT / "bench/include/sniper_sim/overlays/common/core/"
+        "memory_subsystem/cache/cache_set_ecg.cc").read_text()
+    assert "bool     edge_epoch_valid = false;" in cache_context
+    assert "ecg_epoch_valid(false)" in gem5_header
+    assert "m_ecg_epoch_valid[way] = false;" in sniper_source
+
+
 def test_reuse_admission_mapping_is_shared_across_backends():
     callers = (
         "bench/include/cache_sim/cache_sim.h",

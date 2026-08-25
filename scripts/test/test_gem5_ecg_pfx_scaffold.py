@@ -1409,6 +1409,17 @@ def test_proposal_compact_reuse_bind_flowthrough_cli_guards():
     assert "implemented only for --benchmark pr" in (
         wrong_kernel.stdout + wrong_kernel.stderr)
 
+    asymmetric = subprocess.run(
+        [
+            sys.executable, str(ROI_MATRIX_PATH),
+            "--suite", "gem5", "--benchmark", "pr",
+            "--policies", "LRU", "--flowthrough", "all", "--dry-run",
+        ],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=60)
+    assert asymmetric.returncode != 0
+    assert "implemented only for cache-sim" in (
+        asymmetric.stdout + asymmetric.stderr)
+
     wrong_isa = subprocess.run(
         [
             sys.executable, str(ROI_MATRIX_PATH),
