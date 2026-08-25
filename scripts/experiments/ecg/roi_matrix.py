@@ -3219,6 +3219,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "ecg_admission_completed_windows",
         "ecg_admission_winner_changes",
         "ecg_admission_final_winner_arm",
+        "ecg_admission_set_offset",
         "ecg_dueling_leader_samples_rrip",
         "ecg_dueling_leader_samples_grasp",
         "ecg_dueling_leader_samples_epoch",
@@ -5683,6 +5684,7 @@ def standalone_matrix_config_hash(
         "config": config,
         "policy_labels": [spec.label for spec in policies],
         "env": material_env,
+        "explicit_cell_env": explicit_cell_mechanism_env(),
         "inputs": {
             name: hash_input_path(path.resolve())
             for name, path in paths.items()

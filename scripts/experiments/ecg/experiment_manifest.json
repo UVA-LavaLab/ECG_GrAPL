@@ -65,13 +65,19 @@
     "reuse_plan_future_admission_screen": "Three-graph cache_sim kill gate isolating request-bound future-distance admission from neutral recency eviction under symmetric FlowThrough.",
     "reuse_plan_temporal_discrimination": "Degree-identical PageRank controls that separate clustered from spread reader timing so GRASP sees the same degree signal and only the future mask changes.",
     "reuse_plan_temporal_admission_gem5": "Mechanism-only gem5 O3 validation of future-guided admission on the degree-controlled spread-reader graph.",
-    "reuse_plan_online_admission_screen": "Four-graph cache_sim regret gate for access-normalized online selection between GRASP-tier and future-guided admission.",
+    "reuse_plan_online_admission_screen": "Historical generation-1 fixed-color admission-selector screen; retained as failed evidence and not rerunnable with the generation-2 implementation.",
+    "reuse_plan_online_admission_color_stability": "Generation-2 cache_sim sweep over eight unique rotations of evenly dispersed admission leaders, with exact 64-access windows and a frozen 2% regret gate.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
     "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
+    "reuse_plan_online_admission_screen": {
+      "status": "blocked",
+      "reason": "Generation 1 is frozen as a failed fixed-color result. Use run_online_admission_color_sweep.py for the separately preregistered generation-2 color sweep.",
+      "require_clean_worktree": false
+    },
     "reuse_plan_final_campaign": {
       "status": "blocked",
       "reason": "The three-graph corpus is smaller than the GRASP/P-OPT evaluation scale. Use --list or --dry-run for audit only; publication requires the literature-scale replacement profile.",
@@ -2492,7 +2498,7 @@
         "ECG_RECORD_VARIABLE_WIDTH": "1",
         "ECG_EXPECT_BYTES_PER_EDGE": "4"
       },
-      "notes": "Pre-registered low-regret gate. Sets 7-14 provide four alternating leaders per arm for GRASP-tier and future-guided admission until each arm has 64 leader accesses; the policy initializes to GRASP, compares access-normalized miss rates, then all sets follow the winner for the rest of the ROI. Both leader arms must receive positive accesses and misses. Online misses and total off-chip traffic must remain within 1.02 of the better static arm on every graph. At least one cell must select each arm in follower sets before detailed-simulator promotion."
+      "notes": "Historical generation-1 fixed-color gate. At commit 0353f4a5, sets 7-14 provided four alternating leaders per arm; online misses and total off-chip traffic had to remain within 1.02 of the better static arm on every graph. The gate failed because those colors were not representative. The profile is blocked so current generation-2 code cannot silently overwrite that evidence. Use the tracked generation-2 color-sweep flow and its separate analyzer."
     },
     {
       "name": "70_gem5_pagerank_i1",

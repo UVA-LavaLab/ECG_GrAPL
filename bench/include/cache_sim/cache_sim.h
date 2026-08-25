@@ -1469,6 +1469,9 @@ public:
     uint8_t getAdmissionWinnerArm() const {
         return admission_selector_.winnerArm();
     }
+    uint32_t getAdmissionSetOffset() const {
+        return admission_selector_.offset();
+    }
     const std::array<uint64_t, ecg_policy::DUEL_ARM_COUNT>&
     getDuelingLeaderSamplesByArm() const {
         return dueling_leader_samples_by_arm_;
@@ -2559,7 +2562,14 @@ private:
     uint64_t dueling_completed_windows_ = 0;
     uint64_t dueling_winner_changes_ = 0;
     uint64_t reuse_admission_updates_ = 0;
-    ecg_policy::OnlineAdmissionSelector admission_selector_;
+    ecg_policy::OnlineAdmissionSelector admission_selector_{[]() {
+        const char* value =
+            std::getenv("CACHE_ECG_ADMISSION_SET_OFFSET");
+        return value
+            ? static_cast<uint32_t>(
+                std::strtoul(value, nullptr, 10) & 63u)
+            : 0u;
+    }()};
     std::array<uint64_t, ecg_policy::ADMIT_ARM_COUNT>
         admission_follower_selections_{};
     uint64_t admission_completed_windows_ = 0;
@@ -2595,7 +2605,8 @@ private:
         if (!onlineAdmissionEnabled() ||
             (name_ != "L3" && name_ != "L3-Shared"))
             return;
-        const int leader = ecg_policy::admissionLeaderArm(set_idx);
+        const int leader = ecg_policy::admissionLeaderArm(
+            set_idx, admission_selector_.offset());
         const uint8_t selected = admission_selector_.armForSet(set_idx);
         if (leader < 0 && selected < ecg_policy::ADMIT_ARM_COUNT)
             ++admission_follower_selections_[selected];
@@ -3360,6 +3371,8 @@ public:
            << l3_->getAdmissionWinnerChanges() << ",\n";
         ss << "  \"ecg_admission_final_winner_arm\": "
            << static_cast<unsigned>(l3_->getAdmissionWinnerArm()) << ",\n";
+        ss << "  \"ecg_admission_set_offset\": "
+           << l3_->getAdmissionSetOffset() << ",\n";
         static constexpr const char* kDuelingArmNames[] = {
             "rrip", "grasp", "epoch", "degree", "lru"
         };

@@ -360,6 +360,8 @@ int main() {
             selector.recordAccess(
                 leaders[ecg_policy::ADMIT_GRASP], sample < 31);
         }
+        for (int sample = 0; sample < 89; ++sample)
+            selector.recordAccess(leaders[ecg_policy::ADMIT_GRASP], true);
         for (int sample = 0; sample < 64; ++sample) {
             const auto event = selector.recordAccess(
                 leaders[ecg_policy::ADMIT_FUTURE], sample < 3);
@@ -371,6 +373,10 @@ int main() {
         selector.recordAccess(leaders[ecg_policy::ADMIT_GRASP], true);
         const bool ok =
             leaders[0] != 0 && leaders[1] != 0 && follower != 0 &&
+            ecg_policy::admissionLeaderArm(2, 1) ==
+                ecg_policy::ADMIT_GRASP &&
+            ecg_policy::admissionLeaderArm(6, 1) ==
+                ecg_policy::ADMIT_FUTURE &&
             changed_to_future && selector.trained() &&
             selector.completedWindows() == 1 &&
             selector.armForSet(

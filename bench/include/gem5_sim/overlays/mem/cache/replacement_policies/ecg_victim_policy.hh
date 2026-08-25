@@ -292,10 +292,11 @@ enum AdmissionArm : uint8_t {
     ADMIT_ARM_COUNT = 2,
 };
 
-inline int admissionLeaderArm(size_t set_index) {
-    const uint64_t slot = static_cast<uint64_t>(set_index) & 63u;
-    if (slot >= 7 && slot <= 14)
-        return static_cast<int>((slot - 7) & 1u);
+inline int admissionLeaderArm(size_t set_index, uint32_t offset = 0) {
+    const uint64_t slot =
+        (static_cast<uint64_t>(set_index) + (offset & 63u)) & 63u;
+    if ((slot & 7u) == 3u) return ADMIT_GRASP;
+    if ((slot & 7u) == 7u) return ADMIT_FUTURE;
     return -1;
 }
 
@@ -310,10 +311,13 @@ struct AdmissionSampleEvent {
 
 class OnlineAdmissionSelector {
   public:
+    explicit OnlineAdmissionSelector(uint32_t offset = 0)
+        : offset_(offset & 63u) {}
+
     uint8_t armForSet(size_t set_index) const {
         if (trained_.load(std::memory_order_relaxed))
             return winner_.load(std::memory_order_relaxed);
-        const int leader = admissionLeaderArm(set_index);
+        const int leader = admissionLeaderArm(set_index, offset_);
         return leader >= 0
             ? static_cast<uint8_t>(leader)
             : winner_.load(std::memory_order_relaxed);
@@ -324,22 +328,29 @@ class OnlineAdmissionSelector {
         event.winner_before = winner_.load(std::memory_order_relaxed);
         event.winner_after = event.winner_before;
         if (trained_.load(std::memory_order_relaxed)) return event;
-        const int leader = admissionLeaderArm(set_index);
+        const int leader = admissionLeaderArm(set_index, offset_);
         if (leader < 0) return event;
         const size_t arm = static_cast<size_t>(leader);
+        uint64_t reserved = accesses_[arm].load(std::memory_order_relaxed);
+        while (reserved < kSamplesPerArm &&
+               !accesses_[arm].compare_exchange_weak(
+                   reserved, reserved + 1, std::memory_order_relaxed)) {}
+        if (reserved >= kSamplesPerArm) return event;
         event.leader_sample = true;
         event.sampled_arm = static_cast<uint8_t>(leader);
-        accesses_[arm].fetch_add(1, std::memory_order_relaxed);
         total_accesses_[arm].fetch_add(1, std::memory_order_relaxed);
         if (missed) {
             misses_[arm].fetch_add(1, std::memory_order_relaxed);
             total_misses_[arm].fetch_add(1, std::memory_order_relaxed);
         }
         sampled_accesses_.fetch_add(1, std::memory_order_relaxed);
+        completed_samples_[arm].fetch_add(1, std::memory_order_release);
         if (
-                accesses_[ADMIT_GRASP].load(std::memory_order_relaxed) <
+                completed_samples_[ADMIT_GRASP].load(
+                    std::memory_order_acquire) <
                     kSamplesPerArm ||
-                accesses_[ADMIT_FUTURE].load(std::memory_order_relaxed) <
+                completed_samples_[ADMIT_FUTURE].load(
+                    std::memory_order_acquire) <
                     kSamplesPerArm)
             return event;
         bool expected = false;
@@ -351,10 +362,10 @@ class OnlineAdmissionSelector {
         std::array<uint64_t, ADMIT_ARM_COUNT> window_accesses{};
         std::array<uint64_t, ADMIT_ARM_COUNT> window_misses{};
         for (size_t index = 0; index < ADMIT_ARM_COUNT; ++index) {
-            window_accesses[index] = accesses_[index].exchange(
-                0, std::memory_order_relaxed);
-            window_misses[index] = misses_[index].exchange(
-                0, std::memory_order_relaxed);
+            window_accesses[index] =
+                accesses_[index].load(std::memory_order_relaxed);
+            window_misses[index] =
+                misses_[index].load(std::memory_order_relaxed);
         }
         uint8_t best = winner_.load(std::memory_order_relaxed);
         const uint8_t other =
@@ -398,10 +409,13 @@ class OnlineAdmissionSelector {
         return trained_.load(std::memory_order_relaxed);
     }
 
+    uint32_t offset() const { return offset_; }
+
     void reset() {
         for (size_t arm = 0; arm < ADMIT_ARM_COUNT; ++arm) {
             accesses_[arm].store(0, std::memory_order_relaxed);
             misses_[arm].store(0, std::memory_order_relaxed);
+            completed_samples_[arm].store(0, std::memory_order_relaxed);
             total_accesses_[arm].store(0, std::memory_order_relaxed);
             total_misses_[arm].store(0, std::memory_order_relaxed);
         }
@@ -414,8 +428,10 @@ class OnlineAdmissionSelector {
 
   private:
     static constexpr uint64_t kSamplesPerArm = 64;
+    uint32_t offset_ = 0;
     std::array<std::atomic<uint64_t>, ADMIT_ARM_COUNT> accesses_{};
     std::array<std::atomic<uint64_t>, ADMIT_ARM_COUNT> misses_{};
+    std::array<std::atomic<uint64_t>, ADMIT_ARM_COUNT> completed_samples_{};
     std::array<std::atomic<uint64_t>, ADMIT_ARM_COUNT> total_accesses_{};
     std::array<std::atomic<uint64_t>, ADMIT_ARM_COUNT> total_misses_{};
     std::atomic<uint64_t> sampled_accesses_{0};

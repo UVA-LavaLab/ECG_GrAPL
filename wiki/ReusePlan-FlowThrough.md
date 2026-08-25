@@ -121,6 +121,24 @@ actually chose. cache_sim can rotate the leader-set colors to detect a
 set-index artifact; a cache_sim winner must still transfer to gem5 O3 because
 the functional model does not contain gem5's complete LLC request stream.
 
+Admission selection is a separate two-arm experiment. Generation 1 used four
+fixed leader colors per arm and failed because its sampled winner disagreed
+with the better full-cache arm. Generation 2 evenly disperses eight colors per
+arm, reserves exactly 64 completed samples for each arm, and exposes
+`CACHE_ECG_ADMISSION_SET_OFFSET` for all eight unique rotations. The tracked
+`run_online_admission_color_sweep.py` flow is promoted only if every rotation
+chooses the better static miss arm and stays within 2% of the better static arm
+for both LLC misses and total off-chip traffic on all four declared graphs.
+
+Generation 2 also failed this gate. The directed spread control selected future
+admission in all eight rotations and stayed within 1.018 of the best static
+arm. Each real graph selected the wrong arm in exactly four rotations:
+web-Google reached 1.267 miss and 1.271 traffic regret, soc-pokec reached
+1.120/1.121, and cit-Patents reached 1.139/1.100. This isolates fixed leader
+color as the failure mode: the corrected future mask remains useful in its
+controlled regime, but this selector is not eligible for gem5 or Sniper
+performance integration.
+
 An experimental admission diagnostic maps the first delivered future-use
 epoch monotonically into RRPV on LLC fill and hit while retaining RRIP-first
 eviction. It is not a primary policy or a performance claim.
