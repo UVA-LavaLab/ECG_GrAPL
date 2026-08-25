@@ -949,6 +949,17 @@ def test_gem5_array_attribution_is_per_requestor_and_fail_closed():
     assert row["gem5_array_attribution_validated"] == 1
     assert "error" not in row
 
+    replayed = dict(row)
+    replayed["gem5_cpu_type"] = "O3"
+    replayed["gem5_array_record_demand_misses_cpu_data"] = 3
+    replayed["l3_demand_data_misses"] = 7
+    replayed.pop("error", None)
+    replayed["status"] = "ok"
+    assert roi_matrix.apply_gem5_array_attribution(
+        replayed, receipt, required=True)
+    assert replayed["gem5_array_record_replay_excess_lines"] == 1
+    assert replayed["gem5_array_record_replay_limit_lines"] == 1
+
     zero_inst = dict(row)
     for metric in roi_matrix.GEM5_ARRAY_STAT_METRICS:
         for category in roi_matrix.GEM5_ARRAY_CATEGORIES:

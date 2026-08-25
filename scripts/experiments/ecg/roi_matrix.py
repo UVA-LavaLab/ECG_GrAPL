@@ -446,6 +446,7 @@ GEM5_ARRAY_REQUESTORS = {
     "l2cache.prefetcher": "l2_prefetcher",
 }
 GEM5_ARRAY_OTHER_MISS_SHARE_LIMIT = 0.02
+GEM5_RECORD_REPLAY_SHARE_LIMIT = 0.005
 TOPT_MATCHED_REUSE_PLAN_LABELS = frozenset({
     "ECG_REUSE_PLAN_LRU_FLOWTHROUGH",
     "ECG_REUSE_PLAN_GRASP_FLOWTHROUGH",
@@ -2049,12 +2050,25 @@ def apply_gem5_array_attribution(
                     "gem5_array_record_demand_misses_cpu_data"])
             row["gem5_array_expected_record_lines"] = (
                 expected_record_lines)
-            if record_misses != expected_record_lines:
+            replay_excess = record_misses - expected_record_lines
+            replay_limit = (
+                math.ceil(
+                    expected_record_lines *
+                    GEM5_RECORD_REPLAY_SHARE_LIMIT)
+                if str(row.get("gem5_cpu_type") or "") == "O3"
+                else 0)
+            row["gem5_array_record_replay_excess_lines"] = replay_excess
+            row["gem5_array_record_replay_excess_share"] = (
+                replay_excess / expected_record_lines
+                if expected_record_lines else 0.0)
+            row["gem5_array_record_replay_limit_lines"] = replay_limit
+            if replay_excess < 0 or replay_excess > replay_limit:
                 mark_row_error(
                     row,
-                    "FlowThrough record stream did not cold-miss exactly "
-                    f"once per line: misses={record_misses} "
-                    f"expected={expected_record_lines}")
+                    "FlowThrough record stream exceeded its bounded O3 "
+                    f"replay allowance: misses={record_misses} "
+                    f"expected={expected_record_lines} "
+                    f"excess={replay_excess} limit={replay_limit}")
                 valid = False
     elif str(row.get("policy") or "") == "LRU":
         if record_activity != 0:

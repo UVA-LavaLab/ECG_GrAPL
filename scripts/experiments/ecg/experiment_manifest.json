@@ -2408,7 +2408,7 @@
         "GEM5_GRAPH_ARRAY_STATS": "1",
         "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
       },
-      "notes": "Mechanism-only matched O3 test on the directed spread-reader graph. Both rows use the corrected builder-v2 mask, compact 4-byte FlowThrough records, request-bound ReuseBind, RRIP eligibility/aging, and property-recency eviction. Only future-distance admission/refresh changes. Array-attribution schema 2 separately accounts incoming traversal and outgoing-degree CSR offsets. This synthetic control cannot support a general performance or novelty claim."
+      "notes": "Mechanism-only matched O3 test on the directed spread-reader graph. Both rows use the corrected builder-v2 mask, compact 4-byte FlowThrough records, request-bound ReuseBind, RRIP eligibility/aging, and property-recency eviction. Only future-distance admission/refresh changes. Array-attribution schema 2 separately accounts incoming traversal and outgoing-degree CSR offsets. One architectural record sweep is required; O3 replay may add at most 0.5% record-line misses, while a second sweep remains fail-closed. This synthetic control cannot support a general performance or novelty claim."
     },
     {
       "name": "70_gem5_pagerank_i1",
