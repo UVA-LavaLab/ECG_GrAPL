@@ -693,6 +693,34 @@ def test_temporal_admission_gem5_is_matched_and_mechanism_only():
         stage["notes"])
 
 
+def test_online_admission_screen_has_static_controls_and_regret_gate():
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    stages = [
+        stage for stage in manifest["stages"]
+        if "reuse_plan_online_admission_screen" in
+        stage.get("profiles", [])
+    ]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["name"] == "69b_cache_sim_online_admission_i1"
+    assert stage["suite"] == "cache-sim"
+    assert stage["graph_set"] == "admission_selector_graphs"
+    assert stage["flowthrough"] == "all"
+    assert stage["policy_sharding_allowed"] is False
+    assert stage["policies"] == [
+        "LRU",
+        "GRASP",
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_ONLINE_ADMISSION_FLOWTHROUGH",
+    ]
+    assert "within 1.02" in stage["notes"]
+    gate = (
+        ROOT /
+        "scripts/experiments/ecg/analysis/online_admission_gate.py")
+    assert gate.is_file()
+
+
 def test_cache_sim_mode_receipt_survives_graph_context_lifetime():
     cache = (
         ROOT / "bench/include/cache_sim/cache_sim.h").read_text()

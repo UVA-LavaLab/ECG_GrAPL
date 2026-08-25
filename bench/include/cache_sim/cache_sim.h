@@ -1043,6 +1043,7 @@ public:
                 if (is_write) {
                     set[i].dirty = true;
                 }
+                recordAdmissionAccess(set_idx, false);
                 return true;
             }
         }
@@ -1050,6 +1051,7 @@ public:
         // Miss
         stats_.misses++;
         if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_misses++;
+        recordAdmissionAccess(set_idx, true);
         return false;
     }
 
@@ -1310,7 +1312,7 @@ public:
                     ecg_policy::combinedInsertionRRPV(
                         tier, hint15, 15, 7);
             } else if (
-                    reuseAdmissionEnabled() &&
+                    futureAdmissionForSet(evicting_set_idx_) &&
                     mode == ECGMode::ECG_GRASP_POPT && graph_ctx_ &&
                     access_hints &&
                     graph_ctx_->isEcgEpochData(address) &&
@@ -1419,6 +1421,10 @@ public:
     void resetStats() {
         stats_.reset();
         reuse_admission_updates_ = 0;
+        admission_selector_.reset();
+        admission_follower_selections_.fill(0);
+        admission_completed_windows_ = 0;
+        admission_winner_changes_ = 0;
     }
     
     const std::string& getName() const { return name_; }
@@ -1443,6 +1449,25 @@ public:
     }
     uint64_t getReuseAdmissionUpdates() const {
         return reuse_admission_updates_;
+    }
+    uint64_t getAdmissionLeaderAccesses(uint8_t arm) const {
+        return admission_selector_.totalAccesses(arm);
+    }
+    uint64_t getAdmissionLeaderMisses(uint8_t arm) const {
+        return admission_selector_.totalMisses(arm);
+    }
+    uint64_t getAdmissionFollowerSelections(uint8_t arm) const {
+        return arm < ecg_policy::ADMIT_ARM_COUNT
+            ? admission_follower_selections_[arm] : 0;
+    }
+    uint64_t getAdmissionCompletedWindows() const {
+        return admission_completed_windows_;
+    }
+    uint64_t getAdmissionWinnerChanges() const {
+        return admission_winner_changes_;
+    }
+    uint8_t getAdmissionWinnerArm() const {
+        return admission_selector_.winnerArm();
     }
     const std::array<uint64_t, ecg_policy::DUEL_ARM_COUNT>&
     getDuelingLeaderSamplesByArm() const {
@@ -1609,7 +1634,7 @@ private:
                 // Refresh the prediction at the same property access that
                 // delivers the new first future epoch. Unlike epoch-first
                 // eviction, this preserves RRIP as the victim mechanism.
-                if (reuseAdmissionEnabled() &&
+                if (futureAdmissionForSet(set_idx) &&
                     mode == ECGMode::ECG_GRASP_POPT && graph_ctx_ &&
                     graph_ctx_->isEcgEpochData(set[idx].line_addr) &&
                     graph_ctx_->hints_for_thread().edge_epoch_valid &&
@@ -2534,6 +2559,11 @@ private:
     uint64_t dueling_completed_windows_ = 0;
     uint64_t dueling_winner_changes_ = 0;
     uint64_t reuse_admission_updates_ = 0;
+    ecg_policy::OnlineAdmissionSelector admission_selector_;
+    std::array<uint64_t, ecg_policy::ADMIT_ARM_COUNT>
+        admission_follower_selections_{};
+    uint64_t admission_completed_windows_ = 0;
+    uint64_t admission_winner_changes_ = 0;
     size_t evicting_set_idx_ = 0;    // set index of the in-progress eviction
 
     static bool reuseAdmissionEnabled() {
@@ -2546,6 +2576,32 @@ private:
         static const bool enabled = ecg_policy::parseReuseAdmission(
             std::getenv("ECG_REUSE_ADMISSION_COMBINED"));
         return enabled;
+    }
+
+    static bool onlineAdmissionEnabled() {
+        static const bool enabled = ecg_policy::parseReuseAdmission(
+            std::getenv("ECG_REUSE_ADMISSION_ONLINE"));
+        return enabled;
+    }
+
+    bool futureAdmissionForSet(size_t set_idx) const {
+        return reuseAdmissionEnabled() ||
+            (onlineAdmissionEnabled() &&
+             admission_selector_.armForSet(set_idx) ==
+                ecg_policy::ADMIT_FUTURE);
+    }
+
+    void recordAdmissionAccess(size_t set_idx, bool missed) {
+        if (!onlineAdmissionEnabled() ||
+            (name_ != "L3" && name_ != "L3-Shared"))
+            return;
+        const int leader = ecg_policy::admissionLeaderArm(set_idx);
+        const uint8_t selected = admission_selector_.armForSet(set_idx);
+        if (leader < 0 && selected < ecg_policy::ADMIT_ARM_COUNT)
+            ++admission_follower_selections_[selected];
+        const auto event = admission_selector_.recordAccess(set_idx, missed);
+        if (event.completed_window) ++admission_completed_windows_;
+        if (event.winner_changed) ++admission_winner_changes_;
     }
 
     uint32_t currentReuseEpoch() const {
@@ -3284,6 +3340,26 @@ public:
            << l3_->getDuelingWinnerChanges() << ",\n";
         ss << "  \"ecg_reuse_admission_updates\": "
            << l3_->getReuseAdmissionUpdates() << ",\n";
+        static constexpr const char* kAdmissionArmNames[] = {
+            "grasp", "future"
+        };
+        for (uint8_t arm = 0; arm < ecg_policy::ADMIT_ARM_COUNT; ++arm) {
+            ss << "  \"ecg_admission_leader_accesses_"
+               << kAdmissionArmNames[arm] << "\": "
+               << l3_->getAdmissionLeaderAccesses(arm) << ",\n";
+            ss << "  \"ecg_admission_leader_misses_"
+               << kAdmissionArmNames[arm] << "\": "
+               << l3_->getAdmissionLeaderMisses(arm) << ",\n";
+            ss << "  \"ecg_admission_follower_selections_"
+               << kAdmissionArmNames[arm] << "\": "
+               << l3_->getAdmissionFollowerSelections(arm) << ",\n";
+        }
+        ss << "  \"ecg_admission_completed_windows\": "
+           << l3_->getAdmissionCompletedWindows() << ",\n";
+        ss << "  \"ecg_admission_winner_changes\": "
+           << l3_->getAdmissionWinnerChanges() << ",\n";
+        ss << "  \"ecg_admission_final_winner_arm\": "
+           << static_cast<unsigned>(l3_->getAdmissionWinnerArm()) << ",\n";
         static constexpr const char* kDuelingArmNames[] = {
             "rrip", "grasp", "epoch", "degree", "lru"
         };

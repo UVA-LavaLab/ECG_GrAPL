@@ -1235,7 +1235,8 @@ def run_synthetic():
     if not SYNTH_BIN.exists():
         print("  [synthetic] FAIL: could not build test_ecg_victim"); return False
     ok = True
-    for variant in ["tier", "dueling", "grasp_only", "epoch_only", "rrip_first",
+    for variant in ["tier", "dueling", "admission_dueling",
+                    "grasp_only", "epoch_only", "rrip_first",
                     "epoch_first", "degree_first", "lru_only", "record_lru",
                     "rrip_no_epoch", "rrip_no_epoch_recency",
                     "future_tier_first",

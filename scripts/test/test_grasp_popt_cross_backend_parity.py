@@ -106,6 +106,17 @@ def test_online_dueling_five_arm_selection_pins_shared_selector():
         result.stdout)
 
 
+@pytestmark_skip_binary
+def test_online_admission_selector_uses_access_normalized_rates():
+    env = dict(os.environ)
+    env["ECG_VARIANT"] = "admission_dueling"
+    result = subprocess.run(
+        [str(TEST_ECG_VICTIM)], env=env,
+        capture_output=True, text=True, timeout=60, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "RESULT[admission_dueling]: 7 passed, 0 failed" in result.stdout
+
+
 def test_dead_legacy_grasp_auto_tune_hot_fraction_is_removed():
     """Guard against reintroducing the dead legacy GRASP 0.5-of-LLC default.
 

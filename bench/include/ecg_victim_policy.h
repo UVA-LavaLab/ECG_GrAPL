@@ -286,6 +286,150 @@ inline OnlinePlacementSelector& globalOnlinePlacementSelector() {
     return selector;
 }
 
+enum AdmissionArm : uint8_t {
+    ADMIT_GRASP = 0,
+    ADMIT_FUTURE = 1,
+    ADMIT_ARM_COUNT = 2,
+};
+
+inline int admissionLeaderArm(size_t set_index) {
+    const uint64_t slot = static_cast<uint64_t>(set_index) & 63u;
+    if (slot >= 7 && slot <= 14)
+        return static_cast<int>((slot - 7) & 1u);
+    return -1;
+}
+
+struct AdmissionSampleEvent {
+    bool leader_sample = false;
+    bool completed_window = false;
+    bool winner_changed = false;
+    uint8_t sampled_arm = ADMIT_GRASP;
+    uint8_t winner_before = ADMIT_GRASP;
+    uint8_t winner_after = ADMIT_GRASP;
+};
+
+class OnlineAdmissionSelector {
+  public:
+    uint8_t armForSet(size_t set_index) const {
+        if (trained_.load(std::memory_order_relaxed))
+            return winner_.load(std::memory_order_relaxed);
+        const int leader = admissionLeaderArm(set_index);
+        return leader >= 0
+            ? static_cast<uint8_t>(leader)
+            : winner_.load(std::memory_order_relaxed);
+    }
+
+    AdmissionSampleEvent recordAccess(size_t set_index, bool missed) {
+        AdmissionSampleEvent event;
+        event.winner_before = winner_.load(std::memory_order_relaxed);
+        event.winner_after = event.winner_before;
+        if (trained_.load(std::memory_order_relaxed)) return event;
+        const int leader = admissionLeaderArm(set_index);
+        if (leader < 0) return event;
+        const size_t arm = static_cast<size_t>(leader);
+        event.leader_sample = true;
+        event.sampled_arm = static_cast<uint8_t>(leader);
+        accesses_[arm].fetch_add(1, std::memory_order_relaxed);
+        total_accesses_[arm].fetch_add(1, std::memory_order_relaxed);
+        if (missed) {
+            misses_[arm].fetch_add(1, std::memory_order_relaxed);
+            total_misses_[arm].fetch_add(1, std::memory_order_relaxed);
+        }
+        sampled_accesses_.fetch_add(1, std::memory_order_relaxed);
+        if (
+                accesses_[ADMIT_GRASP].load(std::memory_order_relaxed) <
+                    kSamplesPerArm ||
+                accesses_[ADMIT_FUTURE].load(std::memory_order_relaxed) <
+                    kSamplesPerArm)
+            return event;
+        bool expected = false;
+        if (!window_claimed_.compare_exchange_strong(
+                expected, true, std::memory_order_relaxed))
+            return event;
+        event.completed_window = true;
+
+        std::array<uint64_t, ADMIT_ARM_COUNT> window_accesses{};
+        std::array<uint64_t, ADMIT_ARM_COUNT> window_misses{};
+        for (size_t index = 0; index < ADMIT_ARM_COUNT; ++index) {
+            window_accesses[index] = accesses_[index].exchange(
+                0, std::memory_order_relaxed);
+            window_misses[index] = misses_[index].exchange(
+                0, std::memory_order_relaxed);
+        }
+        uint8_t best = winner_.load(std::memory_order_relaxed);
+        const uint8_t other =
+            best == ADMIT_GRASP ? ADMIT_FUTURE : ADMIT_GRASP;
+        if (window_accesses[best] > 0 && window_accesses[other] > 0) {
+            const uint64_t other_scaled =
+                window_misses[other] * window_accesses[best];
+            const uint64_t best_scaled =
+                window_misses[best] * window_accesses[other];
+            if (other_scaled < best_scaled) best = other;
+        }
+        const uint8_t previous =
+            winner_.exchange(best, std::memory_order_relaxed);
+        completed_windows_.fetch_add(1, std::memory_order_relaxed);
+        trained_.store(true, std::memory_order_relaxed);
+        event.winner_before = previous;
+        event.winner_after = best;
+        event.winner_changed = best != previous;
+        return event;
+    }
+
+    uint8_t winnerArm() const {
+        return winner_.load(std::memory_order_relaxed);
+    }
+
+    uint64_t totalAccesses(uint8_t arm) const {
+        return arm < ADMIT_ARM_COUNT
+            ? total_accesses_[arm].load(std::memory_order_relaxed) : 0;
+    }
+
+    uint64_t totalMisses(uint8_t arm) const {
+        return arm < ADMIT_ARM_COUNT
+            ? total_misses_[arm].load(std::memory_order_relaxed) : 0;
+    }
+
+    uint64_t completedWindows() const {
+        return completed_windows_.load(std::memory_order_relaxed);
+    }
+
+    bool trained() const {
+        return trained_.load(std::memory_order_relaxed);
+    }
+
+    void reset() {
+        for (size_t arm = 0; arm < ADMIT_ARM_COUNT; ++arm) {
+            accesses_[arm].store(0, std::memory_order_relaxed);
+            misses_[arm].store(0, std::memory_order_relaxed);
+            total_accesses_[arm].store(0, std::memory_order_relaxed);
+            total_misses_[arm].store(0, std::memory_order_relaxed);
+        }
+        sampled_accesses_.store(0, std::memory_order_relaxed);
+        completed_windows_.store(0, std::memory_order_relaxed);
+        winner_.store(ADMIT_GRASP, std::memory_order_relaxed);
+        trained_.store(false, std::memory_order_relaxed);
+        window_claimed_.store(false, std::memory_order_relaxed);
+    }
+
+  private:
+    static constexpr uint64_t kSamplesPerArm = 64;
+    std::array<std::atomic<uint64_t>, ADMIT_ARM_COUNT> accesses_{};
+    std::array<std::atomic<uint64_t>, ADMIT_ARM_COUNT> misses_{};
+    std::array<std::atomic<uint64_t>, ADMIT_ARM_COUNT> total_accesses_{};
+    std::array<std::atomic<uint64_t>, ADMIT_ARM_COUNT> total_misses_{};
+    std::atomic<uint64_t> sampled_accesses_{0};
+    std::atomic<uint64_t> completed_windows_{0};
+    std::atomic<uint8_t> winner_{ADMIT_GRASP};
+    std::atomic<bool> trained_{false};
+    std::atomic<bool> window_claimed_{false};
+};
+
+inline OnlineAdmissionSelector& globalOnlineAdmissionSelector() {
+    static OnlineAdmissionSelector selector;
+    return selector;
+}
+
 struct WayState {
     bool     prop;     // property (vertex) line, vs record (edge-stream) line
     uint8_t  rrpv;     // RRIP age (aged in place for variants that age)

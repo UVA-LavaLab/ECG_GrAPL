@@ -104,7 +104,8 @@ int main() {
 
     const char* ve = getenv("ECG_VARIANT");
     std::string var = ve ? ve : "rrip_first";
-    if (var != "tier" && var != "dueling")
+    if (var != "tier" && var != "dueling" &&
+        var != "admission_dueling")
         (void)ecg_policy::parseVariant(ve);
     printf("[test_ecg_victim] ECG_VARIANT=%s\n", var.c_str());
 
@@ -343,6 +344,50 @@ int main() {
         check(L3, "equal future uses coldest tier (way2)",
               {{paddr(0),7,10,10,1},{paddr(1),7,10,20,2},{paddr(2),7,10,30,3},{paddr(3),7,10,40,1},
                {paddr(4),7,10,50,1},{paddr(5),7,10,60,1},{paddr(6),7,10,70,1},{paddr(7),7,10,80,1}}, 2);
+    } else if (var == "admission_dueling") {
+        ecg_policy::OnlineAdmissionSelector selector;
+        size_t leaders[ecg_policy::ADMIT_ARM_COUNT] = {};
+        size_t follower = 0;
+        for (size_t set = 0; set < 100000; ++set) {
+            const int arm = ecg_policy::admissionLeaderArm(set);
+            if (arm >= 0 && leaders[arm] == 0)
+                leaders[arm] = set;
+            else if (arm < 0 && follower == 0)
+                follower = set;
+        }
+        bool changed_to_future = false;
+        for (int sample = 0; sample < 64; ++sample) {
+            selector.recordAccess(
+                leaders[ecg_policy::ADMIT_GRASP], sample < 31);
+        }
+        for (int sample = 0; sample < 64; ++sample) {
+            const auto event = selector.recordAccess(
+                leaders[ecg_policy::ADMIT_FUTURE], sample < 3);
+            changed_to_future =
+                changed_to_future ||
+                (event.completed_window && event.winner_changed &&
+                 event.winner_after == ecg_policy::ADMIT_FUTURE);
+        }
+        selector.recordAccess(leaders[ecg_policy::ADMIT_GRASP], true);
+        const bool ok =
+            leaders[0] != 0 && leaders[1] != 0 && follower != 0 &&
+            changed_to_future && selector.trained() &&
+            selector.completedWindows() == 1 &&
+            selector.armForSet(
+                leaders[ecg_policy::ADMIT_GRASP]) ==
+                ecg_policy::ADMIT_FUTURE &&
+            selector.armForSet(
+                leaders[ecg_policy::ADMIT_FUTURE]) ==
+                ecg_policy::ADMIT_FUTURE &&
+            selector.armForSet(follower) == ecg_policy::ADMIT_FUTURE &&
+            selector.totalAccesses(ecg_policy::ADMIT_GRASP) == 64 &&
+            selector.totalAccesses(ecg_policy::ADMIT_FUTURE) == 64 &&
+            selector.totalMisses(ecg_policy::ADMIT_GRASP) == 31 &&
+            selector.totalMisses(ecg_policy::ADMIT_FUTURE) == 3;
+        printf(
+            "    access-normalized admission windows + winner changes [%s]\n",
+            ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
     } else if (var == "dueling") {
         ecg_policy::OnlineDuelingSelector selector;
         size_t leader[ecg_policy::DUEL_ARM_COUNT] = {};

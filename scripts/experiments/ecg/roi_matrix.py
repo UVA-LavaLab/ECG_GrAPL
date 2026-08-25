@@ -1406,6 +1406,8 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
         "1" if spec.ecg_reuse_admission else "0")
     env["ECG_REUSE_ADMISSION_COMBINED"] = (
         "1" if spec.ecg_combined_admission else "0")
+    env["ECG_REUSE_ADMISSION_ONLINE"] = (
+        "1" if spec.ecg_online_admission else "0")
     env.update({
         "CACHE_ULTRAFAST": "0",
         "CACHE_FAST": "0",
@@ -2527,6 +2529,38 @@ def validate_reuse_admission_activity(
     return valid
 
 
+def validate_online_admission_activity(
+        row: dict[str, Any], required: bool) -> bool:
+    fields = (
+        "ecg_admission_leader_accesses_grasp",
+        "ecg_admission_leader_accesses_future",
+        "ecg_admission_leader_misses_grasp",
+        "ecg_admission_leader_misses_future",
+        "ecg_admission_follower_selections_grasp",
+        "ecg_admission_follower_selections_future",
+        "ecg_admission_completed_windows",
+    )
+    values = {field: int(row.get(field) or 0) for field in fields}
+    if required:
+        leader_fields = fields[:4]
+        valid = (
+            all(values[field] > 0 for field in leader_fields) and
+            values["ecg_admission_completed_windows"] > 0 and
+            (
+                values["ecg_admission_follower_selections_grasp"] +
+                values["ecg_admission_follower_selections_future"]
+            ) > 0 and
+            int(row.get("ecg_reuse_admission_updates") or 0) > 0)
+    else:
+        valid = all(value == 0 for value in values.values())
+    if not valid:
+        mark_row_error(
+            row,
+            "online admission selector activity mismatch: "
+            f"required={int(required)} values={values}")
+    return valid
+
+
 def mark_row_error(row: dict[str, Any], message: str) -> None:
     """Preserve every failing gate instead of replacing the first cause."""
     existing = str(row.get("error") or "").strip()
@@ -3176,6 +3210,15 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "ecg_dueling_completed_windows",
         "ecg_dueling_winner_changes",
         "ecg_reuse_admission_updates",
+        "ecg_admission_leader_accesses_grasp",
+        "ecg_admission_leader_accesses_future",
+        "ecg_admission_leader_misses_grasp",
+        "ecg_admission_leader_misses_future",
+        "ecg_admission_follower_selections_grasp",
+        "ecg_admission_follower_selections_future",
+        "ecg_admission_completed_windows",
+        "ecg_admission_winner_changes",
+        "ecg_admission_final_winner_arm",
         "ecg_dueling_leader_samples_rrip",
         "ecg_dueling_leader_samples_grasp",
         "ecg_dueling_leader_samples_epoch",
@@ -3203,9 +3246,13 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "popt_matrix_stream_columns_simulated",
     ):
         row[key] = data.get(key)
-    validate_reuse_admission_activity(
-        row, spec.ecg_reuse_admission,
-        field="ecg_reuse_admission_updates")
+    if spec.ecg_online_admission:
+        validate_online_admission_activity(row, required=True)
+    else:
+        validate_reuse_admission_activity(
+            row, spec.ecg_reuse_admission,
+            field="ecg_reuse_admission_updates")
+        validate_online_admission_activity(row, required=False)
     fills = row.get("prefetch_fills") or 0
     requests = row.get("prefetch_requests") or 0
     if fills:
@@ -3336,6 +3383,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         "1" if spec.ecg_reuse_admission else "0")
     env["ECG_REUSE_ADMISSION_COMBINED"] = (
         "1" if spec.ecg_combined_admission else "0")
+    env["ECG_REUSE_ADMISSION_ONLINE"] = (
+        "1" if spec.ecg_online_admission else "0")
     array_attribution_requested = (
         args.benchmark == "pr" and
         env.get("GEM5_GRAPH_ARRAY_STATS") == "1")
@@ -3431,6 +3480,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             "1" if spec.ecg_reuse_admission else "0")
         env["ECG_REUSE_ADMISSION_COMBINED"] = (
             "1" if spec.ecg_combined_admission else "0")
+        env["ECG_REUSE_ADMISSION_ONLINE"] = (
+            "1" if spec.ecg_online_admission else "0")
         reuse_plan_depth = transport.reuse_plan_depth if is_reuse_plan_ecg else 0
         if reuse_plan_depth not in (0, 2):
             raise RuntimeError(
@@ -4394,6 +4445,8 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         "1" if spec.ecg_reuse_admission else "0")
     env["ECG_REUSE_ADMISSION_COMBINED"] = (
         "1" if spec.ecg_combined_admission else "0")
+    env["ECG_REUSE_ADMISSION_ONLINE"] = (
+        "1" if spec.ecg_online_admission else "0")
     if args.ecg_isa_variant == "computed":
         env["SNIPER_ECG_MODE"] = "ECG_GRASP_POPT"
         env["ECG_MODE"] = "ECG_GRASP_POPT"
@@ -5297,6 +5350,7 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
         "ecg_flowthrough_adaptive": int(transport.flowthrough_adaptive),
         "ecg_reuse_admission": int(spec.ecg_reuse_admission),
         "ecg_combined_admission": int(spec.ecg_combined_admission),
+        "ecg_online_admission": int(spec.ecg_online_admission),
         "popt_reserve_model": args.popt_reserve_model,
         "policy_label": spec.label,
         "policy": spec.policy,

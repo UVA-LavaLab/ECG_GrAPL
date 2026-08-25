@@ -65,6 +65,7 @@
     "reuse_plan_future_admission_screen": "Three-graph cache_sim kill gate isolating request-bound future-distance admission from neutral recency eviction under symmetric FlowThrough.",
     "reuse_plan_temporal_discrimination": "Degree-identical PageRank controls that separate clustered from spread reader timing so GRASP sees the same degree signal and only the future mask changes.",
     "reuse_plan_temporal_admission_gem5": "Mechanism-only gem5 O3 validation of future-guided admission on the degree-controlled spread-reader graph.",
+    "reuse_plan_online_admission_screen": "Four-graph cache_sim regret gate for access-normalized online selection between GRASP-tier and future-guided admission.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
@@ -323,6 +324,56 @@
       }
     ],
     "temporal_spread_control": [
+      {
+        "name": "temporal-spread-directed-n16",
+        "path": "results/graphs/temporal-reuse/spread-n16.sg",
+        "options_key": "file_all_kernels_preordered",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 0
+      }
+    ],
+    "admission_selector_graphs": [
+      {
+        "name": "web-Google-n16",
+        "path": "results/graphs/web-Google-n16/web-Google-n16.sg",
+        "options_key": "file_all_kernels_root0",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 0
+      },
+      {
+        "name": "soc-pokec-n16",
+        "path": "results/graphs/soc-pokec-n16/soc-pokec-n16.sg",
+        "options_key": "file_all_kernels_root0",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 0
+      },
+      {
+        "name": "cit-Patents-n18-sym",
+        "path": "results/graphs/cit-Patents-n18/cit-Patents-n18-sym.sg",
+        "options_key": "file_all_kernels_root0",
+        "l1d_size": "32kB",
+        "l2_size": "128kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "512kB"
+        ],
+        "structure_prefetch_degree": 0
+      },
       {
         "name": "temporal-spread-directed-n16",
         "path": "results/graphs/temporal-reuse/spread-n16.sg",
@@ -2410,6 +2461,38 @@
         "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
       },
       "notes": "Mechanism-only matched O3 test on the directed spread-reader graph. Both rows use the corrected builder-v2 mask, compact 4-byte FlowThrough records, request-bound ReuseBind, RRIP eligibility/aging, and property-recency eviction. Only future-distance admission/refresh changes. Array-attribution schema 2 separately accounts incoming traversal and outgoing-degree CSR offsets. One architectural record sweep is required; O3 replay may add at most 0.5% record-line misses, while a second sweep remains fail-closed. This synthetic control cannot support a general performance or novelty claim."
+    },
+    {
+      "name": "69b_cache_sim_online_admission_i1",
+      "kind": "roi_matrix",
+      "profiles": [
+        "reuse_plan_online_admission_screen"
+      ],
+      "suite": "cache-sim",
+      "graph_set": "admission_selector_graphs",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "LRU",
+        "GRASP",
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_ONLINE_ADMISSION_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "flowthrough": "all",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "policy_sharding_allowed": false,
+      "out_subdir": "69b_cache_sim_online_admission_i1",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_RECORD_TIER_BITS": "2",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      },
+      "notes": "Pre-registered low-regret gate. Sets 7-14 provide four alternating leaders per arm for GRASP-tier and future-guided admission until each arm has 64 leader accesses; the policy initializes to GRASP, compares access-normalized miss rates, then all sets follow the winner for the rest of the ROI. Both leader arms must receive positive accesses and misses. Online misses and total off-chip traffic must remain within 1.02 of the better static arm on every graph. At least one cell must select each arm in follower sets before detailed-simulator promotion."
     },
     {
       "name": "70_gem5_pagerank_i1",
