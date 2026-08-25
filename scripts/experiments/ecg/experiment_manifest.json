@@ -324,8 +324,8 @@
     ],
     "temporal_spread_control": [
       {
-        "name": "temporal-spread-n16",
-        "path": "results/graphs/temporal-reuse/spread-n16-sym.sg",
+        "name": "temporal-spread-directed-n16",
+        "path": "results/graphs/temporal-reuse/spread-n16.sg",
         "options_key": "file_all_kernels_preordered",
         "l1d_size": "16kB",
         "l2_size": "64kB",
@@ -2408,7 +2408,7 @@
         "GEM5_GRAPH_ARRAY_STATS": "1",
         "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
       },
-      "notes": "Mechanism-only matched O3 test. Both rows use the corrected builder-v2 mask, compact 4-byte FlowThrough records, request-bound ReuseBind, RRIP eligibility/aging, and property-recency eviction. Only future-distance admission/refresh changes. This synthetic control cannot support a general performance or novelty claim."
+      "notes": "Mechanism-only matched O3 test on the directed spread-reader graph. Both rows use the corrected builder-v2 mask, compact 4-byte FlowThrough records, request-bound ReuseBind, RRIP eligibility/aging, and property-recency eviction. Only future-distance admission/refresh changes. Array-attribution schema 2 separately accounts incoming traversal and outgoing-degree CSR offsets. This synthetic control cannot support a general performance or novelty claim."
     },
     {
       "name": "70_gem5_pagerank_i1",
