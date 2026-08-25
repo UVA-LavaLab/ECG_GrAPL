@@ -64,6 +64,7 @@
     "reuse_plan_rrip_recency_attribution": "One cit-Patents-n18-sym i=1 O3 cell comparing RRIP epoch ranking against neutral property recency and positional controls.",
     "reuse_plan_future_admission_screen": "Three-graph cache_sim kill gate isolating request-bound future-distance admission from neutral recency eviction under symmetric FlowThrough.",
     "reuse_plan_temporal_discrimination": "Degree-identical PageRank controls that separate clustered from spread reader timing so GRASP sees the same degree signal and only the future mask changes.",
+    "reuse_plan_temporal_admission_gem5": "Mechanism-only gem5 O3 validation of future-guided admission on the degree-controlled spread-reader graph.",
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
@@ -308,6 +309,20 @@
         ],
         "structure_prefetch_degree": 0
       },
+      {
+        "name": "temporal-spread-n16",
+        "path": "results/graphs/temporal-reuse/spread-n16.sg",
+        "options_key": "file_all_kernels_preordered",
+        "l1d_size": "16kB",
+        "l2_size": "64kB",
+        "l3_ways": "16",
+        "l3_sizes": [
+          "128kB"
+        ],
+        "structure_prefetch_degree": 0
+      }
+    ],
+    "temporal_spread_control": [
       {
         "name": "temporal-spread-n16",
         "path": "results/graphs/temporal-reuse/spread-n16.sg",
@@ -2359,6 +2374,41 @@
         "ECG_EXPECT_BYTES_PER_EDGE": "4"
       },
       "notes": "Mechanism discrimination, not a performance claim. Both graphs have 65,536 vertices, degree eight at every vertex, and 524,288 directed edges. Clustered readers are adjacent in the preserved vertex sweep; spread readers are separated by one eighth of the graph. GRASP receives the same degree distribution in both cells. This stage isolates eviction ranking; admission is evaluated on the real-graph stage because clustered reuse is absorbed by private caches and produces no LLC admission updates. A future-mask policy must respond to the timing change while preserving exact semantics and symmetric FlowThrough."
+    },
+    {
+      "name": "69_gem5_temporal_admission_i1",
+      "kind": "roi_matrix",
+      "profiles": [
+        "reuse_plan_temporal_admission_gem5"
+      ],
+      "suite": "gem5",
+      "graph_set": "temporal_spread_control",
+      "benchmarks": [
+        "pr"
+      ],
+      "policies": [
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "ecg_charged": 1,
+      "ecg_epochs": 32,
+      "ecg_isa_variant": "computed",
+      "gem5_cpu_type": "O3",
+      "gem5_compact_reuse_bind_performance": true,
+      "policy_sharding_allowed": false,
+      "out_subdir": "69_gem5_temporal_admission_i1",
+      "timeout_gem5": 86400,
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "ECG_RECORD_TIER_BITS": "2",
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4",
+        "GEM5_GRAPH_ARRAY_STATS": "1",
+        "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
+      },
+      "notes": "Mechanism-only matched O3 test. Both rows use the corrected builder-v2 mask, compact 4-byte FlowThrough records, request-bound ReuseBind, RRIP eligibility/aging, and property-recency eviction. Only future-distance admission/refresh changes. This synthetic control cannot support a general performance or novelty claim."
     },
     {
       "name": "70_gem5_pagerank_i1",

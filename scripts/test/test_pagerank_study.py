@@ -667,6 +667,31 @@ def test_temporal_discrimination_holds_degree_constant():
         stage["policies"])
 
 
+def test_temporal_admission_gem5_is_matched_and_mechanism_only():
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    stages = [
+        stage for stage in manifest["stages"]
+        if "reuse_plan_temporal_admission_gem5" in
+        stage.get("profiles", [])
+    ]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["name"] == "69_gem5_temporal_admission_i1"
+    assert stage["suite"] == "gem5"
+    assert stage["graph_set"] == "temporal_spread_control"
+    assert stage["gem5_cpu_type"] == "O3"
+    assert stage["gem5_compact_reuse_bind_performance"] is True
+    assert stage["policy_sharding_allowed"] is False
+    assert stage["policies"] == [
+        "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
+        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
+    ]
+    assert stage["env"]["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
+    assert stage["env"]["GEM5_REUSE_PLAN_COVERAGE_REQUIRED"] == "1"
+    assert "cannot support a general performance or novelty claim" in (
+        stage["notes"])
+
+
 def test_cache_sim_mode_receipt_survives_graph_context_lifetime():
     cache = (
         ROOT / "bench/include/cache_sim/cache_sim.h").read_text()
