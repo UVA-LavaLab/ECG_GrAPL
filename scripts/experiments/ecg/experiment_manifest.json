@@ -2344,9 +2344,7 @@
         "LRU",
         "GRASP",
         "ECG:REUSE_PLAN_RRIP_NO_EPOCH_RECENCY_FLOWTHROUGH",
-        "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH",
-        "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH",
-        "ECG:REUSE_PLAN_ADMISSION_FLOWTHROUGH"
+        "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH"
       ],
       "prefetcher": "none",
       "flowthrough": "all",
@@ -2360,7 +2358,7 @@
         "ECG_RECORD_VARIABLE_WIDTH": "1",
         "ECG_EXPECT_BYTES_PER_EDGE": "4"
       },
-      "notes": "Mechanism discrimination, not a performance claim. Both graphs have 65,536 vertices, degree eight at every vertex, and 524,288 directed edges. Clustered readers are adjacent in the preserved vertex sweep; spread readers are separated by one eighth of the graph. GRASP receives the same degree distribution in both cells. A future-mask policy must respond to the timing change while preserving exact semantics and symmetric FlowThrough."
+      "notes": "Mechanism discrimination, not a performance claim. Both graphs have 65,536 vertices, degree eight at every vertex, and 524,288 directed edges. Clustered readers are adjacent in the preserved vertex sweep; spread readers are separated by one eighth of the graph. GRASP receives the same degree distribution in both cells. This stage isolates eviction ranking; admission is evaluated on the real-graph stage because clustered reuse is absorbed by private caches and produces no LLC admission updates. A future-mask policy must respond to the timing change while preserving exact semantics and symmetric FlowThrough."
     },
     {
       "name": "70_gem5_pagerank_i1",

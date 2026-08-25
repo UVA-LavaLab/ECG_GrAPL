@@ -663,7 +663,7 @@ def test_temporal_discrimination_holds_degree_constant():
     assert stage["policy_sharding_allowed"] is False
     assert "GRASP receives the same degree distribution" in stage["notes"]
     assert "ECG:REUSE_PLAN_FUTURE_TIER_FLOWTHROUGH" in stage["policies"]
-    assert "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH" in (
+    assert "ECG:REUSE_PLAN_RECENCY_ADMISSION_FLOWTHROUGH" not in (
         stage["policies"])
 
 
