@@ -154,6 +154,23 @@ from the generic build and run receipts.
 python3 -m pytest -q scripts/test
 ```
 
+Regenerate and validate the public architecture figures separately:
+
+```bash
+python3 scripts/docs/generate_ecg_figures.py
+python3 scripts/docs/generate_ecg_figures.py --check
+python3 scripts/docs/check_wiki_figures.py
+```
+
+The generator emits both `fig/wiki/**/*.svg` and matching uncompressed
+`fig/wiki_src/**/*.drawio` files from one declaration. Fixture-backed mechanism
+values, including the graph view and cache-line reuse timeline, come from
+`fig/ecg-figure-fixture.json`.
+
+Use the [architecture guide](ReusePlan-FlowThrough), the
+[RISC-V request path](RISC-V-Instruction-Path), and the
+[evidence boundary](Evaluation-Methodology) to interpret the generated plates.
+
 ## 4. Inspect the PageRank study
 
 ```bash

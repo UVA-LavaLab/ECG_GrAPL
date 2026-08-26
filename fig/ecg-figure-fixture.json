@@ -1,0 +1,33 @@
+{
+  "schema": "ecg-figure-fixture/v1",
+  "num_vertices": 32,
+  "epoch_count": 32,
+  "hot_fraction": 0.15,
+  "property_base": 2147483648,
+  "property_element_bytes": 4,
+  "cache_line_bytes": 64,
+  "source_to_internal": [1, 3, 6, 7, 8, 11, 15, 18, 20],
+  "weighted_undirected_edges": [
+    [0, 1, 2],
+    [0, 2, 5],
+    [0, 8, 9],
+    [1, 2, 1],
+    [1, 4, 4],
+    [2, 3, 2],
+    [2, 4, 3],
+    [2, 8, 7],
+    [3, 4, 2],
+    [3, 5, 5],
+    [4, 5, 1],
+    [4, 7, 5],
+    [5, 6, 2],
+    [5, 7, 3],
+    [6, 7, 2],
+    [6, 8, 4],
+    [7, 8, 1]
+  ],
+  "tracked_edge": {
+    "source_reader": 4,
+    "source_destination": 7
+  }
+}

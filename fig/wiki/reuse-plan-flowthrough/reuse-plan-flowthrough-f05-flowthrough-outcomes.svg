@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1280" viewBox="0 0 1200 1280" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">FlowThrough changes LLC allocation, not lookup or service</title>
+  <desc id="desc">A FlowThrough record request uses normal translation, private caches, LLC tag lookup, miss service, and response. An LLC hit remains a hit. For an LLC miss, an all-no-allocate MSHR skips the LLC fill while mixed targets retain allocation because gem5 combines allocOnFill with OR.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1280" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">FlowThrough changes LLC allocation, not lookup or service</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The important corner case is an MSHR shared with an allocating target.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">UNCHANGED FRONT HALF</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">record request uses the normal memory hierarchy</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3"/>
+  <rect x="24" y="180" width="270" height="205" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="209" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Load queue</text>
+  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">ordering + replay</text>
+  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">size and request role</text>
+  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">FlowThrough flag</text>
+  <rect x="318" y="180" width="270" height="205" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="334" y="209" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">D-TLB + L1D</text>
+  <text x="334" y="239" text-anchor="start" class="sans body" fill="#27313A">normal translation</text>
+  <text x="334" y="263" text-anchor="start" class="sans body" fill="#27313A">private hit is normal</text>
+  <text x="334" y="287" text-anchor="start" class="sans body" fill="#27313A">private fill is normal</text>
+  <rect x="612" y="180" width="270" height="205" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="628" y="209" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">L2 + LLC tags</text>
+  <text x="628" y="239" text-anchor="start" class="sans body" fill="#27313A">normal lookup</text>
+  <text x="628" y="263" text-anchor="start" class="sans body" fill="#27313A">LLC hit returns normally</text>
+  <text x="628" y="287" text-anchor="start" class="sans body" fill="#27313A">miss allocates an MSHR</text>
+  <rect x="906" y="180" width="270" height="205" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="922" y="209" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Memory response</text>
+  <text x="922" y="239" text-anchor="start" class="sans body" fill="#27313A">ordinary line fetch</text>
+  <text x="922" y="263" text-anchor="start" class="sans body" fill="#27313A">ordinary response path</text>
+  <text x="922" y="287" text-anchor="start" class="sans body" fill="#27313A">destination writes back</text>
+  <circle cx="44" cy="430" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <text x="44" y="436" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="437" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">THREE LLC OUTCOMES</text>
+  <text x="1158" y="436" text-anchor="end" class="sans body" fill="#9AA3AD">only the returning miss fill reaches the allocation gate</text>
+  <line x1="24" y1="456" x2="1176" y2="456" stroke="#B45309" stroke-width="3"/>
+  <rect x="24" y="472" width="360" height="245" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="501" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">LLC hit</text>
+  <text x="40" y="531" text-anchor="start" class="sans body" fill="#27313A">existing line supplies the record</text>
+  <text x="40" y="555" text-anchor="start" class="sans body" fill="#27313A">no memory request</text>
+  <text x="40" y="579" text-anchor="start" class="sans body" fill="#27313A">no fill allocation decision</text>
+  <text x="40" y="603" text-anchor="start" class="sans body" fill="#27313A">FlowThrough does not bypass the hit</text>
+  <rect x="420" y="472" width="360" height="245" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="436" y="501" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">LLC miss: all targets no-allocate</text>
+  <text x="436" y="531" text-anchor="start" class="sans body" fill="#27313A">memory fetch completes normally</text>
+  <text x="436" y="555" text-anchor="start" class="sans body" fill="#27313A">private caches receive the line</text>
+  <text x="436" y="579" text-anchor="start" class="sans body" fill="#27313A">MSHR allocOnFill remains false</text>
+  <text x="436" y="603" text-anchor="start" class="sans body" fill="#27313A">returning line is not inserted in LLC</text>
+  <rect x="816" y="472" width="360" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="832" y="501" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">LLC miss: mixed MSHR targets</text>
+  <text x="832" y="531" text-anchor="start" class="sans body" fill="#27313A">one target requires allocation</text>
+  <text x="832" y="555" text-anchor="start" class="sans body" fill="#27313A">allocOnFill combines with OR</text>
+  <text x="832" y="579" text-anchor="start" class="sans body" fill="#27313A">the shared returning line is allocated</text>
+  <text x="832" y="603" text-anchor="start" class="sans body" fill="#27313A">no target suppresses a required fill</text>
+  <circle cx="44" cy="762" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="44" y="768" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="769" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">DERIVED PREFETCHES AND PROPERTY LOADS</text>
+  <text x="1158" y="768" text-anchor="end" class="sans body" fill="#9AA3AD">classification remains target-range exact</text>
+  <line x1="24" y1="788" x2="1176" y2="788" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="24" y="804" width="550" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="833" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Derived structural prefetch</text>
+  <text x="40" y="863" text-anchor="start" class="sans body" fill="#27313A">candidate address is checked against active carrier range</text>
+  <text x="40" y="887" text-anchor="start" class="sans body" fill="#27313A">in-range prefetch receives STRUCTURAL_FLOWTHROUGH</text>
+  <text x="40" y="911" text-anchor="start" class="sans body" fill="#27313A">out-of-range candidate does not inherit the bit</text>
+  <text x="40" y="935" text-anchor="start" class="sans body" fill="#27313A">translated prefetch Request carries the exact result</text>
+  <rect x="600" y="804" width="576" height="245" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="833" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Governed property request</text>
+  <text x="616" y="863" text-anchor="start" class="sans body" fill="#27313A">ReuseBind extension is independent of FlowThrough</text>
+  <text x="616" y="887" text-anchor="start" class="sans body" fill="#27313A">property line must remain allocatable</text>
+  <text x="616" y="911" text-anchor="start" class="sans body" fill="#27313A">LLC hit/fill may update tier and epochs</text>
+  <text x="616" y="935" text-anchor="start" class="sans body" fill="#27313A">property data completes normally</text>
+  <path d="M145 1130 L1055 1130" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="suppress LLC insertion only when every coalesced target permits it"/>
+  <text x="600" y="1115" text-anchor="middle" class="sans body" fill="#B45309" font-weight="700">suppress LLC insertion only when every coalesced target permits it</text>
+</svg>

@@ -57,7 +57,7 @@ KERNELS_SNIPER := sg_kernel pr bfs sssp bc cc cc_sv \
 .PHONY: all artifact converter all-sim all-gem5 all-sniper \
 	sim-% gem5-% gem5-m5ops-% gem5-riscv-m5ops-% sniper-% \
 	setup-gem5 setup-gem5-guest-tools setup-sniper test verify clean clean-sim clean-gem5-bin \
-	clean-sniper-bin help
+	clean-sniper-bin generate-wiki-figures check-wiki-figures help
 
 all: all-sim
 
@@ -73,6 +73,8 @@ help:
 	@echo "  make gem5-riscv-m5ops-pr      Build RISC-V ECG PageRank"
 	@echo "  make setup-sniper             Install/build Sniper overlays"
 	@echo "  make sniper-sg_kernel         Build canonical Sniper workload"
+	@echo "  make generate-wiki-figures    Regenerate SVG and Draw.io figures"
+	@echo "  make check-wiki-figures       Validate figure and mirror contract"
 	@echo "  make test                     Run Python artifact tests"
 
 $(BIN_DIR) $(BIN_SIM_DIR) $(BIN_GEM5_DIR) $(BIN_SNIPER_DIR):
@@ -254,6 +256,13 @@ setup-sniper:
 
 test:
 	pytest -q scripts/test
+
+generate-wiki-figures:
+	$(PYTHON) scripts/docs/generate_ecg_figures.py
+
+check-wiki-figures:
+	$(PYTHON) scripts/docs/generate_ecg_figures.py --check
+	$(PYTHON) scripts/docs/check_wiki_figures.py
 
 verify:
 	$(PYTHON) scripts/experiments/ecg/verify/equiv_kernels.py \

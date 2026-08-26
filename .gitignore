@@ -21,7 +21,7 @@ results/models/
 results/data/
 research/
 /test/
-docs/
+/docs/
 plans/
 # gem5 cloned repository (large, managed by scripts/setup_gem5.py)
 bench/include/gem5_sim/gem5/

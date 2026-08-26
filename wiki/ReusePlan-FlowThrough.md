@@ -1,277 +1,219 @@
-# ReusePlan and FlowThrough: Illustrated Design Guide
+# ReusePlan and FlowThrough: Architecture Guide
 
-Graph programs commonly read an edge and then use its destination vertex to
-load a property such as rank, distance, or component ID. The edge stream is
-regular, but the property access is irregular. ReusePlan uses the edge record
-as a small transport channel for information about the property line that will
-be accessed next.
+Graph kernels stream structural records and then use each destination to access
+a vertex property such as score, parent, distance, depth, or component label.
+The structural stream is regular; the property address is irregular.
+ReusePlan carries graph-derived guidance from the structural access to the
+exact property Request. FlowThrough is a separate LLC placement decision.
 
-This page explains the mechanism only. It contains no experimental results;
-final measurements will be published after the evaluation is complete.
+This page owns the construction, wire-format, victim-policy, and placement
+semantics. Instruction and MSHR details belong to the
+[RISC-V instruction path](RISC-V-Instruction-Path).
+It contains no experimental results.
 
-## 1. Design in one figure
+## 1. Offline construction and the ROI boundary
 
-![ReusePlan mechanism overview](assets/reuse-plan-overview.svg)
+### Figure 1 — From a checked reader graph to one edge-aligned ReusePlan
 
-**Figure 1.** End-to-end flow from graph preprocessing to request-bound
-metadata and LLC replacement.
+![Four-band derivation of reader-direction CSR, reuse tiers, future line readers, compact packing, and the sealed offline-to-runtime boundary](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg)
 
-An offline graph pass computes three fields for each governed property line:
+**Figure 1.** Every displayed value is derived from
+`fig/ecg-figure-fixture.json`; the figure never mixes a second convenient
+example into the construction.
 
-1. a coarse reuse tier;
-2. the epoch of its next use; and
-3. the epoch of the following use.
+The builder is kernel-direction aware:
 
-The fields travel with the edge. ReuseBind attaches them to the exact property
-request, and the LLC stores them as replacement metadata. FlowThrough applies
-separately to the edge-record request so a one-touch record can still fill the
-private caches without occupying the LLC after a miss.
+- PageRank pull records follow the incoming-neighbor traversal.
+- The implemented BFS, BC, CC, and SSSP paths follow their outgoing-neighbor
+  traversal.
+- The edge-aligned record offsets must match the corresponding canonical CSR.
 
-![ReusePlan tier and epoch construction](assets/reuseplan-construction.svg)
+Vertices are ranked by the number of property readers in that direction.
+With the default hot fraction `f = 0.15`, the first `floor(f|V|)` vertices in
+stable reader-count order receive tier 1, the next equally sized group tier 2,
+and the rest tier 3. A property line receives the hottest tier among its
+vertices.
 
-The figures use one stage map throughout: **1** graph/CSR mask construction,
-**2** record load, **3** decode and register dependency, **4** property
-instruction, **5** exact Request binding and cache path, and **6** LLC metadata
-and victim selection.
+For every governed edge, the builder searches the reader CSR strictly after
+the current reader. It takes the next two references to any vertex in the
+property line, wraps when necessary, preserves same-reader line reuse, and
+quantizes each reader into the configured epoch space.
 
-The implementation ranks vertices by the number of property readers in the
-selected kernel direction. With the default 15% hot fraction, the top 15% are
-tier 1 (hot), the next 15% are tier 2 (moderate), and the remainder are tier 3
-(cold). A cache line receives the hottest tier among the vertices it contains.
+Record construction is not measured graph execution. Sidecar headers bind the
+graph, configuration, width, ordering, record count, and payload. The guest
+validates these facts before the ROI and aborts on disagreement.
 
-For epochs, the builder sorts each property's readers, starts after the current
-traversal position, and selects the two nearest future readers across the
-property line. A reader position is quantized as
-`floor(reader x epoch_count / vertex_count)`; the search wraps to the next
-traversal when required.
+## 2. Record formats and traffic
 
-## 2. ReusePlan record
+### Figure 2 — ReusePlan wire formats and honest traffic footprints
 
-![ReusePlan record layouts](assets/reuse-plan-record.svg)
+![Bit-level general and compact ReusePlan layouts plus the two weighted SSSP transport choices and their simulated byte footprints](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f02-record-formats.svg)
 
-**Figure 2.** General and compact ReusePlan record encodings.
+**Figure 2.** Format selection changes the real structural bytes and must be
+bound to a runtime width receipt.
 
-The general record contains a 32-bit destination, a 2-bit tier, and two
-15-bit epochs:
+The general unweighted record is fixed:
 
-`destination | tier | epoch1 | epoch2`
+```text
+destination[32] | tier[2] | epoch1[15] | epoch2[15]
+```
 
-For a compact 32-bit record, the graph-specific fields must satisfy
+The compact record is graph-specific:
 
-`id_bits + 2 + 2 x epoch_bits <= 32`.
+```text
+id_bits + 2 + 2*epoch_bits <= 32
+```
 
-The two epochs describe the next two future accesses to the governed property
-line. Two future positions are useful because graph phases and interleaved
-streams can make a single next-use marker fragile.
+Unused upper compact bits are zero/reserved; they are not alignment bits.
+Decode widens a compact value into the canonical 64-bit metadata layout.
 
-The tier is assigned per cache line rather than per vertex. If several
-vertices share a line, the line receives the hottest tier among them. This
-keeps the hint meaningful even when the graph is not physically reordered by
-degree.
+Weighted SSSP has two honest transports:
 
-## 3. Computing future distance by hand
+- a compact 64-bit substitute with 24-bit destination, 8-bit positive weight,
+  tier, and two 15-bit epochs; or
+- the ordinary weighted edge plus a 32-bit tier/epoch sidecar.
 
-Let the traversal have `N` circular epochs, let `c` be the current epoch, and
-let `e` be a delivered future epoch:
+The latter costs edge bytes plus four metadata bytes. A comparison must not
+erase the weight or sidecar traffic.
 
-`distance(e, c) = (e + N - (c mod N)) mod N`.
+## 3. Future distance
 
-ReusePlan uses the nearer of the two future epochs:
+### Figure 3 — Checked cache-line reuse timeline and circular distance
 
-`ReusePlan distance = min(distance(epoch1, c), distance(epoch2, c))`.
+![Checked horizontal timeline for property line 0x80000040 showing current internal reader 8, future readers 11 and 15, circular distance, and rrip_first interpretation](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg)
 
-The values in the following example are illustrative rather than measured.
+**Figure 3.** The same checked graph now exposes time: the line containing
+internal properties 18 and 20 is read at internal readers
+`1, 6, 8, 11, 15, 18, 20`.
 
-![Worked ReusePlan reuse example](assets/reuse-plan-example.svg)
+For epoch `e`, current epoch `c`, and epoch count `N`:
 
-**Figure 3.** Hand calculation of the nearest future reuse for three lines.
+```text
+distance(e,c) = (e + N - (c mod N)) mod N
+ReusePlan distance = min(distance(epoch1,c), distance(epoch2,c))
+```
 
-In the illustrative example, line B is needed later than lines A and C. If all
-three lines are equally eligible under RRIP, ReusePlan chooses B as the victim
-because its nearest future use is farthest away.
+Malformed or out-of-range payloads are clamped before use. An unstamped
+property line has effective distance zero, so only a live stamp participates
+in future-distance ranking. A payload count of one preserves single-epoch
+behavior; the minimum of two distances is used only when two epochs are live.
 
-## 4. Replacement decision
+For the tracked record at current reader/epoch 8, `epoch1=11` and `epoch2=15`,
+so the two distances are 3 and 7 and the stored pair contributes nearest
+distance 3.
 
-The default static policy is **RRIP-first ReusePlan**:
+## 4. LLC state and victim selection
 
-1. use RRIP to find lines that are already strong eviction candidates;
-2. among those candidates, evict an old edge-record line before a property
-   line;
-3. if only property lines remain, evict the line whose nearest ReusePlan reuse
-   is farthest away;
-4. age RRIP state and repeat when no line is yet eligible.
-
-A small hand-worked set illustrates the ordering:
-
-| Way | Type | RRPV | ReusePlan distance | Decision |
-|---|---|---:|---:|---|
-| A | property | 7 | 2 | keep |
-| B | property | 7 | 10 | evict |
-| C | property | 5 | 20 | not yet RRIP-eligible |
-| D | property | 7 | 1 | keep |
-
-Although C has the most distant future use, RRIP does not yet consider it
-eligible. ReusePlan refines RRIP; it does not discard RRIP's recency state.
-
-The code also contains an online selector that compares RRIP-first, GRASP,
-epoch-first, degree-first, and LRU leader sets. That selector is useful for
-studying phase changes, but the static RRIP-first policy is the primary design.
-Per-arm leader, winner-window, and follower counters expose what the selector
-actually chose. cache_sim can rotate the leader-set colors to detect a
-set-index artifact; a cache_sim winner must still transfer to gem5 O3 because
-the functional model does not contain gem5's complete LLC request stream.
-
-Admission selection is a separate two-arm experiment. Generation 1 used four
-fixed leader colors per arm and failed because its sampled winner disagreed
-with the better full-cache arm. Generation 2 evenly disperses eight colors per
-arm, reserves exactly 64 completed samples for each arm, and exposes
-`CACHE_ECG_ADMISSION_SET_OFFSET` for all eight unique rotations. The tracked
-`run_online_admission_color_sweep.py` flow is promoted only if every rotation
-chooses the better static miss arm and stays within 2% of the better static arm
-for both LLC misses and total off-chip traffic on all four declared graphs.
-
-Generation 2 also failed this gate. The directed spread control selected future
-admission in all eight rotations and stayed within 1.018 of the best static
-arm. Each real graph selected the wrong arm in exactly four rotations:
-web-Google reached 1.267 miss and 1.271 traffic regret, soc-pokec reached
-1.120/1.121, and cit-Patents reached 1.139/1.100. This isolates fixed leader
-color as the failure mode: the corrected future mask remains useful in its
-controlled regime, but this selector is not eligible for gem5 or Sniper
-performance integration.
-
-An experimental admission diagnostic maps the first delivered future-use
-epoch monotonically into RRPV on LLC fill and hit while retaining RRIP-first
-eviction. It is not a primary policy or a performance claim.
-
-Two attribution-only controls isolate victim-rule components:
-
-- `record_lru` keeps epoch-first's records-first ordering, then uses property
-  recency with no epoch ranking.
-- `rrip_no_epoch` keeps RRIP-first eligibility, aging, and records-first
-  ordering, but resolves property ties by set position.
-- `rrip_no_epoch_recency` keeps the same RRIP-first mechanics and resolves
-  property ties by last-touch recency, providing the neutral epoch-information
-  control.
-- `future_tier_first` is the combined-mask arm: RRIP and records-first
-  eligibility remain primary, then property candidates use future distance,
-  carried tier when epochs tie, and recency as the final fallback.
-
-These controls are decomposition tools, not proposed policies.
-
-## 5. ReuseBind property loads
-
-ReuseBind is the instruction family that attaches a ReusePlan to the exact
-property request. It supports both a normal software-computed address and a
-fused indexed address.
-
-| Instruction | Purpose |
-|---|---|
-| `ecg.plan.load[.compact]` | Load a ReusePlan record with ordinary cache placement |
-| `ecg.flow.load[.compact]` | Load a ReusePlan record with FlowThrough placement |
-| `ecg.bind.load.*` | Load from a software-computed property address and bind the plan |
-| `ecg.bind.iload.*` | Form the indexed property address and bind the plan in one instruction |
-
-![ECG Next experimental RISC-V instruction family](assets/riscv-instruction-family.svg)
-
-**Figure 4A.** Record acquisition and property-binding instructions have
-separate request roles.
-
-![ReuseBind and FlowThrough through the O3 pipeline](assets/reuse-plan-cpu-pipeline.svg)
-
-**Figure 4B.** Five correlated columns follow the record result through decode,
-the property instruction, exact Request construction, LLC metadata, and
-completion.
-
-The [detailed RISC-V instruction path](RISC-V-Instruction-Path) explains the
-operand dependencies, address generation, LSQ state, request extensions,
-cache actions, and completion rules shown in these figures.
-The [property-to-cache walkthrough](Property-to-Cache-Walkthrough) follows one
-numeric example through the same path and then shows where every mode differs.
-
-The canonical computed-address path has separate record and property loads:
-
-1. `ecg.flow.load` reads the ReusePlan record and carries the FlowThrough
-   no-allocate bit.
-2. Software computes the property address from the destination.
-3. `ecg.bind.load.*` waits for both the address and ReusePlan metadata, then
-   enters the load/store unit.
-4. The load/store unit creates a normal load request and attaches the ReuseBind
-   extension before the request enters the data-cache hierarchy.
-5. The property data returns through normal completion and writeback.
-
-No shared mailbox or later address lookup is needed to associate the hint with
-the property line.
-
-## 6. FlowThrough placement
-
-![FlowThrough cache path](assets/flowthrough-path.svg)
-
-**Figure 5.** The full CPU-to-memory path and separate LLC outcomes show that the
-FlowThrough flag survives the load queue and MSHR, preserves private-cache
-fills and LLC hits, and controls only the LLC insertion gate after a record
-miss.
-
-FlowThrough changes only what happens after an edge-record miss:
-
-- private-cache hits behave normally;
-- LLC hits behave normally;
-- an LLC miss fetches the record and fills the private cache;
-- the returning record is not inserted into the LLC.
-
-The property request is never bypassed. ReusePlan metadata still reaches the
-property line and participates in replacement.
-
-## 7. Hardware state
-
-ReusePlan does not reserve LLC data ways. Its hardware cost is metadata and
-control:
-
-- two epoch fields and a tier for a governed property line;
-- a validity/count field;
-- request metadata for ReuseBind;
-- one FlowThrough placement bit;
-- optional counters for online policy selection.
-
-The evaluation treats data-capacity and metadata-area costs separately. A design
-with no reserved data ways is not a zero-cost design.
-
-## 8. Simulator mapping
-
-| Simulator | Purpose |
-|---|---|
-| **gem5 O3** | Architectural timing and request-bound ReuseBind behavior |
-| **cache_sim** | Functional replacement behavior and memory traffic |
-| **Sniper** | Larger-scale cache and traffic trends |
-
-All three use the same replacement-policy implementation. Their delivery and
-timing models differ, so absolute miss rates are not compared across
-simulators. Timing claims are based only on gem5 O3.
-
-## 9. Evaluation methodology
-
-The PageRank study uses deterministic samples of web-Google, soc-pokec, and
-cit-Patents, with several iteration counts. The comparison includes LRU,
-GRASP, P-OPT controls, ReusePlan with an LRU replacement control, static RRIP-first
-ReusePlan, and the online ReusePlan variant.
-
-The primary quantities are:
-
-1. gem5 O3 execution time; and
-2. total off-chip traffic, including demand, prefetch, metadata, and writeback
-   traffic.
-
-Each comparison uses a matching baseline from the same build and experiment
-cell. Instruction count is reported with time so a complete-design improvement
-is not confused with a replacement-only improvement.
-
-The current analytic P-OPT model charges its reserved LLC capacity and matrix
-traffic but does not model matrix-stream latency. It is therefore an optimistic
-bound, not a realistic P-OPT timing implementation.
-
-## 10. Continue reading
-
-- [Evaluation methodology](Evaluation-Methodology)
-- [Property-to-cache walkthrough](Property-to-Cache-Walkthrough)
-- [Related work roster](Related-Work)
-- [Build and reproduction guide](Reproduction)
-- [Exact PageRank experiment specification](https://github.com/UVA-LavaLab/ECG_GrAPL/blob/main/scripts/experiments/ecg/configs/pagerank_study.json)
+### Figure 4 — LLC metadata lifecycle and rrip_first victim pipeline
+
+![Four-band LLC architecture showing Request acceptance, line-local metadata, RRIP eligibility, structural preference, epoch ranking, and controlled variants](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f04-llc-policy-pipeline.svg)
+
+**Figure 4.** Request acceptance, metadata lifetime, insertion/refresh, and
+victim ordering are distinct state transitions.
+
+An LLC hit or fill accepts ReuseBind only when the extension is valid, the
+execution context is nonzero, and the destination maps to the accessed
+property line. Conflicted or mismatched metadata never becomes a live line
+stamp. Invalidation clears the tier, epochs, context, count, and stamp-valid
+state.
+
+The default static rule is `rrip_first`:
+
+1. age until at least one way reaches `rrpvMax`;
+2. within that eligible set, select the oldest structural/non-property line;
+3. if only property lines remain, select the farthest effective ReusePlan
+   distance; and
+4. use stable set order for an exact remaining tie.
+
+This is the shared `ecg_policy::selectVictim` decision used by thin cache_sim,
+gem5, and Sniper adapters. Delivery, cache populations, timing, and native line
+state still differ across the simulators.
+
+`grasp_only`, `epoch_first`, `degree_first`, `shortcircuit`, `lru_only`, and
+the no-epoch controls are explicit ablations. The two online-selector
+generations failed their representativeness/regret gates and are not promoted
+to gem5 or Sniper performance policies. Admission diagnostics are separate
+from victim selection.
+
+## 5. FlowThrough cache behavior
+
+### Figure 5 — FlowThrough changes LLC allocation, not lookup or service
+
+![Detailed FlowThrough hierarchy showing ordinary hits, all-no-allocate misses, mixed MSHR targets, exact derived-prefetch classification, and normal property requests](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f05-flowthrough-outcomes.svg)
+
+**Figure 5.** The no-allocate decision is target-level and combines safely
+when several requests share an MSHR.
+
+FlowThrough preserves:
+
+- normal address translation and load ordering;
+- L1D, L2, and LLC tag lookup;
+- all cache hits;
+- memory miss service and response;
+- private-cache fills; and
+- architectural writeback and retirement.
+
+On an LLC miss, a FlowThrough target contributes `allocOnFill=false`. gem5's
+MSHR target list combines allocation requirements with logical OR. Therefore:
+
+- an MSHR containing only no-allocate targets skips the LLC fill; but
+- a mixed MSHR still allocates when any coalesced target requires the line.
+
+A derived prefetch receives structural FlowThrough only when its own target
+address remains inside the active structural-carrier range. The property
+Request is never assigned FlowThrough.
+
+## 6. Design mechanism versus symmetric fairness
+
+### Figure 6 — Design FlowThrough and symmetric structural fairness
+
+![Comparison of request-specific ReusePlan FlowThrough and the policy-independent structural fairness control across baseline CSR and packed substitute carriers](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-structural-fairness.svg)
+
+**Figure 6.** The two switches answer different experimental questions.
+
+`ECG_FLOWTHROUGH` is the design mechanism attached by `ecg.flow.load*` to a
+ReusePlan record Request. It may also use the separate adaptive placement
+diagnostic.
+
+`--flowthrough all` is the fairness control. It enables
+`STRUCTURAL_FLOWTHROUGH` and publishes the actual active structural carrier
+for every policy:
+
+- CSR for LRU, GRASP, and P-OPT;
+- the packed substitute when ReusePlan replaces CSR at runtime; or
+- CSR when a candidate record path falls back.
+
+cache_sim requires positive structural accesses, gem5 positive no-allocate
+miss targets, and Sniper positive structural read/fill events. Sniper rejects
+translated-address mode because the current published ranges are virtual.
+
+Neither switch removes bytes, hides latency, or proves a better victim rule.
+
+## 7. Instruction crosswalk
+
+The cache mechanisms are reached through four experimental instruction roles:
+
+- `ecg.plan.load` and the weighted Plan form acquire general/sidecar records
+  with ordinary placement; there is no compact Plan-load encoding;
+- `ecg.flow.load*` acquires general, compact, or weighted record data with
+  FlowThrough placement;
+- `ecg.bind.load.*` binds a plan to a computed-address property load; and
+- `ecg.bind.iload.*` combines indexed address generation with binding.
+
+Their operands, O3 stages, Request extension, and MSHR rules are owned by the
+[RISC-V instruction path](RISC-V-Instruction-Path).
+
+## 8. Hardware and evidence boundaries
+
+ReusePlan does not reserve LLC data ways, but it is not free. Governed lines
+store tier, epochs, count/validity, context, and ordinary replacement state.
+Requests and MSHRs carry additional control state. Physical area/energy and
+preprocessing costs must be reported separately from data capacity.
+
+Only gem5 O3 timing is architectural speedup evidence. cache_sim supplies
+functional policy/traffic evidence; Sniper supplies modeled cache/traffic
+direction. Analytic P-OPT time remains optimistic because its target-time
+matrix latency, bandwidth, and queueing are not charged.
+
+Continue with [Evaluation methodology](Evaluation-Methodology) and
+[Build and reproduction](Reproduction).

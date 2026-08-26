@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1140" viewBox="0 0 1200 1140" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">Checked cache-line reuse timeline and circular distance</title>
+  <desc id="desc">A horizontal timeline follows the checked property line 0x80000040 from current reader 8 to future readers 11 and 15. The ReusePlan stores the first two quantized epochs, and rrip_first consults their nearer circular distance only after the line becomes RRIP eligible.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1140" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Checked cache-line reuse timeline and circular distance</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The tracked property line is revisited at internal readers 11 and 15 after 8.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">CHECKED CACHE-LINE TIMELINE</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">one 64-byte line contains property vertices 16..31</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="24" y="180" width="1152" height="340" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="3"/>
+  <line x1="85" y1="340" x2="1115" y2="340" stroke="#27313A" stroke-width="3"/>
+  <line x1="85.0" y1="322" x2="85.0" y2="358" stroke="#9AA3AD" stroke-width="3"/>
+  <circle cx="85.0" cy="340" r="11" fill="#FFFFFF" stroke="#9AA3AD" stroke-width="1"/>
+  <text x="85.0" y="292" text-anchor="middle" class="sans label" fill="#9AA3AD" font-weight="700">0</text>
+  <line x1="350.80645161290323" y1="322" x2="350.80645161290323" y2="358" stroke="#B45309" stroke-width="3"/>
+  <circle cx="350.80645161290323" cy="340" r="11" fill="#FFFFFF" stroke="#B45309" stroke-width="1"/>
+  <text x="350.80645161290323" y="395" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">8</text>
+  <line x1="450.48387096774195" y1="322" x2="450.48387096774195" y2="358" stroke="#15803D" stroke-width="3"/>
+  <circle cx="450.48387096774195" cy="340" r="11" fill="#FFFFFF" stroke="#15803D" stroke-width="1"/>
+  <text x="450.48387096774195" y="292" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">11</text>
+  <line x1="583.3870967741935" y1="322" x2="583.3870967741935" y2="358" stroke="#6D5BD0" stroke-width="3"/>
+  <circle cx="583.3870967741935" cy="340" r="11" fill="#FFFFFF" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="583.3870967741935" y="395" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">15</text>
+  <line x1="1115.0" y1="322" x2="1115.0" y2="358" stroke="#9AA3AD" stroke-width="3"/>
+  <circle cx="1115.0" cy="340" r="11" fill="#FFFFFF" stroke="#9AA3AD" stroke-width="1"/>
+  <text x="1115.0" y="292" text-anchor="middle" class="sans label" fill="#9AA3AD" font-weight="700">31</text>
+  <text x="85" y="235" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">line 0x80000040: readers [1, 6, 8, 11, 15, 18, 20]</text>
+  <text x="1115" y="235" text-anchor="end" class="sans label" fill="#B45309" font-weight="700">source 4-&gt;7 / internal 8-&gt;18: e1=11, e2=15</text>
+  <text x="260" y="450" text-anchor="start" class="sans body" fill="#B45309">current reader</text>
+  <text x="505" y="450" text-anchor="start" class="sans body" fill="#15803D">first future line use</text>
+  <text x="860" y="450" text-anchor="start" class="sans body" fill="#6D5BD0">second future line use</text>
+  <text x="600" y="492" text-anchor="middle" class="sans body" fill="#9AA3AD">the two-epoch record captures both future uses of this checked property line</text>
+  <circle cx="44" cy="565" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <text x="44" y="571" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="572" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">CIRCULAR DISTANCE AT THE LLC</text>
+  <text x="1158" y="571" text-anchor="end" class="sans body" fill="#9AA3AD">the current victim-time epoch can advance after fill</text>
+  <line x1="24" y1="591" x2="1176" y2="591" stroke="#15803D" stroke-width="3"/>
+  <rect x="24" y="607" width="550" height="205" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="636" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Checked arithmetic at current epoch 6</text>
+  <text x="40" y="666" text-anchor="start" class="mono body" fill="#27313A">d1 = (11 + 32 - 8) mod 32 = 3</text>
+  <text x="40" y="690" text-anchor="start" class="mono body" fill="#27313A">d2 = (15 + 32 - 8) mod 32 = 7</text>
+  <text x="40" y="714" text-anchor="start" class="mono body" fill="#27313A">nearest = min(3, 7) = 3</text>
+  <text x="40" y="738" text-anchor="start" class="mono body" fill="#27313A">payload count 2 activates both epochs</text>
+  <rect x="600" y="607" width="576" height="205" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="636" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Line-state interpretation</text>
+  <text x="616" y="666" text-anchor="start" class="sans body" fill="#27313A">epochs remain absolute in the cache line</text>
+  <text x="616" y="690" text-anchor="start" class="sans body" fill="#27313A">victim-time current epoch may be later than 6</text>
+  <text x="616" y="714" text-anchor="start" class="sans body" fill="#27313A">unstamped property has effective distance zero</text>
+  <text x="616" y="738" text-anchor="start" class="sans body" fill="#27313A">malformed epochs are clamped before use</text>
+  <circle cx="44" cy="857" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <text x="44" y="863" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="864" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">RRIP-FIRST DECISION</text>
+  <text x="1158" y="863" text-anchor="end" class="sans body" fill="#9AA3AD">timeline ranks properties only after RRIP eligibility</text>
+  <line x1="24" y1="883" x2="1176" y2="883" stroke="#B42318" stroke-width="3"/>
+  <rect x="24" y="899" width="550" height="170" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="928" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Eligible structural line exists</text>
+  <text x="40" y="958" text-anchor="start" class="sans body" fill="#27313A">select the oldest max-RRPV structural line</text>
+  <text x="40" y="982" text-anchor="start" class="sans body" fill="#27313A">property future distance is not consulted</text>
+  <text x="40" y="1006" text-anchor="start" class="sans body" fill="#27313A">this keeps stream pollution separate from property ranking</text>
+  <rect x="600" y="899" width="576" height="170" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="928" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Only eligible property lines remain</text>
+  <text x="616" y="958" text-anchor="start" class="sans body" fill="#27313A">tracked line contributes nearest distance 3</text>
+  <text x="616" y="982" text-anchor="start" class="sans body" fill="#27313A">select the farthest effective stamped distance</text>
+  <text x="616" y="1006" text-anchor="start" class="sans body" fill="#27313A">stable set order resolves an exact remaining tie</text>
+</svg>

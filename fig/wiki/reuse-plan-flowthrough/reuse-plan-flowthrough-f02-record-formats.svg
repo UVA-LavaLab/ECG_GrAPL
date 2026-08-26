@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1150" viewBox="0 0 1200 1150" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">ReusePlan wire formats and honest traffic footprints</title>
+  <desc id="desc">The figure gives the exact unweighted 64-bit layout, the graph-dependent 32-bit compact rule instantiated by the checked fixture, and both weighted SSSP transports: one compact 64-bit edge record or an ordinary weighted edge plus a 32-bit metadata sidecar.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1150" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ReusePlan wire formats and honest traffic footprints</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">General, compact, and weighted layouts are separate transport choices.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">GENERAL UNWEIGHTED RECORD</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">canonical in-memory metadata layout</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="40" y="190" width="531.6129032258065" height="96" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="305.80645161290323" y="236.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">destination</text>
+  <text x="305.80645161290323" y="260.0" text-anchor="middle" class="sans body" fill="#27313A">32 bits</text>
+  <rect x="571.6129032258065" y="190" width="90.0" height="96" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="616.6129032258065" y="236.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">tier</text>
+  <text x="616.6129032258065" y="260.0" text-anchor="middle" class="sans body" fill="#27313A">2 bits</text>
+  <rect x="661.6129032258065" y="190" width="249.19354838709677" height="96" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="786.2096774193549" y="236.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">epoch 1</text>
+  <text x="786.2096774193549" y="260.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
+  <rect x="910.8064516129032" y="190" width="249.19354838709677" height="96" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="1035.4032258064515" y="236.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">epoch 2</text>
+  <text x="1035.4032258064515" y="260.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
+  <text x="40" y="330" text-anchor="start" class="sans body" fill="#27313A">Bits 0..31 destination | bits 32..33 tier | bits 34..48 epoch 1 | bits 49..63 epoch 2</text>
+  <text x="40" y="354" text-anchor="start" class="sans body" fill="#27313A">Tier 1/2/3 means hot/moderate/cold; tier 0 is invalid. Epoch count is at most 2^15.</text>
+  <circle cx="44" cy="405" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <text x="44" y="411" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="412" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">COMPACT 32-BIT RECORD</text>
+  <text x="1158" y="411" text-anchor="end" class="sans body" fill="#9AA3AD">width is derived from graph and epoch configuration</text>
+  <line x1="24" y1="431" x2="1176" y2="431" stroke="#B45309" stroke-width="3"/>
+  <rect x="24" y="447" width="550" height="210" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="476" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Packing condition</text>
+  <text x="40" y="506" text-anchor="start" class="mono body" fill="#27313A">id_bits + 2 tier bits + 2*epoch_bits &lt;= 32</text>
+  <text x="40" y="530" text-anchor="start" class="mono body" fill="#27313A">checked fixture: 5 + 2 + 2*5 = 17</text>
+  <text x="40" y="554" text-anchor="start" class="mono body" fill="#27313A">unused high bits are zero/reserved</text>
+  <text x="40" y="578" text-anchor="start" class="mono body" fill="#27313A">decode widens to the canonical 64-bit value</text>
+  <rect x="600" y="447" width="576" height="210" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="476" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Traffic meaning</text>
+  <text x="616" y="506" text-anchor="start" class="sans body" fill="#27313A">compact record substitutes for one ordinary edge ID</text>
+  <text x="616" y="530" text-anchor="start" class="sans body" fill="#27313A">the simulated stream is 4 bytes per edge</text>
+  <text x="616" y="554" text-anchor="start" class="sans body" fill="#27313A">if fields do not fit, use the wide record or sidecar</text>
+  <text x="616" y="578" text-anchor="start" class="sans body" fill="#27313A">a width receipt must match the materialized container</text>
+  <circle cx="44" cy="702" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <text x="44" y="708" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="709" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">WEIGHTED SSSP TRANSPORTS</text>
+  <text x="1158" y="708" text-anchor="end" class="sans body" fill="#9AA3AD">weight bytes cannot disappear from the comparison</text>
+  <line x1="24" y1="728" x2="1176" y2="728" stroke="#1769C2" stroke-width="3"/>
+  <rect x="24" y="744" width="550" height="285" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="773" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Compact weighted 64-bit substitute</text>
+  <text x="40" y="803" text-anchor="start" class="mono body" fill="#27313A">destination: 24 bits</text>
+  <text x="40" y="827" text-anchor="start" class="mono body" fill="#27313A">positive weight: 8 bits</text>
+  <text x="40" y="851" text-anchor="start" class="mono body" fill="#27313A">tier: 2 bits</text>
+  <text x="40" y="875" text-anchor="start" class="mono body" fill="#27313A">epoch 1 + epoch 2: 15 bits each</text>
+  <text x="40" y="899" text-anchor="start" class="mono body" fill="#27313A">valid only for &lt; 2^24 vertices and weight &lt;= 255</text>
+  <text x="40" y="923" text-anchor="start" class="mono body" fill="#27313A">one 8-byte record replaces the weighted edge</text>
+  <rect x="600" y="744" width="576" height="285" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="773" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">General weighted edge + sidecar</text>
+  <text x="616" y="803" text-anchor="start" class="sans body" fill="#27313A">ordinary weighted edge remains in the structural stream</text>
+  <text x="616" y="827" text-anchor="start" class="sans body" fill="#27313A">parallel 32-bit sidecar stores tier + two 15-bit epochs</text>
+  <text x="616" y="851" text-anchor="start" class="sans body" fill="#27313A">combined logical value still uses canonical ReusePlan fields</text>
+  <text x="616" y="875" text-anchor="start" class="sans body" fill="#27313A">simulated footprint is edge bytes plus 4 sidecar bytes</text>
+  <text x="616" y="899" text-anchor="start" class="sans body" fill="#27313A">FlowThrough roles for edge and sidecar are accounted separately</text>
+</svg>

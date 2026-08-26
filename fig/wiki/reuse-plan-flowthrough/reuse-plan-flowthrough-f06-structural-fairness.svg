@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1000" viewBox="0 0 1200 1000" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">Design FlowThrough and symmetric structural fairness</title>
+  <desc id="desc">The design flag belongs to ReusePlan record requests. The symmetric --flowthrough all control gives LRU, GRASP, P-OPT, and ReusePlan the same no-allocate opportunity on the structural stream each workload actually consumes, with source-specific receipts in all three simulators.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1000" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Design FlowThrough and symmetric structural fairness</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The two switches answer different experimental questions.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">DESIGN MECHANISM</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">ECG_FLOWTHROUGH is attached by ecg.flow.load*</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="24" y="180" width="550" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="209" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">ReusePlan record request</text>
+  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">record can be compact, wide, or weighted sidecar</text>
+  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">request-specific flag is attached by the ISA path</text>
+  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">optional adaptive placement applies only to this stream</text>
+  <text x="40" y="311" text-anchor="start" class="sans body" fill="#27313A">purpose: avoid retaining one-touch metadata records</text>
+  <rect x="600" y="180" width="576" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="209" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">What it does not grant</text>
+  <text x="616" y="239" text-anchor="start" class="sans body" fill="#27313A">it does not bypass the governed property request</text>
+  <text x="616" y="263" text-anchor="start" class="sans body" fill="#27313A">it does not remove record bytes or memory latency</text>
+  <text x="616" y="287" text-anchor="start" class="sans body" fill="#27313A">it does not make P-OPT matrix traffic disappear</text>
+  <text x="616" y="311" text-anchor="start" class="sans body" fill="#27313A">it is not evidence that the victim rule is better</text>
+  <circle cx="44" cy="470" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <text x="44" y="476" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="477" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">SYMMETRIC FAIRNESS CONTROL</text>
+  <text x="1158" y="476" text-anchor="end" class="sans body" fill="#9AA3AD">--flowthrough all is policy-independent</text>
+  <line x1="24" y1="496" x2="1176" y2="496" stroke="#B45309" stroke-width="3"/>
+  <rect x="24" y="512" width="360" height="245" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="541" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Baseline policies</text>
+  <text x="40" y="571" text-anchor="start" class="sans body" fill="#27313A">LRU / GRASP / P-OPT consume CSR</text>
+  <text x="40" y="595" text-anchor="start" class="sans body" fill="#27313A">active carrier range = real edge array</text>
+  <text x="40" y="619" text-anchor="start" class="sans body" fill="#27313A">STRUCTURAL_FLOWTHROUGH no-allocate</text>
+  <text x="40" y="643" text-anchor="start" class="sans body" fill="#27313A">positive activity receipt is required</text>
+  <rect x="420" y="512" width="360" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="436" y="541" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Packed-substitute ReusePlan</text>
+  <text x="436" y="571" text-anchor="start" class="sans body" fill="#27313A">runtime uses record, not edge ID</text>
+  <text x="436" y="595" text-anchor="start" class="sans body" fill="#27313A">active carrier range = record array</text>
+  <text x="436" y="619" text-anchor="start" class="sans body" fill="#27313A">fallback paths publish CSR instead</text>
+  <text x="436" y="643" text-anchor="start" class="sans body" fill="#27313A">carrier selection is fail-closed</text>
+  <rect x="816" y="512" width="360" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="832" y="541" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Backend evidence</text>
+  <text x="832" y="571" text-anchor="start" class="sans body" fill="#27313A">cache_sim: structural access count</text>
+  <text x="832" y="595" text-anchor="start" class="sans body" fill="#27313A">gem5: no-allocate miss targets</text>
+  <text x="832" y="619" text-anchor="start" class="sans body" fill="#27313A">Sniper: structural read/fill counts</text>
+  <text x="832" y="643" text-anchor="start" class="sans body" fill="#27313A">translated Sniper mode is rejected</text>
+  <path d="M110 845 L1090 845" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-label="compare policies only after active structural carriers are matched"/>
+  <text x="600" y="830" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">compare policies only after active structural carriers are matched</text>
+</svg>

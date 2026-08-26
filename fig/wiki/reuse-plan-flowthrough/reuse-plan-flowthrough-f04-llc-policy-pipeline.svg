@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1380" viewBox="0 0 1200 1380" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">LLC metadata lifecycle and rrip_first victim pipeline</title>
+  <desc id="desc">Four bands show how a validated ReuseBind updates line-local metadata on an LLC hit or fill, how invalidation clears it, and how the shared victim policy ages RRPV, prefers an old structural line, and otherwise selects the farthest stamped property among eligible ways.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1380" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">LLC metadata lifecycle and rrip_first victim pipeline</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Line updates, eligibility, structural preference, and epoch ranking are distinct decisions.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">ACCEPT OR REJECT REQUEST METADATA</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">destination line and execution context must agree</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#B42318" stroke-width="3"/>
+  <rect x="24" y="180" width="550" height="225" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="209" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Accepted ReuseBind</text>
+  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">typed Request extension has two epochs</text>
+  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">context ID is nonzero and not conflicted</text>
+  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">destination maps to the accessed property line</text>
+  <text x="40" y="311" text-anchor="start" class="sans body" fill="#27313A">hit or fill may refresh line metadata</text>
+  <rect x="600" y="180" width="576" height="225" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="209" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Rejected metadata</text>
+  <text x="616" y="239" text-anchor="start" class="sans body" fill="#27313A">mixed governed / ungoverned MSHR targets</text>
+  <text x="616" y="263" text-anchor="start" class="sans body" fill="#27313A">requestor or context disagreement</text>
+  <text x="616" y="287" text-anchor="start" class="sans body" fill="#27313A">equal-sequence payload disagreement</text>
+  <text x="616" y="311" text-anchor="start" class="sans body" fill="#27313A">destination-line mismatch or invalid count</text>
+  <circle cx="44" cy="450" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="44" y="456" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="457" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">LINE-LOCAL STATE</text>
+  <text x="1158" y="456" text-anchor="end" class="sans body" fill="#9AA3AD">data value and replacement metadata have different lifetimes</text>
+  <line x1="24" y1="476" x2="1176" y2="476" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="24" y="492" width="550" height="225" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="521" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Governed property line</text>
+  <text x="40" y="551" text-anchor="start" class="mono body" fill="#27313A">valid | property | RRPV | recency</text>
+  <text x="40" y="575" text-anchor="start" class="mono body" fill="#27313A">tier | epoch1 | epoch2 | epoch_count</text>
+  <text x="40" y="599" text-anchor="start" class="mono body" fill="#27313A">context ID and live-stamp validity</text>
+  <text x="40" y="623" text-anchor="start" class="mono body" fill="#27313A">property bytes remain architecturally unchanged</text>
+  <rect x="600" y="492" width="576" height="225" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="521" text-anchor="start" class="sans label" fill="#27313A" font-weight="700">Refresh and invalidation</text>
+  <text x="616" y="551" text-anchor="start" class="sans body" fill="#27313A">accepted hit/fill updates tier and epochs</text>
+  <text x="616" y="575" text-anchor="start" class="sans body" fill="#27313A">ordinary hit still updates native recency/RRIP state</text>
+  <text x="616" y="599" text-anchor="start" class="sans body" fill="#27313A">conflicted metadata does not stamp the line</text>
+  <text x="616" y="623" text-anchor="start" class="sans body" fill="#27313A">invalidation clears tier, epochs, context, and validity</text>
+  <circle cx="44" cy="762" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <text x="44" y="768" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="769" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">RRIP ELIGIBILITY</text>
+  <text x="1158" y="768" text-anchor="end" class="sans body" fill="#9AA3AD">the default variant ages until a way reaches rrpvMax</text>
+  <line x1="24" y1="788" x2="1176" y2="788" stroke="#15803D" stroke-width="3"/>
+  <rect x="24" y="804" width="360" height="225" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="833" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">A. Form candidate set</text>
+  <text x="40" y="863" text-anchor="start" class="sans body" fill="#27313A">keep only ways with RRPV &gt;= rrpvMax</text>
+  <text x="40" y="887" text-anchor="start" class="sans body" fill="#27313A">if empty: increment lower RRPVs</text>
+  <text x="40" y="911" text-anchor="start" class="sans body" fill="#27313A">repeat until a candidate exists</text>
+  <text x="40" y="935" text-anchor="start" class="sans body" fill="#27313A">recency remains an independent field</text>
+  <rect x="420" y="804" width="360" height="225" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="436" y="833" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">B. Prefer structural candidate</text>
+  <text x="436" y="863" text-anchor="start" class="sans body" fill="#27313A">among eligible non-property ways</text>
+  <text x="436" y="887" text-anchor="start" class="sans body" fill="#27313A">select oldest by normalized recency</text>
+  <text x="436" y="911" text-anchor="start" class="sans body" fill="#27313A">records and CSR are structural</text>
+  <text x="436" y="935" text-anchor="start" class="sans body" fill="#27313A">property epochs do not rank these ways</text>
+  <rect x="816" y="804" width="360" height="225" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="832" y="833" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">C. Rank property candidates</text>
+  <text x="832" y="863" text-anchor="start" class="sans body" fill="#27313A">effective distance = zero if unstamped</text>
+  <text x="832" y="887" text-anchor="start" class="sans body" fill="#27313A">else min(d(epoch1), d(epoch2))</text>
+  <text x="832" y="911" text-anchor="start" class="sans body" fill="#27313A">select the farthest effective distance</text>
+  <text x="832" y="935" text-anchor="start" class="sans body" fill="#27313A">set order resolves an exact tie</text>
+  <circle cx="44" cy="1074" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <text x="44" y="1080" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>
+  <text x="74" y="1081" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">VARIANTS ARE CONTROLLED ABLATIONS</text>
+  <text x="1158" y="1080" text-anchor="end" class="sans body" fill="#9AA3AD">do not blend their ordering into the primary claim</text>
+  <line x1="24" y1="1100" x2="1176" y2="1100" stroke="#B42318" stroke-width="3"/>
+  <rect x="24" y="1116" width="550" height="185" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="1145" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Primary and neutral controls</text>
+  <text x="40" y="1175" text-anchor="start" class="sans body" fill="#27313A">rrip_first: eligibility -&gt; structural -&gt; farthest epoch</text>
+  <text x="40" y="1199" text-anchor="start" class="sans body" fill="#27313A">grasp_only: pure RRIP</text>
+  <text x="40" y="1223" text-anchor="start" class="sans body" fill="#27313A">rrip_no_epoch: same gate, fixed property tie</text>
+  <text x="40" y="1247" text-anchor="start" class="sans body" fill="#27313A">rrip_no_epoch_recency: same gate, property LRU</text>
+  <rect x="600" y="1116" width="576" height="185" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="1145" text-anchor="start" class="sans label" fill="#27313A" font-weight="700">Other experiment variants</text>
+  <text x="616" y="1175" text-anchor="start" class="sans body" fill="#27313A">epoch_first | degree_first | shortcircuit | lru_only</text>
+  <text x="616" y="1199" text-anchor="start" class="sans body" fill="#27313A">future_tier_first combines future, tier, then recency</text>
+  <text x="616" y="1223" text-anchor="start" class="sans body" fill="#27313A">online selectors are failed diagnostics, not primary policy</text>
+  <text x="616" y="1247" text-anchor="start" class="sans body" fill="#27313A">admission diagnostics are separate from victim selection</text>
+</svg>

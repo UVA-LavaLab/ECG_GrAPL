@@ -13,7 +13,9 @@ tests, and public documentation only.
 - versioned experiment configurations under
   `scripts/experiments/ecg/configs/`;
 - tests under `scripts/test/`;
-- README, wiki pages, SVG figures, Makefile, and contribution guidance.
+- README, wiki pages, generated SVG figures, editable Draw.io mirrors,
+  `fig/ecg-figure-fixture.json`, figure generators/validators, Makefile, and
+  contribution guidance.
 
 ## Keep these files local
 
@@ -41,7 +43,10 @@ The build and experiment commands are in [Reproduction](Reproduction).
 ```bash
 python3 -m pytest -q \
   scripts/test/test_repository_hygiene.py \
-  scripts/test/test_public_docs.py
+  scripts/test/test_public_docs.py \
+  scripts/test/test_wiki_figures.py
+python3 scripts/docs/generate_ecg_figures.py --check
+python3 scripts/docs/check_wiki_figures.py
 git diff --check
 git status --short
 ```

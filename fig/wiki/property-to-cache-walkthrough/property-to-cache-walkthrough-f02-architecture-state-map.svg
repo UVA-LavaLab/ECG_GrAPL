@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1240" viewBox="0 0 1200 1240" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">Where ECG state lives in the processor and cache hierarchy</title>
+  <desc id="desc">The architecture map places offline records, architectural format/current/context CSRs, renamed ReusePlan operands, load-queue state, typed Request extensions, MSHR merge state, and line-local LLC metadata in their actual controlling structures. It distinguishes exact gem5 O3 binding from diagnostic models.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1240" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Where ECG state lives in the processor and cache hierarchy</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Containment shows storage; arrows are reserved for real operands and requests.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">SOFTWARE AND ARCHITECTURAL INPUTS</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">immutable graph data is separate from live execution state</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3"/>
+  <rect x="24" y="180" width="550" height="225" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="209" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Memory before the ROI</text>
+  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">CSR or weighted structural arrays</text>
+  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">edge-aligned ReusePlan records / sidecars</text>
+  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">property arrays</text>
+  <text x="40" y="311" text-anchor="start" class="sans body" fill="#27313A">sealed graph and payload identity</text>
+  <rect x="600" y="180" width="576" height="225" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="209" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Architectural ECG CSRs</text>
+  <text x="616" y="239" text-anchor="start" class="sans body" fill="#27313A">record format: id bits + epoch bits</text>
+  <text x="616" y="263" text-anchor="start" class="sans body" fill="#27313A">current epoch: quantized traversal position</text>
+  <text x="616" y="287" text-anchor="start" class="sans body" fill="#27313A">context: nonzero execution identity</text>
+  <text x="616" y="311" text-anchor="start" class="sans body" fill="#27313A">updated by software at controlled boundaries</text>
+  <circle cx="44" cy="450" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <text x="44" y="456" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="457" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">OUT-OF-ORDER CORE</text>
+  <text x="1158" y="456" text-anchor="end" class="sans body" fill="#9AA3AD">standard O3 structures carry one explicit dependency</text>
+  <line x1="24" y1="476" x2="1176" y2="476" stroke="#15803D" stroke-width="3"/>
+  <rect x="24" y="492" width="270" height="245" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="521" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Frontend + rename</text>
+  <text x="40" y="551" text-anchor="start" class="sans body" fill="#27313A">custom-0 decode</text>
+  <text x="40" y="575" text-anchor="start" class="sans body" fill="#27313A">ROB allocation</text>
+  <text x="40" y="599" text-anchor="start" class="sans body" fill="#27313A">physical rd mapping</text>
+  <text x="40" y="623" text-anchor="start" class="sans body" fill="#27313A">property rs2 mapping</text>
+  <rect x="318" y="492" width="270" height="245" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="334" y="521" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Issue queue</text>
+  <text x="334" y="551" text-anchor="start" class="sans body" fill="#27313A">record waits for address</text>
+  <text x="334" y="575" text-anchor="start" class="sans body" fill="#27313A">property waits for rs1 + rs2</text>
+  <text x="334" y="599" text-anchor="start" class="sans body" fill="#27313A">normal wakeup</text>
+  <text x="334" y="623" text-anchor="start" class="sans body" fill="#27313A">normal speculation</text>
+  <rect x="612" y="492" width="270" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="628" y="521" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">AGU + load queue</text>
+  <text x="628" y="551" text-anchor="start" class="sans body" fill="#27313A">record EA or property EA</text>
+  <text x="628" y="575" text-anchor="start" class="sans body" fill="#27313A">ordering + replay</text>
+  <text x="628" y="599" text-anchor="start" class="sans body" fill="#27313A">request role + size</text>
+  <text x="628" y="623" text-anchor="start" class="sans body" fill="#27313A">FlowThrough only on record</text>
+  <rect x="906" y="492" width="270" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="922" y="521" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Request object</text>
+  <text x="922" y="551" text-anchor="start" class="sans body" fill="#27313A">ordinary address fields</text>
+  <text x="922" y="575" text-anchor="start" class="sans body" fill="#27313A">optional ReuseBind extension</text>
+  <text x="922" y="599" text-anchor="start" class="sans body" fill="#27313A">destination + tier + epochs</text>
+  <text x="922" y="623" text-anchor="start" class="sans body" fill="#27313A">current + context + sequence</text>
+  <circle cx="44" cy="782" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="44" y="788" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="789" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">CACHE HIERARCHY</text>
+  <text x="1158" y="788" text-anchor="end" class="sans body" fill="#9AA3AD">private caches stay ordinary; LLC state is extended</text>
+  <line x1="24" y1="808" x2="1176" y2="808" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="24" y="824" width="360" height="245" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="853" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">L1D and L2</text>
+  <text x="40" y="883" text-anchor="start" class="sans body" fill="#27313A">ordinary tag/data lookup</text>
+  <text x="40" y="907" text-anchor="start" class="sans body" fill="#27313A">ordinary private fills</text>
+  <text x="40" y="931" text-anchor="start" class="sans body" fill="#27313A">record or property may hit here</text>
+  <text x="40" y="955" text-anchor="start" class="sans body" fill="#27313A">no line-local ECG state needed</text>
+  <rect x="420" y="824" width="360" height="245" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="436" y="853" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">MSHR</text>
+  <text x="436" y="883" text-anchor="start" class="sans body" fill="#27313A">target-level allocOnFill</text>
+  <text x="436" y="907" text-anchor="start" class="sans body" fill="#27313A">ReuseBind merge state</text>
+  <text x="436" y="931" text-anchor="start" class="sans body" fill="#27313A">newest compatible sequence</text>
+  <text x="436" y="955" text-anchor="start" class="sans body" fill="#27313A">conflict propagation</text>
+  <rect x="816" y="824" width="360" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="832" y="853" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">LLC replacement entry</text>
+  <text x="832" y="883" text-anchor="start" class="sans body" fill="#27313A">valid / property / RRPV / recency</text>
+  <text x="832" y="907" text-anchor="start" class="sans body" fill="#27313A">tier / two epochs / count / context</text>
+  <text x="832" y="931" text-anchor="start" class="sans body" fill="#27313A">stamp-valid bit</text>
+  <text x="832" y="955" text-anchor="start" class="sans body" fill="#27313A">shared victim-policy adapter</text>
+  <path d="M130 1145 L1070 1145" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property bytes return normally; metadata remains advisory at the LLC" data-flow-cadence="per governed hit or fill"/>
+  <text x="600" y="1130" text-anchor="middle" class="sans body" fill="#1769C2" font-weight="700">property bytes return normally; metadata remains advisory at the LLC | per governed hit or fill</text>
+</svg>

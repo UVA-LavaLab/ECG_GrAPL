@@ -4,24 +4,31 @@
 
 # ECG Next Documentation
 
-ECG Next combines compact ReusePlan records, exact ReuseBind request binding,
-and FlowThrough placement for irregular graph analytics.
+ECG Next is an experimental cache architecture for irregular graph-property
+loads. It combines an offline ReusePlan, explicit request binding, and
+FlowThrough placement without changing graph results or property values.
+
+### Figure 1 — ECG Next: offline guidance to request-bound LLC state
+
+![System overview tracing immutable graph-derived records through the two-load RISC-V path into validated LLC replacement state and bounded simulator evidence](../fig/wiki/home/home-f01-system-overview.svg)
+
+**Figure 1.** One reading spine separates offline construction, dynamic
+instructions, cache state, victim selection, and the evidence boundary.
 
 ## Start here
 
-- [ReusePlan and FlowThrough](ReusePlan-FlowThrough) — architecture, record layout,
-  request path, and worked examples.
-- [RISC-V instruction path](RISC-V-Instruction-Path) — instruction family,
-  operands, pipeline stages, request construction, and cache behavior.
-- [Property-to-cache walkthrough](Property-to-Cache-Walkthrough) — one concrete
-  property access followed through every stage and ECG mode.
-- [Related work](Related-Work) — direct baselines, policy foundations, and
-  graph-locality context.
-- [Evaluation methodology](Evaluation-Methodology) — workloads, baselines,
-  simulator roles, and reporting rules.
-- [Build and reproduction](Reproduction) — graph preparation, builds,
-  tests, and experiment commands.
-- [Repository hygiene](Repository-Hygiene) — tracked source and local-only
-  artifacts.
+1. [ReusePlan and FlowThrough](ReusePlan-FlowThrough) defines construction,
+   record formats, victim ordering, FlowThrough outcomes, and symmetric
+   structural fairness.
+2. [RISC-V instruction path](RISC-V-Instruction-Path) follows the record and
+   property instructions through gem5 O3, Request construction, MSHR merging,
+   completion, and retirement.
+3. [Property-to-cache walkthrough](Property-to-Cache-Walkthrough) derives one
+   checked fixture and places every ECG state item in the processor and cache.
+4. [Evaluation methodology](Evaluation-Methodology) states what gem5,
+   cache_sim, Sniper, P-OPT, and semantic receipts can establish.
+5. [Build and reproduction](Reproduction) provides graph preparation, build,
+   test, and experiment commands.
 
-Performance claims are reported only through the controlled evaluation flow.
+The figures describe implemented or explicitly modeled architecture. They do
+not report performance measurements.

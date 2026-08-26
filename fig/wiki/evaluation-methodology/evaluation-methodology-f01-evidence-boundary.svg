@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1120" viewBox="0 0 1200 1120" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">Evidence boundary for ECG architecture claims</title>
+  <desc id="desc">The figure separates the questions answered by gem5 O3, cache_sim, and Sniper; identifies semantic receipts and activity counters as acceptance gates; and marks analytic P-OPT timing as an optimistic bound because matrix-stream latency, queueing, and bandwidth are not target-time charged.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1120" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Evidence boundary for ECG architecture claims</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Rows are compared only with matching baselines inside the same simulator.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">SIMULATOR ROLES</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">do not compare absolute rates or time across simulators</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3"/>
+  <rect x="24" y="180" width="360" height="285" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="209" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">gem5 O3</text>
+  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">architectural execution time authority</text>
+  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">decoded experimental RISC-V operations</text>
+  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">exact dynamic Request extension</text>
+  <text x="40" y="311" text-anchor="start" class="sans body" fill="#27313A">native LSQ, MSHR, cache, speculation</text>
+  <text x="40" y="335" text-anchor="start" class="sans body" fill="#27313A">semantic output matches policy peers</text>
+  <text x="40" y="359" text-anchor="start" class="sans body" fill="#27313A">guest build receipt seals binary</text>
+  <rect x="420" y="180" width="360" height="285" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="436" y="209" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">cache_sim</text>
+  <text x="436" y="239" text-anchor="start" class="sans body" fill="#27313A">shared victim-policy behavior</text>
+  <text x="436" y="263" text-anchor="start" class="sans body" fill="#27313A">kernel-declared graph-data accesses</text>
+  <text x="436" y="287" text-anchor="start" class="sans body" fill="#27313A">functional LLC and off-chip traffic</text>
+  <text x="436" y="311" text-anchor="start" class="sans body" fill="#27313A">no cycle or instruction model</text>
+  <text x="436" y="335" text-anchor="start" class="sans body" fill="#27313A">selector result is only a hypothesis</text>
+  <text x="436" y="359" text-anchor="start" class="sans body" fill="#27313A">structural FlowThrough access receipt</text>
+  <rect x="816" y="180" width="360" height="285" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="832" y="209" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Sniper</text>
+  <text x="832" y="239" text-anchor="start" class="sans body" fill="#27313A">modeled cache and traffic direction</text>
+  <text x="832" y="263" text-anchor="start" class="sans body" fill="#27313A">equal semantic work for scale rows</text>
+  <text x="832" y="287" text-anchor="start" class="sans body" fill="#27313A">indexed path: exact per-edge markers</text>
+  <text x="832" y="311" text-anchor="start" class="sans body" fill="#27313A">computed fused sideband is diagnostic</text>
+  <text x="832" y="335" text-anchor="start" class="sans body" fill="#27313A">inconsistent fused hints fail closed</text>
+  <text x="832" y="359" text-anchor="start" class="sans body" fill="#27313A">time is not ReuseBind speedup evidence</text>
+  <circle cx="44" cy="510" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <text x="44" y="516" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="517" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">ROW ACCEPTANCE</text>
+  <text x="1158" y="516" text-anchor="end" class="sans body" fill="#9AA3AD">a success-shaped fallback is not a valid experiment row</text>
+  <line x1="24" y1="536" x2="1176" y2="536" stroke="#B42318" stroke-width="3"/>
+  <rect x="24" y="552" width="550" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="581" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Mechanism receipts</text>
+  <text x="40" y="611" text-anchor="start" class="sans body" fill="#27313A">requested and effective policy/mode match</text>
+  <text x="40" y="635" text-anchor="start" class="sans body" fill="#27313A">active structural carrier and positive events</text>
+  <text x="40" y="659" text-anchor="start" class="sans body" fill="#27313A">record width and replacement/substitution agree</text>
+  <text x="40" y="683" text-anchor="start" class="sans body" fill="#27313A">P-OPT matrix and phase-two queries are active when required</text>
+  <rect x="600" y="552" width="576" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="581" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Semantic receipts</text>
+  <text x="616" y="611" text-anchor="start" class="sans body" fill="#27313A">full kernel output or fixed semantic edge budget</text>
+  <text x="616" y="635" text-anchor="start" class="sans body" fill="#27313A">all policy rows in one matched group agree</text>
+  <text x="616" y="659" text-anchor="start" class="sans body" fill="#27313A">one failed row invalidates group timing</text>
+  <text x="616" y="683" text-anchor="start" class="sans body" fill="#27313A">semantic correctness is independent of speculation counters</text>
+  <circle cx="44" cy="842" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <text x="44" y="848" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="849" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">CLAIM LIMITS</text>
+  <text x="1158" y="848" text-anchor="end" class="sans body" fill="#9AA3AD">state what is omitted before interpreting a ratio</text>
+  <line x1="24" y1="868" x2="1176" y2="868" stroke="#B45309" stroke-width="3"/>
+  <rect x="24" y="884" width="550" height="185" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="913" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">P-OPT analytic mode</text>
+  <text x="40" y="943" text-anchor="start" class="sans body" fill="#27313A">reserved data ways and cumulative matrix bytes are charged</text>
+  <text x="40" y="967" text-anchor="start" class="sans body" fill="#27313A">target-time matrix latency / bandwidth / queueing are omitted</text>
+  <text x="40" y="991" text-anchor="start" class="sans body" fill="#27313A">popt_target_time_charged = 0 -&gt; optimistic timing bound</text>
+  <text x="40" y="1015" text-anchor="start" class="sans body" fill="#27313A">frontier-kernel P-OPT rows remain diagnostic</text>
+  <rect x="600" y="884" width="576" height="185" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="913" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Publication rule</text>
+  <text x="616" y="943" text-anchor="start" class="sans body" fill="#27313A">report time, total off-chip traffic, and instructions together</text>
+  <text x="616" y="967" text-anchor="start" class="sans body" fill="#27313A">use same-build, same-cell baselines</text>
+  <text x="616" y="991" text-anchor="start" class="sans body" fill="#27313A">exclude timing_valid_for_speedup = 0</text>
+  <text x="616" y="1015" text-anchor="start" class="sans body" fill="#27313A">publish final tables only after the frozen campaign completes</text>
+</svg>

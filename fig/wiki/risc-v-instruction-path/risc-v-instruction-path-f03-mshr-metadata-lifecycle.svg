@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1370" viewBox="0 0 1200 1370" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">ReuseBind across MSHR merge, fill, and invalidation</title>
+  <desc id="desc">The figure traces a typed ReuseBind extension into an MSHR target list, shows the exact conflict rules and newest-sequence rule, applies the selected extension to the downstream fill, validates the destination line at the LLC, and separates this from allocOnFill aggregation.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1370" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ReuseBind across MSHR merge, fill, and invalidation</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">MSHR merge validity and FlowThrough allocation are separate state machines.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">REQUEST EXTENSION</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">one dynamic governed property load</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="100" y="180" width="1000" height="185" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="116" y="209" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">EcgReusePlanExtension</text>
+  <text x="116" y="239" text-anchor="start" class="mono body" fill="#27313A">destination | tier | epoch1 | epoch2 | epoch_count</text>
+  <text x="116" y="263" text-anchor="start" class="mono body" fill="#27313A">current_epoch | context_id | dynamic sequence | conflicted</text>
+  <text x="116" y="287" text-anchor="start" class="mono body" fill="#27313A">valid context requires nonzero context ID and no conflict</text>
+  <text x="116" y="311" text-anchor="start" class="mono body" fill="#27313A">the extension clones with the gem5 Request</text>
+  <circle cx="44" cy="410" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <text x="44" y="416" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="417" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">MSHR TARGET-LIST MERGE</text>
+  <text x="1158" y="416" text-anchor="end" class="sans body" fill="#9AA3AD">rebuild state whenever active targets change</text>
+  <line x1="24" y1="436" x2="1176" y2="436" stroke="#15803D" stroke-width="3"/>
+  <rect x="24" y="452" width="360" height="245" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="481" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Compatible governed targets</text>
+  <text x="40" y="511" text-anchor="start" class="sans body" fill="#27313A">same requestor</text>
+  <text x="40" y="535" text-anchor="start" class="sans body" fill="#27313A">same nonzero context</text>
+  <text x="40" y="559" text-anchor="start" class="sans body" fill="#27313A">newer sequence replaces payload</text>
+  <text x="40" y="583" text-anchor="start" class="sans body" fill="#27313A">equal sequence: payload must match</text>
+  <rect x="420" y="452" width="360" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="436" y="481" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Conflict cases</text>
+  <text x="436" y="511" text-anchor="start" class="sans body" fill="#27313A">governed mixed with ungoverned target</text>
+  <text x="436" y="535" text-anchor="start" class="sans body" fill="#27313A">requestor or context mismatch</text>
+  <text x="436" y="559" text-anchor="start" class="sans body" fill="#27313A">invalid context</text>
+  <text x="436" y="583" text-anchor="start" class="sans body" fill="#27313A">equal sequence with different payload</text>
+  <rect x="816" y="452" width="360" height="245" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="832" y="481" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Independent allocation state</text>
+  <text x="832" y="511" text-anchor="start" class="sans body" fill="#27313A">each target carries allocOnFill</text>
+  <text x="832" y="535" text-anchor="start" class="sans body" fill="#27313A">FlowThrough target contributes false</text>
+  <text x="832" y="559" text-anchor="start" class="sans body" fill="#27313A">ordinary target contributes true</text>
+  <text x="832" y="583" text-anchor="start" class="sans body" fill="#27313A">TargetList combines them with OR</text>
+  <circle cx="44" cy="742" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <text x="44" y="748" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="749" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">RESPONSE AND LLC ACCEPTANCE</text>
+  <text x="1158" y="748" text-anchor="end" class="sans body" fill="#9AA3AD">conflict never becomes a valid line stamp</text>
+  <line x1="24" y1="768" x2="1176" y2="768" stroke="#B42318" stroke-width="3"/>
+  <rect x="24" y="784" width="550" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="813" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Downstream response</text>
+  <text x="40" y="843" text-anchor="start" class="sans body" fill="#27313A">selected newest extension is copied to response Request</text>
+  <text x="40" y="867" text-anchor="start" class="sans body" fill="#27313A">conflict marker propagates if any merge rule failed</text>
+  <text x="40" y="891" text-anchor="start" class="sans body" fill="#27313A">serviceable/deferred target changes rebuild merge state</text>
+  <text x="40" y="915" text-anchor="start" class="sans body" fill="#27313A">deallocation resets MSHR metadata state</text>
+  <rect x="600" y="784" width="576" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="813" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">LLC hit or fill</text>
+  <text x="616" y="843" text-anchor="start" class="sans body" fill="#27313A">reject conflicted extension</text>
+  <text x="616" y="867" text-anchor="start" class="sans body" fill="#27313A">map destination through property region and element size</text>
+  <text x="616" y="891" text-anchor="start" class="sans body" fill="#27313A">accept only when destination line equals accessed line</text>
+  <text x="616" y="915" text-anchor="start" class="sans body" fill="#27313A">store tier, epochs, context, and live-stamp validity</text>
+  <circle cx="44" cy="1074" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="44" y="1080" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>
+  <text x="74" y="1081" text-anchor="start" class="sans heading" fill="#27313A" font-weight="700">LINE LIFETIME</text>
+  <text x="1158" y="1080" text-anchor="end" class="sans body" fill="#9AA3AD">metadata is advisory; data correctness stays architectural</text>
+  <line x1="24" y1="1100" x2="1176" y2="1100" stroke="#27313A" stroke-width="3"/>
+  <rect x="100" y="1116" width="1000" height="170" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <text x="116" y="1145" text-anchor="start" class="sans label" fill="#27313A" font-weight="700">After acceptance</text>
+  <text x="116" y="1175" text-anchor="start" class="sans body" fill="#27313A">a later governed hit may refresh the metadata</text>
+  <text x="116" y="1199" text-anchor="start" class="sans body" fill="#27313A">ordinary recency/RRIP state continues to evolve</text>
+  <text x="116" y="1223" text-anchor="start" class="sans body" fill="#27313A">invalidation clears every ECG field and stamp-valid bit</text>
+  <text x="116" y="1247" text-anchor="start" class="sans body" fill="#27313A">eviction discards metadata with the line; property bytes are never modified</text>
+</svg>

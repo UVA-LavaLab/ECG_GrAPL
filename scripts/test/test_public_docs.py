@@ -96,12 +96,10 @@ def test_readme_documents_experimental_riscv_support():
 
 
 def test_svg_figures_are_valid_and_use_straight_connectors():
-    figures = sorted((ROOT / "wiki/assets").glob("*.svg"))
-    assert len(figures) >= 7
+    figures = sorted((ROOT / "fig/wiki").rglob("*.svg"))
+    assert len(figures) == 13
     for path in figures:
         ET.parse(path)
-        if path.name == "logo.svg":
-            continue
         text = path.read_text(errors="ignore")
         path_data = re.findall(
             r"<path\b[^>]*\sd=\"([^\"]+)\"", text)
@@ -110,6 +108,8 @@ def test_svg_figures_are_valid_and_use_straight_connectors():
             for data in path_data)
         assert "markerUnits=\"userSpaceOnUse\"" in text or (
             "marker-end" not in text)
+        assert 'data-figure-schema="ecg-public/v1"' in text
+        assert 'role="img"' in text
 
 
 def test_public_tree_has_no_tracked_research_directory():

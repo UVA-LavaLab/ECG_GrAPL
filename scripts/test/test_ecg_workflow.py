@@ -641,21 +641,21 @@ def test_public_documents_use_the_expected_reading_flow():
 
     # README is concise; the wiki owns the illustrated explanation.
     assert len(root_readme.splitlines()) < 90
-    assert "Illustrated design guide" in root_readme
+    assert "ReusePlan and FlowThrough" in root_readme
     assert "wiki/ReusePlan-FlowThrough.md" in root_readme
     assert "wiki/Evaluation-Methodology.md" in root_readme
     assert "wiki/Reproduction.md" in root_readme
     assert "--profile" not in root_readme
     for figure in (
-            "assets/reuse-plan-overview.svg",
-            "assets/reuse-plan-record.svg",
-            "assets/reuse-plan-example.svg",
-            "assets/reuse-plan-cpu-pipeline.svg",
-            "assets/riscv-instruction-family.svg",
-            "assets/flowthrough-path.svg"):
+            "reuse-plan-flowthrough-f01-offline-construction.svg",
+            "reuse-plan-flowthrough-f02-record-formats.svg",
+            "reuse-plan-flowthrough-f03-future-distance.svg",
+            "reuse-plan-flowthrough-f04-llc-policy-pipeline.svg",
+            "reuse-plan-flowthrough-f05-flowthrough-outcomes.svg",
+            "reuse-plan-flowthrough-f06-structural-fairness.svg"):
         assert figure in wiki
-        assert (ROOT / "wiki" / figure).is_file()
-    assert "values in the following example are illustrative" in wiki
+        assert list((ROOT / "fig/wiki").rglob(figure))
+    assert "checked graph now exposes time" in wiki
     assert "```mermaid" not in wiki
 
     # Public documents use direct technical language rather than internal
@@ -905,10 +905,11 @@ def test_final_design_docs_and_run_flow_are_consistent():
     # performance tables.
     assert "(Evaluation-Methodology)" in wiki
     assert "(Reproduction)" in wiki
-    assert "epoch_first" not in wiki
+    assert "`epoch_first`" in wiki
+    assert "explicit ablations" in wiki
     assert "no experimental results" in wiki
-    assert "## 3. Computing future distance by hand" in wiki
-    assert "## 6. FlowThrough placement" in wiki
+    assert "## 3. Future distance" in wiki
+    assert "## 5. FlowThrough cache behavior" in wiki
 
     assert "# Evaluation Methodology" in methodology
     assert "contains no" in methodology

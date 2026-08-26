@@ -1,169 +1,134 @@
 # Evaluation Methodology
 
-This page defines how ReusePlan and FlowThrough are evaluated. It contains no
+This page defines what each ECG experiment can establish. It contains no
 performance results.
 
-## Simulator roles
+### Figure 1 — Evidence boundary for ECG architecture claims
 
-| Simulator | Use |
-|---|---|
-| **gem5 O3** | architectural execution time and request-bound ReuseBind behavior |
-| **cache_sim** | functional replacement behavior and total memory traffic |
-| **Sniper** | larger-scale cache and traffic trends |
+![Evidence hierarchy separating gem5 O3 architectural timing, cache_sim functional traffic, Sniper modeled direction, row acceptance receipts, and optimistic P-OPT limits](../fig/wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg)
+
+**Figure 1.** A result row is accepted only after mechanism activity and
+semantic output are both verified.
+
+## 1. Simulator roles
+
+| Simulator | Valid use | Explicit limit |
+|---|---|---|
+| **gem5 O3** | architectural execution time, decoded ISA path, exact dynamic Request binding, native LSQ/MSHR/cache behavior | sampled graphs and bounded detailed execution |
+| **cache_sim** | shared victim logic, functional cache behavior, prefetch/traffic accounting, large graph sweeps | no cycle or instruction model; incomplete native runtime request population |
+| **Sniper** | equal-semantic-work cache and traffic direction at larger scale | time is not ReuseBind speedup evidence; delivery is modeled |
 
 Only gem5 O3 execution time is used for architectural speedup. cache_sim does
-not model cycles or instructions. It replays kernel-declared graph-data
-accesses, not gem5's complete LLC request population: instruction fetches,
-stack traffic, and other guest-runtime data can therefore be absent. A victim
-rule or online-selector winner discovered in cache_sim is a hypothesis, not a
-design result, until the same rule is tested in gem5 O3. Sniper uses a coarser
-delivery model than gem5's request-bound O3 path, so its time is not used as a
-ReuseBind speedup.
+not model cycles or instructions. Sniper time is not used as a ReuseBind
+speedup. Every simulator is compared with its own same-build, same-cell
+baseline; absolute miss rates and timing are not compared across simulators.
 
-Measured RISC-V guests are compiled with `-O3`; the exact compiler, flags,
-dependencies, and binary hash are sealed in the guest build receipt.
+The default indexed Sniper ReusePlan path uses exact per-edge delivery markers.
+The computed fused sideband remains diagnostic and rejects source/line cases
+whose per-edge hints cannot be represented consistently.
 
-ReusePlan records are graph-derived immutable inputs, not measured graph work.
-The gem5 PageRank flow generates each record sidecar once with the native
-builder, keys it by the reordered graph and mechanism configuration, and then
-loads it through an immutable sealed file. The guest validates record ordering,
-configuration, graph hash, and payload hash before the ROI and aborts on any
-mismatch. Detailed O3 simulation never recomputes the sidecar.
+## 2. Fail-closed row acceptance
 
-Absolute miss rates are not compared across simulators. Each simulator is
-compared with its own matching baseline.
+An experiment row must establish:
 
-Sniper disables Query-Based Selection for the controlled policy comparison by
-setting the QBS attempt count to one. This prevents LRU/GRASP from consulting
-lower caches while the shared ECG selector does not.
+1. requested and effective policy/mode agree;
+2. the active structural carrier is the one the workload actually consumes;
+3. record width, substitution, and traffic fields agree;
+4. FlowThrough activity is positive when requested;
+5. P-OPT context, matrix, and phase-two queries are active when required; and
+6. semantic output agrees across every policy row in the matched group.
 
-Online-selector diagnostics report per-arm leader samples, winning windows,
-and follower selections, plus the scalar final winning arm. Stability studies
-invoke cache_sim separately for all 64 values of
-`CACHE_ECG_DUELING_SET_OFFSET`; the simulator does not rotate colors within one
-run, and a single favorable leader placement is not sufficient evidence.
+One failed peer invalidates group timing. Memory-order violations, dependency
+conflicts, and squashes are O3 diagnostics; semantic receipts decide
+architectural correctness.
 
-## PageRank study
+## 3. Structural FlowThrough fairness
 
-The deterministic PageRank study uses samples of web-Google, soc-pokec, and
-cit-Patents. Iteration counts are 1, 2, 4, and 8. Exact graph sizes, checksums,
-cache geometries, and command lines are specified in
-[`pagerank_study.json`](https://github.com/UVA-LavaLab/ECG_GrAPL/blob/main/scripts/experiments/ecg/configs/pagerank_study.json).
+The `--flowthrough all` control gives LRU, GRASP, P-OPT, and ReusePlan the same
+no-allocate opportunity on their actual structural carrier. It is distinct
+from request-specific `ECG_FLOWTHROUGH`.
 
-The policy set contains:
+Receipts are backend-specific:
 
-- LRU;
-- GRASP;
-- capacity- and traffic-charged P-OPT;
-- an uncharged P-OPT control;
-- ReusePlan with an LRU replacement control;
-- static RRIP-first ReusePlan with FlowThrough; and
-- online ReusePlan with FlowThrough.
+- cache_sim: positive structural accesses;
+- gem5: positive structural no-allocate miss targets; and
+- Sniper: positive structural read and fill-write counts.
 
-The epoch-informed admission policy is retained only as a diagnostic and is
-excluded from the primary policy set.
+This control removes a placement privilege; it does not equalize record width,
+matrix traffic, instruction count, or victim quality.
 
-## Primary quantities
+## 4. Primary quantities
 
 The primary quantities are always reported together:
 
-1. gem5 O3 execution time; and
+1. gem5 O3 execution time;
 2. total off-chip traffic, including demand, prefetch, metadata, writeback,
-   and modeled reference-structure traffic.
+   and modeled reference-structure traffic;
+3. retired instructions for complete-design comparisons; and
+4. policy/mechanism activity receipts.
 
-Per-cell ratios are aggregated with the geometric mean. A +/-2% interval is
-used when classifying a per-cell ratio as approximately equal.
+Per-cell ratios use a matching baseline from the same invocation and build and
+are aggregated with a geometric mean. A +/-2% interval classifies a per-cell
+ratio as approximately equal. Rows with `timing_valid_for_speedup=0` are
+excluded from timing ratios.
 
-Every comparison uses a matching baseline from the same invocation and build.
-Rows marked `timing_valid_for_speedup=0` are excluded from timing ratios.
-
-## Prefetching
+### Prefetching and idealized models
 
 With a prefetcher enabled, demand misses alone are not performance evidence:
-prefetching may move traffic from demand requests to prefetch requests.
-Execution time and total off-chip traffic remain the primary quantities.
+prefetching may move traffic from demand to prefetch requests. Execution time
+and total off-chip traffic remain primary, and MSHR pressure, bandwidth,
+queueing, and overfetch must remain visible.
 
-An idealized mechanism with perfect prediction or unlimited latency,
-bandwidth, queue, or MSHR resources is reported as an upper bound rather than
-as measured hardware performance.
+A mechanism with perfect prediction or unlimited latency, bandwidth, queue, or
+MSHR resources is reported as an upper bound rather than as measured hardware
+performance.
 
-## Instruction-count interpretation
+### Instruction-count interpretation
 
 Complete-design comparisons include record layout, transport, ISA, placement,
-and replacement. Their instruction counts may differ, so time, traffic, and
-retired instructions must be reported together.
+and replacement, so time, traffic, and retired instructions are interpreted
+together. Replacement-only attribution compares transport-matched ReusePlan
+policies and requires exact per-cell instruction equality.
 
-Replacement-only attribution uses ReusePlan RRIP-first plus FlowThrough versus ReusePlan
-LRU plus FlowThrough. These configurations share the record layout, delivery
-path, ISA, and instruction count. Exact per-cell instruction equality is
-required for this attribution.
+IPC is derived from instructions and time; it is not independent evidence.
+Counterfactual instruction normalization is a sensitivity, not a measurement.
 
-IPC is derived from instruction count and execution time; it is not an
-independent corroborating quantity. Counterfactual instruction normalization
-is a sensitivity study, not a measured result.
+## 5. P-OPT accounting
 
-gem5 memory-order violations, memory-dependence conflicts, and squashed
-instructions are reported as O3 path diagnostics. They describe recovered
-speculation, not architectural correctness; semantic result receipts remain
-the correctness gate.
+Analytic P-OPT charges reserved LLC capacity and cumulative matrix traffic. It
+sets `popt_target_time_charged=0`, so matrix-stream latency is omitted together
+with target-time bandwidth, queueing, and contention. Its timing is therefore
+an optimistic P-OPT bound, not a realistic target-time implementation.
 
-## P-OPT accounting
+The reference matrix assumes an ordered sweep. Final reference rows are
+limited to PageRank and Connected Components. BFS and SSSP comparisons are
+project extensions: frontier order does not satisfy P-OPT's monotonic
+sweep-order epoch assumption, so those rows remain diagnostic.
 
-P-OPT is charged for reserved LLC capacity and cumulative matrix traffic. The
-current analytic mode sets `popt_target_time_charged=0`, so matrix-stream
-latency is omitted. Timing from this mode is an optimistic P-OPT bound and
-must not be presented as a realistic target-time implementation.
-Capacity reservation covers the reference design's two resident columns
-(current and next); initial loading remains part of cumulative matrix-stream
-traffic rather than a third resident column.
+The two resident columns are current and next. Initial loading belongs to
+cumulative stream traffic, not a third resident column.
 
-Final P-OPT reference comparisons are limited to PageRank and Connected
-Components. BFS and SSSP comparisons are project extensions: their
-frontier-driven traversal does not satisfy the monotonic sweep-order epoch
-assumption used by the reference rereference matrix, so they remain
-diagnostic rather than final reference rows.
+## 6. Workloads and campaign roles
 
-## Final campaign roles
+The deterministic PageRank study uses sampled web-Google, soc-pokec, and
+cit-Patents cells. Iteration counts are 1, 2, 4, and 8. Exact hashes,
+geometries, and commands are in
+[`pagerank_study.json`](https://github.com/UVA-LavaLab/ECG_GrAPL/blob/main/scripts/experiments/ecg/configs/pagerank_study.json).
 
-The historical `reuse_plan_final_campaign` profile is a scale-limited pilot,
-not the publication campaign. It completed mechanism/P-OPT validation and most
-sampled timing cells before being stopped. The publication corpus must include
-the six core literature-scale graphs (web-Google, Pokec, Patents, roadNet-CA,
-LiveJournal, and Orkut); Twitter-2010 is the cache-only billion-edge stress
-case.
+The publication corpus must include web-Google, Pokec, Patents, roadNet-CA,
+LiveJournal, and Orkut; Twitter-2010 is the cache-only stress case.
 
-The final campaign separates simulator responsibilities:
+- gem5 O3 supplies compact PageRank architectural timing.
+- cache_sim supplies full-graph all-kernel replacement and traffic.
+- Sniper supplies bounded equal-work cache/traffic corroboration.
 
-- **gem5 O3:** compact 4-byte, 32-epoch PageRank timing only;
-- **cache_sim:** full-graph all-kernel replacement and traffic;
-- **Sniper:** full-graph equal-semantic-work cache/traffic corroboration.
+Selector generations 1 and 2 both failed their preregistered
+representativeness/regret gates. They are retained as negative diagnostics and
+must not be presented as detailed-simulator performance policies.
 
-The full-graph cache_sim primary uses a 4-byte record with 16 epochs, which
-fits all three graphs for PR, BFS, BC, and CC. Weighted SSSP uses its
-implemented 8-byte replacement record. Two wide-record controls isolate the
-cost of record width and the effect of increasing ReusePlan resolution from 16 to
-256 epochs.
+## 7. Publication policy
 
-P-OPT reference rows are limited to PageRank and Connected Components. They
-compare directly with the compact 4-byte/16-epoch ReusePlan primary in the same cell
-and pin property width, resident columns, P-OPT's 256 epochs, minimum data
-ways, and simulated matrix streaming. A separate wide ReusePlan/256-epoch control
-shows the sensitivity to epoch resolution. gem5 P-OPT time still omits
-matrix-stream latency and therefore remains an optimistic bound.
-
-Sniper runs are bounded by one full serialized edge sweep per graph, use equal
-semantic edge visits across policies, and are excluded from speedup reporting.
-Computed-address rows certify exact property-line binding on a fixed prefix of
-at least 32 observed LLC transactions. Large rows then switch from per-load
-magic markers to the same validated fused sideband lookup for the remaining
-matched-work cache simulation. The runner requires receipts for both the exact
-prefix and the marker-free fallback transition.
-
-The compact cit-Patents encoding uses all 32 available bits. Any wider
-identifier or additional record field requires the 8-byte fallback.
-
-## Publication policy
-
-Preliminary numbers and intermediate experiment decisions are not published
-in the README or wiki. Tables and result figures will be added only after the
-final evaluation campaign is complete.
+Preliminary numbers and intermediate choices remain local. Tables and measured
+figures are published only after the final frozen campaign, preprocessing
+costs, record footprints, traffic decomposition, and physical metadata/control
+costs are complete.

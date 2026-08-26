@@ -1,170 +1,125 @@
 # RISC-V Instruction Path
 
-ECG Next implements an experimental custom-0 RISC-V instruction family in
-gem5. Matching RISC-V graph kernels issue the encodings with `.insn`, so the
-measured guest executes the same operations decoded by the simulator.
+ECG implements an experimental custom-0 RISC-V family in gem5. Matching guest
+kernels emit the encodings with `.insn`. This is a research ISA extension, not
+a ratified RISC-V extension, an upstream gem5 feature, or fabricated hardware.
 
-This is a research ISA extension. It is not a ratified RISC-V extension, an
-upstream gem5 ISA feature, or a claim of fabricated processor support.
+## 1. Instruction roles
 
-## Basic request flow
+### Figure 1 — Experimental RISC-V instruction roles and operand contracts
 
-![Basic ECG RISC-V instruction flow](assets/riscv-basic-flow.svg)
+![Three-band instruction-role plate covering ECG control CSRs, record-load variants, computed and indexed property loads, and the explicit register dependency](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg)
 
-The basic flow uses the same stages as the graph and cache figures: **2**
-record load, **3** decode and dependency, **4** property instruction, **5**
-exact Request and cache path, and **6** LLC metadata and completion. The record
-and property remain two loads; the record result becomes the property
-instruction's explicit `rs2` operand.
+**Figure 1.** Record acquisition and property access remain two dynamic loads.
 
-## Instruction family
-
-![ECG Next experimental RISC-V instruction family](assets/riscv-instruction-family.svg)
-
-The family separates record acquisition from property access:
-
-| Instruction | Inputs | Result | Request effect |
+| Family | Inputs | Result | Request effect |
 |---|---|---|---|
-| `ecg.plan.load*` | record address | packed ReusePlan in `rd` | ordinary cacheable record load |
-| `ecg.flow.load*` | record address | packed ReusePlan in `rd` | sets the FlowThrough request flag |
-| `ecg.bind.load.*` | property address in `rs1`, ReusePlan in `rs2` | typed property value | attaches a ReuseBind extension |
-| `ecg.bind.iload.*` | property base in `rs1`, ReusePlan in `rs2` | typed property value | forms the indexed address and attaches ReuseBind |
+| `ecg.plan.load` | general record address | canonical 64-bit ReusePlan in integer `rd` | ordinary cacheable placement |
+| `ecg_plan_weighted_load` | sidecar address in `rs1`, destination in `rs2` | 32-bit weighted sidecar in `rd` | ordinary cacheable placement |
+| `ecg.flow.load` | general record address | canonical 64-bit ReusePlan in integer `rd` | sets record FlowThrough |
+| `ecg.flow.load.compact` | compact record address | canonical widened ReusePlan in integer `rd` | sets record FlowThrough |
+| `ecg_flow_weighted_load` | weighted sidecar address | 32-bit weighted sidecar in `rd` | sets record FlowThrough |
+| `ecg.bind.load.*` | computed property address in `rs1`, plan in `rs2` | typed property value | attaches ReuseBind |
+| `ecg.bind.iload.*` | property base in `rs1`, plan/destination in `rs2` | typed property value | indexed EA plus ReuseBind |
 
-The `*` forms cover compact records, weighted records, integer property widths,
-and the bit-preserving floating-point PageRank load. They share the same
-semantic fields: destination, reuse tier, two future epochs, current epoch, and
-execution context.
+There is no compact Plan-load encoding; compact unweighted acquisition is
+FlowThrough-only. The record-format CSR supplies compact `id_bits` and
+`epoch_bits`. Decode
+widens compact records into the canonical destination/tier/two-epoch layout.
+The current-epoch CSR changes only at quantized traversal boundaries. A
+nonzero context CSR distinguishes overlapping executions.
 
-## Detailed pipeline flow
+The request flags are distinct: `ECG_FLOWTHROUGH` is emitted by the
+request-bound record-load family, while `STRUCTURAL_FLOWTHROUGH` is the
+policy-independent fairness control applied to a validated structural range.
+Neither flag is attached to the governed property Request.
 
-![ReuseBind and FlowThrough through an out-of-order RISC-V pipeline](assets/reuse-plan-cpu-pipeline.svg)
+## 2. Out-of-order request path
 
-The five columns preserve the same stages 2–6. Each column shows only the
-architectural state introduced at that handoff, so the ReusePlan can be
-followed from `rd`, through the property instruction's `rs2`, into the exact
-Request, and finally into LLC metadata.
+### Figure 2 — A real ReusePlan instruction pair in the gem5 O3 pipeline
 
-For a structure-level view of the frontend FIFO, issue queue, ROB, load queue,
-MSHR, LLC ways, property-line words, and metadata fields, see the
-[property-to-cache walkthrough](Property-to-Cache-Walkthrough).
+![Architecture schematic tracing source edge 4 to 7, mapped internally to 8 to 18, through the FlowThrough record instruction, gem5 Fetch Decode Rename IEW Commit pipeline, LSQ Request, caches, LLC line, writeback, and retirement](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
 
-### Fetch
+**Figure 2.** Checked source edge `4 -> 7` maps to internal edge `8 -> 18`
+and supplies the real operands and addresses.
 
-The custom-0 instruction follows the normal frontend path. Fetch, prediction,
-I-cache access, branch recovery, and instruction buffering are unchanged.
+The top-level grouping follows gem5 O3CPU's documented **Fetch, Decode,
+Rename, IEW, Commit** pipeline. The IEW block is expanded into the issue queue,
+physical-register read, AGU, and LSQ Request path used by a load. This is the
+gem5 simulator architecture, not a claim about a fabricated ECG core.
 
-### Decode
+The six numbered stages are record load, rename/dependency, property address
+generation, LSQ Request construction, cache/MSHR/LLC traversal, and
+completion/retirement.
 
-Decode identifies one of four roles:
+### Fetch, decode, and rename
 
-- ordinary ReusePlan record acquisition;
-- FlowThrough record acquisition;
-- computed-address ReuseBind property load; or
-- indexed ReuseBind property load.
+The frontend follows the normal custom-0 decode path. A record load allocates a
+ROB entry, load-queue entry, and renamed integer destination. The property
+instruction reads that renamed destination as `rs2`; issue therefore waits for
+both the property address/base and the ReusePlan.
 
-The opcode determines the memory width and destination register class. Compact
-record formats use the ECG record-format CSR configured before the region of
-interest.
+No shared metadata mailbox is used by the O3 path. TimingSimpleCPU can use a
+serialized mailbox-equivalent diagnostic because its loads cannot overlap, but
+that path is not evidence of out-of-order request binding.
 
-The context CSR is initialized once per execution context. The current-epoch
-CSR is updated only when traversal crosses a quantized epoch boundary; all
-vertices in the same epoch reuse the existing architectural value. This
-preserves exact Request metadata without serializing the O3 pipeline on every
-vertex.
+### Execute and LSQ Request construction
 
-### Rename and dispatch
+The AGU forms:
 
-The destination register is renamed normally. The instruction allocates its
-reorder-buffer and load-queue state:
+- record address plus immediate for `plan.load` and `flow.load`;
+- the software-computed address for `bind.load`; or
+- property base plus destination times element size for `bind.iload`.
 
-- record loads track the record address source;
-- computed ReuseBind loads track the property address and ReusePlan sources;
-- indexed ReuseBind loads track the property-array base and ReusePlan sources.
+The LSQ applies ordinary memory-dependence, ordering, and replay rules. For a
+ReuseBind property load it then attaches:
 
-No shared metadata mailbox is required for the O3 path.
+```text
+destination, tier, epoch1, epoch2, epoch_count,
+current_epoch, context_id, dynamic_sequence, conflicted
+```
 
-### Issue and register read
+to that dynamic Request. The property Request never receives FlowThrough.
 
-A record load issues when its address source is ready. A ReuseBind property
-load waits for both the address/base operand and the ReusePlan operand. This
-dependency keeps the plan paired with the dynamic property-load instruction
-through out-of-order scheduling.
+### Cache and retirement
 
-### Execute and address generation
+Private-cache and LLC hits return data normally. On a miss, compatible MSHR
+targets preserve the selected extension. The LLC accepts a live stamp only
+after validating context and destination line. The integer or floating result
+writes back normally and the ROB retires precisely in order.
 
-The address-generation unit computes:
+## 3. MSHR metadata lifecycle
 
-- `ecg.plan.load*` and `ecg.flow.load*`: record address plus immediate;
-- `ecg.bind.load.*`: the already-computed property address in `rs1`; and
-- `ecg.bind.iload.*`: property base plus destination times element size.
+### Figure 3 — ReuseBind across MSHR merge, fill, and invalidation
 
-The instruction encoding and effective-address calculation are fixed before
-the request enters the load/store queue.
+![Four-band MSHR lifecycle showing typed request fields, compatible and conflicting merges, independent allocOnFill aggregation, LLC acceptance, refresh, and invalidation](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg)
 
-### Load/store queue and Request construction
+**Figure 3.** ReuseBind validity and FlowThrough allocation are independent
+state machines.
 
-The load/store queue performs normal ordering and replay checks. It then builds
-the memory Request:
+The MSHR rebuilds its ECG state whenever active targets change:
 
-- ReuseBind loads attach destination, tier, both epochs, current epoch,
-  context, and sequence state as a typed request extension.
-- FlowThrough loads set the `ECG_FLOWTHROUGH` request flag.
-- Ordinary ReusePlan loads attach neither placement nor property metadata.
+- compatible governed targets require the same requestor and nonzero context;
+- the newest sequence supplies the selected payload;
+- equal sequences must carry identical payloads;
+- governed/ungoverned mixing, context or requestor disagreement, invalid
+  context, or equal-sequence payload disagreement marks a conflict.
 
-MSHR merges require the same requestor and ECG context. For that context, the
-newest dynamic sequence supplies the representative metadata. Equal-sequence
-payload disagreement, mixed governed/ungoverned targets, or context
-disagreement marks the merged metadata invalid.
+The selected extension is copied to the downstream response. A conflict marker
+propagates, so the LLC cannot mistake a merged request for valid metadata.
+MSHR deallocation resets this state.
 
-### Cache hierarchy
+`allocOnFill` is independent and combines with OR. A FlowThrough target cannot
+suppress an ordinary target's required LLC allocation.
 
-All requests use normal address translation and private-cache lookup.
+## 4. Source map
 
-For a ReuseBind property request:
-
-- L1/L2 and LLC hits return the property normally;
-- the typed extension follows a miss;
-- the LLC consumes the extension on a property hit or fill; and
-- the line stores the ReusePlan tier and epochs for replacement.
-
-For a FlowThrough record request:
-
-- private-cache hits and fills remain normal;
-- an LLC hit remains normal; and
-- only an LLC miss suppresses insertion of the returning record into the LLC.
-
-The property request is never bypassed.
-
-### Completion and retirement
-
-Loaded data returns through the normal response path. Integer and
-floating-point destinations write back normally, the reorder-buffer entry is
-marked complete, and the instruction retires in program order.
-
-## Canonical computed-address sequence
-
-The primary computed-address path uses two instructions:
-
-1. `ecg.flow.load` acquires the ReusePlan record and gives that record request
-   FlowThrough placement.
-2. Software computes the property address from the record destination.
-3. `ecg.bind.load.*` loads the property and binds the plan to that exact
-   property request.
-
-The indexed alternative replaces steps 2 and 3 with `ecg.bind.iload.*`.
-
-## Implementation map
-
-| Path | Purpose |
+| Layer | Source |
 |---|---|
-| `bench/include/gem5_sim/overlays/arch/riscv/isa/decoder_ecg_extract.isa` | gem5 custom-0 decoding and request semantics |
-| `bench/include/gem5_sim/overlays/arch/riscv/isa/formats/ecg.isa` | decoder bit fields |
-| `bench/include/gem5_sim/gem5_harness.h` | guest-side `.insn` emitters |
-| `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh` | typed ReuseBind request extension and MSHR merge state |
-| `bench/include/gem5_sim/overlays/cpu/o3/lsq_ecg_producer.patch` | exact dynamic-instruction to Request attachment |
-| `bench/src_gem5/` | RISC-V graph-kernel call sites |
-
-The [ReusePlan and FlowThrough design guide](ReusePlan-FlowThrough) explains
-the record format and replacement policy. The
-[evaluation methodology](Evaluation-Methodology) defines how the RISC-V gem5
-path is used for architectural timing.
+| instruction roles and memory semantics | `bench/include/gem5_sim/overlays/arch/riscv/isa/decoder_ecg_extract.isa` |
+| decoder fields | `bench/include/gem5_sim/overlays/arch/riscv/isa/formats/ecg.isa` |
+| guest `.insn` emitters | `bench/include/gem5_sim/gem5_harness.h` |
+| Request extension and merge rules | `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh` |
+| MSHR integration | `bench/include/gem5_sim/overlays/mem/cache/mshr_ecg_merge.patch` |
+| O3 attachment | `bench/include/gem5_sim/overlays/cpu/o3/lsq_ecg_producer.patch` |
+| graph-kernel call sites | `bench/src_gem5/` |

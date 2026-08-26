@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1490" viewBox="0 0 1200 1490" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">A real ReusePlan instruction pair in the gem5 O3 pipeline</title>
+  <desc id="desc">An architecture-style schematic follows the checked compact record through the actual record instruction, renamed register dependency, property instruction, frontend and execution stages, LSQ Request extension, private caches, MSHR, LLC line state, writeback, and ROB retirement.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1490" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">A real ReusePlan instruction pair in the gem5 O3 pipeline</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Source edge 4-&gt;7 maps to internal 8-&gt;18, property 0x80000048, and LLC line 0x80000040.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">RECORD LOAD + DEPENDENT PROPERTY INSTRUCTION</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">record result is a true rs2 dependency</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#B45309" stroke-width="3"/>
+  <rect x="24" y="180" width="520" height="180" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="209" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">ecg.flow.load.compact</text>
+  <text x="40" y="239" text-anchor="start" class="mono body" fill="#27313A">rs1 = record for source 4-&gt;7 / int 8-&gt;18</text>
+  <text x="40" y="263" text-anchor="start" class="mono body" fill="#27313A">memory width = 4 bytes</text>
+  <text x="40" y="287" text-anchor="start" class="mono body" fill="#27313A">Request flag = ECG_FLOWTHROUGH</text>
+  <text x="40" y="311" text-anchor="start" class="mono body" fill="#27313A">rd = dest 18 | T1 | e1 11 | e2 15</text>
+  <text x="40" y="335" text-anchor="start" class="mono body" fill="#27313A">execute reads format CSR and widens the result</text>
+  <rect x="656" y="180" width="520" height="180" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="672" y="209" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">ecg.bind.load.f32</text>
+  <text x="672" y="239" text-anchor="start" class="mono body" fill="#27313A">rs1 = computed property address 0x80000048</text>
+  <text x="672" y="263" text-anchor="start" class="mono body" fill="#27313A">rs2 = renamed ReusePlan physical register</text>
+  <text x="672" y="287" text-anchor="start" class="mono body" fill="#27313A">result = ordinary binary32 property value</text>
+  <text x="672" y="311" text-anchor="start" class="mono body" fill="#27313A">property Request carries ReuseBind</text>
+  <text x="672" y="335" text-anchor="start" class="mono body" fill="#27313A">never FlowThrough</text>
+  <path d="M284 360 L284 405 L916 405 L916 360" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="canonical ReusePlan register"/>
+  <text x="600" y="392" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">canonical ReusePlan register</text>
+  <circle cx="44" cy="450" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <text x="44" y="456" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2-4</text>
+  <text x="74" y="457" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">GEM5 O3 PIPELINE</text>
+  <text x="1158" y="456" text-anchor="end" class="sans body" fill="#9AA3AD">Fetch | Decode | Rename | IEW | Commit</text>
+  <line x1="24" y1="476" x2="1176" y2="476" stroke="#15803D" stroke-width="3"/>
+  <path d="M105 650 L1090 650" fill="none" stroke="#15803D" stroke-width="2.5" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="dynamic instruction state"/>
+  <rect x="40" y="560" width="140" height="150" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="110" y="595" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">Fetch</text>
+  <text x="110" y="630" text-anchor="middle" class="sans body" fill="#27313A">DynInst</text>
+  <text x="110" y="665" text-anchor="middle" class="sans body" fill="#27313A">branch state</text>
+  <rect x="220" y="560" width="140" height="150" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="290" y="595" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">Decode</text>
+  <text x="290" y="630" text-anchor="middle" class="sans body" fill="#27313A">custom-0 role</text>
+  <text x="290" y="665" text-anchor="middle" class="sans body" fill="#27313A">width + dst</text>
+  <rect x="400" y="540" width="170" height="190" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="400" y1="603.3333333333334" x2="570" y2="603.3333333333334" stroke="#27313A" stroke-width="1"/>
+  <line x1="400" y1="666.6666666666666" x2="570" y2="666.6666666666666" stroke="#27313A" stroke-width="1"/>
+  <text x="485" y="575" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Rename</text>
+  <text x="485" y="632" text-anchor="middle" class="sans body" fill="#27313A">2 plan dependency</text>
+  <text x="485" y="695" text-anchor="middle" class="sans body" fill="#27313A">map + free list</text>
+  <rect x="610" y="520" width="360" height="245" rx="9" fill="#F8F6EC" stroke="#15803D" stroke-width="3"/>
+  <text x="790" y="548" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">IEW: issue / execute / writeback</text>
+  <polygon points="640.0,568 750,568 735.0,646 625,646" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="688" y="595" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">Issue queue</text>
+  <text x="688" y="625" text-anchor="middle" class="sans body" fill="#27313A">rs1 + rs2 ready</text>
+  <rect x="770" y="568" width="90" height="78" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="770" y1="607.0" x2="860" y2="607.0" stroke="#27313A" stroke-width="1"/>
+  <text x="815" y="595" text-anchor="middle" class="sans body" fill="#1769C2" font-weight="700">Phys regs</text>
+  <text x="815" y="625" text-anchor="middle" class="sans body" fill="#27313A">read</text>
+  <polygon points="915,568.0 962.5,607 915,646.0 867.5,607" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="915" y="602" text-anchor="middle" class="sans body" fill="#15803D" font-weight="700">3 AGU</text>
+  <text x="915" y="627" text-anchor="middle" class="sans body" fill="#27313A">EA</text>
+  <rect x="650" y="674" width="285" height="70" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="650" y1="709.0" x2="935" y2="709.0" stroke="#27313A" stroke-width="1"/>
+  <text x="792" y="702" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">4 LSQ Request</text>
+  <text x="792" y="734" text-anchor="middle" class="sans body" fill="#27313A">ordering | replay | ReuseBind extension</text>
+  <rect x="1010" y="540" width="150" height="190" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <line x1="1010" y1="603.3333333333334" x2="1160" y2="603.3333333333334" stroke="#27313A" stroke-width="1"/>
+  <line x1="1010" y1="666.6666666666666" x2="1160" y2="666.6666666666666" stroke="#27313A" stroke-width="1"/>
+  <text x="1085" y="575" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">Commit</text>
+  <text x="1085" y="632" text-anchor="middle" class="sans body" fill="#27313A">ROB head</text>
+  <text x="1085" y="695" text-anchor="middle" class="sans body" fill="#27313A">fault / redirect</text>
+  <text x="600" y="802" text-anchor="middle" class="sans body" fill="#15803D" font-weight="700">dynamic instruction state</text>
+  <text x="600" y="832" text-anchor="middle" class="mono body" fill="#6D5BD0">LSQ extension: dest=18 tier=1 epochs=(11,15) current=8 context=k sequence=s</text>
+  <circle cx="44" cy="880" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <text x="44" y="886" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">5</text>
+  <text x="74" y="887" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">CACHE AND MISS PATH</text>
+  <text x="1158" y="886" text-anchor="end" class="sans body" fill="#9AA3AD">the same property Request crosses every cache boundary</text>
+  <line x1="24" y1="906" x2="1176" y2="906" stroke="#1769C2" stroke-width="3"/>
+  <path d="M270 1075 L330 1075" fill="none" stroke="#1769C2" stroke-width="2.5" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property Request + ReuseBind" data-flow-cadence="per governed load"/>
+  <path d="M560 1075 L620 1075" fill="none" stroke="#1769C2" stroke-width="2.5" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property Request + ReuseBind" data-flow-cadence="per governed load"/>
+  <path d="M850 1075 L930 1075" fill="none" stroke="#1769C2" stroke-width="2.5" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property Request + ReuseBind" data-flow-cadence="per governed load"/>
+  <rect x="40" y="950" width="230" height="215" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="40" y1="1003.75" x2="270" y2="1003.75" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="1057.5" x2="270" y2="1057.5" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="1111.25" x2="270" y2="1111.25" stroke="#27313A" stroke-width="1"/>
+  <text x="56" y="980" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Private hierarchy</text>
+  <text x="56" y="1035" text-anchor="start" class="sans body" fill="#27313A">D-TLB: translation</text>
+  <text x="56" y="1088" text-anchor="start" class="sans body" fill="#27313A">L1D: normal hit/fill</text>
+  <text x="56" y="1142" text-anchor="start" class="sans body" fill="#27313A">L2: extension preserved</text>
+  <rect x="330" y="950" width="230" height="215" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="330" y1="1003.75" x2="560" y2="1003.75" stroke="#27313A" stroke-width="1"/>
+  <line x1="330" y1="1057.5" x2="560" y2="1057.5" stroke="#27313A" stroke-width="1"/>
+  <line x1="330" y1="1111.25" x2="560" y2="1111.25" stroke="#27313A" stroke-width="1"/>
+  <text x="346" y="980" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">MSHR target table</text>
+  <text x="346" y="1020" text-anchor="start" class="sans body" fill="#27313A">same property block</text>
+  <text x="346" y="1075" text-anchor="start" class="sans body" fill="#27313A">newest compatible seq</text>
+  <text x="346" y="1128" text-anchor="start" class="sans body" fill="#27313A">conflict propagation</text>
+  <rect x="620" y="950" width="230" height="215" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="620" y1="1003.75" x2="850" y2="1003.75" stroke="#27313A" stroke-width="1"/>
+  <line x1="620" y1="1057.5" x2="850" y2="1057.5" stroke="#27313A" stroke-width="1"/>
+  <line x1="620" y1="1111.25" x2="850" y2="1111.25" stroke="#27313A" stroke-width="1"/>
+  <text x="636" y="980" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">LLC set + metadata</text>
+  <text x="636" y="1020" text-anchor="start" class="mono body" fill="#27313A">line 0x80000040</text>
+  <text x="636" y="1075" text-anchor="start" class="sans body" fill="#27313A">destination-line guard</text>
+  <text x="636" y="1128" text-anchor="start" class="sans body" fill="#27313A">stamp tier + epochs</text>
+  <rect x="930" y="962.0" width="190" height="191.0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <ellipse cx="1025.0" cy="962.0" rx="95.0" ry="12.0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <ellipse cx="1025.0" cy="1153.0" rx="95.0" ry="12.0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="1025" y="995" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">Memory</text>
+  <text x="1025" y="1045" text-anchor="middle" class="sans body" fill="#27313A">ordinary line fetch</text>
+  <text x="1025" y="1095" text-anchor="middle" class="sans body" fill="#27313A">allocOnFill applies</text>
+  <text x="1025" y="1140" text-anchor="middle" class="sans body" fill="#27313A">normal response</text>
+  <text x="600" y="1203" text-anchor="middle" class="sans body" fill="#1769C2" font-weight="700">property Request + ReuseBind | per governed load</text>
+  <circle cx="44" cy="1250" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <text x="44" y="1256" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">6</text>
+  <text x="74" y="1257" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">COMPLETION AND RETIREMENT</text>
+  <text x="1158" y="1256" text-anchor="end" class="sans body" fill="#9AA3AD">metadata is advisory; data uses normal O3 completion</text>
+  <line x1="24" y1="1276" x2="1176" y2="1276" stroke="#B42318" stroke-width="3"/>
+  <rect x="100" y="1292" width="470" height="145" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="100" y1="1340.3333333333333" x2="570" y2="1340.3333333333333" stroke="#27313A" stroke-width="1"/>
+  <line x1="100" y1="1388.6666666666667" x2="570" y2="1388.6666666666667" stroke="#27313A" stroke-width="1"/>
+  <text x="116" y="1322" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Writeback bus + physical register</text>
+  <text x="116" y="1365" text-anchor="start" class="sans body" fill="#27313A">binary32 value -&gt; floating destination</text>
+  <text x="116" y="1412" text-anchor="start" class="sans body" fill="#27313A">load queue marks the dynamic load complete</text>
+  <rect x="630" y="1292" width="470" height="145" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <line x1="630" y1="1340.3333333333333" x2="1100" y2="1340.3333333333333" stroke="#27313A" stroke-width="1"/>
+  <line x1="630" y1="1388.6666666666667" x2="1100" y2="1388.6666666666667" stroke="#27313A" stroke-width="1"/>
+  <text x="646" y="1322" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">ROB commit</text>
+  <text x="646" y="1365" text-anchor="start" class="sans body" fill="#27313A">precise in-order retirement</text>
+  <text x="646" y="1412" text-anchor="start" class="sans body" fill="#27313A">squash/replay stays native gem5</text>
+</svg>

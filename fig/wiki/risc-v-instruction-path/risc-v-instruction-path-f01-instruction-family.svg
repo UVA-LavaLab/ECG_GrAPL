@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1120" viewBox="0 0 1200 1120" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+  <title id="title">Experimental RISC-V instruction roles and operand contracts</title>
+  <desc id="desc">Four numbered roles distinguish ordinary and FlowThrough record loads from computed-address and indexed ReuseBind property loads. Compact decode uses the record-format CSR and widens into the canonical metadata layout before the property instruction consumes the plan.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
+        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
+        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
+        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
+        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
+        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
+        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
+        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
+        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
+        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
+        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
+        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
+        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
+        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+      }
+      .sans{font-family:Arial,Helvetica,sans-serif}
+      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1120" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Experimental RISC-V instruction roles and operand contracts</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Record acquisition and property access remain separate dynamic loads.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">CONFIGURE EXECUTION CONTEXT</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">software writes format, current epoch, and context CSRs</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="24" y="180" width="360" height="205" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="209" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Record-format CSR</text>
+  <text x="40" y="239" text-anchor="start" class="mono body" fill="#27313A">id bits</text>
+  <text x="40" y="263" text-anchor="start" class="mono body" fill="#27313A">epoch bits</text>
+  <text x="40" y="287" text-anchor="start" class="mono body" fill="#27313A">compact decode widths</text>
+  <text x="40" y="311" text-anchor="start" class="mono body" fill="#27313A">configured before ROI</text>
+  <rect x="420" y="180" width="360" height="205" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="436" y="209" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Current-epoch CSR</text>
+  <text x="436" y="239" text-anchor="start" class="sans body" fill="#27313A">quantized traversal position</text>
+  <text x="436" y="263" text-anchor="start" class="sans body" fill="#27313A">updated at epoch boundaries</text>
+  <text x="436" y="287" text-anchor="start" class="sans body" fill="#27313A">reused inside one epoch</text>
+  <text x="436" y="311" text-anchor="start" class="sans body" fill="#27313A">carried on property Request</text>
+  <rect x="816" y="180" width="360" height="205" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="832" y="209" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Context CSR</text>
+  <text x="832" y="239" text-anchor="start" class="sans body" fill="#27313A">nonzero execution identity</text>
+  <text x="832" y="263" text-anchor="start" class="sans body" fill="#27313A">separates overlapping contexts</text>
+  <text x="832" y="287" text-anchor="start" class="sans body" fill="#27313A">required for valid ReuseBind</text>
+  <text x="832" y="311" text-anchor="start" class="sans body" fill="#27313A">checked during MSHR merge</text>
+  <circle cx="44" cy="430" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <text x="44" y="436" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="437" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">RECORD-LOAD FAMILY</text>
+  <text x="1158" y="436" text-anchor="end" class="sans body" fill="#9AA3AD">rs1 is a record address; result depends on the form</text>
+  <line x1="24" y1="456" x2="1176" y2="456" stroke="#B45309" stroke-width="3"/>
+  <rect x="24" y="472" width="550" height="205" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="501" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">ecg.plan.load*</text>
+  <text x="40" y="531" text-anchor="start" class="mono body" fill="#27313A">ordinary cacheable placement</text>
+  <text x="40" y="555" text-anchor="start" class="mono body" fill="#27313A">general: rd = canonical 64-bit plan</text>
+  <text x="40" y="579" text-anchor="start" class="mono body" fill="#27313A">weighted: rs2 = destination</text>
+  <text x="40" y="603" text-anchor="start" class="mono body" fill="#27313A">weighted: rd = 32-bit sidecar</text>
+  <text x="40" y="627" text-anchor="start" class="mono body" fill="#27313A">no compact Plan-load encoding</text>
+  <rect x="600" y="472" width="576" height="205" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="501" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">ecg.flow.load*</text>
+  <text x="616" y="531" text-anchor="start" class="mono body" fill="#27313A">sets ECG_FLOWTHROUGH on record Request</text>
+  <text x="616" y="555" text-anchor="start" class="mono body" fill="#27313A">general unweighted: canonical plan in rd</text>
+  <text x="616" y="579" text-anchor="start" class="mono body" fill="#27313A">compact unweighted: 4-byte load, widened</text>
+  <text x="616" y="603" text-anchor="start" class="mono body" fill="#27313A">weighted: rd = 32-bit sidecar</text>
+  <text x="616" y="627" text-anchor="start" class="mono body" fill="#27313A">compact unweighted is FlowThrough-only</text>
+  <circle cx="44" cy="722" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <text x="44" y="728" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="729" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">PROPERTY-LOAD FAMILY</text>
+  <text x="1158" y="728" text-anchor="end" class="sans body" fill="#9AA3AD">the ReusePlan result is an explicit source operand</text>
+  <line x1="24" y1="748" x2="1176" y2="748" stroke="#15803D" stroke-width="3"/>
+  <rect x="24" y="764" width="550" height="225" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="40" y="793" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">ecg.bind.load.*</text>
+  <text x="40" y="823" text-anchor="start" class="mono body" fill="#27313A">rs1 = software-computed property address</text>
+  <text x="40" y="847" text-anchor="start" class="mono body" fill="#27313A">rs2 = canonical ReusePlan</text>
+  <text x="40" y="871" text-anchor="start" class="mono body" fill="#27313A">result = typed U32 / S32 / U64 / F32 value</text>
+  <text x="40" y="895" text-anchor="start" class="mono body" fill="#27313A">one ordinary property memory request</text>
+  <rect x="600" y="764" width="576" height="225" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="793" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">ecg.bind.iload.*</text>
+  <text x="616" y="823" text-anchor="start" class="mono body" fill="#27313A">rs1 = property-array base</text>
+  <text x="616" y="847" text-anchor="start" class="mono body" fill="#27313A">rs2 carries destination + ReusePlan</text>
+  <text x="616" y="871" text-anchor="start" class="mono body" fill="#27313A">EA = base + destination * element size</text>
+  <text x="616" y="895" text-anchor="start" class="mono body" fill="#27313A">indexed address generation and binding are fused</text>
+  <path d="M160 1055 L1040 1055" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="record rd becomes property rs2 through normal rename and issue"/>
+  <text x="600" y="1040" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">record rd becomes property rs2 through normal rename and issue</text>
+</svg>

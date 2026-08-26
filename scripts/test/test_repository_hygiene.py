@@ -72,11 +72,20 @@ def test_public_documentation_and_figures_are_tracked():
         "wiki/Reproduction.md",
         "wiki/Repository-Hygiene.md",
         "wiki/assets/logo.png",
+        "fig/README.md",
+        "fig/ecg-figure-fixture.json",
+        "scripts/docs/ecg_figure_lib.py",
+        "scripts/docs/generate_ecg_figures.py",
+        "scripts/docs/check_wiki_figures.py",
         "scripts/experiments/ecg/configs/pagerank_study.json",
     }
     required.update(
         str(path.relative_to(ROOT))
-        for path in (ROOT / "wiki/assets").glob("*.svg"))
+        for base, pattern in (
+            (ROOT / "fig/wiki", "*.svg"),
+            (ROOT / "fig/wiki_src", "*.drawio"),
+        )
+        for path in base.rglob(pattern))
     assert required <= tracked
 
 
