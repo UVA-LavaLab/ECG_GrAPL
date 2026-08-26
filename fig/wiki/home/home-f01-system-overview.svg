@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ECG Next: offline guidance to request-bound LLC state</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">One reading spine separates graph preprocessing, runtime requests, cache policy, and evidence.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">OFFLINE GRAPH ANALYSIS</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">immutable records; excluded from the ROI</text>
@@ -60,7 +60,7 @@
   <text x="832" y="263" text-anchor="start" class="sans body" fill="#27313A">compact record substitutes for edge ID</text>
   <text x="832" y="287" text-anchor="start" class="sans body" fill="#27313A">otherwise use edge plus sidecar</text>
   <text x="832" y="311" text-anchor="start" class="sans body" fill="#27313A">guest validates graph + payload hashes</text>
-  <circle cx="44" cy="430" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <circle cx="44" cy="430" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="436" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="437" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">RUNTIME REQUEST PATH</text>
   <text x="1158" y="436" text-anchor="end" class="sans body" fill="#9AA3AD">two loads and one explicit register dependency</text>
@@ -93,7 +93,7 @@
   <text x="922" y="579" text-anchor="start" class="sans body" fill="#27313A">line guard must match</text>
   <text x="922" y="603" text-anchor="start" class="sans body" fill="#27313A">MSHR conflict rejects hint</text>
   <text x="922" y="627" text-anchor="start" class="sans body" fill="#27313A">data completion is unchanged</text>
-  <circle cx="44" cy="722" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <circle cx="44" cy="722" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="728" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="729" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">POLICY AND EVIDENCE</text>
   <text x="1158" y="728" text-anchor="end" class="sans body" fill="#9AA3AD">mechanism state is not itself a speedup claim</text>

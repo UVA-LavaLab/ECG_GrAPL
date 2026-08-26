@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ReusePlan wire formats and honest traffic footprints</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">General, compact, and weighted layouts are separate transport choices.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">GENERAL UNWEIGHTED RECORD</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">canonical in-memory metadata layout</text>
@@ -56,7 +56,7 @@
   <text x="1035.4032258064515" y="260.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
   <text x="40" y="330" text-anchor="start" class="sans body" fill="#27313A">Bits 0..31 destination | bits 32..33 tier | bits 34..48 epoch 1 | bits 49..63 epoch 2</text>
   <text x="40" y="354" text-anchor="start" class="sans body" fill="#27313A">Tier 1/2/3 means hot/moderate/cold; tier 0 is invalid. Epoch count is at most 2^15.</text>
-  <circle cx="44" cy="405" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <circle cx="44" cy="405" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="411" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="412" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">COMPACT 32-BIT RECORD</text>
   <text x="1158" y="411" text-anchor="end" class="sans body" fill="#9AA3AD">width is derived from graph and epoch configuration</text>
@@ -73,7 +73,7 @@
   <text x="616" y="530" text-anchor="start" class="sans body" fill="#27313A">the simulated stream is 4 bytes per edge</text>
   <text x="616" y="554" text-anchor="start" class="sans body" fill="#27313A">if fields do not fit, use the wide record or sidecar</text>
   <text x="616" y="578" text-anchor="start" class="sans body" fill="#27313A">a width receipt must match the materialized container</text>
-  <circle cx="44" cy="702" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <circle cx="44" cy="702" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="708" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="709" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">WEIGHTED SSSP TRANSPORTS</text>
   <text x="1158" y="708" text-anchor="end" class="sans body" fill="#9AA3AD">weight bytes cannot disappear from the comparison</text>

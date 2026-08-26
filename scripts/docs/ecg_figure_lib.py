@@ -542,7 +542,7 @@ class Figure:
         role: str,
     ) -> None:
         strong, _ = ROLE_COLORS[role]
-        self.circle(44, y, 19, fill=strong, stroke=strong)
+        self.circle(44, y, 19, fill=INK, stroke=INK)
         self.text(44, y + 6, number, size=17, bold=True, color=WHITE, anchor="middle")
         self.text(74, y + 7, title, size=22, bold=True, color=strong, max_width=560)
         self.text(

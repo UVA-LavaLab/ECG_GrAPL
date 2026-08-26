@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Checked cache-line reuse timeline and circular distance</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The tracked property line is revisited at internal readers 11 and 15 after 8.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">CHECKED CACHE-LINE TIMELINE</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">one 64-byte line contains property vertices 16..31</text>
@@ -65,13 +65,13 @@
   <text x="505" y="450" text-anchor="start" class="sans body" fill="#15803D">first future line use</text>
   <text x="860" y="450" text-anchor="start" class="sans body" fill="#6D5BD0">second future line use</text>
   <text x="600" y="492" text-anchor="middle" class="sans body" fill="#9AA3AD">the two-epoch record captures both future uses of this checked property line</text>
-  <circle cx="44" cy="565" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <circle cx="44" cy="565" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="571" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="572" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">CIRCULAR DISTANCE AT THE LLC</text>
   <text x="1158" y="571" text-anchor="end" class="sans body" fill="#9AA3AD">the current victim-time epoch can advance after fill</text>
   <line x1="24" y1="591" x2="1176" y2="591" stroke="#15803D" stroke-width="3"/>
   <rect x="24" y="607" width="550" height="205" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="636" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Checked arithmetic at current epoch 6</text>
+  <text x="40" y="636" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Checked arithmetic at current epoch 8</text>
   <text x="40" y="666" text-anchor="start" class="mono body" fill="#27313A">d1 = (11 + 32 - 8) mod 32 = 3</text>
   <text x="40" y="690" text-anchor="start" class="mono body" fill="#27313A">d2 = (15 + 32 - 8) mod 32 = 7</text>
   <text x="40" y="714" text-anchor="start" class="mono body" fill="#27313A">nearest = min(3, 7) = 3</text>
@@ -79,10 +79,10 @@
   <rect x="600" y="607" width="576" height="205" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <text x="616" y="636" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Line-state interpretation</text>
   <text x="616" y="666" text-anchor="start" class="sans body" fill="#27313A">epochs remain absolute in the cache line</text>
-  <text x="616" y="690" text-anchor="start" class="sans body" fill="#27313A">victim-time current epoch may be later than 6</text>
+  <text x="616" y="690" text-anchor="start" class="sans body" fill="#27313A">victim-time current epoch may be later than 8</text>
   <text x="616" y="714" text-anchor="start" class="sans body" fill="#27313A">unstamped property has effective distance zero</text>
   <text x="616" y="738" text-anchor="start" class="sans body" fill="#27313A">malformed epochs are clamped before use</text>
-  <circle cx="44" cy="857" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <circle cx="44" cy="857" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="863" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="864" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">RRIP-FIRST DECISION</text>
   <text x="1158" y="863" text-anchor="end" class="sans body" fill="#9AA3AD">timeline ranks properties only after RRIP eligibility</text>

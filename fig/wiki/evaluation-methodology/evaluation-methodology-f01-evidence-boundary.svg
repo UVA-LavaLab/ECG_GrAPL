@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Evidence boundary for ECG architecture claims</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Rows are compared only with matching baselines inside the same simulator.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">SIMULATOR ROLES</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">do not compare absolute rates or time across simulators</text>
@@ -66,7 +66,7 @@
   <text x="832" y="311" text-anchor="start" class="sans body" fill="#27313A">computed fused sideband is diagnostic</text>
   <text x="832" y="335" text-anchor="start" class="sans body" fill="#27313A">inconsistent fused hints fail closed</text>
   <text x="832" y="359" text-anchor="start" class="sans body" fill="#27313A">time is not ReuseBind speedup evidence</text>
-  <circle cx="44" cy="510" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <circle cx="44" cy="510" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="516" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="517" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">ROW ACCEPTANCE</text>
   <text x="1158" y="516" text-anchor="end" class="sans body" fill="#9AA3AD">a success-shaped fallback is not a valid experiment row</text>
@@ -83,7 +83,7 @@
   <text x="616" y="635" text-anchor="start" class="sans body" fill="#27313A">all policy rows in one matched group agree</text>
   <text x="616" y="659" text-anchor="start" class="sans body" fill="#27313A">one failed row invalidates group timing</text>
   <text x="616" y="683" text-anchor="start" class="sans body" fill="#27313A">semantic correctness is independent of speculation counters</text>
-  <circle cx="44" cy="842" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <circle cx="44" cy="842" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="848" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="849" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">CLAIM LIMITS</text>
   <text x="1158" y="848" text-anchor="end" class="sans body" fill="#9AA3AD">state what is omitted before interpreting a ratio</text>

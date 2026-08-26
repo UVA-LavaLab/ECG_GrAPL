@@ -745,7 +745,7 @@ def future_distance(
         565, role="compute",
     )
     figure.card(
-        24, 607, 550, 205, "Checked arithmetic at current epoch 6",
+        24, 607, 550, 205, f"Checked arithmetic at current epoch {current}",
         (
             f"d1 = ({fx.first_epoch} + {epoch_count} - {current}) mod "
             f"{epoch_count} = {first_distance}",
@@ -762,7 +762,7 @@ def future_distance(
         600, 607, 576, 205, "Line-state interpretation",
         (
             "epochs remain absolute in the cache line",
-            "victim-time current epoch may be later than 6",
+            f"victim-time current epoch may be later than {current}",
             "unstamped property has effective distance zero",
             "malformed epochs are clamped before use",
         ),
@@ -1218,11 +1218,11 @@ def o3_pipeline(
         mono_body=True,
     )
     figure.card(
-        656, 180, 520, 180, "ecg.bind.load.f32",
+        656, 180, 520, 180, "ecg.bind.load.u32",
         (
             f"rs1 = computed property address 0x{fx.property_address:08X}",
             "rs2 = renamed ReusePlan physical register",
-            "result = ordinary binary32 property value",
+            "result = ordinary uint32 property value",
             "property Request carries ReuseBind",
             "never FlowThrough",
         ),
@@ -1238,33 +1238,37 @@ def o3_pipeline(
     )
 
     figure.section(
-        "2-4", "GEM5 O3 PIPELINE", "Fetch | Decode | Rename | IEW | Commit",
+        "2-4", "GEM5 O3 PIPELINE",
+        "both instructions: Fetch | Decode | Rename | IEW | Commit",
         450, role="compute",
     )
     figure.arrow(
         ((105, 650), (1090, 650)),
         kind="control",
-        label="dynamic instruction state",
+        label="I0 record load -> I1 dependent property load",
         color=GREEN,
         width=2.5,
     )
     figure.rect(40, 560, 140, 150, role="compute", stroke=INK, stroke_width=2)
     figure.text(110, 595, "Fetch", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(110, 630, "DynInst", size=16, anchor="middle")
-    figure.text(110, 665, "branch state", size=16, anchor="middle")
+    figure.text(110, 627, "I0 flow.load", size=16, anchor="middle")
+    figure.text(110, 660, "I1 bind.load", size=16, anchor="middle")
+    figure.text(110, 692, "program order", size=16, anchor="middle")
 
     figure.rect(220, 560, 140, 150, role="compute", stroke=INK, stroke_width=2)
     figure.text(290, 595, "Decode", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(290, 630, "custom-0 role", size=16, anchor="middle")
-    figure.text(290, 665, "width + dst", size=16, anchor="middle")
+    figure.text(290, 627, "I0 record op", size=16, anchor="middle")
+    figure.text(290, 660, "I1 u32 bind", size=16, anchor="middle")
+    figure.text(290, 692, "custom-0 role", size=16, anchor="middle")
 
-    figure.table(400, 540, 170, 190, 3, role="state")
-    figure.text(485, 575, "Rename", size=17, bold=True,
+    figure.table(400, 520, 170, 225, 4, role="state")
+    figure.text(485, 550, "Rename", size=17, bold=True,
                 color=PURPLE, anchor="middle")
-    figure.text(485, 632, "2 plan dependency", size=16, anchor="middle")
-    figure.text(485, 695, "map + free list", size=16, anchor="middle")
+    figure.text(485, 602, "I0 rd -> P17", size=16, anchor="middle")
+    figure.text(485, 660, "I1 rs2 -> P17", size=16, anchor="middle")
+    figure.text(485, 718, "I1 rd -> P21", size=16, anchor="middle")
 
     figure.rect(610, 520, 360, 245, role="neutral", stroke=GREEN, stroke_width=3)
     figure.text(790, 548, "IEW: issue / execute / writeback", size=17,
@@ -1272,28 +1276,31 @@ def o3_pipeline(
     figure.queue(625, 568, 125, 78, role="state")
     figure.text(688, 595, "Issue queue", size=16, bold=True,
                 color=PURPLE, anchor="middle")
-    figure.text(688, 625, "rs1 + rs2 ready", size=16, anchor="middle")
+    figure.text(688, 625, "I1 waits P17", size=16, anchor="middle")
     figure.table(770, 568, 90, 78, 2, role="data")
     figure.text(815, 595, "Phys regs", size=16, bold=True,
                 color=BLUE, anchor="middle")
-    figure.text(815, 625, "read", size=16, anchor="middle")
+    figure.text(815, 625, "P17 plan", size=16, anchor="middle")
     figure.diamond(915, 607, 95, 78, role="compute")
-    figure.text(915, 602, "3 AGU", size=16, bold=True,
+    figure.text(915, 602, "3 I1 AGU", size=16, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(915, 627, "EA", size=16, anchor="middle")
-    figure.table(650, 674, 285, 70, 2, role="state")
-    figure.text(792, 702, "4 LSQ Request", size=17, bold=True,
+    figure.text(915, 627, "rs1 EA", size=16, anchor="middle")
+    figure.table(650, 654, 285, 100, 3, role="state")
+    figure.text(792, 679, "4 LSQ requests", size=17, bold=True,
                 color=PURPLE, anchor="middle")
-    figure.text(792, 734, "ordering | replay | ReuseBind extension", size=16,
+    figure.text(792, 715, "I0: record Request", size=16,
+                anchor="middle")
+    figure.text(792, 745, "I1: property Request + ReuseBind", size=16,
                 anchor="middle")
 
-    figure.table(1010, 540, 150, 190, 3, role="verify")
-    figure.text(1085, 575, "Commit", size=17, bold=True,
+    figure.table(1010, 520, 150, 225, 4, role="verify")
+    figure.text(1085, 550, "Commit", size=17, bold=True,
                 color=RED, anchor="middle")
-    figure.text(1085, 632, "ROB head", size=16, anchor="middle")
-    figure.text(1085, 695, "fault / redirect", size=16, anchor="middle")
+    figure.text(1085, 602, "I0 ROB entry", size=16, anchor="middle")
+    figure.text(1085, 660, "I1 ROB entry", size=16, anchor="middle")
+    figure.text(1085, 718, "in order", size=16, anchor="middle")
     figure.text(
-        600, 802, "dynamic instruction state",
+        600, 802, "I0 record load -> I1 dependent property load",
         size=16, bold=True, color=GREEN, anchor="middle",
     )
     figure.text(
@@ -1357,11 +1364,11 @@ def o3_pipeline(
     figure.table(100, 1292, 470, 145, 3, role="data")
     figure.text(116, 1322, "Writeback bus + physical register", size=17,
                 bold=True, color=BLUE)
-    figure.text(116, 1365, "binary32 value -> floating destination", size=16)
-    figure.text(116, 1412, "load queue marks the dynamic load complete", size=16)
+    figure.text(116, 1365, "I0 plan -> P17; I1 uint32 value -> P21", size=16)
+    figure.text(116, 1412, "both load-queue entries complete normally", size=16)
     figure.table(630, 1292, 470, 145, 3, role="verify")
     figure.text(646, 1322, "ROB commit", size=17, bold=True, color=RED)
-    figure.text(646, 1365, "precise in-order retirement", size=16)
+    figure.text(646, 1365, "I0 commits before dependent I1", size=16)
     figure.text(646, 1412, "squash/replay stays native gem5", size=16)
     save(figure, generated)
 
@@ -1486,7 +1493,7 @@ def checked_walkthrough(
         "record through the record load, explicit register dependency, computed "
         "property address, typed Request extension, LLC line stamp, circular "
         "distance, normal data completion, and later victim selection.",
-        1610,
+        2070,
     )
     figure.section(
         "1", "TRACKED GRAPH EDGE AND RECORD", "one concrete checked edge; not a measured workload",
@@ -1562,39 +1569,94 @@ def checked_walkthrough(
     )
 
     figure.section(
-        "2", "REAL TWO-INSTRUCTION PIPELINE", "the compact record becomes an explicit rs2 operand",
-        505, role="compute",
+        "2", "SOFTWARE LOOP AND HARDWARE CORRELATION", "representative push-family trace; PageRank reverses direction",
+        505, role="state",
+    )
+    figure.rect(24, 547, 650, 300, role="neutral", stroke=INK, stroke_width=3)
+    figure.text(44, 578, "Representative property-access pseudocode",
+                size=17, bold=True, color=PURPLE, max_width=580)
+    pseudocode = (
+        ("L1", "for reader in active_readers:"),
+        ("L2", "  for edge_pos in csr_row(reader):"),
+        ("L3", "    plan = ecg.flow.load.compact(record[edge_pos])  [B]"),
+        ("L4", "    dest = plan.destination"),
+        ("L5", "    addr = property_base + dest * 4"),
+        ("L6", "    value = ecg.bind.load.u32(addr, plan)  [C,D]"),
+        ("L7", "    proposal = update(reader, dest, value)"),
+    )
+    for index, (line_no, code) in enumerate(pseudocode):
+        y = 615 + index * 30
+        figure.text(44, y, line_no, size=16, color=GRAY, mono=True)
+        figure.text(88, y, code, size=16, mono=True, max_width=560)
+    figure.text(
+        44, 830,
+        f"tracked execution: source {fx.tracked_source_reader}->"
+        f"{fx.tracked_source_dest} maps to internal "
+        f"{fx.tracked_reader}->{fx.tracked_dest}",
+        size=16, color=RED, max_width=600,
+    )
+
+    figure.rect(700, 547, 476, 300, role="state", stroke=INK, stroke_width=3)
+    figure.text(720, 578, "Stable software / hardware callouts",
+                size=17, bold=True, color=PURPLE, max_width=430)
+    callouts = (
+        (
+            "A",
+            f"source edge {fx.tracked_source_reader}->{fx.tracked_source_dest} "
+            f"/ internal edge {fx.tracked_reader}->{fx.tracked_dest}",
+            RED,
+        ),
+        (
+            "B",
+            f"record: dest{fx.tracked_dest} | T{fx.line_tier} | "
+            f"e{fx.first_epoch} | e{fx.second_epoch}",
+            AMBER,
+        ),
+        ("C", "record rd becomes bind-load rs2", PURPLE),
+        ("D", "property Request carries ReuseBind", BLUE),
+        ("E", f"LLC line 0x{fx.property_line:08X} stores the stamp", GREEN),
+    )
+    for index, (letter, text, color) in enumerate(callouts):
+        y = 625 + index * 43
+        figure.circle(730, y - 6, 15, fill=color, stroke=color)
+        figure.text(730, y, letter, size=16, bold=True,
+                    color=WHITE, anchor="middle")
+        figure.text(758, y, text, size=16, max_width=390)
+
+    figure.section(
+        "3", "REAL TWO-INSTRUCTION PIPELINE", "the compact record becomes an explicit rs2 operand",
+        885, role="compute",
     )
     pipeline_x = (40, 330, 620, 910)
     pipeline_cards = (
         ("Record load", ("ecg.flow.load", ".compact", f"record[int {fx.tracked_reader}->{fx.tracked_dest}]", "rd = canonical plan"), "transfer"),
         ("Rename + issue", ("rd -> physical reg", "property reads rs2", "wait for rs1 + rs2"), "state"),
-        ("ecg.bind.load.f32", (f"rs1 = 0x{fx.property_address:08X}", "rs2 = ReusePlan", "binary32 result"), "compute"),
+        ("ecg.bind.load.u32", (f"rs1 = 0x{fx.property_address:08X}", "rs2 = ReusePlan", "uint32 result"), "compute"),
         ("LSQ Request", (f"dest={fx.tracked_dest} tier={fx.line_tier}", f"epochs={fx.first_epoch},{fx.second_epoch}", f"current={current} context=k", "sequence=s"), "state"),
     )
     for x1, x2 in zip(pipeline_x, pipeline_x[1:]):
         figure.arrow(
-            ((x1 + 230, 675), (x2, 675)),
+            ((x1 + 230, 1055), (x2, 1055)),
             kind="dependency",
             label="instruction operand / Request state",
             color=PURPLE,
             width=2.5,
         )
     for x, (title, body, role) in zip(pipeline_x, pipeline_cards):
-        figure.card(x, 565, 230, 220, title, body, role=role, mono_body=True)
+        figure.card(x, 945, 230, 220, title, body, role=role, mono_body=True)
     figure.text(
-        600, 825, "C  instruction operand / Request state",
+        600, 1205, "C  instruction operand / Request state",
         size=16, bold=True, color=PURPLE, anchor="middle",
     )
 
     figure.section(
-        "3", "TWO REQUEST LANES THROUGH THE CACHE", "record placement and property metadata remain distinct",
-        870, role="data",
+        "4", "TWO REQUEST LANES THROUGH THE CACHE", "record placement and property metadata remain distinct",
+        1245, role="data",
     )
     lane_x = (40, 320, 600, 880)
     for x1, x2 in zip(lane_x, lane_x[1:]):
         figure.arrow(
-            ((x1 + 204 if x1 < 880 else x1 + 260, 982), (x2, 982)),
+            ((x1 + 204 if x1 < 880 else x1 + 260, 1357), (x2, 1357)),
             kind="transfer",
             label="record Request",
             cadence="per tracked edge",
@@ -1608,10 +1670,10 @@ def checked_walkthrough(
         ("LLC record outcome", ("hit returns normally", "miss may skip LLC fill"), "verify", 260),
     )
     for x, (title, body, role, width) in zip(lane_x, record_lane):
-        figure.card(x, 930, width, 115, title, body, role=role, mono_body=True)
+        figure.card(x, 1305, width, 115, title, body, role=role, mono_body=True)
     for x1, x2 in zip(lane_x, lane_x[1:]):
         figure.arrow(
-            ((x1 + 204 if x1 < 880 else x1 + 260, 1127), (x2, 1127)),
+            ((x1 + 204 if x1 < 880 else x1 + 260, 1502), (x2, 1502)),
             kind="transfer",
             label="property Request + ReuseBind",
             cadence="per tracked edge",
@@ -1634,21 +1696,21 @@ def checked_walkthrough(
         ),
     )
     for x, (title, body, role, width) in zip(lane_x, property_lane):
-        figure.card(x, 1075, width, 115, title, body, role=role, mono_body=True)
+        figure.card(x, 1450, width, 115, title, body, role=role, mono_body=True)
     figure.text(
-        600, 1208,
+        600, 1580,
         "D  record Request | property Request + ReuseBind | per tracked edge",
         size=16, bold=True, color=BLUE, anchor="middle", max_width=850,
     )
 
     figure.section(
-        "4", "LINE STAMP, REUSE TIMELINE, AND LATER VICTIM", "the property value is already complete",
-        1235, role="state",
+        "5", "LINE STAMP, REUSE TIMELINE, AND LATER VICTIM", "the property value is already complete",
+        1625, role="state",
     )
-    figure.rect(24, 1277, 720, 250, role="state", stroke=INK, stroke_width=2)
-    figure.text(44, 1308, f"E  LLC line 0x{fx.property_line:08X}",
+    figure.rect(24, 1667, 720, 250, role="state", stroke=INK, stroke_width=2)
+    figure.text(44, 1698, f"E  LLC line 0x{fx.property_line:08X}",
                 size=17, bold=True, color=PURPLE, max_width=420)
-    axis_y = 1415
+    axis_y = 1805
     figure.line((80, axis_y), (700, axis_y), color=INK, width=3)
     for epoch, color, label in (
         (current, AMBER, f"current {current}"),
@@ -1661,12 +1723,12 @@ def checked_walkthrough(
         figure.text(x, label_y, label, size=16, bold=True,
                     color=color, anchor="middle")
     figure.text(
-        384, 1485,
+        384, 1875,
         f"nearest = min({d1}, {d2}) = {min(d1, d2)}; stored epochs remain absolute",
         size=16, mono=True, color=PURPLE, anchor="middle", max_width=650,
     )
     figure.card(
-        770, 1277, 406, 250, "Later rrip_first decision",
+        770, 1667, 406, 250, "Later rrip_first decision",
         (
             "line must first be max-RRPV eligible",
             "eligible structural line wins first",

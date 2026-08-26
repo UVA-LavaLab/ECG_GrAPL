@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Design FlowThrough and symmetric structural fairness</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The two switches answer different experimental questions.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">DESIGN MECHANISM</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">ECG_FLOWTHROUGH is attached by ecg.flow.load*</text>
@@ -54,7 +54,7 @@
   <text x="616" y="263" text-anchor="start" class="sans body" fill="#27313A">it does not remove record bytes or memory latency</text>
   <text x="616" y="287" text-anchor="start" class="sans body" fill="#27313A">it does not make P-OPT matrix traffic disappear</text>
   <text x="616" y="311" text-anchor="start" class="sans body" fill="#27313A">it is not evidence that the victim rule is better</text>
-  <circle cx="44" cy="470" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <circle cx="44" cy="470" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="476" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="477" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">SYMMETRIC FAIRNESS CONTROL</text>
   <text x="1158" y="476" text-anchor="end" class="sans body" fill="#9AA3AD">--flowthrough all is policy-independent</text>

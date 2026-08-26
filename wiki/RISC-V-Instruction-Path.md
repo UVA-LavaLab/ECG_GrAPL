@@ -24,8 +24,10 @@ a ratified RISC-V extension, an upstream gem5 feature, or fabricated hardware.
 
 There is no compact Plan-load encoding; compact unweighted acquisition is
 FlowThrough-only. The record-format CSR supplies compact `id_bits` and
-`epoch_bits`. Decode
-widens compact records into the canonical destination/tier/two-epoch layout.
+`epoch_bits`. The record-load execution helper consumes that format state and
+widens the returned compact value into the canonical
+destination/tier/two-epoch layout; frontend Decode only identifies the
+custom-0 role.
 The current-epoch CSR changes only at quantized traversal boundaries. A
 nonzero context CSR distinguishes overlapping executions.
 

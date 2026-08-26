@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">FlowThrough changes LLC allocation, not lookup or service</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The important corner case is an MSHR shared with an allocating target.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">UNCHANGED FRONT HALF</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">record request uses the normal memory hierarchy</text>
@@ -62,7 +62,7 @@
   <text x="922" y="239" text-anchor="start" class="sans body" fill="#27313A">ordinary line fetch</text>
   <text x="922" y="263" text-anchor="start" class="sans body" fill="#27313A">ordinary response path</text>
   <text x="922" y="287" text-anchor="start" class="sans body" fill="#27313A">destination writes back</text>
-  <circle cx="44" cy="430" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <circle cx="44" cy="430" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="436" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="437" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">THREE LLC OUTCOMES</text>
   <text x="1158" y="436" text-anchor="end" class="sans body" fill="#9AA3AD">only the returning miss fill reaches the allocation gate</text>
@@ -85,7 +85,7 @@
   <text x="832" y="555" text-anchor="start" class="sans body" fill="#27313A">allocOnFill combines with OR</text>
   <text x="832" y="579" text-anchor="start" class="sans body" fill="#27313A">the shared returning line is allocated</text>
   <text x="832" y="603" text-anchor="start" class="sans body" fill="#27313A">no target suppresses a required fill</text>
-  <circle cx="44" cy="762" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <circle cx="44" cy="762" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="768" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="769" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">DERIVED PREFETCHES AND PROPERTY LOADS</text>
   <text x="1158" y="768" text-anchor="end" class="sans body" fill="#9AA3AD">classification remains target-range exact</text>

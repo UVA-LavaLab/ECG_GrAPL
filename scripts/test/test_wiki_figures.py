@@ -189,17 +189,28 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
         "risc-v-instruction-path-f02-o3-request-pipeline.svg"
     ]
     for token in (
+        "ecg.flow.load.compact",
+        "ecg.bind.load.u32",
+        "rd = dest 18 | T1 | e1 11 | e2 15",
         "Fetch",
+        "I0 flow.load",
+        "I1 bind.load",
         "Decode",
+        "I0 record op",
+        "I1 u32 bind",
         "Rename",
-        "2 plan dependency",
+        "I0 rd -&gt; P17",
+        "I1 rs2 -&gt; P17",
         "IEW: issue / execute / writeback",
         "Issue queue",
-        "3 AGU",
-        "4 LSQ Request",
+        "I1 waits P17",
+        "3 I1 AGU",
+        "I0: record Request",
+        "I1: property Request + ReuseBind",
         "Commit",
-        "5",
-        "6",
+        "I0 ROB entry",
+        "I1 ROB entry",
+        "I0 commits before dependent I1",
         "execute reads format CSR and widens the result",
         "line 0x80000040",
     ):
@@ -211,6 +222,10 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
     ]
     assert "Record-block MSHR" in walkthrough
     assert "Property MSHR" in walkthrough
+    assert "Representative property-access pseudocode" in walkthrough
+    assert "plan = ecg.flow.load.compact(record[edge_pos])  [B]" in walkthrough
+    assert "value = ecg.bind.load.u32(addr, plan)  [C,D]" in walkthrough
+    assert "tracked execution: source 4-&gt;7 maps to internal 8-&gt;18" in walkthrough
     assert "stamp T1 / e11 / e15" in walkthrough
     assert 'data-flow-label="record Request"' in walkthrough
     assert 'data-flow-label="property Request + ReuseBind"' in walkthrough

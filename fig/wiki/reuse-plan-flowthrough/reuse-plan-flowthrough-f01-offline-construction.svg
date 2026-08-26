@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">From a checked reader graph to one edge-aligned ReusePlan</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The concrete values come from fig/ecg-figure-fixture.json and its executable test.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">CHECKED READER GRAPH</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">nine nodes, seventeen edges; other vertex IDs are empty</text>
@@ -118,7 +118,7 @@
   <text x="846" y="431" text-anchor="start" class="mono body" fill="#27313A">tracked 4-&gt;7 = int 8-&gt;18</text>
   <text x="846" y="455" text-anchor="start" class="mono body" fill="#27313A">PageRank uses incoming CSR.</text>
   <text x="846" y="479" text-anchor="start" class="mono body" fill="#27313A">frontier paths use outgoing CSR</text>
-  <circle cx="44" cy="615" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <circle cx="44" cy="615" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="621" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="622" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">READER COUNTS TO REUSE TIER</text>
   <text x="1158" y="621" text-anchor="end" class="sans body" fill="#9AA3AD">stable rank: count descending, vertex ID ascending</text>
@@ -138,7 +138,7 @@
   <text x="616" y="764" text-anchor="start" class="sans body" fill="#27313A">line tier is the hottest tier among those vertices</text>
   <text x="616" y="788" text-anchor="start" class="sans body" fill="#27313A">tracked line tier = 1 (hot)</text>
   <text x="616" y="812" text-anchor="start" class="sans body" fill="#27313A">tier 0 is reserved for invalid metadata</text>
-  <circle cx="44" cy="947" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <circle cx="44" cy="947" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="953" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="954" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">TWO FUTURE LINE READERS</text>
   <text x="1158" y="953" text-anchor="end" class="sans body" fill="#9AA3AD">reader CSR is searched strictly after the current reader</text>
@@ -157,7 +157,7 @@
   <text x="616" y="1096" text-anchor="start" class="sans body" fill="#27313A">same-source accesses to the same line are preserved</text>
   <text x="616" y="1120" text-anchor="start" class="sans body" fill="#27313A">the pair describes the line, not only one vertex</text>
   <text x="616" y="1144" text-anchor="start" class="sans body" fill="#27313A">malformed epochs are clamped before distance use</text>
-  <circle cx="44" cy="1279" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <circle cx="44" cy="1279" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="1285" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>
   <text x="74" y="1286" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">PACK, SEAL, THEN STREAM</text>
   <text x="1158" y="1285" text-anchor="end" class="sans body" fill="#9AA3AD">preprocessing produces an immutable runtime input</text>

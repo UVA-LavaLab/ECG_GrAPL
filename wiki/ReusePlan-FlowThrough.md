@@ -65,7 +65,8 @@ id_bits + 2 + 2*epoch_bits <= 32
 ```
 
 Unused upper compact bits are zero/reserved; they are not alignment bits.
-Decode widens a compact value into the canonical 64-bit metadata layout.
+The record-load execution helper widens a compact value into the canonical
+64-bit metadata layout using the configured record-format CSR.
 
 Weighted SSSP has two honest transports:
 

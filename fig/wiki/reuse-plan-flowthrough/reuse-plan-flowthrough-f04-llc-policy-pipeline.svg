@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">LLC metadata lifecycle and rrip_first victim pipeline</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Line updates, eligibility, structural preference, and epoch ranking are distinct decisions.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">ACCEPT OR REJECT REQUEST METADATA</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">destination line and execution context must agree</text>
@@ -54,7 +54,7 @@
   <text x="616" y="263" text-anchor="start" class="sans body" fill="#27313A">requestor or context disagreement</text>
   <text x="616" y="287" text-anchor="start" class="sans body" fill="#27313A">equal-sequence payload disagreement</text>
   <text x="616" y="311" text-anchor="start" class="sans body" fill="#27313A">destination-line mismatch or invalid count</text>
-  <circle cx="44" cy="450" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <circle cx="44" cy="450" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="456" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="457" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">LINE-LOCAL STATE</text>
   <text x="1158" y="456" text-anchor="end" class="sans body" fill="#9AA3AD">data value and replacement metadata have different lifetimes</text>
@@ -71,7 +71,7 @@
   <text x="616" y="575" text-anchor="start" class="sans body" fill="#27313A">ordinary hit still updates native recency/RRIP state</text>
   <text x="616" y="599" text-anchor="start" class="sans body" fill="#27313A">conflicted metadata does not stamp the line</text>
   <text x="616" y="623" text-anchor="start" class="sans body" fill="#27313A">invalidation clears tier, epochs, context, and validity</text>
-  <circle cx="44" cy="762" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <circle cx="44" cy="762" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="768" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="769" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">RRIP ELIGIBILITY</text>
   <text x="1158" y="768" text-anchor="end" class="sans body" fill="#9AA3AD">the default variant ages until a way reaches rrpvMax</text>
@@ -94,7 +94,7 @@
   <text x="832" y="887" text-anchor="start" class="sans body" fill="#27313A">else min(d(epoch1), d(epoch2))</text>
   <text x="832" y="911" text-anchor="start" class="sans body" fill="#27313A">select the farthest effective distance</text>
   <text x="832" y="935" text-anchor="start" class="sans body" fill="#27313A">set order resolves an exact tie</text>
-  <circle cx="44" cy="1074" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <circle cx="44" cy="1074" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="1080" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>
   <text x="74" y="1081" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">VARIANTS ARE CONTROLLED ABLATIONS</text>
   <text x="1158" y="1080" text-anchor="end" class="sans body" fill="#9AA3AD">do not blend their ordering into the primary claim</text>

@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ReuseBind across MSHR merge, fill, and invalidation</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">MSHR merge validity and FlowThrough allocation are separate state machines.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">REQUEST EXTENSION</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">one dynamic governed property load</text>
@@ -48,7 +48,7 @@
   <text x="116" y="263" text-anchor="start" class="mono body" fill="#27313A">current_epoch | context_id | dynamic sequence | conflicted</text>
   <text x="116" y="287" text-anchor="start" class="mono body" fill="#27313A">valid context requires nonzero context ID and no conflict</text>
   <text x="116" y="311" text-anchor="start" class="mono body" fill="#27313A">the extension clones with the gem5 Request</text>
-  <circle cx="44" cy="410" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <circle cx="44" cy="410" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="416" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="417" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">MSHR TARGET-LIST MERGE</text>
   <text x="1158" y="416" text-anchor="end" class="sans body" fill="#9AA3AD">rebuild state whenever active targets change</text>
@@ -71,7 +71,7 @@
   <text x="832" y="535" text-anchor="start" class="sans body" fill="#27313A">FlowThrough target contributes false</text>
   <text x="832" y="559" text-anchor="start" class="sans body" fill="#27313A">ordinary target contributes true</text>
   <text x="832" y="583" text-anchor="start" class="sans body" fill="#27313A">TargetList combines them with OR</text>
-  <circle cx="44" cy="742" r="19" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <circle cx="44" cy="742" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="748" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="749" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">RESPONSE AND LLC ACCEPTANCE</text>
   <text x="1158" y="748" text-anchor="end" class="sans body" fill="#9AA3AD">conflict never becomes a valid line stamp</text>

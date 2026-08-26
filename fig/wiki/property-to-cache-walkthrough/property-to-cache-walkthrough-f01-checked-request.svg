@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1610" viewBox="0 0 1200 1610" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2070" viewBox="0 0 1200 2070" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
   <title id="title">Checked request: source edge 4 -&gt; 7 maps to property 18</title>
   <desc id="desc">A single checked-fixture edge is followed from its edge-aligned compact record through the record load, explicit register dependency, computed property address, typed Request extension, LLC line stamp, circular distance, normal data completion, and later victim selection.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
@@ -33,11 +33,11 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1610" fill="#FFFFFF"/>
+  <rect x="0" y="0" width="1200" height="2070" fill="#FFFFFF"/>
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Checked request: source edge 4 -&gt; 7 maps to property 18</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Every number is derived from fig/ecg-figure-fixture.json.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">TRACKED GRAPH EDGE AND RECORD</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">one concrete checked edge; not a measured workload</text>
@@ -82,102 +82,141 @@
   <rect x="989.0" y="335" width="162.0" height="90" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <text x="1070.0" y="378.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">e2 15</text>
   <text x="1070.0" y="402.0" text-anchor="middle" class="sans body" fill="#27313A">5 bits</text>
-  <circle cx="44" cy="505" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <circle cx="44" cy="505" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="511" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="512" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">REAL TWO-INSTRUCTION PIPELINE</text>
-  <text x="1158" y="511" text-anchor="end" class="sans body" fill="#9AA3AD">the compact record becomes an explicit rs2 operand</text>
-  <line x1="24" y1="531" x2="1176" y2="531" stroke="#15803D" stroke-width="3"/>
-  <path d="M270 675 L330 675" fill="none" stroke="#6D5BD0" stroke-width="2.5" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="instruction operand / Request state"/>
-  <path d="M560 675 L620 675" fill="none" stroke="#6D5BD0" stroke-width="2.5" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="instruction operand / Request state"/>
-  <path d="M850 675 L910 675" fill="none" stroke="#6D5BD0" stroke-width="2.5" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="instruction operand / Request state"/>
-  <rect x="40" y="565" width="230" height="220" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
-  <text x="56" y="594" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Record load</text>
-  <text x="56" y="624" text-anchor="start" class="mono body" fill="#27313A">ecg.flow.load</text>
-  <text x="56" y="648" text-anchor="start" class="mono body" fill="#27313A">.compact</text>
-  <text x="56" y="672" text-anchor="start" class="mono body" fill="#27313A">record[int 8-&gt;18]</text>
-  <text x="56" y="696" text-anchor="start" class="mono body" fill="#27313A">rd = canonical plan</text>
-  <rect x="330" y="565" width="230" height="220" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="346" y="594" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Rename + issue</text>
-  <text x="346" y="624" text-anchor="start" class="mono body" fill="#27313A">rd -&gt; physical reg</text>
-  <text x="346" y="648" text-anchor="start" class="mono body" fill="#27313A">property reads rs2</text>
-  <text x="346" y="672" text-anchor="start" class="mono body" fill="#27313A">wait for rs1 + rs2</text>
-  <rect x="620" y="565" width="230" height="220" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="636" y="594" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">ecg.bind.load.f32</text>
-  <text x="636" y="624" text-anchor="start" class="mono body" fill="#27313A">rs1 = 0x80000048</text>
-  <text x="636" y="648" text-anchor="start" class="mono body" fill="#27313A">rs2 = ReusePlan</text>
-  <text x="636" y="672" text-anchor="start" class="mono body" fill="#27313A">binary32 result</text>
-  <rect x="910" y="565" width="230" height="220" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="926" y="594" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">LSQ Request</text>
-  <text x="926" y="624" text-anchor="start" class="mono body" fill="#27313A">dest=18 tier=1</text>
-  <text x="926" y="648" text-anchor="start" class="mono body" fill="#27313A">epochs=11,15</text>
-  <text x="926" y="672" text-anchor="start" class="mono body" fill="#27313A">current=8 context=k</text>
-  <text x="926" y="696" text-anchor="start" class="mono body" fill="#27313A">sequence=s</text>
-  <text x="600" y="825" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">C  instruction operand / Request state</text>
-  <circle cx="44" cy="870" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
-  <text x="44" y="876" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="877" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">TWO REQUEST LANES THROUGH THE CACHE</text>
-  <text x="1158" y="876" text-anchor="end" class="sans body" fill="#9AA3AD">record placement and property metadata remain distinct</text>
-  <line x1="24" y1="896" x2="1176" y2="896" stroke="#1769C2" stroke-width="3"/>
-  <path d="M244 982 L320 982" fill="none" stroke="#B45309" stroke-width="2.5" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-label="record Request" data-flow-cadence="per tracked edge"/>
-  <path d="M524 982 L600 982" fill="none" stroke="#B45309" stroke-width="2.5" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-label="record Request" data-flow-cadence="per tracked edge"/>
-  <path d="M804 982 L880 982" fill="none" stroke="#B45309" stroke-width="2.5" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-label="record Request" data-flow-cadence="per tracked edge"/>
-  <rect x="40" y="930" width="204" height="115" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
-  <text x="56" y="959" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Record Request</text>
-  <text x="56" y="989" text-anchor="start" class="mono body" fill="#27313A">ECG_FLOWTHROUGH</text>
-  <text x="56" y="1013" text-anchor="start" class="mono body" fill="#27313A">record address</text>
-  <rect x="320" y="930" width="204" height="115" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
-  <text x="336" y="959" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Private caches</text>
-  <text x="336" y="989" text-anchor="start" class="mono body" fill="#27313A">normal lookup</text>
-  <text x="336" y="1013" text-anchor="start" class="mono body" fill="#27313A">private fill</text>
-  <rect x="600" y="930" width="204" height="115" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
-  <text x="616" y="959" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Record-block MSHR</text>
-  <text x="616" y="989" text-anchor="start" class="mono body" fill="#27313A">same block only</text>
-  <text x="616" y="1013" text-anchor="start" class="mono body" fill="#27313A">allocOnFill=false</text>
-  <rect x="880" y="930" width="260" height="115" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="896" y="959" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">LLC record outcome</text>
-  <text x="896" y="989" text-anchor="start" class="mono body" fill="#27313A">hit returns normally</text>
-  <text x="896" y="1013" text-anchor="start" class="mono body" fill="#27313A">miss may skip LLC fill</text>
-  <path d="M244 1127 L320 1127" fill="none" stroke="#1769C2" stroke-width="2.5" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property Request + ReuseBind" data-flow-cadence="per tracked edge"/>
-  <path d="M524 1127 L600 1127" fill="none" stroke="#1769C2" stroke-width="2.5" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property Request + ReuseBind" data-flow-cadence="per tracked edge"/>
-  <path d="M804 1127 L880 1127" fill="none" stroke="#1769C2" stroke-width="2.5" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property Request + ReuseBind" data-flow-cadence="per tracked edge"/>
-  <rect x="40" y="1075" width="204" height="115" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="56" y="1104" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Property Request</text>
-  <text x="56" y="1134" text-anchor="start" class="mono body" fill="#27313A">property address</text>
-  <text x="56" y="1158" text-anchor="start" class="mono body" fill="#27313A">ReuseBind ext</text>
-  <text x="56" y="1182" text-anchor="start" class="mono body" fill="#27313A">allocOnFill=true</text>
-  <rect x="320" y="1075" width="204" height="115" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
-  <text x="336" y="1104" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Private caches</text>
-  <text x="336" y="1134" text-anchor="start" class="mono body" fill="#27313A">normal lookup</text>
-  <text x="336" y="1158" text-anchor="start" class="mono body" fill="#27313A">private fill</text>
-  <rect x="600" y="1075" width="204" height="115" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="616" y="1104" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Property MSHR</text>
-  <text x="616" y="1134" text-anchor="start" class="mono body" fill="#27313A">same block only</text>
-  <text x="616" y="1158" text-anchor="start" class="mono body" fill="#27313A">ReuseBind merge</text>
-  <rect x="880" y="1075" width="260" height="115" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="896" y="1104" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">LLC property outcome</text>
-  <text x="896" y="1134" text-anchor="start" class="mono body" fill="#27313A">destination-line guard</text>
-  <text x="896" y="1158" text-anchor="start" class="mono body" fill="#27313A">stamp T1 / e11 / e15</text>
-  <text x="600" y="1208" text-anchor="middle" class="sans body" fill="#1769C2" font-weight="700">D  record Request | property Request + ReuseBind | per tracked edge</text>
-  <circle cx="44" cy="1235" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
-  <text x="44" y="1241" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>
-  <text x="74" y="1242" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">LINE STAMP, REUSE TIMELINE, AND LATER VICTIM</text>
-  <text x="1158" y="1241" text-anchor="end" class="sans body" fill="#9AA3AD">the property value is already complete</text>
-  <line x1="24" y1="1261" x2="1176" y2="1261" stroke="#6D5BD0" stroke-width="3"/>
-  <rect x="24" y="1277" width="720" height="250" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="44" y="1308" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">E  LLC line 0x80000040</text>
-  <line x1="80" y1="1415" x2="700" y2="1415" stroke="#27313A" stroke-width="3"/>
-  <circle cx="240.0" cy="1415" r="12" fill="#FFFFFF" stroke="#B45309" stroke-width="1"/>
-  <text x="240.0" y="1383" text-anchor="middle" class="sans body" fill="#B45309" font-weight="700">current 8</text>
-  <circle cx="300.0" cy="1415" r="12" fill="#FFFFFF" stroke="#15803D" stroke-width="1"/>
-  <text x="300.0" y="1465" text-anchor="middle" class="sans body" fill="#15803D" font-weight="700">e1 11</text>
-  <circle cx="380.0" cy="1415" r="12" fill="#FFFFFF" stroke="#6D5BD0" stroke-width="1"/>
-  <text x="380.0" y="1383" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">e2 15</text>
-  <text x="384" y="1485" text-anchor="middle" class="mono body" fill="#6D5BD0">nearest = min(3, 7) = 3; stored epochs remain absolute</text>
-  <rect x="770" y="1277" width="406" height="250" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="786" y="1306" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Later rrip_first decision</text>
-  <text x="786" y="1336" text-anchor="start" class="sans body" fill="#27313A">line must first be max-RRPV eligible</text>
-  <text x="786" y="1360" text-anchor="start" class="sans body" fill="#27313A">eligible structural line wins first</text>
-  <text x="786" y="1384" text-anchor="start" class="sans body" fill="#27313A">otherwise farthest stamped property wins</text>
-  <text x="786" y="1408" text-anchor="start" class="sans body" fill="#27313A">ReusePlan never changes the property value</text>
-  <text x="786" y="1432" text-anchor="start" class="sans body" fill="#27313A">this checked path is not a speedup claim</text>
+  <text x="74" y="512" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">SOFTWARE LOOP AND HARDWARE CORRELATION</text>
+  <text x="1158" y="511" text-anchor="end" class="sans body" fill="#9AA3AD">representative push-family trace; PageRank reverses direction</text>
+  <line x1="24" y1="531" x2="1176" y2="531" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="24" y="547" width="650" height="300" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="3"/>
+  <text x="44" y="578" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Representative property-access pseudocode</text>
+  <text x="44" y="615" text-anchor="start" class="mono body" fill="#9AA3AD">L1</text>
+  <text x="88" y="615" text-anchor="start" class="mono body" fill="#27313A">for reader in active_readers:</text>
+  <text x="44" y="645" text-anchor="start" class="mono body" fill="#9AA3AD">L2</text>
+  <text x="88" y="645" text-anchor="start" class="mono body" fill="#27313A">  for edge_pos in csr_row(reader):</text>
+  <text x="44" y="675" text-anchor="start" class="mono body" fill="#9AA3AD">L3</text>
+  <text x="88" y="675" text-anchor="start" class="mono body" fill="#27313A">    plan = ecg.flow.load.compact(record[edge_pos])  [B]</text>
+  <text x="44" y="705" text-anchor="start" class="mono body" fill="#9AA3AD">L4</text>
+  <text x="88" y="705" text-anchor="start" class="mono body" fill="#27313A">    dest = plan.destination</text>
+  <text x="44" y="735" text-anchor="start" class="mono body" fill="#9AA3AD">L5</text>
+  <text x="88" y="735" text-anchor="start" class="mono body" fill="#27313A">    addr = property_base + dest * 4</text>
+  <text x="44" y="765" text-anchor="start" class="mono body" fill="#9AA3AD">L6</text>
+  <text x="88" y="765" text-anchor="start" class="mono body" fill="#27313A">    value = ecg.bind.load.u32(addr, plan)  [C,D]</text>
+  <text x="44" y="795" text-anchor="start" class="mono body" fill="#9AA3AD">L7</text>
+  <text x="88" y="795" text-anchor="start" class="mono body" fill="#27313A">    proposal = update(reader, dest, value)</text>
+  <text x="44" y="830" text-anchor="start" class="sans body" fill="#B42318">tracked execution: source 4-&gt;7 maps to internal 8-&gt;18</text>
+  <rect x="700" y="547" width="476" height="300" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
+  <text x="720" y="578" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Stable software / hardware callouts</text>
+  <circle cx="730" cy="619" r="15" fill="#B42318" stroke="#B42318" stroke-width="1"/>
+  <text x="730" y="625" text-anchor="middle" class="sans body" fill="#FFFFFF" font-weight="700">A</text>
+  <text x="758" y="625" text-anchor="start" class="sans body" fill="#27313A">source edge 4-&gt;7 / internal edge 8-&gt;18</text>
+  <circle cx="730" cy="662" r="15" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <text x="730" y="668" text-anchor="middle" class="sans body" fill="#FFFFFF" font-weight="700">B</text>
+  <text x="758" y="668" text-anchor="start" class="sans body" fill="#27313A">record: dest18 | T1 | e11 | e15</text>
+  <circle cx="730" cy="705" r="15" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="730" y="711" text-anchor="middle" class="sans body" fill="#FFFFFF" font-weight="700">C</text>
+  <text x="758" y="711" text-anchor="start" class="sans body" fill="#27313A">record rd becomes bind-load rs2</text>
+  <circle cx="730" cy="748" r="15" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <text x="730" y="754" text-anchor="middle" class="sans body" fill="#FFFFFF" font-weight="700">D</text>
+  <text x="758" y="754" text-anchor="start" class="sans body" fill="#27313A">property Request carries ReuseBind</text>
+  <circle cx="730" cy="791" r="15" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <text x="730" y="797" text-anchor="middle" class="sans body" fill="#FFFFFF" font-weight="700">E</text>
+  <text x="758" y="797" text-anchor="start" class="sans body" fill="#27313A">LLC line 0x80000040 stores the stamp</text>
+  <circle cx="44" cy="885" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="44" y="891" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="892" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">REAL TWO-INSTRUCTION PIPELINE</text>
+  <text x="1158" y="891" text-anchor="end" class="sans body" fill="#9AA3AD">the compact record becomes an explicit rs2 operand</text>
+  <line x1="24" y1="911" x2="1176" y2="911" stroke="#15803D" stroke-width="3"/>
+  <path d="M270 1055 L330 1055" fill="none" stroke="#6D5BD0" stroke-width="2.5" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="instruction operand / Request state"/>
+  <path d="M560 1055 L620 1055" fill="none" stroke="#6D5BD0" stroke-width="2.5" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="instruction operand / Request state"/>
+  <path d="M850 1055 L910 1055" fill="none" stroke="#6D5BD0" stroke-width="2.5" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="instruction operand / Request state"/>
+  <rect x="40" y="945" width="230" height="220" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="56" y="974" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Record load</text>
+  <text x="56" y="1004" text-anchor="start" class="mono body" fill="#27313A">ecg.flow.load</text>
+  <text x="56" y="1028" text-anchor="start" class="mono body" fill="#27313A">.compact</text>
+  <text x="56" y="1052" text-anchor="start" class="mono body" fill="#27313A">record[int 8-&gt;18]</text>
+  <text x="56" y="1076" text-anchor="start" class="mono body" fill="#27313A">rd = canonical plan</text>
+  <rect x="330" y="945" width="230" height="220" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="346" y="974" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Rename + issue</text>
+  <text x="346" y="1004" text-anchor="start" class="mono body" fill="#27313A">rd -&gt; physical reg</text>
+  <text x="346" y="1028" text-anchor="start" class="mono body" fill="#27313A">property reads rs2</text>
+  <text x="346" y="1052" text-anchor="start" class="mono body" fill="#27313A">wait for rs1 + rs2</text>
+  <rect x="620" y="945" width="230" height="220" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="636" y="974" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">ecg.bind.load.u32</text>
+  <text x="636" y="1004" text-anchor="start" class="mono body" fill="#27313A">rs1 = 0x80000048</text>
+  <text x="636" y="1028" text-anchor="start" class="mono body" fill="#27313A">rs2 = ReusePlan</text>
+  <text x="636" y="1052" text-anchor="start" class="mono body" fill="#27313A">uint32 result</text>
+  <rect x="910" y="945" width="230" height="220" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="926" y="974" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">LSQ Request</text>
+  <text x="926" y="1004" text-anchor="start" class="mono body" fill="#27313A">dest=18 tier=1</text>
+  <text x="926" y="1028" text-anchor="start" class="mono body" fill="#27313A">epochs=11,15</text>
+  <text x="926" y="1052" text-anchor="start" class="mono body" fill="#27313A">current=8 context=k</text>
+  <text x="926" y="1076" text-anchor="start" class="mono body" fill="#27313A">sequence=s</text>
+  <text x="600" y="1205" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">C  instruction operand / Request state</text>
+  <circle cx="44" cy="1245" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="44" y="1251" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>
+  <text x="74" y="1252" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">TWO REQUEST LANES THROUGH THE CACHE</text>
+  <text x="1158" y="1251" text-anchor="end" class="sans body" fill="#9AA3AD">record placement and property metadata remain distinct</text>
+  <line x1="24" y1="1271" x2="1176" y2="1271" stroke="#1769C2" stroke-width="3"/>
+  <path d="M244 1357 L320 1357" fill="none" stroke="#B45309" stroke-width="2.5" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-label="record Request" data-flow-cadence="per tracked edge"/>
+  <path d="M524 1357 L600 1357" fill="none" stroke="#B45309" stroke-width="2.5" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-label="record Request" data-flow-cadence="per tracked edge"/>
+  <path d="M804 1357 L880 1357" fill="none" stroke="#B45309" stroke-width="2.5" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-label="record Request" data-flow-cadence="per tracked edge"/>
+  <rect x="40" y="1305" width="204" height="115" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="56" y="1334" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Record Request</text>
+  <text x="56" y="1364" text-anchor="start" class="mono body" fill="#27313A">ECG_FLOWTHROUGH</text>
+  <text x="56" y="1388" text-anchor="start" class="mono body" fill="#27313A">record address</text>
+  <rect x="320" y="1305" width="204" height="115" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="336" y="1334" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Private caches</text>
+  <text x="336" y="1364" text-anchor="start" class="mono body" fill="#27313A">normal lookup</text>
+  <text x="336" y="1388" text-anchor="start" class="mono body" fill="#27313A">private fill</text>
+  <rect x="600" y="1305" width="204" height="115" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="1334" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Record-block MSHR</text>
+  <text x="616" y="1364" text-anchor="start" class="mono body" fill="#27313A">same block only</text>
+  <text x="616" y="1388" text-anchor="start" class="mono body" fill="#27313A">allocOnFill=false</text>
+  <rect x="880" y="1305" width="260" height="115" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="896" y="1334" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">LLC record outcome</text>
+  <text x="896" y="1364" text-anchor="start" class="mono body" fill="#27313A">hit returns normally</text>
+  <text x="896" y="1388" text-anchor="start" class="mono body" fill="#27313A">miss may skip LLC fill</text>
+  <path d="M244 1502 L320 1502" fill="none" stroke="#1769C2" stroke-width="2.5" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property Request + ReuseBind" data-flow-cadence="per tracked edge"/>
+  <path d="M524 1502 L600 1502" fill="none" stroke="#1769C2" stroke-width="2.5" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property Request + ReuseBind" data-flow-cadence="per tracked edge"/>
+  <path d="M804 1502 L880 1502" fill="none" stroke="#1769C2" stroke-width="2.5" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-label="property Request + ReuseBind" data-flow-cadence="per tracked edge"/>
+  <rect x="40" y="1450" width="204" height="115" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="56" y="1479" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Property Request</text>
+  <text x="56" y="1509" text-anchor="start" class="mono body" fill="#27313A">property address</text>
+  <text x="56" y="1533" text-anchor="start" class="mono body" fill="#27313A">ReuseBind ext</text>
+  <text x="56" y="1557" text-anchor="start" class="mono body" fill="#27313A">allocOnFill=true</text>
+  <rect x="320" y="1450" width="204" height="115" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="336" y="1479" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Private caches</text>
+  <text x="336" y="1509" text-anchor="start" class="mono body" fill="#27313A">normal lookup</text>
+  <text x="336" y="1533" text-anchor="start" class="mono body" fill="#27313A">private fill</text>
+  <rect x="600" y="1450" width="204" height="115" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="616" y="1479" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Property MSHR</text>
+  <text x="616" y="1509" text-anchor="start" class="mono body" fill="#27313A">same block only</text>
+  <text x="616" y="1533" text-anchor="start" class="mono body" fill="#27313A">ReuseBind merge</text>
+  <rect x="880" y="1450" width="260" height="115" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="896" y="1479" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">LLC property outcome</text>
+  <text x="896" y="1509" text-anchor="start" class="mono body" fill="#27313A">destination-line guard</text>
+  <text x="896" y="1533" text-anchor="start" class="mono body" fill="#27313A">stamp T1 / e11 / e15</text>
+  <text x="600" y="1580" text-anchor="middle" class="sans body" fill="#1769C2" font-weight="700">D  record Request | property Request + ReuseBind | per tracked edge</text>
+  <circle cx="44" cy="1625" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="44" y="1631" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">5</text>
+  <text x="74" y="1632" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">LINE STAMP, REUSE TIMELINE, AND LATER VICTIM</text>
+  <text x="1158" y="1631" text-anchor="end" class="sans body" fill="#9AA3AD">the property value is already complete</text>
+  <line x1="24" y1="1651" x2="1176" y2="1651" stroke="#6D5BD0" stroke-width="3"/>
+  <rect x="24" y="1667" width="720" height="250" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="44" y="1698" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">E  LLC line 0x80000040</text>
+  <line x1="80" y1="1805" x2="700" y2="1805" stroke="#27313A" stroke-width="3"/>
+  <circle cx="240.0" cy="1805" r="12" fill="#FFFFFF" stroke="#B45309" stroke-width="1"/>
+  <text x="240.0" y="1773" text-anchor="middle" class="sans body" fill="#B45309" font-weight="700">current 8</text>
+  <circle cx="300.0" cy="1805" r="12" fill="#FFFFFF" stroke="#15803D" stroke-width="1"/>
+  <text x="300.0" y="1855" text-anchor="middle" class="sans body" fill="#15803D" font-weight="700">e1 11</text>
+  <circle cx="380.0" cy="1805" r="12" fill="#FFFFFF" stroke="#6D5BD0" stroke-width="1"/>
+  <text x="380.0" y="1773" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">e2 15</text>
+  <text x="384" y="1875" text-anchor="middle" class="mono body" fill="#6D5BD0">nearest = min(3, 7) = 3; stored epochs remain absolute</text>
+  <rect x="770" y="1667" width="406" height="250" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="786" y="1696" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Later rrip_first decision</text>
+  <text x="786" y="1726" text-anchor="start" class="sans body" fill="#27313A">line must first be max-RRPV eligible</text>
+  <text x="786" y="1750" text-anchor="start" class="sans body" fill="#27313A">eligible structural line wins first</text>
+  <text x="786" y="1774" text-anchor="start" class="sans body" fill="#27313A">otherwise farthest stamped property wins</text>
+  <text x="786" y="1798" text-anchor="start" class="sans body" fill="#27313A">ReusePlan never changes the property value</text>
+  <text x="786" y="1822" text-anchor="start" class="sans body" fill="#27313A">this checked path is not a speedup claim</text>
 </svg>

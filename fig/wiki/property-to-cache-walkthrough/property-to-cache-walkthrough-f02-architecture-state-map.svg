@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Where ECG state lives in the processor and cache hierarchy</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Containment shows storage; arrows are reserved for real operands and requests.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#1769C2" stroke="#1769C2" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">SOFTWARE AND ARCHITECTURAL INPUTS</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">immutable graph data is separate from live execution state</text>
@@ -54,7 +54,7 @@
   <text x="616" y="263" text-anchor="start" class="sans body" fill="#27313A">current epoch: quantized traversal position</text>
   <text x="616" y="287" text-anchor="start" class="sans body" fill="#27313A">context: nonzero execution identity</text>
   <text x="616" y="311" text-anchor="start" class="sans body" fill="#27313A">updated by software at controlled boundaries</text>
-  <circle cx="44" cy="450" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <circle cx="44" cy="450" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="456" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="457" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">OUT-OF-ORDER CORE</text>
   <text x="1158" y="456" text-anchor="end" class="sans body" fill="#9AA3AD">standard O3 structures carry one explicit dependency</text>
@@ -83,7 +83,7 @@
   <text x="922" y="575" text-anchor="start" class="sans body" fill="#27313A">optional ReuseBind extension</text>
   <text x="922" y="599" text-anchor="start" class="sans body" fill="#27313A">destination + tier + epochs</text>
   <text x="922" y="623" text-anchor="start" class="sans body" fill="#27313A">current + context + sequence</text>
-  <circle cx="44" cy="782" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <circle cx="44" cy="782" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="788" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="789" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">CACHE HIERARCHY</text>
   <text x="1158" y="788" text-anchor="end" class="sans body" fill="#9AA3AD">private caches stay ordinary; LLC state is extended</text>

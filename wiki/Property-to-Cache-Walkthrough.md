@@ -49,7 +49,7 @@ fixed distance.
    `(destination=18, tier=1, epoch1=11, epoch2=15)`.
 2. `ecg.flow.load.compact` reads the record and returns a canonical ReusePlan
    in an integer register. Its Request may use FlowThrough.
-3. `ecg.bind.load.f32` reads the computed address `0x8000_0048` and names the
+3. `ecg.bind.load.u32` reads the computed address `0x8000_0048` and names the
    ReusePlan register as `rs2`.
 4. The LSQ attaches the typed ReuseBind extension to that property Request.
 5. An LLC hit or fill accepts it only when context and destination line match.

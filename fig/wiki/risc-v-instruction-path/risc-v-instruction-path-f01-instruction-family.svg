@@ -37,7 +37,7 @@
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Experimental RISC-V instruction roles and operand contracts</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Record acquisition and property access remain separate dynamic loads.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
-  <circle cx="44" cy="138" r="19" fill="#6D5BD0" stroke="#6D5BD0" stroke-width="1"/>
+  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">CONFIGURE EXECUTION CONTEXT</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">software writes format, current epoch, and context CSRs</text>
@@ -60,7 +60,7 @@
   <text x="832" y="263" text-anchor="start" class="sans body" fill="#27313A">separates overlapping contexts</text>
   <text x="832" y="287" text-anchor="start" class="sans body" fill="#27313A">required for valid ReuseBind</text>
   <text x="832" y="311" text-anchor="start" class="sans body" fill="#27313A">checked during MSHR merge</text>
-  <circle cx="44" cy="430" r="19" fill="#B45309" stroke="#B45309" stroke-width="1"/>
+  <circle cx="44" cy="430" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="436" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="437" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">RECORD-LOAD FAMILY</text>
   <text x="1158" y="436" text-anchor="end" class="sans body" fill="#9AA3AD">rs1 is a record address; result depends on the form</text>
@@ -79,7 +79,7 @@
   <text x="616" y="579" text-anchor="start" class="mono body" fill="#27313A">compact unweighted: 4-byte load, widened</text>
   <text x="616" y="603" text-anchor="start" class="mono body" fill="#27313A">weighted: rd = 32-bit sidecar</text>
   <text x="616" y="627" text-anchor="start" class="mono body" fill="#27313A">compact unweighted is FlowThrough-only</text>
-  <circle cx="44" cy="722" r="19" fill="#15803D" stroke="#15803D" stroke-width="1"/>
+  <circle cx="44" cy="722" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="728" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="729" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">PROPERTY-LOAD FAMILY</text>
   <text x="1158" y="728" text-anchor="end" class="sans body" fill="#9AA3AD">the ReusePlan result is an explicit source operand</text>
