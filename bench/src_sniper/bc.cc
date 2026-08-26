@@ -60,7 +60,7 @@ pvector<ScoreT> Brandes_Sniper(const Graph &g, int num_iters) {
          static_cast<uint32_t>(g.num_nodes()), sizeof(ScoreT), true},
     };
     SniperEdgeRegion edge_regions[2];
-    int num_edge_regions = sniper_make_edge_regions(g, edge_regions, 2, true);
+    int num_edge_regions = sniper_make_edge_regions(g, edge_regions, 2);
     // P-OPT reref matrix keyed on depth (int32): BC pushes OUT-edges reading
     // depth[dest], so depth is next-referenced by its IN-neighbours -> transpose
     // reref (traverseCSR=false), matching the push_out_edges=true epochs below.

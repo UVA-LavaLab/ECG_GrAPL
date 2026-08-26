@@ -4,7 +4,7 @@
      const bool isReadOnly;
 +    const bool graphArrayStatsActive;
 
-@@ -1073,2 +1074,11 @@
+@@ -1073,2 +1074,13 @@
 
 +        /** Demand LLC misses by graph-array category and requestor. */
 +        statistics::Vector2d ecgArrayDemandMisses;
@@ -14,15 +14,17 @@
 +        statistics::Vector2d ecgArrayDemandNonReadMshrMisses;
 +        /** Bytes requested by unique demand-read MSHR misses. */
 +        statistics::Vector2d ecgArrayDemandReadBytes;
++        /** Structural-stream miss requests suppressed from LLC allocation. */
++        statistics::Scalar structuralFlowThroughMissTargets;
 +
          /** Total number of ticks spent waiting for demand misses. */
-@@ -1307,2 +1317,5 @@
+@@ -1307,2 +1319,5 @@
 
 +    void recordGraphArrayDemandMiss(PacketPtr pkt);
 +    void recordGraphArrayMshrMiss(PacketPtr pkt);
 +
      void incMissCount(PacketPtr pkt)
-@@ -1311,2 +1324,3 @@
+@@ -1311,2 +1326,3 @@
          stats.cmdStats(pkt).misses[pkt->req->requestorId()]++;
 +        recordGraphArrayDemandMiss(pkt);
          pkt->req->incAccessDepth();
@@ -81,7 +83,7 @@
          stats.cmdStats(pkt).mshrMisses[pkt->req->requestorId()]++;
 +        recordGraphArrayMshrMiss(pkt);
          if (prefetcher && pkt->isDemand())
-@@ -2305,2 +2349,12 @@
+@@ -2305,2 +2349,15 @@
               "number of overall misses"),
 +    ADD_STAT(ecgArrayDemandMisses, statistics::units::Count::get(),
 +             "demand misses by graph-array category and requestor"),
@@ -93,8 +95,11 @@
 +             "demand non-read MSHR misses by category and requestor"),
 +    ADD_STAT(ecgArrayDemandReadBytes, statistics::units::Byte::get(),
 +             "unique downstream demand-read bytes by category and requestor"),
++    ADD_STAT(structuralFlowThroughMissTargets,
++             statistics::units::Count::get(),
++             "structural-stream miss targets marked no-allocate at the LLC"),
      ADD_STAT(demandMissLatency, statistics::units::Tick::get(),
-@@ -2383,2 +2437,27 @@
+@@ -2383,2 +2440,27 @@
 
 +    const auto num_array_categories =
 +        replacement_policy::graph::numGraphArrayCategories();

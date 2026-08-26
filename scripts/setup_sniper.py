@@ -1060,6 +1060,100 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
         args.dry_run,
         ["if (flowthrough)\n      {\n         eviction = false;"],
     )
+    replace_once(
+        nuca_header,
+        """      UInt64 m_flowthrough_reads, m_flowthrough_writes;
+""",
+        """      UInt64 m_flowthrough_reads, m_flowthrough_writes;
+      UInt64 m_structural_flowthrough_reads, m_structural_flowthrough_writes;
+""",
+        args.dry_run,
+        ["m_structural_flowthrough_reads"],
+    )
+    replace_once(
+        nuca_source,
+        """   , m_flowthrough_writes(0)
+{
+""",
+        """   , m_flowthrough_writes(0)
+   , m_structural_flowthrough_reads(0)
+   , m_structural_flowthrough_writes(0)
+{
+""",
+        args.dry_run,
+        ["m_structural_flowthrough_reads(0)"],
+    )
+    replace_once(
+        nuca_source,
+        """   registerStatsMetric("nuca-cache", m_core_id, "flowthrough-writes", &m_flowthrough_writes);
+}
+""",
+        """   registerStatsMetric("nuca-cache", m_core_id, "flowthrough-writes", &m_flowthrough_writes);
+   registerStatsMetric("nuca-cache", m_core_id, "structural-flowthrough-reads", &m_structural_flowthrough_reads);
+   registerStatsMetric("nuca-cache", m_core_id, "structural-flowthrough-writes", &m_structural_flowthrough_writes);
+}
+""",
+        args.dry_run,
+        ['"structural-flowthrough-reads"'],
+    )
+    replace_once(
+        nuca_source,
+        """   perf->updateTime(now);
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
+         static_cast<uint64_t>(address));
+""",
+        """   perf->updateTime(now);
+   const bool structural_flowthrough =
+      graphbrew::sniper::isStructuralFlowThroughAddress(
+         static_cast<uint64_t>(address));
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
+         static_cast<uint64_t>(address));
+""",
+        args.dry_run,
+        ["perf->updateTime(now);\n   const bool structural_flowthrough ="],
+    )
+    replace_once(
+        nuca_source,
+        """   HitWhere::where_t hit_where = HitWhere::MISS;
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
+         static_cast<uint64_t>(address));
+""",
+        """   HitWhere::where_t hit_where = HitWhere::MISS;
+   const bool structural_flowthrough =
+      graphbrew::sniper::isStructuralFlowThroughAddress(
+         static_cast<uint64_t>(address));
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
+         static_cast<uint64_t>(address));
+""",
+        args.dry_run,
+        ["HitWhere::where_t hit_where = HitWhere::MISS;\n   const bool structural_flowthrough ="],
+    )
+    replace_once(
+        nuca_source,
+        """      if (flowthrough) ++m_flowthrough_reads;
+""",
+        """      if (flowthrough) ++m_flowthrough_reads;
+      if (structural_flowthrough) ++m_structural_flowthrough_reads;
+""",
+        args.dry_run,
+        ["if (structural_flowthrough) ++m_structural_flowthrough_reads;"],
+    )
+    replace_once(
+        nuca_source,
+        """         ++m_flowthrough_writes;
+         if (count) ++m_write_misses;
+""",
+        """         ++m_flowthrough_writes;
+         if (structural_flowthrough) ++m_structural_flowthrough_writes;
+         if (count) ++m_write_misses;
+""",
+        args.dry_run,
+        ["if (structural_flowthrough) ++m_structural_flowthrough_writes;"],
+    )
     migrate_if_present(
         nuca_source,
         """         if (count) ++m_write_misses;

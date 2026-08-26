@@ -38,6 +38,9 @@ def test_flowthrough_preserves_llc_hits_and_suppresses_miss_fill():
     assert "if (l3_->access" in block
     assert "if (!flowthrough) l3_->insert" in block
     assert "ECG_FLOWTHROUGH_ADAPTIVE" in cache
+    assert "accessStructuralStream" in cache
+    assert "adaptive_placement=*/false" in cache
+    assert "adaptive_placement && adaptive_flowthrough_" in cache
     assert "l2_->insert" in block
     assert "l1_->insert" in block
 
@@ -80,11 +83,16 @@ def test_gem5_flowthrough_suppresses_only_l3_allocation():
         "decoder_ecg_extract.isa"
     )
     harness = read("bench/include/gem5_sim/gem5_harness.h")
+    graph_se = read(
+        "bench/include/gem5_sim/configs/graphbrew/graph_se.py")
+    sniper_harness = read("bench/include/sniper_sim/sniper_harness.h")
     assert 'find("l3cache")' in patch
     assert "getVaddr()" in patch
     assert "Request::ECG_FLOWTHROUGH" in flag_patch
     assert "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND" in flag_patch
-    assert "flag_flowthrough && (!request_bound_only || stream_range_match)" in flag_patch
+    assert (
+        "flag_flowthrough && (!request_bound_only || metadata_range_match)"
+        in flag_patch)
     assert "rejecting squashed or stale" in flag_patch
     assert "size=%u source=%s allocate=0" in flag_patch
     assert "pkt->req->getSize()" in flag_patch
@@ -100,6 +108,15 @@ def test_gem5_flowthrough_suppresses_only_l3_allocation():
     assert 'p.name.find("l3cache")' in attribution_patch
     assert "isEcgFlowThroughAddress" in context
     assert "flowthrough_base" in context
+    assert "structural_flowthrough_base" in context
+    assert "isStructuralFlowThroughAddress" in context
+    assert "structural_flowthrough_base" in harness
+    assert "STRUCTURAL-FLOWTHROUGH sim=gem5 active=1" in harness
+    assert "STRUCTURAL_FLOWTHROUGH=" in graph_se
+    assert "structural_flowthrough_base" in sniper_harness
+    assert "STRUCTURAL-FLOWTHROUGH sim=sniper active=1" in sniper_harness
+    assert "isStructuralFlowThroughAddress" in flag_patch
+    assert "structural-range" in flag_patch
     assert "arrayAttributionGraphContext" in context
     assert "static GraphCacheContext context;" in context
     assert "ECG_FLOWTHROUGH_ADAPTIVE" in flag_patch
@@ -114,6 +131,81 @@ def test_gem5_flowthrough_suppresses_only_l3_allocation():
     assert ".insn i 0x0b, 0x3" in harness
     assert ".insn i 0x0b, 0x7" in harness
     assert ".insn i 0x0b, 0x4" in harness
+
+
+def test_structural_flowthrough_tracks_active_carrier_and_direction():
+    for kernel in ("pr", "bfs", "bc", "cc", "sssp"):
+        gem5 = read(f"bench/src_gem5/{kernel}.cc")
+        assert "packed-substitute" in gem5, kernel
+        assert "gem5_export_popt_matrix" in gem5, kernel
+
+    sniper = read("bench/src_sniper/sg_kernel.cc")
+    assert sniper.count('"packed-substitute"') >= 5
+    bc_block = sniper.split("int run_bc", 1)[1].split("int run_cc", 1)[0]
+    cc_block = sniper.split("int run_cc", 1)[1]
+    assert "sniper_make_edge_regions(graph, edge_regions, 2, true)" not in (
+        bc_block)
+    assert "sniper_make_edge_regions(graph, edge_regions, 2, true)" not in (
+        cc_block)
+    for kernel in ("bc", "cc", "cc_sv"):
+        source = read(f"bench/src_sniper/{kernel}.cc")
+        assert "sniper_make_edge_regions(g, edge_regions, 2, true)" not in source
+
+    setup = read("scripts/setup_sniper.py")
+    assert "structural-flowthrough-reads" in setup
+    assert "structural-flowthrough-writes" in setup
+    assert "isStructuralFlowThroughAddress" in setup
+    gem5_pr = read("bench/src_gem5/pr.cc")
+    gem5_bfs = read("bench/src_gem5/bfs.cc")
+    assert "pair_extract_only && pair32_ok" in gem5_pr
+    assert "packed_extract_only && !in_edge_packed_flat.empty()" in gem5_pr
+    assert "epoch_packed_extract_only" in gem5_bfs
+    assert "bfs_pair_stream_active" in sniper
+    assert "bfs_packed_stream_active" in sniper
+    assert "reuse_plan_stream_active" in sniper
+    assert "epoch_packed_stream_active" in sniper
+
+
+def test_sniper_structural_flowthrough_rejects_translated_domain():
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+            "--suite", "sniper",
+            "--benchmark", "pr",
+            "--policies", "LRU",
+            "--flowthrough", "all",
+            "--sniper-workload", "sg_kernel",
+            "--allow-sniper-sg-kernel-workload",
+            "--sniper-address-domain", "translated",
+            "--dry-run",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode != 0
+    assert "requires virtual address mode" in result.stdout + result.stderr
+
+
+def test_structural_prefetch_flags_are_target_range_exact():
+    prefetch_patch = read(
+        "bench/include/gem5_sim/overlays/mem/cache/"
+        "prefetch_flowthrough.patch")
+    request_patch = read(
+        "bench/include/gem5_sim/overlays/mem/cache/"
+        "base_flowthrough_request_flag.patch")
+    assert prefetch_patch.count(
+        "isStructuralFlowThroughAddress(addr)") == 2
+    assert "structuralFlowThrough(pfi.structuralFlowThrough)" not in (
+        prefetch_patch)
+    assert (
+        "flag_structural_flowthrough && !pkt->req->hasVaddr()"
+        in request_patch)
+    assert (
+        "structural_range_match || structural_request_match"
+        in request_patch)
 
 
 def test_sniper_flowthrough_preserves_nuca_lookup_and_skips_miss_fill():
@@ -381,12 +473,20 @@ def test_flowthrough_is_policy_isolated_and_verified():
     assert 'env.get("ECG_FLOWTHROUGH") == "1"' in runner
     assert "--flowthrough requires --reuse-plan-depth 2" in verifier
     assert "SNIPER_ECG_FUSED_REUSE_PLAN" in runner
+    assert (
+        'args.sniper_workload == "sg_kernel" and\n'
+        '            args.ecg_isa_variant == "computed"'
+        in runner)
     assert "FlowThrough inactive" in runner
     assert "ECG_FLOWTHROUGH_ADAPTIVE" in runner
     assert 'env.pop("SNIPER_ECG_FUSED_REUSE_PLAN", None)' in runner
     assert 'env.pop("SNIPER_ECG_FUSED_VALIDATE", None)' in runner
     assert 'env["SNIPER_CACHE_LINE_SIZE"] = str(args.line_size)' in runner
     assert "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND" in runner
+    assert 'env["STRUCTURAL_FLOWTHROUGH"] = "1"' in runner
+    assert "gem5_structural_flowthrough_miss_targets" in runner
+    assert "sniper_structural_flowthrough_receipt" in runner
+    assert "implemented only for cache-sim" not in runner
     assert "previous == record_count" in runner
     assert "mmap.mmap" in runner
     assert ".read_bytes()" not in runner.split(

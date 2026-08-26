@@ -165,9 +165,39 @@ pvector<NodeID> BFS_Gem5(const Graph &g, NodeID source) {
                 /*emit_receipt=*/false);
         }
     }
+    const char* configured_prefetcher = std::getenv("GRAPHBREW_PREFETCHER");
+    const bool packed_stream_compatible =
+        !configured_prefetcher ||
+        std::string(configured_prefetcher) == "none" ||
+        std::string(configured_prefetcher) == "STRIDE";
+    const bool pair_extract_only =
+        pair_ok && !gem5_ecg_pfx_hints_enabled() &&
+        packed_stream_compatible;
+    const bool epoch_packed_extract_only =
+        epoch_packed_ok && epoch_pack_id_bits <= 24 &&
+        !gem5_ecg_pfx_hints_enabled() && packed_stream_compatible;
     gem5_export_context(
         regions, 1, g, GEM5_SIDEBAND_PATH,
-        edge_regions, num_edge_regions, edge_epoch_count);
+        edge_regions, num_edge_regions, edge_epoch_count,
+        pair_ok && !pair_flat.empty()
+            ? reinterpret_cast<uint64_t>(pair_flat.data())
+            : epoch_packed_ok && !epoch_packed_flat.empty()
+                ? reinterpret_cast<uint64_t>(epoch_packed_flat.data())
+                : 0,
+        pair_ok ? pair_flat.size() * sizeof(uint64_t)
+            : epoch_packed_ok
+                ? epoch_packed_flat.size() * sizeof(uint32_t) : 0,
+        nullptr, 0, nullptr, 0, nullptr, 0,
+        pair_extract_only && !pair_flat.empty()
+            ? reinterpret_cast<uint64_t>(pair_flat.data())
+            : epoch_packed_extract_only && !epoch_packed_flat.empty()
+                ? reinterpret_cast<uint64_t>(epoch_packed_flat.data())
+                : 0,
+        pair_extract_only ? pair_flat.size() * sizeof(uint64_t)
+            : epoch_packed_extract_only
+                ? epoch_packed_flat.size() * sizeof(uint32_t) : 0,
+        pair_extract_only || epoch_packed_extract_only
+            ? "packed-substitute" : nullptr);
 
     if (ecg_reuse_plan_depth != 2) {
         constexpr int numVtxPerLine = 64 / sizeof(NodeID);
@@ -195,14 +225,6 @@ pvector<NodeID> BFS_Gem5(const Graph &g, NodeID source) {
     GEM5_RESET_STATS();
     GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE);
     int pfx_lookahead = gem5_env_int_clamped("GEM5_ECG_PFX_LOOKAHEAD", 4, 0, 64);
-    const char* configured_prefetcher = std::getenv("GRAPHBREW_PREFETCHER");
-    const bool packed_stream_compatible =
-        !configured_prefetcher ||
-        std::string(configured_prefetcher) == "none" ||
-        std::string(configured_prefetcher) == "STRIDE";
-    const bool pair_extract_only =
-        pair_ok && !gem5_ecg_pfx_hints_enabled() &&
-        packed_stream_compatible;
 
     // A5: the fused ecg.load EVICT (indexed-property) op reads parent[v] AND delivers v's
     // next-ref epoch to the LLC in one custom-0 instruction (RISC-V), stamping the property
@@ -281,9 +303,7 @@ pvector<NodeID> BFS_Gem5(const Graph &g, NodeID source) {
             }
             continue;
         }
-        if (epoch_packed_ok && epoch_pack_id_bits <= 24 &&
-            !gem5_ecg_pfx_hints_enabled() &&
-            packed_stream_compatible) {
+        if (epoch_packed_extract_only) {
             const uint64_t begin =
                 static_cast<uint64_t>(g.out_offset(u));
             const uint64_t end =
@@ -362,6 +382,8 @@ pvector<NodeID> BFS_Gem5(const Graph &g, NodeID source) {
     }
 
     GEM5_WORK_END(GEM5_WORK_COMPUTE);
+    gem5_report_semantic_result(
+        "bfs", parent.data(), static_cast<size_t>(parent.size()));
     GEM5_DUMP_STATS();
     GEM5_ECG_END_CONTEXT();
     return parent;

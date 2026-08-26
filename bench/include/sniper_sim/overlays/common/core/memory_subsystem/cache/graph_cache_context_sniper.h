@@ -169,6 +169,8 @@ struct GraphCacheContext {
     uint32_t num_edge_regions = 0;
     uint64_t flowthrough_base = 0;
     uint64_t flowthrough_upper = 0;
+    uint64_t structural_flowthrough_base = 0;
+    uint64_t structural_flowthrough_upper = 0;
     std::vector<uint64_t> reuse_plan_offsets;
     std::vector<uint64_t> reuse_plan_line_offsets;
     std::vector<uint32_t> reuse_plan_line_ids;
@@ -211,6 +213,7 @@ struct GraphCacheContext {
     bool isPropertyData(uint64_t addr) const;
     bool isEcgEpochData(uint64_t addr) const;
     bool isFlowThroughData(uint64_t addr) const;
+    bool isStructuralFlowThroughData(uint64_t addr) const;
     bool lookupFusedReusePlanPair(uint64_t line_addr, uint32_t core_id,
                            uint8_t& tier,
                            uint16_t& first, uint16_t& second,
@@ -225,6 +228,7 @@ struct GraphCacheContext {
 };
 
 GraphCacheContext& globalContext();
+bool isStructuralFlowThroughAddress(uint64_t addr);
 bool isEcgFlowThroughAddress(uint64_t addr);
 void recordEcgPlacementMiss(uint64_t addr);
 

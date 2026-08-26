@@ -1321,6 +1321,32 @@ struct Gem5EdgeRegion {
     const char* data_path = nullptr;
 };
 
+template<typename T>
+inline uint64_t gem5_semantic_checksum(const T* data, size_t count)
+{
+    uint64_t hash = 1469598103934665603ULL;
+    const auto* bytes = reinterpret_cast<const unsigned char*>(data);
+    const size_t byte_count = count * sizeof(T);
+    for (size_t i = 0; i < byte_count; ++i) {
+        hash ^= static_cast<uint64_t>(bytes[i]);
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
+template<typename T>
+inline void gem5_report_semantic_result(
+        const char* kernel, const T* data, size_t count)
+{
+    std::fprintf(
+        stderr,
+        "[ECG-KERNEL-RESULT kernel=%s items=%llu checksum=%016llx]\n",
+        kernel,
+        static_cast<unsigned long long>(count),
+        static_cast<unsigned long long>(
+            gem5_semantic_checksum(data, count)));
+}
+
 template<typename GraphType>
 inline int gem5_make_edge_regions(const GraphType& g,
                                   Gem5EdgeRegion* edge_regions,
@@ -1377,8 +1403,79 @@ inline void gem5_export_context(
     const void* plan_offsets = nullptr,
     uint64_t plan_offsets_size = 0,
     const void* csr_offsets_other = nullptr,
-    uint64_t csr_offsets_other_size = 0)
+    uint64_t csr_offsets_other_size = 0,
+    uint64_t structural_carrier_base = 0,
+    uint64_t structural_carrier_size = 0,
+    const char* structural_carrier_name = nullptr)
 {
+    const char* structural_env = std::getenv("STRUCTURAL_FLOWTHROUGH");
+    const bool structural_flowthrough =
+        structural_env && structural_env[0] &&
+        std::strcmp(structural_env, "0") != 0;
+    const bool explicit_structural_carrier =
+        structural_carrier_base != 0 || structural_carrier_size != 0;
+    if (explicit_structural_carrier &&
+        (structural_carrier_base == 0 || structural_carrier_size == 0)) {
+        std::fprintf(
+            stderr,
+            "[STRUCTURAL-FLOWTHROUGH-FATAL sim=gem5 "
+            "reason=incomplete-carrier]\n");
+        std::abort();
+    }
+    if (structural_flowthrough && !explicit_structural_carrier &&
+        (!edge_regions || num_edge_regions < 1 ||
+         edge_regions[0].base_address == 0 ||
+         edge_regions[0].size_bytes == 0)) {
+        std::fprintf(
+            stderr,
+            "[STRUCTURAL-FLOWTHROUGH-FATAL sim=gem5 "
+            "reason=missing-preferred-edge-region]\n");
+        std::abort();
+    }
+    const uint64_t raw_structural_flowthrough_base =
+        structural_flowthrough
+            ? (explicit_structural_carrier
+                ? structural_carrier_base
+                : edge_regions[0].base_address)
+            : 0;
+    const uint64_t raw_structural_flowthrough_size =
+        structural_flowthrough
+            ? (explicit_structural_carrier
+                ? structural_carrier_size
+                : edge_regions[0].size_bytes)
+            : 0;
+    constexpr uint64_t structural_line_size = 64;
+    if (raw_structural_flowthrough_base >
+        UINT64_MAX - raw_structural_flowthrough_size) {
+        std::fprintf(
+            stderr,
+            "[STRUCTURAL-FLOWTHROUGH-FATAL sim=gem5 "
+            "reason=carrier-range-overflow]\n");
+        std::abort();
+    }
+    const uint64_t raw_structural_upper =
+        raw_structural_flowthrough_base + raw_structural_flowthrough_size;
+    const uint64_t upper_remainder =
+        raw_structural_upper % structural_line_size;
+    const uint64_t upper_padding =
+        upper_remainder == 0 ? 0 : structural_line_size - upper_remainder;
+    if (raw_structural_upper > UINT64_MAX - upper_padding) {
+        std::fprintf(
+            stderr,
+            "[STRUCTURAL-FLOWTHROUGH-FATAL sim=gem5 "
+            "reason=carrier-alignment-overflow]\n");
+        std::abort();
+    }
+    const uint64_t structural_flowthrough_base =
+        raw_structural_flowthrough_base -
+        (raw_structural_flowthrough_base % structural_line_size);
+    const uint64_t structural_flowthrough_size =
+        raw_structural_upper + upper_padding - structural_flowthrough_base;
+    const char* structural_flowthrough_name =
+        explicit_structural_carrier && structural_carrier_name
+            ? structural_carrier_name
+            : "csr";
+
     FILE* f = fopen(path, "w");
     if (!f) {
         fprintf(stderr, "gem5_harness: cannot write sideband to %s\n", path);
@@ -1393,6 +1490,10 @@ inline void gem5_export_context(
             (unsigned long)flowthrough_base);
     fprintf(f, "  \"flowthrough_size\": %lu,\n",
             (unsigned long)flowthrough_size);
+    fprintf(f, "  \"structural_flowthrough_base\": %lu,\n",
+            (unsigned long)structural_flowthrough_base);
+    fprintf(f, "  \"structural_flowthrough_size\": %lu,\n",
+            (unsigned long)structural_flowthrough_size);
     const uint64_t edge_preferred_base =
         num_edge_regions > 0 ? edge_regions[0].base_address : 0;
     const uint64_t edge_preferred_size =
@@ -1433,6 +1534,14 @@ inline void gem5_export_context(
             "[ECG-STREAM-REGION sim=gem5 base=%#lx size=%lu]\n",
             (unsigned long)flowthrough_base,
             (unsigned long)flowthrough_size);
+    }
+    if (structural_flowthrough_size > 0) {
+        fprintf(stderr,
+            "[STRUCTURAL-FLOWTHROUGH sim=gem5 active=1 base=%#lx size=%lu "
+            "region=%s]\n",
+            (unsigned long)structural_flowthrough_base,
+            (unsigned long)structural_flowthrough_size,
+            structural_flowthrough_name);
     }
     fprintf(f, "  \"directed\": %s,\n", g.directed() ? "true" : "false");
 

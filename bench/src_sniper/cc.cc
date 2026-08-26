@@ -78,7 +78,7 @@ pvector<NodeID> Afforest_Sniper(const Graph &g, int32_t neighbor_rounds = 2) {
          static_cast<uint32_t>(g.num_nodes()), sizeof(NodeID), true},
     };
     SniperEdgeRegion edge_regions[2];
-    int num_edge_regions = sniper_make_edge_regions(g, edge_regions, 2, true);
+    int num_edge_regions = sniper_make_edge_regions(g, edge_regions, 2);
     // P-OPT reref matrix: CC reads comp[dest] over OUT-edges, so a vertex's comp is
     // next-referenced by its IN-neighbours -> transpose reref (traverseCSR=false),
     // matching bfs.cc and the push_out_edges=true epoch direction below.

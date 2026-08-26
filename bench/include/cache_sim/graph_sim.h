@@ -172,6 +172,13 @@ inline decltype(auto) access_stream_with_site(
 }
 
 template <typename Cache>
+inline decltype(auto) access_structural_stream_with_site(
+        Cache& cache, uint64_t address, bool is_write, uint64_t site_id) {
+    HawkeyeSiteScope scope(site_id);
+    return cache.accessStructuralStream(address, is_write);
+}
+
+template <typename Cache>
 inline void prefetch_with_site(
         Cache& cache, uint64_t address, uint64_t site_id) {
     HawkeyeSiteScope scope(site_id);
@@ -191,7 +198,12 @@ inline void prefetch_with_site(
 inline bool flowthrough_enabled() {
     static const bool enabled = [](){
         const char* v = std::getenv("FLOWTHROUGH");
-        return v && std::atoi(v) != 0;
+        const bool active = v && std::atoi(v) != 0;
+        if (active)
+            std::fprintf(
+                stderr,
+                "[STRUCTURAL-FLOWTHROUGH sim=cache_sim active=1]\n");
+        return active;
     }();
     return enabled;
 }
@@ -200,7 +212,8 @@ template <typename Cache>
 inline decltype(auto) access_edge_with_site(
         Cache& cache, uint64_t address, uint64_t site_id) {
     HawkeyeSiteScope scope(site_id);
-    if (flowthrough_enabled()) return cache.accessStream(address, false);
+    if (flowthrough_enabled())
+        return cache.accessStructuralStream(address, false);
     return cache.access(address, false);
 }
 
@@ -370,7 +383,10 @@ inline decltype(auto) access_edge_with_site(
                 (cfg), (record_base), _idx); \
             for (int _h = 0; _h < ((cfg).record_bytes >= 16 ? 2 : 1); ++_h) { \
                 const uint64_t _ha = _a + static_cast<uint64_t>(_h) * 8ULL; \
-                if ((cfg).flowthrough) \
+                if (::cache_sim::flowthrough_enabled()) \
+                    ::cache_sim::access_structural_stream_with_site( \
+                        (cache), _ha, false, _site); \
+                else if ((cfg).flowthrough) \
                     ::cache_sim::access_stream_with_site( \
                         (cache), _ha, false, _site); \
                 else \

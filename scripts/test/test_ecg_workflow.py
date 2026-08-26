@@ -1422,7 +1422,9 @@ def test_all_five_kernels_expose_indexed_and_computed_address_delivery():
         ROOT / "scripts/experiments/ecg/roi_matrix.py"
     ).read_text()
     assert (
-        'reuse_plan_depth == 2 and args.sniper_workload == "sg_kernel"'
+        'reuse_plan_depth == 2 and\n'
+        '            args.sniper_workload == "sg_kernel" and\n'
+        '            args.ecg_isa_variant == "computed"'
         in runner)
     # The RISC-V fused record load must still be the default delivery, but it
     # has to be ablatable: every fused variant carries the canonical 64-bit

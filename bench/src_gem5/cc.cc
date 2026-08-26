@@ -19,6 +19,7 @@
 #include "graph.h"
 #include "pvector.h"
 
+#include "graphbrew/partition/cagra/popt.h"
 #include "ecg_reuse_plan_builder.h"
 #include "ecg_mode6_builder.h"
 
@@ -151,7 +152,28 @@ pvector<NodeID> Afforest_Gem5(const Graph &g, int32_t neighbor_rounds = 2) {
         pair_ok = true;
     }
     gem5_export_context(regions, 1, g, GEM5_SIDEBAND_PATH,
-                        edge_regions, num_edge_regions, edge_epoch_count);
+                        edge_regions, num_edge_regions, edge_epoch_count,
+                        pair_ok && !pair_flat.empty()
+                            ? reinterpret_cast<uint64_t>(pair_flat.data()) : 0,
+                        pair_ok ? pair_flat.size() * sizeof(uint64_t) : 0,
+                        nullptr, 0, nullptr, 0, nullptr, 0,
+                        pair_ok && !pair_flat.empty()
+                            ? reinterpret_cast<uint64_t>(pair_flat.data()) : 0,
+                        pair_ok ? pair_flat.size() * sizeof(uint64_t) : 0,
+                        pair_ok ? "packed-substitute" : nullptr);
+    if (ecg_reuse_plan_depth != 2) {
+        constexpr int numEpochs = 256;
+        static pvector<uint8_t> popt_matrix;
+        // CC reads comp[dest] over OUT-edges, so next references follow the
+        // transpose, matching cache_sim and Sniper.
+        makeOffsetMatrix(
+            g, popt_matrix, kNumVtxPerLine, numEpochs,
+            /*traverseCSR=*/false);
+        const int numCacheLines =
+            (g.num_nodes() + kNumVtxPerLine - 1) / kNumVtxPerLine;
+        gem5_export_popt_matrix(
+            popt_matrix.data(), numCacheLines, numEpochs, g.num_nodes());
+    }
     const bool ecg_load_evict_on =
         gem5_ecg_pload_enabled() && ecg_extract_on && ecg_reuse_plan_depth != 2;
     const int  ecg_evict_wc = ecg_mode6::ecgEvictWidthClass(g.num_nodes());
@@ -317,6 +339,8 @@ pvector<NodeID> Afforest_Gem5(const Graph &g, int32_t neighbor_rounds = 2) {
     Compress(g, comp);
 
     GEM5_WORK_END(GEM5_WORK_COMPUTE);
+    gem5_report_semantic_result(
+        "cc", comp.data(), static_cast<size_t>(comp.size()));
     GEM5_DUMP_STATS();
     GEM5_ECG_END_CONTEXT();
     return comp;

@@ -320,6 +320,8 @@ GEM5_STAT_KEYS = {
         "system.l3cache.replacement_policy.followerVariantOverrides",
     "gem5_reuse_plan_admission_updates":
         "system.l3cache.replacement_policy.reuseAdmissionUpdates",
+    "gem5_structural_flowthrough_miss_targets":
+        "system.l3cache.structuralFlowThroughMissTargets",
     "gem5_reuse_plan_victim_selections":
         "system.l3cache.replacement_policy.victimSelections",
     "gem5_reuse_plan_victim_request_invalid":
@@ -1402,6 +1404,8 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
     apply_explicit_cell_mechanism_env(env, spec)
     transport = ecg_transport_for(spec, args.benchmark)
     apply_ecg_transport_env(env, transport)
+    if args.flowthrough == "all":
+        env["STRUCTURAL_FLOWTHROUGH"] = "1"
     env["ECG_REUSE_ADMISSION"] = (
         "1" if spec.ecg_reuse_admission else "0")
     env["ECG_REUSE_ADMISSION_COMBINED"] = (
@@ -1590,6 +1594,7 @@ def scrub_cell_mechanism_env(env: dict[str, str]) -> None:
     }
     env.pop("GEM5_GRAPH_ARRAY_STATS", None)
     env.pop("GEM5_REUSE_PLAN_COVERAGE_REQUIRED", None)
+    env.pop("STRUCTURAL_FLOWTHROUGH", None)
     prefixes = (
         "ECG_",
         "GEM5_ECG_",
@@ -3220,6 +3225,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "ecg_admission_winner_changes",
         "ecg_admission_final_winner_arm",
         "ecg_admission_set_offset",
+        "structural_flowthrough_accesses",
         "ecg_dueling_leader_samples_rrip",
         "ecg_dueling_leader_samples_grasp",
         "ecg_dueling_leader_samples_epoch",
@@ -3298,6 +3304,14 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         if expected not in log_text:
             row["status"] = "error"
             row["error"] = "FlowThrough requested but cache_sim FlowThrough path was inactive"
+    if (
+            args.flowthrough == "all" and
+            ("[STRUCTURAL-FLOWTHROUGH sim=cache_sim active=1]" not in log_text or
+             int(row.get("structural_flowthrough_accesses") or 0) <= 0)):
+        row["status"] = "error"
+        row["error"] = (
+            "structural FlowThrough requested but cache_sim path was inactive: "
+            f"accesses={row.get('structural_flowthrough_accesses', 0)}")
     apply_overhead_metrics(row)
     row.update(parse_ecg_log_stats(log_path))
     return [row]
@@ -3380,6 +3394,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     apply_explicit_cell_mechanism_env(env, spec)
     transport = ecg_transport_for(spec, args.benchmark)
     apply_ecg_transport_env(env, transport)
+    if args.flowthrough == "all":
+        env["STRUCTURAL_FLOWTHROUGH"] = "1"
     env["ECG_REUSE_ADMISSION"] = (
         "1" if spec.ecg_reuse_admission else "0")
     env["ECG_REUSE_ADMISSION_COMBINED"] = (
@@ -3944,6 +3960,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
                   else "ecg.extract2")
             base["gem5_ecg_delivery"] = f"{stem}+reuse_plan+{op}"
         base["gem5_metadata_fatal"] = log_text.count("[ECG-METADATA-FATAL")
+        base["gem5_structural_flowthrough_receipt"] = int(
+            "[STRUCTURAL-FLOWTHROUGH sim=gem5 active=1" in log_text)
         base["gem5_flowthrough_trace_events"] = log_text.count(
             "[ECG-FLOWTHROUGH sim=gem5")
         base["gem5_flowthrough_adaptive_active"] = int(
@@ -3955,6 +3973,21 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             base["pr_iterations"] = int(pr_result.group(1))
             base["pr_semantic_edges"] = int(pr_result.group(2))
             base["pr_score_checksum"] = pr_result.group(3).lower()
+        kernel_result = re.search(
+            r"\[ECG-KERNEL-RESULT kernel=([^ ]+) items=(\d+) "
+            r"checksum=([0-9a-fA-F]+)\]",
+            log_text)
+        if kernel_result:
+            base["kernel_semantic_name"] = kernel_result.group(1)
+            base["kernel_semantic_items"] = int(kernel_result.group(2))
+            base["kernel_semantic_checksum"] = (
+                kernel_result.group(3).lower())
+        if args.benchmark != "pr" and (
+                kernel_result is None or
+                kernel_result.group(1) != args.benchmark):
+            mark_row_error(
+                base,
+                f"gem5 {args.benchmark} semantic receipt missing or mismatched")
         if is_reuse_plan_ecg:
             base["gem5_reuse_bind_model"] = (
                 "request" if args.gem5_cpu_type == "O3"
@@ -3997,6 +4030,17 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     })
     row.setdefault("status", "ok")
     row.update(sections[0])
+    if args.flowthrough == "all":
+        structural_targets = int(row.get(
+            "gem5_structural_flowthrough_miss_targets") or 0)
+        if (
+                not int(row.get("gem5_structural_flowthrough_receipt") or 0) or
+                structural_targets <= 0):
+            mark_row_error(
+                row,
+                "structural FlowThrough inactive in gem5: "
+                f"receipt={row.get('gem5_structural_flowthrough_receipt', 0)} "
+                f"miss_targets={structural_targets}")
     apply_gem5_array_attribution(
         row, log_text, required=array_attribution_requested)
     apply_gem5_reuse_plan_coverage(
@@ -4129,6 +4173,12 @@ def sniper_binary_and_options(args: argparse.Namespace) -> tuple[Path, list[str]
 
 
 def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size: str) -> list[dict[str, Any]]:
+    if (
+            args.flowthrough == "all" and
+            args.sniper_address_domain != "virtual"):
+        raise RuntimeError(
+            "Sniper structural FlowThrough requires virtual address mode; "
+            "translated NUCA addresses do not yet have physical carrier ranges")
     label = f"sniper_{args.benchmark}_{spec.safe_label}_L3{sanitize(l3_size)}"
     if getattr(args, "_sniper_thread_sweep", False):
         label += f"_T{sanitize(str(args.sniper_cores))}"
@@ -4344,6 +4394,8 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     env.pop("SNIPER_REUSE_PLAN_EXACT_BIND", None)
     transport = ecg_transport_for(spec, args.benchmark)
     apply_ecg_transport_env(env, transport)
+    if args.flowthrough == "all":
+        env["STRUCTURAL_FLOWTHROUGH"] = "1"
     is_reuse_plan_ecg = policy_name == "ecg" and spec.ecg_mode == "ECG_GRASP_POPT"
     if args.ecg_isa_variant == "computed":
         env["SNIPER_REUSE_PLAN_TRANSPORT_MATCHED"] = "1"
@@ -4474,11 +4526,13 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         raise RuntimeError(
             "Sniper two-epoch ReusePlan requires --sniper-workload sg_kernel; "
             "the smoke/full-wrapper workloads do not emit extract2 pairs.")
-    if (env.get("ECG_FLOWTHROUGH") == "1" and
+    if ((env.get("ECG_FLOWTHROUGH") == "1" or
+         env.get("STRUCTURAL_FLOWTHROUGH") == "1") and
             args.sniper_workload != "sg_kernel"):
         raise RuntimeError(
             "Sniper FlowThrough requires --sniper-workload sg_kernel; "
-            "the smoke/full-wrapper workloads do not export packed-stream ranges.")
+            "the smoke/full-wrapper workloads do not export structural or "
+            "packed-stream ranges.")
     force_delivery = os.environ.get("ECG_FORCE_DELIVERY") == "1"
     fused_reuse_plan = False
     fused_validation = False
@@ -4501,7 +4555,9 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         env["SNIPER_ENABLE_ECG_EXTRACT"] = "1"
         env["ECG_EDGE_MASK_EPOCHS"] = str(args.ecg_epochs)
         fused_reuse_plan = (
-            reuse_plan_depth == 2 and args.sniper_workload == "sg_kernel"
+            reuse_plan_depth == 2 and
+            args.sniper_workload == "sg_kernel" and
+            args.ecg_isa_variant == "computed"
         )
         if fused_reuse_plan:
             env["SNIPER_ECG_FUSED_REUSE_PLAN"] = "1"
@@ -4828,6 +4884,10 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         for field, metric in (
             ("sniper_flowthrough_reads", "flowthrough-reads"),
             ("sniper_flowthrough_writes", "flowthrough-writes"),
+            ("sniper_structural_flowthrough_reads",
+             "structural-flowthrough-reads"),
+            ("sniper_structural_flowthrough_writes",
+             "structural-flowthrough-writes"),
         ):
             match = re.search(
                 rf"nuca-cache\.{re.escape(metric)}\s*=\s*(\d+)",
@@ -4865,10 +4925,36 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         validate_reuse_admission_activity(
             row, spec.ecg_reuse_admission,
             field="sniper_reuse_plan_admission_updates")
-    if transport.flowthrough:
+    log_text = log_path.read_text(errors="ignore")
+    semantic_patterns = {
+        "pr": r"GraphBrew Sniper SG PR checksum: ([^\s]+)",
+        "bfs": r"GraphBrew Sniper SG BFS reached: ([^\n]+)",
+        "sssp": r"GraphBrew Sniper SG SSSP reached/checksum: ([^\n]+)",
+        "bc": r"GraphBrew Sniper SG BC checksum: ([^\s]+)",
+        "cc": r"GraphBrew Sniper SG CC components: ([^\s]+)",
+    }
+    semantic_match = re.search(
+        semantic_patterns.get(args.benchmark, r"$^"), log_text)
+    row["sniper_kernel_semantic_receipt"] = (
+        semantic_match.group(1).strip() if semantic_match else "")
+    if (
+            args.sniper_workload == "sg_kernel" and
+            not row["sniper_kernel_semantic_receipt"]):
+        row["status"] = "error"
+        row["error"] = (
+            f"Sniper {args.benchmark} semantic receipt missing")
+        row["timing_valid_for_speedup"] = "0"
+    if transport.flowthrough or args.flowthrough == "all":
         flowthrough_reads = int(row.get("sniper_flowthrough_reads") or 0)
         flowthrough_writes = int(row.get("sniper_flowthrough_writes") or 0)
-        log_text = log_path.read_text(errors="ignore")
+        structural_reads = int(
+            row.get("sniper_structural_flowthrough_reads") or 0)
+        structural_writes = int(
+            row.get("sniper_structural_flowthrough_writes") or 0)
+        structural_receipt = (
+            "[STRUCTURAL-FLOWTHROUGH sim=sniper active=1" in log_text)
+        row["sniper_structural_flowthrough_receipt"] = int(
+            structural_receipt)
         adaptive_active = (
             "[ECG-FLOWTHROUGH-ADAPTIVE sim=sniper active=1]" in log_text)
         if transport.flowthrough_adaptive and not adaptive_active:
@@ -4876,7 +4962,16 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             row["error"] = (
                 "adaptive FlowThrough was requested but not active")
             row["timing_valid_for_speedup"] = "0"
-        elif (not transport.flowthrough_adaptive and
+        elif (args.flowthrough == "all" and
+              (not structural_receipt or
+               structural_reads <= 0 or structural_writes <= 0)):
+            row["status"] = "error"
+            row["error"] = (
+                "structural FlowThrough inactive in Sniper: "
+                f"receipt={int(structural_receipt)} "
+                f"reads={structural_reads} writes={structural_writes}")
+            row["timing_valid_for_speedup"] = "0"
+        elif (transport.flowthrough and not transport.flowthrough_adaptive and
               (flowthrough_reads <= 0 or flowthrough_writes <= 0)):
             row["status"] = "error"
             row["error"] = (
@@ -5590,6 +5685,75 @@ def certify_gem5_pr_results(
                 f"{detail}"))
 
 
+def certify_detailed_kernel_results(
+        rows: list[dict[str, Any]], args: argparse.Namespace) -> None:
+    """Require identical full-kernel outputs across matched detailed rows."""
+    if args.suite not in ("gem5", "sniper", "both"):
+        return
+
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        simulator = str(row.get("simulator") or "")
+        if simulator not in ("gem5", "sniper"):
+            continue
+        if simulator == "gem5" and args.benchmark == "pr":
+            # PageRank has a stronger receipt that also binds iteration count
+            # and semantic edge count.
+            continue
+        key = (
+            simulator,
+            row.get("benchmark"),
+            row.get("options"),
+            row.get("l3_size"),
+            row.get("l3_ways"),
+            row.get("prefetcher"),
+            row.get("threads"),
+            row.get("gem5_cpu_type"),
+            row.get("sniper_workload"),
+        )
+        groups.setdefault(key, []).append(row)
+
+    for group_rows in groups.values():
+        simulator = str(group_rows[0].get("simulator") or "")
+        if simulator == "gem5":
+            receipts = {
+                (
+                    row.get("kernel_semantic_name"),
+                    row.get("kernel_semantic_items"),
+                    row.get("kernel_semantic_checksum"),
+                )
+                for row in group_rows
+            }
+            receipt = next(iter(receipts), (None, None, None))
+            matched = (
+                len(receipts) == 1 and
+                receipt[0] == args.benchmark and
+                receipt[1] is not None and
+                receipt[2] not in (None, ""))
+        else:
+            receipts = {
+                str(row.get("sniper_semantic_result") or "")
+                for row in group_rows
+            }
+            matched = len(receipts) == 1 and "" not in receipts
+
+        statuses_ok = all(
+            row.get("status") == "ok" for row in group_rows)
+        for row in group_rows:
+            row["kernel_result_matched"] = int(matched)
+            row["kernel_result_group_rows_ok"] = int(statuses_ok)
+            if not statuses_ok:
+                row["timing_valid_for_speedup"] = "0"
+        if matched:
+            continue
+        detail = sorted(str(value) for value in receipts)
+        for row in group_rows:
+            mark_row_error(
+                row,
+                f"{simulator} {args.benchmark} semantic receipt mismatch "
+                f"or missing: {detail}")
+
+
 def write_outputs(out_dir: Path, rows: list[dict[str, Any]]) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     json_path = out_dir / "roi_matrix.json"
@@ -5677,7 +5841,8 @@ def standalone_matrix_config_hash(
     material_env = {
         key: value for key, value in os.environ.items()
         if key.startswith((
-            "CACHE_", "ECG_", "GEM5_", "SNIPER_", "OMP_")) and
+            "CACHE_", "ECG_", "GEM5_", "SNIPER_", "OMP_",
+            "STRUCTURAL_")) and
         not key.startswith("GRAPHBREW_MATRIX_")
     }
     payload = {
@@ -6014,11 +6179,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
-    if args.flowthrough == "all" and args.suite != "cache-sim":
-        raise SystemExit(
-            "--flowthrough all is currently implemented only for cache-sim; "
-            "gem5/Sniper native-baseline structural FlowThrough must not be "
-            "claimed until their guest/workload paths implement it")
     semantic_edge_limit = int(args.sniper_semantic_edge_limit)
     if int(args.sniper_roi_icount) > 0 and semantic_edge_limit > 0:
         raise SystemExit(
@@ -6088,11 +6248,6 @@ def main(argv: list[str]) -> int:
     if compact_reuse_bind_requested and gem5_isa != "riscv":
         raise SystemExit(
             "compact ReuseBind+FlowThrough requires RISC-V gem5")
-    if (getattr(args, "flowthrough", "off") != "off" and
-            args.suite not in ("cache-sim", "both")):
-        raise SystemExit(
-            "--flowthrough is implemented in cache_sim only; other "
-            "backends would record an equalisation that never happened")
     if (getattr(args, "popt_matrix_stream", "analytic") == "simulated" and
             args.suite not in ("cache-sim", "both")):
         raise SystemExit(
@@ -6232,6 +6387,7 @@ def main(argv: list[str]) -> int:
     certify_sniper_semantic_work(rows, args, policies)
     certify_cache_sim_trace_identity(rows, args, policies)
     certify_gem5_pr_results(rows, args)
+    certify_detailed_kernel_results(rows, args)
     if not args.dry_run:
         # Persist layered certification failures before any fail-closed
         # run-level validator raises. Do not emit a completion marker here.

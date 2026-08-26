@@ -1,7 +1,7 @@
 """Policy-invariant guest environment layout for gem5 SE workloads."""
 
 TARGET_ENV_BYTES = 16384
-TARGET_ENV_ENTRIES = 51
+TARGET_ENV_ENTRIES = 52
 
 
 def finalize_environment(entries):

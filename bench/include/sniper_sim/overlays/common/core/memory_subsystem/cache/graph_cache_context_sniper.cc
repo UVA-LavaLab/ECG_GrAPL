@@ -665,6 +665,12 @@ bool GraphCacheContext::loadFromSideband(const std::string& path)
     const uint64_t flowthrough_size =
         parseJsonUint(content, "\"flowthrough_size\"");
     flowthrough_upper = flowthrough_base + flowthrough_size;
+    structural_flowthrough_base =
+        parseJsonUint(content, "\"structural_flowthrough_base\"");
+    const uint64_t structural_flowthrough_size =
+        parseJsonUint(content, "\"structural_flowthrough_size\"");
+    structural_flowthrough_upper =
+        structural_flowthrough_base + structural_flowthrough_size;
     std::vector<uint64_t> raw_reuse_plan_records;
     const char* fused_reuse_plan = std::getenv("SNIPER_ECG_FUSED_REUSE_PLAN");
     const bool offsets_loaded = loadBinaryVector(
@@ -998,6 +1004,13 @@ bool GraphCacheContext::isFlowThroughData(uint64_t addr) const
 {
     return flowthrough_base < flowthrough_upper &&
            addr >= flowthrough_base && addr < flowthrough_upper;
+}
+
+bool GraphCacheContext::isStructuralFlowThroughData(uint64_t addr) const
+{
+    return structural_flowthrough_base < structural_flowthrough_upper &&
+           addr >= structural_flowthrough_base &&
+           addr < structural_flowthrough_upper;
 }
 
 bool GraphCacheContext::lookupFusedReusePlanPair(
@@ -1382,18 +1395,39 @@ bool consumeBoundReusePlanLoad(
     return context_id == nullptr || *context_id != 0;
 }
 
-bool isEcgFlowThroughAddress(uint64_t addr)
+bool isStructuralFlowThroughAddress(uint64_t addr)
 {
-    const char* enabled = std::getenv("ECG_FLOWTHROUGH");
+    const char* enabled = std::getenv("STRUCTURAL_FLOWTHROUGH");
     if (!enabled || std::strcmp(enabled, "0") == 0) return false;
     GraphCacheContext& context = globalContext();
-    if (!context.loaded ||
-        context.flowthrough_base >= context.flowthrough_upper) {
+    if (!context.loaded) {
         const char* path = std::getenv("SNIPER_GRAPHBREW_CTX");
         if (!path || !path[0]) path = "/tmp/sniper_graphbrew_ctx.json";
         context.loaded = context.loadFromSideband(path);
     }
-    const bool match = context.loaded && context.isFlowThroughData(addr);
+    return context.loaded && context.isStructuralFlowThroughData(addr);
+}
+
+bool isEcgFlowThroughAddress(uint64_t addr)
+{
+    const char* metadata_env = std::getenv("ECG_FLOWTHROUGH");
+    const bool metadata_enabled =
+        metadata_env && std::strcmp(metadata_env, "0") != 0;
+    const char* structural_env = std::getenv("STRUCTURAL_FLOWTHROUGH");
+    const bool structural_enabled =
+        structural_env && std::strcmp(structural_env, "0") != 0;
+    if (!metadata_enabled && !structural_enabled) return false;
+    GraphCacheContext& context = globalContext();
+    if (!context.loaded) {
+        const char* path = std::getenv("SNIPER_GRAPHBREW_CTX");
+        if (!path || !path[0]) path = "/tmp/sniper_graphbrew_ctx.json";
+        context.loaded = context.loadFromSideband(path);
+    }
+    const bool metadata_match =
+        metadata_enabled && context.loaded && context.isFlowThroughData(addr);
+    const bool structural_match =
+        structural_enabled && context.loaded &&
+        context.isStructuralFlowThroughData(addr);
     static const bool adaptive = []() {
         const char* value = std::getenv("ECG_FLOWTHROUGH_ADAPTIVE");
         return value && std::strcmp(value, "0") != 0;
@@ -1411,9 +1445,10 @@ bool isEcgFlowThroughAddress(uint64_t addr)
             ? context.rereference.cache_line_size : 64;
     const size_t set_index =
         static_cast<size_t>(addr / line_size);
-    const bool flowthrough = match && (
+    const bool metadata_flowthrough = metadata_match && (
         !adaptive ||
         ecg_policy::globalOnlinePlacementSelector().shouldFlowThrough(set_index));
+    const bool flowthrough = structural_match || metadata_flowthrough;
     static uint64_t probes = 0;
     static const uint64_t limit = []() {
         const char* value = std::getenv("ECG_FLOWTHROUGH_TRACE");
@@ -1422,11 +1457,17 @@ bool isEcgFlowThroughAddress(uint64_t addr)
     if (limit > 0 && probes++ < limit) {
         std::fprintf(stderr,
             "[ECG-FLOWTHROUGH-PROBE sim=sniper addr=%#llx base=%#llx "
-            "upper=%#llx loaded=%d match=%d]\n",
+            "upper=%#llx structural_base=%#llx structural_upper=%#llx "
+            "loaded=%d metadata_match=%d structural_match=%d match=%d]\n",
             static_cast<unsigned long long>(addr),
             static_cast<unsigned long long>(context.flowthrough_base),
             static_cast<unsigned long long>(context.flowthrough_upper),
-            context.loaded ? 1 : 0, flowthrough ? 1 : 0);
+            static_cast<unsigned long long>(
+                context.structural_flowthrough_base),
+            static_cast<unsigned long long>(
+                context.structural_flowthrough_upper),
+            context.loaded ? 1 : 0, metadata_match ? 1 : 0,
+            structural_match ? 1 : 0, flowthrough ? 1 : 0);
     }
     static uint64_t ranged_probes = 0;
     if (limit > 0 &&
@@ -1448,6 +1489,12 @@ void recordEcgPlacementMiss(uint64_t addr)
     const char* value = std::getenv("ECG_FLOWTHROUGH_ADAPTIVE");
     if (!value || std::strcmp(value, "0") == 0) return;
     GraphCacheContext& context = globalContext();
+    if (!context.loaded) {
+        const char* path = std::getenv("SNIPER_GRAPHBREW_CTX");
+        if (!path || !path[0]) path = "/tmp/sniper_graphbrew_ctx.json";
+        context.loaded = context.loadFromSideband(path);
+    }
+    if (!context.loaded || !context.isFlowThroughData(addr)) return;
     const uint64_t line_size =
         context.rereference.cache_line_size
             ? context.rereference.cache_line_size : 64;

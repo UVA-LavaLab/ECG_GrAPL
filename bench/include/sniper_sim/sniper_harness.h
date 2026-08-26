@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <atomic>
+#include <cstring>
 #include <cstdlib>
 #include <cstdio>
 #include <fstream>
@@ -449,8 +450,75 @@ inline bool sniper_export_context(
     const uint64_t* reuse_plan_offsets = nullptr,
     size_t reuse_plan_offset_count = 0,
     const uint64_t* reuse_plan_records = nullptr,
-    size_t reuse_plan_record_count = 0) {
+    size_t reuse_plan_record_count = 0,
+    uint64_t structural_carrier_base = 0,
+    uint64_t structural_carrier_size = 0,
+    const char* structural_carrier_name = nullptr) {
     const std::string resolved_path = path ? std::string(path) : graphbrew_sniper::context_path();
+    const char* structural_env = std::getenv("STRUCTURAL_FLOWTHROUGH");
+    const bool structural_flowthrough =
+        structural_env && structural_env[0] &&
+        std::strcmp(structural_env, "0") != 0;
+    const bool explicit_structural_carrier =
+        structural_carrier_base != 0 || structural_carrier_size != 0;
+    if (explicit_structural_carrier &&
+        (structural_carrier_base == 0 || structural_carrier_size == 0)) {
+        fprintf(stderr,
+            "[STRUCTURAL-FLOWTHROUGH-FATAL sim=sniper "
+            "reason=incomplete-carrier]\n");
+        return false;
+    }
+    if (structural_flowthrough && !explicit_structural_carrier &&
+        (!edge_regions || num_edge_regions < 1 ||
+         edge_regions[0].base_address == 0 ||
+         edge_regions[0].size_bytes == 0)) {
+        fprintf(stderr,
+            "[STRUCTURAL-FLOWTHROUGH-FATAL sim=sniper "
+            "reason=missing-preferred-edge-region]\n");
+        return false;
+    }
+    const uint64_t raw_structural_flowthrough_base =
+        structural_flowthrough
+            ? (explicit_structural_carrier
+                ? structural_carrier_base
+                : edge_regions[0].base_address)
+            : 0;
+    const uint64_t raw_structural_flowthrough_size =
+        structural_flowthrough
+            ? (explicit_structural_carrier
+                ? structural_carrier_size
+                : edge_regions[0].size_bytes)
+            : 0;
+    const uint64_t structural_line_size =
+        static_cast<uint64_t>(graphbrew_sniper::cache_line_size());
+    if (raw_structural_flowthrough_base >
+        UINT64_MAX - raw_structural_flowthrough_size) {
+        fprintf(stderr,
+            "[STRUCTURAL-FLOWTHROUGH-FATAL sim=sniper "
+            "reason=carrier-range-overflow]\n");
+        return false;
+    }
+    const uint64_t raw_structural_upper =
+        raw_structural_flowthrough_base + raw_structural_flowthrough_size;
+    const uint64_t upper_remainder =
+        raw_structural_upper % structural_line_size;
+    const uint64_t upper_padding =
+        upper_remainder == 0 ? 0 : structural_line_size - upper_remainder;
+    if (raw_structural_upper > UINT64_MAX - upper_padding) {
+        fprintf(stderr,
+            "[STRUCTURAL-FLOWTHROUGH-FATAL sim=sniper "
+            "reason=carrier-alignment-overflow]\n");
+        return false;
+    }
+    const uint64_t structural_flowthrough_base =
+        raw_structural_flowthrough_base -
+        (raw_structural_flowthrough_base % structural_line_size);
+    const uint64_t structural_flowthrough_size =
+        raw_structural_upper + upper_padding - structural_flowthrough_base;
+    const char* structural_flowthrough_name =
+        explicit_structural_carrier && structural_carrier_name
+            ? structural_carrier_name
+            : "csr";
     if (flowthrough_size > 0) {
         const uint64_t line_size =
             static_cast<uint64_t>(graphbrew_sniper::cache_line_size());
@@ -513,11 +581,23 @@ inline bool sniper_export_context(
             (unsigned long)flowthrough_base);
     fprintf(f, "  \"flowthrough_size\": %lu,\n",
             (unsigned long)flowthrough_size);
+    fprintf(f, "  \"structural_flowthrough_base\": %lu,\n",
+            (unsigned long)structural_flowthrough_base);
+    fprintf(f, "  \"structural_flowthrough_size\": %lu,\n",
+            (unsigned long)structural_flowthrough_size);
     if (flowthrough_size > 0) {
         fprintf(stderr,
             "[ECG-STREAM-REGION sim=sniper base=%#lx size=%lu]\n",
             (unsigned long)flowthrough_base,
             (unsigned long)flowthrough_size);
+    }
+    if (structural_flowthrough_size > 0) {
+        fprintf(stderr,
+            "[STRUCTURAL-FLOWTHROUGH sim=sniper active=1 base=%#lx size=%lu "
+            "region=%s]\n",
+            (unsigned long)structural_flowthrough_base,
+            (unsigned long)structural_flowthrough_size,
+            structural_flowthrough_name);
     }
     fprintf(f, "  \"reuse_plan_offsets_path\": \"%s\",\n",
             reuse_plan_offsets_path.c_str());

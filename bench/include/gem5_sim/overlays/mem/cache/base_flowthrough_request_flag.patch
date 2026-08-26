@@ -1,30 +1,36 @@
 diff --git a/src/mem/cache/base.cc b/src/mem/cache/base.cc
 --- a/src/mem/cache/base.cc
 +++ b/src/mem/cache/base.cc
-@@ -78,21 +78,59 @@
+@@ -78,21 +78,73 @@
          return false;
      const Addr stream_addr = pkt->req->hasVaddr()
          ? pkt->req->getVaddr() : pkt->getAddr();
 -    const bool flowthrough =
 +    const bool flag_flowthrough =
 +        pkt->req->getFlags().isSet(Request::ECG_FLOWTHROUGH);
++    const bool flag_structural_flowthrough =
++        pkt->req->getFlags().isSet(Request::STRUCTURAL_FLOWTHROUGH);
 +    static const bool request_bound_only = []() {
 +        const char *value =
 +            std::getenv("GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND");
 +        return value && std::strcmp(value, "0") != 0;
 +    }();
-+    const bool stream_range_match =
++    const bool metadata_range_match =
 +        (!request_bound_only || flag_flowthrough) &&
 -        replacement_policy::graph::isEcgFlowThroughAddress(stream_addr);
 +        replacement_policy::graph::isEcgFlowThroughAddress(stream_addr);
++    const bool structural_range_match =
++        replacement_policy::graph::isStructuralFlowThroughAddress(stream_addr);
++    const bool structural_request_match =
++        flag_structural_flowthrough && !pkt->req->hasVaddr();
++    structural_flowthrough =
++        structural_range_match || structural_request_match;
 +    // Keep request-bound selection exact while rejecting squashed or stale
 +    // flagged requests outside the published structural-record stream.
 +    const bool request_flag_flowthrough =
-+        flag_flowthrough && (!request_bound_only || stream_range_match);
-+    const bool range_flowthrough =
-+        !request_bound_only && stream_range_match;
-+    const bool flowthrough_eligible =
-+        request_flag_flowthrough || range_flowthrough;
++        flag_flowthrough && (!request_bound_only || metadata_range_match);
++    const bool metadata_range_flowthrough =
++        !request_bound_only && metadata_range_match;
 +    static const bool adaptive = []() {
 +        const char *value = std::getenv("ECG_FLOWTHROUGH_ADAPTIVE");
 +        return value && std::strcmp(value, "0") != 0;
@@ -40,11 +46,16 @@ diff --git a/src/mem/cache/base.cc b/src/mem/cache/base.cc
 +    const size_t set_index =
 +        static_cast<size_t>(pkt->getAddr() / cache.getBlockSize());
 +    auto &placement = ecg_policy::globalOnlinePlacementSelector();
-+    if (adaptive) {
++    if (adaptive &&
++        (request_flag_flowthrough || metadata_range_flowthrough)) {
 +        placement.recordMiss(set_index);
 +    }
-+    const bool flowthrough = flowthrough_eligible &&
++    const bool metadata_flowthrough =
++        (request_flag_flowthrough || metadata_range_flowthrough) &&
 +        (!adaptive || placement.shouldFlowThrough(set_index));
++    const bool flowthrough =
++        structural_range_match || structural_request_match ||
++        metadata_flowthrough;
      if (flowthrough) {
          static uint64_t traced = 0;
          static const uint64_t limit = []() {
@@ -62,7 +73,10 @@ diff --git a/src/mem/cache/base.cc b/src/mem/cache/base.cc
 -                static_cast<unsigned long long>(stream_addr));
 +                static_cast<unsigned long long>(stream_addr),
 +                static_cast<unsigned>(pkt->req->getSize()),
-+                request_flag_flowthrough ? "request-flag" : "range");
++                flag_structural_flowthrough ? "structural-request-flag" :
++                request_flag_flowthrough ? "request-flag" :
++                structural_range_match ? "structural-range" :
++                "metadata-range");
          }
      }
      return flowthrough;

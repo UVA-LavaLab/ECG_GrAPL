@@ -521,6 +521,38 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
         }
         }
     }
+    const char* configured_prefetcher = std::getenv("GRAPHBREW_PREFETCHER");
+    const bool packed_stream_compatible =
+        !configured_prefetcher ||
+        std::string(configured_prefetcher) == "none" ||
+        std::string(configured_prefetcher) == "STRIDE";
+    const bool packed_extract_only =
+        ecg_extract_enabled && !ecg_prefetch_enabled &&
+        ecg_pfx_mode == 6 && packed_ok && pack_id_bits <= 24 &&
+        !ecg_load_enabled && !gem5_ecg_pload_enabled() &&
+        packed_stream_compatible;
+    const bool pair_extract_only =
+        ecg_extract_enabled && !ecg_prefetch_enabled &&
+        ecg_pfx_mode == 6 && pair_ok &&
+        !ecg_load_enabled &&
+        packed_stream_compatible;
+    const uint64_t structural_substitute_base =
+        pair_extract_only && pair32_ok && !in_edge_pair32_flat.empty()
+            ? reinterpret_cast<uint64_t>(in_edge_pair32_flat.data())
+            : pair_extract_only && !pair32_ok &&
+                    !in_edge_pair_flat.empty()
+                ? reinterpret_cast<uint64_t>(in_edge_pair_flat.data())
+                : packed_extract_only && !in_edge_packed_flat.empty()
+                    ? reinterpret_cast<uint64_t>(in_edge_packed_flat.data())
+                    : 0;
+    const uint64_t structural_substitute_size =
+        pair_extract_only && pair32_ok
+            ? in_edge_pair32_flat.size() * sizeof(uint32_t)
+            : pair_extract_only && !pair32_ok
+                ? in_edge_pair_flat.size() * sizeof(uint64_t)
+            : packed_extract_only
+                ? in_edge_packed_flat.size() * sizeof(uint32_t)
+            : 0;
     gem5_export_context(
         regions, 2, g, GEM5_SIDEBAND_PATH,
         edge_regions, num_edge_regions, edge_epoch_count,
@@ -539,7 +571,9 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
             ? (pair_off.empty() ? nullptr : pair_off.data())
             : (packed_off.empty() ? nullptr : packed_off.data()),
         (pair_ok ? pair_off.size() : packed_off.size()) * sizeof(uint64_t),
-        g.out_index_storage(), g.out_index_storage_bytes());
+        g.out_index_storage(), g.out_index_storage_bytes(),
+        structural_substitute_base, structural_substitute_size,
+        structural_substitute_base ? "packed-substitute" : nullptr);
 
     for (NodeID n = 0; n < g.num_nodes(); n++)
         outgoing_contrib[n] = init_score / g.out_degree(n);
@@ -553,21 +587,6 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     // Prefetch dedup window — tracks recently prefetched hub indices
     vector<NodeID> pfx_window(PREFETCH_WINDOW, -1);
     int pfx_window_pos = 0;
-    const char* configured_prefetcher = std::getenv("GRAPHBREW_PREFETCHER");
-    const bool packed_stream_compatible =
-        !configured_prefetcher ||
-        std::string(configured_prefetcher) == "none" ||
-        std::string(configured_prefetcher) == "STRIDE";
-    const bool packed_extract_only =
-        ecg_extract_enabled && !ecg_prefetch_enabled &&
-        ecg_pfx_mode == 6 && packed_ok && pack_id_bits <= 24 &&
-        !ecg_load_enabled && !gem5_ecg_pload_enabled() &&
-        packed_stream_compatible;
-    const bool pair_extract_only =
-        ecg_extract_enabled && !ecg_prefetch_enabled &&
-        ecg_pfx_mode == 6 && pair_ok &&
-        !ecg_load_enabled &&
-        packed_stream_compatible;
     // The compact ISA path is only meaningful when a compact record was
     // actually built; it is opt-in so the software-decode arm stays measurable.
     const bool compact_isa_requested = gem5_ecg_compact_isa_enabled();

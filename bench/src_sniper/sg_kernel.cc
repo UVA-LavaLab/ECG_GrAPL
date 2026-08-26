@@ -593,6 +593,20 @@ int run_pr(const Graph& graph, int max_iters) {
                          ecg_epoch_count);
         }
     }
+    const char* ecg_enable_env =
+        std::getenv("SNIPER_ENABLE_ECG_PFX_HINTS");
+    const bool ecg_enabled =
+        ecg_enable_env && std::string(ecg_enable_env) != "0";
+    const char* configured_prefetcher =
+        std::getenv("SNIPER_GRAPHBREW_PREFETCHER");
+    const bool packed_stream_compatible =
+        !configured_prefetcher ||
+        std::string(configured_prefetcher) == "none" ||
+        std::string(configured_prefetcher) == "STRIDE";
+    const bool reuse_plan_stream_active =
+        reuse_plan_ok && !ecg_enabled && packed_stream_compatible;
+    const bool epoch_packed_stream_active =
+        epoch_packed_ok && !ecg_enabled && packed_stream_compatible;
     // The bypass region must describe the array the ROI actually streams. With
     // the compact record that is the 32-bit array; the 64-bit one exists only
     // as the sideband source and is never touched inside the ROI.
@@ -622,7 +636,17 @@ int run_pr(const Graph& graph, int max_iters) {
         reuse_plan_ok ? reuse_plan_off.data() : nullptr,
         reuse_plan_ok ? reuse_plan_off.size() : 0,
         reuse_plan_ok ? reuse_plan_flat.data() : nullptr,
-        reuse_plan_ok ? reuse_plan_flat.size() : 0)) {
+        reuse_plan_ok ? reuse_plan_flat.size() : 0,
+        reuse_plan_stream_active
+            ? streamed_pair_base
+            : epoch_packed_stream_active && !epoch_packed_flat.empty()
+                ? reinterpret_cast<uint64_t>(epoch_packed_flat.data()) : 0,
+        reuse_plan_stream_active
+            ? streamed_pair_size
+            : epoch_packed_stream_active
+                ? epoch_packed_flat.size() * sizeof(uint32_t) : 0,
+        reuse_plan_stream_active || epoch_packed_stream_active
+            ? "packed-substitute" : nullptr)) {
         std::fprintf(stderr, "sniper-sg PR: context/ReusePlan sideband export failed\n");
         return 2;
     }
@@ -663,13 +687,6 @@ int run_pr(const Graph& graph, int max_iters) {
     const char* mode_env = std::getenv("SNIPER_ECG_PFX_MODE");
     if (!mode_env || !mode_env[0]) mode_env = std::getenv("ECG_PREFETCH_MODE");
     const int ecg_pfx_mode = (mode_env && mode_env[0]) ? std::atoi(mode_env) : 0;
-    const char* ecg_enable_env = std::getenv("SNIPER_ENABLE_ECG_PFX_HINTS");
-    const bool ecg_enabled = ecg_enable_env && std::string(ecg_enable_env) != "0";
-    const char* configured_prefetcher = std::getenv("SNIPER_GRAPHBREW_PREFETCHER");
-    const bool packed_stream_compatible =
-        !configured_prefetcher ||
-        std::string(configured_prefetcher) == "none" ||
-        std::string(configured_prefetcher) == "STRIDE";
 
     // Build mode-6 fat-mask array BEFORE entering ROI (otherwise
     // Sniper cycle-accurately simulates the offline construction
@@ -752,7 +769,7 @@ int run_pr(const Graph& graph, int max_iters) {
             SNIPER_SET_VERTEX(node);
             ScoreT incoming_total = 0.0f;
 
-            if (reuse_plan_ok && !ecg_enabled && packed_stream_compatible) {
+            if (reuse_plan_stream_active) {
                 const uint64_t begin =
                     static_cast<uint64_t>(graph.in_offset(node));
                 const uint64_t end =
@@ -796,7 +813,7 @@ int run_pr(const Graph& graph, int max_iters) {
                 continue;
             }
 
-            if (epoch_packed_ok && !ecg_enabled && packed_stream_compatible) {
+            if (epoch_packed_stream_active) {
                 const uint64_t begin =
                     static_cast<uint64_t>(graph.in_offset(node));
                 const uint64_t end =
@@ -1098,6 +1115,10 @@ int run_bfs(const Graph& graph, NodeID source) {
             }
         }
     }
+    const bool bfs_pair_stream_active =
+        bfs_pair_ok && !ecg_pfx_hints_on && packed_stream_compatible;
+    const bool bfs_packed_stream_active =
+        bfs_packed_ok && !ecg_pfx_hints_on && packed_stream_compatible;
     if (!sniper_export_context(
             regions, 1, graph, nullptr, edge_regions, num_edge_regions,
             flowthrough_on && bfs_pair_ok
@@ -1111,7 +1132,17 @@ int run_bfs(const Graph& graph, NodeID source) {
             fused_reuse_plan_model && bfs_pair_ok
                 ? bfs_pairs.wide_records.data() : nullptr,
             fused_reuse_plan_model && bfs_pair_ok
-                ? bfs_pairs.wide_records.size() : 0)) {
+                ? bfs_pairs.wide_records.size() : 0,
+            bfs_pair_stream_active
+                ? bfs_pairs.stream_base()
+                : bfs_packed_stream_active && !bfs_packed_flat.empty()
+                    ? reinterpret_cast<uint64_t>(bfs_packed_flat.data()) : 0,
+            bfs_pair_stream_active
+                ? bfs_pairs.stream_bytes()
+                : bfs_packed_stream_active
+                    ? bfs_packed_flat.size() * sizeof(uint32_t) : 0,
+            bfs_pair_stream_active || bfs_packed_stream_active
+                ? "packed-substitute" : nullptr)) {
         std::fprintf(stderr, "sniper-sg BFS: context/ReusePlan sideband export failed\n");
         return 2;
     }
@@ -1148,8 +1179,7 @@ int run_bfs(const Graph& graph, NodeID source) {
         if (ecg_pfx_hints_on && !frontier.empty()) {
             SNIPER_ECG_PFX_TARGET(frontier.front());
         }
-        if (bfs_pair_ok && !ecg_pfx_hints_on &&
-            packed_stream_compatible) {
+        if (bfs_pair_stream_active) {
             const uint64_t begin =
                 static_cast<uint64_t>(graph.out_offset(node));
             const uint64_t end =
@@ -1189,8 +1219,7 @@ int run_bfs(const Graph& graph, NodeID source) {
             }
             continue;
         }
-        if (bfs_packed_ok && !ecg_pfx_hints_on &&
-            packed_stream_compatible) {
+        if (bfs_packed_stream_active) {
             const uint64_t begin =
                 static_cast<uint64_t>(graph.out_offset(node));
             const uint64_t end =
@@ -1395,7 +1424,13 @@ int run_sssp(const WGraph& graph, NodeID source, WeightT delta) {
             fused_reuse_plan_model && pair_ok ? pair_off.data() : nullptr,
             fused_reuse_plan_model && pair_ok ? pair_off.size() : 0,
             fused_reuse_plan_model && pair_ok ? pair_flat.data() : nullptr,
-            fused_reuse_plan_model && pair_ok ? pair_flat.size() : 0)) {
+            fused_reuse_plan_model && pair_ok ? pair_flat.size() : 0,
+            fused_reuse_plan_model && pair_ok && compact_pair_ok
+                ? reinterpret_cast<uint64_t>(pair_compact.data()) : 0,
+            fused_reuse_plan_model && pair_ok && compact_pair_ok
+                ? pair_compact.size() * sizeof(uint64_t) : 0,
+            fused_reuse_plan_model && pair_ok && compact_pair_ok
+                ? "packed-substitute" : nullptr)) {
         std::fprintf(stderr, "sniper-sg SSSP: context/ReusePlan sideband export failed\n");
         return 2;
     }
@@ -1652,7 +1687,7 @@ int run_bc(const Graph& graph, int num_iters) {
          static_cast<uint32_t>(graph.num_nodes()), sizeof(ScoreT), true},
     };
     SniperEdgeRegion edge_regions[2];
-    int num_edge_regions = sniper_make_edge_regions(graph, edge_regions, 2, true);
+    int num_edge_regions = sniper_make_edge_regions(graph, edge_regions, 2);
     const int kNumVtxPerLine = graphbrew_sniper::env_int_clamped(
         "SNIPER_ECG_VERTICES_PER_LINE",
         64 / sizeof(int32_t), 1, 1024);
@@ -1711,7 +1746,10 @@ int run_bc(const Graph& graph, int num_iters) {
             fused_reuse_plan_model && pair_ok
                 ? pairs.wide_records.data() : nullptr,
             fused_reuse_plan_model && pair_ok
-                ? pairs.wide_records.size() : 0)) {
+                ? pairs.wide_records.size() : 0,
+            pair_ok ? pairs.stream_base() : 0,
+            pair_ok ? pairs.stream_bytes() : 0,
+            pair_ok ? "packed-substitute" : nullptr)) {
         std::fprintf(stderr, "sniper-sg BC: context/ReusePlan sideband export failed\n");
         return 2;
     }
@@ -1894,7 +1932,7 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
          static_cast<uint32_t>(graph.num_nodes()), sizeof(NodeID), true},
     };
     SniperEdgeRegion edge_regions[2];
-    int num_edge_regions = sniper_make_edge_regions(graph, edge_regions, 2, true);
+    int num_edge_regions = sniper_make_edge_regions(graph, edge_regions, 2);
     const int kNumVtxPerLine = graphbrew_sniper::env_int_clamped(
         "SNIPER_ECG_VERTICES_PER_LINE",
         64 / sizeof(NodeID), 1, 1024);
@@ -1953,7 +1991,10 @@ int run_cc(const Graph& graph, int neighbor_rounds) {
             fused_reuse_plan_model && pair_ok
                 ? pairs.wide_records.data() : nullptr,
             fused_reuse_plan_model && pair_ok
-                ? pairs.wide_records.size() : 0)) {
+                ? pairs.wide_records.size() : 0,
+            pair_ok ? pairs.stream_base() : 0,
+            pair_ok ? pairs.stream_bytes() : 0,
+            pair_ok ? "packed-substitute" : nullptr)) {
         std::fprintf(stderr, "sniper-sg CC: context/ReusePlan sideband export failed\n");
         return 2;
     }

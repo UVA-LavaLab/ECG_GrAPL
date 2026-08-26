@@ -1,36 +1,49 @@
 --- a/src/mem/cache/prefetch/base.cc
 +++ b/src/mem/cache/prefetch/base.cc
-@@ -62,7 +62,8 @@
+@@ -50,4 +50,5 @@
+ #include "base/intmath.hh"
+ #include "mem/cache/base.hh"
++#include "mem/cache/replacement_policies/graph_cache_context_gem5.hh"
+ #include "params/BasePrefetcher.hh"
+ #include "sim/system.hh"
+@@ -62,7 +63,10 @@
    : address(addr), pc(pkt->req->hasPC() ? pkt->req->getPC() : 0),
      requestorId(pkt->req->requestorId()), validPC(pkt->req->hasPC()),
      secure(pkt->isSecure()), size(pkt->req->getSize()), write(pkt->isWrite()),
 -    paddress(pkt->req->getPaddr()), cacheMiss(miss)
 +    paddress(pkt->req->getPaddr()), cacheMiss(miss),
-+    flowThrough(pkt->req->getFlags().isSet(Request::ECG_FLOWTHROUGH))
++    flowThrough(pkt->req->getFlags().isSet(Request::ECG_FLOWTHROUGH)),
++    structuralFlowThrough(
++        replacement_policy::graph::isStructuralFlowThroughAddress(addr))
  {
      unsigned int req_size = pkt->req->getSize();
      if ((!write && miss) || !pkt->hasData()) {
-@@ -78,7 +79,7 @@
+@@ -78,7 +82,10 @@
    : address(addr), pc(pfi.pc), requestorId(pfi.requestorId),
      validPC(pfi.validPC), secure(pfi.secure), size(pfi.size),
      write(pfi.write), paddress(pfi.paddress), cacheMiss(pfi.cacheMiss),
 -    data(nullptr)
-+    flowThrough(pfi.flowThrough), data(nullptr)
++    flowThrough(pfi.flowThrough),
++    structuralFlowThrough(
++        replacement_policy::graph::isStructuralFlowThroughAddress(addr)),
++    data(nullptr)
  {
  }
  
 --- a/src/mem/cache/prefetch/base.hh
 +++ b/src/mem/cache/prefetch/base.hh
-@@ -127,6 +127,8 @@
+@@ -127,6 +127,10 @@
          Addr paddress;
          /** Whether this event comes from a cache miss */
          bool cacheMiss;
 +        /** Preserve GraphBrew FlowThrough on derived prefetch requests. */
 +        bool flowThrough;
++        /** Preserve policy-independent structural FlowThrough. */
++        bool structuralFlowThrough;
          /** Pointer to the associated request data */
          uint8_t *data;
  
-@@ -149,6 +151,11 @@
+@@ -149,6 +153,16 @@
              return secure;
          }
  
@@ -39,17 +52,25 @@
 +            return flowThrough;
 +        }
 +
++        bool isStructuralFlowThrough() const
++        {
++            return structuralFlowThrough;
++        }
++
          /**
           * Returns the program counter that generated this request.
           * @return the pc value
 --- a/src/mem/cache/prefetch/queued.cc
 +++ b/src/mem/cache/prefetch/queued.cc
-@@ -66,6 +66,9 @@
+@@ -66,6 +66,12 @@
      if (pfInfo.isSecure()) {
          req->setFlags(Request::SECURE);
      }
 +    if (pfInfo.isFlowThrough()) {
 +        req->setFlags(Request::ECG_FLOWTHROUGH);
++    }
++    if (pfInfo.isStructuralFlowThrough()) {
++        req->setFlags(Request::STRUCTURAL_FLOWTHROUGH);
 +    }
      req->taskId(context_switch_task_id::Prefetcher);
      pkt = new Packet(req, MemCmd::HardPFReq);

@@ -96,6 +96,7 @@ def benchmark_environment(args):
         f"ECG_REUSE_PLAN_DEPTH={reuse_plan_depth}",
         f"ECG_REUSE_PLAN_DELIVERY_TRACE={os.environ.get('ECG_REUSE_PLAN_DELIVERY_TRACE', '0')}",
         f"ECG_FLOWTHROUGH={os.environ.get('ECG_FLOWTHROUGH', '0')}",
+        f"STRUCTURAL_FLOWTHROUGH={os.environ.get('STRUCTURAL_FLOWTHROUGH', '0')}",
         f"ECG_FLOWTHROUGH_TRACE={os.environ.get('ECG_FLOWTHROUGH_TRACE', '0')}",
         f"GEM5_ECG_EPOCH_REGION_INDICES={os.environ.get('GEM5_ECG_EPOCH_REGION_INDICES', '')}",
         f"GEM5_ECG_EPOCH_REGION_INDEX={os.environ.get('GEM5_ECG_EPOCH_REGION_INDEX', '')}",

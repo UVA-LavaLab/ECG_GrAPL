@@ -312,8 +312,28 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
         std::fprintf(stderr, "gem5 SSSP ReusePlan record validation failed\n");
         std::abort();
     }
+    const bool compact_structural_substitute =
+        compact_pair_ok && ecg_bind_iload_on &&
+        gem5_env_int_clamped("GEM5_ECG_PFX_LOOKAHEAD", 4, 0, 64) == 0;
     gem5_export_context(regions, 1, g, GEM5_SIDEBAND_PATH,
-                        edge_regions, num_edge_regions, edge_epoch_count);
+                        edge_regions, num_edge_regions, edge_epoch_count,
+                        compact_structural_substitute
+                            ? reinterpret_cast<uint64_t>(pair_compact.data())
+                            : pair_ok && !pair_sidecars.empty()
+                                ? reinterpret_cast<uint64_t>(
+                                    pair_sidecars.data())
+                                : 0,
+                        compact_structural_substitute
+                            ? pair_compact.size() * sizeof(uint64_t)
+                            : pair_ok
+                                ? pair_sidecars.size() * sizeof(uint32_t) : 0,
+                        nullptr, 0, nullptr, 0, nullptr, 0,
+                        compact_structural_substitute
+                            ? reinterpret_cast<uint64_t>(pair_compact.data()) : 0,
+                        compact_structural_substitute
+                            ? pair_compact.size() * sizeof(uint64_t) : 0,
+                        compact_structural_substitute
+                            ? "packed-substitute" : nullptr);
     // The fused ecg.load EVICT op reads dist[dest] AND delivers dest's epoch in one custom-0
     // op (RISC-V); gated on GEM5_ENABLE_ECG_PLOAD. X86 falls back to a plain indexed load
     // (no delivery -> cache_sim is authoritative there).
@@ -441,6 +461,8 @@ pvector<WeightT> DeltaStep_Gem5(const WGraph &g, NodeID source, WeightT delta) {
     }
 
     GEM5_WORK_END(GEM5_WORK_COMPUTE);
+    gem5_report_semantic_result(
+        "sssp", dist.data(), static_cast<size_t>(dist.size()));
     GEM5_DUMP_STATS();
     GEM5_ECG_END_CONTEXT();
     return dist;

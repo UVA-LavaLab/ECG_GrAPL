@@ -40,7 +40,7 @@ pvector<NodeID> ShiloachVishkin_Sniper(const Graph &g) {
          static_cast<uint32_t>(g.num_nodes()), sizeof(NodeID), true},
     };
     SniperEdgeRegion edge_regions[2];
-    int num_edge_regions = sniper_make_edge_regions(g, edge_regions, 2, true);
+    int num_edge_regions = sniper_make_edge_regions(g, edge_regions, 2);
     // P-OPT reref matrix: SV reads comp[dest] over OUT-edges -> a vertex's comp is
     // next-referenced by its IN-neighbours -> transpose reref (traverseCSR=false).
     constexpr int kNumVtxPerLine = 64 / sizeof(NodeID);

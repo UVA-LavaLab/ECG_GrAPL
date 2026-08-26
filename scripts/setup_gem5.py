@@ -470,7 +470,7 @@ def apply_unified_diff_patches():
             ),
             "mem/request_flowthrough.patch": (
                 target / "src/mem/request.hh",
-                "ECG_FLOWTHROUGH",
+                "STRUCTURAL_FLOWTHROUGH",
             ),
             "mem/cache/base_flowthrough.patch": (
                 target / "src/mem/cache/base.hh",
@@ -478,15 +478,15 @@ def apply_unified_diff_patches():
             ),
             "mem/cache/base_flowthrough_request_flag.patch": (
                 target / "src/mem/cache/base.cc",
-                "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND",
+                "isStructuralFlowThroughAddress",
             ),
             "mem/cache/array_attribution.patch": (
                 target / "src/mem/cache/base.hh",
-                "ecgArrayDemandMisses",
+                "structuralFlowThroughMissTargets",
             ),
             "mem/cache/prefetch_flowthrough.patch": (
                 target / "src/mem/cache/prefetch/queued.cc",
-                "pfInfo.isFlowThrough()",
+                "pfInfo.isStructuralFlowThrough()",
             ),
         }
         marker_target = marker_targets.get(overlay_rel)
@@ -707,22 +707,27 @@ def verify_installation_postconditions():
     marker_checks = {
         GEM5_DIR / "src/mem/request.hh": [
             "ECG_FLOWTHROUGH",
+            "STRUCTURAL_FLOWTHROUGH",
         ],
         GEM5_DIR / "src/mem/cache/base.cc": [
             "Request::ECG_FLOWTHROUGH",
             "GEM5_ECG_FLOWTHROUGH_REQUEST_BOUND",
+            "isStructuralFlowThroughAddress",
             "allocOnFill(pkt->cmd) && !flowthrough",
             "allocateMissBuffer(pkt, forward_time, true, !flowthrough)",
             "recordGraphArrayMshrMiss",
             "ecgArrayDemandReadBytes",
+            "structuralFlowThroughMissTargets",
         ],
         GEM5_DIR / "src/mem/cache/base.hh": [
             "allow_alloc_on_fill",
             "ecgArrayDemandMisses",
+            "structuralFlowThroughMissTargets",
             "recordGraphArrayDemandMiss(pkt);",
         ],
         GEM5_DIR / "src/mem/cache/prefetch/base.cc": [
             "flowThrough(pkt->req->getFlags()",
+            "structuralFlowThrough(",
         ],
         GEM5_DIR / "src/mem/cache/prefetch/base.hh": [
             "isFlowThrough",
@@ -730,6 +735,7 @@ def verify_installation_postconditions():
         ],
         GEM5_DIR / "src/mem/cache/prefetch/queued.cc": [
             "pfInfo.isFlowThrough()",
+            "pfInfo.isStructuralFlowThrough()",
             "GRAPHBREW-PREFETCH-LATENCY-GUARD",
         ],
         GEM5_DIR / "src/mem/cache/prefetch/queued.hh": [

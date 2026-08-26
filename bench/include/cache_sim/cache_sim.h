@@ -2802,13 +2802,21 @@ public:
             std::cerr << "[ECG-FLOWTHROUGH sim=cache_sim active=1 adaptive="
                       << (adaptive_flowthrough_ ? 1 : 0) << "]\n";
         }
-        accessNonTemporal(address, is_write);
+        accessNonTemporal(address, is_write, /*adaptive_placement=*/true);
+    }
+
+    void accessStructuralStream(uint64_t address, bool is_write = false) {
+        if (!enabled_) return;
+        structural_flowthrough_accesses_++;
+        accessNonTemporal(address, is_write, /*adaptive_placement=*/false);
     }
 
     // Shared non-temporal core. Kept separate from accessStream so P-OPT's
     // rereference-matrix column stream can reuse the identical accounting
     // instead of duplicating it; only the announcement differs.
-    void accessNonTemporal(uint64_t address, bool is_write = false) {
+    void accessNonTemporal(
+            uint64_t address, bool is_write = false,
+            bool adaptive_placement = true) {
         if (!enabled_) return;
         const uint64_t line_addr = lineAddress(address);
         const bool was_prefetched = hasPrefetchedLine(line_addr);
@@ -2828,10 +2836,14 @@ public:
             if (streamPrefetchOracle()) {
                 for (int k = 1; k <= stream_pf_degree; ++k) {
                     stride_pf_issued_++;
-                    prefetchStream(address + static_cast<uint64_t>(k) * line_size_);
+                    prefetchStream(
+                        address + static_cast<uint64_t>(k) * line_size_,
+                        adaptive_placement);
                 }
             } else {
-                issueStridePrefetch(address, stream_pf_degree, /*non_temporal=*/true);
+                issueStridePrefetch(
+                    address, stream_pf_degree, /*non_temporal=*/true,
+                    adaptive_placement);
             }
         }
 
@@ -2845,8 +2857,9 @@ public:
             l1_->insert(address, is_write);
             return;
         }
-        topt::RequestClassScope request_class(
-            /*bypass=*/!adaptive_flowthrough_);
+        const bool adaptive =
+            adaptive_placement && adaptive_flowthrough_;
+        topt::RequestClassScope request_class(/*bypass=*/!adaptive);
         if (l3_->access(address, is_write)) {
             if (was_prefetched) markPrefetchUseful(line_addr);
             l2_->insert(address, is_write);
@@ -2854,10 +2867,10 @@ public:
             return;
         }
         const size_t set_index = l3_->setIndexForAddress(address);
-        if (adaptive_flowthrough_) {
+        if (adaptive) {
             placement_selector_.recordMiss(set_index);
         }
-        const bool flowthrough = !adaptive_flowthrough_ ||
+        const bool flowthrough = !adaptive ||
             placement_selector_.shouldFlowThrough(set_index);
         // LLC miss: the static arm applies FlowThrough; the adaptive allocate arm retains
         // the record so reused streams can opt out of FlowThrough.
@@ -2870,7 +2883,8 @@ public:
 
     // FlowThrough prefetch: warm private caches without allocating the
     // one-touch record in LLC. Existing L3 data may still be promoted downward.
-    void prefetchStream(uint64_t address) {
+    void prefetchStream(
+            uint64_t address, bool adaptive_placement = true) {
         if (!enabled_) return;
         const uint64_t line_addr = lineAddress(address);
         prefetch_requests_++;
@@ -2892,10 +2906,12 @@ public:
             return;
         }
         const size_t set_index = l3_->setIndexForAddress(address);
-        if (adaptive_flowthrough_) {
+        const bool adaptive =
+            adaptive_placement && adaptive_flowthrough_;
+        if (adaptive) {
             placement_selector_.recordMiss(set_index);
         }
-        const bool flowthrough = !adaptive_flowthrough_ ||
+        const bool flowthrough = !adaptive ||
             placement_selector_.shouldFlowThrough(set_index);
         prefetch_fills_++;
         markPrefetchFill(line_addr);
@@ -2990,6 +3006,7 @@ public:
         l3_->resetStats();
         total_accesses_ = 0;
         memory_accesses_ = 0;
+        structural_flowthrough_accesses_ = 0;
         prefetch_requests_ = 0;
         prefetch_cache_hits_ = 0;
         prefetch_fills_ = 0;
@@ -3149,8 +3166,9 @@ private:
         return limit;
     }
 
-    void issueStridePrefetch(uint64_t address, int degree,
-                             bool non_temporal = false) {
+    void issueStridePrefetch(
+            uint64_t address, int degree, bool non_temporal = false,
+            bool adaptive_placement = true) {
         const uint64_t line = address / line_size_;
         const uint64_t region = address >> kStreamRegionShift;
         StreamEntry& e = stride_table_[region % kStreamTableEntries];
@@ -3187,7 +3205,8 @@ private:
             // translation the model does not perform.
             if ((target >> kStreamRegionShift) != region) break;
             stride_pf_issued_++;
-            if (non_temporal) prefetchStream(target);
+            if (non_temporal)
+                prefetchStream(target, adaptive_placement);
             else prefetch(target);
         }
     }
@@ -3263,6 +3282,9 @@ public:
 
     uint64_t getTotalAccesses() const { return total_accesses_; }
     uint64_t getMemoryAccesses() const { return memory_accesses_; }
+    uint64_t getStructuralFlowThroughAccesses() const {
+        return structural_flowthrough_accesses_;
+    }
     uint64_t getPrefetchRequests() const { return prefetch_requests_; }
     uint64_t getPrefetchCacheHits() const { return prefetch_cache_hits_; }
     uint64_t getPrefetchFills() const { return prefetch_fills_; }
@@ -3337,6 +3359,8 @@ public:
         ss << "  \"prefetch_mtlb_misses\": " << pfx_mtlb_misses_ << ",\n";
         ss << "  \"prefetch_pending\": " << getPrefetchPending() << ",\n";
         ss << "  \"total_memory_traffic\": " << getTotalMemoryTraffic() << ",\n";
+        ss << "  \"structural_flowthrough_accesses\": "
+           << getStructuralFlowThroughAccesses() << ",\n";
         ss << "  \"llc_writebacks\": " << getWritebackTraffic() << ",\n";
         ss << "  \"total_offchip_traffic\": " << getTotalOffChipTraffic() << ",\n";
         ss << "  \"ecg_mode_effective\": \"" << l3_->getEcgMode()
@@ -3547,6 +3571,7 @@ private:
     const GraphCacheContext* graph_ctx_ = nullptr;  // for the structure-stream prefetcher
     std::atomic<uint64_t> total_accesses_{0};
     std::atomic<uint64_t> memory_accesses_{0};
+    std::atomic<uint64_t> structural_flowthrough_accesses_{0};
     std::atomic<uint64_t> prefetch_requests_{0};
     std::atomic<uint64_t> prefetch_cache_hits_{0};
     std::atomic<uint64_t> prefetch_fills_{0};
@@ -3648,6 +3673,10 @@ public:
     }
 
     inline void accessStream(uint64_t address, bool is_write = false) {
+        access(address, is_write);
+    }
+    inline void accessStructuralStream(
+            uint64_t address, bool is_write = false) {
         access(address, is_write);
     }
 
@@ -3846,6 +3875,10 @@ public:
     }
 
     inline void accessStream(uint64_t address, bool is_write = false) {
+        access(address, is_write);
+    }
+    inline void accessStructuralStream(
+            uint64_t address, bool is_write = false) {
         access(address, is_write);
     }
 
@@ -4067,6 +4100,10 @@ public:
     void accessStream(uint64_t address, bool is_write = false) {
         // Prototype falls back to the normal multicore path. The reference path is
         // validated first in the deterministic single-core cache simulator.
+        access(address, is_write);
+    }
+    void accessStructuralStream(
+            uint64_t address, bool is_write = false) {
         access(address, is_write);
     }
 
@@ -4455,6 +4492,10 @@ public:
     }
 
     inline void accessStream(uint64_t address, bool is_write = false) {
+        access(address, is_write);
+    }
+    inline void accessStructuralStream(
+            uint64_t address, bool is_write = false) {
         access(address, is_write);
     }
 

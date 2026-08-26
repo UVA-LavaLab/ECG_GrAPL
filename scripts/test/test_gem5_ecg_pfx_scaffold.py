@@ -1409,16 +1409,14 @@ def test_proposal_compact_reuse_bind_flowthrough_cli_guards():
     assert "implemented only for --benchmark pr" in (
         wrong_kernel.stdout + wrong_kernel.stderr)
 
-    asymmetric = subprocess.run(
+    symmetric = subprocess.run(
         [
             sys.executable, str(ROI_MATRIX_PATH),
             "--suite", "gem5", "--benchmark", "pr",
             "--policies", "LRU", "--flowthrough", "all", "--dry-run",
         ],
         cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=60)
-    assert asymmetric.returncode != 0
-    assert "implemented only for cache-sim" in (
-        asymmetric.stdout + asymmetric.stderr)
+    assert symmetric.returncode == 0, symmetric.stdout + symmetric.stderr
 
     wrong_isa = subprocess.run(
         [
@@ -2004,6 +2002,49 @@ def test_gem5_pr_semantic_receipts_fail_closed():
     roi_matrix.certify_gem5_pr_results(missing, args)
     assert all(row["status"] == "error" for row in missing)
     assert all(row["pr_result_matched"] == 0 for row in missing)
+
+
+def test_detailed_kernel_semantic_receipts_fail_closed():
+    gem5_args = SimpleNamespace(benchmark="bfs", suite="gem5")
+    gem5_rows = [
+        {
+            "simulator": "gem5", "benchmark": "bfs", "status": "ok",
+            "options": "-i 1", "l3_size": "128kB", "l3_ways": 16,
+            "prefetcher": "none", "kernel_semantic_name": "bfs",
+            "kernel_semantic_items": 100, "kernel_semantic_checksum": "abc",
+        },
+        {
+            "simulator": "gem5", "benchmark": "bfs", "status": "ok",
+            "options": "-i 1", "l3_size": "128kB", "l3_ways": 16,
+            "prefetcher": "none", "kernel_semantic_name": "bfs",
+            "kernel_semantic_items": 100, "kernel_semantic_checksum": "abc",
+        },
+    ]
+    roi_matrix.certify_detailed_kernel_results(gem5_rows, gem5_args)
+    assert all(row["kernel_result_matched"] == 1 for row in gem5_rows)
+
+    gem5_rows[1]["kernel_semantic_checksum"] = "def"
+    roi_matrix.certify_detailed_kernel_results(gem5_rows, gem5_args)
+    assert all(row["status"] == "error" for row in gem5_rows)
+
+    sniper_args = SimpleNamespace(benchmark="cc", suite="sniper")
+    sniper_rows = [
+        {
+            "simulator": "sniper", "benchmark": "cc", "status": "ok",
+            "options": "", "l3_size": "128kB", "l3_ways": 16,
+            "prefetcher": "none", "sniper_workload": "sg_kernel",
+            "sniper_semantic_result": "7",
+        },
+        {
+            "simulator": "sniper", "benchmark": "cc", "status": "ok",
+            "options": "", "l3_size": "128kB", "l3_ways": 16,
+            "prefetcher": "none", "sniper_workload": "sg_kernel",
+            "sniper_semantic_result": "",
+        },
+    ]
+    roi_matrix.certify_detailed_kernel_results(sniper_rows, sniper_args)
+    assert all(row["status"] == "error" for row in sniper_rows)
+    assert all(row["kernel_result_matched"] == 0 for row in sniper_rows)
 
 
 def test_gem5_variant_receipt_is_machine_validated():

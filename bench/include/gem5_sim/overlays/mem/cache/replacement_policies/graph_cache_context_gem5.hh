@@ -842,6 +842,8 @@ struct GraphCacheContext {
     uint32_t num_regions = 0;
     uint64_t flowthrough_base = 0;
     uint64_t flowthrough_upper = 0;
+    uint64_t structural_flowthrough_base = 0;
+    uint64_t structural_flowthrough_upper = 0;
     uint32_t array_attribution_schema = 0;
     GraphArrayRegion edge_preferred;
     GraphArrayRegion edge_other;
@@ -890,6 +892,12 @@ struct GraphCacheContext {
     bool isFlowThroughData(uint64_t addr) const {
         return flowthrough_base < flowthrough_upper &&
                addr >= flowthrough_base && addr < flowthrough_upper;
+    }
+
+    bool isStructuralFlowThroughData(uint64_t addr) const {
+        return structural_flowthrough_base < structural_flowthrough_upper &&
+               addr >= structural_flowthrough_base &&
+               addr < structural_flowthrough_upper;
     }
 
     bool arrayAttributionReady() const {
@@ -1031,6 +1039,12 @@ struct GraphCacheContext {
         uint64_t flowthrough_size =
             parseJsonUint(content, "\"flowthrough_size\"");
         flowthrough_upper = flowthrough_base + flowthrough_size;
+        structural_flowthrough_base =
+            parseJsonUint(content, "\"structural_flowthrough_base\"");
+        const uint64_t structural_flowthrough_size =
+            parseJsonUint(content, "\"structural_flowthrough_size\"");
+        structural_flowthrough_upper =
+            structural_flowthrough_base + structural_flowthrough_size;
         array_attribution_schema = static_cast<uint32_t>(
             parseJsonUint(content, "\"array_attribution_schema\""));
         edge_preferred.base_address =
@@ -1290,6 +1304,18 @@ inline bool isEcgFlowThroughAddress(uint64_t addr) {
             match ? 1 : 0);
     }
     return match;
+}
+
+inline bool isStructuralFlowThroughAddress(uint64_t addr) {
+    const char* enabled = std::getenv("STRUCTURAL_FLOWTHROUGH");
+    if (!enabled || std::strcmp(enabled, "0") == 0) return false;
+    static GraphCacheContext context;
+    if (!context.loaded) {
+        const char* path = std::getenv("GEM5_GRAPHBREW_CTX");
+        if (!path || !path[0]) path = "/tmp/gem5_graphbrew_ctx.json";
+        context.loaded = context.loadFromSideband(path);
+    }
+    return context.loaded && context.isStructuralFlowThroughData(addr);
 }
 
 } // namespace graph
