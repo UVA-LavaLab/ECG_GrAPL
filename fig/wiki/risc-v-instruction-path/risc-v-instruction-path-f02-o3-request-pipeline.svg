@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1490" viewBox="0 0 1200 1490" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
-  <title id="title">A real ReusePlan instruction pair in the gem5 O3 pipeline</title>
+  <title id="title">Concrete ReusePlan instruction pair in the gem5 O3 pipeline</title>
   <desc id="desc">An architecture-style schematic follows the checked compact record through the actual record instruction, renamed register dependency, property instruction, frontend and execution stages, LSQ Request extension, private caches, MSHR, LLC line state, writeback, and ROB retirement.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
@@ -34,8 +34,8 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1490" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">A real ReusePlan instruction pair in the gem5 O3 pipeline</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Source edge 4-&gt;7 maps to internal 8-&gt;18, property 0x80000048, and LLC line 0x80000040.</text>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Concrete ReusePlan instruction pair in the gem5 O3 pipeline</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Adjacency entry 4-&gt;7 maps to internal 8-&gt;18, property 0x80000048, and LLC line 0x80000040.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
   <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
@@ -44,7 +44,7 @@
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#B45309" stroke-width="3"/>
   <rect x="24" y="180" width="520" height="180" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
   <text x="40" y="209" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">ecg.flow.load.compact</text>
-  <text x="40" y="239" text-anchor="start" class="mono body" fill="#27313A">rs1 = record for source 4-&gt;7 / int 8-&gt;18</text>
+  <text x="40" y="239" text-anchor="start" class="mono body" fill="#27313A">rs1 = record for adjacency 4-&gt;7 / int 8-&gt;18</text>
   <text x="40" y="263" text-anchor="start" class="mono body" fill="#27313A">memory width = 4 bytes</text>
   <text x="40" y="287" text-anchor="start" class="mono body" fill="#27313A">Request flag = ECG_FLOWTHROUGH</text>
   <text x="40" y="311" text-anchor="start" class="mono body" fill="#27313A">rd = dest 18 | T1 | e1 11 | e2 15</text>

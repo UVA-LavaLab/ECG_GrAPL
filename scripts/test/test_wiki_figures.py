@@ -56,6 +56,10 @@ def test_checked_figure_fixture_derives_published_values():
     readers = [[] for _ in range(n)]
     rows = [[] for _ in range(n)]
     mapping = fixture["source_to_internal"]
+    assert fixture["tracked_edge"] == {
+        "source_vertex": 4,
+        "destination_vertex": 7,
+    }
     assert fixture["weighted_undirected_edges"] == [
         [0, 1, 2], [0, 2, 5], [0, 8, 9], [1, 2, 1], [1, 4, 4],
         [2, 3, 2], [2, 4, 3], [2, 8, 7], [3, 4, 2], [3, 5, 5],
@@ -170,17 +174,19 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
         "reuse-plan-flowthrough-f01-offline-construction.svg"
     ]
     assert "Checked nine-node weighted graph" in graph
-    assert "tracked source edge 4 -&gt; 7" in graph
+    assert "tracked adjacency 4 -&gt; 7" in graph
+    assert "DEGREE-DERIVED REUSE TIER" in graph
+    assert "d_in=4 -&gt; tier 1" in graph
     assert graph.count('data-flow-kind="model-edge"') == 1
 
     timeline = figures[
         "reuse-plan-flowthrough-f03-future-distance.svg"
     ]
     for token in (
-        "line 0x80000040: readers [1, 6, 8, 11, 15, 18, 20]",
-        "current reader",
-        "first future line use",
-        "second future line use",
+        "line 0x80000040 sources: [1, 6, 8, 11, 15, 18, 20]",
+        "current outer vertex",
+        "next line access",
+        "second line access",
         "nearest = min(3, 7) = 3",
     ):
         assert token in timeline
@@ -225,7 +231,43 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
     assert "Representative property-access pseudocode" in walkthrough
     assert "plan = ecg.flow.load.compact(record[edge_pos])  [B]" in walkthrough
     assert "value = ecg.bind.load.u32(addr, plan)  [C,D]" in walkthrough
-    assert "tracked execution: source 4-&gt;7 maps to internal 8-&gt;18" in walkthrough
+    assert "tracked execution: adjacency 4-&gt;7 maps to internal 8-&gt;18" in walkthrough
     assert "stamp T1 / e11 / e15" in walkthrough
     assert 'data-flow-label="record Request"' in walkthrough
     assert 'data-flow-label="property Request + ReuseBind"' in walkthrough
+
+
+def test_public_graph_terminology_is_direction_explicit():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    home = (ROOT / "wiki/Home.md").read_text(encoding="utf-8")
+    guide = (ROOT / "wiki/ReusePlan-FlowThrough.md").read_text(
+        encoding="utf-8"
+    )
+    example = (ROOT / "wiki/Property-to-Cache-Walkthrough.md").read_text(
+        encoding="utf-8"
+    )
+    public_text = "\n".join((readme, home, guide, example))
+
+    for token in (
+        "out-neighbors",
+        "in-neighbors",
+        "`N_out(u)`",
+        "`N_in(u)`",
+        "access count is `d_in(v)`",
+        "access count is `d_out(v)`",
+        "access-source",
+        "outer vertex",
+        "property vertex",
+    ):
+        assert token in public_text
+
+    for imprecise in (
+        "reading spine",
+        "reader graph",
+        "reader-count",
+        "current reader",
+        "future readers",
+        "property 18 readers",
+        "honest traffic",
+    ):
+        assert imprecise not in public_text

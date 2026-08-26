@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1240" viewBox="0 0 1200 1240" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
-  <title id="title">Where ECG state lives in the processor and cache hierarchy</title>
+  <title id="title">ECG state placement in the processor and cache hierarchy</title>
   <desc id="desc">The architecture map places offline records, architectural format/current/context CSRs, renamed ReusePlan operands, load-queue state, typed Request extensions, MSHR merge state, and line-local LLC metadata in their actual controlling structures. It distinguishes exact gem5 O3 binding from diagnostic models.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
@@ -34,8 +34,8 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1240" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Where ECG state lives in the processor and cache hierarchy</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Containment shows storage; arrows are reserved for real operands and requests.</text>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ECG state placement in the processor and cache hierarchy</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Containment denotes storage; arrows denote architectural operand or Request transfer.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
   <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>

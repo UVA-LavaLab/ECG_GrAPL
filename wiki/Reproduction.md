@@ -169,7 +169,7 @@ values, including the graph view and cache-line reuse timeline, come from
 
 Use the [architecture guide](ReusePlan-FlowThrough), the
 [RISC-V request path](RISC-V-Instruction-Path), and the
-[evidence boundary](Evaluation-Methodology) to interpret the generated plates.
+[evidence boundary](Evaluation-Methodology) to interpret the generated figures.
 
 ## 4. Inspect the PageRank study
 

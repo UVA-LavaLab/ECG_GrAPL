@@ -62,7 +62,7 @@
   <rect x="24" y="512" width="360" height="245" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
   <text x="40" y="541" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Baseline policies</text>
   <text x="40" y="571" text-anchor="start" class="sans body" fill="#27313A">LRU / GRASP / P-OPT consume CSR</text>
-  <text x="40" y="595" text-anchor="start" class="sans body" fill="#27313A">active carrier range = real edge array</text>
+  <text x="40" y="595" text-anchor="start" class="sans body" fill="#27313A">carrier range = CSR edge array</text>
   <text x="40" y="619" text-anchor="start" class="sans body" fill="#27313A">STRUCTURAL_FLOWTHROUGH no-allocate</text>
   <text x="40" y="643" text-anchor="start" class="sans body" fill="#27313A">positive activity receipt is required</text>
   <rect x="420" y="512" width="360" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>

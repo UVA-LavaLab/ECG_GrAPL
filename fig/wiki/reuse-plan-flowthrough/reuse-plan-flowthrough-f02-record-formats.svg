@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1150" viewBox="0 0 1200 1150" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
-  <title id="title">ReusePlan wire formats and honest traffic footprints</title>
+  <title id="title">ReusePlan wire formats and traffic overhead</title>
   <desc id="desc">The figure gives the exact unweighted 64-bit layout, the graph-dependent 32-bit compact rule instantiated by the checked fixture, and both weighted SSSP transports: one compact 64-bit edge record or an ordinary weighted edge plus a 32-bit metadata sidecar.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
@@ -34,7 +34,7 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1150" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ReusePlan wire formats and honest traffic footprints</text>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ReusePlan wire formats and traffic overhead</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">General, compact, and weighted layouts are separate transport choices.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
   <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
@@ -66,7 +66,7 @@
   <text x="40" y="506" text-anchor="start" class="mono body" fill="#27313A">id_bits + 2 tier bits + 2*epoch_bits &lt;= 32</text>
   <text x="40" y="530" text-anchor="start" class="mono body" fill="#27313A">checked fixture: 5 + 2 + 2*5 = 17</text>
   <text x="40" y="554" text-anchor="start" class="mono body" fill="#27313A">unused high bits are zero/reserved</text>
-  <text x="40" y="578" text-anchor="start" class="mono body" fill="#27313A">decode widens to the canonical 64-bit value</text>
+  <text x="40" y="578" text-anchor="start" class="mono body" fill="#27313A">record-load execution widens to canonical 64-bit</text>
   <rect x="600" y="447" width="576" height="210" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
   <text x="616" y="476" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Traffic meaning</text>
   <text x="616" y="506" text-anchor="start" class="sans body" fill="#27313A">compact record substitutes for one ordinary edge ID</text>

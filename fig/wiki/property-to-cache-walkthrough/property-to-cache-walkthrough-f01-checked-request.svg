@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2070" viewBox="0 0 1200 2070" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
-  <title id="title">Checked request: source edge 4 -&gt; 7 maps to property 18</title>
+  <title id="title">Checked request: adjacency 4 -&gt; 7 maps to property 18</title>
   <desc id="desc">A single checked-fixture edge is followed from its edge-aligned compact record through the record load, explicit register dependency, computed property address, typed Request extension, LLC line stamp, circular distance, normal data completion, and later victim selection.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
@@ -34,16 +34,16 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="2070" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Checked request: source edge 4 -&gt; 7 maps to property 18</text>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Checked request: adjacency 4 -&gt; 7 maps to property 18</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Every number is derived from fig/ecg-figure-fixture.json.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
   <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">TRACKED GRAPH EDGE AND RECORD</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">one concrete checked edge; not a measured workload</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">TRACKED ADJACENCY ENTRY AND RECORD</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">one fixture-backed entry; not a measured workload</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3"/>
   <rect x="24" y="180" width="500" height="280" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="3"/>
-  <text x="42" y="211" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Source readers of vertex 7</text>
+  <text x="42" y="211" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">In-neighbors of vertex 7</text>
   <path d="M124 250 L388 340" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="model-edge"/>
   <path d="M124 308 L388 340" fill="none" stroke="#9AA3AD" stroke-width="2" marker-end="url(#arrow-gray)" data-flow-kind="model-edge"/>
   <path d="M124 366 L388 340" fill="none" stroke="#9AA3AD" stroke-width="2" marker-end="url(#arrow-gray)" data-flow-kind="model-edge"/>
@@ -63,12 +63,12 @@
   <text x="100" y="430" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">8</text>
   <circle cx="350" cy="205" r="18" fill="#B42318" stroke="#B42318" stroke-width="1"/>
   <text x="350" y="211" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">A</text>
-  <text x="380" y="211" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">track 4 -&gt; 7</text>
+  <text x="380" y="211" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">adjacency 4 -&gt; 7</text>
   <rect x="550" y="180" width="626" height="280" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="3"/>
   <text x="570" y="211" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">B  edge-aligned compact ReusePlan</text>
-  <text x="570" y="244" text-anchor="start" class="mono body" fill="#27313A">source 4 -&gt; internal reader 8</text>
-  <text x="570" y="268" text-anchor="start" class="mono body" fill="#27313A">CSR row contains destination 18</text>
-  <text x="570" y="292" text-anchor="start" class="mono body" fill="#27313A">line tier = 1; future readers = 11, 15</text>
+  <text x="570" y="244" text-anchor="start" class="mono body" fill="#27313A">outer vertex 4 -&gt; internal outer vertex 8</text>
+  <text x="570" y="268" text-anchor="start" class="mono body" fill="#27313A">outgoing CSR row accesses property 18</text>
+  <text x="570" y="292" text-anchor="start" class="mono body" fill="#27313A">line tier = 1; next access sources = 11, 15</text>
   <text x="570" y="316" text-anchor="start" class="mono body" fill="#27313A">property address = 0x80000048; line = 0x80000040</text>
   <rect x="575" y="335" width="162.0" height="90" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
   <text x="656.0" y="378.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">dest 18</text>
@@ -85,30 +85,30 @@
   <circle cx="44" cy="505" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="511" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="512" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">SOFTWARE LOOP AND HARDWARE CORRELATION</text>
-  <text x="1158" y="511" text-anchor="end" class="sans body" fill="#9AA3AD">representative push-family trace; PageRank reverses direction</text>
+  <text x="1158" y="511" text-anchor="end" class="sans body" fill="#9AA3AD">outgoing example; PageRank uses incoming rows</text>
   <line x1="24" y1="531" x2="1176" y2="531" stroke="#6D5BD0" stroke-width="3"/>
   <rect x="24" y="547" width="650" height="300" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="3"/>
   <text x="44" y="578" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Representative property-access pseudocode</text>
   <text x="44" y="615" text-anchor="start" class="mono body" fill="#9AA3AD">L1</text>
-  <text x="88" y="615" text-anchor="start" class="mono body" fill="#27313A">for reader in active_readers:</text>
+  <text x="88" y="615" text-anchor="start" class="mono body" fill="#27313A">for u in active_vertices:</text>
   <text x="44" y="645" text-anchor="start" class="mono body" fill="#9AA3AD">L2</text>
-  <text x="88" y="645" text-anchor="start" class="mono body" fill="#27313A">  for edge_pos in csr_row(reader):</text>
+  <text x="88" y="645" text-anchor="start" class="mono body" fill="#27313A">  for edge_pos in out_csr_row(u):</text>
   <text x="44" y="675" text-anchor="start" class="mono body" fill="#9AA3AD">L3</text>
   <text x="88" y="675" text-anchor="start" class="mono body" fill="#27313A">    plan = ecg.flow.load.compact(record[edge_pos])  [B]</text>
   <text x="44" y="705" text-anchor="start" class="mono body" fill="#9AA3AD">L4</text>
-  <text x="88" y="705" text-anchor="start" class="mono body" fill="#27313A">    dest = plan.destination</text>
+  <text x="88" y="705" text-anchor="start" class="mono body" fill="#27313A">    v = plan.destination</text>
   <text x="44" y="735" text-anchor="start" class="mono body" fill="#9AA3AD">L5</text>
-  <text x="88" y="735" text-anchor="start" class="mono body" fill="#27313A">    addr = property_base + dest * 4</text>
+  <text x="88" y="735" text-anchor="start" class="mono body" fill="#27313A">    addr = property_base + v * 4</text>
   <text x="44" y="765" text-anchor="start" class="mono body" fill="#9AA3AD">L6</text>
   <text x="88" y="765" text-anchor="start" class="mono body" fill="#27313A">    value = ecg.bind.load.u32(addr, plan)  [C,D]</text>
   <text x="44" y="795" text-anchor="start" class="mono body" fill="#9AA3AD">L7</text>
-  <text x="88" y="795" text-anchor="start" class="mono body" fill="#27313A">    proposal = update(reader, dest, value)</text>
-  <text x="44" y="830" text-anchor="start" class="sans body" fill="#B42318">tracked execution: source 4-&gt;7 maps to internal 8-&gt;18</text>
+  <text x="88" y="795" text-anchor="start" class="mono body" fill="#27313A">    proposal = update(u, v, value)</text>
+  <text x="44" y="830" text-anchor="start" class="sans body" fill="#B42318">tracked execution: adjacency 4-&gt;7 maps to internal 8-&gt;18</text>
   <rect x="700" y="547" width="476" height="300" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
-  <text x="720" y="578" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Stable software / hardware callouts</text>
+  <text x="720" y="578" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Cross-layer identifiers</text>
   <circle cx="730" cy="619" r="15" fill="#B42318" stroke="#B42318" stroke-width="1"/>
   <text x="730" y="625" text-anchor="middle" class="sans body" fill="#FFFFFF" font-weight="700">A</text>
-  <text x="758" y="625" text-anchor="start" class="sans body" fill="#27313A">source edge 4-&gt;7 / internal edge 8-&gt;18</text>
+  <text x="758" y="625" text-anchor="start" class="sans body" fill="#27313A">adjacency (4,7) / internal (8,18)</text>
   <circle cx="730" cy="662" r="15" fill="#B45309" stroke="#B45309" stroke-width="1"/>
   <text x="730" y="668" text-anchor="middle" class="sans body" fill="#FFFFFF" font-weight="700">B</text>
   <text x="758" y="668" text-anchor="start" class="sans body" fill="#27313A">record: dest18 | T1 | e11 | e15</text>
@@ -123,7 +123,7 @@
   <text x="758" y="797" text-anchor="start" class="sans body" fill="#27313A">LLC line 0x80000040 stores the stamp</text>
   <circle cx="44" cy="885" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="891" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="892" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">REAL TWO-INSTRUCTION PIPELINE</text>
+  <text x="74" y="892" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">TWO-INSTRUCTION DATA DEPENDENCY</text>
   <text x="1158" y="891" text-anchor="end" class="sans body" fill="#9AA3AD">the compact record becomes an explicit rs2 operand</text>
   <line x1="24" y1="911" x2="1176" y2="911" stroke="#15803D" stroke-width="3"/>
   <path d="M270 1055 L330 1055" fill="none" stroke="#6D5BD0" stroke-width="2.5" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="instruction operand / Request state"/>

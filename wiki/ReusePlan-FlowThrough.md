@@ -6,20 +6,39 @@ The structural stream is regular; the property address is irregular.
 ReusePlan carries graph-derived guidance from the structural access to the
 exact property Request. FlowThrough is a separate LLC placement decision.
 
-This page owns the construction, wire-format, victim-policy, and placement
-semantics. Instruction and MSHR details belong to the
+This page specifies construction, wire-format, victim-policy, and placement
+semantics. Instruction and MSHR details are specified in the
 [RISC-V instruction path](RISC-V-Instruction-Path).
 It contains no experimental results.
 
+## Graph terminology
+
+Let `G = (V,E)` be directed, with out-neighbors `N_out(u)`, in-neighbors
+`N_in(u)`, out-degree `d_out(u) = |N_out(u)|`, and in-degree
+`d_in(u) = |N_in(u)|`.
+
+- An outgoing-neighbor traversal processes adjacency row `u`, which enumerates
+  `N_out(u)`, and accesses `p[v]` for each `v` in that row. The outer-loop
+  vertices that access `p[v]` are `N_in(v)`, so the access count is `d_in(v)`.
+- An incoming-neighbor traversal processes adjacency row `u`, which enumerates
+  `N_in(u)`, and accesses `p[v]` for each `v` in that row. The outer-loop
+  vertices that access `p[v]` are `N_out(v)`, so the access count is `d_out(v)`.
+
+The offline builder stores this reverse incidence relation as an access-source
+index keyed by property vertex. Each list is sorted by outer-loop vertex ID.
+The terms **outer vertex**, **property vertex**, and **access-source vertex**
+are used below instead of the ambiguous term "reader." The checked figure
+fixture is undirected, so its in- and out-neighbor sets are equal; the example
+is labeled according to the outgoing-neighbor traversal.
+
 ## 1. Offline construction and the ROI boundary
 
-### Figure 1 — From a checked reader graph to one edge-aligned ReusePlan
+### Figure 1 — Degree and traversal analysis for one edge-aligned ReusePlan
 
-![Four-band derivation of reader-direction CSR, reuse tiers, future line readers, compact packing, and the sealed offline-to-runtime boundary](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg)
+![Four-band derivation of traversal-direction CSR, degree-derived reuse tiers, subsequent property-line accesses, compact packing, and the offline-to-runtime boundary](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg)
 
 **Figure 1.** Every displayed value is derived from
-`fig/ecg-figure-fixture.json`; the figure never mixes a second convenient
-example into the construction.
+`fig/ecg-figure-fixture.json`.
 
 The builder is kernel-direction aware:
 
@@ -28,16 +47,18 @@ The builder is kernel-direction aware:
   traversal.
 - The edge-aligned record offsets must match the corresponding canonical CSR.
 
-Vertices are ranked by the number of property readers in that direction.
+Vertices are ranked by property-access count: `d_in(v)` for an
+outgoing-neighbor traversal and `d_out(v)` for an incoming-neighbor traversal.
 With the default hot fraction `f = 0.15`, the first `floor(f|V|)` vertices in
-stable reader-count order receive tier 1, the next equally sized group tier 2,
-and the rest tier 3. A property line receives the hottest tier among its
-vertices.
+stable descending access-count order receive tier 1, the next equally sized
+group tier 2, and the rest tier 3. Vertex ID breaks equal-count ties. A
+property line receives the hottest tier among its vertices.
 
-For every governed edge, the builder searches the reader CSR strictly after
-the current reader. It takes the next two references to any vertex in the
-property line, wraps when necessary, preserves same-reader line reuse, and
-quantizes each reader into the configured epoch space.
+For each governed adjacency entry in outer-vertex row `u`, the builder searches
+the access-source lists strictly after `u`. It selects the next two accesses to
+any property vertex in the same cache line, wraps to the next ID-ordered sweep
+when necessary, preserves additional same-row accesses to that line, and
+quantizes each selected outer-vertex ID into the configured epoch space.
 
 Record construction is not measured graph execution. Sidecar headers bind the
 graph, configuration, width, ordering, record count, and payload. The guest
@@ -45,12 +66,12 @@ validates these facts before the ROI and aborts on disagreement.
 
 ## 2. Record formats and traffic
 
-### Figure 2 — ReusePlan wire formats and honest traffic footprints
+### Figure 2 — ReusePlan wire formats and traffic overhead
 
 ![Bit-level general and compact ReusePlan layouts plus the two weighted SSSP transport choices and their simulated byte footprints](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f02-record-formats.svg)
 
-**Figure 2.** Format selection changes the real structural bytes and must be
-bound to a runtime width receipt.
+**Figure 2.** Format selection changes the materialized structural byte count
+and must be bound to a runtime width receipt.
 
 The general unweighted record is fixed:
 
@@ -68,7 +89,7 @@ Unused upper compact bits are zero/reserved; they are not alignment bits.
 The record-load execution helper widens a compact value into the canonical
 64-bit metadata layout using the configured record-format CSR.
 
-Weighted SSSP has two honest transports:
+Weighted SSSP has two supported transport formats:
 
 - a compact 64-bit substitute with 24-bit destination, 8-bit positive weight,
   tier, and two 15-bit epochs; or
@@ -79,13 +100,13 @@ erase the weight or sidecar traffic.
 
 ## 3. Future distance
 
-### Figure 3 — Checked cache-line reuse timeline and circular distance
+### Figure 3 — Cache-line access schedule and circular reuse distance
 
-![Checked horizontal timeline for property line 0x80000040 showing current internal reader 8, future readers 11 and 15, circular distance, and rrip_first interpretation](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg)
+![Checked horizontal schedule for property line 0x80000040 showing current outer vertex 8, subsequent access-source vertices 11 and 15, circular distance, and rrip_first interpretation](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg)
 
-**Figure 3.** The same checked graph now exposes time: the line containing
-internal properties 18 and 20 is read at internal readers
-`1, 6, 8, 11, 15, 18, 20`.
+**Figure 3.** In the checked outgoing-neighbor traversal, the line containing
+internal property vertices 18 and 20 is accessed from outer vertices
+`1, 6, 8, 11, 15, 18, 20`, in ID order.
 
 For epoch `e`, current epoch `c`, and epoch count `N`:
 
@@ -99,9 +120,9 @@ property line has effective distance zero, so only a live stamp participates
 in future-distance ranking. A payload count of one preserves single-epoch
 behavior; the minimum of two distances is used only when two epochs are live.
 
-For the tracked record at current reader/epoch 8, `epoch1=11` and `epoch2=15`,
-so the two distances are 3 and 7 and the stored pair contributes nearest
-distance 3.
+For the tracked adjacency entry at outer vertex/current epoch 8,
+`epoch1=11` and `epoch2=15`. The two distances are 3 and 7, so the line's
+effective ReusePlan distance is 3.
 
 ## 4. LLC state and victim selection
 
@@ -201,7 +222,7 @@ The cache mechanisms are reached through four experimental instruction roles:
 - `ecg.bind.load.*` binds a plan to a computed-address property load; and
 - `ecg.bind.iload.*` combines indexed address generation with binding.
 
-Their operands, O3 stages, Request extension, and MSHR rules are owned by the
+Their operands, O3 stages, Request extension, and MSHR rules are specified in
 [RISC-V instruction path](RISC-V-Instruction-Path).
 
 ## 8. Hardware and evidence boundaries

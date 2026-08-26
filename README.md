@@ -4,10 +4,16 @@
 
 **ReusePlan and FlowThrough cache architecture for irregular graph analytics**
 
-ECG Next derives line-level reuse guidance from graph reader order, carries it
-in an edge-aligned ReusePlan, binds it to the exact property request, and uses
-it to refine last-level-cache replacement. FlowThrough is a separate placement
-mechanism for low-reuse structural records.
+ECG Next derives line-level reuse guidance from the adjacency traversal used by
+each graph kernel, stores it in an edge-aligned ReusePlan, binds it to the exact
+property request, and uses it to refine last-level-cache replacement.
+FlowThrough is a separate placement mechanism for low-reuse structural
+records.
+
+For an outgoing-neighbor traversal, accesses to property `p[v]` originate from
+the in-neighbors of `v`, so the property-access count is the in-degree
+`d_in(v)`. For an incoming-neighbor traversal, they originate from the
+out-neighbors of `v`, so the count is the out-degree `d_out(v)`.
 
 ## ECG Next: offline guidance to request-bound LLC state
 
@@ -18,7 +24,7 @@ The architecture keeps four boundaries explicit:
 1. **Offline construction:** a kernel-direction-aware graph pass emits immutable
    ReusePlan records in canonical CSR order.
 2. **Two dynamic loads:** a record load produces an explicit register operand;
-   a dependent property load owns the architectural data request.
+   a dependent property load issues the architectural data request.
 3. **Request-bound state:** gem5 O3 attaches destination, tier, two epochs,
    current epoch, context, and sequence to that exact property Request.
 4. **LLC policy:** RRIP first forms the eligible set; an old structural line is
@@ -57,7 +63,7 @@ not a ratified RISC-V extension or a claim of fabricated processor support.
 
 - [ReusePlan and FlowThrough](wiki/ReusePlan-FlowThrough.md)
 - [RISC-V instruction path](wiki/RISC-V-Instruction-Path.md)
-- [Property-to-cache walkthrough](wiki/Property-to-Cache-Walkthrough.md)
+- [End-to-end property-access example](wiki/Property-to-Cache-Walkthrough.md)
 - [Evaluation methodology](wiki/Evaluation-Methodology.md)
 - [Related work](wiki/Related-Work.md)
 - [Build and reproduction](wiki/Reproduction.md)

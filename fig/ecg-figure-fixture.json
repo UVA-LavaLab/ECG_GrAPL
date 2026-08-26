@@ -27,7 +27,7 @@
     [7, 8, 1]
   ],
   "tracked_edge": {
-    "source_reader": 4,
-    "source_destination": 7
+    "source_vertex": 4,
+    "destination_vertex": 7
   }
 }

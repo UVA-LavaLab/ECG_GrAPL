@@ -38,12 +38,12 @@ Neither flag is attached to the governed property Request.
 
 ## 2. Out-of-order request path
 
-### Figure 2 — A real ReusePlan instruction pair in the gem5 O3 pipeline
+### Figure 2 — Concrete ReusePlan instruction pair in the gem5 O3 pipeline
 
-![Architecture schematic tracing source edge 4 to 7, mapped internally to 8 to 18, through the FlowThrough record instruction, gem5 Fetch Decode Rename IEW Commit pipeline, LSQ Request, caches, LLC line, writeback, and retirement](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
+![Architecture schematic tracing adjacency entry 4 to 7, mapped internally to 8 to 18, through the FlowThrough record instruction, gem5 Fetch Decode Rename IEW Commit pipeline, LSQ Request, caches, LLC line, writeback, and retirement](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
 
-**Figure 2.** Checked source edge `4 -> 7` maps to internal edge `8 -> 18`
-and supplies the real operands and addresses.
+**Figure 2.** Checked adjacency entry `4 -> 7` maps to internal entry
+`8 -> 18` and supplies the fixture-derived operands and addresses.
 
 The top-level grouping follows gem5 O3CPU's documented **Fetch, Decode,
 Rename, IEW, Commit** pipeline. The IEW block is expanded into the issue queue,
@@ -114,7 +114,7 @@ MSHR deallocation resets this state.
 `allocOnFill` is independent and combines with OR. A FlowThrough target cannot
 suppress an ordinary target's required LLC allocation.
 
-## 4. Source map
+## 4. Implementation sources
 
 | Layer | Source |
 |---|---|

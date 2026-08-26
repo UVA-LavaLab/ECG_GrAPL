@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1160" viewBox="0 0 1200 1160" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
   <title id="title">ECG Next: offline guidance to request-bound LLC state</title>
-  <desc id="desc">Three numbered bands show ECG Next&#x27;s offline graph analysis, the two-load RISC-V runtime path, line-local LLC replacement state, and the evidence boundary across gem5 O3, cache_sim, and Sniper. The tracked checked-fixture edge is reader 8 to property 18.</desc>
+  <desc id="desc">Three numbered bands show ECG Next&#x27;s offline graph analysis, the two-load RISC-V runtime path, line-local LLC replacement state, and the evidence boundary across gem5 O3, cache_sim, and Sniper. The tracked checked-fixture adjacency entry has outer vertex 8 and property vertex 18.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
@@ -35,7 +35,7 @@
 </style></defs>
   <rect x="0" y="0" width="1200" height="1160" fill="#FFFFFF"/>
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ECG Next: offline guidance to request-bound LLC state</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">One reading spine separates graph preprocessing, runtime requests, cache policy, and evidence.</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The diagram separates offline graph analysis, runtime requests, cache policy, and evaluation scope.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
   <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
@@ -43,19 +43,20 @@
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">immutable records; excluded from the ROI</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3"/>
   <rect x="24" y="180" width="360" height="205" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="209" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Kernel-specific reader direction</text>
-  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">PageRank: pull over in-neighbors</text>
-  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">BFS / BC / CC / SSSP: push over</text>
-  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">the implemented out-neighbor schedule</text>
-  <text x="40" y="311" text-anchor="start" class="sans body" fill="#27313A">runtime never infers reader order</text>
+  <text x="40" y="209" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Kernel traversal direction</text>
+  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">PageRank: incoming-neighbor rows</text>
+  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">BFS / BC / CC / SSSP:</text>
+  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">outgoing-neighbor rows</text>
+  <text x="40" y="311" text-anchor="start" class="sans body" fill="#27313A">CSR fixes property-access order</text>
   <rect x="420" y="180" width="360" height="205" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <text x="436" y="209" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Per-line ReusePlan</text>
-  <text x="436" y="239" text-anchor="start" class="sans body" fill="#27313A">rank reader counts -&gt; tier 1 / 2 / 3</text>
-  <text x="436" y="263" text-anchor="start" class="sans body" fill="#27313A">find two future readers after current</text>
-  <text x="436" y="287" text-anchor="start" class="sans body" fill="#27313A">merge vertices in one 64-byte line</text>
-  <text x="436" y="311" text-anchor="start" class="sans body" fill="#27313A">pack destination + tier + two epochs</text>
+  <text x="436" y="239" text-anchor="start" class="sans body" fill="#27313A">rank d_in or d_out access counts</text>
+  <text x="436" y="263" text-anchor="start" class="sans body" fill="#27313A">assign tier 1 / 2 / 3</text>
+  <text x="436" y="287" text-anchor="start" class="sans body" fill="#27313A">find two subsequent line accesses</text>
+  <text x="436" y="311" text-anchor="start" class="sans body" fill="#27313A">combine vertices in one 64-byte line</text>
+  <text x="436" y="335" text-anchor="start" class="sans body" fill="#27313A">pack destination + tier + two epochs</text>
   <rect x="816" y="180" width="360" height="205" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="832" y="209" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Sealed runtime input</text>
+  <text x="832" y="209" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Validated runtime input</text>
   <text x="832" y="239" text-anchor="start" class="sans body" fill="#27313A">record order follows canonical CSR</text>
   <text x="832" y="263" text-anchor="start" class="sans body" fill="#27313A">compact record substitutes for edge ID</text>
   <text x="832" y="287" text-anchor="start" class="sans body" fill="#27313A">otherwise use edge plus sidecar</text>

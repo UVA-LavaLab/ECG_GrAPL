@@ -1,7 +1,7 @@
-# Related Work Roster
+# Related Work
 
-This roster separates direct baselines from conceptual predecessors and
-broader context. Links point to DOI records or official project pages.
+This page separates direct baselines from conceptual predecessors and broader
+context. Links point to DOI records or official project pages.
 
 ## Direct lineage and graph-specific baselines
 

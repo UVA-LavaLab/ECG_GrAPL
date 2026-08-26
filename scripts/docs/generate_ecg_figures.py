@@ -98,12 +98,12 @@ def load_fixture() -> CheckedFixture:
     for rank, vertex in enumerate(order):
         tiers[vertex] = 1 if rank < hot_count else 2 if rank < moderate_end else 3
 
-    tracked_source_reader = int(raw["tracked_edge"]["source_reader"])
-    tracked_source_dest = int(raw["tracked_edge"]["source_destination"])
+    tracked_source_reader = int(raw["tracked_edge"]["source_vertex"])
+    tracked_source_dest = int(raw["tracked_edge"]["destination_vertex"])
     tracked_reader = source_to_internal[tracked_source_reader]
     tracked_dest = source_to_internal[tracked_source_dest]
     if tracked_dest not in rows[tracked_reader]:
-        raise ValueError("tracked edge is absent from the checked reader graph")
+        raise ValueError("tracked adjacency entry is absent from the checked graph")
     vertices_per_line = int(raw["cache_line_bytes"]) // int(
         raw["property_element_bytes"]
     )
@@ -146,7 +146,7 @@ def load_fixture() -> CheckedFixture:
             ))
             index += 1
     if not candidates:
-        raise ValueError("tracked property line has no reader")
+        raise ValueError("tracked property line has no access-source vertex")
     candidates.sort(key=lambda item: item[0])
     first_epoch = candidates[0][1]
     second_epoch = candidates[1][1] if len(candidates) > 1 else first_epoch
@@ -200,11 +200,12 @@ def system_overview(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> N
         ROOT,
         FigureTarget("home", "01", "system-overview"),
         "ECG Next: offline guidance to request-bound LLC state",
-        "One reading spine separates graph preprocessing, runtime requests, cache policy, and evidence.",
+        "The diagram separates offline graph analysis, runtime requests, cache policy, and evaluation scope.",
         "Three numbered bands show ECG Next's offline graph analysis, the two-load "
         "RISC-V runtime path, line-local LLC replacement state, and the evidence "
         "boundary across gem5 O3, cache_sim, and Sniper. The tracked checked-fixture "
-        f"edge is reader {fx.tracked_reader} to property {fx.tracked_dest}.",
+        f"adjacency entry has outer vertex {fx.tracked_reader} and property vertex "
+        f"{fx.tracked_dest}.",
         1160,
     )
     figure.section(
@@ -212,27 +213,28 @@ def system_overview(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> N
         138, role="data",
     )
     figure.card(
-        24, 180, 360, 205, "Kernel-specific reader direction",
+        24, 180, 360, 205, "Kernel traversal direction",
         (
-            "PageRank: pull over in-neighbors",
-            "BFS / BC / CC / SSSP: push over",
-            "the implemented out-neighbor schedule",
-            "runtime never infers reader order",
+            "PageRank: incoming-neighbor rows",
+            "BFS / BC / CC / SSSP:",
+            "outgoing-neighbor rows",
+            "CSR fixes property-access order",
         ),
         role="data",
     )
     figure.card(
         420, 180, 360, 205, "Per-line ReusePlan",
         (
-            "rank reader counts -> tier 1 / 2 / 3",
-            "find two future readers after current",
-            "merge vertices in one 64-byte line",
+            "rank d_in or d_out access counts",
+            "assign tier 1 / 2 / 3",
+            "find two subsequent line accesses",
+            "combine vertices in one 64-byte line",
             "pack destination + tier + two epochs",
         ),
         role="state",
     )
     figure.card(
-        816, 180, 360, 205, "Sealed runtime input",
+        816, 180, 360, 205, "Validated runtime input",
         (
             "record order follows canonical CSR",
             "compact record substitutes for edge ID",
@@ -358,23 +360,24 @@ def offline_construction(
     figure = Figure(
         ROOT,
         FigureTarget("reuse-plan-flowthrough", "01", "offline-construction"),
-        "From a checked reader graph to one edge-aligned ReusePlan",
+        "Degree and traversal analysis for one edge-aligned ReusePlan",
         "The concrete values come from fig/ecg-figure-fixture.json and its executable test.",
-        "Four numbered bands derive a ReusePlan for the checked-fixture edge from "
-        f"source edge {fx.tracked_source_reader}->{fx.tracked_source_dest} "
+        "Four numbered bands derive a ReusePlan for the checked adjacency entry "
+        f"adjacency entry {fx.tracked_source_reader}->{fx.tracked_source_dest} "
         f"(internal {fx.tracked_reader}->{fx.tracked_dest}). The figure "
-        "shows selected CSR rows, reader-count tiering, line-level future readers, "
-        "compact packing, and the boundary between preprocessing and the measured ROI.",
+        "shows selected CSR rows, degree-derived tiering, subsequent property-line "
+        "accesses, compact packing, and the offline/measured-runtime boundary.",
         1725,
     )
     figure.section(
-        "1", "CHECKED READER GRAPH", "nine nodes, seventeen edges; other vertex IDs are empty",
+        "1", "CHECKED WEIGHTED GRAPH",
+        "9 vertices, 17 undirected edges; unused internal IDs omitted",
         138, role="data",
     )
     figure.rect(24, 180, 780, 390, role="neutral", stroke=INK, stroke_width=3)
     figure.text(42, 211, "Checked nine-node weighted graph",
                 size=17, bold=True, color=BLUE, max_width=735)
-    figure.text(42, 238, "source IDs 0..8; node color shows internal property tier",
+    figure.text(42, 238, "fixture IDs 0..8; node color shows internal property tier",
                 size=16, color=GRAY, max_width=735)
     coords = {
         0: (95, 280),
@@ -453,20 +456,20 @@ def offline_construction(
     figure.text(55, 506, "A", size=17, bold=True, color=WHITE, anchor="middle")
     figure.text(
         86, 506,
-        f"tracked source edge {fx.tracked_source_reader} -> "
+        f"tracked adjacency {fx.tracked_source_reader} -> "
         f"{fx.tracked_source_dest}",
         size=17, bold=True, color=RED, max_width=300,
     )
     figure.card(
-        830, 180, 346, 390, "CSR crosswalk",
+        830, 180, 346, 390, "Outgoing-CSR crosswalk",
         (
-            f"src 0 -> int 1",
+            f"fixture 0 -> internal 1",
             f"row = {list(fx.rows[1])}",
-            f"src 2 -> int 6",
+            f"fixture 2 -> internal 6",
             f"row = {list(fx.rows[6])}",
-            f"src 4 -> int 8",
+            f"fixture 4 -> internal 8",
             f"row = {list(fx.rows[8])}",
-            f"src 7 -> int 18",
+            f"fixture 7 -> internal 18",
             f"row = {list(fx.rows[18])}",
             f"tracked 4->7 = int {fx.tracked_reader}->{fx.tracked_dest}",
             "PageRank uses incoming CSR.",
@@ -477,16 +480,17 @@ def offline_construction(
     )
 
     figure.section(
-        "2", "READER COUNTS TO REUSE TIER", "stable rank: count descending, vertex ID ascending",
+        "2", "DEGREE-DERIVED REUSE TIER",
+        "outgoing traversal: sort by d_in, then vertex ID",
         615, role="state",
     )
     counts = (
-        f"src2/int6: {fx.reader_counts[6]} readers -> tier {fx.tiers[6]}",
-        f"src4/int8: {fx.reader_counts[8]} readers -> tier {fx.tiers[8]}",
-        f"src5/int11: {fx.reader_counts[11]} readers -> tier {fx.tiers[11]}",
-        f"src7/int18: {fx.reader_counts[18]} readers -> tier {fx.tiers[18]}",
-        f"src8/int20: {fx.reader_counts[20]} readers -> tier {fx.tiers[20]}",
-        f"src0/int1: {fx.reader_counts[1]} readers -> tier {fx.tiers[1]}",
+        f"v2/int6: d_in={fx.reader_counts[6]} -> tier {fx.tiers[6]}",
+        f"v4/int8: d_in={fx.reader_counts[8]} -> tier {fx.tiers[8]}",
+        f"v5/int11: d_in={fx.reader_counts[11]} -> tier {fx.tiers[11]}",
+        f"v7/int18: d_in={fx.reader_counts[18]} -> tier {fx.tiers[18]}",
+        f"v8/int20: d_in={fx.reader_counts[20]} -> tier {fx.tiers[20]}",
+        f"v0/int1: d_in={fx.reader_counts[1]} -> tier {fx.tiers[1]}",
     )
     tier_name = {1: "hot", 2: "moderate", 3: "cold"}[fx.line_tier]
     figure.card(
@@ -509,36 +513,38 @@ def offline_construction(
     )
 
     figure.section(
-        "3", "TWO FUTURE LINE READERS", "reader CSR is searched strictly after the current reader",
+        "3", "TWO SUBSEQUENT LINE ACCESSES",
+        "search begins after the current outer vertex",
         947, role="compute",
     )
     figure.card(
-        24, 989, 550, 245, "Tracked line reader order",
+        24, 989, 550, 245, "Property-line access sources",
         (
-            f"line {fx.line_begin}..{fx.line_end - 1} readers = "
+            f"sources for line {fx.line_begin}..{fx.line_end - 1} = "
             f"{list(fx.line_reader_ids)}",
-            f"current reader = {fx.tracked_reader}",
-            f"first future reader = {fx.first_reader} -> epoch {fx.first_epoch}",
-            f"second future reader = {fx.second_reader} -> epoch {fx.second_epoch}",
-            "search wraps into the next traversal if needed",
+            f"current outer vertex = {fx.tracked_reader}",
+            f"next outer vertex = {fx.first_reader} -> epoch {fx.first_epoch}",
+            f"second outer vertex = {fx.second_reader} -> epoch {fx.second_epoch}",
+            "ID-order search wraps to the next sweep if needed",
         ),
         role="compute",
         mono_body=True,
     )
     figure.card(
-        600, 989, 576, 245, "Quantization and same-reader correction",
+        600, 989, 576, 245, "Epoch quantization and same-row correction",
         (
-            "epoch = floor(reader * epoch_count / vertex_count)",
+            "epoch = floor(outer_vertex * epoch_count / |V|)",
             f"here epoch_count = vertex_count = {fx.epoch_count}",
-            "same-source accesses to the same line are preserved",
-            "the pair describes the line, not only one vertex",
+            "additional accesses in row u to the line are preserved",
+            "the epoch pair characterizes the cache line",
             "malformed epochs are clamped before distance use",
         ),
         role="neutral",
     )
 
     figure.section(
-        "4", "PACK, SEAL, THEN STREAM", "preprocessing produces an immutable runtime input",
+        "4", "RECORD PACKING AND VALIDATION",
+        "preprocessing produces an immutable runtime input",
         1279, role="transfer",
     )
     figure.card(
@@ -580,7 +586,7 @@ def record_formats(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> No
     figure = Figure(
         ROOT,
         FigureTarget("reuse-plan-flowthrough", "02", "record-formats"),
-        "ReusePlan wire formats and honest traffic footprints",
+        "ReusePlan wire formats and traffic overhead",
         "General, compact, and weighted layouts are separate transport choices.",
         "The figure gives the exact unweighted 64-bit layout, the graph-dependent "
         "32-bit compact rule instantiated by the checked fixture, and both weighted "
@@ -626,7 +632,7 @@ def record_formats(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> No
             f"checked fixture: {fx.id_bits} + 2 + 2*{fx.epoch_bits} = "
             f"{fx.id_bits + 2 + 2 * fx.epoch_bits}",
             "unused high bits are zero/reserved",
-            "decode widens to the canonical 64-bit value",
+            "record-load execution widens to canonical 64-bit",
         ),
         role="transfer",
         mono_body=True,
@@ -687,13 +693,13 @@ def future_distance(
     figure = Figure(
         ROOT,
         FigureTarget("reuse-plan-flowthrough", "03", "future-distance"),
-        "Checked cache-line reuse timeline and circular distance",
-        f"The tracked property line is revisited at internal readers "
+        "Cache-line access schedule and circular reuse distance",
+        f"The tracked property line is subsequently accessed from outer vertices "
         f"{fx.first_reader} and {fx.second_reader} after {fx.tracked_reader}.",
-        f"A horizontal timeline follows the checked property line "
-        f"0x{fx.property_line:08X} from current reader {current} to future "
-        f"readers {fx.first_reader} and {fx.second_reader}. The ReusePlan stores "
-        "the first two quantized epochs, and rrip_first consults their nearer "
+        f"A horizontal schedule follows property line 0x{fx.property_line:08X} "
+        f"from current outer vertex {current} to subsequent access-source vertices "
+        f"{fx.first_reader} and {fx.second_reader}. The ReusePlan stores their "
+        "quantized epochs, and rrip_first consults the nearer "
         "circular distance only after the line becomes RRIP eligible.",
         1140,
     )
@@ -722,22 +728,23 @@ def future_distance(
                     color=color, anchor="middle")
     figure.text(
         axis_x0, 235,
-        f"line 0x{fx.property_line:08X}: readers {list(fx.line_reader_ids)}",
+        f"line 0x{fx.property_line:08X} sources: "
+        f"{list(fx.line_reader_ids)}",
         size=17, bold=True, color=PURPLE, max_width=520,
     )
     figure.text(
         1115, 235,
-        f"source {fx.tracked_source_reader}->{fx.tracked_source_dest} / "
+        f"fixture {fx.tracked_source_reader}->{fx.tracked_source_dest} / "
         f"internal {fx.tracked_reader}->{fx.tracked_dest}: "
         f"e1={fx.first_epoch}, e2={fx.second_epoch}",
         size=17, bold=True, color=AMBER, anchor="end", max_width=520,
     )
-    figure.text(260, 450, "current reader", size=16, color=AMBER)
-    figure.text(505, 450, "first future line use", size=16, color=GREEN)
-    figure.text(860, 450, "second future line use", size=16, color=PURPLE)
+    figure.text(260, 450, "current outer vertex", size=16, color=AMBER)
+    figure.text(505, 450, "next line access", size=16, color=GREEN)
+    figure.text(860, 450, "second line access", size=16, color=PURPLE)
     figure.text(
         600, 492,
-        "the two-epoch record captures both future uses of this checked property line",
+        "the record encodes the next two scheduled accesses to this property line",
         size=16, color=GRAY, anchor="middle", max_width=900,
     )
     figure.section(
@@ -769,7 +776,8 @@ def future_distance(
         role="state",
     )
     figure.section(
-        "3", "RRIP-FIRST DECISION", "timeline ranks properties only after RRIP eligibility",
+        "3", "RRIP-FIRST DECISION",
+        "property-line ranking follows RRIP eligibility",
         857, role="verify",
     )
     figure.card(
@@ -1057,7 +1065,7 @@ def structural_fairness(generated: list[tuple[Path, Path]]) -> None:
         24, 512, 360, 245, "Baseline policies",
         (
             "LRU / GRASP / P-OPT consume CSR",
-            "active carrier range = real edge array",
+            "carrier range = CSR edge array",
             "STRUCTURAL_FLOWTHROUGH no-allocate",
             "positive activity receipt is required",
         ),
@@ -1187,8 +1195,8 @@ def o3_pipeline(
     figure = Figure(
         ROOT,
         FigureTarget("risc-v-instruction-path", "02", "o3-request-pipeline"),
-        "A real ReusePlan instruction pair in the gem5 O3 pipeline",
-        f"Source edge {fx.tracked_source_reader}->{fx.tracked_source_dest} "
+        "Concrete ReusePlan instruction pair in the gem5 O3 pipeline",
+        f"Adjacency entry {fx.tracked_source_reader}->{fx.tracked_source_dest} "
         f"maps to internal {fx.tracked_reader}->{fx.tracked_dest}, property "
         f"0x{fx.property_address:08X}, and LLC line 0x{fx.property_line:08X}.",
         "An architecture-style schematic follows the checked compact record "
@@ -1205,7 +1213,7 @@ def o3_pipeline(
     figure.card(
         24, 180, 520, 180, "ecg.flow.load.compact",
         (
-            f"rs1 = record for source {fx.tracked_source_reader}->"
+            f"rs1 = record for adjacency {fx.tracked_source_reader}->"
             f"{fx.tracked_source_dest} / int {fx.tracked_reader}->"
             f"{fx.tracked_dest}",
             "memory width = 4 bytes",
@@ -1487,7 +1495,7 @@ def checked_walkthrough(
     figure = Figure(
         ROOT,
         FigureTarget("property-to-cache-walkthrough", "01", "checked-request"),
-        "Checked request: source edge 4 -> 7 maps to property 18",
+        "Checked request: adjacency 4 -> 7 maps to property 18",
         "Every number is derived from fig/ecg-figure-fixture.json.",
         "A single checked-fixture edge is followed from its edge-aligned compact "
         "record through the record load, explicit register dependency, computed "
@@ -1496,11 +1504,12 @@ def checked_walkthrough(
         2070,
     )
     figure.section(
-        "1", "TRACKED GRAPH EDGE AND RECORD", "one concrete checked edge; not a measured workload",
+        "1", "TRACKED ADJACENCY ENTRY AND RECORD",
+        "one fixture-backed entry; not a measured workload",
         138, role="data",
     )
     figure.rect(24, 180, 500, 280, role="neutral", stroke=INK, stroke_width=3)
-    figure.text(42, 211, "Source readers of vertex 7", size=17, bold=True,
+    figure.text(42, 211, "In-neighbors of vertex 7", size=17, bold=True,
                 color=BLUE, max_width=330)
     source_readers = sorted({
         right if left == fx.tracked_source_dest else left
@@ -1536,7 +1545,7 @@ def checked_walkthrough(
     figure.text(350, 211, "A", size=17, bold=True, color=WHITE, anchor="middle")
     figure.text(
         380, 211,
-        f"track {fx.tracked_source_reader} -> "
+        f"adjacency {fx.tracked_source_reader} -> "
         f"{fx.tracked_source_dest}",
                 size=17, bold=True, color=RED, max_width=310)
 
@@ -1546,10 +1555,10 @@ def checked_walkthrough(
     figure.lines(
         570, 244,
         (
-            f"source {fx.tracked_source_reader} -> "
-            f"internal reader {fx.tracked_reader}",
-            f"CSR row contains destination {fx.tracked_dest}",
-            f"line tier = {fx.line_tier}; future readers = "
+            f"outer vertex {fx.tracked_source_reader} -> "
+            f"internal outer vertex {fx.tracked_reader}",
+            f"outgoing CSR row accesses property {fx.tracked_dest}",
+            f"line tier = {fx.line_tier}; next access sources = "
             f"{fx.first_reader}, {fx.second_reader}",
             f"property address = 0x{fx.property_address:08X}; "
             f"line = 0x{fx.property_line:08X}",
@@ -1569,20 +1578,21 @@ def checked_walkthrough(
     )
 
     figure.section(
-        "2", "SOFTWARE LOOP AND HARDWARE CORRELATION", "representative push-family trace; PageRank reverses direction",
+        "2", "SOFTWARE LOOP AND HARDWARE CORRELATION",
+        "outgoing example; PageRank uses incoming rows",
         505, role="state",
     )
     figure.rect(24, 547, 650, 300, role="neutral", stroke=INK, stroke_width=3)
     figure.text(44, 578, "Representative property-access pseudocode",
                 size=17, bold=True, color=PURPLE, max_width=580)
     pseudocode = (
-        ("L1", "for reader in active_readers:"),
-        ("L2", "  for edge_pos in csr_row(reader):"),
+        ("L1", "for u in active_vertices:"),
+        ("L2", "  for edge_pos in out_csr_row(u):"),
         ("L3", "    plan = ecg.flow.load.compact(record[edge_pos])  [B]"),
-        ("L4", "    dest = plan.destination"),
-        ("L5", "    addr = property_base + dest * 4"),
+        ("L4", "    v = plan.destination"),
+        ("L5", "    addr = property_base + v * 4"),
         ("L6", "    value = ecg.bind.load.u32(addr, plan)  [C,D]"),
-        ("L7", "    proposal = update(reader, dest, value)"),
+        ("L7", "    proposal = update(u, v, value)"),
     )
     for index, (line_no, code) in enumerate(pseudocode):
         y = 615 + index * 30
@@ -1590,20 +1600,20 @@ def checked_walkthrough(
         figure.text(88, y, code, size=16, mono=True, max_width=560)
     figure.text(
         44, 830,
-        f"tracked execution: source {fx.tracked_source_reader}->"
+        f"tracked execution: adjacency {fx.tracked_source_reader}->"
         f"{fx.tracked_source_dest} maps to internal "
         f"{fx.tracked_reader}->{fx.tracked_dest}",
         size=16, color=RED, max_width=600,
     )
 
     figure.rect(700, 547, 476, 300, role="state", stroke=INK, stroke_width=3)
-    figure.text(720, 578, "Stable software / hardware callouts",
+    figure.text(720, 578, "Cross-layer identifiers",
                 size=17, bold=True, color=PURPLE, max_width=430)
     callouts = (
         (
             "A",
-            f"source edge {fx.tracked_source_reader}->{fx.tracked_source_dest} "
-            f"/ internal edge {fx.tracked_reader}->{fx.tracked_dest}",
+            f"adjacency ({fx.tracked_source_reader},{fx.tracked_source_dest}) "
+            f"/ internal ({fx.tracked_reader},{fx.tracked_dest})",
             RED,
         ),
         (
@@ -1624,7 +1634,8 @@ def checked_walkthrough(
         figure.text(758, y, text, size=16, max_width=390)
 
     figure.section(
-        "3", "REAL TWO-INSTRUCTION PIPELINE", "the compact record becomes an explicit rs2 operand",
+        "3", "TWO-INSTRUCTION DATA DEPENDENCY",
+        "the compact record becomes an explicit rs2 operand",
         885, role="compute",
     )
     pipeline_x = (40, 330, 620, 910)
@@ -1745,8 +1756,8 @@ def architecture_state_map(generated: list[tuple[Path, Path]]) -> None:
     figure = Figure(
         ROOT,
         FigureTarget("property-to-cache-walkthrough", "02", "architecture-state-map"),
-        "Where ECG state lives in the processor and cache hierarchy",
-        "Containment shows storage; arrows are reserved for real operands and requests.",
+        "ECG state placement in the processor and cache hierarchy",
+        "Containment denotes storage; arrows denote architectural operand or Request transfer.",
         "The architecture map places offline records, architectural format/current/context "
         "CSRs, renamed ReusePlan operands, load-queue state, typed Request extensions, "
         "MSHR merge state, and line-local LLC metadata in their actual controlling "
