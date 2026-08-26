@@ -590,9 +590,9 @@ def offline_construction(
         size=16, bold=True, mono=True, color=AMBER,
     )
     validation_nodes = (
-        (650, "header", "graph + config"),
-        (820, "offsets", "record count"),
-        (990, "hash/width", "payload identity"),
+        (700, "header", "graph + config"),
+        (900, "offsets", "record count"),
+        (1100, "hash/width", "payload identity"),
     )
     for x, title, body in validation_nodes:
         figure.diamond(x, 1390, 140, 100, role="verify")
@@ -600,15 +600,15 @@ def offline_construction(
                     color=RED, anchor="middle")
         figure.text(x, 1410, body, size=16, anchor="middle")
     figure.arrow(
-        ((520, 1390), (580, 1390)),
+        ((560, 1390), (630, 1390)),
         kind="control", label="compact width", color=AMBER,
     )
     figure.arrow(
-        ((690, 1390), (750, 1390)),
+        ((770, 1390), (830, 1390)),
         kind="control", label="header", color=RED,
     )
     figure.arrow(
-        ((860, 1390), (920, 1390)),
+        ((970, 1390), (1030, 1390)),
         kind="control", label="offsets", color=RED,
     )
     figure.lines(
@@ -923,9 +923,9 @@ def future_distance(
         kind="control", label="eligible structural", color=AMBER,
     )
     figure.arrow(
-        ((660, 995), (980, 995)),
+        ((620, 1005), (690, 1050), (940, 1050), (940, 995), (980, 995)),
         kind="control", label="no: property only", color=RED,
-        label_at=(820, 1028),
+        label_at=(815, 1085),
     )
     figure.arrow(
         ((220, 1028), (220, 1085), (80, 1085), (80, 970), (115, 970)),
@@ -1060,9 +1060,10 @@ def llc_policy(generated: list[tuple[Path, Path]]) -> None:
         label="eligible structural", color=AMBER,
     )
     figure.arrow(
-        ((610, 925), (930, 925)), kind="control",
+        ((610, 925), (650, 1005), (910, 1005), (910, 925), (930, 925)),
+        kind="control",
         label="property candidates", color=PURPLE,
-        label_at=(770, 955),
+        label_at=(780, 1035),
     )
     figure.arrow(
         ((190, 965), (190, 1035), (70, 1035), (70, 900), (80, 900)),

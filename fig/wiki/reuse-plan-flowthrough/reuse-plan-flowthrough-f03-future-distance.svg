@@ -113,8 +113,8 @@
   <path d="M325 970 L450 970" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="eligible set formed"/>
   <text x="388" y="900" text-anchor="middle" class="sans body" fill="#15803D" font-weight="700">eligible set formed</text>
   <path d="M660 945 L760 945" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="eligible structural"/>
-  <path d="M660 995 L980 995" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-label="no: property only"/>
-  <text x="820" y="1028" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">no: property only</text>
+  <path d="M620 1005 L690 1050 L940 1050 L940 995 L980 995" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-label="no: property only"/>
+  <text x="815" y="1085" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">no: property only</text>
   <path d="M220 1028 L220 1085 L80 1085 L80 970 L115 970" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="loop" data-flow-label="none: age RRPV and retry"/>
   <text x="265" y="1075" text-anchor="start" class="sans body" fill="#6D5BD0" font-weight="700">none: age RRPV and retry</text>
 </svg>

@@ -157,8 +157,8 @@
   <text x="1045" y="962" text-anchor="middle" class="sans body" fill="#27313A">stable set-order tie</text>
   <path d="M300 900 L390 900" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="RRPV == max?"/>
   <path d="M610 875 L680 875" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="eligible structural"/>
-  <path d="M610 925 L930 925" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="property candidates"/>
-  <text x="770" y="955" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">property candidates</text>
+  <path d="M610 925 L650 1005 L910 1005 L910 925 L930 925" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="property candidates"/>
+  <text x="780" y="1035" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">property candidates</text>
   <path d="M190 965 L190 1035 L70 1035 L70 900 L80 900" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="loop" data-flow-label="age RRPV and retry"/>
   <text x="230" y="1025" text-anchor="start" class="sans body" fill="#B42318" font-weight="700">age RRPV and retry</text>
   <circle cx="44" cy="1074" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
