@@ -42,62 +42,71 @@
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">SIMULATOR ROLES</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">do not compare absolute rates or time across simulators</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3"/>
-  <rect x="24" y="180" width="360" height="285" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="209" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">gem5 O3</text>
-  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">architectural execution time authority</text>
-  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">decoded experimental RISC-V operations</text>
-  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">exact dynamic Request extension</text>
-  <text x="40" y="311" text-anchor="start" class="sans body" fill="#27313A">native LSQ, MSHR, cache, speculation</text>
-  <text x="40" y="335" text-anchor="start" class="sans body" fill="#27313A">semantic output matches policy peers</text>
-  <text x="40" y="359" text-anchor="start" class="sans body" fill="#27313A">guest build receipt seals binary</text>
-  <rect x="420" y="180" width="360" height="285" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
-  <text x="436" y="209" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">cache_sim</text>
-  <text x="436" y="239" text-anchor="start" class="sans body" fill="#27313A">shared victim-policy behavior</text>
-  <text x="436" y="263" text-anchor="start" class="sans body" fill="#27313A">kernel-declared graph-data accesses</text>
-  <text x="436" y="287" text-anchor="start" class="sans body" fill="#27313A">functional LLC and off-chip traffic</text>
-  <text x="436" y="311" text-anchor="start" class="sans body" fill="#27313A">no cycle or instruction model</text>
-  <text x="436" y="335" text-anchor="start" class="sans body" fill="#27313A">selector result is only a hypothesis</text>
-  <text x="436" y="359" text-anchor="start" class="sans body" fill="#27313A">structural FlowThrough access receipt</text>
-  <rect x="816" y="180" width="360" height="285" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="832" y="209" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Sniper</text>
-  <text x="832" y="239" text-anchor="start" class="sans body" fill="#27313A">modeled cache and traffic direction</text>
-  <text x="832" y="263" text-anchor="start" class="sans body" fill="#27313A">equal semantic work for scale rows</text>
-  <text x="832" y="287" text-anchor="start" class="sans body" fill="#27313A">indexed path: exact per-edge markers</text>
-  <text x="832" y="311" text-anchor="start" class="sans body" fill="#27313A">computed fused sideband is diagnostic</text>
-  <text x="832" y="335" text-anchor="start" class="sans body" fill="#27313A">inconsistent fused hints fail closed</text>
-  <text x="832" y="359" text-anchor="start" class="sans body" fill="#27313A">time is not ReuseBind speedup evidence</text>
+  <rect x="40" y="190" width="1120" height="260" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <line x1="320" y1="190" x2="320" y2="450" stroke="#27313A" stroke-width="1"/>
+  <line x1="600" y1="190" x2="600" y2="450" stroke="#27313A" stroke-width="1"/>
+  <line x1="880" y1="190" x2="880" y2="450" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="240" x2="1160" y2="240" stroke="#27313A" stroke-width="1"/>
+  <text x="180" y="222" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">gem5 O3</text>
+  <text x="460" y="222" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">cache_sim</text>
+  <text x="740" y="222" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Sniper</text>
+  <text x="1020" y="222" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">Claim output</text>
+  <text x="56" y="280" text-anchor="start" class="sans body" fill="#27313A">architectural time</text>
+  <text x="56" y="310" text-anchor="start" class="sans body" fill="#27313A">exact Request binding</text>
+  <text x="56" y="340" text-anchor="start" class="sans body" fill="#27313A">native LSQ/MSHR/cache</text>
+  <text x="336" y="280" text-anchor="start" class="sans body" fill="#27313A">functional victim logic</text>
+  <text x="336" y="310" text-anchor="start" class="sans body" fill="#27313A">off-chip traffic</text>
+  <text x="336" y="340" text-anchor="start" class="sans body" fill="#27313A">no cycle/instruction model</text>
+  <text x="616" y="280" text-anchor="start" class="sans body" fill="#27313A">modeled cache direction</text>
+  <text x="616" y="310" text-anchor="start" class="sans body" fill="#27313A">exact indexed markers</text>
+  <text x="616" y="340" text-anchor="start" class="sans body" fill="#27313A">computed fused sideband</text>
+  <text x="616" y="370" text-anchor="start" class="sans body" fill="#27313A">is diagnostic</text>
+  <text x="616" y="400" text-anchor="start" class="sans body" fill="#27313A">inconsistent hints</text>
+  <text x="616" y="430" text-anchor="start" class="sans body" fill="#27313A">fail closed</text>
+  <text x="896" y="280" text-anchor="start" class="sans body" fill="#27313A">gem5: timing speedup</text>
+  <text x="896" y="310" text-anchor="start" class="sans body" fill="#27313A">cache_sim: traffic</text>
+  <text x="896" y="340" text-anchor="start" class="sans body" fill="#27313A">Sniper: corroboration</text>
   <circle cx="44" cy="510" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="516" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="517" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">ROW ACCEPTANCE</text>
   <text x="1158" y="516" text-anchor="end" class="sans body" fill="#9AA3AD">a success-shaped fallback is not a valid experiment row</text>
   <line x1="24" y1="536" x2="1176" y2="536" stroke="#B42318" stroke-width="3"/>
-  <rect x="24" y="552" width="550" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="581" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Mechanism receipts</text>
-  <text x="40" y="611" text-anchor="start" class="sans body" fill="#27313A">requested and effective policy/mode match</text>
-  <text x="40" y="635" text-anchor="start" class="sans body" fill="#27313A">active structural carrier and positive events</text>
-  <text x="40" y="659" text-anchor="start" class="sans body" fill="#27313A">record width and replacement/substitution agree</text>
-  <text x="40" y="683" text-anchor="start" class="sans body" fill="#27313A">P-OPT matrix and phase-two queries are active when required</text>
-  <rect x="600" y="552" width="576" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="616" y="581" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Semantic receipts</text>
-  <text x="616" y="611" text-anchor="start" class="sans body" fill="#27313A">full kernel output or fixed semantic edge budget</text>
-  <text x="616" y="635" text-anchor="start" class="sans body" fill="#27313A">all policy rows in one matched group agree</text>
-  <text x="616" y="659" text-anchor="start" class="sans body" fill="#27313A">one failed row invalidates group timing</text>
-  <text x="616" y="683" text-anchor="start" class="sans body" fill="#27313A">semantic correctness is independent of speculation counters</text>
+  <rect x="40" y="565" width="300" height="170" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="190" y="598" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Mechanism receipt vector</text>
+  <text x="58" y="632" text-anchor="start" class="sans body" fill="#27313A">requested == effective</text>
+  <text x="58" y="656" text-anchor="start" class="sans body" fill="#27313A">carrier + events positive</text>
+  <text x="58" y="680" text-anchor="start" class="sans body" fill="#27313A">width/substitution agree</text>
+  <text x="58" y="704" text-anchor="start" class="sans body" fill="#27313A">P-OPT matrix active if required</text>
+  <rect x="420" y="565" width="300" height="170" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="570" y="598" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Semantic receipt vector</text>
+  <text x="438" y="632" text-anchor="start" class="sans body" fill="#27313A">kernel output / edge budget</text>
+  <text x="438" y="656" text-anchor="start" class="sans body" fill="#27313A">all matched policy rows agree</text>
+  <text x="438" y="680" text-anchor="start" class="sans body" fill="#27313A">failed peer invalidates timing</text>
+  <text x="438" y="704" text-anchor="start" class="sans body" fill="#27313A">not gated by speculation counts</text>
+  <polygon points="825,587.5 910.0,650 825,712.5 740.0,650" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="825" y="637" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">mechanism</text>
+  <text x="825" y="668" text-anchor="middle" class="sans body" fill="#27313A">AND semantic</text>
+  <rect x="965" y="595" width="195" height="110" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="1062" y="632" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">accepted row</text>
+  <text x="1062" y="668" text-anchor="middle" class="sans body" fill="#27313A">eligible for claims</text>
+  <path d="M340 650 L420 650" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="Mechanism receipt vector"/>
+  <path d="M680 650 L740 650" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="Semantic receipt vector"/>
+  <path d="M900 650 L965 650" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="accepted row"/>
   <circle cx="44" cy="842" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="848" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="849" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">CLAIM LIMITS</text>
   <text x="1158" y="848" text-anchor="end" class="sans body" fill="#9AA3AD">state what is omitted before interpreting a ratio</text>
   <line x1="24" y1="868" x2="1176" y2="868" stroke="#B45309" stroke-width="3"/>
-  <rect x="24" y="884" width="550" height="185" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="913" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">P-OPT analytic mode</text>
-  <text x="40" y="943" text-anchor="start" class="sans body" fill="#27313A">reserved data ways and cumulative matrix bytes are charged</text>
-  <text x="40" y="967" text-anchor="start" class="sans body" fill="#27313A">target-time matrix latency / bandwidth / queueing are omitted</text>
-  <text x="40" y="991" text-anchor="start" class="sans body" fill="#27313A">popt_target_time_charged = 0 -&gt; optimistic timing bound</text>
-  <text x="40" y="1015" text-anchor="start" class="sans body" fill="#27313A">frontier-kernel P-OPT rows remain diagnostic</text>
-  <rect x="600" y="884" width="576" height="185" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="616" y="913" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Publication rule</text>
-  <text x="616" y="943" text-anchor="start" class="sans body" fill="#27313A">report time, total off-chip traffic, and instructions together</text>
-  <text x="616" y="967" text-anchor="start" class="sans body" fill="#27313A">use same-build, same-cell baselines</text>
-  <text x="616" y="991" text-anchor="start" class="sans body" fill="#27313A">exclude timing_valid_for_speedup = 0</text>
-  <text x="616" y="1015" text-anchor="start" class="sans body" fill="#27313A">publish final tables only after the frozen campaign completes</text>
+  <rect x="40" y="895" width="1120" height="165" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <line x1="600" y1="895" x2="600" y2="1060" stroke="#27313A" stroke-width="1"/>
+  <text x="56" y="928" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Analytic P-OPT boundary</text>
+  <text x="56" y="962" text-anchor="start" class="sans body" fill="#27313A">charged: reserved ways + cumulative matrix bytes</text>
+  <text x="56" y="992" text-anchor="start" class="sans body" fill="#27313A">omitted: target-time latency / bandwidth / queueing</text>
+  <text x="56" y="1022" text-anchor="start" class="mono body" fill="#B42318" font-weight="700">popt_target_time_charged = 0 -&gt; optimistic timing bound</text>
+  <text x="616" y="928" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Publication vector</text>
+  <text x="616" y="962" text-anchor="start" class="sans body" fill="#27313A">time + total off-chip traffic + instructions</text>
+  <text x="616" y="992" text-anchor="start" class="sans body" fill="#27313A">same-build, same-cell baseline; geometric mean</text>
+  <text x="616" y="1022" text-anchor="start" class="mono body" fill="#27313A">exclude timing_valid_for_speedup = 0</text>
+  <path d="M120 1095 L1080 1095" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-label="publish only after the frozen campaign"/>
+  <text x="600" y="1080" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">publish only after the frozen campaign</text>
 </svg>

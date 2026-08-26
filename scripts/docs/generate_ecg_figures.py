@@ -209,147 +209,136 @@ def system_overview(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> N
         1160,
     )
     figure.section(
-        "1", "OFFLINE GRAPH ANALYSIS", "immutable records; excluded from the ROI",
+        "1", "CROSS-LAYER DATAFLOW", "offline construction ends before the measured ROI",
         138, role="data",
     )
-    figure.card(
-        24, 180, 360, 205, "Kernel traversal direction",
-        (
-            "PageRank: incoming-neighbor rows",
-            "BFS / BC / CC / SSSP:",
-            "outgoing-neighbor rows",
-            "CSR fixes property-access order",
-        ),
-        role="data",
+    figure.table(35, 195, 180, 170, 4, role="data")
+    figure.text(125, 225, "Graph storage", size=17, bold=True,
+                color=BLUE, anchor="middle")
+    figure.text(50, 270, "row_ptr / col_idx", size=16, mono=True)
+    figure.text(50, 312, "weight / property", size=16, mono=True)
+    figure.text(50, 352, "kernel direction", size=16)
+    figure.diamond(315, 280, 150, 130, role="compute")
+    figure.text(315, 265, "ReusePlan", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(315, 295, "builder", size=16, anchor="middle")
+    figure.text(315, 325, "d_in / d_out", size=16, anchor="middle")
+    figure.table(430, 195, 190, 170, 4, role="state")
+    figure.text(525, 225, "Record array", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(445, 270, "destination", size=16, mono=True)
+    figure.text(445, 312, "tier | e1 | e2", size=16, mono=True)
+    figure.text(445, 352, "hash + width receipt", size=16)
+    figure.line((660, 180), (660, 410), color=RED, width=3)
+    figure.text(675, 205, "measured ROI", size=16, bold=True, color=RED)
+    figure.queue(700, 210, 150, 135, role="state")
+    figure.text(775, 240, "O3 issue", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(775, 278, "I0 record load", size=16, anchor="middle")
+    figure.text(775, 315, "I1 property load", size=16, anchor="middle")
+    figure.table(900, 195, 120, 170, 3, role="transfer")
+    figure.text(960, 225, "MSHR", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(960, 282, "targets", size=16, anchor="middle")
+    figure.text(960, 338, "merge", size=16, anchor="middle")
+    figure.table(1060, 195, 110, 170, 3, role="state")
+    figure.text(1115, 225, "LLC", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(1115, 282, "RRPV", size=16, anchor="middle")
+    figure.text(1115, 338, "tier/e1/e2", size=16, anchor="middle")
+    for start, end, label, color in (
+        ((215, 280), (240, 280), "Graph storage", BLUE),
+        ((390, 280), (430, 280), "ReusePlan", PURPLE),
+        ((620, 280), (700, 280), "Record array", AMBER),
+        ((850, 280), (900, 280), "O3 issue", GREEN),
+        ((1020, 280), (1060, 280), "MSHR", PURPLE),
+    ):
+        run_start = (start[0] - 35, start[1]) if end[0] - start[0] < 60 else start
+        figure.arrow(
+            (run_start, end), kind="control", label=label, color=color,
+        )
+    figure.text(
+        675, 385,
+        f"tracked: fixture 4->7 -> internal {fx.tracked_reader}->"
+        f"{fx.tracked_dest}",
+        size=16, mono=True, color=RED, max_width=480,
     )
-    figure.card(
-        420, 180, 360, 205, "Per-line ReusePlan",
-        (
-            "rank d_in or d_out access counts",
-            "assign tier 1 / 2 / 3",
-            "find two subsequent line accesses",
-            "combine vertices in one 64-byte line",
-            "pack destination + tier + two epochs",
-        ),
-        role="state",
-    )
-    figure.card(
-        816, 180, 360, 205, "Validated runtime input",
-        (
-            "record order follows canonical CSR",
-            "compact record substitutes for edge ID",
-            "otherwise use edge plus sidecar",
-            "guest validates graph + payload hashes",
-        ),
-        role="verify",
-    )
-
-    figure.section(
-        "2", "RUNTIME REQUEST PATH", "two loads and one explicit register dependency",
-        430, role="compute",
-    )
-    figure.card(
-        24, 472, 270, 205, "Record request",
-        (
-            "ecg.plan.load*",
-            "or ecg.flow.load*",
-            "returns ReusePlan in rd",
-            "FlowThrough marks request",
-            "normal translation + lookup",
-        ),
-        role="transfer",
-    )
-    figure.card(
-        318, 472, 270, 205, "ReusePlan operand",
-        (
-            "rename maps record rd",
-            "property reads it as rs2",
-            "issue waits for both sources",
-            "no shared O3 mailbox",
-        ),
-        role="state",
-    )
-    figure.card(
-        612, 472, 270, 205, "Property request",
-        (
-            "ecg.bind.load.*",
-            "computed address",
-            "ecg.bind.iload.*",
-            "indexed address",
-            "typed ReuseBind extension",
-            "property: no FlowThrough",
-        ),
-        role="compute",
-    )
-    figure.card(
-        906, 472, 270, 205, "LLC line update",
-        (
-            "valid hit/fill",
-            "stamps tier + epochs",
-            "line guard must match",
-            "MSHR conflict rejects hint",
-            "data completion is unchanged",
-        ),
-        role="verify",
+    figure.text(
+        675, 415,
+        f"property address 0x{fx.property_address:08X}",
+        size=16, mono=True, color=RED, max_width=480,
     )
 
     figure.section(
-        "3", "POLICY AND EVIDENCE", "mechanism state is not itself a speedup claim",
-        722, role="verify",
-    )
-    figure.card(
-        24, 764, 360, 205, "Default rrip_first victim rule",
-        (
-            "age until a way reaches max RRPV",
-            "old structural line wins in that set",
-            "else evict farthest stamped property",
-            "unstamped property distance is zero",
-        ),
-        role="state",
-    )
-    figure.card(
-        420, 764, 360, 205, "Placement is a separate decision",
-        (
-            "record FlowThrough: design mechanism",
-            "structural FlowThrough fairness",
-            "LLC hits and private fills stay normal",
-            "mixed MSHR targets may still allocate",
-        ),
-        role="transfer",
-    )
-    figure.card(
-        816, 764, 360, 205, "Claim boundary",
-        (
-            "gem5 O3: timing authority",
-            "cache_sim: functional policy + traffic",
-            "Sniper: modeled cache/traffic",
-            "analytic P-OPT time is optimistic",
-        ),
-        role="verify",
+        "2", "REQUEST AND LLC DECISION PATH",
+        "FlowThrough placement and ReuseBind state are independent",
+        450, role="compute",
     )
     figure.arrow(
-        ((105, 1015), (405, 1015)),
-        kind="transfer",
-        label="immutable ReusePlan records",
-        cadence="once before the ROI",
-        color=AMBER,
-        label_at=(255, 1000),
+        ((60, 560), (1130, 560)),
+        kind="transfer", label="I0 record Request",
+        cadence="per adjacency entry", color=AMBER, width=3,
+        label_at=(300, 545),
     )
     figure.arrow(
-        ((455, 1080), (745, 1080)),
-        kind="transfer",
-        label="property request + ReuseBind",
-        cadence="per governed load",
-        color=PURPLE,
-        label_at=(600, 1065),
+        ((60, 680), (1130, 680)),
+        kind="transfer", label="I1 property Request + ReuseBind",
+        cadence="per governed load", color=BLUE, width=3,
+        label_at=(340, 665),
     )
+    nodes = (
+        (100, "LSQ"),
+        (315, "D-TLB / L1 / L2"),
+        (530, "MSHR"),
+        (745, "LLC hit/fill"),
+        (960, "rrip_first"),
+    )
+    for x, label in nodes:
+        figure.line((x, 520), (x, 735), color=GRAY, width=1)
+        figure.circle(x, 560, 10, fill=WHITE, stroke=AMBER)
+        figure.circle(x, 680, 10, fill=WHITE, stroke=BLUE)
+        figure.text(x, 505, label, size=16, bold=True, anchor="middle")
+    figure.text(100, 595, "FlowThrough=1", size=16,
+                color=AMBER, anchor="middle")
+    figure.text(530, 595, "allocOnFill OR", size=16, anchor="middle")
+    figure.text(745, 595, "hit normal; miss may bypass fill",
+                size=16, anchor="middle")
+    figure.text(100, 715, "ReuseBind", size=16,
+                color=BLUE, anchor="middle")
+    figure.text(530, 715, "newest compatible target", size=16,
+                anchor="middle")
+    figure.text(745, 715, "validate + stamp", size=16,
+                anchor="middle")
+    figure.text(960, 715, "structural -> distance", size=16,
+                anchor="middle")
+
+    figure.section(
+        "3", "EVIDENCE BOUNDARY", "mechanism activity is not itself a speedup claim",
+        780, role="verify",
+    )
+    figure.rect(40, 830, 1120, 225, role="neutral", radius=0)
+    for x in (320, 600, 880):
+        figure.line((x, 830), (x, 1055), color=INK, width=1)
+    figure.line((40, 880), (1160, 880), color=INK, width=1)
+    for x, label in (
+        (180, "gem5 O3"),
+        (460, "cache_sim"),
+        (740, "Sniper"),
+        (1020, "Analytic P-OPT"),
+    ):
+        figure.text(x, 862, label, size=17, bold=True, anchor="middle")
+    evidence = (
+        ("architectural time", "exact Request binding", "instructions + traffic"),
+        ("functional victim", "large-graph traffic", "no cycles/instructions"),
+        ("modeled cache direction", "equal semantic work", "time not speedup"),
+        ("reserved ways + bytes", "target-time costs omitted", "optimistic bound"),
+    )
+    for col, lines in enumerate(evidence):
+        figure.lines(56 + col * 280, 915, lines, max_width=248)
     figure.arrow(
-        ((795, 1015), (1095, 1015)),
-        kind="transfer",
-        label="semantic receipt and counters",
-        cadence="per experiment row",
-        color=RED,
-        label_at=(945, 1000),
+        ((110, 1110), (1090, 1110)),
+        kind="dependency", label="semantic receipts gate every published row",
+        color=RED, label_at=(600, 1095),
     )
     save(figure, generated)
 
@@ -460,86 +449,123 @@ def offline_construction(
         f"{fx.tracked_source_dest}",
         size=17, bold=True, color=RED, max_width=300,
     )
-    figure.card(
-        830, 180, 346, 390, "Outgoing-CSR crosswalk",
-        (
-            f"fixture 0 -> internal 1",
-            f"row = {list(fx.rows[1])}",
-            f"fixture 2 -> internal 6",
-            f"row = {list(fx.rows[6])}",
-            f"fixture 4 -> internal 8",
-            f"row = {list(fx.rows[8])}",
-            f"fixture 7 -> internal 18",
-            f"row = {list(fx.rows[18])}",
-            f"tracked 4->7 = int {fx.tracked_reader}->{fx.tracked_dest}",
-            "PageRank uses incoming CSR.",
-            "frontier paths use outgoing CSR",
-        ),
-        role="data",
-        mono_body=True,
+    figure.rect(830, 180, 346, 390, role="data", radius=0)
+    figure.text(846, 212, "Outgoing-CSR crosswalk", size=17,
+                bold=True, color=BLUE)
+    figure.line((830, 235), (1176, 235), color=INK, width=1)
+    figure.line((970, 235), (970, 475), color=INK, width=1)
+    for y in (295, 355, 415, 475):
+        figure.line((830, y), (1176, y), color=INK, width=1)
+    csr_rows = (
+        ("0 -> 1", str(list(fx.rows[1]))),
+        ("2 -> 6", str(list(fx.rows[6]))),
+        ("4 -> 8", str(list(fx.rows[8]))),
+        ("7 -> 18", str(list(fx.rows[18]))),
     )
+    for row, (mapping, values) in enumerate(csr_rows):
+        y = 272 + row * 60
+        figure.text(846, y, mapping, size=16, mono=True)
+        figure.text(986, y, values, size=16, mono=True)
+    figure.text(
+        846, 515,
+        f"tracked: 4->7 = internal {fx.tracked_reader}->{fx.tracked_dest}",
+        size=16, bold=True, mono=True, color=RED,
+    )
+    figure.text(846, 535, "PageRank: incoming CSR",
+                size=16, color=PURPLE, max_width=314)
+    figure.text(846, 562, "frontier kernels: outgoing CSR",
+                size=16, color=PURPLE, max_width=314)
 
     figure.section(
         "2", "DEGREE-DERIVED REUSE TIER",
         "outgoing traversal: sort by d_in, then vertex ID",
         615, role="state",
     )
-    counts = (
-        f"v2/int6: d_in={fx.reader_counts[6]} -> tier {fx.tiers[6]}",
-        f"v4/int8: d_in={fx.reader_counts[8]} -> tier {fx.tiers[8]}",
-        f"v5/int11: d_in={fx.reader_counts[11]} -> tier {fx.tiers[11]}",
-        f"v7/int18: d_in={fx.reader_counts[18]} -> tier {fx.tiers[18]}",
-        f"v8/int20: d_in={fx.reader_counts[20]} -> tier {fx.tiers[20]}",
-        f"v0/int1: d_in={fx.reader_counts[1]} -> tier {fx.tiers[1]}",
-    )
     tier_name = {1: "hot", 2: "moderate", 3: "cold"}[fx.line_tier]
-    figure.card(
-        24, 657, 550, 245, "Default hot fraction = 0.15",
-        counts,
-        role="state",
-        mono_body=True,
+    figure.rect(24, 657, 550, 245, role="state", radius=0)
+    figure.text(40, 688, "Stable degree rank (hot fraction = 0.15)",
+                size=17, bold=True, color=PURPLE)
+    figure.line((24, 710), (574, 710), color=INK, width=1)
+    for x in (210, 345, 455):
+        figure.line((x, 710), (x, 902), color=INK, width=1)
+    for x, label in ((110, "fixture / internal"), (277, "d_in"),
+                     (400, "rank"), (515, "tier")):
+        figure.text(x, 735, label, size=16, bold=True, anchor="middle")
+    rank_rows = (
+        ("v2 / int6", fx.reader_counts[6], 0, fx.tiers[6]),
+        ("v4 / int8", fx.reader_counts[8], 1, fx.tiers[8]),
+        ("v5 / int11", fx.reader_counts[11], 2, fx.tiers[11]),
+        ("v7 / int18", fx.reader_counts[18], 3, fx.tiers[18]),
+        ("v8 / int20", fx.reader_counts[20], 4, fx.tiers[20]),
     )
-    figure.card(
-        600, 657, 576, 245, "Cache-line aggregation",
-        (
-            "4-byte properties -> 16 vertices per 64-byte line",
-            f"property {fx.tracked_dest} is in line vertices "
-            f"{fx.line_begin}..{fx.line_end - 1}",
-            "line tier is the hottest tier among those vertices",
-            f"tracked line tier = {fx.line_tier} ({tier_name})",
-            "tier 0 is reserved for invalid metadata",
-        ),
-        role="neutral",
+    for row, values in enumerate(rank_rows):
+        y = 770 + row * 30
+        for x, value in zip((40, 277, 400, 515), values):
+            figure.text(x, y, str(value), size=16, mono=True,
+                        anchor="middle" if x != 40 else "start")
+
+    figure.rect(600, 657, 576, 245, role="neutral", radius=0)
+    figure.text(616, 688, "64-byte property line: 16 x 4-byte vertices",
+                size=17, bold=True)
+    cell_width = 34
+    for index, vertex in enumerate(range(fx.line_begin, fx.line_end)):
+        x = 616 + index * cell_width
+        role = "compute" if vertex == fx.tracked_dest else (
+            "state" if vertex == 20 else "neutral"
+        )
+        figure.rect(x, 725, cell_width, 62, role=role,
+                    stroke_width=1, radius=0)
+        figure.text(x + cell_width / 2, 763, str(vertex),
+                    size=16, mono=True, anchor="middle")
+    figure.text(616, 825, "line tier = min(vertex tiers)",
+                size=16, mono=True)
+    figure.text(
+        616, 855,
+        f"min(T18={fx.tiers[18]}, T20={fx.tiers[20]}) = "
+        f"T{fx.line_tier} ({tier_name})",
+        size=16, bold=True, mono=True, color=GREEN,
     )
+    figure.text(616, 885, "tier 0 is reserved for invalid metadata",
+                size=16, color=RED)
 
     figure.section(
         "3", "TWO SUBSEQUENT LINE ACCESSES",
         "search begins after the current outer vertex",
         947, role="compute",
     )
-    figure.card(
-        24, 989, 550, 245, "Property-line access sources",
-        (
-            f"sources for line {fx.line_begin}..{fx.line_end - 1} = "
-            f"{list(fx.line_reader_ids)}",
-            f"current outer vertex = {fx.tracked_reader}",
-            f"next outer vertex = {fx.first_reader} -> epoch {fx.first_epoch}",
-            f"second outer vertex = {fx.second_reader} -> epoch {fx.second_epoch}",
-            "ID-order search wraps to the next sweep if needed",
-        ),
-        role="compute",
-        mono_body=True,
+    figure.rect(24, 989, 1152, 245, role="neutral", radius=0)
+    access_x0, access_x1, access_y = 80, 1120, 1080
+    figure.line((access_x0, access_y), (access_x1, access_y),
+                color=INK, width=3)
+    for vertex in fx.line_reader_ids:
+        x = access_x0 + (access_x1 - access_x0) * vertex / (fx.epoch_count - 1)
+        color = (
+            AMBER if vertex == fx.tracked_reader
+            else GREEN if vertex == fx.first_reader
+            else PURPLE if vertex == fx.second_reader
+            else GRAY
+        )
+        figure.circle(x, access_y, 10, fill=WHITE, stroke=color)
+        figure.text(x, access_y - 28, str(vertex), size=16,
+                    bold=vertex in {
+                        fx.tracked_reader, fx.first_reader, fx.second_reader
+                    }, color=color, anchor="middle")
+    figure.text(
+        40, 1020,
+        f"access-source vertices = {list(fx.line_reader_ids)}",
+        size=16, bold=True, mono=True, color=PURPLE,
     )
-    figure.card(
-        600, 989, 576, 245, "Epoch quantization and same-row correction",
-        (
-            "epoch = floor(outer_vertex * epoch_count / |V|)",
-            f"here epoch_count = vertex_count = {fx.epoch_count}",
-            "additional accesses in row u to the line are preserved",
-            "the epoch pair characterizes the cache line",
-            "malformed epochs are clamped before distance use",
-        ),
-        role="neutral",
+    figure.text(250, 1140, f"current u={fx.tracked_reader}",
+                size=16, bold=True, color=AMBER, anchor="middle")
+    figure.text(540, 1140, f"next u={fx.first_reader} -> e1={fx.first_epoch}",
+                size=16, bold=True, color=GREEN, anchor="middle")
+    figure.text(870, 1140, f"second u={fx.second_reader} -> e2={fx.second_epoch}",
+                size=16, bold=True, color=PURPLE, anchor="middle")
+    figure.text(
+        600, 1190,
+        f"epoch = floor(u * {fx.epoch_count} / {fx.num_vertices}); "
+        "same-row line accesses are preserved; ID order wraps at |V|",
+        size=16, mono=True, anchor="middle", max_width=1080,
     )
 
     figure.section(
@@ -547,29 +573,52 @@ def offline_construction(
         "preprocessing produces an immutable runtime input",
         1279, role="transfer",
     )
-    figure.card(
-        24, 1321, 550, 245, "Checked logical record",
+    figure.bitfield(
+        40, 1340, 520, 90,
         (
-            f"destination = {fx.tracked_dest}",
-            f"tier = {fx.line_tier}",
-            f"epoch1 = {fx.first_epoch}",
-            f"epoch2 = {fx.second_epoch}",
-            f"compact bits = {fx.id_bits} + 2 + 2*{fx.epoch_bits} = "
-            f"{fx.id_bits + 2 + 2 * fx.epoch_bits}",
+            (f"dest {fx.tracked_dest}", fx.id_bits, "data"),
+            (f"T{fx.line_tier}", 2, "transfer"),
+            (f"e1 {fx.first_epoch}", fx.epoch_bits, "compute"),
+            (f"e2 {fx.second_epoch}", fx.epoch_bits, "state"),
         ),
-        role="transfer",
-        mono_body=True,
+        total_bits=fx.id_bits + 2 + 2 * fx.epoch_bits,
     )
-    figure.card(
-        600, 1321, 576, 245, "Offline / runtime boundary",
+    figure.text(
+        40, 1470,
+        f"compact width = {fx.id_bits} + 2 + 2*{fx.epoch_bits} = "
+        f"{fx.id_bits + 2 + 2 * fx.epoch_bits} bits",
+        size=16, bold=True, mono=True, color=AMBER,
+    )
+    validation_nodes = (
+        (650, "header", "graph + config"),
+        (820, "offsets", "record count"),
+        (990, "hash/width", "payload identity"),
+    )
+    for x, title, body in validation_nodes:
+        figure.diamond(x, 1390, 140, 100, role="verify")
+        figure.text(x, 1380, title, size=16, bold=True,
+                    color=RED, anchor="middle")
+        figure.text(x, 1410, body, size=16, anchor="middle")
+    figure.arrow(
+        ((520, 1390), (580, 1390)),
+        kind="control", label="compact width", color=AMBER,
+    )
+    figure.arrow(
+        ((690, 1390), (750, 1390)),
+        kind="control", label="header", color=RED,
+    )
+    figure.arrow(
+        ((860, 1390), (920, 1390)),
+        kind="control", label="offsets", color=RED,
+    )
+    figure.lines(
+        650, 1480,
         (
-            "builder output is outside the measured ROI",
-            "sidecar header binds graph, configuration, and payload",
-            "guest verifies offsets, hashes, width, and record count",
-            "runtime streams the validated record in edge order",
-            "no detailed simulator recomputes the graph pass",
+            "builder executes outside the measured ROI",
+            "guest aborts on header/offset/hash/width mismatch",
+            "runtime streams validated edge order",
         ),
-        role="verify",
+        color=RED, max_width=500,
     )
     figure.arrow(
         ((190, 1665), (1010, 1665)),
@@ -592,7 +641,7 @@ def record_formats(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> No
         "32-bit compact rule instantiated by the checked fixture, and both weighted "
         "SSSP transports: one compact 64-bit edge record or an ordinary weighted edge "
         "plus a 32-bit metadata sidecar.",
-        1150,
+        1190,
     )
     figure.section(
         "1", "GENERAL UNWEIGHTED RECORD", "canonical in-memory metadata layout",
@@ -625,56 +674,92 @@ def record_formats(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> No
         "2", "COMPACT 32-BIT RECORD", "width is derived from graph and epoch configuration",
         405, role="transfer",
     )
-    figure.card(
-        24, 447, 550, 210, "Packing condition",
+    figure.bitfield(
+        40, 455, 1120, 88,
         (
-            "id_bits + 2 tier bits + 2*epoch_bits <= 32",
-            f"checked fixture: {fx.id_bits} + 2 + 2*{fx.epoch_bits} = "
-            f"{fx.id_bits + 2 + 2 * fx.epoch_bits}",
-            "unused high bits are zero/reserved",
-            "record-load execution widens to canonical 64-bit",
+            (f"dest {fx.id_bits}", fx.id_bits, "data"),
+            ("tier 2", 2, "transfer"),
+            (f"e1 {fx.epoch_bits}", fx.epoch_bits, "compute"),
+            (f"e2 {fx.epoch_bits}", fx.epoch_bits, "state"),
+            ("zero / reserved", 32 - fx.id_bits - 2 - 2 * fx.epoch_bits,
+             "neutral"),
         ),
-        role="transfer",
-        mono_body=True,
+        total_bits=32,
     )
-    figure.card(
-        600, 447, 576, 210, "Traffic meaning",
-        (
-            "compact record substitutes for one ordinary edge ID",
-            "the simulated stream is 4 bytes per edge",
-            "if fields do not fit, use the wide record or sidecar",
-            "a width receipt must match the materialized container",
-        ),
-        role="verify",
+    figure.text(
+        40, 580,
+        f"id_bits + 2 + 2*epoch_bits = {fx.id_bits} + 2 + "
+        f"2*{fx.epoch_bits} = {fx.id_bits + 2 + 2 * fx.epoch_bits} <= 32",
+        size=16, bold=True, mono=True, color=AMBER, max_width=650,
     )
+    figure.arrow(
+        ((90, 625), (430, 625)),
+        kind="transfer", label="4-byte compact record",
+        cadence="per governed adjacency", color=AMBER,
+        label_at=(260, 612),
+    )
+    figure.arrow(
+        ((500, 625), (1110, 625)),
+        kind="dependency", label="record-load widening",
+        color=PURPLE, label_at=(805, 612),
+    )
+    figure.text(90, 660, "substitutes for one 4-byte edge ID",
+                size=16, color=AMBER)
+    figure.text(500, 660, "format CSR -> canonical destination/tier/e1/e2",
+                size=16, color=PURPLE)
+    figure.text(40, 687, "unused high bits are zero/reserved",
+                size=16, color=RED)
+    figure.text(500, 687, "width receipt must match the materialized array",
+                size=16, color=RED)
 
     figure.section(
         "3", "WEIGHTED SSSP TRANSPORTS", "weight bytes cannot disappear from the comparison",
-        702, role="data",
+        735, role="data",
     )
-    figure.card(
-        24, 744, 550, 285, "Compact weighted 64-bit substitute",
+    figure.text(40, 790, "A. compact weighted substitute: 8 bytes",
+                size=17, bold=True, color=BLUE)
+    figure.bitfield(
+        40, 815, 1120, 82,
         (
-            "destination: 24 bits",
-            "positive weight: 8 bits",
-            "tier: 2 bits",
-            "epoch 1 + epoch 2: 15 bits each",
-            "valid only for < 2^24 vertices and weight <= 255",
-            "one 8-byte record replaces the weighted edge",
+            ("destination 24", 24, "data"),
+            ("weight 8", 8, "neutral"),
+            ("tier 2", 2, "transfer"),
+            ("epoch 1: 15", 15, "compute"),
+            ("epoch 2: 15", 15, "state"),
         ),
-        role="data",
-        mono_body=True,
+        total_bits=64,
     )
-    figure.card(
-        600, 744, 576, 285, "General weighted edge + sidecar",
+    figure.text(
+        40, 930,
+        "constraint: |V| < 2^24 and 0 < weight <= 255; record replaces the "
+        "ordinary weighted edge",
+        size=16, mono=True, max_width=1120,
+    )
+    figure.text(40, 985, "B. ordinary weighted edge + 4-byte sidecar",
+                size=17, bold=True, color=PURPLE)
+    figure.bitfield(
+        40, 1010, 700, 82,
         (
-            "ordinary weighted edge remains in the structural stream",
-            "parallel 32-bit sidecar stores tier + two 15-bit epochs",
-            "combined logical value still uses canonical ReusePlan fields",
-            "simulated footprint is edge bytes plus 4 sidecar bytes",
-            "FlowThrough roles for edge and sidecar are accounted separately",
+            ("destination 32", 32, "data"),
+            ("weight 32", 32, "neutral"),
         ),
-        role="state",
+        total_bits=64,
+    )
+    figure.text(765, 1045, "+", size=22, bold=True, anchor="middle")
+    figure.bitfield(
+        800, 1010, 360, 82,
+        (
+            ("tier 2", 2, "transfer"),
+            ("epoch 1: 15", 15, "compute"),
+            ("epoch 2: 15", 15, "state"),
+        ),
+        total_bits=32,
+    )
+    figure.text(
+        40, 1130,
+        "traffic = weighted-edge bytes + 4 sidecar bytes; edge and sidecar "
+        "FlowThrough roles are accounted separately",
+        size=16, bold=True, color=RED, max_width=1120,
     )
     save(figure, generated)
 
@@ -751,53 +836,101 @@ def future_distance(
         "2", "CIRCULAR DISTANCE AT THE LLC", "the current victim-time epoch can advance after fill",
         565, role="compute",
     )
-    figure.card(
-        24, 607, 550, 205, f"Checked arithmetic at current epoch {current}",
-        (
-            f"d1 = ({fx.first_epoch} + {epoch_count} - {current}) mod "
-            f"{epoch_count} = {first_distance}",
-            f"d2 = ({fx.second_epoch} + {epoch_count} - {current}) mod "
-            f"{epoch_count} = {second_distance}",
-            f"nearest = min({first_distance}, {second_distance}) = "
-            f"{min(first_distance, second_distance)}",
-            "payload count 2 activates both epochs",
-        ),
-        role="compute",
-        mono_body=True,
+    ring_cx, ring_cy, ring_r = 190, 690, 80
+    figure.circle(ring_cx, ring_cy, ring_r,
+                  fill=PURPLE_MATTE, stroke=PURPLE)
+    figure.circle(ring_cx, ring_cy, 54, fill=WHITE, stroke=WHITE)
+    figure.text(ring_cx, ring_cy - 8, "epoch", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(ring_cx, ring_cy + 20, "mod 32", size=16,
+                color=PURPLE, anchor="middle")
+    for epoch, color, label in (
+        (current, AMBER, f"c={current}"),
+        (fx.first_epoch, GREEN, f"e1={fx.first_epoch}"),
+        (fx.second_epoch, PURPLE, f"e2={fx.second_epoch}"),
+    ):
+        angle = -math.pi / 2 + 2 * math.pi * epoch / epoch_count
+        x = ring_cx + ring_r * math.cos(angle)
+        y = ring_cy + ring_r * math.sin(angle)
+        figure.circle(x, y, 11, fill=WHITE, stroke=color)
+        figure.text(
+            ring_cx + (ring_r + 30) * math.cos(angle),
+            ring_cy + (ring_r + 30) * math.sin(angle) + 6,
+            label, size=16, bold=True, color=color, anchor="middle",
+        )
+
+    figure.rect(380, 607, 796, 205, role="neutral", radius=0)
+    figure.line((380, 652), (1176, 652), color=INK, width=1)
+    figure.line((380, 697), (1176, 697), color=INK, width=1)
+    figure.line((380, 742), (1176, 742), color=INK, width=1)
+    figure.text(400, 637, f"current epoch c = {current}",
+                size=16, bold=True, mono=True)
+    figure.text(
+        400, 682,
+        f"d1 = ({fx.first_epoch} + {epoch_count} - {current}) mod "
+        f"{epoch_count} = {first_distance}",
+        size=16, mono=True,
     )
-    figure.card(
-        600, 607, 576, 205, "Line-state interpretation",
-        (
-            "epochs remain absolute in the cache line",
-            f"victim-time current epoch may be later than {current}",
-            "unstamped property has effective distance zero",
-            "malformed epochs are clamped before use",
-        ),
-        role="state",
+    figure.text(
+        400, 727,
+        f"d2 = ({fx.second_epoch} + {epoch_count} - {current}) mod "
+        f"{epoch_count} = {second_distance}",
+        size=16, mono=True,
     )
+    figure.text(
+        400, 772,
+        f"nearest = min({first_distance}, {second_distance}) = "
+        f"{min(first_distance, second_distance)}",
+        size=16, bold=True, mono=True, color=GREEN,
+    )
+    figure.text(790, 637, "line state stores absolute epochs",
+                size=16, color=PURPLE)
+    figure.text(790, 682, "victim-time c may advance after fill",
+                size=16)
+    figure.text(790, 727, "unstamped distance = 0",
+                size=16)
+    figure.text(790, 772, "malformed epochs are clamped",
+                size=16)
     figure.section(
         "3", "RRIP-FIRST DECISION",
         "property-line ranking follows RRIP eligibility",
         857, role="verify",
     )
-    figure.card(
-        24, 899, 550, 170, "Eligible structural line exists",
-        (
-            "select the oldest max-RRPV structural line",
-            "property future distance is not consulted",
-            "this keeps stream pollution separate from property ranking",
-        ),
-        role="transfer",
+    figure.diamond(220, 970, 210, 115, role="compute")
+    figure.text(220, 958, "max-RRPV", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(220, 985, "candidate exists?", size=16, anchor="middle")
+    figure.diamond(555, 970, 210, 115, role="transfer")
+    figure.text(555, 958, "eligible structural", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(555, 985, "candidate exists?", size=16, anchor="middle")
+    figure.rect(760, 910, 190, 120, role="transfer", radius=0)
+    figure.text(855, 947, "select oldest", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(855, 980, "structural line", size=16, anchor="middle")
+    figure.rect(980, 910, 196, 120, role="verify", radius=0)
+    figure.text(1078, 943, "select farthest", size=17, bold=True,
+                color=RED, anchor="middle")
+    figure.text(1078, 973, "stamped distance", size=16, anchor="middle")
+    figure.text(1078, 1003, "stable set-order tie", size=16, anchor="middle")
+    figure.arrow(
+        ((325, 970), (450, 970)),
+        kind="control", label="eligible set formed", color=GREEN,
+        label_at=(388, 900),
     )
-    figure.card(
-        600, 899, 576, 170, "Only eligible property lines remain",
-        (
-            f"tracked line contributes nearest distance "
-            f"{min(first_distance, second_distance)}",
-            "select the farthest effective stamped distance",
-            "stable set order resolves an exact remaining tie",
-        ),
-        role="verify",
+    figure.arrow(
+        ((660, 945), (760, 945)),
+        kind="control", label="eligible structural", color=AMBER,
+    )
+    figure.arrow(
+        ((660, 995), (980, 995)),
+        kind="control", label="no: property only", color=RED,
+        label_at=(820, 1028),
+    )
+    figure.arrow(
+        ((220, 1028), (220, 1085), (80, 1085), (80, 970), (115, 970)),
+        kind="loop", label="none: age RRPV and retry", color=PURPLE,
+        label_at=(265, 1075), label_anchor="start",
     )
     save(figure, generated)
 
@@ -818,112 +951,152 @@ def llc_policy(generated: list[tuple[Path, Path]]) -> None:
         "1", "ACCEPT OR REJECT REQUEST METADATA", "destination line and execution context must agree",
         138, role="verify",
     )
-    figure.card(
-        24, 180, 550, 225, "Accepted ReuseBind",
-        (
-            "typed Request extension has two epochs",
-            "context ID is nonzero and not conflicted",
-            "destination maps to the accessed property line",
-            "hit or fill may refresh line metadata",
-        ),
-        role="compute",
+    figure.rect(40, 200, 245, 130, role="state", radius=0)
+    figure.text(162, 232, "ReuseBind extension", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(162, 267, "dest | tier | e1 | e2", size=16, mono=True,
+                anchor="middle")
+    figure.text(162, 298, "count | context | conflict", size=16, mono=True,
+                anchor="middle")
+    gates = (
+        (405, "context != 0?", "verify"),
+        (635, "conflict == 0?", "verify"),
+        (865, "dest line == access?", "compute"),
     )
-    figure.card(
-        600, 180, 576, 225, "Rejected metadata",
-        (
-            "mixed governed / ungoverned MSHR targets",
-            "requestor or context disagreement",
-            "equal-sequence payload disagreement",
-            "destination-line mismatch or invalid count",
-        ),
-        role="verify",
+    for x, label, role in gates:
+        figure.diamond(x, 265, 180, 120, role=role)
+        first, second = label.split(" ", 1)
+        figure.text(x, 252, first, size=17, bold=True,
+                    anchor="middle")
+        figure.text(x, 282, second, size=16, anchor="middle")
+    figure.rect(1010, 205, 150, 105, role="compute", radius=0)
+    figure.text(1085, 240, "accept", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(1085, 275, "hit/fill stamp", size=16, anchor="middle")
+    for start, end, label in (
+        ((285, 265), (315, 265), "ReuseBind extension"),
+        ((495, 265), (545, 265), "context"),
+        ((725, 265), (775, 265), "conflict"),
+        ((955, 265), (1010, 265), "destination line"),
+    ):
+        adjusted = (start[0] - (60 - (end[0] - start[0])), start[1])
+        figure.arrow((adjusted, end), kind="control", label=label,
+                     color=GREEN)
+    figure.text(
+        600, 365,
+        "reject: governed/ungoverned mix | requestor/context mismatch | "
+        "invalid count",
+        size=16, bold=True, color=RED, anchor="middle", max_width=1080,
+    )
+    figure.text(
+        600, 397,
+        "reject: equal-sequence payload mismatch | destination-line mismatch",
+        size=16, bold=True, color=RED, anchor="middle", max_width=1080,
     )
 
     figure.section(
         "2", "LINE-LOCAL STATE", "data value and replacement metadata have different lifetimes",
         450, role="state",
     )
-    figure.card(
-        24, 492, 550, 225, "Governed property line",
-        (
-            "valid | property | RRPV | recency",
-            "tier | epoch1 | epoch2 | epoch_count",
-            "context ID and live-stamp validity",
-            "property bytes remain architecturally unchanged",
-        ),
-        role="state",
-        mono_body=True,
+    figure.rect(40, 500, 1120, 205, role="neutral", radius=0)
+    columns = (40, 120, 260, 350, 455, 560, 665, 770, 900, 1040, 1160)
+    for x in columns[1:-1]:
+        figure.line((x, 500), (x, 705), color=INK, width=1)
+    for y in (545, 585, 625, 665):
+        figure.line((40, y), (1160, y), color=INK, width=1)
+    headers = ("way", "role/data", "RRPV", "recency", "tier",
+               "e1", "e2", "count", "context", "stamp")
+    centers = tuple((a + b) / 2 for a, b in zip(columns, columns[1:]))
+    for x, label in zip(centers, headers):
+        figure.text(x, 530, label, size=16, bold=True, anchor="middle")
+    rows = (
+        ("0", "structural", "3", "91", "-", "-", "-", "0", "-", "0"),
+        ("1", "property", "3", "77", "T1", "11", "15", "2", "k", "1"),
+        ("2", "property", "2", "63", "T2", "20", "20", "1", "k", "1"),
+        ("3", "invalid", "-", "-", "T0", "0", "0", "0", "0", "0"),
     )
-    figure.card(
-        600, 492, 576, 225, "Refresh and invalidation",
-        (
-            "accepted hit/fill updates tier and epochs",
-            "ordinary hit still updates native recency/RRIP state",
-            "conflicted metadata does not stamp the line",
-            "invalidation clears tier, epochs, context, and validity",
-        ),
-        role="neutral",
-    )
+    for row, values in enumerate(rows):
+        y = 572 + row * 40
+        for x, value in zip(centers, values):
+            figure.text(x, y, value, size=16, mono=True, anchor="middle")
+    figure.text(40, 742, "hit/fill: refresh tier/epochs/context",
+                size=16, color=GREEN)
+    figure.text(420, 742, "ordinary hit: native RRPV/recency",
+                size=16, color=BLUE)
+    figure.text(790, 742, "invalidate -> clear every ECG field",
+                size=16, color=RED)
 
     figure.section(
         "3", "RRIP ELIGIBILITY", "the default variant ages until a way reaches rrpvMax",
         762, role="compute",
     )
-    figure.card(
-        24, 804, 360, 225, "A. Form candidate set",
-        (
-            "keep only ways with RRPV >= rrpvMax",
-            "if empty: increment lower RRPVs",
-            "repeat until a candidate exists",
-            "recency remains an independent field",
-        ),
-        role="compute",
+    figure.diamond(190, 900, 220, 130, role="compute")
+    figure.text(190, 884, "any way at", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(190, 915, "RRPV == max?", size=16, anchor="middle")
+    figure.diamond(500, 900, 220, 130, role="transfer")
+    figure.text(500, 884, "eligible structural", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(500, 915, "candidate?", size=16, anchor="middle")
+    figure.rect(680, 830, 210, 120, role="transfer", radius=0)
+    figure.text(785, 868, "oldest structural", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(785, 905, "normalized recency", size=16, anchor="middle")
+    figure.rect(930, 830, 230, 150, role="state", radius=0)
+    figure.text(1045, 865, "farthest property", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(1045, 898, "min(d(e1), d(e2))", size=16,
+                mono=True, anchor="middle")
+    figure.text(1045, 932, "unstamped distance=0", size=16,
+                anchor="middle")
+    figure.text(1045, 962, "stable set-order tie", size=16,
+                anchor="middle")
+    figure.arrow(
+        ((300, 900), (390, 900)), kind="control",
+        label="RRPV == max?", color=GREEN,
     )
-    figure.card(
-        420, 804, 360, 225, "B. Prefer structural candidate",
-        (
-            "among eligible non-property ways",
-            "select oldest by normalized recency",
-            "records and CSR are structural",
-            "property epochs do not rank these ways",
-        ),
-        role="transfer",
+    figure.arrow(
+        ((610, 875), (680, 875)), kind="control",
+        label="eligible structural", color=AMBER,
     )
-    figure.card(
-        816, 804, 360, 225, "C. Rank property candidates",
-        (
-            "effective distance = zero if unstamped",
-            "else min(d(epoch1), d(epoch2))",
-            "select the farthest effective distance",
-            "set order resolves an exact tie",
-        ),
-        role="state",
+    figure.arrow(
+        ((610, 925), (930, 925)), kind="control",
+        label="property candidates", color=PURPLE,
+        label_at=(770, 955),
+    )
+    figure.arrow(
+        ((190, 965), (190, 1035), (70, 1035), (70, 900), (80, 900)),
+        kind="loop", label="age RRPV and retry", color=RED,
+        label_at=(230, 1025), label_anchor="start",
     )
 
     figure.section(
         "4", "VARIANTS ARE CONTROLLED ABLATIONS", "do not blend their ordering into the primary claim",
         1074, role="verify",
     )
-    figure.card(
-        24, 1116, 550, 185, "Primary and neutral controls",
-        (
-            "rrip_first: eligibility -> structural -> farthest epoch",
-            "grasp_only: pure RRIP",
-            "rrip_no_epoch: same gate, fixed property tie",
-            "rrip_no_epoch_recency: same gate, property LRU",
-        ),
-        role="verify",
+    figure.rect(40, 1120, 1120, 175, role="neutral", radius=0)
+    figure.line((40, 1165), (1160, 1165), color=INK, width=1)
+    for x in (315, 590, 865):
+        figure.line((x, 1120), (x, 1295), color=INK, width=1)
+    variants = (
+        ("rrip_first", "RRIP->struct->epoch", "primary"),
+        ("grasp_only", "pure RRIP", "neutral"),
+        ("rrip_no_epoch", "fixed property tie", "ablation"),
+        ("rrip_no_epoch_recency", "property LRU tie", "ablation"),
+        ("epoch_first / degree_first", "alternate order", "diagnostic"),
+        ("future_tier_first", "future/tier/LRU", "diagnostic"),
+        ("shortcircuit / lru_only", "baseline ctrl", "diagnostic"),
+        ("online selectors", "failed gates", "not promoted"),
     )
-    figure.card(
-        600, 1116, 576, 185, "Other experiment variants",
-        (
-            "epoch_first | degree_first | shortcircuit | lru_only",
-            "future_tier_first combines future, tier, then recency",
-            "online selectors are failed diagnostics, not primary policy",
-            "admission diagnostics are separate from victim selection",
-        ),
-        role="neutral",
-    )
+    for index, (name, order, status) in enumerate(variants):
+        col = index % 4
+        row = index // 4
+        x = 56 + col * 275
+        y = 1195 + row * 55
+        figure.text(x, y, name, size=16, bold=True, mono=True,
+                    color=RED if status == "not promoted" else INK)
+        figure.text(x, y + 25, f"{order} | {status}", size=16,
+                    max_width=250)
     save(figure, generated)
 
 
@@ -943,79 +1116,132 @@ def flowthrough_outcomes(generated: list[tuple[Path, Path]]) -> None:
         "1", "UNCHANGED FRONT HALF", "record request uses the normal memory hierarchy",
         138, role="data",
     )
-    for x, title, body, role in (
-        (24, "Load queue", ("ordering + replay", "size and request role", "FlowThrough flag"), "state"),
-        (318, "D-TLB + L1D", ("normal translation", "private hit is normal", "private fill is normal"), "data"),
-        (612, "L2 + LLC tags", ("normal lookup", "LLC hit returns normally", "miss allocates an MSHR"), "compute"),
-        (906, "Memory response", ("ordinary line fetch", "ordinary response path", "destination writes back"), "verify"),
-    ):
-        figure.card(x, 180, 270, 205, title, body, role=role)
+    pipeline_nodes = (
+        (35, 205, 145, "Load queue", "order / replay", "state"),
+        (220, 205, 145, "D-TLB", "translation", "data"),
+        (405, 205, 145, "L1D", "tag + data", "data"),
+        (590, 205, 145, "L2", "tag + data", "data"),
+        (775, 205, 145, "LLC tags", "hit or MSHR", "compute"),
+        (960, 205, 180, "Memory", "ordinary service", "verify"),
+    )
+    figure.arrow(
+        ((45, 300), (1130, 300)),
+        kind="transfer", label="record Request + FlowThrough",
+        cadence="per record load", color=AMBER, width=3,
+        label_at=(600, 190),
+    )
+    for x, y, width, title, subtitle, role in pipeline_nodes:
+        figure.rect(x, y, width, 115, role=role, radius=0)
+        figure.text(x + width / 2, y + 38, title, size=17, bold=True,
+                    anchor="middle")
+        figure.text(x + width / 2, y + 75, subtitle, size=16,
+                    anchor="middle")
+    figure.text(
+        600, 370,
+        "translation, private hits/fills, LLC lookup, memory response, "
+        "writeback: unchanged",
+        size=16, bold=True, color=BLUE, anchor="middle", max_width=1050,
+    )
 
     figure.section(
         "2", "THREE LLC OUTCOMES", "only the returning miss fill reaches the allocation gate",
         430, role="transfer",
     )
-    figure.card(
-        24, 472, 360, 245, "LLC hit",
-        (
-            "existing line supplies the record",
-            "no memory request",
-            "no fill allocation decision",
-            "FlowThrough does not bypass the hit",
-        ),
-        role="compute",
+    figure.diamond(170, 585, 210, 120, role="compute")
+    figure.text(170, 575, "LLC tag", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(170, 605, "hit?", size=16, anchor="middle")
+    figure.rect(330, 505, 230, 105, role="compute", radius=0)
+    figure.text(445, 540, "hit: return record", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(445, 575, "no allocation decision", size=16,
+                anchor="middle")
+    figure.arrow(
+        ((260, 560), (330, 560)),
+        kind="control", label="hit: return record", color=GREEN,
     )
-    figure.card(
-        420, 472, 360, 245, "LLC miss: all targets no-allocate",
-        (
-            "memory fetch completes normally",
-            "private caches receive the line",
-            "MSHR allocOnFill remains false",
-            "returning line is not inserted in LLC",
-        ),
-        role="transfer",
+
+    figure.table(330, 635, 350, 150, 4, role="state")
+    figure.text(505, 665, "MSHR target list", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(346, 705, "target A: allocOnFill=false", size=16, mono=True)
+    figure.text(346, 742, "target B: false or true", size=16, mono=True)
+    figure.text(346, 778, "allocOnFill combines with OR", size=16,
+                bold=True, mono=True)
+    figure.arrow(
+        ((170, 645), (170, 710), (330, 710)),
+        kind="control", label="LLC miss", color=AMBER,
+        label_at=(235, 695),
     )
-    figure.card(
-        816, 472, 360, 245, "LLC miss: mixed MSHR targets",
-        (
-            "one target requires allocation",
-            "allocOnFill combines with OR",
-            "the shared returning line is allocated",
-            "no target suppresses a required fill",
-        ),
-        role="verify",
+    figure.diamond(805, 710, 210, 120, role="transfer")
+    figure.text(805, 700, "allocOnFill", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(805, 730, "aggregate?", size=16, anchor="middle")
+    figure.arrow(
+        ((640, 710), (700, 710)),
+        kind="control", label="allocOnFill combines with OR",
+        color=PURPLE,
+    )
+    figure.rect(960, 635, 190, 105, role="verify", radius=0)
+    figure.text(1055, 670, "true: insert LLC", size=17, bold=True,
+                color=RED, anchor="middle")
+    figure.text(1055, 705, "mixed target wins", size=16, anchor="middle")
+    figure.rect(960, 755, 190, 90, role="transfer", radius=0)
+    figure.text(1055, 790, "false: skip fill", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(1055, 820, "all targets false", size=16, anchor="middle")
+    figure.arrow(
+        ((890, 685), (960, 685)),
+        kind="control", label="true: insert LLC", color=RED,
+    )
+    figure.arrow(
+        ((910, 735), (930, 800), (960, 800)),
+        kind="control", label="false: skip fill", color=AMBER,
     )
 
     figure.section(
         "3", "DERIVED PREFETCHES AND PROPERTY LOADS", "classification remains target-range exact",
-        762, role="state",
-    )
-    figure.card(
-        24, 804, 550, 245, "Derived structural prefetch",
-        (
-            "candidate address is checked against active carrier range",
-            "in-range prefetch receives STRUCTURAL_FLOWTHROUGH",
-            "out-of-range candidate does not inherit the bit",
-            "translated prefetch Request carries the exact result",
-        ),
-        role="state",
-    )
-    figure.card(
-        600, 804, 576, 245, "Governed property request",
-        (
-            "ReuseBind extension is independent of FlowThrough",
-            "property line must remain allocatable",
-            "LLC hit/fill may update tier and epochs",
-            "property data completes normally",
-        ),
-        role="compute",
+        890, role="state",
     )
     figure.arrow(
-        ((145, 1130), (1055, 1130)),
+        ((60, 980), (1130, 980)),
+        kind="transfer", label="derived prefetch Request",
+        cadence="per generated candidate", color=PURPLE, width=3,
+        label_at=(300, 965),
+    )
+    figure.arrow(
+        ((60, 1100), (1130, 1100)),
+        kind="transfer", label="governed property Request",
+        cadence="per property access", color=BLUE, width=3,
+        label_at=(300, 1085),
+    )
+    for x, label in (
+        (140, "candidate address"),
+        (430, "range check"),
+        (720, "Request flag/ext"),
+        (1010, "LLC behavior"),
+    ):
+        figure.line((x, 940), (x, 1160), color=GRAY, width=1)
+        figure.text(x, 930, label, size=16, bold=True, anchor="middle")
+        figure.circle(x, 980, 9, fill=WHITE, stroke=PURPLE)
+        figure.circle(x, 1100, 9, fill=WHITE, stroke=BLUE)
+    figure.text(430, 1015, "in active carrier?", size=16, anchor="middle")
+    figure.text(720, 1015, "in-range -> STRUCTURAL_FLOWTHROUGH",
+                size=16, anchor="middle")
+    figure.text(1010, 1015, "out-of-range bit stays clear",
+                size=16, anchor="middle")
+    figure.text(430, 1135, "destination-line guard", size=16,
+                anchor="middle")
+    figure.text(720, 1135, "ReuseBind; FlowThrough=0", size=16,
+                anchor="middle")
+    figure.text(1010, 1135, "allocatable; hit/fill may stamp",
+                size=16, anchor="middle")
+    figure.arrow(
+        ((145, 1215), (1055, 1215)),
         kind="control",
         label="suppress LLC insertion only when every coalesced target permits it",
         color=AMBER,
-        label_at=(600, 1115),
+        label_at=(600, 1200),
     )
     save(figure, generated)
 
@@ -1036,67 +1262,88 @@ def structural_fairness(generated: list[tuple[Path, Path]]) -> None:
         "1", "DESIGN MECHANISM", "ECG_FLOWTHROUGH is attached by ecg.flow.load*",
         138, role="state",
     )
-    figure.card(
-        24, 180, 550, 245, "ReusePlan record request",
-        (
-            "record can be compact, wide, or weighted sidecar",
-            "request-specific flag is attached by the ISA path",
-            "optional adaptive placement applies only to this stream",
-            "purpose: avoid retaining one-touch metadata records",
-        ),
-        role="state",
-    )
-    figure.card(
-        600, 180, 576, 245, "What it does not grant",
-        (
-            "it does not bypass the governed property request",
-            "it does not remove record bytes or memory latency",
-            "it does not make P-OPT matrix traffic disappear",
-            "it is not evidence that the victim rule is better",
-        ),
-        role="verify",
+    figure.rect(40, 200, 180, 105, role="state", radius=0)
+    figure.text(130, 232, "ReusePlan array", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(130, 263, "compact / wide", size=16, anchor="middle")
+    figure.text(130, 289, "weighted sidecar", size=16, anchor="middle")
+    figure.rect(300, 200, 180, 105, role="transfer", radius=0)
+    figure.text(390, 237, "ecg.flow.load*", size=17, bold=True,
+                mono=True, color=AMBER, anchor="middle")
+    figure.text(390, 275, "record Request", size=16, anchor="middle")
+    figure.rect(560, 200, 190, 105, role="transfer", radius=0)
+    figure.text(655, 237, "ECG_FLOWTHROUGH", size=16, bold=True,
+                mono=True, color=AMBER, anchor="middle")
+    figure.text(655, 275, "request-specific bit", size=16, anchor="middle")
+    figure.rect(830, 200, 300, 105, role="data", radius=0)
+    figure.text(980, 232, "normal TLB / private / LLC lookup",
+                size=16, bold=True, color=BLUE, anchor="middle")
+    figure.text(980, 265, "hit returns normally", size=16,
+                anchor="middle")
+    figure.text(980, 292, "miss reaches LLC allocation gate", size=16,
+                anchor="middle")
+    for start, end, label in (
+        ((220, 252), (300, 252), "record load"),
+        ((480, 252), (560, 252), "Request flag"),
+        ((750, 252), (830, 252), "normal hierarchy"),
+    ):
+        figure.arrow(
+            (start, end), kind="control", label=label,
+            color=AMBER, label_at=((start[0] + end[0]) / 2, 185),
+        )
+    figure.line((40, 350), (1130, 350), color=RED, width=2)
+    figure.text(
+        50, 385,
+        "not bypass | not zero bytes | not zero latency | not a victim-policy result",
+        size=16, bold=True, color=RED, max_width=1080,
     )
 
     figure.section(
         "2", "SYMMETRIC FAIRNESS CONTROL", "--flowthrough all is policy-independent",
         470, role="transfer",
     )
-    figure.card(
-        24, 512, 360, 245, "Baseline policies",
-        (
-            "LRU / GRASP / P-OPT consume CSR",
-            "carrier range = CSR edge array",
-            "STRUCTURAL_FLOWTHROUGH no-allocate",
-            "positive activity receipt is required",
-        ),
-        role="data",
+    figure.rect(40, 520, 1120, 275, role="neutral", radius=0)
+    for y in (565, 620, 675, 730):
+        figure.line((40, y), (1160, y), color=INK, width=1)
+    for x in (220, 480, 740, 960):
+        figure.line((x, 520), (x, 795), color=INK, width=1)
+    for x, label in (
+        (130, "Policy row"),
+        (350, "Active structural carrier"),
+        (610, "Fairness flag"),
+        (850, "Required receipt"),
+        (1060, "Fail-closed rule"),
+    ):
+        figure.text(x, 550, label, size=16, bold=True, anchor="middle")
+    rows = (
+        ("LRU", "CSR edge array", "STRUCTURAL_FLOWTHROUGH",
+         "positive structural access", "reject zero activity"),
+        ("GRASP", "CSR edge array", "STRUCTURAL_FLOWTHROUGH",
+         "positive no-allocate", "same workload cell"),
+        ("P-OPT", "CSR + matrix traffic", "STRUCTURAL_FLOWTHROUGH",
+         "positive structural event", "matrix bytes retained"),
+        ("ReusePlan", "record array; CSR on fallback",
+         "STRUCTURAL_FLOWTHROUGH", "backend-specific counter",
+         "carrier receipt must match"),
     )
-    figure.card(
-        420, 512, 360, 245, "Packed-substitute ReusePlan",
-        (
-            "runtime uses record, not edge ID",
-            "active carrier range = record array",
-            "fallback paths publish CSR instead",
-            "carrier selection is fail-closed",
-        ),
-        role="state",
-    )
-    figure.card(
-        816, 512, 360, 245, "Backend evidence",
-        (
-            "cache_sim: structural access count",
-            "gem5: no-allocate miss targets",
-            "Sniper: structural read/fill counts",
-            "translated Sniper mode is rejected",
-        ),
-        role="verify",
+    for row, values in enumerate(rows):
+        y = 602 + row * 55
+        colors = (INK, BLUE, AMBER, PURPLE, RED)
+        for x, value, color in zip((56, 236, 496, 756, 976), values, colors):
+            figure.text(x, y, value, size=16, color=color,
+                        mono=value == "STRUCTURAL_FLOWTHROUGH")
+    figure.text(
+        40, 835,
+        "cache_sim: access count | gem5: no-allocate targets | "
+        "Sniper: read/fill counts; translated mode rejected",
+        size=16, color=PURPLE, max_width=1120,
     )
     figure.arrow(
-        ((110, 845), (1090, 845)),
+        ((110, 910), (1090, 910)),
         kind="dependency",
         label="compare policies only after active structural carriers are matched",
         color=RED,
-        label_at=(600, 830),
+        label_at=(600, 895),
     )
     save(figure, generated)
 
@@ -1117,67 +1364,133 @@ def instruction_family(generated: list[tuple[Path, Path]]) -> None:
         "1", "CONFIGURE EXECUTION CONTEXT", "software writes format, current epoch, and context CSRs",
         138, role="state",
     )
-    figure.card(
-        24, 180, 360, 205, "Record-format CSR",
-        ("id bits", "epoch bits", "compact decode widths", "configured before ROI"),
-        role="state",
-        mono_body=True,
+    figure.rect(40, 180, 1120, 190, role="neutral", radius=0)
+    for y in (225, 273, 321):
+        figure.line((40, y), (1160, y), color=INK, width=1)
+    for x in (270, 570, 860):
+        figure.line((x, 180), (x, 370), color=INK, width=1)
+    for x, label in (
+        (155, "Architectural CSR"),
+        (420, "Fields"),
+        (715, "Software update"),
+        (1010, "Consumer"),
+    ):
+        figure.text(x, 210, label, size=16, bold=True, anchor="middle")
+    csr_rows = (
+        ("record format", "id_bits | epoch_bits", "before ROI",
+         "compact record-load execution"),
+        ("current epoch", "quantized traversal position", "epoch boundary",
+         "ReuseBind Request"),
+        ("context", "nonzero execution identity", "execution boundary",
+         "MSHR merge + LLC validation"),
     )
-    figure.card(
-        420, 180, 360, 205, "Current-epoch CSR",
-        ("quantized traversal position", "updated at epoch boundaries", "reused inside one epoch", "carried on property Request"),
-        role="compute",
-    )
-    figure.card(
-        816, 180, 360, 205, "Context CSR",
-        ("nonzero execution identity", "separates overlapping contexts", "required for valid ReuseBind", "checked during MSHR merge"),
-        role="verify",
-    )
+    for row, values in enumerate(csr_rows):
+        y = 257 + row * 48
+        for x, value in zip((56, 286, 586, 876), values):
+            figure.text(x, y, value, size=16, mono=row == 0)
 
     figure.section(
         "2", "RECORD-LOAD FAMILY", "rs1 is a record address; result depends on the form",
         430, role="transfer",
     )
-    figure.card(
-        24, 472, 550, 205, "ecg.plan.load*",
-        (
-            "ordinary cacheable placement",
-            "general: rd = canonical 64-bit plan",
-            "weighted: rs2 = destination",
-            "weighted: rd = 32-bit sidecar",
-            "no compact Plan-load encoding",
-        ),
-        role="data",
-        mono_body=True,
+    figure.rect(40, 490, 180, 120, role="data", radius=0)
+    figure.text(130, 525, "custom-0", size=17, bold=True,
+                color=BLUE, anchor="middle")
+    figure.text(130, 557, "record address", size=16, anchor="middle")
+    figure.text(130, 585, "in rs1", size=16, mono=True, anchor="middle")
+    figure.diamond(350, 550, 190, 125, role="compute")
+    figure.text(350, 540, "record-load", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(350, 570, "role decode", size=16, anchor="middle")
+    figure.arrow(
+        ((190, 550), (255, 550)),
+        kind="control", label="custom-0", color=BLUE,
     )
-    figure.card(
-        600, 472, 576, 205, "ecg.flow.load*",
+
+    figure.rect(500, 475, 290, 90, role="data", radius=0)
+    figure.text(515, 507, "ecg.plan.load*", size=17, bold=True,
+                mono=True, color=BLUE)
+    figure.text(515, 538, "ordinary placement -> canonical rd", size=16)
+    figure.rect(500, 585, 290, 90, role="transfer", radius=0)
+    figure.text(515, 617, "ecg.flow.load*", size=17, bold=True,
+                mono=True, color=AMBER)
+    figure.text(515, 648, "ECG_FLOWTHROUGH -> canonical rd", size=16)
+    figure.rect(835, 475, 325, 200, role="state", radius=0)
+    figure.text(852, 507, "Transport forms", size=17, bold=True,
+                color=PURPLE)
+    figure.lines(
+        852, 540,
         (
-            "sets ECG_FLOWTHROUGH on record Request",
-            "general unweighted: canonical plan in rd",
-            "compact unweighted: 4-byte load, widened",
-            "weighted: rd = 32-bit sidecar",
-            "compact unweighted is FlowThrough-only",
+            "general: 64-bit ReusePlan",
+            "compact: 4-byte load, widened",
+            "weighted: sidecar32 + dest",
+            "compact: FlowThrough only",
+            "no compact Plan-load",
         ),
-        role="transfer",
-        mono_body=True,
+        mono=True, max_width=292,
+    )
+    figure.arrow(
+        ((430, 525), (500, 525)),
+        kind="control", label="ecg.plan.load*", color=BLUE,
+    )
+    figure.arrow(
+        ((430, 600), (500, 630)),
+        kind="control", label="ecg.flow.load*", color=AMBER,
     )
 
     figure.section(
         "3", "PROPERTY-LOAD FAMILY", "the ReusePlan result is an explicit source operand",
         722, role="compute",
     )
-    figure.card(
-        24, 764, 550, 225, "ecg.bind.load.*",
-        ("rs1 = software-computed property address", "rs2 = canonical ReusePlan", "result = typed U32 / S32 / U64 / F32 value", "one ordinary property memory request"),
-        role="compute",
-        mono_body=True,
+    figure.rect(40, 790, 210, 120, role="state", radius=0)
+    figure.text(145, 825, "physical rd", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(145, 857, "canonical ReusePlan", size=16,
+                anchor="middle")
+    figure.text(145, 885, "becomes property rs2", size=16,
+                mono=True, anchor="middle")
+    figure.diamond(390, 850, 190, 125, role="compute")
+    figure.text(390, 840, "property-load", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(390, 870, "address form", size=16, anchor="middle")
+    figure.arrow(
+        ((230, 850), (295, 850)),
+        kind="dependency", label="physical rd",
+        color=PURPLE,
     )
-    figure.card(
-        600, 764, 576, 225, "ecg.bind.iload.*",
-        ("rs1 = property-array base", "rs2 carries destination + ReusePlan", "EA = base + destination * element size", "indexed address generation and binding are fused"),
-        role="compute",
-        mono_body=True,
+
+    figure.rect(535, 775, 285, 115, role="compute", radius=0)
+    figure.text(552, 808, "ecg.bind.load.*", size=17, bold=True,
+                mono=True, color=GREEN)
+    figure.text(552, 840, "rs1 = computed property address", size=16)
+    figure.text(552, 870, "rs2 = ReusePlan", size=16, mono=True)
+    figure.rect(535, 915, 285, 115, role="compute", radius=0)
+    figure.text(552, 948, "ecg.bind.iload.*", size=17, bold=True,
+                mono=True, color=GREEN)
+    figure.text(552, 980, "rs1 = property-array base", size=16)
+    figure.text(552, 1010, "EA = base + destination*size", size=16,
+                mono=True)
+    figure.rect(865, 790, 295, 225, role="data", radius=0)
+    figure.text(882, 824, "Shared memory semantics", size=17,
+                bold=True, color=BLUE)
+    figure.lines(
+        882, 858,
+        (
+            "one ordinary property Request",
+            "typed ReuseBind on Request",
+            "result: U32 / S32 / U64 / F32",
+            "FlowThrough is never attached",
+            "native order / replay / retire",
+        ),
+        max_width=260,
+    )
+    figure.arrow(
+        ((475, 825), (535, 832)),
+        kind="control", label="ecg.bind.load.*", color=GREEN,
+    )
+    figure.arrow(
+        ((485, 875), (510, 972), (535, 972)),
+        kind="control", label="ecg.bind.iload.*", color=GREEN,
     )
     figure.arrow(
         ((160, 1055), (1040, 1055)),
@@ -1195,256 +1508,355 @@ def o3_pipeline(
     figure = Figure(
         ROOT,
         FigureTarget("risc-v-instruction-path", "02", "o3-request-pipeline"),
-        "Two ECG loads through gem5 O3 and the cache hierarchy",
+        "Graph/CSR-guided loads on the gem5 O3 datapath",
         f"Adjacency entry {fx.tracked_source_reader}->{fx.tracked_source_dest} "
         f"maps to internal {fx.tracked_reader}->{fx.tracked_dest}, property "
         f"0x{fx.property_address:08X}, and LLC line 0x{fx.property_line:08X}.",
-        "Five compact bands separate the instruction contract, two explicit "
-        "frontend lanes, the I0 record Request and response, the dependent I1 "
-        "property Request and response, and in-order ROB retirement.",
-        1715,
+        "The diagram connects an outgoing graph adjacency and its CSR/ReusePlan "
+        "arrays to the O3 load datapath: Fetch, Decode, Rename, ROB, issue "
+        "queue, physical register file, AGU, LSQ, L1D, load-data writeback, "
+        "dependency wakeup, request-specific cache state, and in-order commit.",
+        1900,
     )
 
     figure.section(
-        "1", "INSTRUCTION AND REGISTER CONTRACT",
-        "I0 produces the physical-register operand consumed by I1",
+        "1", "GEM5 O3 LOAD DATAPATH",
+        "shared hardware; amber=I0, green=I1",
         138, role="transfer",
     )
-    contract_x = (24, 94, 350, 650, 895, 1176)
-    figure.rect(24, 180, 1152, 195, role="neutral", radius=0)
-    figure.rect(24, 225, 1152, 75, role="transfer", stroke_width=1, radius=0)
-    figure.rect(24, 300, 1152, 75, role="compute", stroke_width=1, radius=0)
-    for x in contract_x[1:-1]:
-        figure.line((x, 180), (x, 375), color=INK, width=1)
-    headers = (
-        (59, "Lane"),
-        (222, "Instruction"),
-        (500, "Source operands"),
-        (772, "Destination"),
-        (1035, "Request semantics"),
+    figure.circle(45, 200, 16, fill=AMBER, stroke=AMBER)
+    figure.text(45, 206, "I0", size=16, bold=True,
+                color=WHITE, anchor="middle")
+    figure.text(
+        72, 206,
+        f"flow.load.compact: record[{fx.tracked_reader}->"
+        f"{fx.tracked_dest}] -> P17",
+        size=16, mono=True, color=AMBER, max_width=500,
     )
-    for x, label in headers:
-        figure.text(x, 210, label, size=16, bold=True, anchor="middle")
-    figure.text(59, 269, "I0", size=17, bold=True,
+    figure.circle(650, 200, 16, fill=GREEN, stroke=GREEN)
+    figure.text(650, 206, "I1", size=16, bold=True,
+                color=WHITE, anchor="middle")
+    figure.text(
+        677, 206,
+        f"bind.load.u32: rs1=0x{fx.property_address:08X}, "
+        "rs2=P17 -> P21",
+        size=16, mono=True, color=GREEN, max_width=475,
+    )
+
+    figure.rect(24, 230, 1152, 555, role="neutral", radius=0)
+
+    # Dynamic instructions use the same physical pipeline. Draw their paths
+    # before the stage symbols so only the inter-stage segments remain visible.
+    figure.arrow(
+        ((40, 500), (1160, 500)),
+        kind="control", label="I0", color=AMBER, width=3,
+    )
+    figure.arrow(
+        ((40, 535), (1160, 535)),
+        kind="control", label="I1", color=GREEN, width=3,
+    )
+
+    # ROB and commit path.
+    figure.rect(330, 260, 520, 85, role="verify", radius=0)
+    for x in range(370, 850, 40):
+        figure.line((x, 260), (x, 345), color=RED, width=1)
+    figure.text(590, 295, "ROB", size=18, bold=True,
+                color=RED, anchor="middle")
+    figure.text(590, 325, "ROB0: I0 | ROB1: I1", size=16, anchor="middle")
+    figure.rect(950, 270, 180, 65, role="verify", radius=0)
+    figure.text(1040, 298, "Commit", size=17, bold=True,
+                color=RED, anchor="middle")
+    figure.text(1040, 323, "I0 before I1", size=16, anchor="middle")
+
+    # Main load datapath.
+    figure.rect(40, 440, 95, 110, role="data", radius=0)
+    figure.text(87, 468, "Fetch", size=17, bold=True,
+                color=BLUE, anchor="middle")
+    figure.text(87, 500, "I0", size=16, bold=True,
                 color=AMBER, anchor="middle")
-    figure.text(110, 269, "ecg.flow.load.compact", size=16, bold=True,
-                mono=True, color=AMBER)
-    figure.text(
-        366, 269,
-        f"rs1=record[int {fx.tracked_reader}->{fx.tracked_dest}]",
-        size=16, mono=True,
-    )
-    figure.text(666, 252, "P17 = ReusePlan", size=16, mono=True)
-    figure.text(
-        666, 280,
-        f"dest{fx.tracked_dest} | T{fx.line_tier} | "
-        f"e{fx.first_epoch} | e{fx.second_epoch}",
-        size=16, mono=True,
-    )
-    figure.text(911, 252, "4-byte record Request", size=16, mono=True)
-    figure.text(911, 280, "ECG_FLOWTHROUGH=1", size=16, mono=True)
-
-    figure.text(59, 344, "I1", size=17, bold=True,
+    figure.text(87, 535, "I1", size=16, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(110, 344, "ecg.bind.load.u32", size=16, bold=True,
-                mono=True, color=GREEN)
-    figure.text(
-        366, 327, f"rs1=0x{fx.property_address:08X}", size=16, mono=True
+
+    figure.rect(165, 440, 100, 110, role="data", radius=0)
+    figure.text(215, 468, "Decode", size=17, bold=True,
+                color=BLUE, anchor="middle")
+    figure.text(215, 500, "flow", size=16, anchor="middle")
+    figure.text(215, 535, "bind", size=16, anchor="middle")
+
+    figure.rect(295, 425, 125, 140, role="state", radius=0)
+    figure.text(357, 456, "Rename", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(357, 490, "I0 rd->P17", size=16, mono=True,
+                anchor="middle")
+    figure.text(357, 522, "I1 rs2=P17", size=16, mono=True,
+                anchor="middle")
+    figure.text(357, 552, "I1 rd->P21", size=16, mono=True,
+                anchor="middle")
+
+    figure.queue(455, 435, 140, 120, role="state")
+    figure.text(525, 463, "Issue / select", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(525, 500, "I0 request=1", size=16, anchor="middle")
+    figure.text(525, 535, "I1 waits P17", size=16, anchor="middle")
+
+    figure.table(635, 415, 150, 160, 3, role="data")
+    figure.text(710, 446, "Physical regs", size=17, bold=True,
+                color=BLUE, anchor="middle")
+    figure.text(710, 500, "P17 ReusePlan", size=16, mono=True,
+                anchor="middle")
+    figure.text(710, 553, "P21 property", size=16, mono=True,
+                anchor="middle")
+
+    figure.diamond(850, 495, 100, 110, role="compute")
+    figure.text(850, 490, "AGU", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(850, 520, "EA", size=16, anchor="middle")
+
+    figure.table(925, 400, 145, 190, 4, role="state")
+    for x in range(943, 1070, 18):
+        figure.line((x, 400), (x, 438), color=PURPLE, width=1)
+    figure.text(997, 429, "LSQ", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(997, 476, "LQ0 record", size=16, anchor="middle")
+    figure.text(997, 523, "LQ1 property", size=16, anchor="middle")
+    figure.text(997, 570, "order / replay", size=16, anchor="middle")
+
+    figure.rect(1100, 440, 70, 110, role="data", radius=0)
+    figure.text(1135, 478, "L1D", size=17, bold=True,
+                color=BLUE, anchor="middle")
+    figure.text(1135, 515, "tag", size=16, anchor="middle")
+    figure.text(1135, 540, "data", size=16, anchor="middle")
+
+    # Allocation, completion, response, and dependency feedback.
+    figure.arrow(
+        ((357, 425), (357, 375), (430, 375), (430, 345)),
+        kind="control", label="ROB allocation", color=PURPLE,
+        label_at=(445, 370), label_anchor="start",
     )
-    figure.text(366, 355, "rs2=P17 (waits for I0)", size=16, mono=True)
-    figure.text(
-        666, 344, f"P21 = property[{fx.tracked_dest}]",
-        size=16, mono=True,
+    figure.arrow(
+        ((710, 415), (710, 350), (700, 350), (700, 345)),
+        kind="control", label="ROB completion", color=BLUE,
+        label_at=(720, 390), label_anchor="start",
     )
-    figure.text(911, 327, "property Request", size=16, mono=True)
-    figure.text(911, 355, "ReuseBind; FlowThrough=0", size=16, mono=True)
+    figure.arrow(
+        ((850, 302), (950, 302)),
+        kind="control", label="in-order commit", color=RED,
+        label_at=(900, 325),
+    )
+    figure.arrow(
+        ((1135, 550), (1135, 700), (785, 700), (785, 575)),
+        kind="transfer", label="load-data response",
+        cadence="per completed load", color=BLUE,
+        label_at=(960, 690),
+    )
+    figure.arrow(
+        ((635, 548), (615, 548), (615, 650), (525, 650), (525, 555)),
+        kind="dependency", label="P17 wakes I1", color=PURPLE,
+        label_at=(570, 640),
+    )
+    figure.text(
+        600, 750,
+        "Fetch -> Decode -> Rename -> IEW {issue, register read, AGU, LSQ, "
+        "writeback} -> Commit",
+        size=16, bold=True, color=INK, anchor="middle", max_width=1080,
+    )
 
     figure.section(
-        "2", "TWO O3 INSTRUCTION LANES",
-        "Fetch | Decode | Rename | IEW; I1 waits for P17",
-        420, role="compute",
+        "2", "GRAPH, CSR, AND EDGE-ALIGNED REUSEPLAN",
+        "fixture row u=4 maps to internal CSR row u=8",
+        825, role="data",
     )
-    stage_x = (24, 100, 320, 540, 850, 1176)
-    figure.rect(24, 462, 1152, 288, role="neutral", radius=0)
-    figure.rect(24, 507, 1152, 113, role="transfer", stroke_width=1, radius=0)
-    figure.rect(24, 620, 1152, 113, role="compute", stroke_width=1, radius=0)
-    for x in stage_x[1:-1]:
-        figure.line((x, 462), (x, 750), color=INK, width=1)
-    for x, label in (
-        (62, "Lane"),
-        (210, "Fetch"),
-        (430, "Decode"),
-        (695, "Rename / dispatch"),
-        (1013, "IEW issue gate"),
-    ):
-        figure.text(x, 492, label, size=16, bold=True, anchor="middle")
+    figure.rect(24, 867, 1152, 328, role="neutral", radius=0)
+    figure.text(42, 897, "Outgoing row u=4",
+                size=17, bold=True, color=BLUE)
+
+    graph_center = (140, 1040)
+    graph_neighbors = {
+        1: (55, 945, 4),
+        2: (115, 920, 3),
+        3: (185, 920, 2),
+        5: (255, 950, 1),
+        7: (300, 1040, 5),
+    }
+    for vertex, (x, y, weight) in graph_neighbors.items():
+        if vertex == 7:
+            figure.arrow(
+                ((graph_center[0] + 24, graph_center[1]), (x - 24, y)),
+                kind="model-edge", color=RED, width=3,
+            )
+        else:
+            figure.line(graph_center, (x, y), color=GRAY, width=2)
+        figure.circle(x, y, 22, fill=WHITE,
+                      stroke=RED if vertex == 7 else BLUE)
+        figure.text(x, y + 6, str(vertex), size=16, bold=True,
+                    anchor="middle")
+        wx = (graph_center[0] + x) / 2
+        wy = (graph_center[1] + y) / 2 - 8
+        figure.text(wx, wy, f"w{weight}", size=16, color=GRAY,
+                    anchor="middle")
+    figure.circle(graph_center[0], graph_center[1], 24,
+                  fill=AMBER_MATTE, stroke=AMBER)
+    figure.text(graph_center[0], graph_center[1] + 6, "4",
+                size=16, bold=True, anchor="middle")
+    figure.text(185, 1090, "tracked adjacency (4,7), weight 5",
+                size=16, bold=True, color=RED, anchor="middle")
+    figure.text(42, 1168, "N_out_fixture(4) = {1, 2, 3, 5, 7}",
+                size=16, mono=True, color=BLUE)
+
+    figure.text(390, 897, "Internal CSR row u=8 and aligned ReusePlan",
+                size=17, bold=True, color=BLUE)
+    figure.text(500, 925, "row_ptr[8]=14; row_ptr[9]=19",
+                size=16, mono=True)
+    cell_x = (500, 620, 740, 860, 980)
+    cell_centers = tuple(x + 60 for x in cell_x)
+    for center, edge_pos in zip(cell_centers, range(14, 19)):
+        figure.text(center, 954, str(edge_pos), size=16, color=GRAY,
+                    anchor="middle")
+    for row_y, role in ((968, "data"), (1013, "neutral"), (1058, "state")):
+        for index, x in enumerate(cell_x):
+            figure.rect(
+                x, row_y, 120, 45 if row_y < 1058 else 70,
+                role="transfer" if index == 4 else role,
+                stroke_width=1, radius=0,
+            )
+    figure.text(390, 996, "col_idx", size=16, bold=True, mono=True)
+    figure.text(390, 1041, "weight", size=16, bold=True, mono=True)
+    figure.text(390, 1097, "ReusePlan", size=16, bold=True, mono=True)
+    for center, value in zip(cell_centers, (3, 6, 7, 11, 18)):
+        figure.text(center, 996, str(value), size=16, mono=True,
+                    anchor="middle")
+    for center, value in zip(cell_centers, (4, 3, 2, 1, 5)):
+        figure.text(center, 1041, str(value), size=16, mono=True,
+                    anchor="middle")
+    for center, edge_pos in zip(cell_centers[:-1], range(14, 18)):
+        figure.text(center, 1097, f"RP{edge_pos}", size=16, mono=True,
+                    color=GRAY, anchor="middle")
+    figure.text(cell_centers[-1], 1085, "dest18 | T1", size=16,
+                bold=True, mono=True, color=AMBER, anchor="middle")
+    figure.text(cell_centers[-1], 1115, "e11 | e15", size=16,
+                bold=True, mono=True, color=AMBER, anchor="middle")
+    figure.text(
+        390, 1148,
+        "edge_pos 18: fixture (4,7) -> internal (8,18)",
+        size=16, mono=True, color=RED,
+    )
+    figure.text(
+        390, 1178,
+        f"I0 loads ReusePlan[18]; I1 address = "
+        f"0x{fx.property_address - fx.tracked_dest * fx.property_element_bytes:08X} "
+        f"+ 18*4 = 0x{fx.property_address:08X}",
+        size=16, mono=True, color=PURPLE, max_width=755,
+    )
+
+    figure.section(
+        "3", "TWO REQUESTS FROM THE LSQ",
+        "I0 completes before P17 wakes I1",
+        1235, role="compute",
+    )
+    figure.rect(24, 1277, 1152, 340, role="neutral", radius=0)
+    request_columns = (
+        (100, "LSQ"),
+        (320, "D-TLB + private caches"),
+        (540, "MSHR"),
+        (760, "LLC"),
+        (1000, "Response / WB"),
+    )
+    for x, label in request_columns:
+        figure.text(x, 1310, label, size=16, bold=True, anchor="middle")
+        figure.line((x, 1325), (x, 1585), color=GRAY, width=1)
+
     figure.arrow(
-        ((112, 606), (1155, 606)),
-        kind="control", label="I0", color=AMBER, width=2.5,
+        ((70, 1360), (1120, 1360)),
+        kind="transfer", label="I0 record Request",
+        cadence="per adjacency entry", color=AMBER, width=3,
+        label_at=(600, 1348),
     )
     figure.arrow(
-        ((112, 719), (1155, 719)),
-        kind="control", label="I1", color=GREEN, width=2.5,
+        ((70, 1500), (1120, 1500)),
+        kind="transfer", label="I1 property Request + ReuseBind",
+        cadence="per governed property load", color=BLUE, width=3,
+        label_at=(600, 1488),
     )
-    figure.text(62, 554, "I0", size=17, bold=True,
+    for x in (100, 320, 540, 760, 1000):
+        figure.circle(x, 1360, 9, fill=WHITE, stroke=AMBER)
+        figure.circle(x, 1500, 9, fill=WHITE, stroke=BLUE)
+
+    figure.text(45, 1366, "I0", size=17, bold=True,
                 color=AMBER, anchor="middle")
-    figure.text(62, 583, "record", size=16, color=AMBER, anchor="middle")
-    figure.text(116, 548, "I0 in fetch bundle", size=16)
-    figure.text(116, 578, "program order", size=16)
-    figure.text(336, 548, "custom-0", size=16, bold=True)
-    figure.text(336, 578, "compact record load", size=16)
-    figure.text(556, 548, "rd -> P17", size=16, mono=True)
-    figure.text(556, 578, "allocate ROB0 + LQ0", size=16)
-    figure.text(866, 548, "rs1 ready", size=16, mono=True)
-    figure.text(866, 578, "issue I0", size=16, bold=True, color=AMBER)
+    figure.text(100, 1395, "4-byte record", size=16,
+                color=AMBER, anchor="middle")
+    figure.text(100, 1422, "FlowThrough=1", size=16,
+                color=AMBER, anchor="middle")
+    figure.text(320, 1395, "normal lookup/hit", size=16, anchor="middle")
+    figure.text(540, 1395, "record-block MSHR", size=16, anchor="middle")
+    figure.text(760, 1395, "hit normal; miss may", size=16, anchor="middle")
+    figure.text(760, 1422, "skip LLC allocation", size=16, anchor="middle")
+    figure.text(1000, 1395, "widen compact record", size=16, anchor="middle")
+    figure.text(1000, 1422, "writeback P17", size=16,
+                color=AMBER, anchor="middle")
 
-    figure.text(62, 667, "I1", size=17, bold=True,
+    figure.arrow(
+        ((1000, 1422), (1000, 1455), (100, 1455), (100, 1500)),
+        kind="dependency", label="P17 wakeup", color=PURPLE,
+        label_at=(550, 1445),
+    )
+
+    figure.text(45, 1506, "I1", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(62, 696, "property", size=16, color=GREEN, anchor="middle")
-    figure.text(116, 661, "I1 follows I0", size=16)
-    figure.text(116, 691, "program order", size=16)
-    figure.text(336, 661, "custom-0", size=16, bold=True)
-    figure.text(336, 691, "computed U32 load", size=16)
-    figure.text(556, 661, "rs2 -> P17; rd -> P21", size=16, mono=True)
-    figure.text(556, 691, "allocate ROB1 + LQ1", size=16)
-    figure.text(866, 661, "wait for P17", size=16, mono=True)
-    figure.text(866, 691, "I1 remains queued", size=16, bold=True, color=GREEN)
-
-    figure.section(
-        "3", "I0 RECORD REQUEST: ISSUE TO P17 WRITEBACK",
-        "FlowThrough applies to the record Request only",
-        790, role="transfer",
+    figure.text(100, 1535, "4-byte U32", size=16,
+                color=GREEN, anchor="middle")
+    figure.text(100, 1562, "ReuseBind", size=16,
+                color=GREEN, anchor="middle")
+    figure.text(320, 1535, "normal lookup/hit", size=16, anchor="middle")
+    figure.text(540, 1535, "property MSHR", size=16, anchor="middle")
+    figure.text(760, 1535, "guard + valid hit/fill", size=16, anchor="middle")
+    figure.text(
+        760, 1562, f"stamp 0x{fx.property_line:08X}",
+        size=16, mono=True, anchor="middle",
     )
-    request_x = (24, 230, 460, 680, 930, 1176)
-    figure.rect(24, 832, 1152, 253, role="neutral", radius=0)
-    for x in request_x[1:-1]:
-        figure.line((x, 832), (x, 1085), color=INK, width=1)
-    figure.line((24, 877), (1176, 877), color=INK, width=1)
-    figure.line((24, 1015), (1176, 1015), color=INK, width=1)
-    for x, label in (
-        (127, "IEW issue + AGU"),
-        (345, "LSQ Request #0"),
-        (570, "Private caches"),
-        (805, "Record MSHR + LLC"),
-        (1053, "Execute + WB"),
-    ):
-        figure.text(x, 862, label, size=16, bold=True, anchor="middle")
-    figure.lines(40, 910, ("I0 rs1 ready", "EA=record address", "issue before I1"),
-                 mono=True, max_width=174)
-    figure.lines(246, 910, ("4-byte load", "ECG_FLOWTHROUGH=1", "LQ0 tracks response"),
-                 mono=True, max_width=198)
-    figure.lines(476, 910, ("D-TLB, L1D, L2", "normal lookup and hits", "private fills normal"),
-                 max_width=188)
-    figure.lines(
-        696, 910,
-        ("record-block MSHR", "LLC hit: normal response",
-         "miss: memory fetch", "may skip LLC fill"),
-        max_width=218,
+    figure.text(
+        1000, 1535, f"property[{fx.tracked_dest}] -> P21",
+        size=16, mono=True, anchor="middle",
     )
-    figure.lines(
-        946, 910,
-        ("compact value returns", "format CSR widens", "writeback P17", "wake I1 rs2"),
-        max_width=214,
-    )
-    figure.arrow(
-        ((55, 1042), (1145, 1042)),
-        kind="transfer",
-        label="I0 record Request and response",
-        cadence="per adjacency entry",
-        color=AMBER,
-        width=2.5,
-        label_at=(600, 1073),
+    figure.text(1000, 1562, "FlowThrough=0", size=16, anchor="middle")
+    figure.text(
+        600, 1602,
+        f"ReuseBind = dest{fx.tracked_dest} | T{fx.line_tier} | "
+        f"e{fx.first_epoch}/e{fx.second_epoch} | current{fx.tracked_reader} "
+        "| context k | sequence s",
+        size=16, mono=True, color=PURPLE, anchor="middle", max_width=1080,
     )
 
     figure.section(
-        "4", "I1 PROPERTY REQUEST AND P21 WRITEBACK",
-        "P17 wakeup; ReuseBind applies to the property Request only",
-        1125, role="compute",
+        "4", "WRITEBACK, COMMIT, AND ARCHITECTURAL EFFECT",
+        "both loads retain native O3 ordering and fault behavior",
+        1655, role="verify",
     )
-    figure.rect(24, 1167, 1152, 253, role="neutral", radius=0)
-    for x in request_x[1:-1]:
-        figure.line((x, 1167), (x, 1420), color=INK, width=1)
-    figure.line((24, 1212), (1176, 1212), color=INK, width=1)
-    figure.line((24, 1350), (1176, 1350), color=INK, width=1)
-    for x, label in (
-        (127, "IEW wakeup + AGU"),
-        (345, "LSQ Request #1"),
-        (570, "Private caches"),
-        (805, "Property MSHR + LLC"),
-        (1053, "Response + WB"),
-    ):
-        figure.text(x, 1197, label, size=16, bold=True, anchor="middle")
-    figure.lines(
-        40, 1245,
-        ("rs1 address ready", "rs2=P17 ready", f"EA=0x{fx.property_address:08X}"),
-        mono=True, max_width=174,
-    )
-    figure.lines(
-        246, 1245,
-        ("4-byte U32 load", "attach ReuseBind",
-         f"dest={fx.tracked_dest} T{fx.line_tier} "
-         f"e{fx.first_epoch}/{fx.second_epoch}",
-         f"cur={fx.tracked_reader} ctx=k seq=s"),
-        mono=True, max_width=198,
-    )
-    figure.lines(
-        476, 1245,
-        ("D-TLB, L1D, L2", "normal lookup and hits", "ReuseBind preserved"),
-        max_width=188,
-    )
-    figure.lines(
-        696, 1245,
-        ("merge compatible targets", "validate destination line",
-         "on valid hit/fill", f"stamp line 0x{fx.property_line:08X}",
-         "ordinary miss allocation"),
-        max_width=218,
-    )
-    figure.lines(
-        946, 1245,
-        (f"P21=property[{fx.tracked_dest}]", "normal completion",
-         "FlowThrough=0", "value unchanged"),
-        mono=True, max_width=214,
-    )
-    figure.arrow(
-        ((55, 1377), (1145, 1377)),
-        kind="transfer",
-        label="I1 property Request + ReuseBind and response",
-        cadence="per governed property load",
-        color=BLUE,
-        width=2.5,
-        label_at=(600, 1408),
-    )
-
-    figure.section(
-        "5", "COMMIT AND ARCHITECTURAL EFFECT",
-        "Commit follows return; effects remain request-specific",
-        1460, role="verify",
-    )
-    figure.rect(24, 1502, 650, 165, role="verify", radius=0)
-    figure.line((24, 1547), (674, 1547), color=INK, width=1)
-    figure.line((24, 1602), (674, 1602), color=INK, width=1)
-    figure.line((94, 1502), (94, 1667), color=INK, width=1)
-    figure.line((390, 1502), (390, 1667), color=INK, width=1)
+    figure.rect(24, 1697, 650, 165, role="verify", radius=0)
+    figure.line((24, 1742), (674, 1742), color=INK, width=1)
+    figure.line((24, 1797), (674, 1797), color=INK, width=1)
+    figure.line((94, 1697), (94, 1862), color=INK, width=1)
+    figure.line((390, 1697), (390, 1862), color=INK, width=1)
     for x, label in (
         (59, "Lane"),
         (242, "Completion"),
         (532, "Commit"),
     ):
-        figure.text(x, 1532, label, size=16, bold=True, anchor="middle")
-    figure.text(59, 1583, "I0", size=17, bold=True,
+        figure.text(x, 1727, label, size=16, bold=True, anchor="middle")
+    figure.text(59, 1778, "I0", size=17, bold=True,
                 color=AMBER, anchor="middle")
-    figure.text(110, 1583, "P17 ready; LQ0 complete", size=16)
-    figure.text(406, 1583, "commit when ROB0 is oldest", size=16)
-    figure.text(59, 1638, "I1", size=17, bold=True,
+    figure.text(110, 1778, "P17 ready; LQ0 complete", size=16)
+    figure.text(406, 1778, "commit when ROB0 is oldest", size=16)
+    figure.text(59, 1833, "I1", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(110, 1638, "P21 ready; LQ1 complete", size=16)
-    figure.text(406, 1638, "commit after I0", size=16)
+    figure.text(110, 1833, "P21 ready; LQ1 complete", size=16)
+    figure.text(406, 1833, "commit after I0", size=16)
 
-    figure.rect(700, 1502, 476, 165, role="neutral", radius=0)
-    figure.text(716, 1532, "Request-specific effects", size=16,
+    figure.rect(700, 1697, 476, 165, role="neutral", radius=0)
+    figure.text(716, 1727, "Request-specific effects", size=16,
                 bold=True, color=PURPLE)
     figure.lines(
-        716, 1565,
+        716, 1760,
         (
             "I0 FlowThrough: record-miss LLC allocation only",
             "I1 ReuseBind: matching property-line metadata only",
@@ -1472,91 +1884,157 @@ def mshr_lifecycle(generated: list[tuple[Path, Path]]) -> None:
         "1", "REQUEST EXTENSION", "one dynamic governed property load",
         138, role="state",
     )
-    figure.card(
-        100, 180, 1000, 185, "EcgReusePlanExtension",
-        (
-            "destination | tier | epoch1 | epoch2 | epoch_count",
-            "current_epoch | context_id | dynamic sequence | conflicted",
-            "valid context requires nonzero context ID and no conflict",
-            "the extension clones with the gem5 Request",
-        ),
-        role="state",
-        mono_body=True,
+    ext_fields = (
+        ("dest", 130, "data"),
+        ("tier", 90, "transfer"),
+        ("epoch1", 120, "compute"),
+        ("epoch2", 120, "state"),
+        ("count", 90, "state"),
+        ("current", 110, "compute"),
+        ("context", 110, "verify"),
+        ("sequence", 120, "neutral"),
+        ("conflict", 110, "verify"),
+    )
+    x = 40
+    for label, width, role in ext_fields:
+        figure.rect(x, 205, width, 85, role=role, stroke_width=1, radius=0)
+        figure.text(x + width / 2, 255, label, size=16, bold=True,
+                    mono=True, anchor="middle")
+        x += width
+    figure.text(40, 330, "EcgReusePlanExtension cloned with Request",
+                size=17, bold=True, color=PURPLE)
+    figure.text(
+        560, 330,
+        "valid iff context != 0 and conflict == 0",
+        size=16, mono=True, color=RED,
     )
 
     figure.section(
         "2", "MSHR TARGET-LIST MERGE", "rebuild state whenever active targets change",
         410, role="compute",
     )
-    figure.card(
-        24, 452, 360, 245, "Compatible governed targets",
-        (
-            "same requestor",
-            "same nonzero context",
-            "newer sequence replaces payload",
-            "equal sequence: payload must match",
-        ),
-        role="compute",
+    figure.rect(40, 465, 530, 235, role="neutral", radius=0)
+    for y in (510, 558, 606, 654):
+        figure.line((40, y), (570, y), color=INK, width=1)
+    for x in (125, 245, 350, 455):
+        figure.line((x, 465), (x, 700), color=INK, width=1)
+    headers = ("target", "governed", "requestor", "context", "sequence", "alloc")
+    centers = (82, 185, 297, 402, 512)
+    figure.text(82, 495, "target", size=16, bold=True, anchor="middle")
+    figure.text(185, 495, "governed", size=16, bold=True, anchor="middle")
+    figure.text(297, 495, "requestor", size=16, bold=True, anchor="middle")
+    figure.text(402, 495, "context", size=16, bold=True, anchor="middle")
+    figure.text(512, 495, "seq / alloc", size=16, bold=True, anchor="middle")
+    rows = (
+        ("A", "yes", "cpu0", "k", "17 / false"),
+        ("B", "yes", "cpu0", "k", "18 / true"),
+        ("C", "yes/no", "cpu?", "k?", "19 / false"),
+        ("state", "compat?", "same?", "same?", "newest / OR"),
     )
-    figure.card(
-        420, 452, 360, 245, "Conflict cases",
-        (
-            "governed mixed with ungoverned target",
-            "requestor or context mismatch",
-            "invalid context",
-            "equal sequence with different payload",
-        ),
-        role="verify",
+    for row, values in enumerate(rows):
+        y = 544 + row * 48
+        for x, value in zip((82, 185, 297, 402, 512), values):
+            figure.text(x, y, value, size=16, mono=True, anchor="middle")
+
+    figure.diamond(700, 575, 210, 135, role="compute")
+    figure.text(700, 555, "compatibility", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(700, 585, "same requestor/context?", size=16,
+                anchor="middle")
+    figure.text(700, 615, "equal seq => same payload", size=16,
+                anchor="middle")
+    figure.arrow(
+        ((535, 575), (595, 575)),
+        kind="control", label="target", color=PURPLE,
     )
-    figure.card(
-        816, 452, 360, 245, "Independent allocation state",
-        (
-            "each target carries allocOnFill",
-            "FlowThrough target contributes false",
-            "ordinary target contributes true",
-            "TargetList combines them with OR",
-        ),
-        role="transfer",
+    figure.rect(845, 465, 315, 105, role="state", radius=0)
+    figure.text(862, 500, "selected extension", size=17, bold=True,
+                color=PURPLE)
+    figure.text(862, 535, "newest compatible sequence", size=16)
+    figure.rect(845, 595, 315, 105, role="verify", radius=0)
+    figure.text(862, 630, "conflict state", size=17, bold=True,
+                color=RED)
+    figure.text(862, 665, "mixed / mismatch / invalid", size=16)
+    figure.arrow(
+        ((785, 545), (845, 520)),
+        kind="control", label="selected extension", color=GREEN,
+    )
+    figure.arrow(
+        ((780, 605), (845, 645)),
+        kind="control", label="conflict state", color=RED,
+    )
+    figure.text(
+        600, 710,
+        "allocOnFill = OR(target allocOnFill); independent of ReuseBind validity",
+        size=16, bold=True, mono=True, color=AMBER, anchor="middle",
+        max_width=1080,
     )
 
     figure.section(
         "3", "RESPONSE AND LLC ACCEPTANCE", "conflict never becomes a valid line stamp",
         742, role="verify",
     )
-    figure.card(
-        24, 784, 550, 245, "Downstream response",
-        (
-            "selected newest extension is copied to response Request",
-            "conflict marker propagates if any merge rule failed",
-            "serviceable/deferred target changes rebuild merge state",
-            "deallocation resets MSHR metadata state",
-        ),
-        role="state",
+    figure.rect(40, 800, 220, 105, role="state", radius=0)
+    figure.text(150, 835, "response Request", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(150, 870, "selected ext + conflict", size=16,
+                anchor="middle")
+    figure.diamond(390, 852, 190, 125, role="verify")
+    figure.text(390, 840, "conflicted?", size=17, bold=True,
+                color=RED, anchor="middle")
+    figure.text(390, 872, "reject if yes", size=16, anchor="middle")
+    figure.diamond(650, 852, 210, 125, role="compute")
+    figure.text(650, 838, "destination line", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(650, 870, "matches access?", size=16, anchor="middle")
+    figure.rect(820, 800, 330, 105, role="state", radius=0)
+    figure.text(985, 832, "LLC line metadata", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(985, 865, "tier | e1 | e2 | context | valid",
+                size=16, mono=True, anchor="middle")
+    figure.arrow(
+        ((235, 852), (295, 852)),
+        kind="control", label="response Request", color=PURPLE,
     )
-    figure.card(
-        600, 784, 576, 245, "LLC hit or fill",
-        (
-            "reject conflicted extension",
-            "map destination through property region and element size",
-            "accept only when destination line equals accessed line",
-            "store tier, epochs, context, and live-stamp validity",
-        ),
-        role="verify",
+    figure.arrow(
+        ((485, 852), (545, 852)),
+        kind="control", label="conflicted?", color=GREEN,
+    )
+    figure.arrow(
+        ((755, 852), (820, 852)),
+        kind="control", label="destination line", color=GREEN,
+    )
+    figure.text(
+        600, 950,
+        "serviceable/deferred target changes rebuild merge state; "
+        "deallocation resets MSHR ECG state",
+        size=16, color=RED, anchor="middle", max_width=1080,
     )
 
     figure.section(
         "4", "LINE LIFETIME", "metadata is advisory; data correctness stays architectural",
         1074, role="neutral",
     )
-    figure.card(
-        100, 1116, 1000, 170, "After acceptance",
-        (
-            "a later governed hit may refresh the metadata",
-            "ordinary recency/RRIP state continues to evolve",
-            "invalidation clears every ECG field and stamp-valid bit",
-            "eviction discards metadata with the line; property bytes are never modified",
-        ),
-        role="neutral",
+    lifetime_y = 1180
+    figure.arrow(
+        ((90, lifetime_y), (1110, lifetime_y)),
+        kind="control", label="line metadata lifetime", color=PURPLE,
+        label_at=(600, 1165),
+    )
+    for x, title, body, color in (
+        (140, "accept", "valid hit/fill", GREEN),
+        (430, "refresh", "later governed hit", BLUE),
+        (720, "evolve", "native RRPV/recency", PURPLE),
+        (1010, "clear", "invalidate or evict", RED),
+    ):
+        figure.circle(x, lifetime_y, 14, fill=WHITE, stroke=color)
+        figure.text(x, 1225, title, size=17, bold=True,
+                    color=color, anchor="middle")
+        figure.text(x, 1255, body, size=16, anchor="middle")
+    figure.text(
+        600, 1315,
+        "property bytes are never modified by ReuseBind metadata",
+        size=16, bold=True, color=RED, anchor="middle",
     )
     save(figure, generated)
 
@@ -1713,23 +2191,43 @@ def checked_walkthrough(
         "the compact record becomes an explicit rs2 operand",
         885, role="compute",
     )
-    pipeline_x = (40, 330, 620, 910)
-    pipeline_cards = (
-        ("Record load", ("ecg.flow.load", ".compact", f"record[int {fx.tracked_reader}->{fx.tracked_dest}]", "rd = canonical plan"), "transfer"),
-        ("Rename + issue", ("rd -> physical reg", "property reads rs2", "wait for rs1 + rs2"), "state"),
-        ("ecg.bind.load.u32", (f"rs1 = 0x{fx.property_address:08X}", "rs2 = ReusePlan", "uint32 result"), "compute"),
-        ("LSQ Request", (f"dest={fx.tracked_dest} tier={fx.line_tier}", f"epochs={fx.first_epoch},{fx.second_epoch}", f"current={current} context=k", "sequence=s"), "state"),
+    figure.arrow(
+        ((55, 1050), (1145, 1050)),
+        kind="dependency", label="instruction operand / Request state",
+        color=PURPLE, width=3,
     )
-    for x1, x2 in zip(pipeline_x, pipeline_x[1:]):
-        figure.arrow(
-            ((x1 + 230, 1055), (x2, 1055)),
-            kind="dependency",
-            label="instruction operand / Request state",
-            color=PURPLE,
-            width=2.5,
-        )
-    for x, (title, body, role) in zip(pipeline_x, pipeline_cards):
-        figure.card(x, 945, 230, 220, title, body, role=role, mono_body=True)
+    figure.table(40, 950, 190, 160, 3, role="transfer")
+    figure.text(135, 982, "Record array", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(135, 1030, f"record[{fx.tracked_reader}->{fx.tracked_dest}]",
+                size=16, mono=True, anchor="middle")
+    figure.text(135, 1080, "4-byte compact", size=16, anchor="middle")
+    figure.diamond(330, 1030, 150, 130, role="transfer")
+    figure.text(330, 1015, "flow.load", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(330, 1047, "widen", size=16, anchor="middle")
+    figure.table(455, 950, 180, 160, 3, role="state")
+    figure.text(545, 982, "Physical reg", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(545, 1030, "P17 ReusePlan", size=16, mono=True,
+                anchor="middle")
+    figure.text(545, 1080, "I1 rs2 dependency", size=16,
+                anchor="middle")
+    figure.diamond(745, 1030, 160, 130, role="compute")
+    figure.text(745, 1015, "bind.load.u32", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(745, 1047, f"EA=0x{fx.property_address:08X}",
+                size=16, mono=True, anchor="middle")
+    figure.table(880, 935, 270, 190, 4, role="state")
+    figure.text(1015, 967, "LSQ Request", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(1015, 1012, f"dest={fx.tracked_dest} T{fx.line_tier}",
+                size=16, mono=True, anchor="middle")
+    figure.text(1015, 1060,
+                f"e{fx.first_epoch}/e{fx.second_epoch} current={current}",
+                size=16, mono=True, anchor="middle")
+    figure.text(1015, 1105, "context=k sequence=s", size=16,
+                mono=True, anchor="middle")
     figure.text(
         600, 1205, "C  instruction operand / Request state",
         size=16, bold=True, color=PURPLE, anchor="middle",
@@ -1739,50 +2237,42 @@ def checked_walkthrough(
         "4", "TWO REQUEST LANES THROUGH THE CACHE", "record placement and property metadata remain distinct",
         1245, role="data",
     )
-    lane_x = (40, 320, 600, 880)
-    for x1, x2 in zip(lane_x, lane_x[1:]):
-        figure.arrow(
-            ((x1 + 204 if x1 < 880 else x1 + 260, 1357), (x2, 1357)),
-            kind="transfer",
-            label="record Request",
-            cadence="per tracked edge",
-            color=AMBER,
-            width=2.5,
-        )
-    record_lane = (
-        ("Record Request", ("ECG_FLOWTHROUGH", "record address"), "transfer", 204),
-        ("Private caches", ("normal lookup", "private fill"), "data", 204),
-        ("Record-block MSHR", ("same block only", "allocOnFill=false"), "transfer", 204),
-        ("LLC record outcome", ("hit returns normally", "miss may skip LLC fill"), "verify", 260),
+    lane_nodes = ((100, "LSQ"), (360, "Private caches"),
+                  (620, "MSHR"), (900, "LLC"))
+    figure.arrow(
+        ((70, 1350), (1130, 1350)),
+        kind="transfer", label="record Request",
+        cadence="per tracked edge", color=AMBER, width=3,
+        label_at=(600, 1338),
     )
-    for x, (title, body, role, width) in zip(lane_x, record_lane):
-        figure.card(x, 1305, width, 115, title, body, role=role, mono_body=True)
-    for x1, x2 in zip(lane_x, lane_x[1:]):
-        figure.arrow(
-            ((x1 + 204 if x1 < 880 else x1 + 260, 1502), (x2, 1502)),
-            kind="transfer",
-            label="property Request + ReuseBind",
-            cadence="per tracked edge",
-            color=BLUE,
-            width=2.5,
-        )
-    property_lane = (
-        ("Property Request", ("property address", "ReuseBind ext", "allocOnFill=true"), "state", 204),
-        ("Private caches", ("normal lookup", "private fill"), "data", 204),
-        ("Property MSHR", ("same block only", "ReuseBind merge"), "state", 204),
-        (
-            "LLC property outcome",
-            (
-                "destination-line guard",
-                f"stamp T{fx.line_tier} / e{fx.first_epoch} / "
-                f"e{fx.second_epoch}",
-            ),
-            "verify",
-            260,
-        ),
+    figure.arrow(
+        ((70, 1495), (1130, 1495)),
+        kind="transfer", label="property Request + ReuseBind",
+        cadence="per tracked edge", color=BLUE, width=3,
+        label_at=(600, 1483),
     )
-    for x, (title, body, role, width) in zip(lane_x, property_lane):
-        figure.card(x, 1450, width, 115, title, body, role=role, mono_body=True)
+    for x, label in lane_nodes:
+        figure.line((x, 1305), (x, 1555), color=GRAY, width=1)
+        figure.text(x, 1295, label, size=16, bold=True, anchor="middle")
+        figure.circle(x, 1350, 9, fill=WHITE, stroke=AMBER)
+        figure.circle(x, 1495, 9, fill=WHITE, stroke=BLUE)
+    figure.text(100, 1390, "ECG_FLOWTHROUGH", size=16,
+                mono=True, color=AMBER, anchor="middle")
+    figure.text(360, 1390, "normal lookup/fill", size=16, anchor="middle")
+    figure.text(620, 1390, "record block; alloc=false",
+                size=16, anchor="middle")
+    figure.text(900, 1390, "hit normal; miss may skip fill",
+                size=16, anchor="middle")
+    figure.text(100, 1535, "ReuseBind; alloc=true", size=16,
+                color=BLUE, anchor="middle")
+    figure.text(360, 1535, "normal lookup/fill", size=16, anchor="middle")
+    figure.text(620, 1535, "property block; merge ext",
+                size=16, anchor="middle")
+    figure.text(
+        900, 1535,
+        f"guard + stamp T{fx.line_tier}/e{fx.first_epoch}/e{fx.second_epoch}",
+        size=16, anchor="middle",
+    )
     figure.text(
         600, 1580,
         "D  record Request | property Request + ReuseBind | per tracked edge",
@@ -1813,17 +2303,24 @@ def checked_walkthrough(
         f"nearest = min({d1}, {d2}) = {min(d1, d2)}; stored epochs remain absolute",
         size=16, mono=True, color=PURPLE, anchor="middle", max_width=650,
     )
-    figure.card(
-        770, 1667, 406, 250, "Later rrip_first decision",
-        (
-            "line must first be max-RRPV eligible",
-            "eligible structural line wins first",
-            "otherwise farthest stamped property wins",
-            "ReusePlan never changes the property value",
-            "this checked path is not a speedup claim",
-        ),
-        role="verify",
+    figure.diamond(860, 1745, 180, 120, role="verify")
+    figure.text(860, 1732, "max-RRPV", size=17, bold=True,
+                color=RED, anchor="middle")
+    figure.text(860, 1762, "eligible?", size=16, anchor="middle")
+    figure.diamond(1060, 1745, 180, 120, role="transfer")
+    figure.text(1060, 1732, "structural", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(1060, 1762, "candidate?", size=16, anchor="middle")
+    figure.arrow(
+        ((910, 1745), (970, 1745)),
+        kind="control", label="max-RRPV", color=RED,
     )
+    figure.text(790, 1840, "yes -> oldest structural",
+                size=16, color=AMBER)
+    figure.text(790, 1870, "else -> farthest stamped property",
+                size=16, color=PURPLE)
+    figure.text(790, 1900, "property value unchanged; no speedup claim",
+                size=16, color=RED)
     save(figure, generated)
 
 
@@ -1843,86 +2340,95 @@ def architecture_state_map(generated: list[tuple[Path, Path]]) -> None:
         "1", "SOFTWARE AND ARCHITECTURAL INPUTS", "immutable graph data is separate from live execution state",
         138, role="data",
     )
-    figure.card(
-        24, 180, 550, 225, "Memory before the ROI",
-        (
-            "CSR or weighted structural arrays",
-            "edge-aligned ReusePlan records / sidecars",
-            "property arrays",
-            "sealed graph and payload identity",
-        ),
-        role="data",
-    )
-    figure.card(
-        600, 180, 576, 225, "Architectural ECG CSRs",
-        (
-            "record format: id bits + epoch bits",
-            "current epoch: quantized traversal position",
-            "context: nonzero execution identity",
-            "updated by software at controlled boundaries",
-        ),
-        role="state",
-    )
+    figure.table(40, 190, 520, 190, 4, role="data")
+    figure.text(300, 220, "Memory image before ROI", size=17,
+                bold=True, color=BLUE, anchor="middle")
+    figure.text(56, 265, "CSR / weighted structural arrays", size=16)
+    figure.text(56, 312, "edge-aligned ReusePlan / sidecar arrays", size=16)
+    figure.text(56, 360, "property arrays + graph/payload identity", size=16)
+    figure.table(640, 190, 520, 190, 4, role="state")
+    figure.text(900, 220, "Architectural ECG CSR bank", size=17,
+                bold=True, color=PURPLE, anchor="middle")
+    figure.text(656, 265, "format: id_bits | epoch_bits", size=16,
+                mono=True)
+    figure.text(656, 312, "current: quantized traversal epoch", size=16)
+    figure.text(656, 360, "context: nonzero execution identity", size=16)
 
     figure.section(
         "2", "OUT-OF-ORDER CORE", "standard O3 structures carry one explicit dependency",
         450, role="compute",
     )
-    figure.card(
-        24, 492, 270, 245, "Frontend + rename",
-        ("custom-0 decode", "ROB allocation", "physical rd mapping", "property rs2 mapping"),
-        role="compute",
+    figure.arrow(
+        ((50, 615), (1135, 615)),
+        kind="control", label="dynamic instruction state", color=GREEN,
+        label_at=(600, 735),
     )
-    figure.card(
-        318, 492, 270, 245, "Issue queue",
-        ("record waits for address", "property waits for rs1 + rs2", "normal wakeup", "normal speculation"),
-        role="compute",
-    )
-    figure.card(
-        612, 492, 270, 245, "AGU + load queue",
-        ("record EA or property EA", "ordering + replay", "request role + size", "FlowThrough only on record"),
-        role="state",
-    )
-    figure.card(
-        906, 492, 270, 245, "Request object",
-        ("ordinary address fields", "optional ReuseBind extension", "destination + tier + epochs", "current + context + sequence"),
-        role="state",
-    )
+    figure.rect(40, 530, 150, 140, role="data", radius=0)
+    figure.text(115, 562, "Decode", size=17, bold=True,
+                color=BLUE, anchor="middle")
+    figure.text(115, 602, "custom-0", size=16, anchor="middle")
+    figure.text(115, 642, "role + width", size=16, anchor="middle")
+    figure.rect(230, 510, 170, 180, role="state", radius=0)
+    figure.text(315, 542, "Rename / ROB", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(315, 585, "I0 rd -> P17", size=16, mono=True,
+                anchor="middle")
+    figure.text(315, 625, "I1 rs2 -> P17", size=16, mono=True,
+                anchor="middle")
+    figure.text(315, 665, "ROB + LQ allocate", size=16, anchor="middle")
+    figure.queue(440, 530, 170, 140, role="compute")
+    figure.text(525, 562, "Issue / select", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(525, 605, "I0 ready", size=16, anchor="middle")
+    figure.text(525, 645, "I1 waits P17", size=16, anchor="middle")
+    figure.diamond(700, 600, 150, 150, role="compute")
+    figure.text(700, 590, "AGU", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(700, 625, "record/property EA", size=16,
+                anchor="middle")
+    figure.table(820, 505, 180, 190, 4, role="state")
+    figure.text(910, 537, "Load queue", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(910, 580, "order / replay", size=16, anchor="middle")
+    figure.text(910, 625, "role + size", size=16, anchor="middle")
+    figure.text(910, 672, "ReuseBind ext", size=16, anchor="middle")
+    figure.rect(1040, 530, 120, 140, role="state", radius=0)
+    figure.text(1100, 562, "Request", size=17, bold=True,
+                color=PURPLE, anchor="middle")
+    figure.text(1100, 602, "address", size=16, anchor="middle")
+    figure.text(1100, 642, "typed ext", size=16, anchor="middle")
 
     figure.section(
         "3", "CACHE HIERARCHY", "private caches stay ordinary; LLC state is extended",
         782, role="state",
     )
-    figure.card(
-        24, 824, 360, 245, "L1D and L2",
-        (
-            "ordinary tag/data lookup",
-            "ordinary private fills",
-            "record or property may hit here",
-            "no line-local ECG state needed",
-        ),
-        role="data",
+    figure.arrow(
+        ((60, 930), (1130, 930)),
+        kind="transfer", label="property Request + ReuseBind",
+        cadence="per governed load", color=BLUE, width=3,
+        label_at=(600, 1070),
     )
-    figure.card(
-        420, 824, 360, 245, "MSHR",
-        (
-            "target-level allocOnFill",
-            "ReuseBind merge state",
-            "newest compatible sequence",
-            "conflict propagation",
-        ),
-        role="transfer",
+    cache_nodes = (
+        (40, 850, 180, "L1D", "ordinary tags/data"),
+        (280, 850, 180, "L2", "ordinary tags/data"),
+        (520, 830, 210, "MSHR target list", "allocOnFill + merge"),
+        (790, 820, 360, "LLC replacement entry",
+         "valid | property | RRPV | recency\n"
+         "tier | e1 | e2 | count | context | stamp"),
     )
-    figure.card(
-        816, 824, 360, 245, "LLC replacement entry",
-        (
-            "valid / property / RRPV / recency",
-            "tier / two epochs / count / context",
-            "stamp-valid bit",
-            "shared victim-policy adapter",
-        ),
-        role="state",
-    )
+    for x, y, width, title, body in cache_nodes:
+        height = 180 if x >= 790 else 140
+        role = "state" if x >= 520 else "data"
+        figure.rect(x, y, width, height, role=role, radius=0)
+        figure.text(x + width / 2, y + 35, title, size=17, bold=True,
+                    color=PURPLE if role == "state" else BLUE,
+                    anchor="middle")
+        body_lines = body.split("\n")
+        for index, line in enumerate(body_lines):
+            figure.text(x + width / 2, y + 78 + index * 36, line,
+                        size=16, mono=x >= 790, anchor="middle")
+    figure.text(625, 1015, "newest compatible sequence; conflict propagates",
+                size=16, color=AMBER, anchor="middle")
     figure.arrow(
         ((130, 1145), (1070, 1145)),
         kind="transfer",
@@ -1950,91 +2456,109 @@ def evidence_boundary(generated: list[tuple[Path, Path]]) -> None:
         "1", "SIMULATOR ROLES", "do not compare absolute rates or time across simulators",
         138, role="data",
     )
-    figure.card(
-        24, 180, 360, 285, "gem5 O3",
-        (
-            "architectural execution time authority",
-            "decoded experimental RISC-V operations",
-            "exact dynamic Request extension",
-            "native LSQ, MSHR, cache, speculation",
-            "semantic output matches policy peers",
-            "guest build receipt seals binary",
-        ),
-        role="compute",
+    figure.rect(40, 190, 1120, 260, role="neutral", radius=0)
+    for x in (320, 600, 880):
+        figure.line((x, 190), (x, 450), color=INK, width=1)
+    figure.line((40, 240), (1160, 240), color=INK, width=1)
+    for x, label, color in (
+        (180, "gem5 O3", GREEN),
+        (460, "cache_sim", BLUE),
+        (740, "Sniper", PURPLE),
+        (1020, "Claim output", RED),
+    ):
+        figure.text(x, 222, label, size=17, bold=True,
+                    color=color, anchor="middle")
+    simulator_columns = (
+        ("architectural time", "exact Request binding", "native LSQ/MSHR/cache"),
+        ("functional victim logic", "off-chip traffic", "no cycle/instruction model"),
+        ("modeled cache direction", "exact indexed markers",
+         "computed fused sideband", "is diagnostic",
+         "inconsistent hints", "fail closed"),
+        ("gem5: timing speedup", "cache_sim: traffic", "Sniper: corroboration"),
     )
-    figure.card(
-        420, 180, 360, 285, "cache_sim",
-        (
-            "shared victim-policy behavior",
-            "kernel-declared graph-data accesses",
-            "functional LLC and off-chip traffic",
-            "no cycle or instruction model",
-            "selector result is only a hypothesis",
-            "structural FlowThrough access receipt",
-        ),
-        role="data",
-    )
-    figure.card(
-        816, 180, 360, 285, "Sniper",
-        (
-            "modeled cache and traffic direction",
-            "equal semantic work for scale rows",
-            "indexed path: exact per-edge markers",
-            "computed fused sideband is diagnostic",
-            "inconsistent fused hints fail closed",
-            "time is not ReuseBind speedup evidence",
-        ),
-        role="state",
-    )
+    for col, values in enumerate(simulator_columns):
+        figure.lines(56 + col * 280, 280, values, step=30, max_width=248)
 
     figure.section(
         "2", "ROW ACCEPTANCE", "a success-shaped fallback is not a valid experiment row",
         510, role="verify",
     )
-    figure.card(
-        24, 552, 550, 245, "Mechanism receipts",
+    figure.rect(40, 565, 300, 170, role="state", radius=0)
+    figure.text(190, 598, "Mechanism receipt vector", size=17,
+                bold=True, color=PURPLE, anchor="middle")
+    figure.lines(
+        58, 632,
         (
-            "requested and effective policy/mode match",
-            "active structural carrier and positive events",
-            "record width and replacement/substitution agree",
-            "P-OPT matrix and phase-two queries are active when required",
+            "requested == effective",
+            "carrier + events positive",
+            "width/substitution agree",
+            "P-OPT matrix active if required",
         ),
-        role="verify",
+        max_width=264,
     )
-    figure.card(
-        600, 552, 576, 245, "Semantic receipts",
+    figure.rect(420, 565, 300, 170, role="state", radius=0)
+    figure.text(570, 598, "Semantic receipt vector", size=17,
+                bold=True, color=PURPLE, anchor="middle")
+    figure.lines(
+        438, 632,
         (
-            "full kernel output or fixed semantic edge budget",
-            "all policy rows in one matched group agree",
-            "one failed row invalidates group timing",
-            "semantic correctness is independent of speculation counters",
+            "kernel output / edge budget",
+            "all matched policy rows agree",
+            "failed peer invalidates timing",
+            "not gated by speculation counts",
         ),
-        role="verify",
+        max_width=264,
+    )
+    figure.diamond(825, 650, 170, 125, role="verify")
+    figure.text(825, 637, "mechanism", size=17, bold=True,
+                color=RED, anchor="middle")
+    figure.text(825, 668, "AND semantic", size=16, anchor="middle")
+    figure.rect(965, 595, 195, 110, role="compute", radius=0)
+    figure.text(1062, 632, "accepted row", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(1062, 668, "eligible for claims", size=16,
+                anchor="middle")
+    figure.arrow(
+        ((340, 650), (420, 650)),
+        kind="control", label="Mechanism receipt vector",
+        color=PURPLE,
+    )
+    figure.arrow(
+        ((680, 650), (740, 650)),
+        kind="control", label="Semantic receipt vector",
+        color=PURPLE,
+    )
+    figure.arrow(
+        ((900, 650), (965, 650)),
+        kind="control", label="accepted row", color=GREEN,
     )
 
     figure.section(
         "3", "CLAIM LIMITS", "state what is omitted before interpreting a ratio",
         842, role="transfer",
     )
-    figure.card(
-        24, 884, 550, 185, "P-OPT analytic mode",
-        (
-            "reserved data ways and cumulative matrix bytes are charged",
-            "target-time matrix latency / bandwidth / queueing are omitted",
-            "popt_target_time_charged = 0 -> optimistic timing bound",
-            "frontier-kernel P-OPT rows remain diagnostic",
-        ),
-        role="transfer",
-    )
-    figure.card(
-        600, 884, 576, 185, "Publication rule",
-        (
-            "report time, total off-chip traffic, and instructions together",
-            "use same-build, same-cell baselines",
-            "exclude timing_valid_for_speedup = 0",
-            "publish final tables only after the frozen campaign completes",
-        ),
-        role="verify",
+    figure.rect(40, 895, 1120, 165, role="neutral", radius=0)
+    figure.line((600, 895), (600, 1060), color=INK, width=1)
+    figure.text(56, 928, "Analytic P-OPT boundary", size=17,
+                bold=True, color=AMBER)
+    figure.text(56, 962, "charged: reserved ways + cumulative matrix bytes",
+                size=16)
+    figure.text(56, 992, "omitted: target-time latency / bandwidth / queueing",
+                size=16)
+    figure.text(56, 1022, "popt_target_time_charged = 0 -> optimistic timing bound",
+                size=16, bold=True, mono=True, color=RED)
+    figure.text(616, 928, "Publication vector", size=17,
+                bold=True, color=RED)
+    figure.text(616, 962, "time + total off-chip traffic + instructions",
+                size=16)
+    figure.text(616, 992, "same-build, same-cell baseline; geometric mean",
+                size=16)
+    figure.text(616, 1022, "exclude timing_valid_for_speedup = 0",
+                size=16, mono=True)
+    figure.arrow(
+        ((120, 1095), (1080, 1095)),
+        kind="dependency", label="publish only after the frozen campaign",
+        color=RED, label_at=(600, 1080),
     )
     save(figure, generated)
 

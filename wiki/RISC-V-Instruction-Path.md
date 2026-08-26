@@ -38,24 +38,33 @@ Neither flag is attached to the governed property Request.
 
 ## 2. Out-of-order request path
 
-### Figure 2 — Two ECG loads through gem5 O3 and the cache hierarchy
+### Figure 2 — Graph/CSR-guided loads on the gem5 O3 datapath
 
-![Compact lane matrices tracing adjacency entry 4 to 7 through separate I0 record-load and I1 property-load paths across gem5 Fetch, Decode, Rename, IEW, LSQ, cache, MSHR, LLC, writeback, and Commit](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
+![Cross-layer architecture diagram connecting graph adjacency 4 to 7, outgoing CSR row_ptr col_idx weight and ReusePlan arrays, the gem5 O3 ROB issue queue physical registers AGU LSQ and L1D datapath, separate record and property Requests, writeback, and Commit](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
 
 **Figure 2.** Checked adjacency entry `4 -> 7` maps to internal entry
 `8 -> 18` and supplies the fixture-derived operands and addresses.
 
 The top-level grouping follows gem5 O3CPU's documented **Fetch, Decode,
-Rename, IEW, Commit** pipeline. The figure gives I0 and I1 separate frontend
-lanes, then separates the I0 record Request/response from the dependent I1
-property Request/response. IEW is expanded into issue readiness, address
-generation, LSQ Request construction, cache/MSHR/LLC access, and writeback.
-Commit appears only after the corresponding load completes. This is the gem5
-simulator architecture, not a claim about a fabricated ECG core.
+Rename, IEW, Commit** pipeline. The datapath uses conventional architecture
+notation: a segmented ROB and LSQ, an issue queue, a physical register file,
+issue-select readiness, an AGU, L1D, load-data writeback, dependency wakeup,
+and feedback to the ROB.
+The visual organization is informed by the
+[BOOM issue-unit](https://docs.boom-core.org/en/latest/sections/issue-units.html#issue-select-logic)
+and [LSU](https://docs.boom-core.org/en/latest/sections/load-store-unit.html)
+documentation, but the labeled behavior is ECG's gem5 O3 integration, not a
+BOOM implementation or a fabricated ECG core.
 
-The five numbered bands are the instruction/register contract, frontend and
-issue lanes, I0 record access through P17 writeback, I1 property access through
-P21 writeback, and in-order commit with request-specific cache effects.
+The four numbered bands connect:
+
+1. the shared physical O3 load datapath;
+2. fixture outgoing traversal at `u=4`, its mapped internal CSR row `u=8`,
+   CSR arrays (`row_ptr`, `col_idx`, and `weight`), and the edge-aligned
+   ReusePlan array;
+3. the distinct I0 record and I1 property Requests from the LSQ through
+   private caches, MSHRs, and the LLC; and
+4. writeback and in-order commit with request-specific cache effects.
 
 ### Fetch, decode, and rename
 

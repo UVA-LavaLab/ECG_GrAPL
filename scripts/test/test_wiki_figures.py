@@ -135,6 +135,13 @@ def test_generated_figure_contract_and_determinism():
     assert "validated 13 ECG wiki figures" in result.stdout
 
 
+def test_architecture_figures_do_not_regress_to_card_grids():
+    generator = (
+        ROOT / "scripts/docs/generate_ecg_figures.py"
+    ).read_text(encoding="utf-8")
+    assert "figure.card(" not in generator
+
+
 def test_retired_unmirrored_figures_are_removed():
     assert not list((ROOT / "wiki/assets").glob("*.svg"))
 
@@ -151,17 +158,20 @@ def test_architecture_figures_lock_critical_semantics():
         "reuse-plan-flowthrough-f05-flowthrough-outcomes.svg"
     ]
     assert "allocOnFill combines with OR" in flowthrough
-    assert "out-of-range candidate does not inherit the bit" in flowthrough
+    assert "out-of-range bit stays clear" in flowthrough
     mshr = figures[
         "risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg"
     ]
-    assert "governed mixed with ungoverned target" in mshr
-    assert "equal sequence: payload must match" in mshr
+    assert "yes/no" in mshr
+    assert "mixed / mismatch / invalid" in mshr
+    assert "equal seq =&gt; same payload" in mshr
     evidence = figures[
         "evaluation-methodology-f01-evidence-boundary.svg"
     ]
-    assert "computed fused sideband is diagnostic" in evidence
-    assert "inconsistent fused hints fail closed" in evidence
+    assert "computed fused sideband" in evidence
+    assert "is diagnostic" in evidence
+    assert "inconsistent hints" in evidence
+    assert "fail closed" in evidence
     assert "popt_target_time_charged = 0" in evidence
 
 
@@ -176,7 +186,8 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
     assert "Checked nine-node weighted graph" in graph
     assert "tracked adjacency 4 -&gt; 7" in graph
     assert "DEGREE-DERIVED REUSE TIER" in graph
-    assert "d_in=4 -&gt; tier 1" in graph
+    assert "v7 / int18" in graph
+    assert "min(T18=1, T20=2) = T1 (hot)" in graph
     assert graph.count('data-flow-kind="model-edge"') == 1
 
     timeline = figures[
@@ -195,55 +206,64 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
         "risc-v-instruction-path-f02-o3-request-pipeline.svg"
     ]
     for token in (
-        "ecg.flow.load.compact",
-        "ecg.bind.load.u32",
-        "P17 = ReusePlan",
-        "dest18 | T1 | e11 | e15",
+        "Graph/CSR-guided loads on the gem5 O3 datapath",
+        "flow.load.compact: record[8-&gt;18] -&gt; P17",
+        "bind.load.u32: rs1=0x80000048, rs2=P17 -&gt; P21",
         "Fetch",
-        "I0 in fetch bundle",
-        "I1 follows I0",
         "Decode",
-        "Rename / dispatch",
-        "rd -&gt; P17",
-        "rs2 -&gt; P17; rd -&gt; P21",
-        "IEW issue gate",
-        "wait for P17",
-        "I1 remains queued",
-        "LSQ Request #0",
-        "ECG_FLOWTHROUGH=1",
-        "record-block MSHR",
-        "format CSR widens",
-        "writeback P17",
-        "wake I1 rs2",
-        "LSQ Request #1",
-        "attach ReuseBind",
-        "dest=18 T1 e11/15",
-        "cur=8 ctx=k seq=s",
-        "Property MSHR + LLC",
-        "stamp line 0x80000040",
-        "FlowThrough=0",
+        "Rename",
+        "ROB",
+        "Issue / select",
+        "I0 request=1",
+        "Physical regs",
+        "AGU",
+        "LSQ",
+        "L1D",
         "Commit",
+        "I0 rd-&gt;P17",
+        "I1 rs2=P17",
+        "I1 waits P17",
+        "P17 wakes I1",
+        "load-data response",
+        "Outgoing row u=4",
+        "N_out_fixture(4) = {1, 2, 3, 5, 7}",
+        "Internal CSR row u=8 and aligned ReusePlan",
+        "row_ptr[8]=14; row_ptr[9]=19",
+        "col_idx",
+        "weight",
+        "RP14",
+        "dest18 | T1",
+        "e11 | e15",
+        "edge_pos 18: fixture (4,7) -&gt; internal (8,18)",
+        "I0 loads ReusePlan[18]",
+        "4-byte record",
+        "FlowThrough=1",
+        "D-TLB + private caches",
+        "record-block MSHR",
+        "widen compact record",
+        "4-byte U32",
+        "ReuseBind",
+        "property MSHR",
+        "stamp 0x80000040",
+        "FlowThrough=0",
         "commit when ROB0 is oldest",
         "commit after I0",
     ):
         assert token in pipeline
     assert "record-format CSR" not in pipeline
-    assert 'data-flow-label="I0 record Request and response"' in pipeline
-    assert (
-        'data-flow-label="I1 property Request + ReuseBind and response"'
-        in pipeline
-    )
+    assert 'data-flow-label="I0 record Request"' in pipeline
+    assert 'data-flow-label="I1 property Request + ReuseBind"' in pipeline
 
     walkthrough = figures[
         "property-to-cache-walkthrough-f01-checked-request.svg"
     ]
-    assert "Record-block MSHR" in walkthrough
-    assert "Property MSHR" in walkthrough
+    assert "record block; alloc=false" in walkthrough
+    assert "property block; merge ext" in walkthrough
     assert "Representative property-access pseudocode" in walkthrough
     assert "plan = ecg.flow.load.compact(record[edge_pos])  [B]" in walkthrough
     assert "value = ecg.bind.load.u32(addr, plan)  [C,D]" in walkthrough
     assert "tracked execution: adjacency 4-&gt;7 maps to internal 8-&gt;18" in walkthrough
-    assert "stamp T1 / e11 / e15" in walkthrough
+    assert "guard + stamp T1/e11/e15" in walkthrough
     assert 'data-flow-label="record Request"' in walkthrough
     assert 'data-flow-label="property Request + ReuseBind"' in walkthrough
 

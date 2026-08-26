@@ -42,41 +42,68 @@
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">DESIGN MECHANISM</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">ECG_FLOWTHROUGH is attached by ecg.flow.load*</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3"/>
-  <rect x="24" y="180" width="550" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="209" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">ReusePlan record request</text>
-  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">record can be compact, wide, or weighted sidecar</text>
-  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">request-specific flag is attached by the ISA path</text>
-  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">optional adaptive placement applies only to this stream</text>
-  <text x="40" y="311" text-anchor="start" class="sans body" fill="#27313A">purpose: avoid retaining one-touch metadata records</text>
-  <rect x="600" y="180" width="576" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="616" y="209" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">What it does not grant</text>
-  <text x="616" y="239" text-anchor="start" class="sans body" fill="#27313A">it does not bypass the governed property request</text>
-  <text x="616" y="263" text-anchor="start" class="sans body" fill="#27313A">it does not remove record bytes or memory latency</text>
-  <text x="616" y="287" text-anchor="start" class="sans body" fill="#27313A">it does not make P-OPT matrix traffic disappear</text>
-  <text x="616" y="311" text-anchor="start" class="sans body" fill="#27313A">it is not evidence that the victim rule is better</text>
+  <rect x="40" y="200" width="180" height="105" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="130" y="232" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">ReusePlan array</text>
+  <text x="130" y="263" text-anchor="middle" class="sans body" fill="#27313A">compact / wide</text>
+  <text x="130" y="289" text-anchor="middle" class="sans body" fill="#27313A">weighted sidecar</text>
+  <rect x="300" y="200" width="180" height="105" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="390" y="237" text-anchor="middle" class="mono label" fill="#B45309" font-weight="700">ecg.flow.load*</text>
+  <text x="390" y="275" text-anchor="middle" class="sans body" fill="#27313A">record Request</text>
+  <rect x="560" y="200" width="190" height="105" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="655" y="237" text-anchor="middle" class="mono body" fill="#B45309" font-weight="700">ECG_FLOWTHROUGH</text>
+  <text x="655" y="275" text-anchor="middle" class="sans body" fill="#27313A">request-specific bit</text>
+  <rect x="830" y="200" width="300" height="105" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <text x="980" y="232" text-anchor="middle" class="sans body" fill="#1769C2" font-weight="700">normal TLB / private / LLC lookup</text>
+  <text x="980" y="265" text-anchor="middle" class="sans body" fill="#27313A">hit returns normally</text>
+  <text x="980" y="292" text-anchor="middle" class="sans body" fill="#27313A">miss reaches LLC allocation gate</text>
+  <path d="M220 252 L300 252" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="record load"/>
+  <text x="260.0" y="185" text-anchor="middle" class="sans body" fill="#B45309" font-weight="700">record load</text>
+  <path d="M480 252 L560 252" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="Request flag"/>
+  <text x="520.0" y="185" text-anchor="middle" class="sans body" fill="#B45309" font-weight="700">Request flag</text>
+  <path d="M750 252 L830 252" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="normal hierarchy"/>
+  <text x="790.0" y="185" text-anchor="middle" class="sans body" fill="#B45309" font-weight="700">normal hierarchy</text>
+  <line x1="40" y1="350" x2="1130" y2="350" stroke="#B42318" stroke-width="2"/>
+  <text x="50" y="385" text-anchor="start" class="sans body" fill="#B42318" font-weight="700">not bypass | not zero bytes | not zero latency | not a victim-policy result</text>
   <circle cx="44" cy="470" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="476" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="477" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">SYMMETRIC FAIRNESS CONTROL</text>
   <text x="1158" y="476" text-anchor="end" class="sans body" fill="#9AA3AD">--flowthrough all is policy-independent</text>
   <line x1="24" y1="496" x2="1176" y2="496" stroke="#B45309" stroke-width="3"/>
-  <rect x="24" y="512" width="360" height="245" rx="9" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="541" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Baseline policies</text>
-  <text x="40" y="571" text-anchor="start" class="sans body" fill="#27313A">LRU / GRASP / P-OPT consume CSR</text>
-  <text x="40" y="595" text-anchor="start" class="sans body" fill="#27313A">carrier range = CSR edge array</text>
-  <text x="40" y="619" text-anchor="start" class="sans body" fill="#27313A">STRUCTURAL_FLOWTHROUGH no-allocate</text>
-  <text x="40" y="643" text-anchor="start" class="sans body" fill="#27313A">positive activity receipt is required</text>
-  <rect x="420" y="512" width="360" height="245" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="436" y="541" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Packed-substitute ReusePlan</text>
-  <text x="436" y="571" text-anchor="start" class="sans body" fill="#27313A">runtime uses record, not edge ID</text>
-  <text x="436" y="595" text-anchor="start" class="sans body" fill="#27313A">active carrier range = record array</text>
-  <text x="436" y="619" text-anchor="start" class="sans body" fill="#27313A">fallback paths publish CSR instead</text>
-  <text x="436" y="643" text-anchor="start" class="sans body" fill="#27313A">carrier selection is fail-closed</text>
-  <rect x="816" y="512" width="360" height="245" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="832" y="541" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Backend evidence</text>
-  <text x="832" y="571" text-anchor="start" class="sans body" fill="#27313A">cache_sim: structural access count</text>
-  <text x="832" y="595" text-anchor="start" class="sans body" fill="#27313A">gem5: no-allocate miss targets</text>
-  <text x="832" y="619" text-anchor="start" class="sans body" fill="#27313A">Sniper: structural read/fill counts</text>
-  <text x="832" y="643" text-anchor="start" class="sans body" fill="#27313A">translated Sniper mode is rejected</text>
-  <path d="M110 845 L1090 845" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-label="compare policies only after active structural carriers are matched"/>
-  <text x="600" y="830" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">compare policies only after active structural carriers are matched</text>
+  <rect x="40" y="520" width="1120" height="275" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <line x1="40" y1="565" x2="1160" y2="565" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="620" x2="1160" y2="620" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="675" x2="1160" y2="675" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="730" x2="1160" y2="730" stroke="#27313A" stroke-width="1"/>
+  <line x1="220" y1="520" x2="220" y2="795" stroke="#27313A" stroke-width="1"/>
+  <line x1="480" y1="520" x2="480" y2="795" stroke="#27313A" stroke-width="1"/>
+  <line x1="740" y1="520" x2="740" y2="795" stroke="#27313A" stroke-width="1"/>
+  <line x1="960" y1="520" x2="960" y2="795" stroke="#27313A" stroke-width="1"/>
+  <text x="130" y="550" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">Policy row</text>
+  <text x="350" y="550" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">Active structural carrier</text>
+  <text x="610" y="550" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">Fairness flag</text>
+  <text x="850" y="550" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">Required receipt</text>
+  <text x="1060" y="550" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">Fail-closed rule</text>
+  <text x="56" y="602" text-anchor="start" class="sans body" fill="#27313A">LRU</text>
+  <text x="236" y="602" text-anchor="start" class="sans body" fill="#1769C2">CSR edge array</text>
+  <text x="496" y="602" text-anchor="start" class="mono body" fill="#B45309">STRUCTURAL_FLOWTHROUGH</text>
+  <text x="756" y="602" text-anchor="start" class="sans body" fill="#6D5BD0">positive structural access</text>
+  <text x="976" y="602" text-anchor="start" class="sans body" fill="#B42318">reject zero activity</text>
+  <text x="56" y="657" text-anchor="start" class="sans body" fill="#27313A">GRASP</text>
+  <text x="236" y="657" text-anchor="start" class="sans body" fill="#1769C2">CSR edge array</text>
+  <text x="496" y="657" text-anchor="start" class="mono body" fill="#B45309">STRUCTURAL_FLOWTHROUGH</text>
+  <text x="756" y="657" text-anchor="start" class="sans body" fill="#6D5BD0">positive no-allocate</text>
+  <text x="976" y="657" text-anchor="start" class="sans body" fill="#B42318">same workload cell</text>
+  <text x="56" y="712" text-anchor="start" class="sans body" fill="#27313A">P-OPT</text>
+  <text x="236" y="712" text-anchor="start" class="sans body" fill="#1769C2">CSR + matrix traffic</text>
+  <text x="496" y="712" text-anchor="start" class="mono body" fill="#B45309">STRUCTURAL_FLOWTHROUGH</text>
+  <text x="756" y="712" text-anchor="start" class="sans body" fill="#6D5BD0">positive structural event</text>
+  <text x="976" y="712" text-anchor="start" class="sans body" fill="#B42318">matrix bytes retained</text>
+  <text x="56" y="767" text-anchor="start" class="sans body" fill="#27313A">ReusePlan</text>
+  <text x="236" y="767" text-anchor="start" class="sans body" fill="#1769C2">record array; CSR on fallback</text>
+  <text x="496" y="767" text-anchor="start" class="mono body" fill="#B45309">STRUCTURAL_FLOWTHROUGH</text>
+  <text x="756" y="767" text-anchor="start" class="sans body" fill="#6D5BD0">backend-specific counter</text>
+  <text x="976" y="767" text-anchor="start" class="sans body" fill="#B42318">carrier receipt must match</text>
+  <text x="40" y="835" text-anchor="start" class="sans body" fill="#6D5BD0">cache_sim: access count | gem5: no-allocate targets | Sniper: read/fill counts; translated mode rejected</text>
+  <path d="M110 910 L1090 910" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-label="compare policies only after active structural carriers are matched"/>
+  <text x="600" y="895" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">compare policies only after active structural carriers are matched</text>
 </svg>

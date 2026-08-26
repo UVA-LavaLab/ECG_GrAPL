@@ -42,73 +42,149 @@
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">ACCEPT OR REJECT REQUEST METADATA</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">destination line and execution context must agree</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#B42318" stroke-width="3"/>
-  <rect x="24" y="180" width="550" height="225" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="209" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">Accepted ReuseBind</text>
-  <text x="40" y="239" text-anchor="start" class="sans body" fill="#27313A">typed Request extension has two epochs</text>
-  <text x="40" y="263" text-anchor="start" class="sans body" fill="#27313A">context ID is nonzero and not conflicted</text>
-  <text x="40" y="287" text-anchor="start" class="sans body" fill="#27313A">destination maps to the accessed property line</text>
-  <text x="40" y="311" text-anchor="start" class="sans body" fill="#27313A">hit or fill may refresh line metadata</text>
-  <rect x="600" y="180" width="576" height="225" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="616" y="209" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Rejected metadata</text>
-  <text x="616" y="239" text-anchor="start" class="sans body" fill="#27313A">mixed governed / ungoverned MSHR targets</text>
-  <text x="616" y="263" text-anchor="start" class="sans body" fill="#27313A">requestor or context disagreement</text>
-  <text x="616" y="287" text-anchor="start" class="sans body" fill="#27313A">equal-sequence payload disagreement</text>
-  <text x="616" y="311" text-anchor="start" class="sans body" fill="#27313A">destination-line mismatch or invalid count</text>
+  <rect x="40" y="200" width="245" height="130" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="162" y="232" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">ReuseBind extension</text>
+  <text x="162" y="267" text-anchor="middle" class="mono body" fill="#27313A">dest | tier | e1 | e2</text>
+  <text x="162" y="298" text-anchor="middle" class="mono body" fill="#27313A">count | context | conflict</text>
+  <polygon points="405,205.0 495.0,265 405,325.0 315.0,265" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="405" y="252" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">context</text>
+  <text x="405" y="282" text-anchor="middle" class="sans body" fill="#27313A">!= 0?</text>
+  <polygon points="635,205.0 725.0,265 635,325.0 545.0,265" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <text x="635" y="252" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">conflict</text>
+  <text x="635" y="282" text-anchor="middle" class="sans body" fill="#27313A">== 0?</text>
+  <polygon points="865,205.0 955.0,265 865,325.0 775.0,265" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="865" y="252" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">dest</text>
+  <text x="865" y="282" text-anchor="middle" class="sans body" fill="#27313A">line == access?</text>
+  <rect x="1010" y="205" width="150" height="105" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="1085" y="240" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">accept</text>
+  <text x="1085" y="275" text-anchor="middle" class="sans body" fill="#27313A">hit/fill stamp</text>
+  <path d="M255 265 L315 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="ReuseBind extension"/>
+  <path d="M485 265 L545 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="context"/>
+  <path d="M715 265 L775 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="conflict"/>
+  <path d="M950 265 L1010 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="destination line"/>
+  <text x="600" y="365" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">reject: governed/ungoverned mix | requestor/context mismatch | invalid count</text>
+  <text x="600" y="397" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">reject: equal-sequence payload mismatch | destination-line mismatch</text>
   <circle cx="44" cy="450" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="456" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="457" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">LINE-LOCAL STATE</text>
   <text x="1158" y="456" text-anchor="end" class="sans body" fill="#9AA3AD">data value and replacement metadata have different lifetimes</text>
   <line x1="24" y1="476" x2="1176" y2="476" stroke="#6D5BD0" stroke-width="3"/>
-  <rect x="24" y="492" width="550" height="225" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="521" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Governed property line</text>
-  <text x="40" y="551" text-anchor="start" class="mono body" fill="#27313A">valid | property | RRPV | recency</text>
-  <text x="40" y="575" text-anchor="start" class="mono body" fill="#27313A">tier | epoch1 | epoch2 | epoch_count</text>
-  <text x="40" y="599" text-anchor="start" class="mono body" fill="#27313A">context ID and live-stamp validity</text>
-  <text x="40" y="623" text-anchor="start" class="mono body" fill="#27313A">property bytes remain architecturally unchanged</text>
-  <rect x="600" y="492" width="576" height="225" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <text x="616" y="521" text-anchor="start" class="sans label" fill="#27313A" font-weight="700">Refresh and invalidation</text>
-  <text x="616" y="551" text-anchor="start" class="sans body" fill="#27313A">accepted hit/fill updates tier and epochs</text>
-  <text x="616" y="575" text-anchor="start" class="sans body" fill="#27313A">ordinary hit still updates native recency/RRIP state</text>
-  <text x="616" y="599" text-anchor="start" class="sans body" fill="#27313A">conflicted metadata does not stamp the line</text>
-  <text x="616" y="623" text-anchor="start" class="sans body" fill="#27313A">invalidation clears tier, epochs, context, and validity</text>
+  <rect x="40" y="500" width="1120" height="205" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <line x1="120" y1="500" x2="120" y2="705" stroke="#27313A" stroke-width="1"/>
+  <line x1="260" y1="500" x2="260" y2="705" stroke="#27313A" stroke-width="1"/>
+  <line x1="350" y1="500" x2="350" y2="705" stroke="#27313A" stroke-width="1"/>
+  <line x1="455" y1="500" x2="455" y2="705" stroke="#27313A" stroke-width="1"/>
+  <line x1="560" y1="500" x2="560" y2="705" stroke="#27313A" stroke-width="1"/>
+  <line x1="665" y1="500" x2="665" y2="705" stroke="#27313A" stroke-width="1"/>
+  <line x1="770" y1="500" x2="770" y2="705" stroke="#27313A" stroke-width="1"/>
+  <line x1="900" y1="500" x2="900" y2="705" stroke="#27313A" stroke-width="1"/>
+  <line x1="1040" y1="500" x2="1040" y2="705" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="545" x2="1160" y2="545" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="585" x2="1160" y2="585" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="625" x2="1160" y2="625" stroke="#27313A" stroke-width="1"/>
+  <line x1="40" y1="665" x2="1160" y2="665" stroke="#27313A" stroke-width="1"/>
+  <text x="80.0" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">way</text>
+  <text x="190.0" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">role/data</text>
+  <text x="305.0" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">RRPV</text>
+  <text x="402.5" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">recency</text>
+  <text x="507.5" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">tier</text>
+  <text x="612.5" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">e1</text>
+  <text x="717.5" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">e2</text>
+  <text x="835.0" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">count</text>
+  <text x="970.0" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">context</text>
+  <text x="1100.0" y="530" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">stamp</text>
+  <text x="80.0" y="572" text-anchor="middle" class="mono body" fill="#27313A">0</text>
+  <text x="190.0" y="572" text-anchor="middle" class="mono body" fill="#27313A">structural</text>
+  <text x="305.0" y="572" text-anchor="middle" class="mono body" fill="#27313A">3</text>
+  <text x="402.5" y="572" text-anchor="middle" class="mono body" fill="#27313A">91</text>
+  <text x="507.5" y="572" text-anchor="middle" class="mono body" fill="#27313A">-</text>
+  <text x="612.5" y="572" text-anchor="middle" class="mono body" fill="#27313A">-</text>
+  <text x="717.5" y="572" text-anchor="middle" class="mono body" fill="#27313A">-</text>
+  <text x="835.0" y="572" text-anchor="middle" class="mono body" fill="#27313A">0</text>
+  <text x="970.0" y="572" text-anchor="middle" class="mono body" fill="#27313A">-</text>
+  <text x="1100.0" y="572" text-anchor="middle" class="mono body" fill="#27313A">0</text>
+  <text x="80.0" y="612" text-anchor="middle" class="mono body" fill="#27313A">1</text>
+  <text x="190.0" y="612" text-anchor="middle" class="mono body" fill="#27313A">property</text>
+  <text x="305.0" y="612" text-anchor="middle" class="mono body" fill="#27313A">3</text>
+  <text x="402.5" y="612" text-anchor="middle" class="mono body" fill="#27313A">77</text>
+  <text x="507.5" y="612" text-anchor="middle" class="mono body" fill="#27313A">T1</text>
+  <text x="612.5" y="612" text-anchor="middle" class="mono body" fill="#27313A">11</text>
+  <text x="717.5" y="612" text-anchor="middle" class="mono body" fill="#27313A">15</text>
+  <text x="835.0" y="612" text-anchor="middle" class="mono body" fill="#27313A">2</text>
+  <text x="970.0" y="612" text-anchor="middle" class="mono body" fill="#27313A">k</text>
+  <text x="1100.0" y="612" text-anchor="middle" class="mono body" fill="#27313A">1</text>
+  <text x="80.0" y="652" text-anchor="middle" class="mono body" fill="#27313A">2</text>
+  <text x="190.0" y="652" text-anchor="middle" class="mono body" fill="#27313A">property</text>
+  <text x="305.0" y="652" text-anchor="middle" class="mono body" fill="#27313A">2</text>
+  <text x="402.5" y="652" text-anchor="middle" class="mono body" fill="#27313A">63</text>
+  <text x="507.5" y="652" text-anchor="middle" class="mono body" fill="#27313A">T2</text>
+  <text x="612.5" y="652" text-anchor="middle" class="mono body" fill="#27313A">20</text>
+  <text x="717.5" y="652" text-anchor="middle" class="mono body" fill="#27313A">20</text>
+  <text x="835.0" y="652" text-anchor="middle" class="mono body" fill="#27313A">1</text>
+  <text x="970.0" y="652" text-anchor="middle" class="mono body" fill="#27313A">k</text>
+  <text x="1100.0" y="652" text-anchor="middle" class="mono body" fill="#27313A">1</text>
+  <text x="80.0" y="692" text-anchor="middle" class="mono body" fill="#27313A">3</text>
+  <text x="190.0" y="692" text-anchor="middle" class="mono body" fill="#27313A">invalid</text>
+  <text x="305.0" y="692" text-anchor="middle" class="mono body" fill="#27313A">-</text>
+  <text x="402.5" y="692" text-anchor="middle" class="mono body" fill="#27313A">-</text>
+  <text x="507.5" y="692" text-anchor="middle" class="mono body" fill="#27313A">T0</text>
+  <text x="612.5" y="692" text-anchor="middle" class="mono body" fill="#27313A">0</text>
+  <text x="717.5" y="692" text-anchor="middle" class="mono body" fill="#27313A">0</text>
+  <text x="835.0" y="692" text-anchor="middle" class="mono body" fill="#27313A">0</text>
+  <text x="970.0" y="692" text-anchor="middle" class="mono body" fill="#27313A">0</text>
+  <text x="1100.0" y="692" text-anchor="middle" class="mono body" fill="#27313A">0</text>
+  <text x="40" y="742" text-anchor="start" class="sans body" fill="#15803D">hit/fill: refresh tier/epochs/context</text>
+  <text x="420" y="742" text-anchor="start" class="sans body" fill="#1769C2">ordinary hit: native RRPV/recency</text>
+  <text x="790" y="742" text-anchor="start" class="sans body" fill="#B42318">invalidate -&gt; clear every ECG field</text>
   <circle cx="44" cy="762" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="768" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="769" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">RRIP ELIGIBILITY</text>
   <text x="1158" y="768" text-anchor="end" class="sans body" fill="#9AA3AD">the default variant ages until a way reaches rrpvMax</text>
   <line x1="24" y1="788" x2="1176" y2="788" stroke="#15803D" stroke-width="3"/>
-  <rect x="24" y="804" width="360" height="225" rx="9" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="833" text-anchor="start" class="sans label" fill="#15803D" font-weight="700">A. Form candidate set</text>
-  <text x="40" y="863" text-anchor="start" class="sans body" fill="#27313A">keep only ways with RRPV &gt;= rrpvMax</text>
-  <text x="40" y="887" text-anchor="start" class="sans body" fill="#27313A">if empty: increment lower RRPVs</text>
-  <text x="40" y="911" text-anchor="start" class="sans body" fill="#27313A">repeat until a candidate exists</text>
-  <text x="40" y="935" text-anchor="start" class="sans body" fill="#27313A">recency remains an independent field</text>
-  <rect x="420" y="804" width="360" height="225" rx="9" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
-  <text x="436" y="833" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">B. Prefer structural candidate</text>
-  <text x="436" y="863" text-anchor="start" class="sans body" fill="#27313A">among eligible non-property ways</text>
-  <text x="436" y="887" text-anchor="start" class="sans body" fill="#27313A">select oldest by normalized recency</text>
-  <text x="436" y="911" text-anchor="start" class="sans body" fill="#27313A">records and CSR are structural</text>
-  <text x="436" y="935" text-anchor="start" class="sans body" fill="#27313A">property epochs do not rank these ways</text>
-  <rect x="816" y="804" width="360" height="225" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
-  <text x="832" y="833" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">C. Rank property candidates</text>
-  <text x="832" y="863" text-anchor="start" class="sans body" fill="#27313A">effective distance = zero if unstamped</text>
-  <text x="832" y="887" text-anchor="start" class="sans body" fill="#27313A">else min(d(epoch1), d(epoch2))</text>
-  <text x="832" y="911" text-anchor="start" class="sans body" fill="#27313A">select the farthest effective distance</text>
-  <text x="832" y="935" text-anchor="start" class="sans body" fill="#27313A">set order resolves an exact tie</text>
+  <polygon points="190,835.0 300.0,900 190,965.0 80.0,900" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <text x="190" y="884" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">any way at</text>
+  <text x="190" y="915" text-anchor="middle" class="sans body" fill="#27313A">RRPV == max?</text>
+  <polygon points="500,835.0 610.0,900 500,965.0 390.0,900" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="500" y="884" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">eligible structural</text>
+  <text x="500" y="915" text-anchor="middle" class="sans body" fill="#27313A">candidate?</text>
+  <rect x="680" y="830" width="210" height="120" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <text x="785" y="868" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">oldest structural</text>
+  <text x="785" y="905" text-anchor="middle" class="sans body" fill="#27313A">normalized recency</text>
+  <rect x="930" y="830" width="230" height="150" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <text x="1045" y="865" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">farthest property</text>
+  <text x="1045" y="898" text-anchor="middle" class="mono body" fill="#27313A">min(d(e1), d(e2))</text>
+  <text x="1045" y="932" text-anchor="middle" class="sans body" fill="#27313A">unstamped distance=0</text>
+  <text x="1045" y="962" text-anchor="middle" class="sans body" fill="#27313A">stable set-order tie</text>
+  <path d="M300 900 L390 900" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="RRPV == max?"/>
+  <path d="M610 875 L680 875" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="eligible structural"/>
+  <path d="M610 925 L930 925" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="property candidates"/>
+  <text x="770" y="955" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">property candidates</text>
+  <path d="M190 965 L190 1035 L70 1035 L70 900 L80 900" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="loop" data-flow-label="age RRPV and retry"/>
+  <text x="230" y="1025" text-anchor="start" class="sans body" fill="#B42318" font-weight="700">age RRPV and retry</text>
   <circle cx="44" cy="1074" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="1080" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>
   <text x="74" y="1081" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">VARIANTS ARE CONTROLLED ABLATIONS</text>
   <text x="1158" y="1080" text-anchor="end" class="sans body" fill="#9AA3AD">do not blend their ordering into the primary claim</text>
   <line x1="24" y1="1100" x2="1176" y2="1100" stroke="#B42318" stroke-width="3"/>
-  <rect x="24" y="1116" width="550" height="185" rx="9" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
-  <text x="40" y="1145" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">Primary and neutral controls</text>
-  <text x="40" y="1175" text-anchor="start" class="sans body" fill="#27313A">rrip_first: eligibility -&gt; structural -&gt; farthest epoch</text>
-  <text x="40" y="1199" text-anchor="start" class="sans body" fill="#27313A">grasp_only: pure RRIP</text>
-  <text x="40" y="1223" text-anchor="start" class="sans body" fill="#27313A">rrip_no_epoch: same gate, fixed property tie</text>
-  <text x="40" y="1247" text-anchor="start" class="sans body" fill="#27313A">rrip_no_epoch_recency: same gate, property LRU</text>
-  <rect x="600" y="1116" width="576" height="185" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <text x="616" y="1145" text-anchor="start" class="sans label" fill="#27313A" font-weight="700">Other experiment variants</text>
-  <text x="616" y="1175" text-anchor="start" class="sans body" fill="#27313A">epoch_first | degree_first | shortcircuit | lru_only</text>
-  <text x="616" y="1199" text-anchor="start" class="sans body" fill="#27313A">future_tier_first combines future, tier, then recency</text>
-  <text x="616" y="1223" text-anchor="start" class="sans body" fill="#27313A">online selectors are failed diagnostics, not primary policy</text>
-  <text x="616" y="1247" text-anchor="start" class="sans body" fill="#27313A">admission diagnostics are separate from victim selection</text>
+  <rect x="40" y="1120" width="1120" height="175" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <line x1="40" y1="1165" x2="1160" y2="1165" stroke="#27313A" stroke-width="1"/>
+  <line x1="315" y1="1120" x2="315" y2="1295" stroke="#27313A" stroke-width="1"/>
+  <line x1="590" y1="1120" x2="590" y2="1295" stroke="#27313A" stroke-width="1"/>
+  <line x1="865" y1="1120" x2="865" y2="1295" stroke="#27313A" stroke-width="1"/>
+  <text x="56" y="1195" text-anchor="start" class="mono body" fill="#27313A" font-weight="700">rrip_first</text>
+  <text x="56" y="1220" text-anchor="start" class="sans body" fill="#27313A">RRIP-&gt;struct-&gt;epoch | primary</text>
+  <text x="331" y="1195" text-anchor="start" class="mono body" fill="#27313A" font-weight="700">grasp_only</text>
+  <text x="331" y="1220" text-anchor="start" class="sans body" fill="#27313A">pure RRIP | neutral</text>
+  <text x="606" y="1195" text-anchor="start" class="mono body" fill="#27313A" font-weight="700">rrip_no_epoch</text>
+  <text x="606" y="1220" text-anchor="start" class="sans body" fill="#27313A">fixed property tie | ablation</text>
+  <text x="881" y="1195" text-anchor="start" class="mono body" fill="#27313A" font-weight="700">rrip_no_epoch_recency</text>
+  <text x="881" y="1220" text-anchor="start" class="sans body" fill="#27313A">property LRU tie | ablation</text>
+  <text x="56" y="1250" text-anchor="start" class="mono body" fill="#27313A" font-weight="700">epoch_first / degree_first</text>
+  <text x="56" y="1275" text-anchor="start" class="sans body" fill="#27313A">alternate order | diagnostic</text>
+  <text x="331" y="1250" text-anchor="start" class="mono body" fill="#27313A" font-weight="700">future_tier_first</text>
+  <text x="331" y="1275" text-anchor="start" class="sans body" fill="#27313A">future/tier/LRU | diagnostic</text>
+  <text x="606" y="1250" text-anchor="start" class="mono body" fill="#27313A" font-weight="700">shortcircuit / lru_only</text>
+  <text x="606" y="1275" text-anchor="start" class="sans body" fill="#27313A">baseline ctrl | diagnostic</text>
+  <text x="881" y="1250" text-anchor="start" class="mono body" fill="#B42318" font-weight="700">online selectors</text>
+  <text x="881" y="1275" text-anchor="start" class="sans body" fill="#27313A">failed gates | not promoted</text>
 </svg>
