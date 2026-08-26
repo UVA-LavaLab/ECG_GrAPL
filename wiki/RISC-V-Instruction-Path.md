@@ -38,21 +38,24 @@ Neither flag is attached to the governed property Request.
 
 ## 2. Out-of-order request path
 
-### Figure 2 — Concrete ReusePlan instruction pair in the gem5 O3 pipeline
+### Figure 2 — Two ECG loads through gem5 O3 and the cache hierarchy
 
-![Architecture schematic tracing adjacency entry 4 to 7, mapped internally to 8 to 18, through the FlowThrough record instruction, gem5 Fetch Decode Rename IEW Commit pipeline, LSQ Request, caches, LLC line, writeback, and retirement](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
+![Compact lane matrices tracing adjacency entry 4 to 7 through separate I0 record-load and I1 property-load paths across gem5 Fetch, Decode, Rename, IEW, LSQ, cache, MSHR, LLC, writeback, and Commit](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
 
 **Figure 2.** Checked adjacency entry `4 -> 7` maps to internal entry
 `8 -> 18` and supplies the fixture-derived operands and addresses.
 
 The top-level grouping follows gem5 O3CPU's documented **Fetch, Decode,
-Rename, IEW, Commit** pipeline. The IEW block is expanded into the issue queue,
-physical-register read, AGU, and LSQ Request path used by a load. This is the
-gem5 simulator architecture, not a claim about a fabricated ECG core.
+Rename, IEW, Commit** pipeline. The figure gives I0 and I1 separate frontend
+lanes, then separates the I0 record Request/response from the dependent I1
+property Request/response. IEW is expanded into issue readiness, address
+generation, LSQ Request construction, cache/MSHR/LLC access, and writeback.
+Commit appears only after the corresponding load completes. This is the gem5
+simulator architecture, not a claim about a fabricated ECG core.
 
-The six numbered stages are record load, rename/dependency, property address
-generation, LSQ Request construction, cache/MSHR/LLC traversal, and
-completion/retirement.
+The five numbered bands are the instruction/register contract, frontend and
+issue lanes, I0 record access through P17 writeback, I1 property access through
+P21 writeback, and in-order commit with request-specific cache effects.
 
 ### Fetch, decode, and rename
 

@@ -197,31 +197,42 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
     for token in (
         "ecg.flow.load.compact",
         "ecg.bind.load.u32",
-        "rd = dest 18 | T1 | e1 11 | e2 15",
+        "P17 = ReusePlan",
+        "dest18 | T1 | e11 | e15",
         "Fetch",
-        "I0 flow.load",
-        "I1 bind.load",
+        "I0 in fetch bundle",
+        "I1 follows I0",
         "Decode",
-        "I0 record op",
-        "I1 u32 bind",
-        "Rename",
-        "I0 rd -&gt; P17",
-        "I1 rs2 -&gt; P17",
-        "IEW: issue / execute / writeback",
-        "Issue queue",
-        "I1 waits P17",
-        "3 I1 AGU",
-        "I0: record Request",
-        "I1: property Request + ReuseBind",
+        "Rename / dispatch",
+        "rd -&gt; P17",
+        "rs2 -&gt; P17; rd -&gt; P21",
+        "IEW issue gate",
+        "wait for P17",
+        "I1 remains queued",
+        "LSQ Request #0",
+        "ECG_FLOWTHROUGH=1",
+        "record-block MSHR",
+        "format CSR widens",
+        "writeback P17",
+        "wake I1 rs2",
+        "LSQ Request #1",
+        "attach ReuseBind",
+        "dest=18 T1 e11/15",
+        "cur=8 ctx=k seq=s",
+        "Property MSHR + LLC",
+        "stamp line 0x80000040",
+        "FlowThrough=0",
         "Commit",
-        "I0 ROB entry",
-        "I1 ROB entry",
-        "I0 commits before dependent I1",
-        "execute reads format CSR and widens the result",
-        "line 0x80000040",
+        "commit when ROB0 is oldest",
+        "commit after I0",
     ):
         assert token in pipeline
     assert "record-format CSR" not in pipeline
+    assert 'data-flow-label="I0 record Request and response"' in pipeline
+    assert (
+        'data-flow-label="I1 property Request + ReuseBind and response"'
+        in pipeline
+    )
 
     walkthrough = figures[
         "property-to-cache-walkthrough-f01-checked-request.svg"

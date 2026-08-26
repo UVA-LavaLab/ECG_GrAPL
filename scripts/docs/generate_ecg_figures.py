@@ -1195,189 +1195,264 @@ def o3_pipeline(
     figure = Figure(
         ROOT,
         FigureTarget("risc-v-instruction-path", "02", "o3-request-pipeline"),
-        "Concrete ReusePlan instruction pair in the gem5 O3 pipeline",
+        "Two ECG loads through gem5 O3 and the cache hierarchy",
         f"Adjacency entry {fx.tracked_source_reader}->{fx.tracked_source_dest} "
         f"maps to internal {fx.tracked_reader}->{fx.tracked_dest}, property "
         f"0x{fx.property_address:08X}, and LLC line 0x{fx.property_line:08X}.",
-        "An architecture-style schematic follows the checked compact record "
-        "through the actual record instruction, renamed register dependency, "
-        "property instruction, frontend and execution stages, LSQ Request "
-        "extension, private caches, MSHR, LLC line state, writeback, and ROB "
-        "retirement.",
-        1490,
+        "Five compact bands separate the instruction contract, two explicit "
+        "frontend lanes, the I0 record Request and response, the dependent I1 "
+        "property Request and response, and in-order ROB retirement.",
+        1715,
     )
+
     figure.section(
-        "1", "RECORD LOAD + DEPENDENT PROPERTY INSTRUCTION", "record result is a true rs2 dependency",
+        "1", "INSTRUCTION AND REGISTER CONTRACT",
+        "I0 produces the physical-register operand consumed by I1",
         138, role="transfer",
     )
-    figure.card(
-        24, 180, 520, 180, "ecg.flow.load.compact",
-        (
-            f"rs1 = record for adjacency {fx.tracked_source_reader}->"
-            f"{fx.tracked_source_dest} / int {fx.tracked_reader}->"
-            f"{fx.tracked_dest}",
-            "memory width = 4 bytes",
-            "Request flag = ECG_FLOWTHROUGH",
-            f"rd = dest {fx.tracked_dest} | T{fx.line_tier} | "
-            f"e1 {fx.first_epoch} | e2 {fx.second_epoch}",
-            "execute reads format CSR and widens the result",
-        ),
-        role="transfer",
-        mono_body=True,
+    contract_x = (24, 94, 350, 650, 895, 1176)
+    figure.rect(24, 180, 1152, 195, role="neutral", radius=0)
+    figure.rect(24, 225, 1152, 75, role="transfer", stroke_width=1, radius=0)
+    figure.rect(24, 300, 1152, 75, role="compute", stroke_width=1, radius=0)
+    for x in contract_x[1:-1]:
+        figure.line((x, 180), (x, 375), color=INK, width=1)
+    headers = (
+        (59, "Lane"),
+        (222, "Instruction"),
+        (500, "Source operands"),
+        (772, "Destination"),
+        (1035, "Request semantics"),
     )
-    figure.card(
-        656, 180, 520, 180, "ecg.bind.load.u32",
-        (
-            f"rs1 = computed property address 0x{fx.property_address:08X}",
-            "rs2 = renamed ReusePlan physical register",
-            "result = ordinary uint32 property value",
-            "property Request carries ReuseBind",
-            "never FlowThrough",
-        ),
-        role="compute",
-        mono_body=True,
+    for x, label in headers:
+        figure.text(x, 210, label, size=16, bold=True, anchor="middle")
+    figure.text(59, 269, "I0", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(110, 269, "ecg.flow.load.compact", size=16, bold=True,
+                mono=True, color=AMBER)
+    figure.text(
+        366, 269,
+        f"rs1=record[int {fx.tracked_reader}->{fx.tracked_dest}]",
+        size=16, mono=True,
     )
-    figure.arrow(
-        ((284, 360), (284, 405), (916, 405), (916, 360)),
-        kind="dependency",
-        label="canonical ReusePlan register",
-        color=PURPLE,
-        label_at=(600, 392),
+    figure.text(666, 252, "P17 = ReusePlan", size=16, mono=True)
+    figure.text(
+        666, 280,
+        f"dest{fx.tracked_dest} | T{fx.line_tier} | "
+        f"e{fx.first_epoch} | e{fx.second_epoch}",
+        size=16, mono=True,
     )
+    figure.text(911, 252, "4-byte record Request", size=16, mono=True)
+    figure.text(911, 280, "ECG_FLOWTHROUGH=1", size=16, mono=True)
+
+    figure.text(59, 344, "I1", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(110, 344, "ecg.bind.load.u32", size=16, bold=True,
+                mono=True, color=GREEN)
+    figure.text(
+        366, 327, f"rs1=0x{fx.property_address:08X}", size=16, mono=True
+    )
+    figure.text(366, 355, "rs2=P17 (waits for I0)", size=16, mono=True)
+    figure.text(
+        666, 344, f"P21 = property[{fx.tracked_dest}]",
+        size=16, mono=True,
+    )
+    figure.text(911, 327, "property Request", size=16, mono=True)
+    figure.text(911, 355, "ReuseBind; FlowThrough=0", size=16, mono=True)
 
     figure.section(
-        "2-4", "GEM5 O3 PIPELINE",
-        "both instructions: Fetch | Decode | Rename | IEW | Commit",
-        450, role="compute",
+        "2", "TWO O3 INSTRUCTION LANES",
+        "Fetch | Decode | Rename | IEW; I1 waits for P17",
+        420, role="compute",
     )
-    figure.arrow(
-        ((105, 650), (1090, 650)),
-        kind="control",
-        label="I0 record load -> I1 dependent property load",
-        color=GREEN,
-        width=2.5,
-    )
-    figure.rect(40, 560, 140, 150, role="compute", stroke=INK, stroke_width=2)
-    figure.text(110, 595, "Fetch", size=17, bold=True,
-                color=GREEN, anchor="middle")
-    figure.text(110, 627, "I0 flow.load", size=16, anchor="middle")
-    figure.text(110, 660, "I1 bind.load", size=16, anchor="middle")
-    figure.text(110, 692, "program order", size=16, anchor="middle")
-
-    figure.rect(220, 560, 140, 150, role="compute", stroke=INK, stroke_width=2)
-    figure.text(290, 595, "Decode", size=17, bold=True,
-                color=GREEN, anchor="middle")
-    figure.text(290, 627, "I0 record op", size=16, anchor="middle")
-    figure.text(290, 660, "I1 u32 bind", size=16, anchor="middle")
-    figure.text(290, 692, "custom-0 role", size=16, anchor="middle")
-
-    figure.table(400, 520, 170, 225, 4, role="state")
-    figure.text(485, 550, "Rename", size=17, bold=True,
-                color=PURPLE, anchor="middle")
-    figure.text(485, 602, "I0 rd -> P17", size=16, anchor="middle")
-    figure.text(485, 660, "I1 rs2 -> P17", size=16, anchor="middle")
-    figure.text(485, 718, "I1 rd -> P21", size=16, anchor="middle")
-
-    figure.rect(610, 520, 360, 245, role="neutral", stroke=GREEN, stroke_width=3)
-    figure.text(790, 548, "IEW: issue / execute / writeback", size=17,
-                bold=True, color=GREEN, anchor="middle")
-    figure.queue(625, 568, 125, 78, role="state")
-    figure.text(688, 595, "Issue queue", size=16, bold=True,
-                color=PURPLE, anchor="middle")
-    figure.text(688, 625, "I1 waits P17", size=16, anchor="middle")
-    figure.table(770, 568, 90, 78, 2, role="data")
-    figure.text(815, 595, "Phys regs", size=16, bold=True,
-                color=BLUE, anchor="middle")
-    figure.text(815, 625, "P17 plan", size=16, anchor="middle")
-    figure.diamond(915, 607, 95, 78, role="compute")
-    figure.text(915, 602, "3 I1 AGU", size=16, bold=True,
-                color=GREEN, anchor="middle")
-    figure.text(915, 627, "rs1 EA", size=16, anchor="middle")
-    figure.table(650, 654, 285, 100, 3, role="state")
-    figure.text(792, 679, "4 LSQ requests", size=17, bold=True,
-                color=PURPLE, anchor="middle")
-    figure.text(792, 715, "I0: record Request", size=16,
-                anchor="middle")
-    figure.text(792, 745, "I1: property Request + ReuseBind", size=16,
-                anchor="middle")
-
-    figure.table(1010, 520, 150, 225, 4, role="verify")
-    figure.text(1085, 550, "Commit", size=17, bold=True,
-                color=RED, anchor="middle")
-    figure.text(1085, 602, "I0 ROB entry", size=16, anchor="middle")
-    figure.text(1085, 660, "I1 ROB entry", size=16, anchor="middle")
-    figure.text(1085, 718, "in order", size=16, anchor="middle")
-    figure.text(
-        600, 802, "I0 record load -> I1 dependent property load",
-        size=16, bold=True, color=GREEN, anchor="middle",
-    )
-    figure.text(
-        600, 832,
-        f"LSQ extension: dest={fx.tracked_dest} tier={fx.line_tier} "
-        f"epochs=({fx.first_epoch},{fx.second_epoch}) current={fx.tracked_reader} "
-        "context=k sequence=s",
-        size=16, mono=True, color=PURPLE, anchor="middle", max_width=1080,
-    )
-
-    figure.section(
-        "5", "CACHE AND MISS PATH", "the same property Request crosses every cache boundary",
-        880, role="data",
-    )
-    for start, end in (
-        ((270, 1075), (330, 1075)),
-        ((560, 1075), (620, 1075)),
-        ((850, 1075), (930, 1075)),
+    stage_x = (24, 100, 320, 540, 850, 1176)
+    figure.rect(24, 462, 1152, 288, role="neutral", radius=0)
+    figure.rect(24, 507, 1152, 113, role="transfer", stroke_width=1, radius=0)
+    figure.rect(24, 620, 1152, 113, role="compute", stroke_width=1, radius=0)
+    for x in stage_x[1:-1]:
+        figure.line((x, 462), (x, 750), color=INK, width=1)
+    for x, label in (
+        (62, "Lane"),
+        (210, "Fetch"),
+        (430, "Decode"),
+        (695, "Rename / dispatch"),
+        (1013, "IEW issue gate"),
     ):
-        figure.arrow(
-            (start, end),
-            kind="transfer",
-            label="property Request + ReuseBind",
-            cadence="per governed load",
-            color=BLUE,
-            width=2.5,
-        )
-    figure.table(40, 950, 230, 215, 4, role="data")
-    figure.text(56, 980, "Private hierarchy", size=17, bold=True, color=BLUE)
-    figure.text(56, 1035, "D-TLB: translation", size=16)
-    figure.text(56, 1088, "L1D: normal hit/fill", size=16)
-    figure.text(56, 1142, "L2: extension preserved", size=16)
+        figure.text(x, 492, label, size=16, bold=True, anchor="middle")
+    figure.arrow(
+        ((112, 606), (1155, 606)),
+        kind="control", label="I0", color=AMBER, width=2.5,
+    )
+    figure.arrow(
+        ((112, 719), (1155, 719)),
+        kind="control", label="I1", color=GREEN, width=2.5,
+    )
+    figure.text(62, 554, "I0", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(62, 583, "record", size=16, color=AMBER, anchor="middle")
+    figure.text(116, 548, "I0 in fetch bundle", size=16)
+    figure.text(116, 578, "program order", size=16)
+    figure.text(336, 548, "custom-0", size=16, bold=True)
+    figure.text(336, 578, "compact record load", size=16)
+    figure.text(556, 548, "rd -> P17", size=16, mono=True)
+    figure.text(556, 578, "allocate ROB0 + LQ0", size=16)
+    figure.text(866, 548, "rs1 ready", size=16, mono=True)
+    figure.text(866, 578, "issue I0", size=16, bold=True, color=AMBER)
 
-    figure.table(330, 950, 230, 215, 4, role="state")
-    figure.text(346, 980, "MSHR target table", size=17, bold=True, color=PURPLE)
-    figure.text(346, 1020, "same property block", size=16)
-    figure.text(346, 1075, "newest compatible seq", size=16)
-    figure.text(346, 1128, "conflict propagation", size=16)
+    figure.text(62, 667, "I1", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(62, 696, "property", size=16, color=GREEN, anchor="middle")
+    figure.text(116, 661, "I1 follows I0", size=16)
+    figure.text(116, 691, "program order", size=16)
+    figure.text(336, 661, "custom-0", size=16, bold=True)
+    figure.text(336, 691, "computed U32 load", size=16)
+    figure.text(556, 661, "rs2 -> P17; rd -> P21", size=16, mono=True)
+    figure.text(556, 691, "allocate ROB1 + LQ1", size=16)
+    figure.text(866, 661, "wait for P17", size=16, mono=True)
+    figure.text(866, 691, "I1 remains queued", size=16, bold=True, color=GREEN)
 
-    figure.table(620, 950, 230, 215, 4, role="state")
-    figure.text(636, 980, "LLC set + metadata", size=17, bold=True, color=PURPLE)
-    figure.text(636, 1020, f"line 0x{fx.property_line:08X}", size=16, mono=True)
-    figure.text(636, 1075, "destination-line guard", size=16)
-    figure.text(636, 1128, "stamp tier + epochs", size=16)
-
-    figure.cylinder(930, 950, 190, 215, role="data")
-    figure.text(1025, 995, "Memory", size=17, bold=True,
-                color=BLUE, anchor="middle")
-    figure.text(1025, 1045, "ordinary line fetch", size=16, anchor="middle")
-    figure.text(1025, 1095, "allocOnFill applies", size=16, anchor="middle")
-    figure.text(1025, 1140, "normal response", size=16, anchor="middle")
-    figure.text(
-        600, 1203, "property Request + ReuseBind | per governed load",
-        size=16, bold=True, color=BLUE, anchor="middle",
+    figure.section(
+        "3", "I0 RECORD REQUEST: ISSUE TO P17 WRITEBACK",
+        "FlowThrough applies to the record Request only",
+        790, role="transfer",
+    )
+    request_x = (24, 230, 460, 680, 930, 1176)
+    figure.rect(24, 832, 1152, 253, role="neutral", radius=0)
+    for x in request_x[1:-1]:
+        figure.line((x, 832), (x, 1085), color=INK, width=1)
+    figure.line((24, 877), (1176, 877), color=INK, width=1)
+    figure.line((24, 1015), (1176, 1015), color=INK, width=1)
+    for x, label in (
+        (127, "IEW issue + AGU"),
+        (345, "LSQ Request #0"),
+        (570, "Private caches"),
+        (805, "Record MSHR + LLC"),
+        (1053, "Execute + WB"),
+    ):
+        figure.text(x, 862, label, size=16, bold=True, anchor="middle")
+    figure.lines(40, 910, ("I0 rs1 ready", "EA=record address", "issue before I1"),
+                 mono=True, max_width=174)
+    figure.lines(246, 910, ("4-byte load", "ECG_FLOWTHROUGH=1", "LQ0 tracks response"),
+                 mono=True, max_width=198)
+    figure.lines(476, 910, ("D-TLB, L1D, L2", "normal lookup and hits", "private fills normal"),
+                 max_width=188)
+    figure.lines(
+        696, 910,
+        ("record-block MSHR", "LLC hit: normal response",
+         "miss: memory fetch", "may skip LLC fill"),
+        max_width=218,
+    )
+    figure.lines(
+        946, 910,
+        ("compact value returns", "format CSR widens", "writeback P17", "wake I1 rs2"),
+        max_width=214,
+    )
+    figure.arrow(
+        ((55, 1042), (1145, 1042)),
+        kind="transfer",
+        label="I0 record Request and response",
+        cadence="per adjacency entry",
+        color=AMBER,
+        width=2.5,
+        label_at=(600, 1073),
     )
 
     figure.section(
-        "6", "COMPLETION AND RETIREMENT", "metadata is advisory; data uses normal O3 completion",
-        1250, role="verify",
+        "4", "I1 PROPERTY REQUEST AND P21 WRITEBACK",
+        "P17 wakeup; ReuseBind applies to the property Request only",
+        1125, role="compute",
     )
-    figure.table(100, 1292, 470, 145, 3, role="data")
-    figure.text(116, 1322, "Writeback bus + physical register", size=17,
-                bold=True, color=BLUE)
-    figure.text(116, 1365, "I0 plan -> P17; I1 uint32 value -> P21", size=16)
-    figure.text(116, 1412, "both load-queue entries complete normally", size=16)
-    figure.table(630, 1292, 470, 145, 3, role="verify")
-    figure.text(646, 1322, "ROB commit", size=17, bold=True, color=RED)
-    figure.text(646, 1365, "I0 commits before dependent I1", size=16)
-    figure.text(646, 1412, "squash/replay stays native gem5", size=16)
+    figure.rect(24, 1167, 1152, 253, role="neutral", radius=0)
+    for x in request_x[1:-1]:
+        figure.line((x, 1167), (x, 1420), color=INK, width=1)
+    figure.line((24, 1212), (1176, 1212), color=INK, width=1)
+    figure.line((24, 1350), (1176, 1350), color=INK, width=1)
+    for x, label in (
+        (127, "IEW wakeup + AGU"),
+        (345, "LSQ Request #1"),
+        (570, "Private caches"),
+        (805, "Property MSHR + LLC"),
+        (1053, "Response + WB"),
+    ):
+        figure.text(x, 1197, label, size=16, bold=True, anchor="middle")
+    figure.lines(
+        40, 1245,
+        ("rs1 address ready", "rs2=P17 ready", f"EA=0x{fx.property_address:08X}"),
+        mono=True, max_width=174,
+    )
+    figure.lines(
+        246, 1245,
+        ("4-byte U32 load", "attach ReuseBind",
+         f"dest={fx.tracked_dest} T{fx.line_tier} "
+         f"e{fx.first_epoch}/{fx.second_epoch}",
+         f"cur={fx.tracked_reader} ctx=k seq=s"),
+        mono=True, max_width=198,
+    )
+    figure.lines(
+        476, 1245,
+        ("D-TLB, L1D, L2", "normal lookup and hits", "ReuseBind preserved"),
+        max_width=188,
+    )
+    figure.lines(
+        696, 1245,
+        ("merge compatible targets", "validate destination line",
+         "on valid hit/fill", f"stamp line 0x{fx.property_line:08X}",
+         "ordinary miss allocation"),
+        max_width=218,
+    )
+    figure.lines(
+        946, 1245,
+        (f"P21=property[{fx.tracked_dest}]", "normal completion",
+         "FlowThrough=0", "value unchanged"),
+        mono=True, max_width=214,
+    )
+    figure.arrow(
+        ((55, 1377), (1145, 1377)),
+        kind="transfer",
+        label="I1 property Request + ReuseBind and response",
+        cadence="per governed property load",
+        color=BLUE,
+        width=2.5,
+        label_at=(600, 1408),
+    )
+
+    figure.section(
+        "5", "COMMIT AND ARCHITECTURAL EFFECT",
+        "Commit follows return; effects remain request-specific",
+        1460, role="verify",
+    )
+    figure.rect(24, 1502, 650, 165, role="verify", radius=0)
+    figure.line((24, 1547), (674, 1547), color=INK, width=1)
+    figure.line((24, 1602), (674, 1602), color=INK, width=1)
+    figure.line((94, 1502), (94, 1667), color=INK, width=1)
+    figure.line((390, 1502), (390, 1667), color=INK, width=1)
+    for x, label in (
+        (59, "Lane"),
+        (242, "Completion"),
+        (532, "Commit"),
+    ):
+        figure.text(x, 1532, label, size=16, bold=True, anchor="middle")
+    figure.text(59, 1583, "I0", size=17, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(110, 1583, "P17 ready; LQ0 complete", size=16)
+    figure.text(406, 1583, "commit when ROB0 is oldest", size=16)
+    figure.text(59, 1638, "I1", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(110, 1638, "P21 ready; LQ1 complete", size=16)
+    figure.text(406, 1638, "commit after I0", size=16)
+
+    figure.rect(700, 1502, 476, 165, role="neutral", radius=0)
+    figure.text(716, 1532, "Request-specific effects", size=16,
+                bold=True, color=PURPLE)
+    figure.lines(
+        716, 1565,
+        (
+            "I0 FlowThrough: record-miss LLC allocation only",
+            "I1 ReuseBind: matching property-line metadata only",
+            "native replay, squash, fault, and retirement rules",
+            "neither mechanism changes the loaded property value",
+        ),
+        max_width=444,
+    )
     save(figure, generated)
 
 
