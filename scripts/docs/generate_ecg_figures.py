@@ -923,7 +923,7 @@ def future_distance(
         kind="control", label="structural", color=AMBER,
     )
     figure.arrow(
-        ((660, 995), (690, 1050), (940, 1050), (940, 995), (980, 995)),
+        ((660, 995), (690, 1050), (965, 1050), (965, 995), (980, 995)),
         kind="control", label="no: property only", color=RED,
         label_at=(815, 1085),
     )
@@ -1128,7 +1128,7 @@ def flowthrough_outcomes(generated: list[tuple[Path, Path]]) -> None:
         ((45, 300), (1130, 300)),
         kind="transfer", label="record Request + FlowThrough",
         cadence="per record load", color=AMBER, width=3,
-        label_at=(600, 190),
+        label_at=(600, 190), underlay=True,
     )
     for x, y, width, title, subtitle, role in pipeline_nodes:
         figure.rect(x, y, width, 115, role=role, radius=0)
@@ -1585,10 +1585,12 @@ def o3_pipeline(
     figure.arrow(
         ((40, 500), (1160, 500)),
         kind="control", label="I0", color=AMBER, width=3,
+        underlay=True,
     )
     figure.arrow(
         ((40, 535), (1160, 535)),
         kind="control", label="I1", color=GREEN, width=3,
+        underlay=True,
     )
 
     # ROB and commit path.
@@ -2237,7 +2239,7 @@ def checked_walkthrough(
     figure.arrow(
         ((55, 1050), (1145, 1050)),
         kind="dependency", label="instruction operand / Request state",
-        color=PURPLE, width=3,
+        color=PURPLE, width=3, underlay=True,
     )
     figure.table(40, 950, 190, 160, 3, role="transfer")
     figure.text(135, 982, "Record array", size=17, bold=True,
@@ -2407,7 +2409,7 @@ def architecture_state_map(generated: list[tuple[Path, Path]]) -> None:
     figure.arrow(
         ((50, 615), (1135, 615)),
         kind="control", label="dynamic instruction state", color=GREEN,
-        label_at=(600, 735),
+        label_at=(600, 735), underlay=True,
     )
     figure.rect(40, 530, 150, 140, role="data", radius=0)
     figure.text(115, 562, "Decode", size=17, bold=True,
@@ -2453,7 +2455,7 @@ def architecture_state_map(generated: list[tuple[Path, Path]]) -> None:
         ((60, 930), (1130, 930)),
         kind="transfer", label="property Request + ReuseBind",
         cadence="per governed load", color=BLUE, width=3,
-        label_at=(600, 1070),
+        label_at=(600, 1070), underlay=True,
     )
     cache_nodes = (
         (40, 850, 180, "L1D", "ordinary tags/data"),

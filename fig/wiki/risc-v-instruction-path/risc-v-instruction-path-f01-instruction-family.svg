@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1120" viewBox="0 0 1200 1120" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
   <title id="title">Experimental RISC-V instruction roles and operand contracts</title>
   <desc id="desc">Four numbered roles distinguish ordinary and FlowThrough record loads from computed-address and indexed ReuseBind property loads. Compact decode uses the record-format CSR and widens into the canonical metadata layout before the property instruction consumes the plan.</desc>
-  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
-<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
-<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
-<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
-<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
-<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
-<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#27313A"/></marker><style>
       :root { color-scheme: light dark; }
       @media (prefers-color-scheme: dark) {
         [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
@@ -36,19 +36,19 @@
   <rect x="0" y="0" width="1200" height="1120" fill="#FFFFFF"/>
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Experimental RISC-V instruction roles and operand contracts</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Record acquisition and property access remain separate dynamic loads.</text>
-  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">CONFIGURE EXECUTION CONTEXT</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">software writes format, current epoch, and context CSRs</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3"/>
-  <rect x="40" y="180" width="1120" height="190" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <line x1="40" y1="225" x2="1160" y2="225" stroke="#27313A" stroke-width="1"/>
-  <line x1="40" y1="273" x2="1160" y2="273" stroke="#27313A" stroke-width="1"/>
-  <line x1="40" y1="321" x2="1160" y2="321" stroke="#27313A" stroke-width="1"/>
-  <line x1="270" y1="180" x2="270" y2="370" stroke="#27313A" stroke-width="1"/>
-  <line x1="570" y1="180" x2="570" y2="370" stroke="#27313A" stroke-width="1"/>
-  <line x1="860" y1="180" x2="860" y2="370" stroke="#27313A" stroke-width="1"/>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="180" width="1120" height="190" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="180" data-width="1120" data-height="190"/>
+  <line x1="40" y1="225" x2="1160" y2="225" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="273" x2="1160" y2="273" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="321" x2="1160" y2="321" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="270" y1="180" x2="270" y2="370" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="570" y1="180" x2="570" y2="370" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="860" y1="180" x2="860" y2="370" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="155" y="210" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">Architectural CSR</text>
   <text x="420" y="210" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">Fields</text>
   <text x="715" y="210" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">Software update</text>
@@ -69,60 +69,60 @@
   <text x="44" y="436" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="437" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">RECORD-LOAD FAMILY</text>
   <text x="1158" y="436" text-anchor="end" class="sans body" fill="#9AA3AD">rs1 is a record address; result depends on the form</text>
-  <line x1="24" y1="456" x2="1176" y2="456" stroke="#B45309" stroke-width="3"/>
-  <rect x="40" y="490" width="180" height="120" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="24" y1="456" x2="1176" y2="456" stroke="#B45309" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="490" width="180" height="120" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="490" data-width="180" data-height="120"/>
   <text x="130" y="525" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">custom-0</text>
   <text x="130" y="557" text-anchor="middle" class="sans body" fill="#27313A">record address</text>
   <text x="130" y="585" text-anchor="middle" class="mono body" fill="#27313A">in rs1</text>
   <polygon points="350,487.5 445.0,550 350,612.5 255.0,550" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="350" data-cy="550" data-width="190" data-height="125"/>
   <text x="350" y="540" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">record-load</text>
   <text x="350" y="570" text-anchor="middle" class="sans body" fill="#27313A">role decode</text>
-  <path d="M220 550 L255 550" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-label="custom-0"/>
-  <rect x="500" y="475" width="290" height="90" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <path d="M220 550 L255 550" fill="none" stroke="#1769C2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="custom-0"/>
+  <rect x="500" y="475" width="290" height="90" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="500" data-y="475" data-width="290" data-height="90"/>
   <text x="515" y="507" text-anchor="start" class="mono label" fill="#1769C2" font-weight="700">ecg.plan.load*</text>
   <text x="515" y="538" text-anchor="start" class="sans body" fill="#27313A">ordinary placement -&gt; canonical rd</text>
-  <rect x="500" y="585" width="290" height="90" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <rect x="500" y="585" width="290" height="90" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="500" data-y="585" data-width="290" data-height="90"/>
   <text x="515" y="617" text-anchor="start" class="mono label" fill="#B45309" font-weight="700">ecg.flow.load*</text>
   <text x="515" y="648" text-anchor="start" class="sans body" fill="#27313A">ECG_FLOWTHROUGH -&gt; canonical rd</text>
-  <rect x="835" y="475" width="325" height="200" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <rect x="835" y="475" width="325" height="200" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="835" data-y="475" data-width="325" data-height="200"/>
   <text x="852" y="507" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Transport forms</text>
   <text x="852" y="540" text-anchor="start" class="mono body" fill="#27313A">general: 64-bit ReusePlan</text>
   <text x="852" y="564" text-anchor="start" class="mono body" fill="#27313A">compact: 4-byte load, widened</text>
   <text x="852" y="588" text-anchor="start" class="mono body" fill="#27313A">weighted: sidecar32 + dest</text>
   <text x="852" y="612" text-anchor="start" class="mono body" fill="#27313A">compact: FlowThrough only</text>
   <text x="852" y="636" text-anchor="start" class="mono body" fill="#27313A">no compact Plan-load</text>
-  <path d="M445 525 L500 525" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-label="ecg.plan.load*"/>
-  <path d="M445 600 L500 630" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="ecg.flow.load*"/>
+  <path d="M445 525 L500 525" fill="none" stroke="#1769C2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="ecg.plan.load*"/>
+  <path d="M445 600 L500 630" fill="none" stroke="#B45309" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="ecg.flow.load*"/>
   <circle cx="44" cy="722" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="728" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="729" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">PROPERTY-LOAD FAMILY</text>
   <text x="1158" y="728" text-anchor="end" class="sans body" fill="#9AA3AD">the ReusePlan result is an explicit source operand</text>
-  <line x1="24" y1="748" x2="1176" y2="748" stroke="#15803D" stroke-width="3"/>
-  <rect x="40" y="790" width="210" height="120" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="24" y1="748" x2="1176" y2="748" stroke="#15803D" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="790" width="210" height="120" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="790" data-width="210" data-height="120"/>
   <text x="145" y="825" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">physical rd</text>
   <text x="145" y="857" text-anchor="middle" class="sans body" fill="#27313A">canonical ReusePlan</text>
   <text x="145" y="885" text-anchor="middle" class="mono body" fill="#27313A">becomes property rs2</text>
   <polygon points="390,787.5 485.0,850 390,912.5 295.0,850" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="390" data-cy="850" data-width="190" data-height="125"/>
   <text x="390" y="840" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">property</text>
   <text x="390" y="870" text-anchor="middle" class="sans body" fill="#27313A">address form</text>
-  <path d="M250 850 L295 850" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="physical rd"/>
-  <rect x="535" y="775" width="285" height="115" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <path d="M250 850 L295 850" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="physical rd"/>
+  <rect x="535" y="775" width="285" height="115" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="535" data-y="775" data-width="285" data-height="115"/>
   <text x="552" y="808" text-anchor="start" class="mono label" fill="#15803D" font-weight="700">ecg.bind.load.*</text>
   <text x="552" y="840" text-anchor="start" class="sans body" fill="#27313A"><tspan fill="#6D5BD0" font-weight="700">rs1</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#1769C2">computed address</tspan></text>
   <text x="552" y="870" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#6D5BD0" font-weight="700">rs2</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#6D5BD0">ReusePlan</tspan></text>
-  <rect x="535" y="915" width="285" height="115" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <rect x="535" y="915" width="285" height="115" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="535" data-y="915" data-width="285" data-height="115"/>
   <text x="552" y="948" text-anchor="start" class="mono label" fill="#15803D" font-weight="700">ecg.bind.iload.*</text>
   <text x="552" y="980" text-anchor="start" class="sans body" fill="#27313A"><tspan fill="#6D5BD0" font-weight="700">rs1</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#1769C2">property base</tspan></text>
   <text x="552" y="1010" text-anchor="start" class="sans body" fill="#27313A"><tspan fill="#15803D" font-weight="700">EA</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#1769C2">base</tspan><tspan fill="#27313A"> + dest*size</tspan></text>
-  <rect x="865" y="790" width="295" height="225" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
+  <rect x="865" y="790" width="295" height="225" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="865" data-y="790" data-width="295" data-height="225"/>
   <text x="882" y="824" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Shared memory semantics</text>
   <text x="882" y="858" text-anchor="start" class="sans body" fill="#27313A">one ordinary property Request</text>
   <text x="882" y="882" text-anchor="start" class="sans body" fill="#27313A">typed ReuseBind on Request</text>
   <text x="882" y="906" text-anchor="start" class="sans body" fill="#27313A">result: U32 / S32 / U64 / F32</text>
   <text x="882" y="930" text-anchor="start" class="sans body" fill="#27313A">FlowThrough is never attached</text>
   <text x="882" y="954" text-anchor="start" class="sans body" fill="#27313A">native order / replay / retire</text>
-  <path d="M485 825 L535 832" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="ecg.bind.load.*"/>
-  <path d="M485 875 L510 972 L535 972" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="ecg.bind.iload.*"/>
-  <path d="M160 1055 L1040 1055" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="record rd becomes property rs2 through normal rename and issue"/>
-  <text x="600" y="1040" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">record rd becomes property rs2 through normal rename and issue</text>
+  <path d="M485 825 L535 832" fill="none" stroke="#15803D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="ecg.bind.load.*"/>
+  <path d="M485 875 L510 972 L535 972" fill="none" stroke="#15803D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="ecg.bind.iload.*"/>
+  <path d="M160 1055 L1040 1055" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="record rd becomes property rs2 through normal rename and issue"/>
+  <text x="600" y="1040" text-anchor="middle" class="sans body" fill="#6D5BD0" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">record rd becomes property rs2 through normal rename and issue</text>
 </svg>

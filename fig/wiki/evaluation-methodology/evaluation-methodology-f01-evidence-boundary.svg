@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1120" viewBox="0 0 1200 1120" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
   <title id="title">Evidence boundary for ECG architecture claims</title>
   <desc id="desc">The figure separates the questions answered by gem5 O3, cache_sim, and Sniper; identifies semantic receipts and activity counters as acceptance gates; and marks analytic P-OPT timing as an optimistic bound because matrix-stream latency, queueing, and bandwidth are not target-time charged.</desc>
-  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
-<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#15803D"/></marker>
-<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B45309"/></marker>
-<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#B42318"/></marker>
-<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6D5BD0"/></marker>
-<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#9AA3AD"/></marker>
-<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#27313A"/></marker><style>
+  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#1769C2"/></marker>
+<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#15803D"/></marker>
+<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B45309"/></marker>
+<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B42318"/></marker>
+<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6D5BD0"/></marker>
+<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#9AA3AD"/></marker>
+<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#27313A"/></marker><style>
       :root { color-scheme: light dark; }
       @media (prefers-color-scheme: dark) {
         [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
@@ -36,17 +36,17 @@
   <rect x="0" y="0" width="1200" height="1120" fill="#FFFFFF"/>
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">Evidence boundary for ECG architecture claims</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Rows are compared only with matching baselines inside the same simulator.</text>
-  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">SIMULATOR ROLES</text>
   <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">do not compare absolute rates or time across simulators</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3"/>
-  <rect x="40" y="190" width="1120" height="260" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <line x1="320" y1="190" x2="320" y2="450" stroke="#27313A" stroke-width="1"/>
-  <line x1="600" y1="190" x2="600" y2="450" stroke="#27313A" stroke-width="1"/>
-  <line x1="880" y1="190" x2="880" y2="450" stroke="#27313A" stroke-width="1"/>
-  <line x1="40" y1="240" x2="1160" y2="240" stroke="#27313A" stroke-width="1"/>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="190" width="1120" height="260" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="190" data-width="1120" data-height="260"/>
+  <line x1="320" y1="190" x2="320" y2="450" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="600" y1="190" x2="600" y2="450" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="880" y1="190" x2="880" y2="450" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="240" x2="1160" y2="240" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="180" y="222" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">gem5 O3</text>
   <text x="460" y="222" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">cache_sim</text>
   <text x="740" y="222" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Sniper</text>
@@ -70,14 +70,14 @@
   <text x="44" y="516" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="517" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">ROW ACCEPTANCE</text>
   <text x="1158" y="516" text-anchor="end" class="sans body" fill="#9AA3AD">a success-shaped fallback is not a valid experiment row</text>
-  <line x1="24" y1="536" x2="1176" y2="536" stroke="#B42318" stroke-width="3"/>
-  <rect x="40" y="565" width="300" height="170" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <line x1="24" y1="536" x2="1176" y2="536" stroke="#B42318" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="565" width="300" height="170" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="565" data-width="300" data-height="170"/>
   <text x="190" y="598" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Mechanism receipt vector</text>
   <text x="58" y="632" text-anchor="start" class="sans body" fill="#27313A">requested == effective</text>
   <text x="58" y="656" text-anchor="start" class="sans body" fill="#27313A">carrier + events positive</text>
   <text x="58" y="680" text-anchor="start" class="sans body" fill="#27313A">width/substitution agree</text>
   <text x="58" y="704" text-anchor="start" class="sans body" fill="#27313A">P-OPT matrix active if required</text>
-  <rect x="420" y="565" width="300" height="170" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
+  <rect x="420" y="565" width="300" height="170" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="420" data-y="565" data-width="300" data-height="170"/>
   <text x="570" y="598" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Semantic receipt vector</text>
   <text x="438" y="632" text-anchor="start" class="sans body" fill="#27313A">kernel output / edge budget</text>
   <text x="438" y="656" text-anchor="start" class="sans body" fill="#27313A">all matched policy rows agree</text>
@@ -86,19 +86,19 @@
   <polygon points="825,587.5 910.0,650 825,712.5 740.0,650" fill="#F7DEDC" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="825" data-cy="650" data-width="170" data-height="125"/>
   <text x="825" y="637" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">mechanism</text>
   <text x="825" y="668" text-anchor="middle" class="sans body" fill="#27313A">AND semantic</text>
-  <rect x="965" y="595" width="195" height="110" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <rect x="965" y="595" width="195" height="110" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="965" data-y="595" data-width="195" data-height="110"/>
   <text x="1062" y="632" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">accepted row</text>
   <text x="1062" y="668" text-anchor="middle" class="sans body" fill="#27313A">eligible for claims</text>
-  <path d="M340 650 L420 650" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="Mechanism receipt vector"/>
-  <path d="M720 650 L740 650" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="Semantic receipt vector"/>
-  <path d="M910 650 L965 650" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="accepted row"/>
+  <path d="M340 650 L420 650" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Mechanism receipt vector"/>
+  <path d="M720 650 L740 650" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Semantic receipt vector"/>
+  <path d="M910 650 L965 650" fill="none" stroke="#15803D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="accepted row"/>
   <circle cx="44" cy="842" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="848" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="849" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">CLAIM LIMITS</text>
   <text x="1158" y="848" text-anchor="end" class="sans body" fill="#9AA3AD">state what is omitted before interpreting a ratio</text>
-  <line x1="24" y1="868" x2="1176" y2="868" stroke="#B45309" stroke-width="3"/>
-  <rect x="40" y="895" width="1120" height="165" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <line x1="600" y1="895" x2="600" y2="1060" stroke="#27313A" stroke-width="1"/>
+  <line x1="24" y1="868" x2="1176" y2="868" stroke="#B45309" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="895" width="1120" height="165" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="895" data-width="1120" data-height="165"/>
+  <line x1="600" y1="895" x2="600" y2="1060" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="56" y="928" text-anchor="start" class="sans label" fill="#B45309" font-weight="700">Analytic P-OPT boundary</text>
   <text x="56" y="962" text-anchor="start" class="sans body" fill="#27313A">charged: reserved ways + cumulative matrix bytes</text>
   <text x="56" y="992" text-anchor="start" class="sans body" fill="#27313A">omitted: target-time latency / bandwidth / queueing</text>
@@ -107,6 +107,6 @@
   <text x="616" y="962" text-anchor="start" class="sans body" fill="#27313A">time + total off-chip traffic + instructions</text>
   <text x="616" y="992" text-anchor="start" class="sans body" fill="#27313A">same-build, same-cell baseline; geometric mean</text>
   <text x="616" y="1022" text-anchor="start" class="mono body" fill="#27313A">exclude timing_valid_for_speedup = 0</text>
-  <path d="M120 1095 L1080 1095" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-label="publish only after the frozen campaign"/>
-  <text x="600" y="1080" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">publish only after the frozen campaign</text>
+  <path d="M120 1095 L1080 1095" fill="none" stroke="#B42318" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="publish only after the frozen campaign"/>
+  <text x="600" y="1080" text-anchor="middle" class="sans body" fill="#B42318" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">publish only after the frozen campaign</text>
 </svg>

@@ -158,6 +158,11 @@ class Figure:
             "fill": fill,
             "stroke": stroke,
             "stroke-width": stroke_width,
+            "data-shape": "rect",
+            "data-x": x,
+            "data-y": y,
+            "data-width": width,
+            "data-height": height,
         }
         self._svg.append(
             f'<rect {_attrs(attributes)}/>'
@@ -251,7 +256,9 @@ class Figure:
         )
         self._svg.append(
             f'<polygon points="{points}" fill="{fill}" stroke="{stroke}" '
-            f'stroke-width="{stroke_width}"/>'
+            f'stroke-width="{stroke_width}" data-shape="queue" '
+            f'data-x="{x}" data-y="{y}" data-width="{width}" '
+            f'data-height="{height}"/>'
         )
         cell_id = self._id("b")
         self._cells.append(
@@ -328,6 +335,7 @@ class Figure:
         color: str = INK,
         anchor: str = "start",
         max_width: float | None = None,
+        halo: bool = False,
     ) -> None:
         if size < 16:
             raise ValueError(f"{self.target.stem}: font below 16 px")
@@ -364,6 +372,13 @@ class Figure:
             "class": " ".join(classes),
             "fill": color,
         }
+        if halo:
+            attributes.update({
+                "stroke": WHITE,
+                "stroke-width": 4,
+                "paint-order": "stroke fill",
+                "stroke-linejoin": "round",
+            })
         self._svg.append(
             f'<text {_attrs(attributes)}{extra}>'
             f'{escape(value)}</text>'
@@ -386,7 +401,8 @@ class Figure:
             f'<mxCell id="{cell_id}" value="{escape(value, quote=True)}" '
             f'style="text;html=0;strokeColor=none;fillColor=none;'
             f'align={align};verticalAlign=middle;fontFamily={family};'
-            f'fontSize={size};fontColor={color};fontStyle={font_style};" '
+            f'fontSize={size};fontColor={color};fontStyle={font_style};'
+            f'{"labelBackgroundColor=" + WHITE + ";" if halo else ""}" '
             f'vertex="1" parent="1"><mxGeometry x="{geometry_x:.2f}" '
             f'y="{geometry_y:.2f}" width="{geometry_width:.2f}" '
             f'height="{size * 1.4:.2f}" as="geometry"/></mxCell>'
@@ -490,6 +506,8 @@ class Figure:
             "y2": end[1],
             "stroke": color,
             "stroke-width": width,
+            "stroke-linecap": "round",
+            "vector-effect": "non-scaling-stroke",
         }
         self._svg.append(
             f'<line {_attrs(attributes)}/>'
@@ -516,6 +534,7 @@ class Figure:
         width: float = 3,
         label_at: tuple[float, float] | None = None,
         label_anchor: str = "middle",
+        underlay: bool = False,
     ) -> None:
         if kind not in {"transfer", "control", "loop", "dependency", "model-edge"}:
             raise ValueError(f"unsupported arrow kind: {kind}")
@@ -548,8 +567,12 @@ class Figure:
             "fill": "none",
             "stroke": color,
             "stroke-width": width,
+            "stroke-linecap": "round",
+            "stroke-linejoin": "round",
+            "vector-effect": "non-scaling-stroke",
             "marker-end": f"url(#{marker})",
             "data-flow-kind": kind,
+            "data-flow-underlay": "true" if underlay else "false",
         }
         if label:
             attributes["data-flow-label"] = label
@@ -563,6 +586,7 @@ class Figure:
             "data-flow-kind": kind,
             "data-flow-label": label,
             "data-flow-cadence": cadence,
+            "data-flow-underlay": "true" if underlay else "false",
         }
         point_xml = "".join(
             f'<mxPoint x="{x}" y="{y}"/>'
@@ -571,7 +595,8 @@ class Figure:
         self._cells.append(
             f'<object {_attrs(wrapper)}><mxCell value="" '
             f'style="edgeStyle=none;html=0;strokeColor={color};'
-            f'strokeWidth={width};startArrow=none;endArrow=block;endFill=1;" '
+            f'strokeWidth={width};rounded=1;startArrow=none;'
+            f'endArrow=block;endFill=1;" '
             f'edge="1" parent="1"><mxGeometry relative="1" as="geometry">'
             f'<mxPoint x="{points[0][0]}" y="{points[0][1]}" '
             f'as="sourcePoint"/><Array as="points">{point_xml}</Array>'
@@ -589,6 +614,7 @@ class Figure:
                 color=color,
                 anchor=label_anchor,
                 max_width=900,
+                halo=True,
             )
 
     def section(
@@ -712,10 +738,10 @@ class Figure:
         svg_path.parent.mkdir(parents=True, exist_ok=True)
         drawio_path.parent.mkdir(parents=True, exist_ok=True)
         markers = "\n".join(
-            f'<marker id="arrow-{name}" viewBox="0 0 10 8" '
-            f'markerWidth="10" markerHeight="8" refX="10" refY="4" '
+            f'<marker id="arrow-{name}" viewBox="0 0 8 6" '
+            f'markerWidth="8" markerHeight="6" refX="8" refY="3" '
             f'orient="auto" markerUnits="userSpaceOnUse">'
-            f'<path d="M0 0 L10 4 L0 8 Z" fill="{color}"/></marker>'
+            f'<path d="M0 0 L8 3 L0 6 Z" fill="{color}"/></marker>'
             for name, color in (
                 ("blue", BLUE),
                 ("green", GREEN),

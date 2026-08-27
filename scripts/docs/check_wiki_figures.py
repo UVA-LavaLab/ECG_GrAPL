@@ -189,6 +189,102 @@ def check_diamond_text_fit(
         errors.append(f"{name}: diamond text fit: {'; '.join(spills[:8])}")
 
 
+def _point_in_box(
+    point: tuple[float, float],
+    box: tuple[float, float, float, float],
+    epsilon: float = 1.5,
+) -> bool:
+    x, y = point
+    left, top, right, bottom = box
+    return (
+        left - epsilon <= x <= right + epsilon
+        and top - epsilon <= y <= bottom + epsilon
+    )
+
+
+def _segment_crosses_box(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    box: tuple[float, float, float, float],
+) -> bool:
+    # Liang-Barsky clipping against a slightly inset rectangle treats a line
+    # along a symbol boundary as valid while rejecting interior crossings.
+    left, top, right, bottom = box
+    left += 2
+    top += 2
+    right -= 2
+    bottom -= 2
+    if left >= right or top >= bottom:
+        return False
+    x0, y0 = start
+    x1, y1 = end
+    dx, dy = x1 - x0, y1 - y0
+    p = (-dx, dx, -dy, dy)
+    q = (x0 - left, right - x0, y0 - top, bottom - y0)
+    low, high = 0.0, 1.0
+    for pi, qi in zip(p, q):
+        if pi == 0:
+            if qi < 0:
+                return False
+            continue
+        value = qi / pi
+        if pi < 0:
+            low = max(low, value)
+        else:
+            high = min(high, value)
+        if low > high:
+            return False
+    return high >= 0 and low <= 1
+
+
+def check_arrow_routing(
+    figure: Figure, root: ET.Element, errors: list[str]
+) -> None:
+    name = figure.svg.relative_to(ROOT)
+    shapes: list[tuple[float, float, float, float]] = []
+    for node in root.iter():
+        shape = node.get("data-shape")
+        if shape in {"rect", "queue"}:
+            x = float(node.get("data-x", "0"))
+            y = float(node.get("data-y", "0"))
+            width = float(node.get("data-width", "0"))
+            height = float(node.get("data-height", "0"))
+            shapes.append((x, y, x + width, y + height))
+        elif shape == "diamond":
+            cx = float(node.get("data-cx", "0"))
+            cy = float(node.get("data-cy", "0"))
+            width = float(node.get("data-width", "0"))
+            height = float(node.get("data-height", "0"))
+            shapes.append((
+                cx - width / 2, cy - height / 2,
+                cx + width / 2, cy + height / 2,
+            ))
+    crossings: list[str] = []
+    for node in root.iter():
+        if not node.get("marker-end"):
+            continue
+        if node.get("data-flow-underlay") == "true":
+            continue
+        points = [
+            (float(x), float(y))
+            for x, y in POINT.findall(node.get("d", ""))
+        ]
+        if len(points) < 2:
+            continue
+        label = node.get("data-flow-label") or node.get("data-flow-kind", "arrow")
+        for box in shapes:
+            if _point_in_box(points[0], box) or _point_in_box(points[-1], box):
+                continue
+            if any(
+                _segment_crosses_box(start, end, box)
+                for start, end in zip(points, points[1:])
+            ):
+                crossings.append(f"'{label}' crosses a non-endpoint symbol")
+                break
+    if crossings:
+        errors.append(f"{name}: arrow routing: {'; '.join(crossings[:8])}")
+
+
 def collect(errors: list[str]) -> list[Figure]:
     figures: list[Figure] = []
     expected: set[Path] = set()
@@ -262,6 +358,7 @@ def check_svg(figure: Figure, errors: list[str]) -> ET.Element | None:
         errors.append(f"{name}: missing fully opaque publication background")
     boxes = check_text_layout(figure, root, errors)
     check_diamond_text_fit(figure, root, boxes, errors)
+    check_arrow_routing(figure, root, errors)
     visible = " ".join(svg_labels(root))
     for node in root.iter():
         if not node.get("marker-end"):

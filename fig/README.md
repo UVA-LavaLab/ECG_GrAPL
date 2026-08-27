@@ -29,6 +29,11 @@ opaque background, the shared light/dark role palette, and semantic arrow
 metadata. SVG and Draw.io files are emitted from the same operations and have
 matching canvas, title, description, ordered labels, and arrow kinds.
 
+Connectors follow one publication rule across the set: arrows attach at symbol
+boundaries, use rounded joins and compact arrowheads, route around non-endpoint
+symbols, and place labels off the signal path with a light/dark-aware halo.
+Transfer arrows also state their cadence.
+
 ## Visual roles
 
 | Role | Strong | Matte |
