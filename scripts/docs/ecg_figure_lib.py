@@ -762,10 +762,10 @@ class Figure:
         svg_path.parent.mkdir(parents=True, exist_ok=True)
         drawio_path.parent.mkdir(parents=True, exist_ok=True)
         markers = "\n".join(
-            f'<marker id="arrow-{name}" viewBox="0 0 8 6" '
-            f'markerWidth="8" markerHeight="6" refX="8" refY="3" '
+            f'<marker id="arrow-{name}" viewBox="0 0 10 8" '
+            f'markerWidth="11" markerHeight="8" refX="10" refY="4" '
             f'orient="auto" markerUnits="userSpaceOnUse">'
-            f'<path d="M0 0 L8 3 L0 6 Z" fill="{color}"/></marker>'
+            f'<path d="M0 0 L10 4 L0 8 Z" fill="{color}"/></marker>'
             for name, color in (
                 ("blue", BLUE),
                 ("green", GREEN),

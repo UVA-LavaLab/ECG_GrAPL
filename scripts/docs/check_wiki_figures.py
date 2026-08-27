@@ -385,6 +385,11 @@ def check_svg(figure: Figure, errors: list[str]) -> ET.Element | None:
             for (x1, y1), (x2, y2) in zip(points, points[1:])
         ) < 20:
             errors.append(f"{name}: arrow has no run of at least 20 px")
+        if kind != "model-edge" and any(
+            abs(x2 - x1) > 0.01 and abs(y2 - y1) > 0.01
+            for (x1, y1), (x2, y2) in zip(points, points[1:])
+        ):
+            errors.append(f"{name}: semantic arrow contains a diagonal segment")
     return root
 
 

@@ -14,6 +14,7 @@ from pathlib import Path
 from ecg_figure_lib import (
     AMBER,
     AMBER_MATTE,
+    BORDER,
     BLUE,
     GRAY,
     GREEN,
@@ -919,11 +920,12 @@ def future_distance(
         label_at=(388, 900),
     )
     figure.arrow(
-        ((660, 945), (760, 945)),
+        ((660, 970), (760, 970)),
         kind="control", label="structural", color=AMBER,
     )
     figure.arrow(
-        ((660, 995), (690, 1050), (965, 1050), (965, 995), (980, 995)),
+        ((660, 970), (690, 970), (690, 1050), (965, 1050),
+         (965, 970), (980, 970)),
         kind="control", label="no: property only", color=RED,
         label_at=(815, 1085),
     )
@@ -1055,11 +1057,13 @@ def llc_policy(generated: list[tuple[Path, Path]]) -> None:
         label="RRPV == max?", color=GREEN,
     )
     figure.arrow(
-        ((610, 875), (680, 875)), kind="control",
+        ((610, 900), (645, 900), (645, 890), (680, 890)),
+        kind="control",
         label="structural", color=AMBER,
     )
     figure.arrow(
-        ((610, 925), (650, 1005), (910, 1005), (910, 925), (930, 925)),
+        ((610, 900), (650, 900), (650, 1005), (910, 1005),
+         (910, 905), (930, 905)),
         kind="control",
         label="property candidates", color=PURPLE,
         label_at=(780, 1035),
@@ -1125,7 +1129,7 @@ def flowthrough_outcomes(generated: list[tuple[Path, Path]]) -> None:
         (960, 205, 180, "Memory", "ordinary service", "verify"),
     )
     figure.arrow(
-        ((45, 300), (1130, 300)),
+        ((45, 263), (1130, 263)),
         kind="transfer", label="record Request + FlowThrough",
         cadence="per record load", color=AMBER, width=3,
         label_at=(600, 190), underlay=True,
@@ -1191,11 +1195,11 @@ def flowthrough_outcomes(generated: list[tuple[Path, Path]]) -> None:
                 color=AMBER, anchor="middle")
     figure.text(1055, 820, "all targets false", size=16, anchor="middle")
     figure.arrow(
-        ((910, 685), (960, 685)),
+        ((910, 710), (935, 710), (935, 688), (960, 688)),
         kind="control", label="true: insert LLC", color=RED,
     )
     figure.arrow(
-        ((910, 735), (930, 800), (960, 800)),
+        ((910, 710), (935, 710), (935, 800), (960, 800)),
         kind="control", label="false: skip fill", color=AMBER,
     )
 
@@ -1429,12 +1433,15 @@ def instruction_family(generated: list[tuple[Path, Path]]) -> None:
         ),
         mono=True, max_width=292,
     )
+    figure.line((445, 550), (470, 550), color=BORDER, width=2)
+    figure.line((470, 520), (470, 630), color=BORDER, width=2)
+    figure.circle(470, 550, 5, fill=WHITE, stroke=BORDER)
     figure.arrow(
-        ((445, 525), (500, 525)),
+        ((470, 520), (500, 520)),
         kind="control", label="ecg.plan.load*", color=BLUE,
     )
     figure.arrow(
-        ((445, 600), (500, 630)),
+        ((470, 630), (500, 630)),
         kind="control", label="ecg.flow.load*", color=AMBER,
     )
 
@@ -1503,12 +1510,15 @@ def instruction_family(generated: list[tuple[Path, Path]]) -> None:
         ),
         max_width=260,
     )
+    figure.line((485, 850), (510, 850), color=BORDER, width=2)
+    figure.line((510, 833), (510, 973), color=BORDER, width=2)
+    figure.circle(510, 850, 5, fill=WHITE, stroke=BORDER)
     figure.arrow(
-        ((485, 825), (535, 832)),
+        ((510, 833), (535, 833)),
         kind="control", label="ecg.bind.load.*", color=GREEN,
     )
     figure.arrow(
-        ((485, 875), (510, 972), (535, 972)),
+        ((510, 973), (535, 973)),
         kind="control", label="ecg.bind.iload.*", color=GREEN,
     )
     figure.arrow(
@@ -1593,13 +1603,18 @@ def o3_pipeline(
         underlay=True,
     )
 
-    # ROB and commit path.
-    figure.rect(330, 260, 520, 85, role="verify", radius=0)
-    for x in range(370, 850, 40):
-        figure.line((x, 260), (x, 345), color=RED, width=1)
-    figure.text(590, 295, "ROB", size=18, bold=True,
-                color=RED, anchor="middle")
-    figure.text(590, 325, "ROB0: I0 | ROB1: I1", size=16, anchor="middle")
+    # ROB occupancy: neutral entries plus the two live loads at the commit end.
+    figure.text(590, 252, "ROB entries (oldest at right)", size=17,
+                bold=True, color=RED, anchor="middle")
+    for index in range(13):
+        role = "transfer" if index == 12 else "compute" if index == 11 else "neutral"
+        figure.rect(330 + index * 40, 270, 40, 70, role=role,
+                    stroke_width=1, radius=0)
+    figure.text(790, 312, "I1", size=16, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(830, 312, "I0", size=16, bold=True,
+                color=AMBER, anchor="middle")
+    figure.text(830, 362, "head", size=16, color=RED, anchor="middle")
     figure.rect(950, 270, 180, 65, role="verify", radius=0)
     figure.text(1040, 298, "Commit", size=17, bold=True,
                 color=RED, anchor="middle")
@@ -1666,22 +1681,21 @@ def o3_pipeline(
 
     # Allocation, completion, response, and dependency feedback.
     figure.arrow(
-        ((357, 425), (357, 375), (430, 375), (430, 345)),
+        ((357, 425), (357, 375), (790, 375), (790, 340)),
         kind="control", label="ROB allocation", color=PURPLE,
-        label_at=(445, 370), label_anchor="start",
+        label_at=(555, 368),
     )
     figure.arrow(
-        ((710, 415), (710, 350), (700, 350), (700, 345)),
+        ((710, 415), (710, 360), (830, 360), (830, 340)),
         kind="control", label="ROB completion", color=BLUE,
-        label_at=(720, 390), label_anchor="start",
+        label_at=(765, 390),
     )
     figure.arrow(
         ((850, 302), (950, 302)),
-        kind="control", label="in-order commit", color=RED,
-        label_at=(900, 325),
+        kind="control", label="Commit", color=RED,
     )
     figure.arrow(
-        ((1135, 550), (1135, 700), (785, 700), (785, 575)),
+        ((1135, 550), (1135, 700), (710, 700), (710, 575)),
         kind="transfer", label="load-data response",
         cadence="per completed load", color=BLUE,
         label_at=(960, 690),
@@ -1990,11 +2004,11 @@ def mshr_lifecycle(generated: list[tuple[Path, Path]]) -> None:
                 color=RED)
     figure.text(862, 665, "mixed / mismatch / invalid", size=16)
     figure.arrow(
-        ((805, 545), (845, 520)),
+        ((805, 575), (825, 575), (825, 518), (845, 518)),
         kind="control", label="selected extension", color=GREEN,
     )
     figure.arrow(
-        ((805, 605), (845, 645)),
+        ((805, 575), (825, 575), (825, 648), (845, 648)),
         kind="control", label="conflict state", color=RED,
     )
     figure.text(
@@ -2237,7 +2251,7 @@ def checked_walkthrough(
         885, role="compute",
     )
     figure.arrow(
-        ((55, 1050), (1145, 1050)),
+        ((55, 1030), (1145, 1030)),
         kind="dependency", label="instruction operand / Request state",
         color=PURPLE, width=3, underlay=True,
     )
@@ -2407,7 +2421,7 @@ def architecture_state_map(generated: list[tuple[Path, Path]]) -> None:
         450, role="compute",
     )
     figure.arrow(
-        ((50, 615), (1135, 615)),
+        ((50, 600), (1135, 600)),
         kind="control", label="dynamic instruction state", color=GREEN,
         label_at=(600, 735), underlay=True,
     )
@@ -2452,7 +2466,7 @@ def architecture_state_map(generated: list[tuple[Path, Path]]) -> None:
         782, role="state",
     )
     figure.arrow(
-        ((60, 930), (1130, 930)),
+        ((60, 920), (1130, 920)),
         kind="transfer", label="property Request + ReuseBind",
         cadence="per governed load", color=BLUE, width=3,
         label_at=(600, 1070), underlay=True,
@@ -2460,8 +2474,8 @@ def architecture_state_map(generated: list[tuple[Path, Path]]) -> None:
     cache_nodes = (
         (40, 850, 180, "L1D", "ordinary tags/data"),
         (280, 850, 180, "L2", "ordinary tags/data"),
-        (520, 830, 210, "MSHR target list", "allocOnFill + merge"),
-        (790, 820, 360, "LLC replacement entry",
+        (520, 850, 210, "MSHR target list", "allocOnFill + merge"),
+        (790, 830, 360, "LLC replacement entry",
          "valid | property | RRPV | recency\n"
          "tier | e1 | e2 | count\n"
          "context | stamp"),

@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1240" viewBox="0 0 1200 1240" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">ECG state placement in the processor and cache hierarchy</title>
   <desc id="desc">The architecture map places offline records, architectural format/current/context CSRs, renamed ReusePlan operands, load-queue state, typed Request extensions, MSHR merge state, and line-local LLC metadata in their actual controlling structures. It distinguishes exact gem5 O3 binding from diagnostic models.</desc>
-  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#2563EB"/></marker>
-<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#0F8A72"/></marker>
-<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C56A13"/></marker>
-<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C63C4A"/></marker>
-<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6558C5"/></marker>
-<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#98A2B3"/></marker>
-<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#182230"/></marker><style>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C63C4A"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6558C5"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#98A2B3"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#182230"/></marker><style>
       :root { color-scheme: light dark; }
       @media (prefers-color-scheme: dark) {
         [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
@@ -66,7 +66,7 @@
   <text x="1158" y="456" text-anchor="end" class="sans body" fill="#98A2B3">standard O3 structures carry one explicit dependency</text>
   <line x1="24" y1="476" x2="1176" y2="476" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="476" x2="170" y2="476" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <path d="M50 615 L1135 615" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="true" data-flow-label="dynamic instruction state"/>
+  <path d="M50 600 L1135 600" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="true" data-flow-label="dynamic instruction state"/>
   <rect x="481.00" y="718.00" width="238.00" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="600" y="735" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">dynamic instruction state</text>
   <rect x="40" y="530" width="150" height="140" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="530" data-width="150" data-height="140"/>
@@ -104,7 +104,7 @@
   <text x="1158" y="788" text-anchor="end" class="sans body" fill="#98A2B3">private caches stay ordinary; LLC state is extended</text>
   <line x1="24" y1="808" x2="1176" y2="808" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="808" x2="170" y2="808" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <path d="M60 930 L1130 930" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="true" data-flow-label="property Request + ReuseBind" data-flow-cadence="per governed load"/>
+  <path d="M60 920 L1130 920" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="true" data-flow-label="property Request + ReuseBind" data-flow-cadence="per governed load"/>
   <rect x="376.12" y="1053.00" width="447.76" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="600" y="1070" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">property Request + ReuseBind | per governed load</text>
   <rect x="40" y="850" width="180" height="140" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="850" data-width="180" data-height="140"/>
@@ -113,14 +113,14 @@
   <rect x="280" y="850" width="180" height="140" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="280" data-y="850" data-width="180" data-height="140"/>
   <text x="370.0" y="885" text-anchor="middle" class="sans label" fill="#2563EB" font-weight="700">L2</text>
   <text x="370.0" y="928" text-anchor="middle" class="sans body" fill="#182230">ordinary tags/data</text>
-  <rect x="520" y="830" width="210" height="140" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="520" data-y="830" data-width="210" data-height="140"/>
-  <text x="625.0" y="865" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">MSHR target list</text>
-  <text x="625.0" y="908" text-anchor="middle" class="sans body" fill="#182230">allocOnFill + merge</text>
-  <rect x="790" y="820" width="360" height="180" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="790" data-y="820" data-width="360" data-height="180"/>
-  <text x="970.0" y="855" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">LLC replacement entry</text>
-  <text x="970.0" y="898" text-anchor="middle" class="mono body" fill="#182230">valid | property | RRPV | recency</text>
-  <text x="970.0" y="934" text-anchor="middle" class="mono body" fill="#182230">tier | e1 | e2 | count</text>
-  <text x="970.0" y="970" text-anchor="middle" class="mono body" fill="#182230">context | stamp</text>
+  <rect x="520" y="850" width="210" height="140" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="520" data-y="850" data-width="210" data-height="140"/>
+  <text x="625.0" y="885" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">MSHR target list</text>
+  <text x="625.0" y="928" text-anchor="middle" class="sans body" fill="#182230">allocOnFill + merge</text>
+  <rect x="790" y="830" width="360" height="180" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="790" data-y="830" data-width="360" data-height="180"/>
+  <text x="970.0" y="865" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">LLC replacement entry</text>
+  <text x="970.0" y="908" text-anchor="middle" class="mono body" fill="#182230">valid | property | RRPV | recency</text>
+  <text x="970.0" y="944" text-anchor="middle" class="mono body" fill="#182230">tier | e1 | e2 | count</text>
+  <text x="970.0" y="980" text-anchor="middle" class="mono body" fill="#182230">context | stamp</text>
   <text x="625" y="1015" text-anchor="middle" class="sans body" fill="#C56A13">newest compatible sequence; conflict propagates</text>
   <path d="M130 1145 L1070 1145" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="property bytes return normally; metadata remains advisory at the LLC" data-flow-cadence="per governed hit or fill"/>
   <rect x="161.80" y="1113.00" width="876.40" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
