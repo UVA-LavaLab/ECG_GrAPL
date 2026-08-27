@@ -16,8 +16,12 @@ CORPUS = ROOT / "results/graphs/literature_scale_corpus.receipt.json"
 def test_literature_scale_gate_expected_shapes():
     screen = literature_scale_gate.expected_cells(
         MANIFEST, SCREEN, literature_scale_gate.SCREEN_STAGES)
+    early = literature_scale_gate.expected_cells(
+        MANIFEST, SCREEN, literature_scale_gate.EARLY_STOP_STAGES)
     complete = literature_scale_gate.expected_cells(
         MANIFEST, SCREEN, literature_scale_gate.COMPLETE_STAGES)
+    assert len(early) == 7
+    assert sum(len(roster) for roster in early.values()) == 51
     assert len(screen) == 13
     assert sum(len(roster) for roster in screen.values()) == 99
     assert len(complete) == 81
@@ -52,6 +56,49 @@ def test_empty_screen_gate_fails_closed():
     assert any(
         "PageRank timing rows incomplete" in error
         for error in result["errors"])
+
+
+def test_early_stop_guard_reports_decisive_cell():
+    primary = literature_scale_gate.pagerank_gate.policy_roles(
+        SCREEN)["primary"]
+    result = {
+        "candidates": {
+            primary: {
+                "comparisons": {
+                    "LRU": {"cells": [{
+                        "graph": "graph-a",
+                        "iterations": 1,
+                        "time_ratio": 0.95,
+                        "traffic_ratio": 0.90,
+                    }]},
+                    "SRRIP": {"cells": [{
+                        "graph": "graph-a",
+                        "iterations": 1,
+                        "time_ratio": 0.96,
+                        "traffic_ratio": 0.91,
+                    }]},
+                    "GRASP": {"cells": [{
+                        "graph": "graph-a",
+                        "iterations": 1,
+                        "time_ratio": 0.98,
+                        "traffic_ratio": 0.99,
+                    }]},
+                    "POPT": {"cells": [{
+                        "graph": "graph-a",
+                        "iterations": 1,
+                        "time_ratio": 1.031,
+                        "traffic_ratio": 0.96,
+                    }]},
+                },
+            },
+        },
+    }
+    violations = literature_scale_gate.per_cell_guard_violations(
+        result, SCREEN)
+    assert len(violations) == 1
+    assert violations[0]["baseline"] == "POPT"
+    assert violations[0]["graph"] == "graph-a"
+    assert violations[0]["time_ratio"] == 1.031
 
 
 def test_literature_gate_requires_certified_sniper_fallback():

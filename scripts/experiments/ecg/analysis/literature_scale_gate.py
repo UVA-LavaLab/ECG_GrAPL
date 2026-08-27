@@ -34,6 +34,10 @@ SCREEN_STAGES = {
     "90_gem5_literature_scale_i1",
     "91_gem5_literature_scale_i8",
 }
+EARLY_STOP_STAGES = {
+    "60_gem5_proposal_reuse_bind_o3",
+    "90_gem5_literature_scale_i1",
+}
 COMPLETE_STAGES = {
     *SCREEN_STAGES,
     "92_cache_sim_literature_scale_wide16",
@@ -324,6 +328,115 @@ def validate_full_role_authorizations(
     return errors
 
 
+def per_cell_guard_violations(
+        pagerank_result: dict[str, Any],
+        screen: dict[str, Any],
+) -> list[dict[str, Any]]:
+    roles = pagerank_gate.policy_roles(screen)
+    comparisons = pagerank_result["candidates"][roles["primary"]][
+        "comparisons"]
+    decision = screen["decision"]
+    time_limit = float(decision["max_time_ratio_per_cell"])
+    traffic_limit = float(decision["max_traffic_ratio_per_cell"])
+    violations = []
+    for baseline in [roles["sanity"], *roles["serious"]]:
+        for cell in comparisons[baseline]["cells"]:
+            time_ratio = float(cell["time_ratio"])
+            traffic_ratio = float(cell["traffic_ratio"])
+            if time_ratio <= time_limit and traffic_ratio <= traffic_limit:
+                continue
+            violations.append({
+                "baseline": baseline,
+                "graph": cell["graph"],
+                "iterations": cell["iterations"],
+                "time_ratio": time_ratio,
+                "traffic_ratio": traffic_ratio,
+                "time_limit": time_limit,
+                "traffic_limit": traffic_limit,
+                "maximum_normalized_excess": max(
+                    time_ratio / time_limit,
+                    traffic_ratio / traffic_limit,
+                ),
+            })
+    return sorted(
+        violations,
+        key=lambda item: (
+            -item["maximum_normalized_excess"],
+            item["graph"],
+            item["baseline"],
+        ),
+    )
+
+
+def evaluate_early_stop(
+        rows: list[dict[str, Any]],
+        manifest: dict[str, Any],
+        screen: dict[str, Any],
+        run_dirs: list[Path],
+) -> dict[str, Any]:
+    groups = grouped_rows(rows, EARLY_STOP_STAGES)
+    errors = []
+    errors.extend(validate_rosters(
+        groups, expected_cells(manifest, screen, EARLY_STOP_STAGES)))
+    errors.extend(validate_rows(groups, manifest))
+    errors.extend(final_campaign_gate.validate_run_preflight(run_dirs))
+
+    timing_rows = [
+        row for row in rows
+        if row.get("final_stage") == "90_gem5_literature_scale_i1"
+    ]
+    pagerank_result = None
+    violations: list[dict[str, Any]] = []
+    expected_timing_rows = len(screen["graphs"]) * len(
+        screen["policies"]["all"])
+    if len(timing_rows) != expected_timing_rows:
+        errors.append(
+            f"PageRank iteration-1 rows incomplete: "
+            f"expected={expected_timing_rows} actual={len(timing_rows)}")
+    else:
+        early_screen = json.loads(json.dumps(screen))
+        early_screen["iterations"] = [1]
+        try:
+            pagerank_result = pagerank_gate.evaluate(
+                timing_rows, early_screen)
+            if not pagerank_result["screen_valid"]:
+                errors.append(
+                    "PageRank iteration-1 baseline/oracle sanity failed")
+            violations = per_cell_guard_violations(
+                pagerank_result, early_screen)
+        except ValueError as error:
+            errors.append(
+                f"PageRank iteration-1 early-stop gate failed: {error}")
+
+    valid = not errors
+    stop = bool(
+        valid and violations and
+        screen["decision"]["stop_if_primary_fails"])
+    decision = "INVALID" if not valid else "STOP" if stop else "CONTINUE"
+    return {
+        "valid": valid,
+        "phase": "early-stop",
+        "decision": decision,
+        "errors": errors,
+        "run_dirs": [str(path) for path in run_dirs],
+        "cell_count": len(groups),
+        "row_count": sum(len(group) for group in groups.values()),
+        "stage_rows": {
+            stage: sum(
+                len(group) for key, group in groups.items()
+                if key[0] == stage)
+            for stage in sorted(EARLY_STOP_STAGES)
+        },
+        "pagerank_gate": pagerank_result,
+        "per_cell_violations": violations,
+        "decisive_violation": violations[0] if violations else None,
+        "stop_if_primary_fails": bool(
+            screen["decision"]["stop_if_primary_fails"]),
+        "iteration_8_authorized": bool(valid and not stop),
+        "full_roles_authorized": False,
+    }
+
+
 def evaluate(
         rows: list[dict[str, Any]],
         manifest: dict[str, Any],
@@ -385,7 +498,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--input-run-dirs", nargs="+", required=True)
     parser.add_argument(
-        "--phase", choices=("screen", "complete"), default="complete")
+        "--phase", choices=("early-stop", "screen", "complete"),
+        default="complete")
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--screen-config", default=str(DEFAULT_SCREEN))
     parser.add_argument(
@@ -399,13 +513,14 @@ def main(argv: list[str] | None = None) -> int:
     ])
     with redirect_stdout(sys.stderr):
         rows, _ = aggregate_results.collect_csvs(run_dirs, [])
-    result = evaluate(
-        rows,
-        json.loads(Path(args.manifest).read_text()),
-        json.loads(Path(args.screen_config).read_text()),
-        run_dirs,
-        args.phase,
-        Path(args.corpus_receipt),
+    manifest = json.loads(Path(args.manifest).read_text())
+    screen = json.loads(Path(args.screen_config).read_text())
+    result = (
+        evaluate_early_stop(rows, manifest, screen, run_dirs)
+        if args.phase == "early-stop" else
+        evaluate(
+            rows, manifest, screen, run_dirs, args.phase,
+            Path(args.corpus_receipt))
     )
     git_head = subprocess.run(
         ["/usr/bin/git", "rev-parse", "HEAD"],
