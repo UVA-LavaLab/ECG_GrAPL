@@ -12,21 +12,22 @@ from typing import Iterable, Sequence
 CANVAS_WIDTH = 1200
 SCHEMA = "ecg-public/v1"
 
-INK = "#27313A"
-GRAY = "#9AA3AD"
-BLUE = "#1769C2"
-GREEN = "#15803D"
-AMBER = "#B45309"
-RED = "#B42318"
-PURPLE = "#6D5BD0"
+INK = "#182230"
+BORDER = "#475467"
+GRAY = "#98A2B3"
+BLUE = "#2563EB"
+GREEN = "#0F8A72"
+AMBER = "#C56A13"
+RED = "#C63C4A"
+PURPLE = "#6558C5"
 
 WHITE = "#FFFFFF"
-NEUTRAL = "#F8F6EC"
-BLUE_MATTE = "#EDF5FF"
-GREEN_MATTE = "#E7F7EA"
-AMBER_MATTE = "#FFF0D8"
-RED_MATTE = "#F7DEDC"
-PURPLE_MATTE = "#EEE9FF"
+NEUTRAL = "#F8FAFC"
+BLUE_MATTE = "#EFF6FF"
+GREEN_MATTE = "#ECFDF5"
+AMBER_MATTE = "#FFF7ED"
+RED_MATTE = "#FFF1F2"
+PURPLE_MATTE = "#F5F3FF"
 
 ROLE_COLORS = {
     "ink": (INK, WHITE),
@@ -143,12 +144,14 @@ class Figure:
         height: float,
         *,
         role: str = "neutral",
-        stroke: str = INK,
-        stroke_width: float = 2,
-        radius: float = 9,
+        stroke: str = BORDER,
+        stroke_width: float = 1.5,
+        radius: float = 6,
     ) -> None:
         self._check_bounds(x, y, width, height)
         _, fill = ROLE_COLORS[role]
+        resolved_stroke = BORDER if stroke == INK and role != "ink" else stroke
+        stroke_width = min(stroke_width, 2)
         attributes = {
             "x": x,
             "y": y,
@@ -156,7 +159,7 @@ class Figure:
             "height": height,
             "rx": radius,
             "fill": fill,
-            "stroke": stroke,
+            "stroke": resolved_stroke,
             "stroke-width": stroke_width,
             "data-shape": "rect",
             "data-x": x,
@@ -168,7 +171,7 @@ class Figure:
             f'<rect {_attrs(attributes)}/>'
         )
         self._add_drawio_rect(
-            x, y, width, height, fill, stroke, stroke_width,
+            x, y, width, height, fill, resolved_stroke, stroke_width,
             rounded=1 if radius else 0,
         )
 
@@ -210,19 +213,21 @@ class Figure:
         height: float,
         *,
         role: str = "compute",
-        stroke: str = INK,
-        stroke_width: float = 2,
+        stroke: str = BORDER,
+        stroke_width: float = 1.5,
     ) -> None:
         x = cx - width / 2
         y = cy - height / 2
         self._check_bounds(x, y, width, height)
         _, fill = ROLE_COLORS[role]
+        resolved_stroke = BORDER if stroke == INK and role != "ink" else stroke
+        stroke_width = min(stroke_width, 2)
         points = (
             f"{cx},{y} {x + width},{cy} "
             f"{cx},{y + height} {x},{cy}"
         )
         self._svg.append(
-            f'<polygon points="{points}" fill="{fill}" stroke="{stroke}" '
+            f'<polygon points="{points}" fill="{fill}" stroke="{resolved_stroke}" '
             f'stroke-width="{stroke_width}" data-shape="diamond" '
             f'data-cx="{cx}" data-cy="{cy}" data-width="{width}" '
             f'data-height="{height}"/>'
@@ -230,7 +235,7 @@ class Figure:
         cell_id = self._id("b")
         self._cells.append(
             f'<mxCell id="{cell_id}" value="" '
-            f'style="rhombus;html=0;fillColor={fill};strokeColor={stroke};'
+            f'style="rhombus;html=0;fillColor={fill};strokeColor={resolved_stroke};'
             f'strokeWidth={stroke_width};" vertex="1" parent="1">'
             f'<mxGeometry x="{x}" y="{y}" width="{width}" height="{height}" '
             f'as="geometry"/></mxCell>'
@@ -244,18 +249,20 @@ class Figure:
         height: float,
         *,
         role: str = "state",
-        stroke: str = INK,
-        stroke_width: float = 2,
+        stroke: str = BORDER,
+        stroke_width: float = 1.5,
     ) -> None:
         self._check_bounds(x, y, width, height)
         _, fill = ROLE_COLORS[role]
+        resolved_stroke = BORDER if stroke == INK and role != "ink" else stroke
+        stroke_width = min(stroke_width, 2)
         inset = min(24.0, width * 0.12)
         points = (
             f"{x + inset},{y} {x + width},{y} "
             f"{x + width - inset},{y + height} {x},{y + height}"
         )
         self._svg.append(
-            f'<polygon points="{points}" fill="{fill}" stroke="{stroke}" '
+            f'<polygon points="{points}" fill="{fill}" stroke="{resolved_stroke}" '
             f'stroke-width="{stroke_width}" data-shape="queue" '
             f'data-x="{x}" data-y="{y}" data-width="{width}" '
             f'data-height="{height}"/>'
@@ -264,7 +271,7 @@ class Figure:
         self._cells.append(
             f'<mxCell id="{cell_id}" value="" '
             f'style="shape=trapezoid;perimeter=trapezoidPerimeter;html=0;'
-            f'fillColor={fill};strokeColor={stroke};strokeWidth={stroke_width};" '
+            f'fillColor={fill};strokeColor={resolved_stroke};strokeWidth={stroke_width};" '
             f'vertex="1" parent="1"><mxGeometry x="{x}" y="{y}" '
             f'width="{width}" height="{height}" as="geometry"/></mxCell>'
         )
@@ -277,28 +284,30 @@ class Figure:
         height: float,
         *,
         role: str = "data",
-        stroke: str = INK,
-        stroke_width: float = 2,
+        stroke: str = BORDER,
+        stroke_width: float = 1.5,
     ) -> None:
         self._check_bounds(x, y, width, height)
         _, fill = ROLE_COLORS[role]
+        resolved_stroke = BORDER if stroke == INK and role != "ink" else stroke
+        stroke_width = min(stroke_width, 2)
         cap = min(24.0, height * 0.18)
         self._svg.extend([
             f'<rect x="{x}" y="{y + cap / 2}" width="{width}" '
-            f'height="{height - cap}" fill="{fill}" stroke="{stroke}" '
+            f'height="{height - cap}" fill="{fill}" stroke="{resolved_stroke}" '
             f'stroke-width="{stroke_width}"/>',
             f'<ellipse cx="{x + width / 2}" cy="{y + cap / 2}" '
             f'rx="{width / 2}" ry="{cap / 2}" fill="{fill}" '
-            f'stroke="{stroke}" stroke-width="{stroke_width}"/>',
+            f'stroke="{resolved_stroke}" stroke-width="{stroke_width}"/>',
             f'<ellipse cx="{x + width / 2}" cy="{y + height - cap / 2}" '
             f'rx="{width / 2}" ry="{cap / 2}" fill="{fill}" '
-            f'stroke="{stroke}" stroke-width="{stroke_width}"/>',
+            f'stroke="{resolved_stroke}" stroke-width="{stroke_width}"/>',
         ])
         cell_id = self._id("b")
         self._cells.append(
             f'<mxCell id="{cell_id}" value="" '
             f'style="shape=cylinder3;html=0;boundedLbl=1;backgroundOutline=1;'
-            f'fillColor={fill};strokeColor={stroke};strokeWidth={stroke_width};" '
+            f'fillColor={fill};strokeColor={resolved_stroke};strokeWidth={stroke_width};" '
             f'vertex="1" parent="1"><mxGeometry x="{x}" y="{y}" '
             f'width="{width}" height="{height}" as="geometry"/></mxCell>'
         )
@@ -312,8 +321,8 @@ class Figure:
         rows: int,
         *,
         role: str = "data",
-        stroke: str = INK,
-        stroke_width: float = 2,
+        stroke: str = BORDER,
+        stroke_width: float = 1.5,
     ) -> None:
         self.rect(
             x, y, width, height, role=role, stroke=stroke,
@@ -375,7 +384,8 @@ class Figure:
         if halo:
             attributes.update({
                 "stroke": WHITE,
-                "stroke-width": 4,
+                "stroke-width": 2,
+                "stroke-opacity": 0.96,
                 "paint-order": "stroke fill",
                 "stroke-linejoin": "round",
             })
@@ -393,7 +403,7 @@ class Figure:
             else x
         )
         geometry_y = y - size * 0.86
-        family = "Courier New" if mono else "Helvetica"
+        family = "DejaVu Sans Mono" if mono else "Liberation Sans"
         align = "center" if anchor == "middle" else "right" if anchor == "end" else "left"
         font_style = "1" if bold else "0"
         cell_id = self._id("t")
@@ -472,7 +482,7 @@ class Figure:
         }
         self._svg.append(f'<text {_attrs(attributes)}>{spans}</text>')
         self._labels.append(combined)
-        family = "Courier New" if mono else "Helvetica"
+        family = "DejaVu Sans Mono" if mono else "Liberation Sans"
         html_value = "".join(
             f'<span style="color:{color};'
             f'{"font-weight:700;" if bold else ""}">'
@@ -605,6 +615,20 @@ class Figure:
         )
         if label_at and label:
             visible = label if not cadence else f"{label} | {cadence}"
+            label_width = _estimate_text(visible, 16, False, True)
+            label_left = (
+                label_at[0] - label_width / 2
+                if label_anchor == "middle"
+                else label_at[0] - label_width
+                if label_anchor == "end"
+                else label_at[0]
+            )
+            self._svg.append(
+                f'<rect x="{label_left - 5:.2f}" y="{label_at[1] - 17:.2f}" '
+                f'width="{label_width + 10:.2f}" height="22" rx="3" '
+                f'fill="{WHITE}" fill-opacity="0.96" '
+                f'data-label-background="true"/>'
+            )
             self.text(
                 label_at[0],
                 label_at[1],
@@ -614,7 +638,6 @@ class Figure:
                 color=color,
                 anchor=label_anchor,
                 max_width=900,
-                halo=True,
             )
 
     def section(
@@ -629,7 +652,7 @@ class Figure:
         strong, _ = ROLE_COLORS[role]
         self.circle(44, y, 19, fill=INK, stroke=INK)
         self.text(44, y + 6, number, size=17, bold=True, color=WHITE, anchor="middle")
-        self.text(74, y + 7, title, size=22, bold=True, color=strong, max_width=560)
+        self.text(74, y + 7, title, size=22, bold=True, color=INK, max_width=560)
         self.text(
             1158,
             y + 6,
@@ -639,7 +662,8 @@ class Figure:
             anchor="end",
             max_width=520,
         )
-        self.line((24, y + 26), (1176, y + 26), color=strong, width=3)
+        self.line((24, y + 26), (1176, y + 26), color=BORDER, width=1)
+        self.line((24, y + 26), (170, y + 26), color=strong, width=3)
 
     def card(
         self,
@@ -654,7 +678,7 @@ class Figure:
         mono_body: bool = False,
         title_color: str | None = None,
     ) -> None:
-        self.rect(x, y, width, height, role=role, stroke=INK, stroke_width=2)
+        self.rect(x, y, width, height, role=role)
         strong, _ = ROLE_COLORS[role]
         self.text(
             x + 16,
@@ -755,23 +779,24 @@ class Figure:
         style = """
       :root { color-scheme: light dark; }
       @media (prefers-color-scheme: dark) {
-        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
-        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
-        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
-        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
-        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
-        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
-        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
-        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
-        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
-        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
-        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
-        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
-        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
-        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+        [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
+        [fill="#F8FAFC"]{fill:#172033}[stroke="#F8FAFC"]{stroke:#172033}
+        [fill="#EFF6FF"]{fill:#172554}[stroke="#EFF6FF"]{stroke:#172554}
+        [fill="#ECFDF5"]{fill:#073B34}[stroke="#ECFDF5"]{stroke:#073B34}
+        [fill="#FFF7ED"]{fill:#422A12}[stroke="#FFF7ED"]{stroke:#422A12}
+        [fill="#FFF1F2"]{fill:#421B22}[stroke="#FFF1F2"]{stroke:#421B22}
+        [fill="#F5F3FF"]{fill:#292349}[stroke="#F5F3FF"]{stroke:#292349}
+        [fill="#182230"]{fill:#F8FAFC}[stroke="#182230"]{stroke:#F8FAFC}
+        [fill="#475467"]{fill:#94A3B8}[stroke="#475467"]{stroke:#94A3B8}
+        [fill="#98A2B3"]{fill:#A8B0BF}[stroke="#98A2B3"]{stroke:#A8B0BF}
+        [fill="#2563EB"]{fill:#7FB0FF}[stroke="#2563EB"]{stroke:#7FB0FF}
+        [fill="#0F8A72"]{fill:#5ED0B0}[stroke="#0F8A72"]{stroke:#5ED0B0}
+        [fill="#C56A13"]{fill:#F0B36A}[stroke="#C56A13"]{stroke:#F0B36A}
+        [fill="#6558C5"]{fill:#ADA4FF}[stroke="#6558C5"]{stroke:#ADA4FF}
+        [fill="#C63C4A"]{fill:#F48B98}[stroke="#C63C4A"]{stroke:#F48B98}
       }
-      .sans{font-family:Arial,Helvetica,sans-serif}
-      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
+      .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
       .title{font-size:32px;font-weight:700}
       .subtitle{font-size:18px}
       .heading{font-size:22px;font-weight:700}

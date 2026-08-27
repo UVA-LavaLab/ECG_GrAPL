@@ -412,10 +412,10 @@ def offline_construction(
         color=RED,
         width=3,
     )
-    figure.text(52, 552, "green: tier 1", size=16, color=GREEN)
-    figure.text(215, 552, "amber: tier 2", size=16, color=AMBER)
-    figure.text(375, 552, "purple: tier 3", size=16, color=PURPLE)
-    figure.text(555, 552, "red: tracked access 4 -> 7", size=16, color=RED)
+    figure.text(52, 552, "T1 hot (green)", size=16, color=GREEN)
+    figure.text(215, 552, "T2 moderate (amber)", size=16, color=AMBER)
+    figure.text(410, 552, "T3 cold (purple)", size=16, color=PURPLE)
+    figure.text(585, 552, "tracked 4 -> 7 (red)", size=16, color=RED)
     for source_vertex in range(9):
         x, y = coords[source_vertex]
         internal = fx.source_to_internal[source_vertex]
@@ -1300,13 +1300,13 @@ def structural_fairness(generated: list[tuple[Path, Path]]) -> None:
 
     figure.section(
         "2", "SYMMETRIC FAIRNESS CONTROL", "--flowthrough all is policy-independent",
-        470, role="transfer",
+        440, role="transfer",
     )
-    figure.rect(40, 520, 1120, 275, role="neutral", radius=0)
-    for y in (565, 620, 675, 730):
+    figure.rect(40, 490, 1120, 275, role="neutral", radius=0)
+    for y in (535, 590, 645, 700):
         figure.line((40, y), (1160, y), color=INK, width=1)
     for x in (220, 480, 740, 960):
-        figure.line((x, 520), (x, 795), color=INK, width=1)
+        figure.line((x, 490), (x, 765), color=INK, width=1)
     for x, label in (
         (130, "Policy row"),
         (350, "Active structural carrier"),
@@ -1314,7 +1314,7 @@ def structural_fairness(generated: list[tuple[Path, Path]]) -> None:
         (850, "Required receipt"),
         (1060, "Fail-closed rule"),
     ):
-        figure.text(x, 550, label, size=16, bold=True, anchor="middle")
+        figure.text(x, 520, label, size=16, bold=True, anchor="middle")
     rows = (
         ("LRU", "CSR edge array", "STRUCTURAL_FLOWTHROUGH",
          "positive structural access", "reject zero activity"),
@@ -1327,23 +1327,23 @@ def structural_fairness(generated: list[tuple[Path, Path]]) -> None:
          "carrier receipt must match"),
     )
     for row, values in enumerate(rows):
-        y = 602 + row * 55
+        y = 572 + row * 55
         colors = (INK, BLUE, AMBER, PURPLE, RED)
         for x, value, color in zip((56, 236, 496, 756, 976), values, colors):
             figure.text(x, y, value, size=16, color=color,
                         mono=value == "STRUCTURAL_FLOWTHROUGH")
     figure.text(
-        40, 835,
+        40, 805,
         "cache_sim: access count | gem5: no-allocate targets | "
         "Sniper: read/fill counts; translated mode rejected",
         size=16, color=PURPLE, max_width=1120,
     )
     figure.arrow(
-        ((110, 910), (1090, 910)),
+        ((110, 880), (1090, 880)),
         kind="dependency",
         label="compare policies only after active structural carriers are matched",
         color=RED,
-        label_at=(600, 895),
+        label_at=(600, 865),
     )
     save(figure, generated)
 
@@ -2463,7 +2463,8 @@ def architecture_state_map(generated: list[tuple[Path, Path]]) -> None:
         (520, 830, 210, "MSHR target list", "allocOnFill + merge"),
         (790, 820, 360, "LLC replacement entry",
          "valid | property | RRPV | recency\n"
-         "tier | e1 | e2 | count | context | stamp"),
+         "tier | e1 | e2 | count\n"
+         "context | stamp"),
     )
     for x, y, width, title, body in cache_nodes:
         height = 180 if x >= 790 else 140

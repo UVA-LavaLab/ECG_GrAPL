@@ -1,32 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1190" viewBox="0 0 1200 1190" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1190" viewBox="0 0 1200 1190" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">ReusePlan wire formats and traffic overhead</title>
   <desc id="desc">The figure gives the exact unweighted 64-bit layout, the graph-dependent 32-bit compact rule instantiated by the checked fixture, and both weighted SSSP transports: one compact 64-bit edge record or an ordinary weighted edge plus a 32-bit metadata sidecar.</desc>
-  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#1769C2"/></marker>
-<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#15803D"/></marker>
-<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B45309"/></marker>
-<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B42318"/></marker>
-<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6D5BD0"/></marker>
-<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#9AA3AD"/></marker>
-<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#27313A"/></marker><style>
+  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#2563EB"/></marker>
+<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#0F8A72"/></marker>
+<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C56A13"/></marker>
+<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C63C4A"/></marker>
+<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6558C5"/></marker>
+<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#98A2B3"/></marker>
+<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#182230"/></marker><style>
       :root { color-scheme: light dark; }
       @media (prefers-color-scheme: dark) {
-        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
-        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
-        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
-        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
-        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
-        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
-        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
-        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
-        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
-        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
-        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
-        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
-        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
-        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+        [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
+        [fill="#F8FAFC"]{fill:#172033}[stroke="#F8FAFC"]{stroke:#172033}
+        [fill="#EFF6FF"]{fill:#172554}[stroke="#EFF6FF"]{stroke:#172554}
+        [fill="#ECFDF5"]{fill:#073B34}[stroke="#ECFDF5"]{stroke:#073B34}
+        [fill="#FFF7ED"]{fill:#422A12}[stroke="#FFF7ED"]{stroke:#422A12}
+        [fill="#FFF1F2"]{fill:#421B22}[stroke="#FFF1F2"]{stroke:#421B22}
+        [fill="#F5F3FF"]{fill:#292349}[stroke="#F5F3FF"]{stroke:#292349}
+        [fill="#182230"]{fill:#F8FAFC}[stroke="#182230"]{stroke:#F8FAFC}
+        [fill="#475467"]{fill:#94A3B8}[stroke="#475467"]{stroke:#94A3B8}
+        [fill="#98A2B3"]{fill:#A8B0BF}[stroke="#98A2B3"]{stroke:#A8B0BF}
+        [fill="#2563EB"]{fill:#7FB0FF}[stroke="#2563EB"]{stroke:#7FB0FF}
+        [fill="#0F8A72"]{fill:#5ED0B0}[stroke="#0F8A72"]{stroke:#5ED0B0}
+        [fill="#C56A13"]{fill:#F0B36A}[stroke="#C56A13"]{stroke:#F0B36A}
+        [fill="#6558C5"]{fill:#ADA4FF}[stroke="#6558C5"]{stroke:#ADA4FF}
+        [fill="#C63C4A"]{fill:#F48B98}[stroke="#C63C4A"]{stroke:#F48B98}
       }
-      .sans{font-family:Arial,Helvetica,sans-serif}
-      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
+      .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
       .title{font-size:32px;font-weight:700}
       .subtitle{font-size:18px}
       .heading{font-size:22px;font-weight:700}
@@ -34,95 +35,100 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1190" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ReusePlan wire formats and traffic overhead</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">General, compact, and weighted layouts are separate transport choices.</text>
-  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">ReusePlan wire formats and traffic overhead</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">General, compact, and weighted layouts are separate transport choices.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">GENERAL UNWEIGHTED RECORD</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">canonical in-memory metadata layout</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="190" width="531.6129032258065" height="96" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="190" data-width="531.6129032258065" data-height="96"/>
-  <text x="305.80645161290323" y="236.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">destination</text>
-  <text x="305.80645161290323" y="260.0" text-anchor="middle" class="sans body" fill="#27313A">32 bits</text>
-  <rect x="571.6129032258065" y="190" width="90.0" height="96" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="571.6129032258065" data-y="190" data-width="90.0" data-height="96"/>
-  <text x="616.6129032258065" y="236.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">tier</text>
-  <text x="616.6129032258065" y="260.0" text-anchor="middle" class="sans body" fill="#27313A">2 bits</text>
-  <rect x="661.6129032258065" y="190" width="249.19354838709677" height="96" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="661.6129032258065" data-y="190" data-width="249.19354838709677" data-height="96"/>
-  <text x="786.2096774193549" y="236.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">epoch 1</text>
-  <text x="786.2096774193549" y="260.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
-  <rect x="910.8064516129032" y="190" width="249.19354838709677" height="96" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="910.8064516129032" data-y="190" data-width="249.19354838709677" data-height="96"/>
-  <text x="1035.4032258064515" y="236.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">epoch 2</text>
-  <text x="1035.4032258064515" y="260.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
-  <text x="40" y="330" text-anchor="start" class="sans body" fill="#27313A">Bits 0..31 destination | bits 32..33 tier | bits 34..48 epoch 1 | bits 49..63 epoch 2</text>
-  <text x="40" y="354" text-anchor="start" class="sans body" fill="#27313A">Tier 1/2/3 means hot/moderate/cold; tier 0 is invalid. Epoch count is at most 2^15.</text>
-  <circle cx="44" cy="405" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">GENERAL UNWEIGHTED RECORD</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#98A2B3">canonical in-memory metadata layout</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="190" width="531.6129032258065" height="96" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="190" data-width="531.6129032258065" data-height="96"/>
+  <text x="305.80645161290323" y="236.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">destination</text>
+  <text x="305.80645161290323" y="260.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <rect x="571.6129032258065" y="190" width="90.0" height="96" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="571.6129032258065" data-y="190" data-width="90.0" data-height="96"/>
+  <text x="616.6129032258065" y="236.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">tier</text>
+  <text x="616.6129032258065" y="260.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="661.6129032258065" y="190" width="249.19354838709677" height="96" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="661.6129032258065" data-y="190" data-width="249.19354838709677" data-height="96"/>
+  <text x="786.2096774193549" y="236.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 1</text>
+  <text x="786.2096774193549" y="260.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <rect x="910.8064516129032" y="190" width="249.19354838709677" height="96" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="910.8064516129032" data-y="190" data-width="249.19354838709677" data-height="96"/>
+  <text x="1035.4032258064515" y="236.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 2</text>
+  <text x="1035.4032258064515" y="260.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <text x="40" y="330" text-anchor="start" class="sans body" fill="#182230">Bits 0..31 destination | bits 32..33 tier | bits 34..48 epoch 1 | bits 49..63 epoch 2</text>
+  <text x="40" y="354" text-anchor="start" class="sans body" fill="#182230">Tier 1/2/3 means hot/moderate/cold; tier 0 is invalid. Epoch count is at most 2^15.</text>
+  <circle cx="44" cy="405" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="411" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="412" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">COMPACT 32-BIT RECORD</text>
-  <text x="1158" y="411" text-anchor="end" class="sans body" fill="#9AA3AD">width is derived from graph and epoch configuration</text>
-  <line x1="24" y1="431" x2="1176" y2="431" stroke="#B45309" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="455" width="171.66666666666666" height="88" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="455" data-width="171.66666666666666" data-height="88"/>
-  <text x="125.83333333333333" y="497.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">dest 5</text>
-  <text x="125.83333333333333" y="521.0" text-anchor="middle" class="sans body" fill="#27313A">5 bits</text>
-  <rect x="211.66666666666666" y="455" width="90.0" height="88" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="211.66666666666666" data-y="455" data-width="90.0" data-height="88"/>
-  <text x="256.66666666666663" y="497.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">tier 2</text>
-  <text x="256.66666666666663" y="521.0" text-anchor="middle" class="sans body" fill="#27313A">2 bits</text>
-  <rect x="301.66666666666663" y="455" width="171.66666666666666" height="88" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="301.66666666666663" data-y="455" data-width="171.66666666666666" data-height="88"/>
-  <text x="387.49999999999994" y="497.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">e1 5</text>
-  <text x="387.49999999999994" y="521.0" text-anchor="middle" class="sans body" fill="#27313A">5 bits</text>
-  <rect x="473.33333333333326" y="455" width="171.66666666666666" height="88" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="473.33333333333326" data-y="455" data-width="171.66666666666666" data-height="88"/>
-  <text x="559.1666666666666" y="497.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">e2 5</text>
-  <text x="559.1666666666666" y="521.0" text-anchor="middle" class="sans body" fill="#27313A">5 bits</text>
-  <rect x="644.9999999999999" y="455" width="515.0" height="88" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="644.9999999999999" data-y="455" data-width="515.0" data-height="88"/>
-  <text x="902.4999999999999" y="497.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">zero / reserved</text>
-  <text x="902.4999999999999" y="521.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
-  <text x="40" y="580" text-anchor="start" class="mono body" fill="#B45309" font-weight="700">id_bits + 2 + 2*epoch_bits = 5 + 2 + 2*5 = 17 &lt;= 32</text>
-  <path d="M90 625 L430 625" fill="none" stroke="#B45309" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="4-byte compact record" data-flow-cadence="per governed adjacency"/>
-  <text x="260" y="612" text-anchor="middle" class="sans body" fill="#B45309" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">4-byte compact record | per governed adjacency</text>
-  <path d="M500 625 L1110 625" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="record-load widening"/>
-  <text x="805" y="612" text-anchor="middle" class="sans body" fill="#6D5BD0" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">record-load widening</text>
-  <text x="90" y="660" text-anchor="start" class="sans body" fill="#B45309">substitutes for one 4-byte edge ID</text>
-  <text x="500" y="660" text-anchor="start" class="sans body" fill="#6D5BD0">format CSR -&gt; canonical destination/tier/e1/e2</text>
-  <text x="40" y="687" text-anchor="start" class="sans body" fill="#B42318">unused high bits are zero/reserved</text>
-  <text x="500" y="687" text-anchor="start" class="sans body" fill="#B42318">width receipt must match the materialized array</text>
-  <circle cx="44" cy="735" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="74" y="412" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">COMPACT 32-BIT RECORD</text>
+  <text x="1158" y="411" text-anchor="end" class="sans body" fill="#98A2B3">width is derived from graph and epoch configuration</text>
+  <line x1="24" y1="431" x2="1176" y2="431" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="431" x2="170" y2="431" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="455" width="171.66666666666666" height="88" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="455" data-width="171.66666666666666" data-height="88"/>
+  <text x="125.83333333333333" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">dest 5</text>
+  <text x="125.83333333333333" y="521.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
+  <rect x="211.66666666666666" y="455" width="90.0" height="88" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="211.66666666666666" data-y="455" data-width="90.0" data-height="88"/>
+  <text x="256.66666666666663" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">tier 2</text>
+  <text x="256.66666666666663" y="521.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="301.66666666666663" y="455" width="171.66666666666666" height="88" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="301.66666666666663" data-y="455" data-width="171.66666666666666" data-height="88"/>
+  <text x="387.49999999999994" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">e1 5</text>
+  <text x="387.49999999999994" y="521.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
+  <rect x="473.33333333333326" y="455" width="171.66666666666666" height="88" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="473.33333333333326" data-y="455" data-width="171.66666666666666" data-height="88"/>
+  <text x="559.1666666666666" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">e2 5</text>
+  <text x="559.1666666666666" y="521.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
+  <rect x="644.9999999999999" y="455" width="515.0" height="88" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="644.9999999999999" data-y="455" data-width="515.0" data-height="88"/>
+  <text x="902.4999999999999" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">zero / reserved</text>
+  <text x="902.4999999999999" y="521.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <text x="40" y="580" text-anchor="start" class="mono body" fill="#C56A13" font-weight="700">id_bits + 2 + 2*epoch_bits = 5 + 2 + 2*5 = 17 &lt;= 32</text>
+  <path d="M90 625 L430 625" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="4-byte compact record" data-flow-cadence="per governed adjacency"/>
+  <rect x="45.24" y="595.00" width="429.52" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="260" y="612" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">4-byte compact record | per governed adjacency</text>
+  <path d="M500 625 L1110 625" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="record-load widening"/>
+  <rect x="708.80" y="595.00" width="192.40" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="805" y="612" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">record-load widening</text>
+  <text x="90" y="660" text-anchor="start" class="sans body" fill="#C56A13">substitutes for one 4-byte edge ID</text>
+  <text x="500" y="660" text-anchor="start" class="sans body" fill="#6558C5">format CSR -&gt; canonical destination/tier/e1/e2</text>
+  <text x="40" y="687" text-anchor="start" class="sans body" fill="#C63C4A">unused high bits are zero/reserved</text>
+  <text x="500" y="687" text-anchor="start" class="sans body" fill="#C63C4A">width receipt must match the materialized array</text>
+  <circle cx="44" cy="735" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="741" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="742" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">WEIGHTED SSSP TRANSPORTS</text>
-  <text x="1158" y="741" text-anchor="end" class="sans body" fill="#9AA3AD">weight bytes cannot disappear from the comparison</text>
-  <line x1="24" y1="761" x2="1176" y2="761" stroke="#1769C2" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="40" y="790" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">A. compact weighted substitute: 8 bytes</text>
-  <rect x="40" y="815" width="398.7096774193548" height="82" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="815" data-width="398.7096774193548" data-height="82"/>
-  <text x="239.3548387096774" y="854.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">destination 24</text>
-  <text x="239.3548387096774" y="878.0" text-anchor="middle" class="sans body" fill="#27313A">24 bits</text>
-  <rect x="438.7096774193548" y="815" width="132.90322580645162" height="82" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="438.7096774193548" data-y="815" data-width="132.90322580645162" data-height="82"/>
-  <text x="505.1612903225806" y="854.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">weight 8</text>
-  <text x="505.1612903225806" y="878.0" text-anchor="middle" class="sans body" fill="#27313A">8 bits</text>
-  <rect x="571.6129032258065" y="815" width="90.0" height="82" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="571.6129032258065" data-y="815" data-width="90.0" data-height="82"/>
-  <text x="616.6129032258065" y="854.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">tier 2</text>
-  <text x="616.6129032258065" y="878.0" text-anchor="middle" class="sans body" fill="#27313A">2 bits</text>
-  <rect x="661.6129032258065" y="815" width="249.19354838709677" height="82" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="661.6129032258065" data-y="815" data-width="249.19354838709677" data-height="82"/>
-  <text x="786.2096774193549" y="854.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">epoch 1: 15</text>
-  <text x="786.2096774193549" y="878.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
-  <rect x="910.8064516129032" y="815" width="249.19354838709677" height="82" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="910.8064516129032" data-y="815" data-width="249.19354838709677" data-height="82"/>
-  <text x="1035.4032258064515" y="854.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">epoch 2: 15</text>
-  <text x="1035.4032258064515" y="878.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
-  <text x="40" y="930" text-anchor="start" class="mono body" fill="#27313A">constraint: |V| &lt; 2^24 and 0 &lt; weight &lt;= 255; record replaces the ordinary weighted edge</text>
-  <text x="40" y="985" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">B. ordinary weighted edge + 4-byte sidecar</text>
-  <rect x="40" y="1010" width="350.0" height="82" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="1010" data-width="350.0" data-height="82"/>
-  <text x="215.0" y="1049.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">destination 32</text>
-  <text x="215.0" y="1073.0" text-anchor="middle" class="sans body" fill="#27313A">32 bits</text>
-  <rect x="390.0" y="1010" width="350.0" height="82" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="390.0" data-y="1010" data-width="350.0" data-height="82"/>
-  <text x="565.0" y="1049.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">weight 32</text>
-  <text x="565.0" y="1073.0" text-anchor="middle" class="sans body" fill="#27313A">32 bits</text>
-  <text x="765" y="1045" text-anchor="middle" class="sans heading" fill="#27313A" font-weight="700">+</text>
-  <rect x="800" y="1010" width="90.0" height="82" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="800" data-y="1010" data-width="90.0" data-height="82"/>
-  <text x="845.0" y="1049.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">tier 2</text>
-  <text x="845.0" y="1073.0" text-anchor="middle" class="sans body" fill="#27313A">2 bits</text>
-  <rect x="890.0" y="1010" width="135.0" height="82" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="890.0" data-y="1010" data-width="135.0" data-height="82"/>
-  <text x="957.5" y="1049.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">epoch 1: 15</text>
-  <text x="957.5" y="1073.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
-  <rect x="1025.0" y="1010" width="135.0" height="82" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="1025.0" data-y="1010" data-width="135.0" data-height="82"/>
-  <text x="1092.5" y="1049.0" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">epoch 2: 15</text>
-  <text x="1092.5" y="1073.0" text-anchor="middle" class="sans body" fill="#27313A">15 bits</text>
-  <text x="40" y="1130" text-anchor="start" class="sans body" fill="#B42318" font-weight="700">traffic = weighted-edge bytes + 4 sidecar bytes; edge and sidecar FlowThrough roles are accounted separately</text>
+  <text x="74" y="742" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">WEIGHTED SSSP TRANSPORTS</text>
+  <text x="1158" y="741" text-anchor="end" class="sans body" fill="#98A2B3">weight bytes cannot disappear from the comparison</text>
+  <line x1="24" y1="761" x2="1176" y2="761" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="761" x2="170" y2="761" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="40" y="790" text-anchor="start" class="sans label" fill="#2563EB" font-weight="700">A. compact weighted substitute: 8 bytes</text>
+  <rect x="40" y="815" width="398.7096774193548" height="82" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="815" data-width="398.7096774193548" data-height="82"/>
+  <text x="239.3548387096774" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">destination 24</text>
+  <text x="239.3548387096774" y="878.0" text-anchor="middle" class="sans body" fill="#182230">24 bits</text>
+  <rect x="438.7096774193548" y="815" width="132.90322580645162" height="82" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="438.7096774193548" data-y="815" data-width="132.90322580645162" data-height="82"/>
+  <text x="505.1612903225806" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">weight 8</text>
+  <text x="505.1612903225806" y="878.0" text-anchor="middle" class="sans body" fill="#182230">8 bits</text>
+  <rect x="571.6129032258065" y="815" width="90.0" height="82" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="571.6129032258065" data-y="815" data-width="90.0" data-height="82"/>
+  <text x="616.6129032258065" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">tier 2</text>
+  <text x="616.6129032258065" y="878.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="661.6129032258065" y="815" width="249.19354838709677" height="82" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="661.6129032258065" data-y="815" data-width="249.19354838709677" data-height="82"/>
+  <text x="786.2096774193549" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 1: 15</text>
+  <text x="786.2096774193549" y="878.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <rect x="910.8064516129032" y="815" width="249.19354838709677" height="82" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="910.8064516129032" data-y="815" data-width="249.19354838709677" data-height="82"/>
+  <text x="1035.4032258064515" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 2: 15</text>
+  <text x="1035.4032258064515" y="878.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <text x="40" y="930" text-anchor="start" class="mono body" fill="#182230">constraint: |V| &lt; 2^24 and 0 &lt; weight &lt;= 255; record replaces the ordinary weighted edge</text>
+  <text x="40" y="985" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">B. ordinary weighted edge + 4-byte sidecar</text>
+  <rect x="40" y="1010" width="350.0" height="82" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="1010" data-width="350.0" data-height="82"/>
+  <text x="215.0" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">destination 32</text>
+  <text x="215.0" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <rect x="390.0" y="1010" width="350.0" height="82" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="390.0" data-y="1010" data-width="350.0" data-height="82"/>
+  <text x="565.0" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">weight 32</text>
+  <text x="565.0" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <text x="765" y="1045" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">+</text>
+  <rect x="800" y="1010" width="90.0" height="82" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="800" data-y="1010" data-width="90.0" data-height="82"/>
+  <text x="845.0" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">tier 2</text>
+  <text x="845.0" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="890.0" y="1010" width="135.0" height="82" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="890.0" data-y="1010" data-width="135.0" data-height="82"/>
+  <text x="957.5" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 1: 15</text>
+  <text x="957.5" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <rect x="1025.0" y="1010" width="135.0" height="82" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="1025.0" data-y="1010" data-width="135.0" data-height="82"/>
+  <text x="1092.5" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 2: 15</text>
+  <text x="1092.5" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <text x="40" y="1130" text-anchor="start" class="sans body" fill="#C63C4A" font-weight="700">traffic = weighted-edge bytes + 4 sidecar bytes; edge and sidecar FlowThrough roles are accounted separately</text>
 </svg>

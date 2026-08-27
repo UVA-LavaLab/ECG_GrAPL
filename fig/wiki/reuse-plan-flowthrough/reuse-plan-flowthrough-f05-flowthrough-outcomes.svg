@@ -1,32 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1280" viewBox="0 0 1200 1280" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1280" viewBox="0 0 1200 1280" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">FlowThrough changes LLC allocation, not lookup or service</title>
   <desc id="desc">A FlowThrough record request uses normal translation, private caches, LLC tag lookup, miss service, and response. An LLC hit remains a hit. For an LLC miss, an all-no-allocate MSHR skips the LLC fill while mixed targets retain allocation because gem5 combines allocOnFill with OR.</desc>
-  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#1769C2"/></marker>
-<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#15803D"/></marker>
-<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B45309"/></marker>
-<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B42318"/></marker>
-<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6D5BD0"/></marker>
-<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#9AA3AD"/></marker>
-<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#27313A"/></marker><style>
+  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#2563EB"/></marker>
+<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#0F8A72"/></marker>
+<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C56A13"/></marker>
+<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C63C4A"/></marker>
+<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6558C5"/></marker>
+<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#98A2B3"/></marker>
+<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#182230"/></marker><style>
       :root { color-scheme: light dark; }
       @media (prefers-color-scheme: dark) {
-        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
-        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
-        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
-        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
-        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
-        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
-        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
-        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
-        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
-        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
-        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
-        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
-        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
-        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+        [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
+        [fill="#F8FAFC"]{fill:#172033}[stroke="#F8FAFC"]{stroke:#172033}
+        [fill="#EFF6FF"]{fill:#172554}[stroke="#EFF6FF"]{stroke:#172554}
+        [fill="#ECFDF5"]{fill:#073B34}[stroke="#ECFDF5"]{stroke:#073B34}
+        [fill="#FFF7ED"]{fill:#422A12}[stroke="#FFF7ED"]{stroke:#422A12}
+        [fill="#FFF1F2"]{fill:#421B22}[stroke="#FFF1F2"]{stroke:#421B22}
+        [fill="#F5F3FF"]{fill:#292349}[stroke="#F5F3FF"]{stroke:#292349}
+        [fill="#182230"]{fill:#F8FAFC}[stroke="#182230"]{stroke:#F8FAFC}
+        [fill="#475467"]{fill:#94A3B8}[stroke="#475467"]{stroke:#94A3B8}
+        [fill="#98A2B3"]{fill:#A8B0BF}[stroke="#98A2B3"]{stroke:#A8B0BF}
+        [fill="#2563EB"]{fill:#7FB0FF}[stroke="#2563EB"]{stroke:#7FB0FF}
+        [fill="#0F8A72"]{fill:#5ED0B0}[stroke="#0F8A72"]{stroke:#5ED0B0}
+        [fill="#C56A13"]{fill:#F0B36A}[stroke="#C56A13"]{stroke:#F0B36A}
+        [fill="#6558C5"]{fill:#ADA4FF}[stroke="#6558C5"]{stroke:#ADA4FF}
+        [fill="#C63C4A"]{fill:#F48B98}[stroke="#C63C4A"]{stroke:#F48B98}
       }
-      .sans{font-family:Arial,Helvetica,sans-serif}
-      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
+      .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
       .title{font-size:32px;font-weight:700}
       .subtitle{font-size:18px}
       .heading{font-size:22px;font-weight:700}
@@ -34,100 +35,108 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1280" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">FlowThrough changes LLC allocation, not lookup or service</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The important corner case is an MSHR shared with an allocating target.</text>
-  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">FlowThrough changes LLC allocation, not lookup or service</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">The important corner case is an MSHR shared with an allocating target.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">UNCHANGED FRONT HALF</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">record request uses the normal memory hierarchy</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <path d="M45 300 L1130 300" fill="none" stroke="#B45309" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="true" data-flow-label="record Request + FlowThrough" data-flow-cadence="per record load"/>
-  <text x="600" y="190" text-anchor="middle" class="sans body" fill="#B45309" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">record Request + FlowThrough | per record load</text>
-  <rect x="35" y="205" width="145" height="115" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="35" data-y="205" data-width="145" data-height="115"/>
-  <text x="107.5" y="243" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">Load queue</text>
-  <text x="107.5" y="280" text-anchor="middle" class="sans body" fill="#27313A">order / replay</text>
-  <rect x="220" y="205" width="145" height="115" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="220" data-y="205" data-width="145" data-height="115"/>
-  <text x="292.5" y="243" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">D-TLB</text>
-  <text x="292.5" y="280" text-anchor="middle" class="sans body" fill="#27313A">translation</text>
-  <rect x="405" y="205" width="145" height="115" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="405" data-y="205" data-width="145" data-height="115"/>
-  <text x="477.5" y="243" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">L1D</text>
-  <text x="477.5" y="280" text-anchor="middle" class="sans body" fill="#27313A">tag + data</text>
-  <rect x="590" y="205" width="145" height="115" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="590" data-y="205" data-width="145" data-height="115"/>
-  <text x="662.5" y="243" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">L2</text>
-  <text x="662.5" y="280" text-anchor="middle" class="sans body" fill="#27313A">tag + data</text>
-  <rect x="775" y="205" width="145" height="115" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="775" data-y="205" data-width="145" data-height="115"/>
-  <text x="847.5" y="243" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">LLC tags</text>
-  <text x="847.5" y="280" text-anchor="middle" class="sans body" fill="#27313A">hit or MSHR</text>
-  <rect x="960" y="205" width="180" height="115" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="960" data-y="205" data-width="180" data-height="115"/>
-  <text x="1050.0" y="243" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">Memory</text>
-  <text x="1050.0" y="280" text-anchor="middle" class="sans body" fill="#27313A">ordinary service</text>
-  <text x="600" y="370" text-anchor="middle" class="sans body" fill="#1769C2" font-weight="700">translation, private hits/fills, LLC lookup, memory response, writeback: unchanged</text>
-  <circle cx="44" cy="430" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">UNCHANGED FRONT HALF</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#98A2B3">record request uses the normal memory hierarchy</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <path d="M45 300 L1130 300" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="true" data-flow-label="record Request + FlowThrough" data-flow-cadence="per record load"/>
+  <rect x="385.24" y="173.00" width="429.52" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="600" y="190" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">record Request + FlowThrough | per record load</text>
+  <rect x="35" y="205" width="145" height="115" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="35" data-y="205" data-width="145" data-height="115"/>
+  <text x="107.5" y="243" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">Load queue</text>
+  <text x="107.5" y="280" text-anchor="middle" class="sans body" fill="#182230">order / replay</text>
+  <rect x="220" y="205" width="145" height="115" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="220" data-y="205" data-width="145" data-height="115"/>
+  <text x="292.5" y="243" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">D-TLB</text>
+  <text x="292.5" y="280" text-anchor="middle" class="sans body" fill="#182230">translation</text>
+  <rect x="405" y="205" width="145" height="115" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="405" data-y="205" data-width="145" data-height="115"/>
+  <text x="477.5" y="243" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">L1D</text>
+  <text x="477.5" y="280" text-anchor="middle" class="sans body" fill="#182230">tag + data</text>
+  <rect x="590" y="205" width="145" height="115" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="590" data-y="205" data-width="145" data-height="115"/>
+  <text x="662.5" y="243" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">L2</text>
+  <text x="662.5" y="280" text-anchor="middle" class="sans body" fill="#182230">tag + data</text>
+  <rect x="775" y="205" width="145" height="115" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="775" data-y="205" data-width="145" data-height="115"/>
+  <text x="847.5" y="243" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">LLC tags</text>
+  <text x="847.5" y="280" text-anchor="middle" class="sans body" fill="#182230">hit or MSHR</text>
+  <rect x="960" y="205" width="180" height="115" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="960" data-y="205" data-width="180" data-height="115"/>
+  <text x="1050.0" y="243" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">Memory</text>
+  <text x="1050.0" y="280" text-anchor="middle" class="sans body" fill="#182230">ordinary service</text>
+  <text x="600" y="370" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">translation, private hits/fills, LLC lookup, memory response, writeback: unchanged</text>
+  <circle cx="44" cy="430" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="436" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="437" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">THREE LLC OUTCOMES</text>
-  <text x="1158" y="436" text-anchor="end" class="sans body" fill="#9AA3AD">only the returning miss fill reaches the allocation gate</text>
-  <line x1="24" y1="456" x2="1176" y2="456" stroke="#B45309" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <polygon points="170,525.0 275.0,585 170,645.0 65.0,585" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="170" data-cy="585" data-width="210" data-height="120"/>
-  <text x="170" y="575" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">LLC tag</text>
-  <text x="170" y="605" text-anchor="middle" class="sans body" fill="#27313A">hit?</text>
-  <rect x="330" y="505" width="230" height="105" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="330" data-y="505" data-width="230" data-height="105"/>
-  <text x="445" y="540" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">hit: return record</text>
-  <text x="445" y="575" text-anchor="middle" class="sans body" fill="#27313A">no allocation decision</text>
-  <path d="M275 560 L330 560" fill="none" stroke="#15803D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="hit: return record"/>
-  <rect x="330" y="635" width="350" height="150" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="330" data-y="635" data-width="350" data-height="150"/>
-  <line x1="330" y1="672.5" x2="680" y2="672.5" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="330" y1="710.0" x2="680" y2="710.0" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="330" y1="747.5" x2="680" y2="747.5" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="505" y="665" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">MSHR target list</text>
-  <text x="346" y="705" text-anchor="start" class="mono body" fill="#27313A">target A: allocOnFill=false</text>
-  <text x="346" y="742" text-anchor="start" class="mono body" fill="#27313A">target B: false or true</text>
-  <text x="346" y="778" text-anchor="start" class="mono body" fill="#27313A" font-weight="700">allocOnFill combines with OR</text>
-  <path d="M170 645 L170 710 L330 710" fill="none" stroke="#B45309" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="LLC miss"/>
-  <text x="235" y="695" text-anchor="middle" class="sans body" fill="#B45309" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">LLC miss</text>
-  <polygon points="805,650.0 910.0,710 805,770.0 700.0,710" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="805" data-cy="710" data-width="210" data-height="120"/>
-  <text x="805" y="700" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">allocOnFill</text>
-  <text x="805" y="730" text-anchor="middle" class="sans body" fill="#27313A">aggregate?</text>
-  <path d="M680 710 L700 710" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="allocOnFill combines with OR"/>
-  <rect x="960" y="635" width="190" height="105" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="960" data-y="635" data-width="190" data-height="105"/>
-  <text x="1055" y="670" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">true: insert LLC</text>
-  <text x="1055" y="705" text-anchor="middle" class="sans body" fill="#27313A">mixed target wins</text>
-  <rect x="960" y="755" width="190" height="90" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="960" data-y="755" data-width="190" data-height="90"/>
-  <text x="1055" y="790" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">false: skip fill</text>
-  <text x="1055" y="820" text-anchor="middle" class="sans body" fill="#27313A">all targets false</text>
-  <path d="M910 685 L960 685" fill="none" stroke="#B42318" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="true: insert LLC"/>
-  <path d="M910 735 L930 800 L960 800" fill="none" stroke="#B45309" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="false: skip fill"/>
-  <circle cx="44" cy="890" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="74" y="437" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">THREE LLC OUTCOMES</text>
+  <text x="1158" y="436" text-anchor="end" class="sans body" fill="#98A2B3">only the returning miss fill reaches the allocation gate</text>
+  <line x1="24" y1="456" x2="1176" y2="456" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="456" x2="170" y2="456" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <polygon points="170,525.0 275.0,585 170,645.0 65.0,585" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="170" data-cy="585" data-width="210" data-height="120"/>
+  <text x="170" y="575" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">LLC tag</text>
+  <text x="170" y="605" text-anchor="middle" class="sans body" fill="#182230">hit?</text>
+  <rect x="330" y="505" width="230" height="105" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="330" data-y="505" data-width="230" data-height="105"/>
+  <text x="445" y="540" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">hit: return record</text>
+  <text x="445" y="575" text-anchor="middle" class="sans body" fill="#182230">no allocation decision</text>
+  <path d="M275 560 L330 560" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="hit: return record"/>
+  <rect x="330" y="635" width="350" height="150" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="330" data-y="635" data-width="350" data-height="150"/>
+  <line x1="330" y1="672.5" x2="680" y2="672.5" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="330" y1="710.0" x2="680" y2="710.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="330" y1="747.5" x2="680" y2="747.5" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="505" y="665" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">MSHR target list</text>
+  <text x="346" y="705" text-anchor="start" class="mono body" fill="#182230">target A: allocOnFill=false</text>
+  <text x="346" y="742" text-anchor="start" class="mono body" fill="#182230">target B: false or true</text>
+  <text x="346" y="778" text-anchor="start" class="mono body" fill="#182230" font-weight="700">allocOnFill combines with OR</text>
+  <path d="M170 645 L170 710 L330 710" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="LLC miss"/>
+  <rect x="193.52" y="678.00" width="82.96" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="235" y="695" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">LLC miss</text>
+  <polygon points="805,650.0 910.0,710 805,770.0 700.0,710" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="805" data-cy="710" data-width="210" data-height="120"/>
+  <text x="805" y="700" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">allocOnFill</text>
+  <text x="805" y="730" text-anchor="middle" class="sans body" fill="#182230">aggregate?</text>
+  <path d="M680 710 L700 710" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="allocOnFill combines with OR"/>
+  <rect x="960" y="635" width="190" height="105" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="960" data-y="635" data-width="190" data-height="105"/>
+  <text x="1055" y="670" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">true: insert LLC</text>
+  <text x="1055" y="705" text-anchor="middle" class="sans body" fill="#182230">mixed target wins</text>
+  <rect x="960" y="755" width="190" height="90" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="960" data-y="755" data-width="190" data-height="90"/>
+  <text x="1055" y="790" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">false: skip fill</text>
+  <text x="1055" y="820" text-anchor="middle" class="sans body" fill="#182230">all targets false</text>
+  <path d="M910 685 L960 685" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="true: insert LLC"/>
+  <path d="M910 735 L930 800 L960 800" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="false: skip fill"/>
+  <circle cx="44" cy="890" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="896" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="897" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">DERIVED PREFETCHES AND PROPERTY LOADS</text>
-  <text x="1158" y="896" text-anchor="end" class="sans body" fill="#9AA3AD">classification remains target-range exact</text>
-  <line x1="24" y1="916" x2="1176" y2="916" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <path d="M60 980 L1130 980" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="derived prefetch Request" data-flow-cadence="per generated candidate"/>
-  <text x="300" y="965" text-anchor="middle" class="sans body" fill="#6D5BD0" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">derived prefetch Request | per generated candidate</text>
-  <path d="M60 1100 L1130 1100" fill="none" stroke="#1769C2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="governed property Request" data-flow-cadence="per property access"/>
-  <text x="300" y="1085" text-anchor="middle" class="sans body" fill="#1769C2" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">governed property Request | per property access</text>
-  <line x1="140" y1="940" x2="140" y2="1160" stroke="#9AA3AD" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="140" y="930" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">candidate address</text>
-  <circle cx="140" cy="980" r="9" fill="#FFFFFF" stroke="#6D5BD0" stroke-width="1"/>
-  <circle cx="140" cy="1100" r="9" fill="#FFFFFF" stroke="#1769C2" stroke-width="1"/>
-  <line x1="430" y1="940" x2="430" y2="1160" stroke="#9AA3AD" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="430" y="930" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">range check</text>
-  <circle cx="430" cy="980" r="9" fill="#FFFFFF" stroke="#6D5BD0" stroke-width="1"/>
-  <circle cx="430" cy="1100" r="9" fill="#FFFFFF" stroke="#1769C2" stroke-width="1"/>
-  <line x1="720" y1="940" x2="720" y2="1160" stroke="#9AA3AD" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="720" y="930" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">Request flag/ext</text>
-  <circle cx="720" cy="980" r="9" fill="#FFFFFF" stroke="#6D5BD0" stroke-width="1"/>
-  <circle cx="720" cy="1100" r="9" fill="#FFFFFF" stroke="#1769C2" stroke-width="1"/>
-  <line x1="1010" y1="940" x2="1010" y2="1160" stroke="#9AA3AD" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="1010" y="930" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">LLC behavior</text>
-  <circle cx="1010" cy="980" r="9" fill="#FFFFFF" stroke="#6D5BD0" stroke-width="1"/>
-  <circle cx="1010" cy="1100" r="9" fill="#FFFFFF" stroke="#1769C2" stroke-width="1"/>
-  <text x="430" y="1015" text-anchor="middle" class="sans body" fill="#27313A">in active carrier?</text>
-  <text x="720" y="1015" text-anchor="middle" class="sans body" fill="#27313A">in-range -&gt; STRUCTURAL_FLOWTHROUGH</text>
-  <text x="1010" y="1015" text-anchor="middle" class="sans body" fill="#27313A">out-of-range bit stays clear</text>
-  <text x="430" y="1135" text-anchor="middle" class="sans body" fill="#27313A">destination-line guard</text>
-  <text x="720" y="1135" text-anchor="middle" class="sans body" fill="#27313A">ReuseBind; FlowThrough=0</text>
-  <text x="1010" y="1135" text-anchor="middle" class="sans body" fill="#27313A">allocatable; hit/fill may stamp</text>
-  <path d="M145 1215 L1055 1215" fill="none" stroke="#B45309" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="suppress LLC insertion only when every coalesced target permits it"/>
-  <text x="600" y="1200" text-anchor="middle" class="sans body" fill="#B45309" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">suppress LLC insertion only when every coalesced target permits it</text>
+  <text x="74" y="897" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">DERIVED PREFETCHES AND PROPERTY LOADS</text>
+  <text x="1158" y="896" text-anchor="end" class="sans body" fill="#98A2B3">classification remains target-range exact</text>
+  <line x1="24" y1="916" x2="1176" y2="916" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="916" x2="170" y2="916" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <path d="M60 980 L1130 980" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="derived prefetch Request" data-flow-cadence="per generated candidate"/>
+  <rect x="67.00" y="948.00" width="466.00" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="300" y="965" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">derived prefetch Request | per generated candidate</text>
+  <path d="M60 1100 L1130 1100" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="governed property Request" data-flow-cadence="per property access"/>
+  <rect x="80.68" y="1068.00" width="438.64" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="300" y="1085" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">governed property Request | per property access</text>
+  <line x1="140" y1="940" x2="140" y2="1160" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="140" y="930" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">candidate address</text>
+  <circle cx="140" cy="980" r="9" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
+  <circle cx="140" cy="1100" r="9" fill="#FFFFFF" stroke="#2563EB" stroke-width="1"/>
+  <line x1="430" y1="940" x2="430" y2="1160" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="430" y="930" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">range check</text>
+  <circle cx="430" cy="980" r="9" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
+  <circle cx="430" cy="1100" r="9" fill="#FFFFFF" stroke="#2563EB" stroke-width="1"/>
+  <line x1="720" y1="940" x2="720" y2="1160" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="720" y="930" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">Request flag/ext</text>
+  <circle cx="720" cy="980" r="9" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
+  <circle cx="720" cy="1100" r="9" fill="#FFFFFF" stroke="#2563EB" stroke-width="1"/>
+  <line x1="1010" y1="940" x2="1010" y2="1160" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="1010" y="930" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">LLC behavior</text>
+  <circle cx="1010" cy="980" r="9" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
+  <circle cx="1010" cy="1100" r="9" fill="#FFFFFF" stroke="#2563EB" stroke-width="1"/>
+  <text x="430" y="1015" text-anchor="middle" class="sans body" fill="#182230">in active carrier?</text>
+  <text x="720" y="1015" text-anchor="middle" class="sans body" fill="#182230">in-range -&gt; STRUCTURAL_FLOWTHROUGH</text>
+  <text x="1010" y="1015" text-anchor="middle" class="sans body" fill="#182230">out-of-range bit stays clear</text>
+  <text x="430" y="1135" text-anchor="middle" class="sans body" fill="#182230">destination-line guard</text>
+  <text x="720" y="1135" text-anchor="middle" class="sans body" fill="#182230">ReuseBind; FlowThrough=0</text>
+  <text x="1010" y="1135" text-anchor="middle" class="sans body" fill="#182230">allocatable; hit/fill may stamp</text>
+  <path d="M145 1215 L1055 1215" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="suppress LLC insertion only when every coalesced target permits it"/>
+  <rect x="294.04" y="1183.00" width="611.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="600" y="1200" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">suppress LLC insertion only when every coalesced target permits it</text>
 </svg>

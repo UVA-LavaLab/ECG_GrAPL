@@ -1,32 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1240" viewBox="0 0 1200 1240" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1240" viewBox="0 0 1200 1240" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">ECG state placement in the processor and cache hierarchy</title>
   <desc id="desc">The architecture map places offline records, architectural format/current/context CSRs, renamed ReusePlan operands, load-queue state, typed Request extensions, MSHR merge state, and line-local LLC metadata in their actual controlling structures. It distinguishes exact gem5 O3 binding from diagnostic models.</desc>
-  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#1769C2"/></marker>
-<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#15803D"/></marker>
-<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B45309"/></marker>
-<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B42318"/></marker>
-<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6D5BD0"/></marker>
-<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#9AA3AD"/></marker>
-<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#27313A"/></marker><style>
+  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#2563EB"/></marker>
+<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#0F8A72"/></marker>
+<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C56A13"/></marker>
+<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C63C4A"/></marker>
+<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6558C5"/></marker>
+<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#98A2B3"/></marker>
+<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#182230"/></marker><style>
       :root { color-scheme: light dark; }
       @media (prefers-color-scheme: dark) {
-        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
-        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
-        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
-        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
-        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
-        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
-        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
-        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
-        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
-        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
-        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
-        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
-        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
-        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+        [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
+        [fill="#F8FAFC"]{fill:#172033}[stroke="#F8FAFC"]{stroke:#172033}
+        [fill="#EFF6FF"]{fill:#172554}[stroke="#EFF6FF"]{stroke:#172554}
+        [fill="#ECFDF5"]{fill:#073B34}[stroke="#ECFDF5"]{stroke:#073B34}
+        [fill="#FFF7ED"]{fill:#422A12}[stroke="#FFF7ED"]{stroke:#422A12}
+        [fill="#FFF1F2"]{fill:#421B22}[stroke="#FFF1F2"]{stroke:#421B22}
+        [fill="#F5F3FF"]{fill:#292349}[stroke="#F5F3FF"]{stroke:#292349}
+        [fill="#182230"]{fill:#F8FAFC}[stroke="#182230"]{stroke:#F8FAFC}
+        [fill="#475467"]{fill:#94A3B8}[stroke="#475467"]{stroke:#94A3B8}
+        [fill="#98A2B3"]{fill:#A8B0BF}[stroke="#98A2B3"]{stroke:#A8B0BF}
+        [fill="#2563EB"]{fill:#7FB0FF}[stroke="#2563EB"]{stroke:#7FB0FF}
+        [fill="#0F8A72"]{fill:#5ED0B0}[stroke="#0F8A72"]{stroke:#5ED0B0}
+        [fill="#C56A13"]{fill:#F0B36A}[stroke="#C56A13"]{stroke:#F0B36A}
+        [fill="#6558C5"]{fill:#ADA4FF}[stroke="#6558C5"]{stroke:#ADA4FF}
+        [fill="#C63C4A"]{fill:#F48B98}[stroke="#C63C4A"]{stroke:#F48B98}
       }
-      .sans{font-family:Arial,Helvetica,sans-serif}
-      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
+      .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
       .title{font-size:32px;font-weight:700}
       .subtitle{font-size:18px}
       .heading{font-size:22px;font-weight:700}
@@ -34,87 +35,94 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1240" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ECG state placement in the processor and cache hierarchy</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">Containment denotes storage; arrows denote architectural operand or Request transfer.</text>
-  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">ECG state placement in the processor and cache hierarchy</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Containment denotes storage; arrows denote architectural operand or Request transfer.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#1769C2" font-weight="700">SOFTWARE AND ARCHITECTURAL INPUTS</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">immutable graph data is separate from live execution state</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#1769C2" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="190" width="520" height="190" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="190" data-width="520" data-height="190"/>
-  <line x1="40" y1="237.5" x2="560" y2="237.5" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="285.0" x2="560" y2="285.0" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="332.5" x2="560" y2="332.5" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="300" y="220" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">Memory image before ROI</text>
-  <text x="56" y="265" text-anchor="start" class="sans body" fill="#27313A">CSR / weighted structural arrays</text>
-  <text x="56" y="312" text-anchor="start" class="sans body" fill="#27313A">edge-aligned ReusePlan / sidecar arrays</text>
-  <text x="56" y="360" text-anchor="start" class="sans body" fill="#27313A">property arrays + graph/payload identity</text>
-  <rect x="640" y="190" width="520" height="190" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="640" data-y="190" data-width="520" data-height="190"/>
-  <line x1="640" y1="237.5" x2="1160" y2="237.5" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="640" y1="285.0" x2="1160" y2="285.0" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="640" y1="332.5" x2="1160" y2="332.5" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="900" y="220" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Architectural ECG CSR bank</text>
-  <text x="656" y="265" text-anchor="start" class="mono body" fill="#27313A">format: id_bits | epoch_bits</text>
-  <text x="656" y="312" text-anchor="start" class="sans body" fill="#27313A">current: quantized traversal epoch</text>
-  <text x="656" y="360" text-anchor="start" class="sans body" fill="#27313A">context: nonzero execution identity</text>
-  <circle cx="44" cy="450" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">SOFTWARE AND ARCHITECTURAL INPUTS</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#98A2B3">immutable graph data is separate from live execution state</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="190" width="520" height="190" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="190" data-width="520" data-height="190"/>
+  <line x1="40" y1="237.5" x2="560" y2="237.5" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="285.0" x2="560" y2="285.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="332.5" x2="560" y2="332.5" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="300" y="220" text-anchor="middle" class="sans label" fill="#2563EB" font-weight="700">Memory image before ROI</text>
+  <text x="56" y="265" text-anchor="start" class="sans body" fill="#182230">CSR / weighted structural arrays</text>
+  <text x="56" y="312" text-anchor="start" class="sans body" fill="#182230">edge-aligned ReusePlan / sidecar arrays</text>
+  <text x="56" y="360" text-anchor="start" class="sans body" fill="#182230">property arrays + graph/payload identity</text>
+  <rect x="640" y="190" width="520" height="190" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="640" data-y="190" data-width="520" data-height="190"/>
+  <line x1="640" y1="237.5" x2="1160" y2="237.5" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="640" y1="285.0" x2="1160" y2="285.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="640" y1="332.5" x2="1160" y2="332.5" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="900" y="220" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">Architectural ECG CSR bank</text>
+  <text x="656" y="265" text-anchor="start" class="mono body" fill="#182230">format: id_bits | epoch_bits</text>
+  <text x="656" y="312" text-anchor="start" class="sans body" fill="#182230">current: quantized traversal epoch</text>
+  <text x="656" y="360" text-anchor="start" class="sans body" fill="#182230">context: nonzero execution identity</text>
+  <circle cx="44" cy="450" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="456" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="457" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">OUT-OF-ORDER CORE</text>
-  <text x="1158" y="456" text-anchor="end" class="sans body" fill="#9AA3AD">standard O3 structures carry one explicit dependency</text>
-  <line x1="24" y1="476" x2="1176" y2="476" stroke="#15803D" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <path d="M50 615 L1135 615" fill="none" stroke="#15803D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="true" data-flow-label="dynamic instruction state"/>
-  <text x="600" y="735" text-anchor="middle" class="sans body" fill="#15803D" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">dynamic instruction state</text>
-  <rect x="40" y="530" width="150" height="140" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="530" data-width="150" data-height="140"/>
-  <text x="115" y="562" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">Decode</text>
-  <text x="115" y="602" text-anchor="middle" class="sans body" fill="#27313A">custom-0</text>
-  <text x="115" y="642" text-anchor="middle" class="sans body" fill="#27313A">role + width</text>
-  <rect x="230" y="510" width="170" height="180" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="230" data-y="510" data-width="170" data-height="180"/>
-  <text x="315" y="542" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Rename / ROB</text>
-  <text x="315" y="585" text-anchor="middle" class="mono body" fill="#27313A">I0 rd -&gt; P17</text>
-  <text x="315" y="625" text-anchor="middle" class="mono body" fill="#27313A">I1 rs2 -&gt; P17</text>
-  <text x="315" y="665" text-anchor="middle" class="sans body" fill="#27313A">ROB + LQ allocate</text>
-  <polygon points="460.4,530 610,530 589.6,670 440,670" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="queue" data-x="440" data-y="530" data-width="170" data-height="140"/>
-  <text x="525" y="562" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">Issue / select</text>
-  <text x="525" y="605" text-anchor="middle" class="sans body" fill="#27313A">I0 ready</text>
-  <text x="525" y="645" text-anchor="middle" class="sans body" fill="#27313A">I1 waits P17</text>
-  <polygon points="700,525.0 775.0,600 700,675.0 625.0,600" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="700" data-cy="600" data-width="150" data-height="150"/>
-  <text x="700" y="590" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">AGU</text>
-  <text x="700" y="625" text-anchor="middle" class="sans body" fill="#27313A">EA</text>
-  <text x="700" y="695" text-anchor="middle" class="sans body" fill="#15803D">record or property address</text>
-  <rect x="820" y="505" width="180" height="190" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="820" data-y="505" data-width="180" data-height="190"/>
-  <line x1="820" y1="552.5" x2="1000" y2="552.5" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="820" y1="600.0" x2="1000" y2="600.0" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="820" y1="647.5" x2="1000" y2="647.5" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="910" y="537" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Load queue</text>
-  <text x="910" y="580" text-anchor="middle" class="sans body" fill="#27313A">order / replay</text>
-  <text x="910" y="625" text-anchor="middle" class="sans body" fill="#27313A">role + size</text>
-  <text x="910" y="672" text-anchor="middle" class="sans body" fill="#27313A">ReuseBind ext</text>
-  <rect x="1040" y="530" width="120" height="140" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="1040" data-y="530" data-width="120" data-height="140"/>
-  <text x="1100" y="562" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Request</text>
-  <text x="1100" y="602" text-anchor="middle" class="sans body" fill="#27313A">address</text>
-  <text x="1100" y="642" text-anchor="middle" class="sans body" fill="#27313A">typed ext</text>
-  <circle cx="44" cy="782" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="74" y="457" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">OUT-OF-ORDER CORE</text>
+  <text x="1158" y="456" text-anchor="end" class="sans body" fill="#98A2B3">standard O3 structures carry one explicit dependency</text>
+  <line x1="24" y1="476" x2="1176" y2="476" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="476" x2="170" y2="476" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <path d="M50 615 L1135 615" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="true" data-flow-label="dynamic instruction state"/>
+  <rect x="481.00" y="718.00" width="238.00" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="600" y="735" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">dynamic instruction state</text>
+  <rect x="40" y="530" width="150" height="140" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="530" data-width="150" data-height="140"/>
+  <text x="115" y="562" text-anchor="middle" class="sans label" fill="#2563EB" font-weight="700">Decode</text>
+  <text x="115" y="602" text-anchor="middle" class="sans body" fill="#182230">custom-0</text>
+  <text x="115" y="642" text-anchor="middle" class="sans body" fill="#182230">role + width</text>
+  <rect x="230" y="510" width="170" height="180" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="230" data-y="510" data-width="170" data-height="180"/>
+  <text x="315" y="542" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">Rename / ROB</text>
+  <text x="315" y="585" text-anchor="middle" class="mono body" fill="#182230">I0 rd -&gt; P17</text>
+  <text x="315" y="625" text-anchor="middle" class="mono body" fill="#182230">I1 rs2 -&gt; P17</text>
+  <text x="315" y="665" text-anchor="middle" class="sans body" fill="#182230">ROB + LQ allocate</text>
+  <polygon points="460.4,530 610,530 589.6,670 440,670" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="queue" data-x="440" data-y="530" data-width="170" data-height="140"/>
+  <text x="525" y="562" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">Issue / select</text>
+  <text x="525" y="605" text-anchor="middle" class="sans body" fill="#182230">I0 ready</text>
+  <text x="525" y="645" text-anchor="middle" class="sans body" fill="#182230">I1 waits P17</text>
+  <polygon points="700,525.0 775.0,600 700,675.0 625.0,600" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="700" data-cy="600" data-width="150" data-height="150"/>
+  <text x="700" y="590" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">AGU</text>
+  <text x="700" y="625" text-anchor="middle" class="sans body" fill="#182230">EA</text>
+  <text x="700" y="695" text-anchor="middle" class="sans body" fill="#0F8A72">record or property address</text>
+  <rect x="820" y="505" width="180" height="190" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="820" data-y="505" data-width="180" data-height="190"/>
+  <line x1="820" y1="552.5" x2="1000" y2="552.5" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="820" y1="600.0" x2="1000" y2="600.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="820" y1="647.5" x2="1000" y2="647.5" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="910" y="537" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">Load queue</text>
+  <text x="910" y="580" text-anchor="middle" class="sans body" fill="#182230">order / replay</text>
+  <text x="910" y="625" text-anchor="middle" class="sans body" fill="#182230">role + size</text>
+  <text x="910" y="672" text-anchor="middle" class="sans body" fill="#182230">ReuseBind ext</text>
+  <rect x="1040" y="530" width="120" height="140" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1040" data-y="530" data-width="120" data-height="140"/>
+  <text x="1100" y="562" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">Request</text>
+  <text x="1100" y="602" text-anchor="middle" class="sans body" fill="#182230">address</text>
+  <text x="1100" y="642" text-anchor="middle" class="sans body" fill="#182230">typed ext</text>
+  <circle cx="44" cy="782" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="788" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="789" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">CACHE HIERARCHY</text>
-  <text x="1158" y="788" text-anchor="end" class="sans body" fill="#9AA3AD">private caches stay ordinary; LLC state is extended</text>
-  <line x1="24" y1="808" x2="1176" y2="808" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <path d="M60 930 L1130 930" fill="none" stroke="#1769C2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="true" data-flow-label="property Request + ReuseBind" data-flow-cadence="per governed load"/>
-  <text x="600" y="1070" text-anchor="middle" class="sans body" fill="#1769C2" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">property Request + ReuseBind | per governed load</text>
-  <rect x="40" y="850" width="180" height="140" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="850" data-width="180" data-height="140"/>
-  <text x="130.0" y="885" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">L1D</text>
-  <text x="130.0" y="928" text-anchor="middle" class="sans body" fill="#27313A">ordinary tags/data</text>
-  <rect x="280" y="850" width="180" height="140" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="280" data-y="850" data-width="180" data-height="140"/>
-  <text x="370.0" y="885" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">L2</text>
-  <text x="370.0" y="928" text-anchor="middle" class="sans body" fill="#27313A">ordinary tags/data</text>
-  <rect x="520" y="830" width="210" height="140" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="520" data-y="830" data-width="210" data-height="140"/>
-  <text x="625.0" y="865" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">MSHR target list</text>
-  <text x="625.0" y="908" text-anchor="middle" class="sans body" fill="#27313A">allocOnFill + merge</text>
-  <rect x="790" y="820" width="360" height="180" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="790" data-y="820" data-width="360" data-height="180"/>
-  <text x="970.0" y="855" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">LLC replacement entry</text>
-  <text x="970.0" y="898" text-anchor="middle" class="mono body" fill="#27313A">valid | property | RRPV | recency</text>
-  <text x="970.0" y="934" text-anchor="middle" class="mono body" fill="#27313A">tier | e1 | e2 | count | context | stamp</text>
-  <text x="625" y="1015" text-anchor="middle" class="sans body" fill="#B45309">newest compatible sequence; conflict propagates</text>
-  <path d="M130 1145 L1070 1145" fill="none" stroke="#1769C2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="property bytes return normally; metadata remains advisory at the LLC" data-flow-cadence="per governed hit or fill"/>
-  <text x="600" y="1130" text-anchor="middle" class="sans body" fill="#1769C2" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">property bytes return normally; metadata remains advisory at the LLC | per governed hit or fill</text>
+  <text x="74" y="789" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">CACHE HIERARCHY</text>
+  <text x="1158" y="788" text-anchor="end" class="sans body" fill="#98A2B3">private caches stay ordinary; LLC state is extended</text>
+  <line x1="24" y1="808" x2="1176" y2="808" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="808" x2="170" y2="808" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <path d="M60 930 L1130 930" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="true" data-flow-label="property Request + ReuseBind" data-flow-cadence="per governed load"/>
+  <rect x="376.12" y="1053.00" width="447.76" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="600" y="1070" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">property Request + ReuseBind | per governed load</text>
+  <rect x="40" y="850" width="180" height="140" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="850" data-width="180" data-height="140"/>
+  <text x="130.0" y="885" text-anchor="middle" class="sans label" fill="#2563EB" font-weight="700">L1D</text>
+  <text x="130.0" y="928" text-anchor="middle" class="sans body" fill="#182230">ordinary tags/data</text>
+  <rect x="280" y="850" width="180" height="140" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="280" data-y="850" data-width="180" data-height="140"/>
+  <text x="370.0" y="885" text-anchor="middle" class="sans label" fill="#2563EB" font-weight="700">L2</text>
+  <text x="370.0" y="928" text-anchor="middle" class="sans body" fill="#182230">ordinary tags/data</text>
+  <rect x="520" y="830" width="210" height="140" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="520" data-y="830" data-width="210" data-height="140"/>
+  <text x="625.0" y="865" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">MSHR target list</text>
+  <text x="625.0" y="908" text-anchor="middle" class="sans body" fill="#182230">allocOnFill + merge</text>
+  <rect x="790" y="820" width="360" height="180" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="790" data-y="820" data-width="360" data-height="180"/>
+  <text x="970.0" y="855" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">LLC replacement entry</text>
+  <text x="970.0" y="898" text-anchor="middle" class="mono body" fill="#182230">valid | property | RRPV | recency</text>
+  <text x="970.0" y="934" text-anchor="middle" class="mono body" fill="#182230">tier | e1 | e2 | count</text>
+  <text x="970.0" y="970" text-anchor="middle" class="mono body" fill="#182230">context | stamp</text>
+  <text x="625" y="1015" text-anchor="middle" class="sans body" fill="#C56A13">newest compatible sequence; conflict propagates</text>
+  <path d="M130 1145 L1070 1145" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="property bytes return normally; metadata remains advisory at the LLC" data-flow-cadence="per governed hit or fill"/>
+  <rect x="161.80" y="1113.00" width="876.40" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="600" y="1130" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">property bytes return normally; metadata remains advisory at the LLC | per governed hit or fill</text>
 </svg>

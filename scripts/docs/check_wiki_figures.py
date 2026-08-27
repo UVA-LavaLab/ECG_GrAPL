@@ -33,12 +33,12 @@ CSS_SIZE = re.compile(r"font-size\s*:\s*(\d+(?:\.\d+)?)px")
 HTML_TAG = re.compile(r"<[^>]+>")
 
 ALLOWED_COLORS = {
-    "#27313A", "#9AA3AD", "#1769C2", "#15803D", "#B45309",
-    "#B42318", "#6D5BD0", "#FFFFFF", "#F8F6EC", "#EDF5FF",
-    "#E7F7EA", "#FFF0D8", "#F7DEDC", "#EEE9FF",
-    "#1E2327", "#252A2E", "#273846", "#24382A", "#3B3122",
-    "#3D292A", "#302C3C", "#ECE7DD", "#747D86", "#63A8FF",
-    "#63D68B", "#F0B35A", "#F09B95", "#A79BF0",
+    "#182230", "#475467", "#98A2B3", "#2563EB", "#0F8A72",
+    "#C56A13", "#C63C4A", "#6558C5", "#FFFFFF", "#F8FAFC",
+    "#EFF6FF", "#ECFDF5", "#FFF7ED", "#FFF1F2", "#F5F3FF",
+    "#111827", "#172033", "#172554", "#073B34", "#422A12",
+    "#421B22", "#292349", "#F8FAFC", "#94A3B8", "#A8B0BF",
+    "#7FB0FF", "#5ED0B0", "#F0B36A", "#F48B98", "#ADA4FF",
 }
 ARROW_KINDS = {"transfer", "control", "loop", "dependency", "model-edge"}
 PAGE_BY_SLUG = {

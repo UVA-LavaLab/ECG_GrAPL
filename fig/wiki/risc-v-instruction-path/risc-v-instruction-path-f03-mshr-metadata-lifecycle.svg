@@ -1,32 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1370" viewBox="0 0 1200 1370" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1370" viewBox="0 0 1200 1370" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">ReuseBind across MSHR merge, fill, and invalidation</title>
   <desc id="desc">The figure traces a typed ReuseBind extension into an MSHR target list, shows the exact conflict rules and newest-sequence rule, applies the selected extension to the downstream fill, validates the destination line at the LLC, and separates this from allocOnFill aggregation.</desc>
-  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#1769C2"/></marker>
-<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#15803D"/></marker>
-<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B45309"/></marker>
-<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#B42318"/></marker>
-<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6D5BD0"/></marker>
-<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#9AA3AD"/></marker>
-<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#27313A"/></marker><style>
+  <defs><marker id="arrow-blue" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#2563EB"/></marker>
+<marker id="arrow-green" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#0F8A72"/></marker>
+<marker id="arrow-amber" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C56A13"/></marker>
+<marker id="arrow-red" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#C63C4A"/></marker>
+<marker id="arrow-purple" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#6558C5"/></marker>
+<marker id="arrow-gray" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#98A2B3"/></marker>
+<marker id="arrow-ink" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L8 3 L0 6 Z" fill="#182230"/></marker><style>
       :root { color-scheme: light dark; }
       @media (prefers-color-scheme: dark) {
-        [fill="#FFFFFF"]{fill:#1E2327}[stroke="#FFFFFF"]{stroke:#1E2327}
-        [fill="#F8F6EC"]{fill:#252A2E}[stroke="#F8F6EC"]{stroke:#252A2E}
-        [fill="#EDF5FF"]{fill:#273846}[stroke="#EDF5FF"]{stroke:#273846}
-        [fill="#E7F7EA"]{fill:#24382A}[stroke="#E7F7EA"]{stroke:#24382A}
-        [fill="#FFF0D8"]{fill:#3B3122}[stroke="#FFF0D8"]{stroke:#3B3122}
-        [fill="#F7DEDC"]{fill:#3D292A}[stroke="#F7DEDC"]{stroke:#3D292A}
-        [fill="#EEE9FF"]{fill:#302C3C}[stroke="#EEE9FF"]{stroke:#302C3C}
-        [fill="#27313A"]{fill:#ECE7DD}[stroke="#27313A"]{stroke:#ECE7DD}
-        [fill="#9AA3AD"]{fill:#747D86}[stroke="#9AA3AD"]{stroke:#747D86}
-        [fill="#1769C2"]{fill:#63A8FF}[stroke="#1769C2"]{stroke:#63A8FF}
-        [fill="#15803D"]{fill:#63D68B}[stroke="#15803D"]{stroke:#63D68B}
-        [fill="#B45309"]{fill:#F0B35A}[stroke="#B45309"]{stroke:#F0B35A}
-        [fill="#6D5BD0"]{fill:#A79BF0}[stroke="#6D5BD0"]{stroke:#A79BF0}
-        [fill="#B42318"]{fill:#F09B95}[stroke="#B42318"]{stroke:#F09B95}
+        [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
+        [fill="#F8FAFC"]{fill:#172033}[stroke="#F8FAFC"]{stroke:#172033}
+        [fill="#EFF6FF"]{fill:#172554}[stroke="#EFF6FF"]{stroke:#172554}
+        [fill="#ECFDF5"]{fill:#073B34}[stroke="#ECFDF5"]{stroke:#073B34}
+        [fill="#FFF7ED"]{fill:#422A12}[stroke="#FFF7ED"]{stroke:#422A12}
+        [fill="#FFF1F2"]{fill:#421B22}[stroke="#FFF1F2"]{stroke:#421B22}
+        [fill="#F5F3FF"]{fill:#292349}[stroke="#F5F3FF"]{stroke:#292349}
+        [fill="#182230"]{fill:#F8FAFC}[stroke="#182230"]{stroke:#F8FAFC}
+        [fill="#475467"]{fill:#94A3B8}[stroke="#475467"]{stroke:#94A3B8}
+        [fill="#98A2B3"]{fill:#A8B0BF}[stroke="#98A2B3"]{stroke:#A8B0BF}
+        [fill="#2563EB"]{fill:#7FB0FF}[stroke="#2563EB"]{stroke:#7FB0FF}
+        [fill="#0F8A72"]{fill:#5ED0B0}[stroke="#0F8A72"]{stroke:#5ED0B0}
+        [fill="#C56A13"]{fill:#F0B36A}[stroke="#C56A13"]{stroke:#F0B36A}
+        [fill="#6558C5"]{fill:#ADA4FF}[stroke="#6558C5"]{stroke:#ADA4FF}
+        [fill="#C63C4A"]{fill:#F48B98}[stroke="#C63C4A"]{stroke:#F48B98}
       }
-      .sans{font-family:Arial,Helvetica,sans-serif}
-      .mono{font-family:"SFMono-Regular",Consolas,monospace}
+      .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
+      .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
       .title{font-size:32px;font-weight:700}
       .subtitle{font-size:18px}
       .heading{font-size:22px;font-weight:700}
@@ -34,124 +35,129 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1370" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ReuseBind across MSHR merge, fill, and invalidation</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">MSHR merge validity and FlowThrough allocation are separate state machines.</text>
-  <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="44" cy="138" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">ReuseBind across MSHR merge, fill, and invalidation</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">MSHR merge validity and FlowThrough allocation are separate state machines.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#6D5BD0" font-weight="700">REQUEST EXTENSION</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#9AA3AD">one dynamic governed property load</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="205" width="130" height="85" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="1" data-shape="rect" data-x="40" data-y="205" data-width="130" data-height="85"/>
-  <text x="105.0" y="255" text-anchor="middle" class="mono body" fill="#27313A" font-weight="700">dest</text>
-  <rect x="170" y="205" width="90" height="85" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="1" data-shape="rect" data-x="170" data-y="205" data-width="90" data-height="85"/>
-  <text x="215.0" y="255" text-anchor="middle" class="mono body" fill="#27313A" font-weight="700">tier</text>
-  <rect x="260" y="205" width="120" height="85" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="1" data-shape="rect" data-x="260" data-y="205" data-width="120" data-height="85"/>
-  <text x="320.0" y="255" text-anchor="middle" class="mono body" fill="#27313A" font-weight="700">epoch1</text>
-  <rect x="380" y="205" width="120" height="85" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="1" data-shape="rect" data-x="380" data-y="205" data-width="120" data-height="85"/>
-  <text x="440.0" y="255" text-anchor="middle" class="mono body" fill="#27313A" font-weight="700">epoch2</text>
-  <rect x="500" y="205" width="90" height="85" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="1" data-shape="rect" data-x="500" data-y="205" data-width="90" data-height="85"/>
-  <text x="545.0" y="255" text-anchor="middle" class="mono body" fill="#27313A" font-weight="700">count</text>
-  <rect x="590" y="205" width="110" height="85" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="1" data-shape="rect" data-x="590" data-y="205" data-width="110" data-height="85"/>
-  <text x="645.0" y="255" text-anchor="middle" class="mono body" fill="#27313A" font-weight="700">current</text>
-  <rect x="700" y="205" width="110" height="85" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="1" data-shape="rect" data-x="700" data-y="205" data-width="110" data-height="85"/>
-  <text x="755.0" y="255" text-anchor="middle" class="mono body" fill="#27313A" font-weight="700">context</text>
-  <rect x="810" y="205" width="120" height="85" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="1" data-shape="rect" data-x="810" data-y="205" data-width="120" data-height="85"/>
-  <text x="870.0" y="255" text-anchor="middle" class="mono body" fill="#27313A" font-weight="700">sequence</text>
-  <rect x="930" y="205" width="110" height="85" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="1" data-shape="rect" data-x="930" data-y="205" data-width="110" data-height="85"/>
-  <text x="985.0" y="255" text-anchor="middle" class="mono body" fill="#27313A" font-weight="700">conflict</text>
-  <text x="40" y="330" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">EcgReusePlanExtension cloned with Request</text>
-  <text x="560" y="330" text-anchor="start" class="mono body" fill="#B42318">valid iff context != 0 and conflict == 0</text>
-  <circle cx="44" cy="410" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">REQUEST EXTENSION</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#98A2B3">one dynamic governed property load</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="205" width="130" height="85" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1" data-shape="rect" data-x="40" data-y="205" data-width="130" data-height="85"/>
+  <text x="105.0" y="255" text-anchor="middle" class="mono body" fill="#182230" font-weight="700">dest</text>
+  <rect x="170" y="205" width="90" height="85" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1" data-shape="rect" data-x="170" data-y="205" data-width="90" data-height="85"/>
+  <text x="215.0" y="255" text-anchor="middle" class="mono body" fill="#182230" font-weight="700">tier</text>
+  <rect x="260" y="205" width="120" height="85" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1" data-shape="rect" data-x="260" data-y="205" data-width="120" data-height="85"/>
+  <text x="320.0" y="255" text-anchor="middle" class="mono body" fill="#182230" font-weight="700">epoch1</text>
+  <rect x="380" y="205" width="120" height="85" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1" data-shape="rect" data-x="380" data-y="205" data-width="120" data-height="85"/>
+  <text x="440.0" y="255" text-anchor="middle" class="mono body" fill="#182230" font-weight="700">epoch2</text>
+  <rect x="500" y="205" width="90" height="85" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1" data-shape="rect" data-x="500" data-y="205" data-width="90" data-height="85"/>
+  <text x="545.0" y="255" text-anchor="middle" class="mono body" fill="#182230" font-weight="700">count</text>
+  <rect x="590" y="205" width="110" height="85" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1" data-shape="rect" data-x="590" data-y="205" data-width="110" data-height="85"/>
+  <text x="645.0" y="255" text-anchor="middle" class="mono body" fill="#182230" font-weight="700">current</text>
+  <rect x="700" y="205" width="110" height="85" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1" data-shape="rect" data-x="700" data-y="205" data-width="110" data-height="85"/>
+  <text x="755.0" y="255" text-anchor="middle" class="mono body" fill="#182230" font-weight="700">context</text>
+  <rect x="810" y="205" width="120" height="85" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="810" data-y="205" data-width="120" data-height="85"/>
+  <text x="870.0" y="255" text-anchor="middle" class="mono body" fill="#182230" font-weight="700">sequence</text>
+  <rect x="930" y="205" width="110" height="85" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1" data-shape="rect" data-x="930" data-y="205" data-width="110" data-height="85"/>
+  <text x="985.0" y="255" text-anchor="middle" class="mono body" fill="#182230" font-weight="700">conflict</text>
+  <text x="40" y="330" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">EcgReusePlanExtension cloned with Request</text>
+  <text x="560" y="330" text-anchor="start" class="mono body" fill="#C63C4A">valid iff context != 0 and conflict == 0</text>
+  <circle cx="44" cy="410" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="416" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="417" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">MSHR TARGET-LIST MERGE</text>
-  <text x="1158" y="416" text-anchor="end" class="sans body" fill="#9AA3AD">rebuild state whenever active targets change</text>
-  <line x1="24" y1="436" x2="1176" y2="436" stroke="#15803D" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="465" width="530" height="235" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="465" data-width="530" data-height="235"/>
-  <line x1="40" y1="510" x2="570" y2="510" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="558" x2="570" y2="558" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="606" x2="570" y2="606" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="654" x2="570" y2="654" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="125" y1="465" x2="125" y2="700" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="245" y1="465" x2="245" y2="700" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="350" y1="465" x2="350" y2="700" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="455" y1="465" x2="455" y2="700" stroke="#27313A" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="82" y="495" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">target</text>
-  <text x="185" y="495" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">governed</text>
-  <text x="297" y="495" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">requestor</text>
-  <text x="402" y="495" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">context</text>
-  <text x="512" y="495" text-anchor="middle" class="sans body" fill="#27313A" font-weight="700">seq / alloc</text>
-  <text x="82" y="544" text-anchor="middle" class="mono body" fill="#27313A">A</text>
-  <text x="185" y="544" text-anchor="middle" class="mono body" fill="#27313A">yes</text>
-  <text x="297" y="544" text-anchor="middle" class="mono body" fill="#27313A">cpu0</text>
-  <text x="402" y="544" text-anchor="middle" class="mono body" fill="#27313A">k</text>
-  <text x="512" y="544" text-anchor="middle" class="mono body" fill="#27313A">17 / false</text>
-  <text x="82" y="592" text-anchor="middle" class="mono body" fill="#27313A">B</text>
-  <text x="185" y="592" text-anchor="middle" class="mono body" fill="#27313A">yes</text>
-  <text x="297" y="592" text-anchor="middle" class="mono body" fill="#27313A">cpu0</text>
-  <text x="402" y="592" text-anchor="middle" class="mono body" fill="#27313A">k</text>
-  <text x="512" y="592" text-anchor="middle" class="mono body" fill="#27313A">18 / true</text>
-  <text x="82" y="640" text-anchor="middle" class="mono body" fill="#27313A">C</text>
-  <text x="185" y="640" text-anchor="middle" class="mono body" fill="#27313A">yes/no</text>
-  <text x="297" y="640" text-anchor="middle" class="mono body" fill="#27313A">cpu?</text>
-  <text x="402" y="640" text-anchor="middle" class="mono body" fill="#27313A">k?</text>
-  <text x="512" y="640" text-anchor="middle" class="mono body" fill="#27313A">19 / false</text>
-  <text x="82" y="688" text-anchor="middle" class="mono body" fill="#27313A">state</text>
-  <text x="185" y="688" text-anchor="middle" class="mono body" fill="#27313A">compat?</text>
-  <text x="297" y="688" text-anchor="middle" class="mono body" fill="#27313A">same?</text>
-  <text x="402" y="688" text-anchor="middle" class="mono body" fill="#27313A">same?</text>
-  <text x="512" y="688" text-anchor="middle" class="mono body" fill="#27313A">newest / OR</text>
-  <polygon points="700,507.5 805.0,575 700,642.5 595.0,575" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="700" data-cy="575" data-width="210" data-height="135"/>
-  <text x="700" y="582" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">compatible?</text>
-  <path d="M570 575 L595 575" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="target"/>
-  <rect x="845" y="465" width="315" height="105" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="845" data-y="465" data-width="315" data-height="105"/>
-  <text x="862" y="500" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">selected extension</text>
-  <text x="862" y="535" text-anchor="start" class="sans body" fill="#27313A">newest compatible sequence</text>
-  <text x="862" y="562" text-anchor="start" class="sans body" fill="#27313A">equal seq requires same payload</text>
-  <rect x="845" y="595" width="315" height="105" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="845" data-y="595" data-width="315" data-height="105"/>
-  <text x="862" y="630" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">conflict state</text>
-  <text x="862" y="665" text-anchor="start" class="sans body" fill="#27313A">mixed / mismatch / invalid</text>
-  <path d="M805 545 L845 520" fill="none" stroke="#15803D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="selected extension"/>
-  <path d="M805 605 L845 645" fill="none" stroke="#B42318" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="conflict state"/>
-  <text x="600" y="710" text-anchor="middle" class="mono body" fill="#B45309" font-weight="700">allocOnFill = OR(target allocOnFill); independent of ReuseBind validity</text>
-  <circle cx="44" cy="742" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="74" y="417" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">MSHR TARGET-LIST MERGE</text>
+  <text x="1158" y="416" text-anchor="end" class="sans body" fill="#98A2B3">rebuild state whenever active targets change</text>
+  <line x1="24" y1="436" x2="1176" y2="436" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="436" x2="170" y2="436" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="465" width="530" height="235" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="465" data-width="530" data-height="235"/>
+  <line x1="40" y1="510" x2="570" y2="510" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="558" x2="570" y2="558" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="606" x2="570" y2="606" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="654" x2="570" y2="654" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="125" y1="465" x2="125" y2="700" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="245" y1="465" x2="245" y2="700" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="350" y1="465" x2="350" y2="700" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="455" y1="465" x2="455" y2="700" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="82" y="495" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">target</text>
+  <text x="185" y="495" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">governed</text>
+  <text x="297" y="495" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">requestor</text>
+  <text x="402" y="495" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">context</text>
+  <text x="512" y="495" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">seq / alloc</text>
+  <text x="82" y="544" text-anchor="middle" class="mono body" fill="#182230">A</text>
+  <text x="185" y="544" text-anchor="middle" class="mono body" fill="#182230">yes</text>
+  <text x="297" y="544" text-anchor="middle" class="mono body" fill="#182230">cpu0</text>
+  <text x="402" y="544" text-anchor="middle" class="mono body" fill="#182230">k</text>
+  <text x="512" y="544" text-anchor="middle" class="mono body" fill="#182230">17 / false</text>
+  <text x="82" y="592" text-anchor="middle" class="mono body" fill="#182230">B</text>
+  <text x="185" y="592" text-anchor="middle" class="mono body" fill="#182230">yes</text>
+  <text x="297" y="592" text-anchor="middle" class="mono body" fill="#182230">cpu0</text>
+  <text x="402" y="592" text-anchor="middle" class="mono body" fill="#182230">k</text>
+  <text x="512" y="592" text-anchor="middle" class="mono body" fill="#182230">18 / true</text>
+  <text x="82" y="640" text-anchor="middle" class="mono body" fill="#182230">C</text>
+  <text x="185" y="640" text-anchor="middle" class="mono body" fill="#182230">yes/no</text>
+  <text x="297" y="640" text-anchor="middle" class="mono body" fill="#182230">cpu?</text>
+  <text x="402" y="640" text-anchor="middle" class="mono body" fill="#182230">k?</text>
+  <text x="512" y="640" text-anchor="middle" class="mono body" fill="#182230">19 / false</text>
+  <text x="82" y="688" text-anchor="middle" class="mono body" fill="#182230">state</text>
+  <text x="185" y="688" text-anchor="middle" class="mono body" fill="#182230">compat?</text>
+  <text x="297" y="688" text-anchor="middle" class="mono body" fill="#182230">same?</text>
+  <text x="402" y="688" text-anchor="middle" class="mono body" fill="#182230">same?</text>
+  <text x="512" y="688" text-anchor="middle" class="mono body" fill="#182230">newest / OR</text>
+  <polygon points="700,507.5 805.0,575 700,642.5 595.0,575" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="700" data-cy="575" data-width="210" data-height="135"/>
+  <text x="700" y="582" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">compatible?</text>
+  <path d="M570 575 L595 575" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="target"/>
+  <rect x="845" y="465" width="315" height="105" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="845" data-y="465" data-width="315" data-height="105"/>
+  <text x="862" y="500" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">selected extension</text>
+  <text x="862" y="535" text-anchor="start" class="sans body" fill="#182230">newest compatible sequence</text>
+  <text x="862" y="562" text-anchor="start" class="sans body" fill="#182230">equal seq requires same payload</text>
+  <rect x="845" y="595" width="315" height="105" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="845" data-y="595" data-width="315" data-height="105"/>
+  <text x="862" y="630" text-anchor="start" class="sans label" fill="#C63C4A" font-weight="700">conflict state</text>
+  <text x="862" y="665" text-anchor="start" class="sans body" fill="#182230">mixed / mismatch / invalid</text>
+  <path d="M805 545 L845 520" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="selected extension"/>
+  <path d="M805 605 L845 645" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="conflict state"/>
+  <text x="600" y="710" text-anchor="middle" class="mono body" fill="#C56A13" font-weight="700">allocOnFill = OR(target allocOnFill); independent of ReuseBind validity</text>
+  <circle cx="44" cy="742" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="748" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="749" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">RESPONSE AND LLC ACCEPTANCE</text>
-  <text x="1158" y="748" text-anchor="end" class="sans body" fill="#9AA3AD">conflict never becomes a valid line stamp</text>
-  <line x1="24" y1="768" x2="1176" y2="768" stroke="#B42318" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="800" width="220" height="105" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="40" data-y="800" data-width="220" data-height="105"/>
-  <text x="150" y="835" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">response Request</text>
-  <text x="150" y="870" text-anchor="middle" class="sans body" fill="#27313A">selected ext + conflict</text>
-  <polygon points="390,789.5 485.0,852 390,914.5 295.0,852" fill="#F7DEDC" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="390" data-cy="852" data-width="190" data-height="125"/>
-  <text x="390" y="840" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">conflicted?</text>
-  <text x="390" y="872" text-anchor="middle" class="sans body" fill="#27313A">reject if yes</text>
-  <polygon points="650,789.5 755.0,852 650,914.5 545.0,852" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="650" data-cy="852" data-width="210" data-height="125"/>
-  <text x="650" y="858" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">line match?</text>
-  <rect x="820" y="800" width="330" height="105" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2" data-shape="rect" data-x="820" data-y="800" data-width="330" data-height="105"/>
-  <text x="985" y="832" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">LLC line metadata</text>
-  <text x="985" y="865" text-anchor="middle" class="mono body" fill="#27313A">tier | e1 | e2 | context | valid</text>
-  <path d="M260 852 L295 852" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="response Request"/>
-  <path d="M485 852 L545 852" fill="none" stroke="#15803D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="conflicted?"/>
-  <path d="M755 852 L820 852" fill="none" stroke="#15803D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="line match?"/>
-  <text x="600" y="950" text-anchor="middle" class="sans body" fill="#B42318">serviceable/deferred target changes rebuild merge state; deallocation resets MSHR ECG state</text>
-  <circle cx="44" cy="1074" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
+  <text x="74" y="749" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">RESPONSE AND LLC ACCEPTANCE</text>
+  <text x="1158" y="748" text-anchor="end" class="sans body" fill="#98A2B3">conflict never becomes a valid line stamp</text>
+  <line x1="24" y1="768" x2="1176" y2="768" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="768" x2="170" y2="768" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="800" width="220" height="105" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="800" data-width="220" data-height="105"/>
+  <text x="150" y="835" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">response Request</text>
+  <text x="150" y="870" text-anchor="middle" class="sans body" fill="#182230">selected ext + conflict</text>
+  <polygon points="390,789.5 485.0,852 390,914.5 295.0,852" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="390" data-cy="852" data-width="190" data-height="125"/>
+  <text x="390" y="840" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">conflicted?</text>
+  <text x="390" y="872" text-anchor="middle" class="sans body" fill="#182230">reject if yes</text>
+  <polygon points="650,789.5 755.0,852 650,914.5 545.0,852" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="650" data-cy="852" data-width="210" data-height="125"/>
+  <text x="650" y="858" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">line match?</text>
+  <rect x="820" y="800" width="330" height="105" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="820" data-y="800" data-width="330" data-height="105"/>
+  <text x="985" y="832" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">LLC line metadata</text>
+  <text x="985" y="865" text-anchor="middle" class="mono body" fill="#182230">tier | e1 | e2 | context | valid</text>
+  <path d="M260 852 L295 852" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="response Request"/>
+  <path d="M485 852 L545 852" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="conflicted?"/>
+  <path d="M755 852 L820 852" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="line match?"/>
+  <text x="600" y="950" text-anchor="middle" class="sans body" fill="#C63C4A">serviceable/deferred target changes rebuild merge state; deallocation resets MSHR ECG state</text>
+  <circle cx="44" cy="1074" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="1080" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>
-  <text x="74" y="1081" text-anchor="start" class="sans heading" fill="#27313A" font-weight="700">LINE LIFETIME</text>
-  <text x="1158" y="1080" text-anchor="end" class="sans body" fill="#9AA3AD">metadata is advisory; data correctness stays architectural</text>
-  <line x1="24" y1="1100" x2="1176" y2="1100" stroke="#27313A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <path d="M90 1180 L1110 1180" fill="none" stroke="#6D5BD0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="line metadata lifetime"/>
-  <text x="600" y="1165" text-anchor="middle" class="sans body" fill="#6D5BD0" stroke="#FFFFFF" stroke-width="4" paint-order="stroke fill" stroke-linejoin="round" font-weight="700">line metadata lifetime</text>
-  <circle cx="140" cy="1180" r="14" fill="#FFFFFF" stroke="#15803D" stroke-width="1"/>
-  <text x="140" y="1225" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">accept</text>
-  <text x="140" y="1255" text-anchor="middle" class="sans body" fill="#27313A">valid hit/fill</text>
-  <circle cx="430" cy="1180" r="14" fill="#FFFFFF" stroke="#1769C2" stroke-width="1"/>
-  <text x="430" y="1225" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">refresh</text>
-  <text x="430" y="1255" text-anchor="middle" class="sans body" fill="#27313A">later governed hit</text>
-  <circle cx="720" cy="1180" r="14" fill="#FFFFFF" stroke="#6D5BD0" stroke-width="1"/>
-  <text x="720" y="1225" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">evolve</text>
-  <text x="720" y="1255" text-anchor="middle" class="sans body" fill="#27313A">native RRPV/recency</text>
-  <circle cx="1010" cy="1180" r="14" fill="#FFFFFF" stroke="#B42318" stroke-width="1"/>
-  <text x="1010" y="1225" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">clear</text>
-  <text x="1010" y="1255" text-anchor="middle" class="sans body" fill="#27313A">invalidate or evict</text>
-  <text x="600" y="1315" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">property bytes are never modified by ReuseBind metadata</text>
+  <text x="74" y="1081" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">LINE LIFETIME</text>
+  <text x="1158" y="1080" text-anchor="end" class="sans body" fill="#98A2B3">metadata is advisory; data correctness stays architectural</text>
+  <line x1="24" y1="1100" x2="1176" y2="1100" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="1100" x2="170" y2="1100" stroke="#182230" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <path d="M90 1180 L1110 1180" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="line metadata lifetime"/>
+  <rect x="494.68" y="1148.00" width="210.64" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="600" y="1165" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">line metadata lifetime</text>
+  <circle cx="140" cy="1180" r="14" fill="#FFFFFF" stroke="#0F8A72" stroke-width="1"/>
+  <text x="140" y="1225" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">accept</text>
+  <text x="140" y="1255" text-anchor="middle" class="sans body" fill="#182230">valid hit/fill</text>
+  <circle cx="430" cy="1180" r="14" fill="#FFFFFF" stroke="#2563EB" stroke-width="1"/>
+  <text x="430" y="1225" text-anchor="middle" class="sans label" fill="#2563EB" font-weight="700">refresh</text>
+  <text x="430" y="1255" text-anchor="middle" class="sans body" fill="#182230">later governed hit</text>
+  <circle cx="720" cy="1180" r="14" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
+  <text x="720" y="1225" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">evolve</text>
+  <text x="720" y="1255" text-anchor="middle" class="sans body" fill="#182230">native RRPV/recency</text>
+  <circle cx="1010" cy="1180" r="14" fill="#FFFFFF" stroke="#C63C4A" stroke-width="1"/>
+  <text x="1010" y="1225" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">clear</text>
+  <text x="1010" y="1255" text-anchor="middle" class="sans body" fill="#182230">invalidate or evict</text>
+  <text x="600" y="1315" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">property bytes are never modified by ReuseBind metadata</text>
 </svg>

@@ -38,13 +38,18 @@ Transfer arrows also state their cadence.
 
 | Role | Strong | Matte |
 |---|---|---|
-| ink / border | `#27313A` | `#FFFFFF` |
-| neutral / annotation | `#9AA3AD` | `#F8F6EC` |
-| graph data / request data | `#1769C2` | `#EDF5FF` |
-| local compute / accepted state | `#15803D` | `#E7F7EA` |
-| transfer / FlowThrough | `#B45309` | `#FFF0D8` |
-| verification / rejection | `#B42318` | `#F7DEDC` |
-| policy / metadata state | `#6D5BD0` | `#EEE9FF` |
+| ink / primary text | `#182230` | `#FFFFFF` |
+| border / structure | `#475467` | `#F8FAFC` |
+| neutral / annotation | `#98A2B3` | `#F8FAFC` |
+| graph data / request data | `#2563EB` | `#EFF6FF` |
+| local compute / accepted state | `#0F8A72` | `#ECFDF5` |
+| transfer / FlowThrough | `#C56A13` | `#FFF7ED` |
+| verification / rejection | `#C63C4A` | `#FFF1F2` |
+| policy / metadata state | `#6558C5` | `#F5F3FF` |
+
+The reset is paper-first: dark navy headings, thin slate borders, mostly white
+or near-white surfaces, and one or two semantic accents per local flow. Full
+panel fills no longer carry the hierarchy by themselves.
 
 Instruction and pseudocode text uses the same semantic colors: record and
 FlowThrough mnemonics are amber, property-load mnemonics are green, register
