@@ -741,6 +741,11 @@ def test_proposal_compact_reuse_bind_flowthrough_is_fail_closed():
     measured_roi = guest.split(
         "GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE)", 1)[1].split(
             "GEM5_WORK_END(GEM5_WORK_COMPUTE)", 1)[0]
+    proposal_call = (
+        "PageRankPullGSCompactReuseBindFlowthroughIteration(")
+    assert measured_roi.count(proposal_call) == 1
+    assert measured_roi.index(proposal_call) < measured_roi.index(
+        "for (NodeID u = 0; u < g.num_nodes(); u++)")
     assert not re.search(r"\b\w*_off\s*\[", measured_roi)
     assert "g.in_offset(0)" in measured_roi
     assert "g.in_offset(u + 1)" in measured_roi

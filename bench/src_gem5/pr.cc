@@ -33,6 +33,51 @@ using namespace std;
 typedef float ScoreT;
 const float kDamp = 0.85;
 
+static __attribute__((noinline)) double
+PageRankPullGSCompactReuseBindFlowthroughIteration(
+        const Graph& g,
+        pvector<ScoreT>& scores,
+        pvector<ScoreT>& outgoing_contrib,
+        const pvector<uint32_t>& records,
+        uint32_t record_id_bits,
+        uint32_t record_epoch_bits,
+        uint32_t epoch_count,
+        ScoreT base_score) {
+    double error = 0;
+    Gem5EcgMonotonicEpochCursor epoch_cursor;
+    if (gem5_ecg_epoch_csr_enabled())
+        epoch_cursor.reset(g.num_nodes(), epoch_count);
+
+    uint64_t begin = static_cast<uint64_t>(g.in_offset(0));
+    for (NodeID u = 0; u < g.num_nodes(); ++u) {
+        GEM5_SET_MONOTONIC_VERTEX_EPOCH(epoch_cursor, u);
+        const uint64_t end =
+            static_cast<uint64_t>(g.in_offset(u + 1));
+        const uint32_t* record_ptr = records.data() + begin;
+        const uint32_t* const record_end = records.data() + end;
+        ScoreT incoming_total = 0;
+        for (; record_ptr != record_end; ++record_ptr) {
+            const uint64_t record =
+                gem5_ecg_flow_load_compact_instruction(
+                    record_ptr, record_id_bits, record_epoch_bits);
+            const NodeID v =
+                static_cast<NodeID>(record & 0xFFFFFFFFULL);
+            incoming_total += gem5_ecg_bind_load_f32(
+                &outgoing_contrib[v], record);
+        }
+        begin = end;
+
+        const ScoreT old_score = scores[u];
+        const ScoreT new_score =
+            base_score + kDamp * incoming_total;
+        scores[u] = new_score;
+        error += fabs(new_score - old_score);
+        outgoing_contrib[u] =
+            new_score / g.out_degree(u);
+    }
+    return error;
+}
+
 pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                                      double epsilon = 0) {
     const ScoreT init_score = 1.0f / g.num_nodes();
@@ -731,6 +776,14 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     for (int iter = 0; iter < max_iters; iter++) {
         ++executed_iters;
         double error = 0;
+        if (compact_reuse_bind_flowthrough_on) {
+            error = PageRankPullGSCompactReuseBindFlowthroughIteration(
+                g, scores, outgoing_contrib, in_edge_pair32_flat,
+                pair32_id_bits, pair32_epoch_bits, edge_epoch_count,
+                base_score);
+            if (error < epsilon) break;
+            continue;
+        }
         Gem5EcgMonotonicEpochCursor epoch_cursor;
         if (gem5_ecg_epoch_csr_enabled()) {
             epoch_cursor.reset(g.num_nodes(), edge_epoch_count);
@@ -747,30 +800,6 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                 const uint64_t end =
                     static_cast<uint64_t>(g.in_offset(u + 1));
                 csr_pair_begin = end;
-                if (compact_reuse_bind_flowthrough_on) {
-                    const uint32_t* record_ptr =
-                        in_edge_pair32_flat.data() + begin;
-                    const uint32_t* const record_end =
-                        in_edge_pair32_flat.data() + end;
-                    for (; record_ptr != record_end; ++record_ptr) {
-                        const uint64_t rec =
-                            gem5_ecg_flow_load_compact_instruction(
-                                record_ptr, pair32_id_bits,
-                                pair32_epoch_bits);
-                        const NodeID v = static_cast<NodeID>(
-                            rec & 0xFFFFFFFFULL);
-                        incoming_total += gem5_ecg_bind_load_f32(
-                            &outgoing_contrib[v], rec);
-                    }
-                    const ScoreT old_score = scores[u];
-                    const ScoreT new_score =
-                        base_score + kDamp * incoming_total;
-                    scores[u] = new_score;
-                    error += fabs(new_score - old_score);
-                    outgoing_contrib[u] =
-                        new_score / g.out_degree(u);
-                    continue;
-                }
                 if (wide_reuse_bind_flowthrough_on) {
                     const uint64_t* record_ptr =
                         in_edge_pair_flat.data() + begin;
