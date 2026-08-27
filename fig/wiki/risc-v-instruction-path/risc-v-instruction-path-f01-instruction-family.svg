@@ -74,7 +74,7 @@
   <text x="130" y="525" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">custom-0</text>
   <text x="130" y="557" text-anchor="middle" class="sans body" fill="#27313A">record address</text>
   <text x="130" y="585" text-anchor="middle" class="mono body" fill="#27313A">in rs1</text>
-  <polygon points="350,487.5 445.0,550 350,612.5 255.0,550" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <polygon points="350,487.5 445.0,550 350,612.5 255.0,550" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="350" data-cy="550" data-width="190" data-height="125"/>
   <text x="350" y="540" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">record-load</text>
   <text x="350" y="570" text-anchor="middle" class="sans body" fill="#27313A">role decode</text>
   <path d="M220 550 L255 550" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-label="custom-0"/>
@@ -102,8 +102,8 @@
   <text x="145" y="825" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">physical rd</text>
   <text x="145" y="857" text-anchor="middle" class="sans body" fill="#27313A">canonical ReusePlan</text>
   <text x="145" y="885" text-anchor="middle" class="mono body" fill="#27313A">becomes property rs2</text>
-  <polygon points="390,787.5 485.0,850 390,912.5 295.0,850" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="390" y="840" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">property-load</text>
+  <polygon points="390,787.5 485.0,850 390,912.5 295.0,850" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="390" data-cy="850" data-width="190" data-height="125"/>
+  <text x="390" y="840" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">property</text>
   <text x="390" y="870" text-anchor="middle" class="sans body" fill="#27313A">address form</text>
   <path d="M250 850 L295 850" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="physical rd"/>
   <rect x="535" y="775" width="285" height="115" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>

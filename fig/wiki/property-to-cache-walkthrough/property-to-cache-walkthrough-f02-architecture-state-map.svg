@@ -78,9 +78,10 @@
   <text x="525" y="562" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">Issue / select</text>
   <text x="525" y="605" text-anchor="middle" class="sans body" fill="#27313A">I0 ready</text>
   <text x="525" y="645" text-anchor="middle" class="sans body" fill="#27313A">I1 waits P17</text>
-  <polygon points="700,525.0 775.0,600 700,675.0 625.0,600" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <polygon points="700,525.0 775.0,600 700,675.0 625.0,600" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="700" data-cy="600" data-width="150" data-height="150"/>
   <text x="700" y="590" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">AGU</text>
-  <text x="700" y="625" text-anchor="middle" class="sans body" fill="#27313A">record/property EA</text>
+  <text x="700" y="625" text-anchor="middle" class="sans body" fill="#27313A">EA</text>
+  <text x="700" y="695" text-anchor="middle" class="sans body" fill="#15803D">record or property address</text>
   <rect x="820" y="505" width="180" height="190" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <line x1="820" y1="552.5" x2="1000" y2="552.5" stroke="#27313A" stroke-width="1"/>
   <line x1="820" y1="600.0" x2="1000" y2="600.0" stroke="#27313A" stroke-width="1"/>

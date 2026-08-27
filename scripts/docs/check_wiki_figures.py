@@ -109,7 +109,7 @@ def css_sizes(root: ET.Element) -> dict[str, float]:
 
 def check_text_layout(
     figure: Figure, root: ET.Element, errors: list[str]
-) -> None:
+) -> list[tuple[float, float, float, float, str]]:
     sizes = css_sizes(root)
     boxes: list[tuple[float, float, float, float, str]] = []
     name = figure.svg.relative_to(ROOT)
@@ -151,6 +151,42 @@ def check_text_layout(
             break
     if collisions:
         errors.append(f"{name}: text collisions: {'; '.join(collisions)}")
+    return boxes
+
+
+def check_diamond_text_fit(
+    figure: Figure,
+    root: ET.Element,
+    boxes: list[tuple[float, float, float, float, str]],
+    errors: list[str],
+) -> None:
+    name = figure.svg.relative_to(ROOT)
+    spills: list[str] = []
+    for node in root.iter():
+        if node.get("data-shape") != "diamond":
+            continue
+        cx = float(node.get("data-cx", "0"))
+        cy = float(node.get("data-cy", "0"))
+        half_width = float(node.get("data-width", "0")) / 2
+        half_height = float(node.get("data-height", "0")) / 2
+        for left, top, right, bottom, value in boxes:
+            text_cx = (left + right) / 2
+            text_cy = (top + bottom) / 2
+            if (
+                abs(text_cx - cx) > half_width
+                or abs(text_cy - cy) > half_height
+            ):
+                continue
+            corners = (
+                (left, top), (right, top), (left, bottom), (right, bottom)
+            )
+            if any(
+                abs(x - cx) / half_width + abs(y - cy) / half_height > 1.0
+                for x, y in corners
+            ):
+                spills.append(f"'{value}' spills outside a decision diamond")
+    if spills:
+        errors.append(f"{name}: diamond text fit: {'; '.join(spills[:8])}")
 
 
 def collect(errors: list[str]) -> list[Figure]:
@@ -224,7 +260,8 @@ def check_svg(figure: Figure, errors: list[str]) -> ET.Element | None:
     ]
     if not backgrounds:
         errors.append(f"{name}: missing fully opaque publication background")
-    check_text_layout(figure, root, errors)
+    boxes = check_text_layout(figure, root, errors)
+    check_diamond_text_fit(figure, root, boxes, errors)
     visible = " ".join(svg_labels(root))
     for node in root.iter():
         if not node.get("marker-end"):

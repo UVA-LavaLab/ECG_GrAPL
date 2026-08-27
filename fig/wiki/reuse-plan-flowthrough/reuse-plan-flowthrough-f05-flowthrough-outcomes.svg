@@ -68,7 +68,7 @@
   <text x="74" y="437" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">THREE LLC OUTCOMES</text>
   <text x="1158" y="436" text-anchor="end" class="sans body" fill="#9AA3AD">only the returning miss fill reaches the allocation gate</text>
   <line x1="24" y1="456" x2="1176" y2="456" stroke="#B45309" stroke-width="3"/>
-  <polygon points="170,525.0 275.0,585 170,645.0 65.0,585" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <polygon points="170,525.0 275.0,585 170,645.0 65.0,585" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="170" data-cy="585" data-width="210" data-height="120"/>
   <text x="170" y="575" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">LLC tag</text>
   <text x="170" y="605" text-anchor="middle" class="sans body" fill="#27313A">hit?</text>
   <rect x="330" y="505" width="230" height="105" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
@@ -85,7 +85,7 @@
   <text x="346" y="778" text-anchor="start" class="mono body" fill="#27313A" font-weight="700">allocOnFill combines with OR</text>
   <path d="M170 645 L170 710 L330 710" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="LLC miss"/>
   <text x="235" y="695" text-anchor="middle" class="sans body" fill="#B45309" font-weight="700">LLC miss</text>
-  <polygon points="805,650.0 910.0,710 805,770.0 700.0,710" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <polygon points="805,650.0 910.0,710 805,770.0 700.0,710" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="805" data-cy="710" data-width="210" data-height="120"/>
   <text x="805" y="700" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">allocOnFill</text>
   <text x="805" y="730" text-anchor="middle" class="sans body" fill="#27313A">aggregate?</text>
   <path d="M680 710 L700 710" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="allocOnFill combines with OR"/>

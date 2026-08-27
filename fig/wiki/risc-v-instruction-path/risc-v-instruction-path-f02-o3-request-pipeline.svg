@@ -92,7 +92,7 @@
   <text x="710" y="446" text-anchor="middle" class="sans label" fill="#1769C2" font-weight="700">Physical regs</text>
   <text x="710" y="500" text-anchor="middle" class="mono body" fill="#27313A">P17 ReusePlan</text>
   <text x="710" y="553" text-anchor="middle" class="mono body" fill="#27313A">P21 property</text>
-  <polygon points="850,440.0 900.0,495 850,550.0 800.0,495" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
+  <polygon points="850,440.0 900.0,495 850,550.0 800.0,495" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="850" data-cy="495" data-width="100" data-height="110"/>
   <text x="850" y="490" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">AGU</text>
   <text x="850" y="520" text-anchor="middle" class="sans body" fill="#27313A">EA</text>
   <rect x="925" y="400" width="145" height="190" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>

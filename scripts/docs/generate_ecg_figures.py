@@ -219,10 +219,11 @@ def system_overview(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> N
     figure.text(50, 312, "weight / property", size=16, mono=True)
     figure.text(50, 352, "kernel direction", size=16)
     figure.diamond(315, 280, 150, 130, role="compute")
-    figure.text(315, 265, "ReusePlan", size=17, bold=True,
+    figure.text(315, 275, "ReusePlan", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(315, 295, "builder", size=16, anchor="middle")
-    figure.text(315, 325, "d_in / d_out", size=16, anchor="middle")
+    figure.text(315, 305, "builder", size=16, anchor="middle")
+    figure.text(315, 370, "rank d_in / d_out", size=16,
+                color=GREEN, anchor="middle")
     figure.table(430, 195, 190, 170, 4, role="state")
     figure.text(525, 225, "Record array", size=17, bold=True,
                 color=PURPLE, anchor="middle")
@@ -595,9 +596,9 @@ def offline_construction(
     )
     for x, title, body in validation_nodes:
         figure.diamond(x, 1390, 140, 100, role="verify")
-        figure.text(x, 1380, title, size=16, bold=True,
+        figure.text(x, 1396, title, size=16, bold=True,
                     color=RED, anchor="middle")
-        figure.text(x, 1410, body, size=16, anchor="middle")
+        figure.text(x, 1460, body, size=16, anchor="middle")
     figure.arrow(
         ((560, 1390), (630, 1390)),
         kind="control", label="compact width", color=AMBER,
@@ -898,11 +899,11 @@ def future_distance(
     figure.diamond(220, 970, 210, 115, role="compute")
     figure.text(220, 958, "max-RRPV", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(220, 985, "candidate exists?", size=16, anchor="middle")
+    figure.text(220, 985, "candidate?", size=16, anchor="middle")
     figure.diamond(555, 970, 210, 115, role="transfer")
-    figure.text(555, 958, "eligible structural", size=17, bold=True,
+    figure.text(555, 958, "structural", size=17, bold=True,
                 color=AMBER, anchor="middle")
-    figure.text(555, 985, "candidate exists?", size=16, anchor="middle")
+    figure.text(555, 985, "candidate?", size=16, anchor="middle")
     figure.rect(760, 910, 190, 120, role="transfer", radius=0)
     figure.text(855, 947, "select oldest", size=17, bold=True,
                 color=AMBER, anchor="middle")
@@ -919,7 +920,7 @@ def future_distance(
     )
     figure.arrow(
         ((660, 945), (760, 945)),
-        kind="control", label="eligible structural", color=AMBER,
+        kind="control", label="structural", color=AMBER,
     )
     figure.arrow(
         ((660, 995), (690, 1050), (940, 1050), (940, 995), (980, 995)),
@@ -960,7 +961,7 @@ def llc_policy(generated: list[tuple[Path, Path]]) -> None:
     gates = (
         (405, "context != 0?", "verify"),
         (635, "conflict == 0?", "verify"),
-        (865, "dest line == access?", "compute"),
+        (865, "dest line match?", "compute"),
     )
     for x, label, role in gates:
         figure.diamond(x, 265, 180, 120, role=role)
@@ -976,7 +977,7 @@ def llc_policy(generated: list[tuple[Path, Path]]) -> None:
         ((285, 265), (315, 265), "ReuseBind extension"),
         ((495, 265), (545, 265), "context"),
         ((725, 265), (775, 265), "conflict"),
-        ((955, 265), (1010, 265), "destination line"),
+        ((955, 265), (1010, 265), "dest"),
     ):
         figure.arrow((start, end), kind="control", label=label,
                      color=GREEN)
@@ -1033,7 +1034,7 @@ def llc_policy(generated: list[tuple[Path, Path]]) -> None:
                 color=GREEN, anchor="middle")
     figure.text(190, 915, "RRPV == max?", size=16, anchor="middle")
     figure.diamond(500, 900, 220, 130, role="transfer")
-    figure.text(500, 884, "eligible structural", size=17, bold=True,
+    figure.text(500, 884, "structural", size=17, bold=True,
                 color=AMBER, anchor="middle")
     figure.text(500, 915, "candidate?", size=16, anchor="middle")
     figure.rect(680, 830, 210, 120, role="transfer", radius=0)
@@ -1055,7 +1056,7 @@ def llc_policy(generated: list[tuple[Path, Path]]) -> None:
     )
     figure.arrow(
         ((610, 875), (680, 875)), kind="control",
-        label="eligible structural", color=AMBER,
+        label="structural", color=AMBER,
     )
     figure.arrow(
         ((610, 925), (650, 1005), (910, 1005), (910, 925), (930, 925)),
@@ -1449,7 +1450,7 @@ def instruction_family(generated: list[tuple[Path, Path]]) -> None:
     figure.text(145, 885, "becomes property rs2", size=16,
                 mono=True, anchor="middle")
     figure.diamond(390, 850, 190, 125, role="compute")
-    figure.text(390, 840, "property-load", size=17, bold=True,
+    figure.text(390, 840, "property", size=17, bold=True,
                 color=GREEN, anchor="middle")
     figure.text(390, 870, "address form", size=16, anchor="middle")
     figure.arrow(
@@ -1971,12 +1972,8 @@ def mshr_lifecycle(generated: list[tuple[Path, Path]]) -> None:
             figure.text(x, y, value, size=16, mono=True, anchor="middle")
 
     figure.diamond(700, 575, 210, 135, role="compute")
-    figure.text(700, 555, "compatibility", size=17, bold=True,
+    figure.text(700, 582, "compatible?", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(700, 585, "same requestor/context?", size=16,
-                anchor="middle")
-    figure.text(700, 615, "equal seq => same payload", size=16,
-                anchor="middle")
     figure.arrow(
         ((570, 575), (595, 575)),
         kind="control", label="target", color=PURPLE,
@@ -1985,6 +1982,7 @@ def mshr_lifecycle(generated: list[tuple[Path, Path]]) -> None:
     figure.text(862, 500, "selected extension", size=17, bold=True,
                 color=PURPLE)
     figure.text(862, 535, "newest compatible sequence", size=16)
+    figure.text(862, 562, "equal seq requires same payload", size=16)
     figure.rect(845, 595, 315, 105, role="verify", radius=0)
     figure.text(862, 630, "conflict state", size=17, bold=True,
                 color=RED)
@@ -2018,9 +2016,8 @@ def mshr_lifecycle(generated: list[tuple[Path, Path]]) -> None:
                 color=RED, anchor="middle")
     figure.text(390, 872, "reject if yes", size=16, anchor="middle")
     figure.diamond(650, 852, 210, 125, role="compute")
-    figure.text(650, 838, "destination line", size=17, bold=True,
+    figure.text(650, 858, "line match?", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(650, 870, "matches access?", size=16, anchor="middle")
     figure.rect(820, 800, 330, 105, role="state", radius=0)
     figure.text(985, 832, "LLC line metadata", size=17, bold=True,
                 color=PURPLE, anchor="middle")
@@ -2036,7 +2033,7 @@ def mshr_lifecycle(generated: list[tuple[Path, Path]]) -> None:
     )
     figure.arrow(
         ((755, 852), (820, 852)),
-        kind="control", label="destination line", color=GREEN,
+        kind="control", label="line match?", color=GREEN,
     )
     figure.text(
         600, 950,
@@ -2249,9 +2246,10 @@ def checked_walkthrough(
                 size=16, mono=True, anchor="middle")
     figure.text(135, 1080, "4-byte compact", size=16, anchor="middle")
     figure.diamond(330, 1030, 150, 130, role="transfer")
-    figure.text(330, 1015, "flow.load", size=17, bold=True,
+    figure.text(330, 1036, "record load", size=17, bold=True,
                 color=AMBER, anchor="middle")
-    figure.text(330, 1047, "widen", size=16, anchor="middle")
+    figure.text(330, 1125, "widen compact ReusePlan", size=16,
+                color=AMBER, anchor="middle")
     figure.table(455, 950, 180, 160, 3, role="state")
     figure.text(545, 982, "Physical reg", size=17, bold=True,
                 color=PURPLE, anchor="middle")
@@ -2260,10 +2258,12 @@ def checked_walkthrough(
     figure.text(545, 1080, "I1 rs2 dependency", size=16,
                 anchor="middle")
     figure.diamond(745, 1030, 160, 130, role="compute")
-    figure.text(745, 1015, "bind.load.u32", size=17, bold=True,
+    figure.text(745, 945, "ecg.bind.load.u32", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(745, 1047, f"EA=0x{fx.property_address:08X}",
-                size=16, mono=True, anchor="middle")
+    figure.text(745, 1036, "property load", size=17, bold=True,
+                color=GREEN, anchor="middle")
+    figure.text(745, 1125, f"EA=0x{fx.property_address:08X}",
+                size=16, mono=True, color=BLUE, anchor="middle")
     figure.table(880, 935, 270, 190, 4, role="state")
     figure.text(1015, 967, "LSQ Request", size=17, bold=True,
                 color=PURPLE, anchor="middle")
@@ -2430,8 +2430,9 @@ def architecture_state_map(generated: list[tuple[Path, Path]]) -> None:
     figure.diamond(700, 600, 150, 150, role="compute")
     figure.text(700, 590, "AGU", size=17, bold=True,
                 color=GREEN, anchor="middle")
-    figure.text(700, 625, "record/property EA", size=16,
-                anchor="middle")
+    figure.text(700, 625, "EA", size=16, anchor="middle")
+    figure.text(700, 695, "record or property address", size=16,
+                color=GREEN, anchor="middle")
     figure.table(820, 505, 180, 190, 4, role="state")
     figure.text(910, 537, "Load queue", size=17, bold=True,
                 color=PURPLE, anchor="middle")

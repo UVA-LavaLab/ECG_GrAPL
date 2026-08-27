@@ -218,7 +218,9 @@ class Figure:
         )
         self._svg.append(
             f'<polygon points="{points}" fill="{fill}" stroke="{stroke}" '
-            f'stroke-width="{stroke_width}"/>'
+            f'stroke-width="{stroke_width}" data-shape="diamond" '
+            f'data-cx="{cx}" data-cy="{cy}" data-width="{width}" '
+            f'data-height="{height}"/>'
         )
         cell_id = self._id("b")
         self._cells.append(

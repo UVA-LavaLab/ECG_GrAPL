@@ -50,10 +50,10 @@
   <text x="50" y="270" text-anchor="start" class="mono body" fill="#27313A">row_ptr / col_idx</text>
   <text x="50" y="312" text-anchor="start" class="mono body" fill="#27313A">weight / property</text>
   <text x="50" y="352" text-anchor="start" class="sans body" fill="#27313A">kernel direction</text>
-  <polygon points="315,215.0 390.0,280 315,345.0 240.0,280" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="315" y="265" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">ReusePlan</text>
-  <text x="315" y="295" text-anchor="middle" class="sans body" fill="#27313A">builder</text>
-  <text x="315" y="325" text-anchor="middle" class="sans body" fill="#27313A">d_in / d_out</text>
+  <polygon points="315,215.0 390.0,280 315,345.0 240.0,280" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="315" data-cy="280" data-width="150" data-height="130"/>
+  <text x="315" y="275" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">ReusePlan</text>
+  <text x="315" y="305" text-anchor="middle" class="sans body" fill="#27313A">builder</text>
+  <text x="315" y="370" text-anchor="middle" class="sans body" fill="#15803D">rank d_in / d_out</text>
   <rect x="430" y="195" width="190" height="170" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <line x1="430" y1="237.5" x2="620" y2="237.5" stroke="#27313A" stroke-width="1"/>
   <line x1="430" y1="280.0" x2="620" y2="280.0" stroke="#27313A" stroke-width="1"/>

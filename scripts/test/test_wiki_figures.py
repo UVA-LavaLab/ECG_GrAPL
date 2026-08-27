@@ -164,7 +164,7 @@ def test_architecture_figures_lock_critical_semantics():
     ]
     assert "yes/no" in mshr
     assert "mixed / mismatch / invalid" in mshr
-    assert "equal seq =&gt; same payload" in mshr
+    assert "equal seq requires same payload" in mshr
     evidence = figures[
         "evaluation-methodology-f01-evidence-boundary.svg"
     ]

@@ -101,14 +101,13 @@
   <text x="297" y="688" text-anchor="middle" class="mono body" fill="#27313A">same?</text>
   <text x="402" y="688" text-anchor="middle" class="mono body" fill="#27313A">same?</text>
   <text x="512" y="688" text-anchor="middle" class="mono body" fill="#27313A">newest / OR</text>
-  <polygon points="700,507.5 805.0,575 700,642.5 595.0,575" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="700" y="555" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">compatibility</text>
-  <text x="700" y="585" text-anchor="middle" class="sans body" fill="#27313A">same requestor/context?</text>
-  <text x="700" y="615" text-anchor="middle" class="sans body" fill="#27313A">equal seq =&gt; same payload</text>
+  <polygon points="700,507.5 805.0,575 700,642.5 595.0,575" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="700" data-cy="575" data-width="210" data-height="135"/>
+  <text x="700" y="582" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">compatible?</text>
   <path d="M570 575 L595 575" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="target"/>
   <rect x="845" y="465" width="315" height="105" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <text x="862" y="500" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">selected extension</text>
   <text x="862" y="535" text-anchor="start" class="sans body" fill="#27313A">newest compatible sequence</text>
+  <text x="862" y="562" text-anchor="start" class="sans body" fill="#27313A">equal seq requires same payload</text>
   <rect x="845" y="595" width="315" height="105" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
   <text x="862" y="630" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">conflict state</text>
   <text x="862" y="665" text-anchor="start" class="sans body" fill="#27313A">mixed / mismatch / invalid</text>
@@ -123,18 +122,17 @@
   <rect x="40" y="800" width="220" height="105" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <text x="150" y="835" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">response Request</text>
   <text x="150" y="870" text-anchor="middle" class="sans body" fill="#27313A">selected ext + conflict</text>
-  <polygon points="390,789.5 485.0,852 390,914.5 295.0,852" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <polygon points="390,789.5 485.0,852 390,914.5 295.0,852" fill="#F7DEDC" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="390" data-cy="852" data-width="190" data-height="125"/>
   <text x="390" y="840" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">conflicted?</text>
   <text x="390" y="872" text-anchor="middle" class="sans body" fill="#27313A">reject if yes</text>
-  <polygon points="650,789.5 755.0,852 650,914.5 545.0,852" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="650" y="838" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">destination line</text>
-  <text x="650" y="870" text-anchor="middle" class="sans body" fill="#27313A">matches access?</text>
+  <polygon points="650,789.5 755.0,852 650,914.5 545.0,852" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="650" data-cy="852" data-width="210" data-height="125"/>
+  <text x="650" y="858" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">line match?</text>
   <rect x="820" y="800" width="330" height="105" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <text x="985" y="832" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">LLC line metadata</text>
   <text x="985" y="865" text-anchor="middle" class="mono body" fill="#27313A">tier | e1 | e2 | context | valid</text>
   <path d="M260 852 L295 852" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="response Request"/>
   <path d="M485 852 L545 852" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="conflicted?"/>
-  <path d="M755 852 L820 852" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="destination line"/>
+  <path d="M755 852 L820 852" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="line match?"/>
   <text x="600" y="950" text-anchor="middle" class="sans body" fill="#B42318">serviceable/deferred target changes rebuild merge state; deallocation resets MSHR ECG state</text>
   <circle cx="44" cy="1074" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="1080" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>

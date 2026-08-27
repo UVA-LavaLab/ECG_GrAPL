@@ -83,7 +83,7 @@
   <text x="438" y="656" text-anchor="start" class="sans body" fill="#27313A">all matched policy rows agree</text>
   <text x="438" y="680" text-anchor="start" class="sans body" fill="#27313A">failed peer invalidates timing</text>
   <text x="438" y="704" text-anchor="start" class="sans body" fill="#27313A">not gated by speculation counts</text>
-  <polygon points="825,587.5 910.0,650 825,712.5 740.0,650" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <polygon points="825,587.5 910.0,650 825,712.5 740.0,650" fill="#F7DEDC" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="825" data-cy="650" data-width="170" data-height="125"/>
   <text x="825" y="637" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">mechanism</text>
   <text x="825" y="668" text-anchor="middle" class="sans body" fill="#27313A">AND semantic</text>
   <rect x="965" y="595" width="195" height="110" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>

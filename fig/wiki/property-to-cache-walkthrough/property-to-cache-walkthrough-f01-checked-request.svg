@@ -133,18 +133,19 @@
   <text x="135" y="982" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">Record array</text>
   <text x="135" y="1030" text-anchor="middle" class="mono body" fill="#27313A">record[8-&gt;18]</text>
   <text x="135" y="1080" text-anchor="middle" class="sans body" fill="#27313A">4-byte compact</text>
-  <polygon points="330,965.0 405.0,1030 330,1095.0 255.0,1030" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
-  <text x="330" y="1015" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">flow.load</text>
-  <text x="330" y="1047" text-anchor="middle" class="sans body" fill="#27313A">widen</text>
+  <polygon points="330,965.0 405.0,1030 330,1095.0 255.0,1030" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="330" data-cy="1030" data-width="150" data-height="130"/>
+  <text x="330" y="1036" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">record load</text>
+  <text x="330" y="1125" text-anchor="middle" class="sans body" fill="#B45309">widen compact ReusePlan</text>
   <rect x="455" y="950" width="180" height="160" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <line x1="455" y1="1003.3333333333334" x2="635" y2="1003.3333333333334" stroke="#27313A" stroke-width="1"/>
   <line x1="455" y1="1056.6666666666667" x2="635" y2="1056.6666666666667" stroke="#27313A" stroke-width="1"/>
   <text x="545" y="982" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">Physical reg</text>
   <text x="545" y="1030" text-anchor="middle" class="mono body" fill="#27313A">P17 ReusePlan</text>
   <text x="545" y="1080" text-anchor="middle" class="sans body" fill="#27313A">I1 rs2 dependency</text>
-  <polygon points="745,965.0 825.0,1030 745,1095.0 665.0,1030" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
-  <text x="745" y="1015" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">bind.load.u32</text>
-  <text x="745" y="1047" text-anchor="middle" class="mono body" fill="#27313A">EA=0x80000048</text>
+  <polygon points="745,965.0 825.0,1030 745,1095.0 665.0,1030" fill="#E7F7EA" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="745" data-cy="1030" data-width="160" data-height="130"/>
+  <text x="745" y="945" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">ecg.bind.load.u32</text>
+  <text x="745" y="1036" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">property load</text>
+  <text x="745" y="1125" text-anchor="middle" class="mono body" fill="#1769C2">EA=0x80000048</text>
   <rect x="880" y="935" width="270" height="190" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <line x1="880" y1="982.5" x2="1150" y2="982.5" stroke="#27313A" stroke-width="1"/>
   <line x1="880" y1="1030.0" x2="1150" y2="1030.0" stroke="#27313A" stroke-width="1"/>
@@ -203,10 +204,10 @@
   <circle cx="380.0" cy="1805" r="12" fill="#FFFFFF" stroke="#6D5BD0" stroke-width="1"/>
   <text x="380.0" y="1773" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">e2 15</text>
   <text x="384" y="1875" text-anchor="middle" class="mono body" fill="#6D5BD0">nearest = min(3, 7) = 3; stored epochs remain absolute</text>
-  <polygon points="860,1685.0 950.0,1745 860,1805.0 770.0,1745" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
+  <polygon points="860,1685.0 950.0,1745 860,1805.0 770.0,1745" fill="#F7DEDC" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="860" data-cy="1745" data-width="180" data-height="120"/>
   <text x="860" y="1732" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">max-RRPV</text>
   <text x="860" y="1762" text-anchor="middle" class="sans body" fill="#27313A">eligible?</text>
-  <polygon points="1060,1685.0 1150.0,1745 1060,1805.0 970.0,1745" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
+  <polygon points="1060,1685.0 1150.0,1745 1060,1805.0 970.0,1745" fill="#FFF0D8" stroke="#27313A" stroke-width="2" data-shape="diamond" data-cx="1060" data-cy="1745" data-width="180" data-height="120"/>
   <text x="1060" y="1732" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">structural</text>
   <text x="1060" y="1762" text-anchor="middle" class="sans body" fill="#27313A">candidate?</text>
   <path d="M950 1745 L970 1745" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-label="max-RRPV"/>
