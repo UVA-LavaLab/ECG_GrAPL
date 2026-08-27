@@ -415,6 +415,63 @@ class Figure:
                 max_width=max_width,
             )
 
+    def token_line(
+        self,
+        x: float,
+        y: float,
+        tokens: Sequence[tuple[str, str, bool]],
+        *,
+        size: float = 16,
+        mono: bool = True,
+        max_width: float | None = None,
+    ) -> None:
+        widths = [
+            _estimate_text(value, size, mono, bold)
+            for value, _color, bold in tokens
+        ]
+        total = sum(widths)
+        if max_width is not None and total > max_width:
+            joined = "".join(value for value, _color, _bold in tokens)
+            raise ValueError(
+                f"{self.target.stem}: token line '{joined}' needs "
+                f"{total:.1f}px but only {max_width:.1f}px is available"
+            )
+        combined = "".join(value for value, _color, _bold in tokens)
+        self._check_bounds(x, y - size, max(12.0, total), size * 1.25)
+        classes = ["mono" if mono else "sans", "body"]
+        spans = "".join(
+            f'<tspan fill="{color}"'
+            + (' font-weight="700"' if bold else '')
+            + f'>{escape(value)}</tspan>'
+            for value, color, bold in tokens
+        )
+        attributes = {
+            "x": x,
+            "y": y,
+            "text-anchor": "start",
+            "class": " ".join(classes),
+            "fill": INK,
+        }
+        self._svg.append(f'<text {_attrs(attributes)}>{spans}</text>')
+        self._labels.append(combined)
+        family = "Courier New" if mono else "Helvetica"
+        html_value = "".join(
+            f'<span style="color:{color};'
+            f'{"font-weight:700;" if bold else ""}">'
+            f'{escape(value).replace(" ", "&nbsp;")}</span>'
+            for value, color, bold in tokens
+        )
+        cell_id = self._id("t")
+        self._cells.append(
+            f'<mxCell id="{cell_id}" value="{escape(html_value, quote=True)}" '
+            f'style="text;html=1;strokeColor=none;fillColor=none;'
+            f'align=left;verticalAlign=middle;fontFamily={family};'
+            f'fontSize={size};fontColor={INK};fontStyle=0;" '
+            f'vertex="1" parent="1"><mxGeometry x="{x:.2f}" '
+            f'y="{y - size * 0.86:.2f}" width="{max(12.0, total):.2f}" '
+            f'height="{size * 1.4:.2f}" as="geometry"/></mxCell>'
+        )
+
     def line(
         self,
         start: tuple[float, float],
@@ -470,8 +527,8 @@ class Figure:
             max(abs(x2 - x1), abs(y2 - y1))
             for (x1, y1), (x2, y2) in zip(points, points[1:])
         )
-        if dominant < 60:
-            raise ValueError("semantic arrows need a run of at least 60 px")
+        if dominant < 20:
+            raise ValueError("semantic arrows need a run of at least 20 px")
         path = " ".join(
             [f"M{points[0][0]} {points[0][1]}"]
             + [f"L{x} {y}" for x, y in points[1:]]

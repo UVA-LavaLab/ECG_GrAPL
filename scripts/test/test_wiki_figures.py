@@ -207,8 +207,10 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
     ]
     for token in (
         "Graph/CSR-guided loads on the gem5 O3 datapath",
-        "flow.load.compact: record[8-&gt;18] -&gt; P17",
-        "bind.load.u32: rs1=0x80000048, rs2=P17 -&gt; P21",
+        "flow.load.compact",
+        "record[8-&gt;18]",
+        "bind.load.u32",
+        "0x80000048",
         "Fetch",
         "Decode",
         "Rename",
@@ -260,8 +262,10 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
     assert "record block; alloc=false" in walkthrough
     assert "property block; merge ext" in walkthrough
     assert "Representative property-access pseudocode" in walkthrough
-    assert "plan = ecg.flow.load.compact(record[edge_pos])  [B]" in walkthrough
-    assert "value = ecg.bind.load.u32(addr, plan)  [C,D]" in walkthrough
+    assert "ecg.flow.load.compact" in walkthrough
+    assert "record[edge_pos]" in walkthrough
+    assert "ecg.bind.load.u32" in walkthrough
+    assert "[C,D]" in walkthrough
     assert "tracked execution: adjacency 4-&gt;7 maps to internal 8-&gt;18" in walkthrough
     assert "guard + stamp T1/e11/e15" in walkthrough
     assert 'data-flow-label="record Request"' in walkthrough

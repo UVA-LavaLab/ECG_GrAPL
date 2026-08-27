@@ -206,7 +206,7 @@ def system_overview(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> N
         "boundary across gem5 O3, cache_sim, and Sniper. The tracked checked-fixture "
         f"adjacency entry has outer vertex {fx.tracked_reader} and property vertex "
         f"{fx.tracked_dest}.",
-        1160,
+        1060,
     )
     figure.section(
         "1", "CROSS-LAYER DATAFLOW", "offline construction ends before the measured ROI",
@@ -253,9 +253,8 @@ def system_overview(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> N
         ((850, 280), (900, 280), "O3 issue", GREEN),
         ((1020, 280), (1060, 280), "MSHR", PURPLE),
     ):
-        run_start = (start[0] - 35, start[1]) if end[0] - start[0] < 60 else start
         figure.arrow(
-            (run_start, end), kind="control", label=label, color=color,
+            (start, end), kind="control", label=label, color=color,
         )
     figure.text(
         675, 385,
@@ -316,9 +315,9 @@ def system_overview(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> N
         "3", "EVIDENCE BOUNDARY", "mechanism activity is not itself a speedup claim",
         780, role="verify",
     )
-    figure.rect(40, 830, 1120, 225, role="neutral", radius=0)
+    figure.rect(40, 830, 1120, 150, role="neutral", radius=0)
     for x in (320, 600, 880):
-        figure.line((x, 830), (x, 1055), color=INK, width=1)
+        figure.line((x, 830), (x, 980), color=INK, width=1)
     figure.line((40, 880), (1160, 880), color=INK, width=1)
     for x, label in (
         (180, "gem5 O3"),
@@ -336,9 +335,9 @@ def system_overview(fx: CheckedFixture, generated: list[tuple[Path, Path]]) -> N
     for col, lines in enumerate(evidence):
         figure.lines(56 + col * 280, 915, lines, max_width=248)
     figure.arrow(
-        ((110, 1110), (1090, 1110)),
+        ((110, 1025), (1090, 1025)),
         kind="dependency", label="semantic receipts gate every published row",
-        color=RED, label_at=(600, 1095),
+        color=RED, label_at=(600, 1010),
     )
     save(figure, generated)
 
@@ -923,7 +922,7 @@ def future_distance(
         kind="control", label="eligible structural", color=AMBER,
     )
     figure.arrow(
-        ((620, 1005), (690, 1050), (940, 1050), (940, 995), (980, 995)),
+        ((660, 995), (690, 1050), (940, 1050), (940, 995), (980, 995)),
         kind="control", label="no: property only", color=RED,
         label_at=(815, 1085),
     )
@@ -979,8 +978,7 @@ def llc_policy(generated: list[tuple[Path, Path]]) -> None:
         ((725, 265), (775, 265), "conflict"),
         ((955, 265), (1010, 265), "destination line"),
     ):
-        adjusted = (start[0] - (60 - (end[0] - start[0])), start[1])
-        figure.arrow((adjusted, end), kind="control", label=label,
+        figure.arrow((start, end), kind="control", label=label,
                      color=GREEN)
     figure.text(
         600, 365,
@@ -1158,7 +1156,7 @@ def flowthrough_outcomes(generated: list[tuple[Path, Path]]) -> None:
     figure.text(445, 575, "no allocation decision", size=16,
                 anchor="middle")
     figure.arrow(
-        ((260, 560), (330, 560)),
+        ((275, 560), (330, 560)),
         kind="control", label="hit: return record", color=GREEN,
     )
 
@@ -1179,7 +1177,7 @@ def flowthrough_outcomes(generated: list[tuple[Path, Path]]) -> None:
                 color=AMBER, anchor="middle")
     figure.text(805, 730, "aggregate?", size=16, anchor="middle")
     figure.arrow(
-        ((640, 710), (700, 710)),
+        ((680, 710), (700, 710)),
         kind="control", label="allocOnFill combines with OR",
         color=PURPLE,
     )
@@ -1192,7 +1190,7 @@ def flowthrough_outcomes(generated: list[tuple[Path, Path]]) -> None:
                 color=AMBER, anchor="middle")
     figure.text(1055, 820, "all targets false", size=16, anchor="middle")
     figure.arrow(
-        ((890, 685), (960, 685)),
+        ((910, 685), (960, 685)),
         kind="control", label="true: insert LLC", color=RED,
     )
     figure.arrow(
@@ -1404,7 +1402,7 @@ def instruction_family(generated: list[tuple[Path, Path]]) -> None:
                 color=GREEN, anchor="middle")
     figure.text(350, 570, "role decode", size=16, anchor="middle")
     figure.arrow(
-        ((190, 550), (255, 550)),
+        ((220, 550), (255, 550)),
         kind="control", label="custom-0", color=BLUE,
     )
 
@@ -1431,11 +1429,11 @@ def instruction_family(generated: list[tuple[Path, Path]]) -> None:
         mono=True, max_width=292,
     )
     figure.arrow(
-        ((430, 525), (500, 525)),
+        ((445, 525), (500, 525)),
         kind="control", label="ecg.plan.load*", color=BLUE,
     )
     figure.arrow(
-        ((430, 600), (500, 630)),
+        ((445, 600), (500, 630)),
         kind="control", label="ecg.flow.load*", color=AMBER,
     )
 
@@ -1455,7 +1453,7 @@ def instruction_family(generated: list[tuple[Path, Path]]) -> None:
                 color=GREEN, anchor="middle")
     figure.text(390, 870, "address form", size=16, anchor="middle")
     figure.arrow(
-        ((230, 850), (295, 850)),
+        ((250, 850), (295, 850)),
         kind="dependency", label="physical rd",
         color=PURPLE,
     )
@@ -1463,14 +1461,33 @@ def instruction_family(generated: list[tuple[Path, Path]]) -> None:
     figure.rect(535, 775, 285, 115, role="compute", radius=0)
     figure.text(552, 808, "ecg.bind.load.*", size=17, bold=True,
                 mono=True, color=GREEN)
-    figure.text(552, 840, "rs1 = computed property address", size=16)
-    figure.text(552, 870, "rs2 = ReusePlan", size=16, mono=True)
+    figure.token_line(
+        552, 840,
+        (("rs1", PURPLE, True), (" = ", INK, False),
+         ("computed address", BLUE, False)),
+        mono=False, max_width=250,
+    )
+    figure.token_line(
+        552, 870,
+        (("rs2", PURPLE, True), (" = ", INK, False),
+         ("ReusePlan", PURPLE, False)),
+        mono=True, max_width=250,
+    )
     figure.rect(535, 915, 285, 115, role="compute", radius=0)
     figure.text(552, 948, "ecg.bind.iload.*", size=17, bold=True,
                 mono=True, color=GREEN)
-    figure.text(552, 980, "rs1 = property-array base", size=16)
-    figure.text(552, 1010, "EA = base + destination*size", size=16,
-                mono=True)
+    figure.token_line(
+        552, 980,
+        (("rs1", PURPLE, True), (" = ", INK, False),
+         ("property base", BLUE, False)),
+        mono=False, max_width=250,
+    )
+    figure.token_line(
+        552, 1010,
+        (("EA", GREEN, True), (" = ", INK, False),
+         ("base", BLUE, False), (" + dest*size", INK, False)),
+        mono=False, max_width=250,
+    )
     figure.rect(865, 790, 295, 225, role="data", radius=0)
     figure.text(882, 824, "Shared memory semantics", size=17,
                 bold=True, color=BLUE)
@@ -1486,7 +1503,7 @@ def instruction_family(generated: list[tuple[Path, Path]]) -> None:
         max_width=260,
     )
     figure.arrow(
-        ((475, 825), (535, 832)),
+        ((485, 825), (535, 832)),
         kind="control", label="ecg.bind.load.*", color=GREEN,
     )
     figure.arrow(
@@ -1528,20 +1545,36 @@ def o3_pipeline(
     figure.circle(45, 200, 16, fill=AMBER, stroke=AMBER)
     figure.text(45, 206, "I0", size=16, bold=True,
                 color=WHITE, anchor="middle")
-    figure.text(
+    figure.token_line(
         72, 206,
-        f"flow.load.compact: record[{fx.tracked_reader}->"
-        f"{fx.tracked_dest}] -> P17",
-        size=16, mono=True, color=AMBER, max_width=500,
+        (
+            ("flow.load.compact", AMBER, True),
+            (": ", INK, False),
+            (f"record[{fx.tracked_reader}->{fx.tracked_dest}]", BLUE, False),
+            (" -> ", INK, False),
+            ("P17", PURPLE, True),
+        ),
+        max_width=500,
     )
     figure.circle(650, 200, 16, fill=GREEN, stroke=GREEN)
     figure.text(650, 206, "I1", size=16, bold=True,
                 color=WHITE, anchor="middle")
-    figure.text(
+    figure.token_line(
         677, 206,
-        f"bind.load.u32: rs1=0x{fx.property_address:08X}, "
-        "rs2=P17 -> P21",
-        size=16, mono=True, color=GREEN, max_width=475,
+        (
+            ("bind.load.u32", GREEN, True),
+            (": ", INK, False),
+            ("rs1", PURPLE, True),
+            ("=", INK, False),
+            (f"0x{fx.property_address:08X}", BLUE, False),
+            (", ", INK, False),
+            ("rs2", PURPLE, True),
+            ("=", INK, False),
+            ("P17", PURPLE, True),
+            (" -> ", INK, False),
+            ("P21", PURPLE, True),
+        ),
+        max_width=475,
     )
 
     figure.rect(24, 230, 1152, 555, role="neutral", radius=0)
@@ -1797,7 +1830,7 @@ def o3_pipeline(
                 color=AMBER, anchor="middle")
 
     figure.arrow(
-        ((1000, 1422), (1000, 1455), (100, 1455), (100, 1500)),
+        ((1000, 1369), (1000, 1455), (100, 1455), (100, 1500)),
         kind="dependency", label="P17 wakeup", color=PURPLE,
         label_at=(550, 1445),
     )
@@ -1945,7 +1978,7 @@ def mshr_lifecycle(generated: list[tuple[Path, Path]]) -> None:
     figure.text(700, 615, "equal seq => same payload", size=16,
                 anchor="middle")
     figure.arrow(
-        ((535, 575), (595, 575)),
+        ((570, 575), (595, 575)),
         kind="control", label="target", color=PURPLE,
     )
     figure.rect(845, 465, 315, 105, role="state", radius=0)
@@ -1957,11 +1990,11 @@ def mshr_lifecycle(generated: list[tuple[Path, Path]]) -> None:
                 color=RED)
     figure.text(862, 665, "mixed / mismatch / invalid", size=16)
     figure.arrow(
-        ((785, 545), (845, 520)),
+        ((805, 545), (845, 520)),
         kind="control", label="selected extension", color=GREEN,
     )
     figure.arrow(
-        ((780, 605), (845, 645)),
+        ((805, 605), (845, 645)),
         kind="control", label="conflict state", color=RED,
     )
     figure.text(
@@ -1994,7 +2027,7 @@ def mshr_lifecycle(generated: list[tuple[Path, Path]]) -> None:
     figure.text(985, 865, "tier | e1 | e2 | context | valid",
                 size=16, mono=True, anchor="middle")
     figure.arrow(
-        ((235, 852), (295, 852)),
+        ((260, 852), (295, 852)),
         kind="control", label="response Request", color=PURPLE,
     )
     figure.arrow(
@@ -2140,18 +2173,30 @@ def checked_walkthrough(
     figure.text(44, 578, "Representative property-access pseudocode",
                 size=17, bold=True, color=PURPLE, max_width=580)
     pseudocode = (
-        ("L1", "for u in active_vertices:"),
-        ("L2", "  for edge_pos in out_csr_row(u):"),
-        ("L3", "    plan = ecg.flow.load.compact(record[edge_pos])  [B]"),
-        ("L4", "    v = plan.destination"),
-        ("L5", "    addr = property_base + v * 4"),
-        ("L6", "    value = ecg.bind.load.u32(addr, plan)  [C,D]"),
-        ("L7", "    proposal = update(u, v, value)"),
+        ("L1", (("for ", RED, True), ("u", INK, False),
+                (" in ", RED, True), ("active_vertices", BLUE, False),
+                (":", INK, False))),
+        ("L2", (("  for ", RED, True), ("edge_pos", INK, False),
+                (" in ", RED, True), ("out_csr_row", BLUE, False),
+                ("(u):", INK, False))),
+        ("L3", (("    plan", PURPLE, True), (" = ", INK, False),
+                ("ecg.flow.load.compact", AMBER, True),
+                ("(record[edge_pos])  ", INK, False), ("[B]", AMBER, True))),
+        ("L4", (("    v", INK, False), (" = ", INK, False),
+                ("plan", PURPLE, True), (".destination", BLUE, False))),
+        ("L5", (("    addr", BLUE, True), (" = ", INK, False),
+                ("property_base", BLUE, False), (" + v * 4", INK, False))),
+        ("L6", (("    value", BLUE, True), (" = ", INK, False),
+                ("ecg.bind.load.u32", GREEN, True),
+                ("(addr, ", INK, False), ("plan", PURPLE, True),
+                (")  ", INK, False), ("[C,D]", PURPLE, True))),
+        ("L7", (("    proposal", INK, False), (" = ", INK, False),
+                ("update", BLUE, False), ("(u, v, value)", INK, False))),
     )
-    for index, (line_no, code) in enumerate(pseudocode):
+    for index, (line_no, tokens) in enumerate(pseudocode):
         y = 615 + index * 30
         figure.text(44, y, line_no, size=16, color=GRAY, mono=True)
-        figure.text(88, y, code, size=16, mono=True, max_width=560)
+        figure.token_line(88, y, tokens, max_width=560)
     figure.text(
         44, 830,
         f"tracked execution: adjacency {fx.tracked_source_reader}->"
@@ -2313,7 +2358,7 @@ def checked_walkthrough(
                 color=AMBER, anchor="middle")
     figure.text(1060, 1762, "candidate?", size=16, anchor="middle")
     figure.arrow(
-        ((910, 1745), (970, 1745)),
+        ((950, 1745), (970, 1745)),
         kind="control", label="max-RRPV", color=RED,
     )
     figure.text(790, 1840, "yes -> oldest structural",
@@ -2525,12 +2570,12 @@ def evidence_boundary(generated: list[tuple[Path, Path]]) -> None:
         color=PURPLE,
     )
     figure.arrow(
-        ((680, 650), (740, 650)),
+        ((720, 650), (740, 650)),
         kind="control", label="Semantic receipt vector",
         color=PURPLE,
     )
     figure.arrow(
-        ((900, 650), (965, 650)),
+        ((910, 650), (965, 650)),
         kind="control", label="accepted row", color=GREEN,
     )
 

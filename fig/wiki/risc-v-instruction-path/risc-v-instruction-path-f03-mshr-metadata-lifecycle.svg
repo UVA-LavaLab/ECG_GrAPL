@@ -105,15 +105,15 @@
   <text x="700" y="555" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">compatibility</text>
   <text x="700" y="585" text-anchor="middle" class="sans body" fill="#27313A">same requestor/context?</text>
   <text x="700" y="615" text-anchor="middle" class="sans body" fill="#27313A">equal seq =&gt; same payload</text>
-  <path d="M535 575 L595 575" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="target"/>
+  <path d="M570 575 L595 575" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="target"/>
   <rect x="845" y="465" width="315" height="105" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <text x="862" y="500" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">selected extension</text>
   <text x="862" y="535" text-anchor="start" class="sans body" fill="#27313A">newest compatible sequence</text>
   <rect x="845" y="595" width="315" height="105" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
   <text x="862" y="630" text-anchor="start" class="sans label" fill="#B42318" font-weight="700">conflict state</text>
   <text x="862" y="665" text-anchor="start" class="sans body" fill="#27313A">mixed / mismatch / invalid</text>
-  <path d="M785 545 L845 520" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="selected extension"/>
-  <path d="M780 605 L845 645" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-label="conflict state"/>
+  <path d="M805 545 L845 520" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="selected extension"/>
+  <path d="M805 605 L845 645" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-label="conflict state"/>
   <text x="600" y="710" text-anchor="middle" class="mono body" fill="#B45309" font-weight="700">allocOnFill = OR(target allocOnFill); independent of ReuseBind validity</text>
   <circle cx="44" cy="742" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="748" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
@@ -132,7 +132,7 @@
   <rect x="820" y="800" width="330" height="105" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <text x="985" y="832" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">LLC line metadata</text>
   <text x="985" y="865" text-anchor="middle" class="mono body" fill="#27313A">tier | e1 | e2 | context | valid</text>
-  <path d="M235 852 L295 852" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="response Request"/>
+  <path d="M260 852 L295 852" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="response Request"/>
   <path d="M485 852 L545 852" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="conflicted?"/>
   <path d="M755 852 L820 852" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="destination line"/>
   <text x="600" y="950" text-anchor="middle" class="sans body" fill="#B42318">serviceable/deferred target changes rebuild merge state; deallocation resets MSHR ECG state</text>

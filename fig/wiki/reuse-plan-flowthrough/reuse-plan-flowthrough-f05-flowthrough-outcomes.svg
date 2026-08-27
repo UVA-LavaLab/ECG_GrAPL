@@ -74,7 +74,7 @@
   <rect x="330" y="505" width="230" height="105" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
   <text x="445" y="540" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">hit: return record</text>
   <text x="445" y="575" text-anchor="middle" class="sans body" fill="#27313A">no allocation decision</text>
-  <path d="M260 560 L330 560" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="hit: return record"/>
+  <path d="M275 560 L330 560" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="hit: return record"/>
   <rect x="330" y="635" width="350" height="150" rx="0" fill="#EEE9FF" stroke="#27313A" stroke-width="2"/>
   <line x1="330" y1="672.5" x2="680" y2="672.5" stroke="#27313A" stroke-width="1"/>
   <line x1="330" y1="710.0" x2="680" y2="710.0" stroke="#27313A" stroke-width="1"/>
@@ -88,14 +88,14 @@
   <polygon points="805,650.0 910.0,710 805,770.0 700.0,710" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
   <text x="805" y="700" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">allocOnFill</text>
   <text x="805" y="730" text-anchor="middle" class="sans body" fill="#27313A">aggregate?</text>
-  <path d="M640 710 L700 710" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="allocOnFill combines with OR"/>
+  <path d="M680 710 L700 710" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="allocOnFill combines with OR"/>
   <rect x="960" y="635" width="190" height="105" rx="0" fill="#F7DEDC" stroke="#27313A" stroke-width="2"/>
   <text x="1055" y="670" text-anchor="middle" class="sans label" fill="#B42318" font-weight="700">true: insert LLC</text>
   <text x="1055" y="705" text-anchor="middle" class="sans body" fill="#27313A">mixed target wins</text>
   <rect x="960" y="755" width="190" height="90" rx="0" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
   <text x="1055" y="790" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">false: skip fill</text>
   <text x="1055" y="820" text-anchor="middle" class="sans body" fill="#27313A">all targets false</text>
-  <path d="M890 685 L960 685" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-label="true: insert LLC"/>
+  <path d="M910 685 L960 685" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-label="true: insert LLC"/>
   <path d="M910 735 L930 800 L960 800" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="false: skip fill"/>
   <circle cx="44" cy="890" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="896" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>

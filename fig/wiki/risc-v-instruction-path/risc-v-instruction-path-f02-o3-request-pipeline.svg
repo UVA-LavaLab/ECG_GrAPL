@@ -44,10 +44,10 @@
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#B45309" stroke-width="3"/>
   <circle cx="45" cy="200" r="16" fill="#B45309" stroke="#B45309" stroke-width="1"/>
   <text x="45" y="206" text-anchor="middle" class="sans body" fill="#FFFFFF" font-weight="700">I0</text>
-  <text x="72" y="206" text-anchor="start" class="mono body" fill="#B45309">flow.load.compact: record[8-&gt;18] -&gt; P17</text>
+  <text x="72" y="206" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#B45309" font-weight="700">flow.load.compact</tspan><tspan fill="#27313A">: </tspan><tspan fill="#1769C2">record[8-&gt;18]</tspan><tspan fill="#27313A"> -&gt; </tspan><tspan fill="#6D5BD0" font-weight="700">P17</tspan></text>
   <circle cx="650" cy="200" r="16" fill="#15803D" stroke="#15803D" stroke-width="1"/>
   <text x="650" y="206" text-anchor="middle" class="sans body" fill="#FFFFFF" font-weight="700">I1</text>
-  <text x="677" y="206" text-anchor="start" class="mono body" fill="#15803D">bind.load.u32: rs1=0x80000048, rs2=P17 -&gt; P21</text>
+  <text x="677" y="206" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#15803D" font-weight="700">bind.load.u32</tspan><tspan fill="#27313A">: </tspan><tspan fill="#6D5BD0" font-weight="700">rs1</tspan><tspan fill="#27313A">=</tspan><tspan fill="#1769C2">0x80000048</tspan><tspan fill="#27313A">, </tspan><tspan fill="#6D5BD0" font-weight="700">rs2</tspan><tspan fill="#27313A">=</tspan><tspan fill="#6D5BD0" font-weight="700">P17</tspan><tspan fill="#27313A"> -&gt; </tspan><tspan fill="#6D5BD0" font-weight="700">P21</tspan></text>
   <rect x="24" y="230" width="1152" height="555" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
   <path d="M40 500 L1160 500" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="I0"/>
   <path d="M40 535 L1160 535" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="I1"/>
@@ -239,7 +239,7 @@
   <text x="760" y="1422" text-anchor="middle" class="sans body" fill="#27313A">skip LLC allocation</text>
   <text x="1000" y="1395" text-anchor="middle" class="sans body" fill="#27313A">widen compact record</text>
   <text x="1000" y="1422" text-anchor="middle" class="sans body" fill="#B45309">writeback P17</text>
-  <path d="M1000 1422 L1000 1455 L100 1455 L100 1500" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="P17 wakeup"/>
+  <path d="M1000 1369 L1000 1455 L100 1455 L100 1500" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="P17 wakeup"/>
   <text x="550" y="1445" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">P17 wakeup</text>
   <text x="45" y="1506" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">I1</text>
   <text x="100" y="1535" text-anchor="middle" class="sans body" fill="#15803D">4-byte U32</text>

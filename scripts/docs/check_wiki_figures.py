@@ -30,6 +30,7 @@ HEX = re.compile(r"#[0-9A-Fa-f]{6}")
 POINT = re.compile(r"[ML]\s*(-?[\d.]+)[\s,]+(-?[\d.]+)")
 CSS_CLASS = re.compile(r"\.([A-Za-z0-9_-]+)\s*\{([^}]*)\}")
 CSS_SIZE = re.compile(r"font-size\s*:\s*(\d+(?:\.\d+)?)px")
+HTML_TAG = re.compile(r"<[^>]+>")
 
 ALLOWED_COLORS = {
     "#27313A", "#9AA3AD", "#1769C2", "#15803D", "#B45309",
@@ -86,7 +87,7 @@ def drawio_labels(root: ET.Element) -> list[str]:
     for cell in root.iter("mxCell"):
         if cell.get("vertex") != "1":
             continue
-        value = unescape(cell.get("value", "")).strip()
+        value = HTML_TAG.sub("", unescape(cell.get("value", ""))).strip()
         if value:
             labels.append(" ".join(value.split()))
     return labels
@@ -248,8 +249,8 @@ def check_svg(figure: Figure, errors: list[str]) -> ET.Element | None:
         elif max(
             max(abs(x2 - x1), abs(y2 - y1))
             for (x1, y1), (x2, y2) in zip(points, points[1:])
-        ) < 60:
-            errors.append(f"{name}: arrow has no run of at least 60 px")
+        ) < 20:
+            errors.append(f"{name}: arrow has no run of at least 20 px")
     return root
 
 

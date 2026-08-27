@@ -77,7 +77,7 @@
   <polygon points="350,487.5 445.0,550 350,612.5 255.0,550" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
   <text x="350" y="540" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">record-load</text>
   <text x="350" y="570" text-anchor="middle" class="sans body" fill="#27313A">role decode</text>
-  <path d="M190 550 L255 550" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-label="custom-0"/>
+  <path d="M220 550 L255 550" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-label="custom-0"/>
   <rect x="500" y="475" width="290" height="90" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
   <text x="515" y="507" text-anchor="start" class="mono label" fill="#1769C2" font-weight="700">ecg.plan.load*</text>
   <text x="515" y="538" text-anchor="start" class="sans body" fill="#27313A">ordinary placement -&gt; canonical rd</text>
@@ -91,8 +91,8 @@
   <text x="852" y="588" text-anchor="start" class="mono body" fill="#27313A">weighted: sidecar32 + dest</text>
   <text x="852" y="612" text-anchor="start" class="mono body" fill="#27313A">compact: FlowThrough only</text>
   <text x="852" y="636" text-anchor="start" class="mono body" fill="#27313A">no compact Plan-load</text>
-  <path d="M430 525 L500 525" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-label="ecg.plan.load*"/>
-  <path d="M430 600 L500 630" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="ecg.flow.load*"/>
+  <path d="M445 525 L500 525" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-label="ecg.plan.load*"/>
+  <path d="M445 600 L500 630" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="ecg.flow.load*"/>
   <circle cx="44" cy="722" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="728" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="729" text-anchor="start" class="sans heading" fill="#15803D" font-weight="700">PROPERTY-LOAD FAMILY</text>
@@ -105,15 +105,15 @@
   <polygon points="390,787.5 485.0,850 390,912.5 295.0,850" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
   <text x="390" y="840" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">property-load</text>
   <text x="390" y="870" text-anchor="middle" class="sans body" fill="#27313A">address form</text>
-  <path d="M230 850 L295 850" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="physical rd"/>
+  <path d="M250 850 L295 850" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="physical rd"/>
   <rect x="535" y="775" width="285" height="115" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
   <text x="552" y="808" text-anchor="start" class="mono label" fill="#15803D" font-weight="700">ecg.bind.load.*</text>
-  <text x="552" y="840" text-anchor="start" class="sans body" fill="#27313A">rs1 = computed property address</text>
-  <text x="552" y="870" text-anchor="start" class="mono body" fill="#27313A">rs2 = ReusePlan</text>
+  <text x="552" y="840" text-anchor="start" class="sans body" fill="#27313A"><tspan fill="#6D5BD0" font-weight="700">rs1</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#1769C2">computed address</tspan></text>
+  <text x="552" y="870" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#6D5BD0" font-weight="700">rs2</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#6D5BD0">ReusePlan</tspan></text>
   <rect x="535" y="915" width="285" height="115" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
   <text x="552" y="948" text-anchor="start" class="mono label" fill="#15803D" font-weight="700">ecg.bind.iload.*</text>
-  <text x="552" y="980" text-anchor="start" class="sans body" fill="#27313A">rs1 = property-array base</text>
-  <text x="552" y="1010" text-anchor="start" class="mono body" fill="#27313A">EA = base + destination*size</text>
+  <text x="552" y="980" text-anchor="start" class="sans body" fill="#27313A"><tspan fill="#6D5BD0" font-weight="700">rs1</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#1769C2">property base</tspan></text>
+  <text x="552" y="1010" text-anchor="start" class="sans body" fill="#27313A"><tspan fill="#15803D" font-weight="700">EA</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#1769C2">base</tspan><tspan fill="#27313A"> + dest*size</tspan></text>
   <rect x="865" y="790" width="295" height="225" rx="0" fill="#EDF5FF" stroke="#27313A" stroke-width="2"/>
   <text x="882" y="824" text-anchor="start" class="sans label" fill="#1769C2" font-weight="700">Shared memory semantics</text>
   <text x="882" y="858" text-anchor="start" class="sans body" fill="#27313A">one ordinary property Request</text>
@@ -121,7 +121,7 @@
   <text x="882" y="906" text-anchor="start" class="sans body" fill="#27313A">result: U32 / S32 / U64 / F32</text>
   <text x="882" y="930" text-anchor="start" class="sans body" fill="#27313A">FlowThrough is never attached</text>
   <text x="882" y="954" text-anchor="start" class="sans body" fill="#27313A">native order / replay / retire</text>
-  <path d="M475 825 L535 832" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="ecg.bind.load.*"/>
+  <path d="M485 825 L535 832" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="ecg.bind.load.*"/>
   <path d="M485 875 L510 972 L535 972" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="ecg.bind.iload.*"/>
   <path d="M160 1055 L1040 1055" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-label="record rd becomes property rs2 through normal rename and issue"/>
   <text x="600" y="1040" text-anchor="middle" class="sans body" fill="#6D5BD0" font-weight="700">record rd becomes property rs2 through normal rename and issue</text>

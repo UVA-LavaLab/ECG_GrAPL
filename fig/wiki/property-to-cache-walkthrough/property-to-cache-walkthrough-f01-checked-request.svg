@@ -90,19 +90,19 @@
   <rect x="24" y="547" width="650" height="300" rx="9" fill="#F8F6EC" stroke="#27313A" stroke-width="3"/>
   <text x="44" y="578" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Representative property-access pseudocode</text>
   <text x="44" y="615" text-anchor="start" class="mono body" fill="#9AA3AD">L1</text>
-  <text x="88" y="615" text-anchor="start" class="mono body" fill="#27313A">for u in active_vertices:</text>
+  <text x="88" y="615" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#B42318" font-weight="700">for </tspan><tspan fill="#27313A">u</tspan><tspan fill="#B42318" font-weight="700"> in </tspan><tspan fill="#1769C2">active_vertices</tspan><tspan fill="#27313A">:</tspan></text>
   <text x="44" y="645" text-anchor="start" class="mono body" fill="#9AA3AD">L2</text>
-  <text x="88" y="645" text-anchor="start" class="mono body" fill="#27313A">  for edge_pos in out_csr_row(u):</text>
+  <text x="88" y="645" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#B42318" font-weight="700">  for </tspan><tspan fill="#27313A">edge_pos</tspan><tspan fill="#B42318" font-weight="700"> in </tspan><tspan fill="#1769C2">out_csr_row</tspan><tspan fill="#27313A">(u):</tspan></text>
   <text x="44" y="675" text-anchor="start" class="mono body" fill="#9AA3AD">L3</text>
-  <text x="88" y="675" text-anchor="start" class="mono body" fill="#27313A">    plan = ecg.flow.load.compact(record[edge_pos])  [B]</text>
+  <text x="88" y="675" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#6D5BD0" font-weight="700">    plan</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#B45309" font-weight="700">ecg.flow.load.compact</tspan><tspan fill="#27313A">(record[edge_pos])  </tspan><tspan fill="#B45309" font-weight="700">[B]</tspan></text>
   <text x="44" y="705" text-anchor="start" class="mono body" fill="#9AA3AD">L4</text>
-  <text x="88" y="705" text-anchor="start" class="mono body" fill="#27313A">    v = plan.destination</text>
+  <text x="88" y="705" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#27313A">    v</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#6D5BD0" font-weight="700">plan</tspan><tspan fill="#1769C2">.destination</tspan></text>
   <text x="44" y="735" text-anchor="start" class="mono body" fill="#9AA3AD">L5</text>
-  <text x="88" y="735" text-anchor="start" class="mono body" fill="#27313A">    addr = property_base + v * 4</text>
+  <text x="88" y="735" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#1769C2" font-weight="700">    addr</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#1769C2">property_base</tspan><tspan fill="#27313A"> + v * 4</tspan></text>
   <text x="44" y="765" text-anchor="start" class="mono body" fill="#9AA3AD">L6</text>
-  <text x="88" y="765" text-anchor="start" class="mono body" fill="#27313A">    value = ecg.bind.load.u32(addr, plan)  [C,D]</text>
+  <text x="88" y="765" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#1769C2" font-weight="700">    value</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#15803D" font-weight="700">ecg.bind.load.u32</tspan><tspan fill="#27313A">(addr, </tspan><tspan fill="#6D5BD0" font-weight="700">plan</tspan><tspan fill="#27313A">)  </tspan><tspan fill="#6D5BD0" font-weight="700">[C,D]</tspan></text>
   <text x="44" y="795" text-anchor="start" class="mono body" fill="#9AA3AD">L7</text>
-  <text x="88" y="795" text-anchor="start" class="mono body" fill="#27313A">    proposal = update(u, v, value)</text>
+  <text x="88" y="795" text-anchor="start" class="mono body" fill="#27313A"><tspan fill="#27313A">    proposal</tspan><tspan fill="#27313A"> = </tspan><tspan fill="#1769C2">update</tspan><tspan fill="#27313A">(u, v, value)</tspan></text>
   <text x="44" y="830" text-anchor="start" class="sans body" fill="#B42318">tracked execution: adjacency 4-&gt;7 maps to internal 8-&gt;18</text>
   <rect x="700" y="547" width="476" height="300" rx="9" fill="#EEE9FF" stroke="#27313A" stroke-width="3"/>
   <text x="720" y="578" text-anchor="start" class="sans label" fill="#6D5BD0" font-weight="700">Cross-layer identifiers</text>
@@ -209,7 +209,7 @@
   <polygon points="1060,1685.0 1150.0,1745 1060,1805.0 970.0,1745" fill="#FFF0D8" stroke="#27313A" stroke-width="2"/>
   <text x="1060" y="1732" text-anchor="middle" class="sans label" fill="#B45309" font-weight="700">structural</text>
   <text x="1060" y="1762" text-anchor="middle" class="sans body" fill="#27313A">candidate?</text>
-  <path d="M910 1745 L970 1745" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-label="max-RRPV"/>
+  <path d="M950 1745 L970 1745" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-label="max-RRPV"/>
   <text x="790" y="1840" text-anchor="start" class="sans body" fill="#B45309">yes -&gt; oldest structural</text>
   <text x="790" y="1870" text-anchor="start" class="sans body" fill="#6D5BD0">else -&gt; farthest stamped property</text>
   <text x="790" y="1900" text-anchor="start" class="sans body" fill="#B42318">property value unchanged; no speedup claim</text>

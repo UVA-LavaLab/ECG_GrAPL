@@ -58,10 +58,10 @@
   <rect x="1010" y="205" width="150" height="105" rx="0" fill="#E7F7EA" stroke="#27313A" stroke-width="2"/>
   <text x="1085" y="240" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">accept</text>
   <text x="1085" y="275" text-anchor="middle" class="sans body" fill="#27313A">hit/fill stamp</text>
-  <path d="M255 265 L315 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="ReuseBind extension"/>
-  <path d="M485 265 L545 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="context"/>
-  <path d="M715 265 L775 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="conflict"/>
-  <path d="M950 265 L1010 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="destination line"/>
+  <path d="M285 265 L315 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="ReuseBind extension"/>
+  <path d="M495 265 L545 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="context"/>
+  <path d="M725 265 L775 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="conflict"/>
+  <path d="M955 265 L1010 265" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="destination line"/>
   <text x="600" y="365" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">reject: governed/ungoverned mix | requestor/context mismatch | invalid count</text>
   <text x="600" y="397" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">reject: equal-sequence payload mismatch | destination-line mismatch</text>
   <circle cx="44" cy="450" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>

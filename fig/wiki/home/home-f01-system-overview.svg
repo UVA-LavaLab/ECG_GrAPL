@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1160" viewBox="0 0 1200 1160" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1060" viewBox="0 0 1200 1060" role="img" aria-labelledby="title desc" fill="#27313A" data-figure-schema="ecg-public/v1">
   <title id="title">ECG Next: offline guidance to request-bound LLC state</title>
   <desc id="desc">Three numbered bands show ECG Next&#x27;s offline graph analysis, the two-load RISC-V runtime path, line-local LLC replacement state, and the evidence boundary across gem5 O3, cache_sim, and Sniper. The tracked checked-fixture adjacency entry has outer vertex 8 and property vertex 18.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#1769C2"/></marker>
@@ -33,7 +33,7 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1160" fill="#FFFFFF"/>
+  <rect x="0" y="0" width="1200" height="1060" fill="#FFFFFF"/>
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#27313A" font-weight="700">ECG Next: offline guidance to request-bound LLC state</text>
   <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#27313A">The diagram separates offline graph analysis, runtime requests, cache policy, and evaluation scope.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#27313A" stroke-width="2"/>
@@ -80,11 +80,11 @@
   <text x="1115" y="225" text-anchor="middle" class="sans label" fill="#6D5BD0" font-weight="700">LLC</text>
   <text x="1115" y="282" text-anchor="middle" class="sans body" fill="#27313A">RRPV</text>
   <text x="1115" y="338" text-anchor="middle" class="sans body" fill="#27313A">tier/e1/e2</text>
-  <path d="M180 280 L240 280" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-label="Graph storage"/>
-  <path d="M355 280 L430 280" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="ReusePlan"/>
+  <path d="M215 280 L240 280" fill="none" stroke="#1769C2" stroke-width="3" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-label="Graph storage"/>
+  <path d="M390 280 L430 280" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="ReusePlan"/>
   <path d="M620 280 L700 280" fill="none" stroke="#B45309" stroke-width="3" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-label="Record array"/>
-  <path d="M815 280 L900 280" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="O3 issue"/>
-  <path d="M985 280 L1060 280" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="MSHR"/>
+  <path d="M850 280 L900 280" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="O3 issue"/>
+  <path d="M1020 280 L1060 280" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="MSHR"/>
   <text x="675" y="385" text-anchor="start" class="mono body" fill="#B42318">tracked: fixture 4-&gt;7 -&gt; internal 8-&gt;18</text>
   <text x="675" y="415" text-anchor="start" class="mono body" fill="#B42318">property address 0x80000048</text>
   <circle cx="44" cy="450" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
@@ -128,10 +128,10 @@
   <text x="74" y="787" text-anchor="start" class="sans heading" fill="#B42318" font-weight="700">EVIDENCE BOUNDARY</text>
   <text x="1158" y="786" text-anchor="end" class="sans body" fill="#9AA3AD">mechanism activity is not itself a speedup claim</text>
   <line x1="24" y1="806" x2="1176" y2="806" stroke="#B42318" stroke-width="3"/>
-  <rect x="40" y="830" width="1120" height="225" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
-  <line x1="320" y1="830" x2="320" y2="1055" stroke="#27313A" stroke-width="1"/>
-  <line x1="600" y1="830" x2="600" y2="1055" stroke="#27313A" stroke-width="1"/>
-  <line x1="880" y1="830" x2="880" y2="1055" stroke="#27313A" stroke-width="1"/>
+  <rect x="40" y="830" width="1120" height="150" rx="0" fill="#F8F6EC" stroke="#27313A" stroke-width="2"/>
+  <line x1="320" y1="830" x2="320" y2="980" stroke="#27313A" stroke-width="1"/>
+  <line x1="600" y1="830" x2="600" y2="980" stroke="#27313A" stroke-width="1"/>
+  <line x1="880" y1="830" x2="880" y2="980" stroke="#27313A" stroke-width="1"/>
   <line x1="40" y1="880" x2="1160" y2="880" stroke="#27313A" stroke-width="1"/>
   <text x="180" y="862" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">gem5 O3</text>
   <text x="460" y="862" text-anchor="middle" class="sans label" fill="#27313A" font-weight="700">cache_sim</text>
@@ -149,6 +149,6 @@
   <text x="896" y="915" text-anchor="start" class="sans body" fill="#27313A">reserved ways + bytes</text>
   <text x="896" y="939" text-anchor="start" class="sans body" fill="#27313A">target-time costs omitted</text>
   <text x="896" y="963" text-anchor="start" class="sans body" fill="#27313A">optimistic bound</text>
-  <path d="M110 1110 L1090 1110" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-label="semantic receipts gate every published row"/>
-  <text x="600" y="1095" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">semantic receipts gate every published row</text>
+  <path d="M110 1025 L1090 1025" fill="none" stroke="#B42318" stroke-width="3" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-label="semantic receipts gate every published row"/>
+  <text x="600" y="1010" text-anchor="middle" class="sans body" fill="#B42318" font-weight="700">semantic receipts gate every published row</text>
 </svg>

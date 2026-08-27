@@ -90,8 +90,8 @@
   <text x="1062" y="632" text-anchor="middle" class="sans label" fill="#15803D" font-weight="700">accepted row</text>
   <text x="1062" y="668" text-anchor="middle" class="sans body" fill="#27313A">eligible for claims</text>
   <path d="M340 650 L420 650" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="Mechanism receipt vector"/>
-  <path d="M680 650 L740 650" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="Semantic receipt vector"/>
-  <path d="M900 650 L965 650" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="accepted row"/>
+  <path d="M720 650 L740 650" fill="none" stroke="#6D5BD0" stroke-width="3" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-label="Semantic receipt vector"/>
+  <path d="M910 650 L965 650" fill="none" stroke="#15803D" stroke-width="3" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-label="accepted row"/>
   <circle cx="44" cy="842" r="19" fill="#27313A" stroke="#27313A" stroke-width="1"/>
   <text x="44" y="848" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="849" text-anchor="start" class="sans heading" fill="#B45309" font-weight="700">CLAIM LIMITS</text>

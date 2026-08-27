@@ -41,6 +41,12 @@ matching canvas, title, description, ordered labels, and arrow kinds.
 | verification / rejection | `#B42318` | `#F7DEDC` |
 | policy / metadata state | `#6D5BD0` | `#EEE9FF` |
 
+Instruction and pseudocode text uses the same semantic colors: record and
+FlowThrough mnemonics are amber, property-load mnemonics are green, register
+names and ReusePlan operands are purple, addresses/data are blue, and rejected
+or invalid state is red. SVG and Draw.io mirrors retain this token-level
+highlighting.
+
 ## Value and claim ownership
 
 The only fixture-backed concrete mechanism example is
