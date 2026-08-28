@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1190" viewBox="0 0 1200 1190" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">ReusePlan record formats and structural traffic</title>
-  <desc id="desc">The figure shows the canonical 64-bit record, the fixture&#x27;s 32-bit compact layout, and the two weighted SSSP transports with their byte accounting constraints.</desc>
+  <desc id="desc">The figure gives the exact unweighted 64-bit layout, the graph-dependent 32-bit compact rule instantiated by the checked fixture, and both weighted SSSP transports: one compact 64-bit edge record or an ordinary weighted edge plus a 32-bit metadata sidecar.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -28,84 +28,107 @@
       }
       .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
       .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
-      .display{font-size:26px;font-weight:700}
-      .heading{font-size:20px;font-weight:700}
-      .label{font-size:18px;font-weight:700}
-      .body{font-size:18px}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="620" fill="#FFFFFF"/>
-  <rect x="24" y="24" width="1152" height="166" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="24" data-width="1152" data-height="166"/>
-  <text x="40" y="52" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(a)</text>
-  <text x="82" y="52" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Canonical 64-bit layout</text>
-  <line x1="40" y1="70" x2="1160" y2="70" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="60" y="92" width="510.96774193548384" height="74" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="60" data-y="92" data-width="510.96774193548384" data-height="74"/>
-  <text x="315.48387096774195" y="122.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">destination</text>
-  <text x="315.48387096774195" y="149.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
-  <rect x="570.9677419354839" y="92" width="90.0" height="74" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="570.9677419354839" data-y="92" data-width="90.0" data-height="74"/>
-  <text x="615.9677419354839" y="122.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">tier</text>
-  <text x="615.9677419354839" y="149.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
-  <rect x="660.9677419354839" y="92" width="239.51612903225808" height="74" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="660.9677419354839" data-y="92" data-width="239.51612903225808" data-height="74"/>
-  <text x="780.7258064516129" y="122.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">epoch 1</text>
-  <text x="780.7258064516129" y="149.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
-  <rect x="900.483870967742" y="92" width="239.51612903225808" height="74" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="900.483870967742" data-y="92" data-width="239.51612903225808" data-height="74"/>
-  <text x="1020.241935483871" y="122.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">epoch 2</text>
-  <text x="1020.241935483871" y="149.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
-  <text x="600" y="184" text-anchor="middle" class="mono body" fill="#6558C5">tier 0 invalid; epoch count &lt;= 2^15</text>
-  <rect x="24" y="214" width="1152" height="174" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="214" data-width="1152" data-height="174"/>
-  <text x="40" y="242" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(b)</text>
-  <text x="82" y="242" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Compact 32-bit layout</text>
-  <line x1="40" y1="260" x2="1160" y2="260" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="60" y="284" width="165.0" height="74" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="60" data-y="284" data-width="165.0" data-height="74"/>
-  <text x="142.5" y="314.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">dest 5</text>
-  <text x="142.5" y="341.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
-  <rect x="225.0" y="284" width="90.0" height="74" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="225.0" data-y="284" data-width="90.0" data-height="74"/>
-  <text x="270.0" y="314.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">tier 2</text>
-  <text x="270.0" y="341.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
-  <rect x="315.0" y="284" width="165.0" height="74" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="315.0" data-y="284" data-width="165.0" data-height="74"/>
-  <text x="397.5" y="314.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">e1 5</text>
-  <text x="397.5" y="341.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
-  <rect x="480.0" y="284" width="165.0" height="74" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="480.0" data-y="284" data-width="165.0" data-height="74"/>
-  <text x="562.5" y="314.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">e2 5</text>
-  <text x="562.5" y="341.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
-  <rect x="645.0" y="284" width="495.0" height="74" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="645.0" data-y="284" data-width="495.0" data-height="74"/>
-  <text x="892.5" y="314.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">zero/reserved</text>
-  <text x="892.5" y="341.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
-  <text x="312" y="382" text-anchor="middle" class="sans body" fill="#C63C4A">unused high bits are zero/reserved</text>
-  <text x="874" y="382" text-anchor="middle" class="sans body" fill="#6558C5">width receipt must match the array</text>
-  <rect x="24" y="412" width="1152" height="184" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="412" data-width="1152" data-height="184"/>
-  <text x="40" y="440" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(c)</text>
-  <text x="82" y="440" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Weighted SSSP transports</text>
-  <line x1="40" y1="458" x2="1160" y2="458" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="60" y="480" width="127.74193548387096" height="74" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="60" data-y="480" data-width="127.74193548387096" data-height="74"/>
-  <text x="123.87096774193549" y="510.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">d24</text>
-  <text x="123.87096774193549" y="537.0" text-anchor="middle" class="sans body" fill="#182230">24 bits</text>
-  <rect x="187.74193548387098" y="480" width="42.58064516129032" height="74" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="187.74193548387098" data-y="480" data-width="42.58064516129032" data-height="74"/>
-  <text x="209.03225806451613" y="523.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">w8</text>
-  <rect x="230.32258064516128" y="480" width="90.0" height="74" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="230.32258064516128" data-y="480" data-width="90.0" data-height="74"/>
-  <text x="275.3225806451613" y="510.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">T</text>
-  <text x="275.3225806451613" y="537.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
-  <rect x="320.3225806451613" y="480" width="79.83870967741936" height="74" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="320.3225806451613" data-y="480" data-width="79.83870967741936" data-height="74"/>
-  <text x="360.241935483871" y="510.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">e1</text>
-  <text x="360.241935483871" y="537.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
-  <rect x="400.1612903225806" y="480" width="79.83870967741936" height="74" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="400.1612903225806" data-y="480" data-width="79.83870967741936" data-height="74"/>
-  <text x="440.0806451612903" y="510.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">e2</text>
-  <text x="440.0806451612903" y="537.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
-  <text x="310" y="578" text-anchor="middle" class="sans body" fill="#2563EB">compact substitute: 8 bytes</text>
-  <rect x="560" y="480" width="110.0" height="74" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="560" data-y="480" data-width="110.0" data-height="74"/>
-  <text x="615.0" y="510.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">d32</text>
-  <text x="615.0" y="537.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
-  <rect x="670.0" y="480" width="110.0" height="74" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="670.0" data-y="480" data-width="110.0" data-height="74"/>
-  <text x="725.0" y="510.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">w32</text>
-  <text x="725.0" y="537.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
-  <text x="820" y="518" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">+</text>
-  <rect x="860" y="480" width="90.0" height="74" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="860" data-y="480" data-width="90.0" data-height="74"/>
-  <text x="905.0" y="510.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">T</text>
-  <text x="905.0" y="537.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
-  <rect x="950.0" y="480" width="95.0" height="74" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="950.0" data-y="480" data-width="95.0" data-height="74"/>
-  <text x="997.5" y="510.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">e1</text>
-  <text x="997.5" y="537.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
-  <rect x="1045.0" y="480" width="95.0" height="74" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="1045.0" data-y="480" data-width="95.0" data-height="74"/>
-  <text x="1092.5" y="510.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">e2</text>
-  <text x="1092.5" y="537.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
-  <text x="850" y="578" text-anchor="middle" class="sans body" fill="#6558C5">edge + 4-byte sidecar</text>
+  <rect x="0" y="0" width="1200" height="1190" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">ReusePlan record formats and structural traffic</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">General, compact, and weighted layouts are separate transport choices.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">GENERAL UNWEIGHTED RECORD</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#98A2B3">canonical in-memory metadata layout</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="190" width="531.6129032258065" height="96" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="190" data-width="531.6129032258065" data-height="96"/>
+  <text x="305.80645161290323" y="236.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">destination</text>
+  <text x="305.80645161290323" y="260.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <rect x="571.6129032258065" y="190" width="90.0" height="96" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="571.6129032258065" data-y="190" data-width="90.0" data-height="96"/>
+  <text x="616.6129032258065" y="236.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">tier</text>
+  <text x="616.6129032258065" y="260.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="661.6129032258065" y="190" width="249.19354838709677" height="96" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="661.6129032258065" data-y="190" data-width="249.19354838709677" data-height="96"/>
+  <text x="786.2096774193549" y="236.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 1</text>
+  <text x="786.2096774193549" y="260.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <rect x="910.8064516129032" y="190" width="249.19354838709677" height="96" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="910.8064516129032" data-y="190" data-width="249.19354838709677" data-height="96"/>
+  <text x="1035.4032258064515" y="236.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 2</text>
+  <text x="1035.4032258064515" y="260.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <text x="40" y="330" text-anchor="start" class="sans body" fill="#182230">Bits 0..31 destination | bits 32..33 tier | bits 34..48 epoch 1 | bits 49..63 epoch 2</text>
+  <text x="40" y="354" text-anchor="start" class="sans body" fill="#182230">Tier 1/2/3 means hot/moderate/cold; tier 0 is invalid. Epoch count is at most 2^15.</text>
+  <circle cx="44" cy="405" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="411" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="412" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">COMPACT 32-BIT RECORD</text>
+  <text x="1158" y="411" text-anchor="end" class="sans body" fill="#98A2B3">width is derived from graph and epoch configuration</text>
+  <line x1="24" y1="431" x2="1176" y2="431" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="431" x2="170" y2="431" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="455" width="171.66666666666666" height="88" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="455" data-width="171.66666666666666" data-height="88"/>
+  <text x="125.83333333333333" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">dest 5</text>
+  <text x="125.83333333333333" y="521.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
+  <rect x="211.66666666666666" y="455" width="90.0" height="88" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="211.66666666666666" data-y="455" data-width="90.0" data-height="88"/>
+  <text x="256.66666666666663" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">tier 2</text>
+  <text x="256.66666666666663" y="521.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="301.66666666666663" y="455" width="171.66666666666666" height="88" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="301.66666666666663" data-y="455" data-width="171.66666666666666" data-height="88"/>
+  <text x="387.49999999999994" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">e1 5</text>
+  <text x="387.49999999999994" y="521.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
+  <rect x="473.33333333333326" y="455" width="171.66666666666666" height="88" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="473.33333333333326" data-y="455" data-width="171.66666666666666" data-height="88"/>
+  <text x="559.1666666666666" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">e2 5</text>
+  <text x="559.1666666666666" y="521.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
+  <rect x="644.9999999999999" y="455" width="515.0" height="88" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="644.9999999999999" data-y="455" data-width="515.0" data-height="88"/>
+  <text x="902.4999999999999" y="497.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">zero / reserved</text>
+  <text x="902.4999999999999" y="521.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <text x="40" y="580" text-anchor="start" class="mono body" fill="#C56A13" font-weight="700">id_bits + 2 + 2*epoch_bits = 5 + 2 + 2*5 = 17 &lt;= 32</text>
+  <path d="M90 625 L430 625" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="4-byte compact record" data-flow-cadence="per governed adjacency"/>
+  <rect x="45.24" y="595.00" width="429.52" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="260" y="612" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">4-byte compact record | per governed adjacency</text>
+  <path d="M500 625 L1110 625" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="record-load widening"/>
+  <rect x="708.80" y="595.00" width="192.40" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="805" y="612" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">record-load widening</text>
+  <text x="90" y="660" text-anchor="start" class="sans body" fill="#C56A13">substitutes for one 4-byte edge ID</text>
+  <text x="500" y="660" text-anchor="start" class="sans body" fill="#6558C5">format CSR -&gt; canonical destination/tier/e1/e2</text>
+  <text x="40" y="687" text-anchor="start" class="sans body" fill="#C63C4A">unused high bits are zero/reserved</text>
+  <text x="500" y="687" text-anchor="start" class="sans body" fill="#C63C4A">width receipt must match the materialized array</text>
+  <circle cx="44" cy="735" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="741" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="742" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">WEIGHTED SSSP TRANSPORTS</text>
+  <text x="1158" y="741" text-anchor="end" class="sans body" fill="#98A2B3">weight bytes cannot disappear from the comparison</text>
+  <line x1="24" y1="761" x2="1176" y2="761" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="761" x2="170" y2="761" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="40" y="790" text-anchor="start" class="sans label" fill="#2563EB" font-weight="700">A. compact weighted substitute: 8 bytes</text>
+  <rect x="40" y="815" width="398.7096774193548" height="82" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="815" data-width="398.7096774193548" data-height="82"/>
+  <text x="239.3548387096774" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">destination 24</text>
+  <text x="239.3548387096774" y="878.0" text-anchor="middle" class="sans body" fill="#182230">24 bits</text>
+  <rect x="438.7096774193548" y="815" width="132.90322580645162" height="82" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="438.7096774193548" data-y="815" data-width="132.90322580645162" data-height="82"/>
+  <text x="505.1612903225806" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">weight 8</text>
+  <text x="505.1612903225806" y="878.0" text-anchor="middle" class="sans body" fill="#182230">8 bits</text>
+  <rect x="571.6129032258065" y="815" width="90.0" height="82" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="571.6129032258065" data-y="815" data-width="90.0" data-height="82"/>
+  <text x="616.6129032258065" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">tier 2</text>
+  <text x="616.6129032258065" y="878.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="661.6129032258065" y="815" width="249.19354838709677" height="82" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="661.6129032258065" data-y="815" data-width="249.19354838709677" data-height="82"/>
+  <text x="786.2096774193549" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 1: 15</text>
+  <text x="786.2096774193549" y="878.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <rect x="910.8064516129032" y="815" width="249.19354838709677" height="82" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="910.8064516129032" data-y="815" data-width="249.19354838709677" data-height="82"/>
+  <text x="1035.4032258064515" y="854.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 2: 15</text>
+  <text x="1035.4032258064515" y="878.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <text x="40" y="930" text-anchor="start" class="mono body" fill="#182230">constraint: |V| &lt; 2^24 and 0 &lt; weight &lt;= 255; record replaces the ordinary weighted edge</text>
+  <text x="40" y="985" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">B. ordinary weighted edge + 4-byte sidecar</text>
+  <rect x="40" y="1010" width="350.0" height="82" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="1010" data-width="350.0" data-height="82"/>
+  <text x="215.0" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">destination 32</text>
+  <text x="215.0" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <rect x="390.0" y="1010" width="350.0" height="82" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="390.0" data-y="1010" data-width="350.0" data-height="82"/>
+  <text x="565.0" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">weight 32</text>
+  <text x="565.0" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <text x="765" y="1045" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">+</text>
+  <rect x="800" y="1010" width="90.0" height="82" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="800" data-y="1010" data-width="90.0" data-height="82"/>
+  <text x="845.0" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">tier 2</text>
+  <text x="845.0" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="890.0" y="1010" width="135.0" height="82" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="890.0" data-y="1010" data-width="135.0" data-height="82"/>
+  <text x="957.5" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 1: 15</text>
+  <text x="957.5" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <rect x="1025.0" y="1010" width="135.0" height="82" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="1025.0" data-y="1010" data-width="135.0" data-height="82"/>
+  <text x="1092.5" y="1049.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">epoch 2: 15</text>
+  <text x="1092.5" y="1073.0" text-anchor="middle" class="sans body" fill="#182230">15 bits</text>
+  <text x="40" y="1130" text-anchor="start" class="sans body" fill="#C63C4A" font-weight="700">traffic = weighted-edge bytes + 4 sidecar bytes; edge and sidecar FlowThrough roles are accounted separately</text>
 </svg>

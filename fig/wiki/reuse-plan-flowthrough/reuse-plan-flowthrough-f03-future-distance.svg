@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1140" viewBox="0 0 1200 1140" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">Quantized next-reference distance for one property line</title>
-  <desc id="desc">The figure contains one fixture timeline, the circular distance calculation, and the RRIP-first ordering rule.</desc>
+  <desc id="desc">A horizontal schedule follows property line 0x80000040 from current outer vertex 8 to subsequent access-source vertices 11 and 15. The ReusePlan stores their quantized epochs, and RRIP-first consults the nearer circular distance only after the line becomes RRIP eligible.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -28,76 +28,100 @@
       }
       .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
       .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
-      .display{font-size:26px;font-weight:700}
-      .heading{font-size:20px;font-weight:700}
-      .label{font-size:18px;font-weight:700}
-      .body{font-size:18px}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="620" fill="#FFFFFF"/>
-  <rect x="24" y="24" width="1152" height="206" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="24" data-width="1152" data-height="206"/>
-  <text x="40" y="52" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(a)</text>
-  <text x="82" y="52" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Fixture property-line timeline</text>
-  <line x1="40" y1="70" x2="1160" y2="70" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="74" y1="142" x2="1126" y2="142" stroke="#182230" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="74.0" y1="122" x2="74.0" y2="162" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="74.0" cy="142" r="10" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
-  <text x="74.0" y="104" text-anchor="middle" class="sans label" fill="#98A2B3" font-weight="700">0</text>
-  <line x1="345.48387096774195" y1="122" x2="345.48387096774195" y2="162" stroke="#C56A13" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="345.48387096774195" cy="142" r="10" fill="#FFFFFF" stroke="#C56A13" stroke-width="1"/>
-  <text x="345.48387096774195" y="104" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">8</text>
-  <line x1="447.2903225806452" y1="122" x2="447.2903225806452" y2="162" stroke="#0F8A72" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="447.2903225806452" cy="142" r="10" fill="#FFFFFF" stroke="#0F8A72" stroke-width="1"/>
-  <text x="447.2903225806452" y="104" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">11</text>
-  <line x1="583.0322580645161" y1="122" x2="583.0322580645161" y2="162" stroke="#6558C5" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="583.0322580645161" cy="142" r="10" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
-  <text x="583.0322580645161" y="188" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">15</text>
-  <line x1="1126.0" y1="122" x2="1126.0" y2="162" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="1126.0" cy="142" r="10" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
-  <text x="1126.0" y="104" text-anchor="middle" class="sans label" fill="#98A2B3" font-weight="700">31</text>
-  <text x="292" y="204" text-anchor="middle" class="mono body" fill="#6558C5">0x80000040 sources: [1, 6, 8, 11, 15, 18, 20]</text>
-  <text x="878" y="204" text-anchor="middle" class="mono body" fill="#C63C4A">fixture 4-&gt;7 / internal 8-&gt;18: e1=11, e2=15</text>
-  <rect x="24" y="254" width="556" height="342" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="254" data-width="556" data-height="342"/>
-  <text x="40" y="282" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(b)</text>
-  <text x="82" y="282" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Circular distance</text>
-  <line x1="40" y1="300" x2="564" y2="300" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="150" cy="414" r="82" fill="#F5F3FF" stroke="#6558C5" stroke-width="1"/>
-  <circle cx="150" cy="414" r="56" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1"/>
-  <text x="150" y="406" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">epoch</text>
-  <text x="150" y="434" text-anchor="middle" class="sans body" fill="#6558C5">mod 32</text>
-  <circle cx="232.0" cy="414.0" r="10" fill="#FFFFFF" stroke="#C56A13" stroke-width="1"/>
-  <text x="266.0" y="420.0" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">c=8</text>
-  <circle cx="218.1805082088087" cy="459.5567591076074" r="10" fill="#FFFFFF" stroke="#0F8A72" stroke-width="1"/>
-  <text x="246.45047502709525" y="484.44614703027383" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">e1=11</text>
-  <circle cx="165.99740640532255" cy="494.4243929930649" r="10" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
-  <text x="172.6304773538709" y="533.7710925267747" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">e2=15</text>
-  <text x="286" y="344" text-anchor="start" class="mono body" fill="#0F8A72">e1=11 -&gt; d1=3</text>
-  <text x="286" y="370" text-anchor="start" class="mono body" fill="#0F8A72">e2=15 -&gt; d2=7</text>
-  <text x="286" y="396" text-anchor="start" class="mono body" fill="#0F8A72">nearest = 3</text>
-  <text x="286" y="422" text-anchor="start" class="mono body" fill="#0F8A72">epochs stay absolute</text>
-  <text x="286" y="448" text-anchor="start" class="mono body" fill="#0F8A72">unstamped = 0</text>
-  <rect x="604" y="254" width="572" height="342" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="604" data-y="254" data-width="572" data-height="342"/>
-  <text x="620" y="282" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(c)</text>
-  <text x="662" y="282" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">RRIP-first ordering</text>
-  <line x1="620" y1="300" x2="1160" y2="300" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="642" y="346" width="188" height="108" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="642" data-y="346" data-width="188" data-height="108"/>
-  <text x="736" y="392" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">eligible set</text>
-  <text x="736" y="420" text-anchor="middle" class="sans body" fill="#182230">at max RRPV?</text>
-  <rect x="874" y="346" width="188" height="108" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="874" data-y="346" data-width="188" data-height="108"/>
-  <text x="968" y="392" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">structural</text>
-  <text x="968" y="420" text-anchor="middle" class="sans body" fill="#182230">candidate?</text>
-  <rect x="664" y="490" width="162" height="80" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="664" data-y="490" data-width="162" data-height="80"/>
-  <text x="745.0" y="516" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">select oldest</text>
-  <text x="745" y="544" text-anchor="middle" class="sans body" fill="#182230">structural line</text>
-  <rect x="920" y="490" width="220" height="80" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="920" data-y="490" data-width="220" data-height="80"/>
-  <text x="1030.0" y="516" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">select farthest</text>
-  <text x="1030" y="544" text-anchor="middle" class="sans body" fill="#182230">stamped distance</text>
-  <path d="M830 400 L874 400" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="eligible"/>
-  <rect x="804.96" y="311.00" width="94.08" height="25" rx="2" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="852" y="330" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">eligible</text>
-  <path d="M1048 454 L1048 490" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="property"/>
-  <rect x="1046.96" y="427.00" width="94.08" height="25" rx="2" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="1094" y="446" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">property</text>
-  <path d="M968 454 L968 490 L826 490" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="structural"/>
-  <rect x="822.70" y="453.00" width="114.60" height="25" rx="2" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="880" y="472" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">structural</text>
+  <rect x="0" y="0" width="1200" height="1140" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Quantized next-reference distance for one property line</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">The tracked property line is subsequently accessed from outer vertices 11 and 15 after 8.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">CHECKED CACHE-LINE TIMELINE</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#98A2B3">one 64-byte line contains property vertices 16..31</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="24" y="180" width="1152" height="340" rx="6" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="24" data-y="180" data-width="1152" data-height="340"/>
+  <line x1="85" y1="340" x2="1115" y2="340" stroke="#182230" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="85.0" y1="322" x2="85.0" y2="358" stroke="#98A2B3" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="85.0" cy="340" r="11" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
+  <text x="85.0" y="292" text-anchor="middle" class="sans label" fill="#98A2B3" font-weight="700">0</text>
+  <line x1="350.80645161290323" y1="322" x2="350.80645161290323" y2="358" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="350.80645161290323" cy="340" r="11" fill="#FFFFFF" stroke="#C56A13" stroke-width="1"/>
+  <text x="350.80645161290323" y="395" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">8</text>
+  <line x1="450.48387096774195" y1="322" x2="450.48387096774195" y2="358" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="450.48387096774195" cy="340" r="11" fill="#FFFFFF" stroke="#0F8A72" stroke-width="1"/>
+  <text x="450.48387096774195" y="292" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">11</text>
+  <line x1="583.3870967741935" y1="322" x2="583.3870967741935" y2="358" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="583.3870967741935" cy="340" r="11" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
+  <text x="583.3870967741935" y="395" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">15</text>
+  <line x1="1115.0" y1="322" x2="1115.0" y2="358" stroke="#98A2B3" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="1115.0" cy="340" r="11" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
+  <text x="1115.0" y="292" text-anchor="middle" class="sans label" fill="#98A2B3" font-weight="700">31</text>
+  <text x="85" y="235" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">line 0x80000040 sources: [1, 6, 8, 11, 15, 18, 20]</text>
+  <text x="1115" y="235" text-anchor="end" class="sans label" fill="#C56A13" font-weight="700">fixture 4-&gt;7 / internal 8-&gt;18: e1=11, e2=15</text>
+  <text x="260" y="450" text-anchor="start" class="sans body" fill="#C56A13">current outer vertex</text>
+  <text x="505" y="450" text-anchor="start" class="sans body" fill="#0F8A72">next line access</text>
+  <text x="860" y="450" text-anchor="start" class="sans body" fill="#6558C5">second line access</text>
+  <text x="600" y="492" text-anchor="middle" class="sans body" fill="#98A2B3">the record encodes the next two scheduled accesses to this property line</text>
+  <circle cx="44" cy="565" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="571" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="572" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">CIRCULAR DISTANCE AT THE LLC</text>
+  <text x="1158" y="571" text-anchor="end" class="sans body" fill="#98A2B3">the current victim-time epoch can advance after fill</text>
+  <line x1="24" y1="591" x2="1176" y2="591" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="591" x2="170" y2="591" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="190" cy="690" r="80" fill="#F5F3FF" stroke="#6558C5" stroke-width="1"/>
+  <circle cx="190" cy="690" r="54" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="190" y="682" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">epoch</text>
+  <text x="190" y="710" text-anchor="middle" class="sans body" fill="#6558C5">mod 32</text>
+  <circle cx="270.0" cy="690.0" r="11" fill="#FFFFFF" stroke="#C56A13" stroke-width="1"/>
+  <text x="300.0" y="696.0" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">c=8</text>
+  <circle cx="256.51756898420365" cy="734.4456186415682" r="11" fill="#FFFFFF" stroke="#0F8A72" stroke-width="1"/>
+  <text x="281.46165735328" y="757.1127256321562" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">e1=11</text>
+  <circle cx="205.6072257612903" cy="768.4628224322585" r="11" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
+  <text x="211.45993542177413" y="803.8863808443554" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">e2=15</text>
+  <rect x="380" y="607" width="796" height="205" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="380" data-y="607" data-width="796" data-height="205"/>
+  <line x1="380" y1="652" x2="1176" y2="652" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="380" y1="697" x2="1176" y2="697" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="380" y1="742" x2="1176" y2="742" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="400" y="637" text-anchor="start" class="mono body" fill="#182230" font-weight="700">current epoch c = 8</text>
+  <text x="400" y="682" text-anchor="start" class="mono body" fill="#182230">d1 = (11 + 32 - 8) mod 32 = 3</text>
+  <text x="400" y="727" text-anchor="start" class="mono body" fill="#182230">d2 = (15 + 32 - 8) mod 32 = 7</text>
+  <text x="400" y="772" text-anchor="start" class="mono body" fill="#0F8A72" font-weight="700">nearest = min(3, 7) = 3</text>
+  <text x="790" y="637" text-anchor="start" class="sans body" fill="#6558C5">line state stores absolute epochs</text>
+  <text x="790" y="682" text-anchor="start" class="sans body" fill="#182230">victim-time c may advance after fill</text>
+  <text x="790" y="727" text-anchor="start" class="sans body" fill="#182230">unstamped distance = 0</text>
+  <text x="790" y="772" text-anchor="start" class="sans body" fill="#182230">malformed epochs are clamped</text>
+  <circle cx="44" cy="857" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="863" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="864" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">RRIP-FIRST DECISION</text>
+  <text x="1158" y="863" text-anchor="end" class="sans body" fill="#98A2B3">property-line ranking follows RRIP eligibility</text>
+  <line x1="24" y1="883" x2="1176" y2="883" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="883" x2="170" y2="883" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <polygon points="220,912.5 325.0,970 220,1027.5 115.0,970" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="220" data-cy="970" data-width="210" data-height="115"/>
+  <text x="220" y="958" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">max-RRPV</text>
+  <text x="220" y="985" text-anchor="middle" class="sans body" fill="#182230">candidate?</text>
+  <polygon points="555,912.5 660.0,970 555,1027.5 450.0,970" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="555" data-cy="970" data-width="210" data-height="115"/>
+  <text x="555" y="958" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">structural</text>
+  <text x="555" y="985" text-anchor="middle" class="sans body" fill="#182230">candidate?</text>
+  <rect x="760" y="910" width="190" height="120" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="760" data-y="910" data-width="190" data-height="120"/>
+  <text x="855" y="947" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">select oldest</text>
+  <text x="855" y="980" text-anchor="middle" class="sans body" fill="#182230">structural line</text>
+  <rect x="980" y="910" width="196" height="120" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="980" data-y="910" data-width="196" data-height="120"/>
+  <text x="1078" y="943" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">select farthest</text>
+  <text x="1078" y="973" text-anchor="middle" class="sans body" fill="#182230">stamped distance</text>
+  <text x="1078" y="1003" text-anchor="middle" class="sans body" fill="#182230">stable set-order tie</text>
+  <path d="M325 970 L450 970" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="eligible set formed"/>
+  <rect x="296.36" y="883.00" width="183.28" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="388" y="900" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">eligible set formed</text>
+  <path d="M660 970 L760 970" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="structural"/>
+  <path d="M660 970 L690 970 L690 1050 L965 1050 L965 970 L980 970" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="no: property only"/>
+  <rect x="732.48" y="1068.00" width="165.04" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="815" y="1085" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">no: property only</text>
+  <path d="M220 1028 L220 1085 L80 1085 L80 970 L115 970" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="loop" data-flow-underlay="false" data-flow-label="none: age RRPV and retry"/>
+  <rect x="260.00" y="1058.00" width="228.88" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="265" y="1075" text-anchor="start" class="sans body" fill="#6558C5" font-weight="700">none: age RRPV and retry</text>
 </svg>

@@ -23,7 +23,7 @@ python3 scripts/docs/generate_ecg_figures.py --check
 python3 scripts/docs/check_wiki_figures.py
 ```
 
-Every published figure uses a 1200 px canvas, live text of at least 18 px, the
+Every published figure uses a 1200 px canvas, live text of at least 16 px, the
 `ecg-public/v1` schema, accessible title and description metadata, a fully
 opaque background, the shared light/dark role palette, and semantic arrow
 metadata. SVG and Draw.io files are emitted from the same operations and have
@@ -110,7 +110,7 @@ latency, bandwidth, queueing, and contention are omitted.
 | [`reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg) | Quantized next-reference distance for one property line | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 3 |
 | [`reuse-plan-flowthrough/reuse-plan-flowthrough-f04-llc-policy-pipeline.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f04-llc-policy-pipeline.svg) | ReuseBind acceptance and RRIP-first victim selection | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 4 |
 | [`reuse-plan-flowthrough/reuse-plan-flowthrough-f05-flowthrough-outcomes.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f05-flowthrough-outcomes.svg) | FlowThrough lookup, service, and LLC fill allocation | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 5 |
-| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f06-structural-fairness.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-structural-fairness.svg) | Request-specific FlowThrough and matched structural-array control | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 6 |
+| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f06-structural-fairness.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-structural-fairness.svg) | FlowThrough mechanism and matched structural-array control | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 6 |
 | [`risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg) | RISC-V record-load and property-load instruction roles | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 1 |
 | [`risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg) | ReusePlan loads in an out-of-order core | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 2 |
 | [`risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg) | ReuseBind merge, response, and line-metadata lifetime | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 3 |

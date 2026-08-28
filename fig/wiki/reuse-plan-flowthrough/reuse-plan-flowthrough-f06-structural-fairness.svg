@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Request-specific FlowThrough and matched structural-array control</title>
-  <desc id="desc">The figure separates request-specific FlowThrough from the policy-independent matched control that equalizes no-allocate opportunity across compared policies.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1000" viewBox="0 0 1200 1000" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">FlowThrough mechanism and matched structural-array control</title>
+  <desc id="desc">The design flag belongs to ReusePlan record requests. The symmetric --flowthrough all control gives LRU, GRASP, P-OPT, and ReusePlan the same no-allocate opportunity on the structural stream each workload actually consumes, with source-specific receipts in all three simulators.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -28,71 +28,89 @@
       }
       .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
       .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
-      .display{font-size:26px;font-weight:700}
-      .heading{font-size:20px;font-weight:700}
-      .label{font-size:18px;font-weight:700}
-      .body{font-size:18px}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="520" fill="#FFFFFF"/>
-  <rect x="24" y="24" width="560" height="472" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="24" data-width="560" data-height="472"/>
-  <text x="40" y="52" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(a)</text>
-  <text x="82" y="52" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Design mechanism</text>
-  <line x1="40" y1="70" x2="568" y2="70" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="56" y="98" width="150" height="86" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="56" data-y="98" data-width="150" data-height="86"/>
-  <text x="131.0" y="124" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">ReusePlan</text>
-  <text x="131" y="152" text-anchor="middle" class="sans body" fill="#182230">compact / wide / sidecar</text>
-  <rect x="240" y="98" width="152" height="86" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="240" data-y="98" data-width="152" data-height="86"/>
-  <text x="316.0" y="124" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">flow.load*</text>
-  <text x="316" y="152" text-anchor="middle" class="sans body" fill="#182230">record Request</text>
-  <rect x="426" y="98" width="126" height="86" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="426" data-y="98" data-width="126" data-height="86"/>
-  <text x="489.0" y="124" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">FLOW</text>
-  <text x="489" y="152" text-anchor="middle" class="sans body" fill="#182230">request bit</text>
-  <path d="M206 141 L240 141" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="record"/>
-  <rect x="186.22" y="87.00" width="73.56" height="25" rx="2" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="223" y="106" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">record</text>
-  <path d="M392 141 L426 141" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="flag"/>
-  <rect x="382.48" y="87.00" width="53.04" height="25" rx="2" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="409" y="106" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">flag</text>
-  <rect x="86" y="244" width="438" height="104" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="86" data-y="244" data-width="438" data-height="104"/>
-  <text x="305.0" y="270" text-anchor="middle" class="sans label" fill="#2563EB" font-weight="700">Normal hierarchy response</text>
-  <text x="108" y="300" text-anchor="start" class="sans body" fill="#2563EB">hit returns normally</text>
-  <text x="108" y="326" text-anchor="start" class="sans body" fill="#2563EB">miss reaches the LLC allocation gate</text>
-  <text x="108" y="352" text-anchor="start" class="sans body" fill="#2563EB">not bypass</text>
-  <text x="108" y="378" text-anchor="start" class="sans body" fill="#2563EB">data footprint and latency retained</text>
-  <rect x="608" y="24" width="568" height="472" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="608" data-y="24" data-width="568" data-height="472"/>
-  <text x="624" y="52" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(b)</text>
-  <text x="666" y="52" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Matched structural-array control</text>
-  <line x1="624" y1="70" x2="1160" y2="70" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="636" y="98" width="512" height="262" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="636" data-y="98" data-width="512" data-height="262"/>
-  <line x1="636" y1="150.4" x2="1148" y2="150.4" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="636" y1="202.8" x2="1148" y2="202.8" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="636" y1="255.2" x2="1148" y2="255.2" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="636" y1="307.6" x2="1148" y2="307.6" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="764.0" y1="98" x2="764.0" y2="360" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="892.0" y1="98" x2="892.0" y2="360" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="1020.0" y1="98" x2="1020.0" y2="360" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="700" y="128" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">policy</text>
-  <text x="828" y="128" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">array</text>
-  <text x="956" y="128" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">receipt</text>
-  <text x="1084" y="128" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">gate</text>
-  <text x="700" y="180" text-anchor="middle" class="mono body" fill="#182230">LRU</text>
-  <text x="828" y="180" text-anchor="middle" class="sans body" fill="#182230">CSR edges</text>
-  <text x="956" y="180" text-anchor="middle" class="sans body" fill="#182230">struct hits</text>
-  <text x="1084" y="180" text-anchor="middle" class="sans body" fill="#182230">reject zero</text>
-  <text x="700" y="232" text-anchor="middle" class="mono body" fill="#182230">GRASP</text>
-  <text x="828" y="232" text-anchor="middle" class="sans body" fill="#182230">CSR edges</text>
-  <text x="956" y="232" text-anchor="middle" class="sans body" fill="#182230">no-alloc</text>
-  <text x="1084" y="232" text-anchor="middle" class="sans body" fill="#182230">same cell</text>
-  <text x="700" y="284" text-anchor="middle" class="mono body" fill="#182230">P-OPT</text>
-  <text x="828" y="284" text-anchor="middle" class="sans body" fill="#182230">CSR + matrix</text>
-  <text x="956" y="284" text-anchor="middle" class="sans body" fill="#182230">struct event</text>
-  <text x="1084" y="284" text-anchor="middle" class="sans body" fill="#182230">keep matrix</text>
-  <text x="700" y="336" text-anchor="middle" class="mono body" fill="#182230">ReusePlan</text>
-  <text x="828" y="336" text-anchor="middle" class="sans body" fill="#182230">record array</text>
-  <text x="956" y="336" text-anchor="middle" class="sans body" fill="#182230">event count</text>
-  <text x="1084" y="336" text-anchor="middle" class="sans body" fill="#182230">matched array</text>
-  <text x="690" y="372" text-anchor="start" class="sans body" fill="#6558C5">cache_sim: access count</text>
-  <text x="690" y="398" text-anchor="start" class="sans body" fill="#6558C5">gem5: no-allocate targets</text>
-  <text x="690" y="424" text-anchor="start" class="sans body" fill="#6558C5">Sniper: read/fill counts</text>
-  <text x="894" y="458" text-anchor="middle" class="sans body" fill="#C63C4A">compare only after structural arrays are matched</text>
+  <rect x="0" y="0" width="1200" height="1000" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">FlowThrough mechanism and matched structural-array control</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">The two switches answer different experimental questions.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">DESIGN MECHANISM</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#98A2B3">ECG_FLOWTHROUGH is attached by ecg.flow.load*</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="200" width="180" height="105" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="200" data-width="180" data-height="105"/>
+  <text x="130" y="232" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">ReusePlan array</text>
+  <text x="130" y="263" text-anchor="middle" class="sans body" fill="#182230">compact / wide</text>
+  <text x="130" y="289" text-anchor="middle" class="sans body" fill="#182230">weighted sidecar</text>
+  <rect x="300" y="200" width="180" height="105" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="300" data-y="200" data-width="180" data-height="105"/>
+  <text x="390" y="237" text-anchor="middle" class="mono label" fill="#C56A13" font-weight="700">ecg.flow.load*</text>
+  <text x="390" y="275" text-anchor="middle" class="sans body" fill="#182230">record Request</text>
+  <rect x="560" y="200" width="190" height="105" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="560" data-y="200" data-width="190" data-height="105"/>
+  <text x="655" y="237" text-anchor="middle" class="mono body" fill="#C56A13" font-weight="700">ECG_FLOWTHROUGH</text>
+  <text x="655" y="275" text-anchor="middle" class="sans body" fill="#182230">request-specific bit</text>
+  <rect x="830" y="200" width="300" height="105" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="830" data-y="200" data-width="300" data-height="105"/>
+  <text x="980" y="232" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">normal TLB / private / LLC lookup</text>
+  <text x="980" y="265" text-anchor="middle" class="sans body" fill="#182230">hit returns normally</text>
+  <text x="980" y="292" text-anchor="middle" class="sans body" fill="#182230">miss reaches LLC allocation gate</text>
+  <path d="M220 252 L300 252" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="record load"/>
+  <rect x="204.84" y="168.00" width="110.32" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="260.0" y="185" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">record load</text>
+  <path d="M480 252 L560 252" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Request flag"/>
+  <rect x="460.28" y="168.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="520.0" y="185" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">Request flag</text>
+  <path d="M750 252 L830 252" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="normal hierarchy"/>
+  <rect x="712.04" y="168.00" width="155.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="790.0" y="185" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">normal hierarchy</text>
+  <line x1="40" y1="350" x2="1130" y2="350" stroke="#C63C4A" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="50" y="385" text-anchor="start" class="sans body" fill="#C63C4A" font-weight="700">not bypass | not zero bytes | not zero latency | not a victim-policy result</text>
+  <circle cx="44" cy="440" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="446" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="447" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">SYMMETRIC FAIRNESS CONTROL</text>
+  <text x="1158" y="446" text-anchor="end" class="sans body" fill="#98A2B3">--flowthrough all is policy-independent</text>
+  <line x1="24" y1="466" x2="1176" y2="466" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="466" x2="170" y2="466" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="490" width="1120" height="275" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="490" data-width="1120" data-height="275"/>
+  <line x1="40" y1="535" x2="1160" y2="535" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="590" x2="1160" y2="590" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="645" x2="1160" y2="645" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="700" x2="1160" y2="700" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="220" y1="490" x2="220" y2="765" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="480" y1="490" x2="480" y2="765" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="740" y1="490" x2="740" y2="765" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="960" y1="490" x2="960" y2="765" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="130" y="520" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">Policy row</text>
+  <text x="350" y="520" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">Active structural carrier</text>
+  <text x="610" y="520" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">Fairness flag</text>
+  <text x="850" y="520" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">Required receipt</text>
+  <text x="1060" y="520" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">Fail-closed rule</text>
+  <text x="56" y="572" text-anchor="start" class="sans body" fill="#182230">LRU</text>
+  <text x="236" y="572" text-anchor="start" class="sans body" fill="#2563EB">CSR edge array</text>
+  <text x="496" y="572" text-anchor="start" class="mono body" fill="#C56A13">STRUCTURAL_FLOWTHROUGH</text>
+  <text x="756" y="572" text-anchor="start" class="sans body" fill="#6558C5">positive structural access</text>
+  <text x="976" y="572" text-anchor="start" class="sans body" fill="#C63C4A">reject zero activity</text>
+  <text x="56" y="627" text-anchor="start" class="sans body" fill="#182230">GRASP</text>
+  <text x="236" y="627" text-anchor="start" class="sans body" fill="#2563EB">CSR edge array</text>
+  <text x="496" y="627" text-anchor="start" class="mono body" fill="#C56A13">STRUCTURAL_FLOWTHROUGH</text>
+  <text x="756" y="627" text-anchor="start" class="sans body" fill="#6558C5">positive no-allocate</text>
+  <text x="976" y="627" text-anchor="start" class="sans body" fill="#C63C4A">same workload cell</text>
+  <text x="56" y="682" text-anchor="start" class="sans body" fill="#182230">P-OPT</text>
+  <text x="236" y="682" text-anchor="start" class="sans body" fill="#2563EB">CSR + matrix traffic</text>
+  <text x="496" y="682" text-anchor="start" class="mono body" fill="#C56A13">STRUCTURAL_FLOWTHROUGH</text>
+  <text x="756" y="682" text-anchor="start" class="sans body" fill="#6558C5">positive structural event</text>
+  <text x="976" y="682" text-anchor="start" class="sans body" fill="#C63C4A">matrix bytes retained</text>
+  <text x="56" y="737" text-anchor="start" class="sans body" fill="#182230">ReusePlan</text>
+  <text x="236" y="737" text-anchor="start" class="sans body" fill="#2563EB">record array; CSR on fallback</text>
+  <text x="496" y="737" text-anchor="start" class="mono body" fill="#C56A13">STRUCTURAL_FLOWTHROUGH</text>
+  <text x="756" y="737" text-anchor="start" class="sans body" fill="#6558C5">backend-specific counter</text>
+  <text x="976" y="737" text-anchor="start" class="sans body" fill="#C63C4A">carrier receipt must match</text>
+  <text x="40" y="805" text-anchor="start" class="sans body" fill="#6558C5">cache_sim: access count | gem5: no-allocate targets | Sniper: read/fill counts; translated mode rejected</text>
+  <path d="M110 880 L1090 880" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="compare policies only after active structural carriers are matched"/>
+  <rect x="294.04" y="848.00" width="611.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="600" y="865" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">compare policies only after active structural carriers are matched</text>
 </svg>

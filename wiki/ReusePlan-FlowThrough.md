@@ -196,7 +196,7 @@ Request is never assigned FlowThrough.
 
 ## 6. Design mechanism and matched structural-array control
 
-### Figure 6 — Request-specific FlowThrough and matched structural-array control
+### Figure 6 — FlowThrough mechanism and matched structural-array control
 
 ![Comparison of request-specific ReusePlan FlowThrough and the policy-independent structural fairness control across baseline CSR and packed substitute carriers](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-structural-fairness.svg)
 

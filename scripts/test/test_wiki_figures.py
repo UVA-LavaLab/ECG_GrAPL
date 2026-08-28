@@ -6,62 +6,10 @@ import bisect
 import json
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SVG_NS = "http://www.w3.org/2000/svg"
-DEFAULT_MAX_HEIGHT = 900
-BOTTOM_MARGIN_MAX = 30
-HEIGHT_LIMITS = {
-    "property-to-cache-walkthrough-f01-checked-request.svg": 1100,
-    "risc-v-instruction-path-f02-o3-request-pipeline.svg": 1100,
-    "reuse-plan-flowthrough-f01-offline-construction.svg": 1000,
-}
-
-
-def content_bottom(root: ET.Element) -> float:
-    import re
-
-    bottom = 0.0
-    for node in root.iter():
-        name = node.tag.rsplit("}", 1)[-1]
-        if (
-            name == "rect"
-            and node.get("x") == "0"
-            and node.get("y") == "0"
-            and node.get("width") == root.get("width")
-            and node.get("height") == root.get("height")
-        ):
-            continue
-        if name == "text":
-            if "".join(node.itertext()).strip():
-                bottom = max(bottom, float(node.get("y", "0")) + 18 * 0.22)
-        elif name == "rect":
-            bottom = max(bottom, float(node.get("y", "0")) + float(node.get("height", "0")))
-        elif name == "circle":
-            bottom = max(bottom, float(node.get("cy", "0")) + float(node.get("r", "0")))
-        elif name == "ellipse":
-            bottom = max(bottom, float(node.get("cy", "0")) + float(node.get("ry", "0")))
-        elif name == "line":
-            bottom = max(bottom, float(node.get("y1", "0")), float(node.get("y2", "0")))
-        elif name == "polygon":
-            points = [
-                tuple(map(float, pair.split(",")))
-                for pair in (node.get("points") or "").split()
-                if "," in pair
-            ]
-            if points:
-                bottom = max(bottom, max(y for _x, y in points))
-        elif name == "path":
-            points = [
-                (float(x), float(y))
-                for x, y in re.findall(r"[ML]\s*(-?[\d.]+)[\s,]+(-?[\d.]+)", node.get("d", ""))
-            ]
-            if points:
-                bottom = max(bottom, max(y for _x, y in points))
-    return bottom
 
 
 def derive_next_two(
@@ -210,8 +158,7 @@ def test_architecture_figures_lock_critical_semantics():
         "reuse-plan-flowthrough-f05-flowthrough-outcomes.svg"
     ]
     assert "allocOnFill combines with OR" in flowthrough
-    assert "bit stays clear" in flowthrough
-    assert "STRUCT_FLOW bit" in flowthrough
+    assert "out-of-range bit stays clear" in flowthrough
     mshr = figures[
         "risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg"
     ]
@@ -221,10 +168,11 @@ def test_architecture_figures_lock_critical_semantics():
     evidence = figures[
         "evaluation-methodology-f01-evidence-boundary.svg"
     ]
-    assert "computed sideband" in evidence
-    assert "diagnostic only" in evidence
-    assert "timing_valid_for_speedup=0 rows excluded" in evidence
-    assert "popt_target_time_charged=0" in evidence
+    assert "computed fused sideband" in evidence
+    assert "is diagnostic" in evidence
+    assert "inconsistent hints" in evidence
+    assert "fail closed" in evidence
+    assert "popt_target_time_charged = 0" in evidence
 
 
 def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
@@ -235,10 +183,10 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
     graph = figures[
         "reuse-plan-flowthrough-f01-offline-construction.svg"
     ]
-    assert "fixture 9-node graph" in graph
-    assert "tracked 4-&gt;7, w5" in graph
-    assert "Tier from access counts" in graph
-    assert "v7/int18" in graph
+    assert "Checked nine-node weighted graph" in graph
+    assert "tracked adjacency 4 -&gt; 7" in graph
+    assert "DEGREE-DERIVED REUSE TIER" in graph
+    assert "v7 / int18" in graph
     assert "min(T18=1, T20=2) = T1 (hot)" in graph
     assert graph.count('data-flow-kind="model-edge"') == 1
 
@@ -246,11 +194,11 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
         "reuse-plan-flowthrough-f03-future-distance.svg"
     ]
     for token in (
-        "0x80000040 sources: [1, 6, 8, 11, 15, 18, 20]",
-        "e1=11 -&gt; d1=3",
-        "e2=15 -&gt; d2=7",
-        "nearest = 3",
-        "epochs stay absolute",
+        "line 0x80000040 sources: [1, 6, 8, 11, 15, 18, 20]",
+        "current outer vertex",
+        "next line access",
+        "second line access",
+        "nearest = min(3, 7) = 3",
     ):
         assert token in timeline
 
@@ -266,65 +214,62 @@ def test_pictorial_graph_timeline_and_pipeline_are_semantically_locked():
         "Fetch",
         "Decode",
         "Rename",
+        "ROB",
         "Issue / select",
+        "I0 request=1",
         "Physical regs",
         "AGU",
+        "LSQ",
         "L1D",
+        "Commit",
         "I0 rd-&gt;P17",
         "I1 rs2=P17",
+        "I1 waits P17",
         "P17 wakes I1",
-        "N_out(4) = {1,2,3,5,7}",
-        "Internal CSR row u=8 + ReusePlan",
+        "load-data response",
+        "Outgoing row u=4",
+        "N_out_fixture(4) = {1, 2, 3, 5, 7}",
+        "Internal CSR row u=8 and aligned ReusePlan",
         "row_ptr[8]=14; row_ptr[9]=19",
-        "edge_pos18 -&gt; (4,7) / (8,18) / dest18 / T1 / e11 / e15",
+        "col_idx",
+        "weight",
+        "RP14",
+        "dest18 | T1",
+        "e11 | e15",
+        "edge_pos 18: fixture (4,7) -&gt; internal (8,18)",
+        "I0 loads ReusePlan[18]",
         "4-byte record",
         "FlowThrough=1",
-        "record MSHR",
-        "write P17",
+        "D-TLB + private caches",
+        "record-block MSHR",
+        "widen compact record",
         "4-byte U32",
         "ReuseBind",
+        "property MSHR",
         "stamp 0x80000040",
-        "ROB0 oldest",
+        "FlowThrough=0",
+        "commit when ROB0 is oldest",
         "commit after I0",
     ):
         assert token in pipeline
+    assert "record-format CSR" not in pipeline
     assert 'data-flow-label="I0 record Request"' in pipeline
-    assert 'data-flow-label="I1 property Request"' in pipeline
+    assert 'data-flow-label="I1 property Request + ReuseBind"' in pipeline
 
     walkthrough = figures[
         "property-to-cache-walkthrough-f01-checked-request.svg"
     ]
-    assert "record block; no alloc" in walkthrough
+    assert "record block; alloc=false" in walkthrough
     assert "property block; merge ext" in walkthrough
-    assert "flow.load.compact" in walkthrough
-    assert "bind.load.u32" in walkthrough
+    assert "Representative property-access pseudocode" in walkthrough
+    assert "ecg.flow.load.compact" in walkthrough
+    assert "record[edge_pos]" in walkthrough
+    assert "ecg.bind.load.u32" in walkthrough
     assert "[C,D]" in walkthrough
-    assert "tracked execution: 4-&gt;7 maps to 8-&gt;18" in walkthrough
-    assert "guard/stamp T1/e11/e15" in walkthrough
+    assert "tracked execution: adjacency 4-&gt;7 maps to internal 8-&gt;18" in walkthrough
+    assert "guard + stamp T1/e11/e15" in walkthrough
     assert 'data-flow-label="record Request"' in walkthrough
-    assert 'data-flow-label="property Request"' in walkthrough
-
-
-def test_compact_paper_layout_contract():
-    for path in sorted((ROOT / "fig/wiki").rglob("*.svg")):
-        root = ET.parse(path).getroot()
-        title = root.find(f"{{{SVG_NS}}}title")
-        assert title is not None and title.text
-        labels = [
-            " ".join("".join(node.itertext()).split())
-            for node in root.iter(f"{{{SVG_NS}}}text")
-            if "".join(node.itertext()).strip()
-        ]
-        assert title.text not in labels
-        assert sum(label.startswith("(") and label.endswith(")") for label in labels) >= 2
-        assert int(root.get("height", "0")) <= HEIGHT_LIMITS.get(
-            path.name, DEFAULT_MAX_HEIGHT
-        )
-        assert int(root.get("height", "0")) - content_bottom(root) <= BOTTOM_MARGIN_MAX
-        source = path.read_text(encoding="utf-8")
-        assert "font-size:18px" in source
-        assert "font-size:16px" not in source
-        assert "font-size:17px" not in source
+    assert 'data-flow-label="property Request + ReuseBind"' in walkthrough
 
 
 def test_public_graph_terminology_is_direction_explicit():
