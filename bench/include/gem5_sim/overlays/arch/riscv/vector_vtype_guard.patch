@@ -1,0 +1,16 @@
+diff --git a/src/arch/riscv/isa/formats/vector_conf.isa b/src/arch/riscv/isa/formats/vector_conf.isa
+--- a/src/arch/riscv/isa/formats/vector_conf.isa
++++ b/src/arch/riscv/isa/formats/vector_conf.isa
+@@ -119,2 +119,5 @@ def template VConfExecute {{
+         if (oldVtype != reqVtype) {
+             newVtype = reqVtype;
++            // GRAPHBREW-RISCV-VTYPE-GUARD: reserved vsew values must set
++            // vill instead of asserting while an O3 core decodes a wrong path.
++            const bool invalidVsew = newVtype.vsew > 3;
+@@ -124 +127 @@ def template VConfExecute {{
+-            uint32_t sew = getSew(newVtype.vsew);
++            uint32_t sew = invalidVsew ? 0 : getSew(newVtype.vsew);
+@@ -127 +130,2 @@ def template VConfExecute {{
+-                !(vflmul >= 0.125 && vflmul <= 8) ||
++                invalidVsew ||
++                    !(vflmul >= 0.125 && vflmul <= 8) ||

@@ -42,6 +42,19 @@ def test_setup_gem5_installs_ecg_pfx_overlays():
     assert (
         "mem/cache/array_attribution.patch", "."
     ) in setup_gem5.UNIFIED_DIFF_PATCHES
+    assert (
+        "arch/riscv/vector_vtype_guard.patch", "."
+    ) in setup_gem5.UNIFIED_DIFF_PATCHES
+
+
+def test_riscv_vector_config_rejects_reserved_vsew_without_asserting():
+    patch = read(
+        "bench/include/gem5_sim/overlays/arch/riscv/"
+        "vector_vtype_guard.patch")
+    assert "GRAPHBREW-RISCV-VTYPE-GUARD" in patch
+    assert "const bool invalidVsew = newVtype.vsew > 3;" in patch
+    assert "invalidVsew ? 0 : getSew(newVtype.vsew)" in patch
+    assert "invalidVsew ||" in patch
 
 
 def test_every_required_gem5_patch_is_tracked():

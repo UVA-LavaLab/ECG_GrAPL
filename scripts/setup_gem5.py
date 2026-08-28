@@ -109,6 +109,10 @@ UNIFIED_DIFF_PATCHES = [
     # per-hart RISC-V MiscReg storage. This state is automatically copied and
     # checkpointed by gem5's ISA machinery.
     ("arch/riscv/ecg_csr.patch", "."),
+    # Reserved VTYPE.vsew values are legal encodings that set vill. Guard the
+    # O3 branch-target path so speculative decoding cannot abort gem5 before
+    # the illegal vector configuration is squashed.
+    ("arch/riscv/vector_vtype_guard.patch", "."),
     # Queue-servicing fix: nextPrefetchReadyTime returns curTick()
     # when pfqMissingTranslation has entries even if pfq is empty.
     # Required for prefetchers like ECG_PFX that emit only cross-page
@@ -440,6 +444,10 @@ def apply_unified_diff_patches():
                 target / "src/arch/riscv/regs/misc.hh",
                 "CSR_ECG_RECORD_FORMAT",
             ),
+            "arch/riscv/vector_vtype_guard.patch": (
+                target / "src/arch/riscv/isa/formats/vector_conf.isa",
+                "GRAPHBREW-RISCV-VTYPE-GUARD",
+            ),
             "mem/cache/prefetch/queued_hh.patch": (
                 target / "src/mem/cache/prefetch/queued.hh",
                 "GRAPHBREW-QUEUE-SERVICING-PATCH",
@@ -764,6 +772,10 @@ def verify_installation_postconditions():
         ],
         GEM5_DIR / "src/arch/riscv/regs/misc.hh": [
             "CSR_ECG_RECORD_FORMAT",
+        ],
+        GEM5_DIR / "src/arch/riscv/isa/formats/vector_conf.isa": [
+            "GRAPHBREW-RISCV-VTYPE-GUARD",
+            "invalidVsew ? 0 : getSew",
         ],
         GEM5_DIR / "src/mem/cache/replacement_policies/SConscript": [
             "hawkeye_rp.cc",
