@@ -187,10 +187,20 @@ def verify_existing_patch_state() -> None:
             f"Invalid gem5 patch state {PATCH_STATE_FILE}: {exc}") from exc
 
     recorded_targets = patch_state.get("installed_targets", {})
-    if recorded_targets and installed_patch_target_hashes() != recorded_targets:
+    installed_targets = installed_patch_target_hashes()
+    drifted_targets = {
+        path: {
+            "expected": expected,
+            "actual": installed_targets.get(path),
+        }
+        for path, expected in recorded_targets.items()
+        if installed_targets.get(path) != expected
+    }
+    if drifted_targets:
         raise SystemExit(
             "Installed gem5 patched sources differ from the verified patch "
-            "state. Run setup_gem5.py --clean and reinstall.")
+            f"state: {drifted_targets}. Run setup_gem5.py --clean and "
+            "reinstall.")
 
 
 # =============================================================================
