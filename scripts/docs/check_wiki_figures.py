@@ -19,6 +19,14 @@ WIKI_ROOT = ROOT / "wiki"
 REGISTER = ROOT / "fig" / "README.md"
 SVG_NS = "http://www.w3.org/2000/svg"
 SCHEMA = "ecg-public/v1"
+DEFAULT_MAX_HEIGHT = 900
+HEIGHT_LIMITS = {
+    "property-to-cache-walkthrough-f01-checked-request.svg": 1100,
+    "risc-v-instruction-path-f02-o3-request-pipeline.svg": 1100,
+    "reuse-plan-flowthrough-f01-offline-construction.svg": 1000,
+}
+PANEL_LABEL = re.compile(r"^\([a-z]\)$")
+BOTTOM_MARGIN_MAX = 30
 
 NAME = re.compile(
     r"^(?P<slug>[a-z0-9]+(?:-[a-z0-9]+)*)-f(?P<index>\d{2})-"
@@ -120,7 +128,7 @@ def check_text_layout(
         if not value:
             continue
         classes = node.get("class", "").split()
-        size = next((sizes[item] for item in classes if item in sizes), 16.0)
+        size = next((sizes[item] for item in classes if item in sizes), 18.0)
         mono = "mono" in classes
         bold = (
             node.get("font-weight") == "700"
@@ -285,6 +293,53 @@ def check_arrow_routing(
         errors.append(f"{name}: arrow routing: {'; '.join(crossings[:8])}")
 
 
+def content_bottom(root: ET.Element) -> float:
+    sizes = css_sizes(root)
+    bottom = 0.0
+    for node in root.iter():
+        name = local_name(node)
+        if (
+            name == "rect"
+            and node.get("x") == "0"
+            and node.get("y") == "0"
+            and node.get("width") == root.get("width")
+            and node.get("height") == root.get("height")
+        ):
+            continue
+        if name == "text":
+            value = " ".join("".join(node.itertext()).split())
+            if not value:
+                continue
+            classes = node.get("class", "").split()
+            size = next((sizes[item] for item in classes if item in sizes), 18.0)
+            bottom = max(bottom, float(node.get("y", "0")) + size * 0.22)
+        elif name == "rect":
+            bottom = max(bottom, float(node.get("y", "0")) + float(node.get("height", "0")))
+        elif name == "circle":
+            bottom = max(bottom, float(node.get("cy", "0")) + float(node.get("r", "0")))
+        elif name == "ellipse":
+            bottom = max(bottom, float(node.get("cy", "0")) + float(node.get("ry", "0")))
+        elif name == "line":
+            bottom = max(bottom, float(node.get("y1", "0")), float(node.get("y2", "0")))
+        elif name == "polygon":
+            points = [
+                tuple(map(float, pair.split(",")))
+                for pair in (node.get("points") or "").split()
+                if "," in pair
+            ]
+            if points:
+                bottom = max(bottom, max(y for _x, y in points))
+        elif name == "path":
+            points = [
+                (float(x), float(y))
+                for x, y in POINT.findall(node.get("d", ""))
+            ]
+            if points:
+                bottom = max(bottom, max(y for _x, y in points))
+    return bottom
+
+
+
 def collect(errors: list[str]) -> list[Figure]:
     figures: list[Figure] = []
     expected: set[Path] = set()
@@ -323,6 +378,13 @@ def check_svg(figure: Figure, errors: list[str]) -> ET.Element | None:
     name = figure.svg.relative_to(ROOT)
     if root.get("width") != "1200":
         errors.append(f"{name}: canvas width must be exactly 1200")
+    try:
+        height = int(root.get("height", "0"))
+    except ValueError:
+        height = 0
+    limit = HEIGHT_LIMITS.get(figure.svg.name, DEFAULT_MAX_HEIGHT)
+    if height <= 0 or height > limit:
+        errors.append(f"{name}: canvas height must be <= {limit}px")
     view_box = root.get("viewBox", "").split()
     if len(view_box) != 4 or view_box[:3] != ["0", "0", "1200"]:
         errors.append(f"{name}: viewBox must start '0 0 1200'")
@@ -336,14 +398,19 @@ def check_svg(figure: Figure, errors: list[str]) -> ET.Element | None:
         errors.append(f"{name}: missing accessible title")
     if desc is None or desc.get("id") != "desc" or len(figure_description(root)) < 80:
         errors.append(f"{name}: description must replace the visible figure")
+    labels = svg_labels(root)
+    if figure_title(root) in labels:
+        errors.append(f"{name}: accessible title must not be rendered as live text")
+    if sum(1 for label in labels if PANEL_LABEL.match(label)) < 2:
+        errors.append(f"{name}: expected compact panel labels such as (a), (b)")
     source = figure.svg.read_text(encoding="utf-8")
     if "prefers-color-scheme: dark" not in source:
         errors.append(f"{name}: missing dark-mode mapping")
     if any(token in source for token in ("<foreignObject", "<script", "<image ")):
         errors.append(f"{name}: raster/HTML/script content is forbidden")
     fonts = [float(value) for value in FONT.findall(source)]
-    if not fonts or min(fonts) < 16:
-        errors.append(f"{name}: every used font style must be at least 16 px")
+    if not fonts or min(fonts) < 18:
+        errors.append(f"{name}: every used font style must be at least 18 px")
     colors = {value.upper() for value in HEX.findall(source)}
     unknown = sorted(colors - ALLOWED_COLORS)
     if unknown:
@@ -356,6 +423,12 @@ def check_svg(figure: Figure, errors: list[str]) -> ET.Element | None:
     ]
     if not backgrounds:
         errors.append(f"{name}: missing fully opaque publication background")
+    bottom_margin = float(root.get("height", "0")) - content_bottom(root)
+    if bottom_margin > BOTTOM_MARGIN_MAX:
+        errors.append(
+            f"{name}: excessive bottom whitespace ({bottom_margin:.1f}px > "
+            f"{BOTTOM_MARGIN_MAX}px)"
+        )
     boxes = check_text_layout(figure, root, errors)
     check_diamond_text_fit(figure, root, boxes, errors)
     check_arrow_routing(figure, root, errors)

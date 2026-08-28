@@ -94,9 +94,6 @@ class Figure:
             0, 0, self.width, self.height, WHITE, "none", 0, rounded=0,
             identifier="canvas",
         )
-        self.text(42, 47, title, size=32, bold=True, max_width=1116)
-        self.text(42, 75, subtitle, size=18, color=INK, max_width=1116)
-        self.line((42, 99), (1158, 99), color=INK, width=2)
 
     def _id(self, prefix: str) -> str:
         identifier = f"{prefix}{self._next_id:03d}"
@@ -320,6 +317,7 @@ class Figure:
         height: float,
         rows: int,
         *,
+        cols: int = 1,
         role: str = "data",
         stroke: str = BORDER,
         stroke_width: float = 1.5,
@@ -331,6 +329,9 @@ class Figure:
         for row in range(1, rows):
             row_y = y + height * row / rows
             self.line((x, row_y), (x + width, row_y), color=stroke, width=1)
+        for col in range(1, cols):
+            col_x = x + width * col / cols
+            self.line((col_x, y), (col_x, y + height), color=stroke, width=1)
 
     def text(
         self,
@@ -338,7 +339,7 @@ class Figure:
         y: float,
         value: str,
         *,
-        size: float = 16,
+        size: float = 18,
         bold: bool = False,
         mono: bool = False,
         color: str = INK,
@@ -346,8 +347,8 @@ class Figure:
         max_width: float | None = None,
         halo: bool = False,
     ) -> None:
-        if size < 16:
-            raise ValueError(f"{self.target.stem}: font below 16 px")
+        if size < 18:
+            raise ValueError(f"{self.target.stem}: font below 18 px")
         estimated = _estimate_text(value, size, mono, bold)
         if max_width is not None and estimated > max_width:
             raise ValueError(
@@ -361,15 +362,13 @@ class Figure:
             if anchor == "end"
             else x
         )
-        self._check_bounds(max(0, left), y - size, min(estimated, self.width), size * 1.25)
+        self._check_bounds(max(0, left), y - size, min(estimated, self.width), size * 1.25        )
         classes = ["mono" if mono else "sans"]
-        if size == 32:
-            classes.append("title")
-        elif size == 22:
+        if size >= 26:
+            classes.append("display")
+        elif size >= 20:
             classes.append("heading")
-        elif size == 18:
-            classes.append("subtitle")
-        elif size == 17:
+        elif size >= 18 and bold:
             classes.append("label")
         else:
             classes.append("body")
@@ -424,8 +423,8 @@ class Figure:
         y: float,
         values: Sequence[str],
         *,
-        size: float = 16,
-        step: float = 24,
+        size: float = 18,
+        step: float = 26,
         bold_first: bool = False,
         mono: bool = False,
         color: str = INK,
@@ -449,7 +448,7 @@ class Figure:
         y: float,
         tokens: Sequence[tuple[str, str, bool]],
         *,
-        size: float = 16,
+        size: float = 18,
         mono: bool = True,
         max_width: float | None = None,
     ) -> None:
@@ -508,7 +507,12 @@ class Figure:
         color: str = INK,
         width: float = 2,
     ) -> None:
-        self._check_bounds(min(start[0], end[0]), min(start[1], end[1]))
+        self._check_bounds(
+            min(start[0], end[0]),
+            min(start[1], end[1]),
+            abs(end[0] - start[0]),
+            abs(end[1] - start[1]),
+        )
         attributes = {
             "x1": start[0],
             "y1": start[1],
@@ -615,7 +619,7 @@ class Figure:
         )
         if label_at and label:
             visible = label if not cadence else f"{label} | {cadence}"
-            label_width = _estimate_text(visible, 16, False, True)
+            label_width = _estimate_text(visible, 18, False, True)
             label_left = (
                 label_at[0] - label_width / 2
                 if label_anchor == "middle"
@@ -624,8 +628,8 @@ class Figure:
                 else label_at[0]
             )
             self._svg.append(
-                f'<rect x="{label_left - 5:.2f}" y="{label_at[1] - 17:.2f}" '
-                f'width="{label_width + 10:.2f}" height="22" rx="3" '
+                f'<rect x="{label_left - 6:.2f}" y="{label_at[1] - 19:.2f}" '
+                f'width="{label_width + 12:.2f}" height="25" rx="2" '
                 f'fill="{WHITE}" fill-opacity="0.96" '
                 f'data-label-background="true"/>'
             )
@@ -633,7 +637,7 @@ class Figure:
                 label_at[0],
                 label_at[1],
                 visible,
-                size=16,
+                size=18,
                 bold=True,
                 color=color,
                 anchor=label_anchor,
@@ -650,20 +654,9 @@ class Figure:
         role: str,
     ) -> None:
         strong, _ = ROLE_COLORS[role]
-        self.circle(44, y, 19, fill=INK, stroke=INK)
-        self.text(44, y + 6, number, size=17, bold=True, color=WHITE, anchor="middle")
-        self.text(74, y + 7, title, size=22, bold=True, color=INK, max_width=560)
-        self.text(
-            1158,
-            y + 6,
-            subtitle,
-            size=16,
-            color=GRAY,
-            anchor="end",
-            max_width=520,
-        )
-        self.line((24, y + 26), (1176, y + 26), color=BORDER, width=1)
-        self.line((24, y + 26), (170, y + 26), color=strong, width=3)
+        label = number if number.startswith("(") else f"({number})"
+        self.text(24, y, label, size=18, bold=True, color=strong, max_width=48)
+        self.text(72, y, title, size=20, bold=True, color=INK, max_width=900)
 
     def card(
         self,
@@ -684,7 +677,7 @@ class Figure:
             x + 16,
             y + 29,
             title,
-            size=17,
+            size=18,
             bold=True,
             color=title_color or strong,
             max_width=width - 32,
@@ -693,7 +686,7 @@ class Figure:
             x + 16,
             y + 59,
             body,
-            size=16,
+            size=18,
             step=24,
             mono=mono_body,
             max_width=width - 32,
@@ -731,23 +724,34 @@ class Figure:
                 stroke_width=2,
                 radius=0,
             )
-            self.text(
-                cursor + field_width / 2,
-                y + height / 2 - 2,
-                label,
-                size=16,
-                bold=True,
-                anchor="middle",
-                max_width=max(20, field_width - 12),
-            )
-            self.text(
-                cursor + field_width / 2,
-                y + height / 2 + 22,
-                f"{bits} bits",
-                size=16,
-                anchor="middle",
-                max_width=max(20, field_width - 12),
-            )
+            if field_width < 78:
+                self.text(
+                    cursor + field_width / 2,
+                    y + height / 2 + 6,
+                    label,
+                    size=18,
+                    bold=True,
+                    anchor="middle",
+                    max_width=max(18, field_width - 8),
+                )
+            else:
+                self.text(
+                    cursor + field_width / 2,
+                    y + height / 2 - 7,
+                    label,
+                    size=18,
+                    bold=True,
+                    anchor="middle",
+                    max_width=max(20, field_width - 12),
+                )
+                self.text(
+                    cursor + field_width / 2,
+                    y + height / 2 + 20,
+                    f"{bits} bits",
+                    size=18,
+                    anchor="middle",
+                    max_width=max(20, field_width - 12),
+                )
             cursor += field_width
 
     def save(self) -> tuple[Path, Path]:
@@ -797,11 +801,10 @@ class Figure:
       }
       .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
       .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
-      .title{font-size:32px;font-weight:700}
-      .subtitle{font-size:18px}
-      .heading{font-size:22px;font-weight:700}
-      .label{font-size:17px;font-weight:700}
-      .body{font-size:16px}
+      .display{font-size:26px;font-weight:700}
+      .heading{font-size:20px;font-weight:700}
+      .label{font-size:18px;font-weight:700}
+      .body{font-size:18px}
 """
         svg = (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.width}" '

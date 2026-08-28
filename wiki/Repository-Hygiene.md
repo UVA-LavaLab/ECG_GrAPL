@@ -3,7 +3,7 @@
 The tracked repository should contain source code, experiment definitions,
 tests, and public documentation only.
 
-## Push these files
+## Track these files
 
 - cache and simulator integration source under `bench/include/`;
 - graph kernels under `bench/src_sim/`, `bench/src_gem5/`, and
@@ -17,7 +17,7 @@ tests, and public documentation only.
   `fig/ecg-figure-fixture.json`, figure generators/validators, Makefile, and
   contribution guidance.
 
-## Keep these files local
+## Leave these paths untracked
 
 - `research/` drafts, notes, literature copies, and private working material;
 - `results/` simulator output and aggregate tables;
@@ -38,7 +38,7 @@ make setup-sniper
 
 The build and experiment commands are in [Reproduction](Reproduction).
 
-## Before pushing
+## Before updating the public repository
 
 ```bash
 python3 -m pytest -q \

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1725" viewBox="0 0 1200 1725" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Degree and traversal analysis for one edge-aligned ReusePlan</title>
-  <desc id="desc">Four numbered bands derive a ReusePlan for the checked adjacency entry adjacency entry 4-&gt;7 (internal 8-&gt;18). The figure shows selected CSR rows, degree-derived tiering, subsequent property-line accesses, compact packing, and the offline/measured-runtime boundary.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="706" viewBox="0 0 1200 706" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">Constructing an edge-aligned ReusePlan</title>
+  <desc id="desc">The figure shows the fixture edge 4-&gt;7, the derived internal row 8-&gt;18, the line tier, the next two line accesses, and the packed record that becomes immutable runtime input.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -28,239 +28,128 @@
       }
       .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
       .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
-      .title{font-size:32px;font-weight:700}
-      .subtitle{font-size:18px}
-      .heading{font-size:22px;font-weight:700}
-      .label{font-size:17px;font-weight:700}
-      .body{font-size:16px}
+      .display{font-size:26px;font-weight:700}
+      .heading{font-size:20px;font-weight:700}
+      .label{font-size:18px;font-weight:700}
+      .body{font-size:18px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1725" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Degree and traversal analysis for one edge-aligned ReusePlan</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">The concrete values come from fig/ecg-figure-fixture.json and its executable test.</text>
-  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">CHECKED WEIGHTED GRAPH</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#98A2B3">9 vertices, 17 undirected edges; unused internal IDs omitted</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="24" y="180" width="780" height="390" rx="6" fill="#F8FAFC" stroke="#475467" stroke-width="2" data-shape="rect" data-x="24" data-y="180" data-width="780" data-height="390"/>
-  <text x="42" y="211" text-anchor="start" class="sans label" fill="#2563EB" font-weight="700">Checked nine-node weighted graph</text>
-  <text x="42" y="238" text-anchor="start" class="sans body" fill="#98A2B3">fixture IDs 0..8; node color shows internal property tier</text>
-  <line x1="95" y1="280" x2="95" y2="425" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="85.0" y="352.5" text-anchor="middle" class="sans body" fill="#98A2B3">2</text>
-  <line x1="95" y1="280" x2="220" y2="335" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="161.52738614266016" y="298.3468496757723" text-anchor="middle" class="sans body" fill="#98A2B3">5</text>
-  <line x1="95" y1="280" x2="740" y2="335" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="416.65037014031947" y="317.4638410817084" text-anchor="middle" class="sans body" fill="#98A2B3">9</text>
-  <line x1="95" y1="425" x2="220" y2="335" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="151.65695274154925" y="371.88465658548506" text-anchor="middle" class="sans body" fill="#98A2B3">1</text>
-  <line x1="95" y1="425" x2="350" y2="440" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="221.9127797804853" y="442.48274373174996" text-anchor="middle" class="sans body" fill="#98A2B3">4</text>
-  <line x1="220" y1="335" x2="365" y2="260" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="287.90577081126236" y="288.6178235684405" text-anchor="middle" class="sans body" fill="#98A2B3">2</text>
-  <line x1="220" y1="335" x2="350" y2="440" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="278.7166289291238" y="395.2794118020372" text-anchor="middle" class="sans body" fill="#98A2B3">3</text>
-  <line x1="220" y1="335" x2="740" y2="335" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="480.0" y="325.0" text-anchor="middle" class="sans body" fill="#98A2B3">7</text>
-  <line x1="365" y1="260" x2="350" y2="440" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="347.5345424175512" y="349.1695452014626" text-anchor="middle" class="sans body" fill="#98A2B3">2</text>
-  <line x1="365" y1="260" x2="500" y2="375" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="438.98466455599794" y="309.8875676951329" text-anchor="middle" class="sans body" fill="#98A2B3">5</text>
-  <line x1="350" y1="440" x2="500" y2="375" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="428.976074376343" y="416.6755562530992" text-anchor="middle" class="sans body" fill="#98A2B3">1</text>
-  <line x1="350" y1="440" x2="620" y2="450" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="485.3701166050988" y="435.00685166233234" text-anchor="middle" class="sans body" fill="#98A2B3">5</text>
-  <line x1="500" y1="375" x2="625" y2="270" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="568.9319208642328" y="330.1570486478961" text-anchor="middle" class="sans body" fill="#98A2B3">2</text>
-  <line x1="500" y1="375" x2="620" y2="450" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="565.2999894000318" y="404.02001695994915" text-anchor="middle" class="sans body" fill="#98A2B3">3</text>
-  <line x1="625" y1="270" x2="620" y2="450" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="612.5038557934728" y="359.72232932759647" text-anchor="middle" class="sans body" fill="#98A2B3">2</text>
-  <line x1="625" y1="270" x2="740" y2="335" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="687.420572566679" y="293.79437161279867" text-anchor="middle" class="sans body" fill="#98A2B3">4</text>
-  <line x1="620" y1="450" x2="740" y2="335" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="686.9190536323562" y="399.71988205115423" text-anchor="middle" class="sans body" fill="#98A2B3">1</text>
-  <path d="M374.98287084416916 440.925291512747 L592.0191846545305 448.96367350572336" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="model-edge" data-flow-underlay="false"/>
-  <text x="52" y="552" text-anchor="start" class="sans body" fill="#0F8A72">T1 hot (green)</text>
-  <text x="215" y="552" text-anchor="start" class="sans body" fill="#C56A13">T2 moderate (amber)</text>
-  <text x="410" y="552" text-anchor="start" class="sans body" fill="#6558C5">T3 cold (purple)</text>
-  <text x="585" y="552" text-anchor="start" class="sans body" fill="#C63C4A">tracked 4 -&gt; 7 (red)</text>
-  <circle cx="95" cy="280" r="24" fill="#FFF7ED" stroke="#C56A13" stroke-width="1"/>
-  <text x="95" y="286" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">0</text>
-  <circle cx="95" cy="425" r="24" fill="#FFF7ED" stroke="#C56A13" stroke-width="1"/>
-  <text x="95" y="431" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">1</text>
-  <circle cx="220" cy="335" r="24" fill="#ECFDF5" stroke="#0F8A72" stroke-width="1"/>
-  <text x="220" y="341" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">2</text>
-  <circle cx="365" cy="260" r="24" fill="#FFF7ED" stroke="#C56A13" stroke-width="1"/>
-  <text x="365" y="266" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">3</text>
-  <circle cx="350" cy="440" r="24" fill="#ECFDF5" stroke="#C63C4A" stroke-width="1"/>
-  <text x="350" y="446" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">4</text>
-  <circle cx="500" cy="375" r="24" fill="#ECFDF5" stroke="#0F8A72" stroke-width="1"/>
-  <text x="500" y="381" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">5</text>
-  <circle cx="625" cy="270" r="24" fill="#F5F3FF" stroke="#6558C5" stroke-width="1"/>
-  <text x="625" y="276" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">6</text>
-  <circle cx="620" cy="450" r="24" fill="#ECFDF5" stroke="#C63C4A" stroke-width="1"/>
-  <text x="620" y="456" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">7</text>
-  <circle cx="740" cy="335" r="24" fill="#FFF7ED" stroke="#C56A13" stroke-width="1"/>
-  <text x="740" y="341" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">8</text>
-  <circle cx="55" cy="500" r="18" fill="#C63C4A" stroke="#C63C4A" stroke-width="1"/>
-  <text x="55" y="506" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">A</text>
-  <text x="86" y="506" text-anchor="start" class="sans label" fill="#C63C4A" font-weight="700">tracked adjacency 4 -&gt; 7</text>
-  <rect x="830" y="180" width="346" height="390" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="830" data-y="180" data-width="346" data-height="390"/>
-  <text x="846" y="212" text-anchor="start" class="sans label" fill="#2563EB" font-weight="700">Outgoing-CSR crosswalk</text>
-  <line x1="830" y1="235" x2="1176" y2="235" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="970" y1="235" x2="970" y2="475" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="830" y1="295" x2="1176" y2="295" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="830" y1="355" x2="1176" y2="355" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="830" y1="415" x2="1176" y2="415" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="830" y1="475" x2="1176" y2="475" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="846" y="272" text-anchor="start" class="mono body" fill="#182230">0 -&gt; 1</text>
-  <text x="986" y="272" text-anchor="start" class="mono body" fill="#182230">[3, 6, 20]</text>
-  <text x="846" y="332" text-anchor="start" class="mono body" fill="#182230">2 -&gt; 6</text>
-  <text x="986" y="332" text-anchor="start" class="mono body" fill="#182230">[1, 3, 7, 8, 20]</text>
-  <text x="846" y="392" text-anchor="start" class="mono body" fill="#182230">4 -&gt; 8</text>
-  <text x="986" y="392" text-anchor="start" class="mono body" fill="#182230">[3, 6, 7, 11, 18]</text>
-  <text x="846" y="452" text-anchor="start" class="mono body" fill="#182230">7 -&gt; 18</text>
-  <text x="986" y="452" text-anchor="start" class="mono body" fill="#182230">[8, 11, 15, 20]</text>
-  <text x="846" y="515" text-anchor="start" class="mono body" fill="#C63C4A" font-weight="700">tracked: 4-&gt;7 = internal 8-&gt;18</text>
-  <text x="846" y="535" text-anchor="start" class="sans body" fill="#6558C5">PageRank: incoming CSR</text>
-  <text x="846" y="562" text-anchor="start" class="sans body" fill="#6558C5">frontier kernels: outgoing CSR</text>
-  <circle cx="44" cy="615" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="621" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="622" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">DEGREE-DERIVED REUSE TIER</text>
-  <text x="1158" y="621" text-anchor="end" class="sans body" fill="#98A2B3">outgoing traversal: sort by d_in, then vertex ID</text>
-  <line x1="24" y1="641" x2="1176" y2="641" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="641" x2="170" y2="641" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="24" y="657" width="550" height="245" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="657" data-width="550" data-height="245"/>
-  <text x="40" y="688" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Stable degree rank (hot fraction = 0.15)</text>
-  <line x1="24" y1="710" x2="574" y2="710" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="210" y1="710" x2="210" y2="902" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="345" y1="710" x2="345" y2="902" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="455" y1="710" x2="455" y2="902" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="110" y="735" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">fixture / internal</text>
-  <text x="277" y="735" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">d_in</text>
-  <text x="400" y="735" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">rank</text>
-  <text x="515" y="735" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">tier</text>
-  <text x="40" y="770" text-anchor="start" class="mono body" fill="#182230">v2 / int6</text>
-  <text x="277" y="770" text-anchor="middle" class="mono body" fill="#182230">5</text>
-  <text x="400" y="770" text-anchor="middle" class="mono body" fill="#182230">0</text>
-  <text x="515" y="770" text-anchor="middle" class="mono body" fill="#182230">1</text>
-  <text x="40" y="800" text-anchor="start" class="mono body" fill="#182230">v4 / int8</text>
-  <text x="277" y="800" text-anchor="middle" class="mono body" fill="#182230">5</text>
-  <text x="400" y="800" text-anchor="middle" class="mono body" fill="#182230">1</text>
-  <text x="515" y="800" text-anchor="middle" class="mono body" fill="#182230">1</text>
-  <text x="40" y="830" text-anchor="start" class="mono body" fill="#182230">v5 / int11</text>
-  <text x="277" y="830" text-anchor="middle" class="mono body" fill="#182230">4</text>
-  <text x="400" y="830" text-anchor="middle" class="mono body" fill="#182230">2</text>
-  <text x="515" y="830" text-anchor="middle" class="mono body" fill="#182230">1</text>
-  <text x="40" y="860" text-anchor="start" class="mono body" fill="#182230">v7 / int18</text>
-  <text x="277" y="860" text-anchor="middle" class="mono body" fill="#182230">4</text>
-  <text x="400" y="860" text-anchor="middle" class="mono body" fill="#182230">3</text>
-  <text x="515" y="860" text-anchor="middle" class="mono body" fill="#182230">1</text>
-  <text x="40" y="890" text-anchor="start" class="mono body" fill="#182230">v8 / int20</text>
-  <text x="277" y="890" text-anchor="middle" class="mono body" fill="#182230">4</text>
-  <text x="400" y="890" text-anchor="middle" class="mono body" fill="#182230">4</text>
-  <text x="515" y="890" text-anchor="middle" class="mono body" fill="#182230">2</text>
-  <rect x="600" y="657" width="576" height="245" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="600" data-y="657" data-width="576" data-height="245"/>
-  <text x="616" y="688" text-anchor="start" class="sans label" fill="#182230" font-weight="700">64-byte property line: 16 x 4-byte vertices</text>
-  <rect x="616" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="616" data-y="725" data-width="34" data-height="62"/>
-  <text x="633.0" y="763" text-anchor="middle" class="mono body" fill="#182230">16</text>
-  <rect x="650" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="650" data-y="725" data-width="34" data-height="62"/>
-  <text x="667.0" y="763" text-anchor="middle" class="mono body" fill="#182230">17</text>
-  <rect x="684" y="725" width="34" height="62" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1" data-shape="rect" data-x="684" data-y="725" data-width="34" data-height="62"/>
-  <text x="701.0" y="763" text-anchor="middle" class="mono body" fill="#182230">18</text>
-  <rect x="718" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="718" data-y="725" data-width="34" data-height="62"/>
-  <text x="735.0" y="763" text-anchor="middle" class="mono body" fill="#182230">19</text>
-  <rect x="752" y="725" width="34" height="62" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1" data-shape="rect" data-x="752" data-y="725" data-width="34" data-height="62"/>
-  <text x="769.0" y="763" text-anchor="middle" class="mono body" fill="#182230">20</text>
-  <rect x="786" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="786" data-y="725" data-width="34" data-height="62"/>
-  <text x="803.0" y="763" text-anchor="middle" class="mono body" fill="#182230">21</text>
-  <rect x="820" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="820" data-y="725" data-width="34" data-height="62"/>
-  <text x="837.0" y="763" text-anchor="middle" class="mono body" fill="#182230">22</text>
-  <rect x="854" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="854" data-y="725" data-width="34" data-height="62"/>
-  <text x="871.0" y="763" text-anchor="middle" class="mono body" fill="#182230">23</text>
-  <rect x="888" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="888" data-y="725" data-width="34" data-height="62"/>
-  <text x="905.0" y="763" text-anchor="middle" class="mono body" fill="#182230">24</text>
-  <rect x="922" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="922" data-y="725" data-width="34" data-height="62"/>
-  <text x="939.0" y="763" text-anchor="middle" class="mono body" fill="#182230">25</text>
-  <rect x="956" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="956" data-y="725" data-width="34" data-height="62"/>
-  <text x="973.0" y="763" text-anchor="middle" class="mono body" fill="#182230">26</text>
-  <rect x="990" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="990" data-y="725" data-width="34" data-height="62"/>
-  <text x="1007.0" y="763" text-anchor="middle" class="mono body" fill="#182230">27</text>
-  <rect x="1024" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="1024" data-y="725" data-width="34" data-height="62"/>
-  <text x="1041.0" y="763" text-anchor="middle" class="mono body" fill="#182230">28</text>
-  <rect x="1058" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="1058" data-y="725" data-width="34" data-height="62"/>
-  <text x="1075.0" y="763" text-anchor="middle" class="mono body" fill="#182230">29</text>
-  <rect x="1092" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="1092" data-y="725" data-width="34" data-height="62"/>
-  <text x="1109.0" y="763" text-anchor="middle" class="mono body" fill="#182230">30</text>
-  <rect x="1126" y="725" width="34" height="62" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1" data-shape="rect" data-x="1126" data-y="725" data-width="34" data-height="62"/>
-  <text x="1143.0" y="763" text-anchor="middle" class="mono body" fill="#182230">31</text>
-  <text x="616" y="825" text-anchor="start" class="mono body" fill="#182230">line tier = min(vertex tiers)</text>
-  <text x="616" y="855" text-anchor="start" class="mono body" fill="#0F8A72" font-weight="700">min(T18=1, T20=2) = T1 (hot)</text>
-  <text x="616" y="885" text-anchor="start" class="sans body" fill="#C63C4A">tier 0 is reserved for invalid metadata</text>
-  <circle cx="44" cy="947" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="953" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="954" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">TWO SUBSEQUENT LINE ACCESSES</text>
-  <text x="1158" y="953" text-anchor="end" class="sans body" fill="#98A2B3">search begins after the current outer vertex</text>
-  <line x1="24" y1="973" x2="1176" y2="973" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="973" x2="170" y2="973" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="24" y="989" width="1152" height="245" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="989" data-width="1152" data-height="245"/>
-  <line x1="80" y1="1080" x2="1120" y2="1080" stroke="#182230" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="113.54838709677419" cy="1080" r="10" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
-  <text x="113.54838709677419" y="1052" text-anchor="middle" class="sans body" fill="#98A2B3">1</text>
-  <circle cx="281.2903225806451" cy="1080" r="10" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
-  <text x="281.2903225806451" y="1052" text-anchor="middle" class="sans body" fill="#98A2B3">6</text>
-  <circle cx="348.38709677419354" cy="1080" r="10" fill="#FFFFFF" stroke="#C56A13" stroke-width="1"/>
-  <text x="348.38709677419354" y="1052" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">8</text>
-  <circle cx="449.03225806451616" cy="1080" r="10" fill="#FFFFFF" stroke="#0F8A72" stroke-width="1"/>
-  <text x="449.03225806451616" y="1052" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">11</text>
-  <circle cx="583.2258064516129" cy="1080" r="10" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
-  <text x="583.2258064516129" y="1052" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">15</text>
-  <circle cx="683.8709677419355" cy="1080" r="10" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
-  <text x="683.8709677419355" y="1052" text-anchor="middle" class="sans body" fill="#98A2B3">18</text>
-  <circle cx="750.9677419354839" cy="1080" r="10" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
-  <text x="750.9677419354839" y="1052" text-anchor="middle" class="sans body" fill="#98A2B3">20</text>
-  <text x="40" y="1020" text-anchor="start" class="mono body" fill="#6558C5" font-weight="700">access-source vertices = [1, 6, 8, 11, 15, 18, 20]</text>
-  <text x="250" y="1140" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">current u=8</text>
-  <text x="540" y="1140" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">next u=11 -&gt; e1=11</text>
-  <text x="870" y="1140" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">second u=15 -&gt; e2=15</text>
-  <text x="600" y="1190" text-anchor="middle" class="mono body" fill="#182230">epoch = floor(u * 32 / 32); same-row line accesses are preserved; ID order wraps at |V|</text>
-  <circle cx="44" cy="1279" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="1285" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">4</text>
-  <text x="74" y="1286" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">RECORD PACKING AND VALIDATION</text>
-  <text x="1158" y="1285" text-anchor="end" class="sans body" fill="#98A2B3">preprocessing produces an immutable runtime input</text>
-  <line x1="24" y1="1305" x2="1176" y2="1305" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="1305" x2="170" y2="1305" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="1340" width="143.33333333333334" height="90" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="1340" data-width="143.33333333333334" data-height="90"/>
-  <text x="111.66666666666667" y="1383.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">dest 18</text>
-  <text x="111.66666666666667" y="1407.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
-  <rect x="183.33333333333334" y="1340" width="90.0" height="90" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="183.33333333333334" data-y="1340" data-width="90.0" data-height="90"/>
-  <text x="228.33333333333334" y="1383.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">T1</text>
-  <text x="228.33333333333334" y="1407.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
-  <rect x="273.33333333333337" y="1340" width="143.33333333333334" height="90" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="273.33333333333337" data-y="1340" data-width="143.33333333333334" data-height="90"/>
-  <text x="345.00000000000006" y="1383.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">e1 11</text>
-  <text x="345.00000000000006" y="1407.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
-  <rect x="416.66666666666674" y="1340" width="143.33333333333334" height="90" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="416.66666666666674" data-y="1340" data-width="143.33333333333334" data-height="90"/>
-  <text x="488.3333333333334" y="1383.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">e2 15</text>
-  <text x="488.3333333333334" y="1407.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
-  <text x="40" y="1470" text-anchor="start" class="mono body" fill="#C56A13" font-weight="700">compact width = 5 + 2 + 2*5 = 17 bits</text>
-  <polygon points="700,1340.0 770.0,1390 700,1440.0 630.0,1390" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="700" data-cy="1390" data-width="140" data-height="100"/>
-  <text x="700" y="1396" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">header</text>
-  <text x="700" y="1460" text-anchor="middle" class="sans body" fill="#182230">graph + config</text>
-  <polygon points="900,1340.0 970.0,1390 900,1440.0 830.0,1390" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="900" data-cy="1390" data-width="140" data-height="100"/>
-  <text x="900" y="1396" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">offsets</text>
-  <text x="900" y="1460" text-anchor="middle" class="sans body" fill="#182230">record count</text>
-  <polygon points="1100,1340.0 1170.0,1390 1100,1440.0 1030.0,1390" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="1100" data-cy="1390" data-width="140" data-height="100"/>
-  <text x="1100" y="1396" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">hash/width</text>
-  <text x="1100" y="1460" text-anchor="middle" class="sans body" fill="#182230">payload identity</text>
-  <path d="M560 1390 L630 1390" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="compact width"/>
-  <path d="M770 1390 L830 1390" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="header"/>
-  <path d="M970 1390 L1030 1390" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="offsets"/>
-  <text x="650" y="1480" text-anchor="start" class="sans body" fill="#C63C4A">builder executes outside the measured ROI</text>
-  <text x="650" y="1504" text-anchor="start" class="sans body" fill="#C63C4A">guest aborts on header/offset/hash/width mismatch</text>
-  <text x="650" y="1528" text-anchor="start" class="sans body" fill="#C63C4A">runtime streams validated edge order</text>
-  <path d="M190 1665 L1010 1665" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="validated edge-aligned record stream" data-flow-cadence="one record per governed edge access"/>
-  <rect x="257.56" y="1633.00" width="684.88" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="600" y="1650" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">validated edge-aligned record stream | one record per governed edge access</text>
+  <rect x="0" y="0" width="1200" height="706" fill="#FFFFFF"/>
+  <rect x="24" y="24" width="1152" height="320" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="24" data-width="1152" data-height="320"/>
+  <text x="40" y="52" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(a)</text>
+  <text x="82" y="52" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Fixture graph and mapped row</text>
+  <line x1="40" y1="70" x2="1160" y2="70" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="146" cy="194" r="24" fill="#FFF7ED" stroke="#C56A13" stroke-width="1"/>
+  <text x="146" y="200" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">4</text>
+  <text x="146" y="288" text-anchor="middle" class="sans body" fill="#2563EB">fixture 9-node graph</text>
+  <line x1="146" y1="194" x2="62" y2="114" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="62" cy="114" r="22" fill="#FFFFFF" stroke="#2563EB" stroke-width="1"/>
+  <text x="62" y="120" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">1</text>
+  <text x="104.0" y="144.0" text-anchor="middle" class="sans body" fill="#98A2B3">w4</text>
+  <line x1="146" y1="194" x2="128" y2="88" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="128" cy="88" r="22" fill="#FFFFFF" stroke="#2563EB" stroke-width="1"/>
+  <text x="128" y="94" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">2</text>
+  <text x="137.0" y="131.0" text-anchor="middle" class="sans body" fill="#98A2B3">w3</text>
+  <line x1="146" y1="194" x2="212" y2="106" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="212" cy="106" r="22" fill="#FFFFFF" stroke="#2563EB" stroke-width="1"/>
+  <text x="212" y="112" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">3</text>
+  <text x="179.0" y="140.0" text-anchor="middle" class="sans body" fill="#98A2B3">w2</text>
+  <line x1="146" y1="194" x2="238" y2="202" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="238" cy="202" r="22" fill="#FFFFFF" stroke="#2563EB" stroke-width="1"/>
+  <text x="238" y="208" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">5</text>
+  <text x="192.0" y="188.0" text-anchor="middle" class="sans body" fill="#98A2B3">w1</text>
+  <path d="M166 212 L242 262" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="model-edge" data-flow-underlay="false"/>
+  <circle cx="262" cy="278" r="22" fill="#F5F3FF" stroke="#C63C4A" stroke-width="1"/>
+  <text x="262" y="284" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">7</text>
+  <text x="204.0" y="226.0" text-anchor="middle" class="sans body" fill="#98A2B3">w5</text>
+  <text x="56" y="314" text-anchor="start" class="sans body" fill="#C63C4A">tracked 4-&gt;7, w5</text>
+  <rect x="350" y="94" width="360" height="210" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="350" data-y="94" data-width="360" data-height="210"/>
+  <text x="530.0" y="120" text-anchor="middle" class="sans label" fill="#2563EB" font-weight="700">Internal CSR row u=8</text>
+  <text x="530" y="148" text-anchor="middle" class="mono body" fill="#182230">row_ptr[8]=14; row_ptr[9]=19</text>
+  <rect x="380" y="176" width="300" height="92" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="380" data-y="176" data-width="300" data-height="92"/>
+  <line x1="380" y1="222.0" x2="680" y2="222.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="440.0" y1="176" x2="440.0" y2="268" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="500.0" y1="176" x2="500.0" y2="268" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="560.0" y1="176" x2="560.0" y2="268" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="620.0" y1="176" x2="620.0" y2="268" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="410" y="204" text-anchor="middle" class="sans body" fill="#98A2B3">14</text>
+  <text x="470" y="204" text-anchor="middle" class="sans body" fill="#98A2B3">15</text>
+  <text x="530" y="204" text-anchor="middle" class="sans body" fill="#98A2B3">16</text>
+  <text x="590" y="204" text-anchor="middle" class="sans body" fill="#98A2B3">17</text>
+  <text x="650" y="204" text-anchor="middle" class="sans body" fill="#98A2B3">18</text>
+  <text x="410" y="250" text-anchor="middle" class="mono body" fill="#182230">3</text>
+  <text x="470" y="250" text-anchor="middle" class="mono body" fill="#182230">6</text>
+  <text x="530" y="250" text-anchor="middle" class="mono body" fill="#182230">7</text>
+  <text x="590" y="250" text-anchor="middle" class="mono body" fill="#182230">11</text>
+  <text x="650" y="250" text-anchor="middle" class="mono body" fill="#182230">18</text>
+  <text x="530" y="292" text-anchor="middle" class="sans body" fill="#C63C4A">edge_pos 18 -&gt; dest 18</text>
+  <rect x="754" y="94" width="390" height="210" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="754" data-y="94" data-width="390" data-height="210"/>
+  <text x="949.0" y="120" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">Tier from access counts</text>
+  <rect x="784" y="148" width="330" height="116" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="784" data-y="148" data-width="330" data-height="116"/>
+  <line x1="784" y1="177.0" x2="1114" y2="177.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="784" y1="206.0" x2="1114" y2="206.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="784" y1="235.0" x2="1114" y2="235.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="866.5" y1="148" x2="866.5" y2="264" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="949.0" y1="148" x2="949.0" y2="264" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="1031.5" y1="148" x2="1031.5" y2="264" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="825.0" y="176" text-anchor="middle" class="mono label" fill="#182230" font-weight="700">vertex</text>
+  <text x="907.5" y="176" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">d_in</text>
+  <text x="990.0" y="176" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">rank</text>
+  <text x="1072.5" y="176" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">tier</text>
+  <text x="825.0" y="205" text-anchor="middle" class="mono body" fill="#182230">v2/int6</text>
+  <text x="907.5" y="205" text-anchor="middle" class="mono body" fill="#182230">5</text>
+  <text x="990.0" y="205" text-anchor="middle" class="mono body" fill="#182230">0</text>
+  <text x="1072.5" y="205" text-anchor="middle" class="sans body" fill="#182230">T1</text>
+  <text x="825.0" y="234" text-anchor="middle" class="mono body" fill="#182230">v4/int8</text>
+  <text x="907.5" y="234" text-anchor="middle" class="mono body" fill="#182230">5</text>
+  <text x="990.0" y="234" text-anchor="middle" class="mono body" fill="#182230">1</text>
+  <text x="1072.5" y="234" text-anchor="middle" class="sans body" fill="#182230">T1</text>
+  <text x="825.0" y="263" text-anchor="middle" class="mono body" fill="#182230">v7/int18</text>
+  <text x="907.5" y="263" text-anchor="middle" class="mono body" fill="#182230">4</text>
+  <text x="990.0" y="263" text-anchor="middle" class="mono body" fill="#182230">3</text>
+  <text x="1072.5" y="263" text-anchor="middle" class="sans body" fill="#182230">T1</text>
+  <text x="949" y="292" text-anchor="middle" class="mono body" fill="#0F8A72">min(T18=1, T20=2) = T1 (hot)</text>
+  <rect x="24" y="432" width="556" height="246" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="24" data-y="432" data-width="556" data-height="246"/>
+  <text x="40" y="460" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(b)</text>
+  <text x="82" y="460" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Next two line accesses</text>
+  <line x1="40" y1="478" x2="564" y2="478" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="74" y1="560" x2="538" y2="560" stroke="#182230" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="74.0" y1="542" x2="74.0" y2="578" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="74.0" cy="560" r="10" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
+  <text x="74.0" y="522" text-anchor="middle" class="sans label" fill="#98A2B3" font-weight="700">0</text>
+  <line x1="193.74193548387098" y1="542" x2="193.74193548387098" y2="578" stroke="#C56A13" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="193.74193548387098" cy="560" r="10" fill="#FFFFFF" stroke="#C56A13" stroke-width="1"/>
+  <text x="193.74193548387098" y="522" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">8</text>
+  <line x1="238.6451612903226" y1="542" x2="238.6451612903226" y2="578" stroke="#0F8A72" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="238.6451612903226" cy="560" r="10" fill="#FFFFFF" stroke="#0F8A72" stroke-width="1"/>
+  <text x="238.6451612903226" y="522" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">11</text>
+  <line x1="298.51612903225805" y1="542" x2="298.51612903225805" y2="578" stroke="#6558C5" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="298.51612903225805" cy="560" r="10" fill="#FFFFFF" stroke="#6558C5" stroke-width="1"/>
+  <text x="298.51612903225805" y="600" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">15</text>
+  <line x1="538.0" y1="542" x2="538.0" y2="578" stroke="#98A2B3" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="538.0" cy="560" r="10" fill="#FFFFFF" stroke="#98A2B3" stroke-width="1"/>
+  <text x="538.0" y="522" text-anchor="middle" class="sans label" fill="#98A2B3" font-weight="700">31</text>
+  <text x="302" y="628" text-anchor="middle" class="mono body" fill="#6558C5">0x80000040 sources: [1, 6, 8, 11, 15, 18, 20]</text>
+  <text x="302" y="654" text-anchor="middle" class="mono body" fill="#C63C4A">current 8 -&gt; e1 11 via 11 -&gt; e2 15 via 15</text>
+  <rect x="604" y="432" width="572" height="246" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="604" data-y="432" data-width="572" data-height="246"/>
+  <text x="620" y="460" text-anchor="start" class="sans label" fill="#182230" font-weight="700">(c)</text>
+  <text x="662" y="460" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">Packed record and validation</text>
+  <line x1="620" y1="478" x2="1160" y2="478" stroke="#98A2B3" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="630" y="514" width="143.33333333333334" height="92" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="630" data-y="514" data-width="143.33333333333334" data-height="92"/>
+  <text x="701.6666666666666" y="553.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">dest 18</text>
+  <text x="701.6666666666666" y="580.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
+  <rect x="773.3333333333334" y="514" width="90.0" height="92" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="773.3333333333334" data-y="514" data-width="90.0" data-height="92"/>
+  <text x="818.3333333333334" y="553.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">T1</text>
+  <text x="818.3333333333334" y="580.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="863.3333333333334" y="514" width="143.33333333333334" height="92" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="2" data-shape="rect" data-x="863.3333333333334" data-y="514" data-width="143.33333333333334" data-height="92"/>
+  <text x="935.0" y="553.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">e1 11</text>
+  <text x="935.0" y="580.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
+  <rect x="1006.6666666666667" y="514" width="143.33333333333334" height="92" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="1006.6666666666667" data-y="514" data-width="143.33333333333334" data-height="92"/>
+  <text x="1078.3333333333335" y="553.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">e2 15</text>
+  <text x="1078.3333333333335" y="580.0" text-anchor="middle" class="sans body" fill="#182230">5 bits</text>
+  <text x="890" y="642" text-anchor="middle" class="mono body" fill="#C56A13">compact width = 5 + 2 + 2*5 = 17 bits</text>
+  <text x="680" y="666" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">header</text>
+  <text x="890" y="666" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">offsets</text>
+  <text x="1100" y="666" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">hash/width</text>
+  <line x1="730" y1="656" x2="840" y2="656" stroke="#C63C4A" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="940" y1="656" x2="1050" y2="656" stroke="#C63C4A" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
 </svg>

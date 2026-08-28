@@ -10,25 +10,81 @@ ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_PAGES = (
     ROOT / "README.md",
     ROOT / "CONTRIBUTING.md",
+    ROOT / "fig/README.md",
     ROOT / "wiki/Home.md",
     ROOT / "wiki/ReusePlan-FlowThrough.md",
     ROOT / "wiki/RISC-V-Instruction-Path.md",
+    ROOT / "wiki/Property-to-Cache-Walkthrough.md",
     ROOT / "wiki/Evaluation-Methodology.md",
+    ROOT / "wiki/Related-Work.md",
     ROOT / "wiki/Reproduction.md",
     ROOT / "wiki/Repository-Hygiene.md",
 )
 
 
 def test_public_pages_use_direct_project_language():
-    forbidden = (
+    direct_language_pages = (
+        ROOT / "README.md",
+        ROOT / "fig/README.md",
+        *(ROOT / "wiki").glob("*.md"),
+    )
+    forbidden_phrases = (
+        "reading spine",
+        "reader graph",
+        "future readers",
+        "incoming-neighbor",
+        "outgoing-neighbor",
+        "access-source vertex",
+        "paper-first",
+        "publication vector",
+        "whole cells",
+        "audit inspection",
+        "thin cache_sim",
+        "closest generic",
+        "closest design",
+        "rrip_first victim",
+    )
+    for path in direct_language_pages:
+        text = path.read_text(errors="ignore").lower()
+        for phrase in forbidden_phrases:
+            assert phrase not in text, f"{path} contains {phrase!r}"
+
+    operational_forbidden = (
         "hpca",
         "go/no-go",
         "claim gate",
     )
-    for path in PUBLIC_PAGES:
+    for path in (
+            ROOT / "README.md",
+            ROOT / "wiki/Home.md",
+            ROOT / "wiki/ReusePlan-FlowThrough.md",
+            ROOT / "wiki/RISC-V-Instruction-Path.md",
+            ROOT / "wiki/Evaluation-Methodology.md",
+            ROOT / "wiki/Reproduction.md",
+            ROOT / "wiki/Repository-Hygiene.md"):
         text = path.read_text(errors="ignore").lower()
-        for term in forbidden:
+        for term in operational_forbidden:
             assert term not in text, f"{path} contains {term!r}"
+
+
+def test_graph_direction_language_is_mathematically_explicit():
+    readme = (ROOT / "README.md").read_text()
+    guide = (ROOT / "wiki/ReusePlan-FlowThrough.md").read_text()
+    for text in (readme, guide):
+        assert "N_in(v)" in text
+        assert "d_in(v)" in text
+        assert "N_out(v)" in text
+        assert "d_out(v)" in text
+    assert "property `p[v]` is read once for each source" in readme
+    assert "property-request count is therefore `d_out(v)`" in readme
+
+
+def test_reproduction_requires_the_iteration_one_gate():
+    reproduction = (ROOT / "wiki/Reproduction.md").read_text()
+    assert "--phase early-stop" in reproduction
+    assert '"iteration_8_authorized": true' in reproduction
+    assert reproduction.index("--phase early-stop") < reproduction.index(
+        "--only 91")
 
 
 def test_public_links_resolve():

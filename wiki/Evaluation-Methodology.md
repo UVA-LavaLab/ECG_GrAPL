@@ -3,9 +3,9 @@
 This page defines what each ECG experiment can establish. It contains no
 performance results.
 
-### Figure 1 — Evidence boundary for ECG architecture claims
+### Figure 1 — Evaluation evidence and admissible claims
 
-![Evidence hierarchy separating gem5 O3 architectural timing, cache_sim functional traffic, Sniper modeled direction, row acceptance receipts, and optimistic P-OPT limits](../fig/wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg)
+![Evidence hierarchy separating gem5 O3 architectural timing, cache_sim functional cache and traffic evidence, Sniper matched-work modeled cache and traffic evidence, row acceptance receipts, and optimistic P-OPT limits](../fig/wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg)
 
 **Figure 1.** A result row is accepted only after mechanism activity and
 semantic output are both verified.
@@ -14,16 +14,16 @@ semantic output are both verified.
 
 | Simulator | Valid use | Explicit limit |
 |---|---|---|
-| **gem5 O3** | architectural execution time, decoded ISA path, exact dynamic Request binding, native LSQ/MSHR/cache behavior | sampled graphs and bounded detailed execution |
-| **cache_sim** | shared victim logic, functional cache behavior, prefetch/traffic accounting, large graph sweeps | no cycle or instruction model; incomplete native runtime request population |
-| **Sniper** | equal-semantic-work cache and traffic direction at larger scale | time is not ReuseBind speedup evidence; delivery is modeled |
+| **gem5 O3** | architectural execution time, decoded ISA path, dynamic Request binding, native LSQ/MSHR/cache behavior | sampled graphs and bounded detailed simulation |
+| **cache_sim** | shared victim logic, functional cache behavior, prefetch/traffic accounting, large graph sweeps | no cycle or instruction model; native runtime Requests are abstracted |
+| **Sniper** | matched-work modeled cache and traffic evidence at larger scale | time is not ReuseBind speedup evidence; delivery and pipeline behavior are modeled |
 
 Only gem5 O3 execution time is used for architectural speedup. cache_sim does
-not model cycles or instructions. Sniper time is not used as a ReuseBind
-speedup. Every simulator is compared with its own same-build, same-cell
+not model cycles or instructions. Sniper time is not used as ReuseBind speedup
+evidence. Every simulator is compared with its own same-build, same-cell
 baseline; absolute miss rates and timing are not compared across simulators.
 
-The default indexed Sniper ReusePlan path uses exact per-edge delivery markers.
+The default indexed Sniper ReusePlan path uses per-edge delivery markers.
 The computed fused sideband remains diagnostic and rejects source/line cases
 whose per-edge hints cannot be represented consistently.
 
@@ -38,8 +38,8 @@ An experiment row must establish:
 5. P-OPT context, matrix, and phase-two queries are active when required; and
 6. semantic output agrees across every policy row in the matched group.
 
-One failed peer invalidates group timing. Memory-order violations, dependency
-conflicts, and squashes are O3 diagnostics; semantic receipts decide
+If any matched row fails, group timing is invalid. Memory-order violations,
+dependency conflicts, and squashes are O3 diagnostics; semantic receipts decide
 architectural correctness.
 
 ## 3. Structural FlowThrough fairness
@@ -54,8 +54,9 @@ Receipts are backend-specific:
 - gem5: positive structural no-allocate miss targets; and
 - Sniper: positive structural read and fill-write counts.
 
-This control removes a placement privilege; it does not equalize record width,
-matrix traffic, instruction count, or victim quality.
+This control removes a policy-specific structural allocation advantage; it does
+not equalize record width, matrix traffic, instruction count, or victim
+quality.
 
 ## 4. Primary quantities
 
@@ -96,9 +97,10 @@ Counterfactual instruction normalization is a sensitivity, not a measurement.
 ## 5. P-OPT accounting
 
 Analytic P-OPT charges reserved LLC capacity and cumulative matrix traffic. It
-sets `popt_target_time_charged=0`, so matrix-stream latency is omitted together
-with target-time bandwidth, queueing, and contention. Its timing is therefore
-an optimistic P-OPT bound, not a realistic target-time implementation.
+sets `popt_target_time_charged=0`, so target-time lookup latency and
+matrix-stream latency are omitted together with target-time bandwidth,
+queueing, and contention. Its timing is therefore an optimistic lower bound,
+not a realistic target-time implementation.
 
 The reference matrix assumes an ordered sweep. Final reference rows are
 limited to PageRank and Connected Components. BFS and SSSP comparisons are
@@ -110,9 +112,13 @@ cumulative stream traffic, not a third resident column.
 
 ## 6. Workloads and campaign roles
 
-The deterministic PageRank study uses sampled web-Google, soc-pokec, and
-cit-Patents cells. Iteration counts are 1, 2, 4, and 8. Exact hashes,
-geometries, and commands are in
+The literature-scale PageRank screen uses fixed 262,144-vertex samples of
+web-Google, Pokec, Patents, roadNet-CA, LiveJournal, and Orkut at iteration
+counts 1 and 8. Its hashes, geometries, policy roles, and decision thresholds
+are in `pagerank_literature_scale.json`.
+
+The earlier three-graph sensitivity study uses web-Google, Pokec, and Patents
+at iteration counts 1, 2, 4, and 8. Its configuration is
 [`pagerank_study.json`](https://github.com/UVA-LavaLab/ECG_GrAPL/blob/main/scripts/experiments/ecg/configs/pagerank_study.json).
 
 The publication corpus must include web-Google, Pokec, Patents, roadNet-CA,
@@ -120,15 +126,15 @@ LiveJournal, and Orkut; Twitter-2010 is the cache-only stress case.
 
 - gem5 O3 supplies compact PageRank architectural timing.
 - cache_sim supplies full-graph all-kernel replacement and traffic.
-- Sniper supplies bounded equal-work cache/traffic corroboration.
+- Sniper supplies bounded matched-work cache/traffic corroboration.
 
-Selector generations 1 and 2 both failed their preregistered
-representativeness/regret gates. They are retained as negative diagnostics and
-must not be presented as detailed-simulator performance policies.
+Selector generations 1 and 2 did not satisfy the retained representativeness
+and regret checks. They are retained as negative diagnostics and must not be
+presented as detailed-simulator performance policies.
 
 ## 7. Publication policy
 
 Preliminary numbers and intermediate choices remain local. Tables and measured
 figures are published only after the final frozen campaign, preprocessing
-costs, record footprints, traffic decomposition, and physical metadata/control
-costs are complete.
+costs, record data footprints, traffic decomposition, and physical
+metadata/control costs are complete.

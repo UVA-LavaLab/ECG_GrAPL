@@ -2,68 +2,71 @@
 
 # ECG Next
 
-**ReusePlan and FlowThrough cache architecture for irregular graph analytics**
+**ReusePlan, ReuseBind, and FlowThrough cache mechanisms for irregular graph
+analytics**
 
 ECG Next derives line-level reuse guidance from the adjacency traversal used by
-each graph kernel, stores it in an edge-aligned ReusePlan, binds it to the exact
-property request, and uses it to refine last-level-cache replacement.
-FlowThrough is a separate placement mechanism for low-reuse structural
-records.
+each graph kernel. **ReusePlan** is the offline edge-aligned metadata record,
+**ReuseBind** is the Request extension attached to the consuming property load,
+and **FlowThrough** is the no-allocate decision for eligible structural misses.
+These mechanisms do not change graph results or property values.
 
-For an outgoing-neighbor traversal, accesses to property `p[v]` originate from
-the in-neighbors of `v`, so the property-access count is the in-degree
-`d_in(v)`. For an incoming-neighbor traversal, they originate from the
-out-neighbors of `v`, so the count is the out-degree `d_out(v)`.
+For an out-neighbor traversal, property `p[v]` is read once for each source
+vertex in `N_in(v)`; its property-request count is therefore `d_in(v)`. For an
+in-neighbor (pull) traversal, `p[v]` is read once for each destination vertex in
+`N_out(v)`; its property-request count is therefore `d_out(v)`.
 
-## ECG Next: offline guidance to request-bound LLC state
+## Architecture overview
 
-![System overview showing ECG offline record construction, the two-load RISC-V request path, LLC replacement state, and simulator evidence boundaries](fig/wiki/home/home-f01-system-overview.svg)
+![System overview showing ECG offline record construction, the two-load RISC-V instruction path, LLC replacement state, and simulator evidence boundaries](fig/wiki/home/home-f01-system-overview.svg)
 
 The architecture keeps four boundaries explicit:
 
 1. **Offline construction:** a kernel-direction-aware graph pass emits immutable
    ReusePlan records in canonical CSR order.
 2. **Two dynamic loads:** a record load produces an explicit register operand;
-   a dependent property load issues the architectural data request.
+   a dependent property load issues the consuming memory Request.
 3. **Request-bound state:** gem5 O3 attaches destination, tier, two epochs,
-   current epoch, context, and sequence to that exact property Request.
-4. **LLC policy:** RRIP first forms the eligible set; an old structural line is
-   preferred, otherwise the farthest stamped property line is selected.
+   current epoch, context, and sequence to that property Request through
+   ReuseBind.
+4. **LLC policy:** RRIP-first forms the eligible set, selects the oldest
+   eligible non-property line when one exists, and otherwise selects the
+   property line with the largest valid reuse distance.
 
 FlowThrough preserves translation, private-cache behavior, LLC hits, miss
-service, and response. It changes only whether an eligible returning miss
-allocates in the LLC. If a coalesced MSHR also contains an allocating target,
-the shared fill still allocates.
+service, and response. It changes only whether an eligible returning structural
+miss receives fill allocation in the LLC. If a coalesced MSHR also contains an
+allocating target, the shared fill still allocates.
 
 The request-bound `ECG_FLOWTHROUGH` flag is the ReusePlan design mechanism.
-The separate `STRUCTURAL_FLOWTHROUGH` / `--flowthrough all` switch is a
-policy-independent fairness control for each workload's active structural
-carrier.
+For controlled comparisons, `STRUCTURAL_FLOWTHROUGH` / `--flowthrough all`
+applies the same no-allocate rule to the active structural array used by each
+policy, either CSR or the packed ReusePlan array.
 
 ## Evidence boundary
 
 | Backend | Role |
 |---|---|
-| **gem5 O3** | architectural timing and exact dynamic Request binding |
-| **cache_sim** | functional victim-policy behavior and off-chip traffic |
-| **Sniper** | modeled equal-work cache and traffic direction |
+| **gem5 O3** | architectural timing evidence and dynamic Request binding |
+| **cache_sim** | functional cache behavior and off-chip traffic evidence |
+| **Sniper** | matched-work modeled cache and traffic evidence |
 | **RTL models** | synthesizable metadata and physical-cost components |
 
 Only gem5 O3 time is architectural speedup evidence. Analytic P-OPT time is an
-optimistic bound because target-time matrix latency, bandwidth, and queueing
-are not charged.
+optimistic lower bound because target-time lookup latency, matrix-stream
+latency, bandwidth, queueing, and contention are omitted.
 
-Sniper includes exact per-edge marker and computed fused-sideband diagnostics;
-neither path is architectural ReuseBind speedup evidence.
+Sniper includes per-edge markers in its indexed path and computed fused-sideband
+diagnostics; neither path is architectural ReuseBind speedup evidence.
 
 The gem5 mechanism is an experimental RISC-V custom-0 implementation. It is
-not a ratified RISC-V extension or a claim of fabricated processor support.
+not a ratified RISC-V extension or an upstream gem5 feature.
 
 ## Documentation
 
 - [ReusePlan and FlowThrough](wiki/ReusePlan-FlowThrough.md)
 - [RISC-V instruction path](wiki/RISC-V-Instruction-Path.md)
-- [End-to-end property-access example](wiki/Property-to-Cache-Walkthrough.md)
+- [End-to-end property Request example](wiki/Property-to-Cache-Walkthrough.md)
 - [Evaluation methodology](wiki/Evaluation-Methodology.md)
 - [Related work](wiki/Related-Work.md)
 - [Build and reproduction](wiki/Reproduction.md)

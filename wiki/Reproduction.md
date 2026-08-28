@@ -5,8 +5,7 @@ Generated graphs, binaries, traces, and experiment output remain under
 
 ## 1. Prepare graph data
 
-Prepare the literature-scale publication corpus with the resumable corpus
-tool:
+Prepare the literature-scale graph corpus:
 
 ```bash
 make converter
@@ -36,11 +35,12 @@ python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py \
   --semantics-only
 ```
 
-Downloads are resumable. Conversion and generated SHA-256 receipts are written
-under `results/graphs`; researchers do not maintain checksum constants in the
-repository. The tool also writes a deterministic `*-dbg.sg` for each graph and
-timing sample. Final simulator jobs consume those preordered files with
-`-o 0`; DBG is never recomputed per policy.
+Downloads resume when partial files already exist. Conversion receipts and
+generated SHA-256 hashes are written under `results/graphs`; the repository
+does not carry fixed checksum constants for these generated datasets. The tool
+also writes a deterministic `*-dbg.sg` for each graph and timing sample. Final
+simulator jobs consume those preordered files with `-o 0`; the reordered graph
+is not regenerated per policy.
 
 The commands below describe the earlier three-graph pilot inputs and remain
 useful for smoke and sampled timing runs.
@@ -61,7 +61,7 @@ curl -L https://snap.stanford.edu/data/cit-Patents.txt.gz |
   gzip -dc > results/graphs/cit-Patents/cit-Patents.el
 ```
 
-Convert the symmetrized full graphs used by the final campaign:
+Convert the three symmetrized pilot graphs:
 
 ```bash
 bench/bin/converter \
@@ -107,16 +107,24 @@ Convert the samples:
 ```bash
 bench/bin/converter \
   -f results/graphs/web-Google-n16/web-Google-n16.el \
+  -s -o 0 \
   -b results/graphs/web-Google-n16/web-Google-n16.sg
 
 bench/bin/converter \
   -f results/graphs/soc-pokec-n16/soc-pokec-n16.el \
+  -s -o 0 \
   -b results/graphs/soc-pokec-n16/soc-pokec-n16.sg
 
 bench/bin/converter \
   -f results/graphs/cit-Patents-n18/cit-Patents-n18.el \
-  -s -b results/graphs/cit-Patents-n18/cit-Patents-n18-sym.sg
+  -s -o 0 \
+  -b results/graphs/cit-Patents-n18/cit-Patents-n18.sg
 ```
+
+The publication workflow additionally applies reorder mode `5` and writes the
+canonical `*-dbg.sg` files. Use
+`prepare_final_graph_corpus.py --samples-only` rather than reproducing that
+second conversion manually.
 
 ## 2. Build
 
@@ -132,8 +140,9 @@ make gem5-riscv-m5ops-pr gem5-riscv-m5ops-bfs \
 make sniper-sg_kernel
 ```
 
-`make all-sim` builds `bench/bin_sim/reuse_plan_sidecar`. gem5 PageRank runs
-cache generated sidecars under `results/ecg_experiments/reuse_plan_sidecars/`.
+`make all-sim` builds `bench/bin_sim/reuse_plan_sidecar`. The gem5 PageRank
+flow caches generated sidecars under
+`results/ecg_experiments/reuse_plan_sidecars/`.
 The cache key includes the graph, reorder options, record width, epoch count,
 property-line width, tier fraction, and generator binary. Existing sidecars are
 reused; gem5 validates and immutably seals them before execution.
@@ -168,7 +177,7 @@ values, including the graph view and cache-line reuse timeline, come from
 `fig/ecg-figure-fixture.json`.
 
 Use the [architecture guide](ReusePlan-FlowThrough), the
-[RISC-V request path](RISC-V-Instruction-Path), and the
+[RISC-V instruction path](RISC-V-Instruction-Path), and the
 [evidence boundary](Evaluation-Methodology) to interpret the generated figures.
 
 ## 4. Inspect the PageRank study
@@ -181,8 +190,9 @@ python3 scripts/experiments/ecg/flows/experiment_run.py \
   --allow-missing-graphs --allow-missing-runtime-inputs
 ```
 
-The profile expands to 12 whole cells: three graphs and four iteration counts.
-Policy sharding is disabled so each comparison retains its matching baseline.
+The profile expands to 12 experiment cells: three graphs and four iteration
+counts. Policy sharding is disabled so each comparison retains its matching
+baseline.
 
 ## 5. Run
 
@@ -207,31 +217,51 @@ python3 scripts/experiments/ecg/analysis/pagerank_gate.py \
 
 ## 6. Final role-separated campaign
 
-> **Scale warning:** the checked-in `reuse_plan_final_campaign` profile is the
-> stopped three-graph pilot. It is retained for auditability, not publication.
-> A publication run must use the literature-scale corpus above and a revised
-> scale campaign profile.
+The checked-in `reuse_plan_final_campaign` profile is the stopped three-graph
+pilot. It remains as a record of that pilot, not as a publication profile.
+Publication runs must use the literature-scale corpus above and a revised scale
+campaign profile.
 
-Run the literature-scale mechanism and timing screen first:
+Run the mechanism stage and iteration-1 cells first:
 
 ```bash
-python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+/usr/bin/python3.12 -I scripts/experiments/ecg/flows/experiment_run.py \
   --profile reuse_plan_literature_scale_campaign \
-  --run-dir results/ecg_experiments/runs/literature_scale_screen \
-  --only 60 90 91 --no-build
+  --run-dir results/ecg_experiments/runs/literature_scale_i1 \
+  --only 60 90 --no-build --require-reference-python
+
+python3 scripts/experiments/ecg/analysis/literature_scale_gate.py \
+  --phase early-stop \
+  --input-run-dirs \
+    results/ecg_experiments/runs/literature_scale_i1 \
+  --output \
+    results/ecg_experiments/aggregates/literature_scale/early_stop_gate.json
+```
+
+Run iteration 8 only if the early-stop gate reports `"decision": "CONTINUE"`
+and `"iteration_8_authorized": true`:
+
+```bash
+/usr/bin/python3.12 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile reuse_plan_literature_scale_campaign \
+  --run-dir results/ecg_experiments/runs/literature_scale_i8 \
+  --only 91 --no-build --require-reference-python
 
 python3 scripts/experiments/ecg/analysis/literature_scale_gate.py \
   --phase screen \
   --input-run-dirs \
-    results/ecg_experiments/runs/literature_scale_screen \
+    results/ecg_experiments/runs/literature_scale_i1 \
+    results/ecg_experiments/runs/literature_scale_i8 \
   --output \
     results/ecg_experiments/aggregates/literature_scale/screen_gate.json
 ```
 
-Launch full-graph roles only if the screen gate reports `"valid": true`:
+Launch the remaining full-graph roles only if the screen receipt reports
+`"valid": true`, `"phase": "screen"`, and
+`"pagerank_gate": {"screen_passes": true, ...}`:
 
 ```bash
-python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+/usr/bin/python3.12 -I scripts/experiments/ecg/flows/experiment_run.py \
   --profile reuse_plan_literature_scale_campaign \
   --run-dir results/ecg_experiments/runs/literature_scale_full \
   --only 92 93 94 95 \
@@ -242,15 +272,16 @@ python3 -I scripts/experiments/ecg/flows/experiment_run.py \
 python3 scripts/experiments/ecg/analysis/literature_scale_gate.py \
   --phase complete \
   --input-run-dirs \
-    results/ecg_experiments/runs/literature_scale_screen \
+    results/ecg_experiments/runs/literature_scale_i1 \
+    results/ecg_experiments/runs/literature_scale_i8 \
     results/ecg_experiments/runs/literature_scale_full \
   --output \
     results/ecg_experiments/aggregates/literature_scale/gate.json
 ```
 
-For parallel full-role execution, generate whole-cell shards so every shard
-retains its complete policy roster. The same screen authorization is required
-by every local shard:
+For parallel local execution, generate cell-complete shards so every shard
+retains its full policy roster. The same screen authorization is required by
+every local shard:
 
 ```bash
 python3 scripts/experiments/ecg/slurm/make_slurm_shards.py \
@@ -271,7 +302,7 @@ python3 scripts/experiments/ecg/flows/run_local_shards.py \
 For Slurm arrays, export the same receipt as
 `GRAPHBREW_SCREEN_GATE` before invoking
 `slurm_experiment_shard.sbatch`. The stopped `reuse_plan_final_campaign`
-profile remains available only for `--list --dry-run` audit inspection and
+profile remains available only for `--list --dry-run` manifest enumeration and
 must not be executed.
 
 ## 7. Cross-simulator consistency
