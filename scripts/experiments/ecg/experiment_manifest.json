@@ -2779,6 +2779,7 @@
       "profiles": ["reuse_plan_literature_scale_campaign"],
       "screen_config": "scripts/experiments/ecg/configs/pagerank_literature_scale.json",
       "screen_iteration": 1,
+      "flowthrough": "all",
       "out_subdir": "90_gem5_literature_scale_i1",
       "env": {
         "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
@@ -2792,6 +2793,7 @@
       "profiles": ["reuse_plan_literature_scale_campaign"],
       "screen_config": "scripts/experiments/ecg/configs/pagerank_literature_scale.json",
       "screen_iteration": 8,
+      "flowthrough": "all",
       "out_subdir": "91_gem5_literature_scale_i8",
       "env": {
         "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
@@ -2814,6 +2816,7 @@
         "ECG:REUSE_PLAN_ONLINE_FLOWTHROUGH"
       ],
       "prefetcher": "none",
+      "flowthrough": "all",
       "ecg_charged": 1,
       "ecg_epochs": 16,
       "ecg_isa_variant": "computed",
@@ -2848,6 +2851,7 @@
       "popt_min_data_ways": 1,
       "popt_matrix_stream": "simulated",
       "prefetcher": "none",
+      "flowthrough": "all",
       "ecg_charged": 1,
       "ecg_epochs": 16,
       "ecg_isa_variant": "computed",
@@ -2872,6 +2876,7 @@
         "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"
       ],
       "prefetcher": "none",
+      "flowthrough": "all",
       "ecg_charged": 1,
       "ecg_epochs": 16,
       "ecg_isa_variant": "computed",
@@ -2897,6 +2902,7 @@
         "ECG:REUSE_PLAN_RRIP_FLOWTHROUGH"
       ],
       "prefetcher": "none",
+      "flowthrough": "all",
       "ecg_charged": 1,
       "ecg_epochs": 16,
       "ecg_isa_variant": "computed",

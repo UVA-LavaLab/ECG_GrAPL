@@ -182,6 +182,15 @@ def test_literature_scale_campaign_shape_is_frozen():
         "94_cache_sim_literature_scale_compact16",
         "95_sniper_literature_scale_matched",
     }
+    stage_by_name = {stage["name"]: stage for stage in stages}
+    for name in (
+            "90_gem5_literature_scale_i1",
+            "91_gem5_literature_scale_i8",
+            "92_cache_sim_literature_scale_wide16",
+            "93_cache_sim_literature_scale_popt",
+            "94_cache_sim_literature_scale_compact16",
+            "95_sniper_literature_scale_matched"):
+        assert stage_by_name[name]["flowthrough"] == "all"
     assert len(screen["graphs"]) == 6
     assert screen["iterations"] == [1, 8]
     assert len(screen["policies"]["all"]) == 8
