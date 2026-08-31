@@ -117,8 +117,8 @@ web-Google, Pokec, Patents, roadNet-CA, LiveJournal, and Orkut at iteration
 counts 1 and 8. Its hashes, geometries, policy roles, and decision thresholds
 are in `pagerank_literature_scale.json`.
 
-The earlier three-graph sensitivity study uses web-Google, Pokec, and Patents
-at iteration counts 1, 2, 4, and 8. Its configuration is
+The earlier three-graph sensitivity study uses web-Google, soc-pokec, and
+cit-Patents. Iteration counts are 1, 2, 4, and 8. Its configuration is
 [`pagerank_study.json`](https://github.com/UVA-LavaLab/ECG_GrAPL/blob/main/scripts/experiments/ecg/configs/pagerank_study.json).
 
 The publication corpus must include web-Google, Pokec, Patents, roadNet-CA,
