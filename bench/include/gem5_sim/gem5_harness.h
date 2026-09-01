@@ -163,7 +163,8 @@ inline uint32_t gem5_ecg_load_embedded(const void* prop_base, uint64_t fat_edge)
 }
 
 // Compact-record twin of gem5_ecg_extract2_instruction. The 32-bit record goes
-// in rs1 and the loop-invariant format word (id_bits | epoch_bits << 8) in rs2,
+// in rs1 and the loop-invariant format word built by
+// gem5_ecg_compact_format_word (id_bits, epoch_bits and tier_bits) in rs2,
 // so the decoder widens to the canonical layout instead of the guest doing it
 // with about 16 instructions of runtime shifts and masks per edge. Returns the
 // destination vertex, so the caller needs no mask either.
@@ -207,14 +208,28 @@ inline uint32_t gem5_ecg_extract2c_instruction_traced(uint32_t record,
                                                       uint32_t fmt) {
 #ifndef NO_M5OPS
     gem5_trace_ecg_reuse_plan_expect(ecg_reuse_plan::widenReusePlan32(
-        record, fmt & 0x3FU, (fmt >> 8) & 0x3FU));
+        record, fmt & 0x3FU, (fmt >> 8) & 0x3FU, (fmt >> 16) & 0x3FU));
 #endif
     return gem5_ecg_extract2c_instruction(record, fmt);
 }
 
-inline uint32_t gem5_ecg_compact_format_word(uint32_t id_bits,
-                                             uint32_t epoch_bits) {
-    return (id_bits & 0x3FU) | ((epoch_bits & 0x3FU) << 8);
+// Loop-invariant compact record format word, shared by the register operand of
+// ecg_extract2c and by CSR 0x802:
+//   fmt[5:0]   = id_bits
+//   fmt[13:8]  = epoch_bits
+//   fmt[21:16] = tier_bits (0 or 2)
+//   fmt[31]    = tier width present
+// Bit 31 exists because tier_bits=0 is a legal width: without a presence
+// marker a stale guest that never wrote the field would be indistinguishable
+// from a tierless one, and the decoder would silently deliver a tier it read
+// out of the first epoch's bits.
+static const uint32_t kGem5EcgCompactFormatTierPresent = 0x80000000U;
+
+inline uint32_t gem5_ecg_compact_format_word(
+        uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = ecg_reuse_plan::kReusePlanDefaultTierBits) {
+    return (id_bits & 0x3FU) | ((epoch_bits & 0x3FU) << 8) |
+           ((tier_bits & 0x3FU) << 16) | kGem5EcgCompactFormatTierPresent;
 }
 
 inline bool gem5_ecg_compact_isa_enabled() {
@@ -424,12 +439,13 @@ inline uint32_t gem5_ecg_bind_iload_u32(const void* prop_base, uint64_t packed_r
 }
 
 // Fused compact two-epoch ReusePlan load. Rs1 is the property base and Rs2 is the
-// 32-bit record; CSR 0x802 carries the loop-invariant id/epoch field widths.
-// That leaves both source operands available for the actual memory operation
-// and keeps the hot path to one custom instruction per edge.
+// 32-bit record; CSR 0x802 carries the loop-invariant id/epoch/tier field
+// widths. That leaves both source operands available for the actual memory
+// operation and keeps the hot path to one custom instruction per edge.
 inline uint32_t gem5_ecg_bind_iload_compact(
         const void* prop_base, uint32_t packed_record,
-        uint32_t id_bits, uint32_t epoch_bits) {
+        uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = ecg_reuse_plan::kReusePlanDefaultTierBits) {
 #if defined(__riscv)
     uint64_t val = 0;
     asm volatile (".insn r 0x0b, 0x2, 0x2c, %0, %1, %2"
@@ -442,19 +458,21 @@ inline uint32_t gem5_ecg_bind_iload_compact(
     const uint32_t dest = ecg_reuse_plan::extractReusePlan32Dest(
         packed_record, id_bits);
     (void)epoch_bits;
+    (void)tier_bits;
     return base ? base[dest] : 0;
 #endif
 }
 
 inline uint32_t gem5_ecg_bind_iload_compact_traced(
         const void* prop_base, uint32_t packed_record,
-        uint32_t id_bits, uint32_t epoch_bits) {
+        uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = ecg_reuse_plan::kReusePlanDefaultTierBits) {
 #ifndef NO_M5OPS
     gem5_trace_ecg_reuse_plan_expect(ecg_reuse_plan::widenReusePlan32(
-        packed_record, id_bits, epoch_bits));
+        packed_record, id_bits, epoch_bits, tier_bits));
 #endif
     return gem5_ecg_bind_iload_compact(
-        prop_base, packed_record, id_bits, epoch_bits);
+        prop_base, packed_record, id_bits, epoch_bits, tier_bits);
 }
 
 inline uint64_t gem5_ecg_bind_iload_u64(
@@ -633,7 +651,8 @@ inline uint64_t gem5_ecg_flow_load_instruction(const void* record_ptr) {
 }
 
 inline uint64_t gem5_ecg_flow_load_compact_instruction(
-        const void* record_ptr, uint32_t id_bits, uint32_t epoch_bits) {
+        const void* record_ptr, uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = ecg_reuse_plan::kReusePlanDefaultTierBits) {
     uint64_t packed = 0;
 #if defined(__riscv)
     asm volatile (".insn i 0x0b, 0x7, %0, 0(%1)"
@@ -642,11 +661,12 @@ inline uint64_t gem5_ecg_flow_load_compact_instruction(
                   : "memory");
     (void)id_bits;
     (void)epoch_bits;
+    (void)tier_bits;
 #else
     if (record_ptr) {
         packed = ecg_reuse_plan::widenReusePlan32(
             *static_cast<const uint32_t*>(record_ptr),
-            id_bits, epoch_bits);
+            id_bits, epoch_bits, tier_bits);
     }
 #endif
     return packed;
@@ -801,11 +821,12 @@ inline uint64_t gem5_ecg_flow_load_instruction(const void* record_ptr) {
     return record_ptr ? *static_cast<const uint64_t*>(record_ptr) : 0;
 }
 inline uint64_t gem5_ecg_flow_load_compact_instruction(
-        const void* record_ptr, uint32_t id_bits, uint32_t epoch_bits) {
+        const void* record_ptr, uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = ecg_reuse_plan::kReusePlanDefaultTierBits) {
     return record_ptr
         ? ecg_reuse_plan::widenReusePlan32(
               *static_cast<const uint32_t*>(record_ptr),
-              id_bits, epoch_bits)
+              id_bits, epoch_bits, tier_bits)
         : 0;
 }
 inline uint64_t gem5_ecg_plan_load_instruction(const void* record_ptr) {
@@ -827,18 +848,21 @@ inline uint32_t gem5_ecg_bind_iload_u32(
 }
 inline uint32_t gem5_ecg_bind_iload_compact(
         const void* prop_base, uint32_t packed_record,
-        uint32_t id_bits, uint32_t epoch_bits) {
+        uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = ecg_reuse_plan::kReusePlanDefaultTierBits) {
     const uint32_t* base = static_cast<const uint32_t*>(prop_base);
     const uint32_t dest = ecg_reuse_plan::extractReusePlan32Dest(
         packed_record, id_bits);
     (void)epoch_bits;
+    (void)tier_bits;
     return base ? base[dest] : 0;
 }
 inline uint32_t gem5_ecg_bind_iload_compact_traced(
         const void* prop_base, uint32_t packed_record,
-        uint32_t id_bits, uint32_t epoch_bits) {
+        uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = ecg_reuse_plan::kReusePlanDefaultTierBits) {
     return gem5_ecg_bind_iload_compact(
-        prop_base, packed_record, id_bits, epoch_bits);
+        prop_base, packed_record, id_bits, epoch_bits, tier_bits);
 }
 inline uint64_t gem5_ecg_bind_iload_u64(
         const void* prop_base, uint64_t packed_record) {
@@ -1143,14 +1167,16 @@ inline void gem5_ecg_update_current_epoch_csr(uint16_t epoch) {
 }
 
 inline void gem5_ecg_write_record_format_csr(
-        uint32_t id_bits, uint32_t epoch_bits) {
+        uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = ecg_reuse_plan::kReusePlanDefaultTierBits) {
 #if defined(__riscv)
     const uintptr_t value = gem5_ecg_compact_format_word(
-        id_bits, epoch_bits);
+        id_bits, epoch_bits, tier_bits);
     asm volatile ("csrw 0x802, %0" :: "r"(value) : "memory");
 #else
     (void)id_bits;
     (void)epoch_bits;
+    (void)tier_bits;
 #endif
 }
 

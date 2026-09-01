@@ -11,6 +11,7 @@
 #include "builder.h"
 #include "command_line.h"
 #include "graph.h"
+#include "ecg_metadata.h"
 #include "ecg_reuse_plan_builder.h"
 #include "ecg_reuse_plan_sidecar.h"
 
@@ -40,7 +41,7 @@ int generateOrVerify(
         const Graph& graph, const std::string& output_path,
         bool verify_only, bool push_out_edges,
         uint32_t num_vtx_per_line, uint32_t epochs,
-        bool linemin, double hot_fraction) {
+        bool linemin, double hot_fraction, uint32_t tier_bits) {
     std::vector<uint64_t> offsets;
     std::vector<RecordT> records;
     ecg_reuse_plan::ReusePlanSidecarHeader header;
@@ -48,7 +49,7 @@ int generateOrVerify(
     if (verify_only) {
         if (!ecg_reuse_plan::loadReusePlanSidecar(
                 output_path, graph, push_out_edges,
-                num_vtx_per_line, epochs, linemin, hot_fraction,
+                num_vtx_per_line, epochs, linemin, hot_fraction, tier_bits,
                 offsets, records, header, error)) {
             std::cerr << "[ReusePlan-SIDECAR-FAIL] " << error << "\n";
             return 2;
@@ -58,7 +59,7 @@ int generateOrVerify(
         if constexpr (sizeof(RecordT) == 4) {
             built = ecg_reuse_plan::buildInEdgeReusePlanRecords32(
                 graph, num_vtx_per_line, epochs, linemin,
-                offsets, records, push_out_edges);
+                offsets, records, push_out_edges, tier_bits);
         } else {
             ecg_reuse_plan::buildInEdgeReusePlanRecords(
                 graph, num_vtx_per_line, epochs, linemin,
@@ -77,6 +78,7 @@ int generateOrVerify(
         header.hot_fraction_ppm =
             ecg_reuse_plan::sidecarHotFractionPpm(hot_fraction);
         header.vertices = static_cast<uint32_t>(graph.num_nodes());
+        header.tier_bits = tier_bits;
         header.directed_edges =
             static_cast<uint64_t>(graph.num_edges_directed());
         header.graph_hash =
@@ -90,7 +92,7 @@ int generateOrVerify(
         records.clear();
         if (!ecg_reuse_plan::loadReusePlanSidecar(
                 output_path, graph, push_out_edges,
-                num_vtx_per_line, epochs, linemin, hot_fraction,
+                num_vtx_per_line, epochs, linemin, hot_fraction, tier_bits,
                 offsets, records, header, error)) {
             std::cerr
                 << "[ReusePlan-SIDECAR-FAIL] post-write validation: "
@@ -101,6 +103,7 @@ int generateOrVerify(
     std::cout
         << "[ReusePlan-SIDECAR-OK path=" << output_path
         << " record_bytes=" << sizeof(RecordT)
+        << " tier_bits=" << header.tier_bits
         << " vertices=" << header.vertices
         << " records=" << header.record_count
         << " graph_hash=" << header.graph_hash
@@ -141,12 +144,23 @@ int main(int argc, char* argv[]) {
         "ECG_REUSE_PLAN_SIDECAR_VERIFY_ONLY", false);
     const double hot_fraction =
         ecg_reuse_plan::configuredReuseHotFraction();
+    // The tier width comes from the one shared metadata rule, so the host
+    // generator cannot disagree with the guest about the record layout.
+    const uint32_t tier_bits = static_cast<uint32_t>(
+        ::ecg_metadata::configure(
+            static_cast<uint64_t>(graph.num_nodes()), epochs).tier_bits);
+    if (!ecg_reuse_plan::reusePlan32TierBitsSupported(tier_bits)) {
+        std::cerr
+            << "[ReusePlan-SIDECAR-FAIL] unsupported ECG_RECORD_TIER_BITS="
+            << tier_bits << " (only 0 or 2 are defined)\n";
+        return 2;
+    }
     if (record_bytes == 4) {
         return generateOrVerify<uint32_t>(
             graph, output, verify_only, push_out_edges,
-            num_vtx_per_line, epochs, linemin, hot_fraction);
+            num_vtx_per_line, epochs, linemin, hot_fraction, tier_bits);
     }
     return generateOrVerify<uint64_t>(
         graph, output, verify_only, push_out_edges,
-        num_vtx_per_line, epochs, linemin, hot_fraction);
+        num_vtx_per_line, epochs, linemin, hot_fraction, tier_bits);
 }

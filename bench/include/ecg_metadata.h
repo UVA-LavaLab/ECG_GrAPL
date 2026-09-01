@@ -33,7 +33,9 @@
 //   ECG_DELIVERY              packed | sidecar | none   (default packed)
 //   ECG_REUSE_PLAN_DEPTH       stamps per record, 1 or 2
 //   ECG_EDGE_MASK_EPOCHS      epoch count -> epoch_bits
-//   ECG_RECORD_TIER_BITS      tier bits carried (default 2)
+//   ECG_RECORD_TIER_BITS      tier bits carried (default 2; the COMPACT
+//                             32-bit record implements only 0 or 2, and 0 is
+//                             what makes an n18 graph with 128 epochs fit)
 //   ECG_EDGE_RECORD_BYTES     force packed container width (4/8/16)
 //   ECG_SIDECAR_PAYLOAD_BITS  force sidecar payload width
 //   ECG_RECORD_VARIABLE_WIDTH compute two-epoch ReusePlan width instead of forcing 8

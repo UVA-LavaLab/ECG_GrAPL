@@ -438,7 +438,8 @@ def test_gem5_reuse_plan_mailbox_is_cleared_after_governed_load():
         "graph_cache_context_gem5.hh")
     harness = read("bench/include/gem5_sim/gem5_harness.h")
     assert "clearDecodedEcgExtractHint()" in context
-    assert "if (tier == 0)" in context
+    assert "if (tier == 0)" not in context
+    assert "decodedEcgEpochCountStorage().store(2" in context
     assert "GEM5_ECG_CLEAR_EXTRACT2_HINT" in harness
     for path in (
         "bench/src_gem5/pr.cc",
@@ -603,7 +604,10 @@ def test_reuse_plan_computed_address_variant_is_distinct_from_indexed_load():
         "0x0: ecg_bind_iload_compact", 1)[1].split(
             "\n                }", 1)[0]
     assert "MISCREG_ECG_RECORD_FORMAT" in fused_compact
-    assert "id_bits + 2 + 2 * epoch_bits > 32" in fused_compact
+    assert "id_bits + tier_bits + 2 * epoch_bits > 32" in fused_compact
+    assert "(fmt & 0x80000000U) == 0" in fused_compact, (
+        "the fused compact load must reject a format word that declares no "
+        "tier width, because tier_bits=0 is itself a legal width")
     assert "Rs1 + static_cast<uint64_t>(dest_id) * 4" in fused_compact
     assert "xc->setEcgLoadHint2(" in fused_compact
     assert '".insn r 0x0b, 0x2, 0x2c' in harness
@@ -786,7 +790,7 @@ def test_proposal_compact_reuse_bind_flowthrough_is_fail_closed():
         performance,
         "[ECG_REUSE_BIND_LOAD_C_FLOW] PR compact FlowThrough record load "
         "+ computed-address computed-address property load ACTIVE "
-        "(id_bits=16 epoch_bits=5)\n",
+        "(id_bits=16 epoch_bits=5 tier_bits=2)\n",
         requested=True,
         require_trace_receipts=False,
         performance_requested=True)
@@ -795,6 +799,38 @@ def test_proposal_compact_reuse_bind_flowthrough_is_fail_closed():
     assert performance["proposal_compact_epoch_bits"] == 5
     assert performance["proposal_compact_tier_bits"] == 2
     assert "error" not in performance
+
+    # The tier width is read from the guest, not assumed: the n18/128-epoch
+    # cell only fits because the two tier bits are dropped.
+    tierless = {"timing_valid_for_speedup": "1"}
+    assert roi_matrix.apply_gem5_compact_reuse_bind_flowthrough_receipt(
+        tierless,
+        "[ECG_REUSE_BIND_LOAD_C_FLOW] PR compact FlowThrough record load "
+        "+ computed-address computed-address property load ACTIVE "
+        "(id_bits=18 epoch_bits=7 tier_bits=0)\n",
+        requested=True,
+        require_trace_receipts=False,
+        performance_requested=True)
+    assert tierless["proposal_compact_id_bits"] == 18
+    assert tierless["proposal_compact_epoch_bits"] == 7
+    assert tierless["proposal_compact_tier_bits"] == 0
+    assert (
+        tierless["proposal_compact_id_bits"] +
+        tierless["proposal_compact_tier_bits"] +
+        2 * tierless["proposal_compact_epoch_bits"]) == 32
+    assert "error" not in tierless
+
+    # A guest that reports no tier width cannot be timed as a compact cell.
+    untyped = {"timing_valid_for_speedup": "1"}
+    roi_matrix.apply_gem5_compact_reuse_bind_flowthrough_receipt(
+        untyped,
+        "[ECG_REUSE_BIND_LOAD_C_FLOW] PR compact FlowThrough record load "
+        "ACTIVE (id_bits=16 epoch_bits=5)\n",
+        requested=True,
+        require_trace_receipts=False,
+        performance_requested=True)
+    assert untyped["status"] == "error"
+    assert "proposal_compact_tier_bits" not in untyped
 
     missing = {"timing_valid_for_speedup": "1"}
     assert not roi_matrix.apply_gem5_compact_reuse_bind_flowthrough_receipt(

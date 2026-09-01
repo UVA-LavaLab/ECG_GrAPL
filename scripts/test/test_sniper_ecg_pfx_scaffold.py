@@ -237,6 +237,8 @@ def test_sniper_ecg_extract_payload_and_runner_are_faithful() -> None:
     assert "lookupLineEcgReusePlan(" in cache
     assert "lookupEcgReusePlan(" in context_cc
     assert "recordEcgReusePlan(" in context_cc
+    assert "if (tier == 0)" not in context_cc
+    assert "m.count[i].store(2" in context_cc
     assert "GRAPHBREW_CONTEXT_READY_WORK_ID" in context_h
     assert "GRAPHBREW_CONTEXT_READY_WORK_ID" in setup
     assert "ECG-CONTEXT-READY sim=sniper" in setup

@@ -183,9 +183,10 @@ def replace_once(
         log.info(f"Overlay patch already superseded in {path.relative_to(SNIPER_DIR)}")
         return
     if old not in text:
+        anchor = " ".join(old.strip().split())[:160]
         raise SystemExit(
             f"Could not apply overlay patch to {path}; expected anchor not found. "
-            "The Sniper checkout may have changed."
+            f"The Sniper checkout may have changed. Anchor: {anchor!r}"
         )
     log.info(f"Patch {path.relative_to(SNIPER_DIR)}")
     _write_overlay_text(path, text.replace(old, new, 1), dry_run)
@@ -1000,7 +1001,10 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
    PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
 """,
         args.dry_run,
-        ["perf->updateTime(now);\n   const bool flowthrough ="],
+        [
+            "perf->updateTime(now);\n   const bool flowthrough =",
+            "perf->updateTime(now);\n   const bool structural_flowthrough =",
+        ],
     )
     replace_once(
         nuca_source,
@@ -1032,7 +1036,10 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
    PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
 """,
         args.dry_run,
-        ["HitWhere::where_t hit_where = HitWhere::MISS;\n   const bool flowthrough ="],
+        [
+            "HitWhere::where_t hit_where = HitWhere::MISS;\n   const bool flowthrough =",
+            "HitWhere::where_t hit_where = HitWhere::MISS;\n   const bool structural_flowthrough =",
+        ],
     )
     replace_once(
         nuca_source,

@@ -41,6 +41,7 @@ PageRankPullGSCompactReuseBindFlowthroughIteration(
         const pvector<uint32_t>& records,
         uint32_t record_id_bits,
         uint32_t record_epoch_bits,
+        uint32_t record_tier_bits,
         uint32_t epoch_count,
         ScoreT base_score) {
     double error = 0;
@@ -59,7 +60,8 @@ PageRankPullGSCompactReuseBindFlowthroughIteration(
         for (; record_ptr != record_end; ++record_ptr) {
             const uint64_t record =
                 gem5_ecg_flow_load_compact_instruction(
-                    record_ptr, record_id_bits, record_epoch_bits);
+                    record_ptr, record_id_bits, record_epoch_bits,
+                    record_tier_bits);
             const NodeID v =
                 static_cast<NodeID>(record & 0xFFFFFFFFULL);
             incoming_total += gem5_ecg_bind_load_f32(
@@ -245,6 +247,7 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     uint64_t pair_sidecar_graph_hash = 0;
     uint64_t pair_sidecar_payload_hash = 0;
     uint32_t pair32_id_bits = 1, pair32_epoch_bits = 1;
+    uint32_t pair32_tier_bits = ecg_reuse_plan::kReusePlanDefaultTierBits;
     bool use_compact_pair = false;
     vector<uint64_t> pair_off;
     uint64_t pair_record_count = 0;
@@ -273,6 +276,21 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
         {
             auto ecg_meta = ::ecg_metadata::configure(
                 static_cast<uint64_t>(g.num_nodes()), edge_epoch_count);
+            // The compact record's tier width is a configured research axis,
+            // not a constant: dropping the two tier bits is exactly what makes
+            // an n18 graph with 128 epochs fit in 32 bits. Take it from the one
+            // shared rule so the host sidecar, the guest and the decoder cannot
+            // disagree, and refuse any width the record layout does not define.
+            pair32_tier_bits = static_cast<uint32_t>(ecg_meta.tier_bits);
+            if (ecg_reuse_plan_depth == 2 &&
+                !ecg_reuse_plan::reusePlan32TierBitsSupported(
+                    pair32_tier_bits)) {
+                fprintf(stderr,
+                    "[ECG-METADATA-FATAL] ECG_RECORD_TIER_BITS=%u is not a "
+                    "defined compact ReusePlan tier width (only 0 or 2)\n",
+                    pair32_tier_bits);
+                std::abort();
+            }
             // The shared rule decides the width; the budget and container
             // must agree: a compact record is used only when the shared rule
             // asks for 4 bytes AND the fields actually fit. Letting gem5 decide
@@ -291,13 +309,13 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                 (ecg_meta.record_bytes != 4 ||
                  !ecg_reuse_plan::canPackReusePlan32(
                      static_cast<uint32_t>(g.num_nodes()),
-                     edge_epoch_count))) {
+                     edge_epoch_count, pair32_tier_bits))) {
                 fprintf(stderr,
                     "[ECG-METADATA-FATAL] compact ReuseBind+FlowThrough "
                     "requested but the 32-bit record is infeasible "
-                    "(vertices=%u epochs=%u record_bytes=%u)\n",
+                    "(vertices=%u epochs=%u tier_bits=%u record_bytes=%u)\n",
                     static_cast<unsigned>(g.num_nodes()),
-                    edge_epoch_count,
+                    edge_epoch_count, pair32_tier_bits,
                     static_cast<unsigned>(ecg_meta.record_bytes));
                 std::abort();
             }
@@ -305,7 +323,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                 ecg_reuse_plan_depth == 2 && ecg_meta.record_bytes == 4 &&
                 !wide_only_transport &&
                 ecg_reuse_plan::canPackReusePlan32(
-                    static_cast<uint32_t>(g.num_nodes()), edge_epoch_count);
+                    static_cast<uint32_t>(g.num_nodes()), edge_epoch_count,
+                    pair32_tier_bits);
             if (ecg_reuse_plan_depth == 2 && ecg_meta.record_bytes == 4 &&
                 wide_only_transport) {
                 fprintf(stderr,
@@ -362,6 +381,7 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     sidecar_path, g, false, kNumVtxPerLine,
                     edge_epoch_count, true,
                     ecg_reuse_plan::configuredReuseHotFraction(),
+                    pair32_tier_bits,
                     pair_off, pair32, header, error);
                 if (!compact_ready && sidecar_required) {
                     fprintf(stderr,
@@ -379,7 +399,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                 compact_ready =
                     ecg_reuse_plan::buildInEdgeReusePlanRecords32(
                         g, kNumVtxPerLine, edge_epoch_count, true,
-                        pair_off, pair32);
+                        pair_off, pair32, /*push_out_edges=*/false,
+                        pair32_tier_bits);
             }
             if (use_compact_pair && compact_ready) {
                 require_csr_pair_offsets(
@@ -396,12 +417,11 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     ecg_reuse_plan::reusePlan32EpochBits(edge_epoch_count);
                 printf("[gem5 ECG mode 6] two-epoch ReusePlan COMPACT record ON: "
                        "ne=%u records=%llu id_bits=%u epoch_bits=%u "
+                       "tier_bits=%u "
                        "(4-byte, substitutes for the CSR edge)\n",
                        edge_epoch_count,
                        (unsigned long long)in_edge_pair32_flat.size(),
-                       ecg_reuse_plan::reusePlan32IdBits(
-                           static_cast<uint32_t>(g.num_nodes())),
-                       ecg_reuse_plan::reusePlan32EpochBits(edge_epoch_count));
+                       pair32_id_bits, pair32_epoch_bits, pair32_tier_bits);
             } else {
                 std::vector<uint64_t> pair_records;
                 bool wide_ready = false;
@@ -412,6 +432,7 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                         sidecar_path, g, false, kNumVtxPerLine,
                         edge_epoch_count, true,
                         ecg_reuse_plan::configuredReuseHotFraction(),
+                        pair32_tier_bits,
                         pair_off, pair_records, header, error);
                     if (!wide_ready && sidecar_required) {
                         fprintf(stderr,
@@ -447,9 +468,9 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
             if (pair_sidecar_loaded) {
                 fprintf(stderr,
                     "[ReusePlan-SIDECAR sim=gem5 active=1 "
-                    "record_bytes=%u records=%llu graph_hash=%llu "
-                    "payload_hash=%llu]\n",
-                    pair32_ok ? 4U : 8U,
+                    "record_bytes=%u tier_bits=%u records=%llu "
+                    "graph_hash=%llu payload_hash=%llu]\n",
+                    pair32_ok ? 4U : 8U, pair32_tier_bits,
                     (unsigned long long)(
                         pair32_ok ? in_edge_pair32_flat.size()
                                   : in_edge_pair_flat.size()),
@@ -639,7 +660,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
         compact_isa_requested && pair_extract_only && pair32_ok &&
         !ecg_bind_iload_on && !ecg_flow_load_on && !ecg_plan_load_on;
     const uint32_t compact_fmt_word =
-        gem5_ecg_compact_format_word(pair32_id_bits, pair32_epoch_bits);
+        gem5_ecg_compact_format_word(
+            pair32_id_bits, pair32_epoch_bits, pair32_tier_bits);
     // Hoisted once: see gem5_ecg_extract2c_instruction_traced for why this must
     // not be tested per edge.
     const bool compact_isa_trace =
@@ -724,19 +746,19 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     }
     if (pair32_ok) {
         gem5_ecg_write_record_format_csr(
-            pair32_id_bits, pair32_epoch_bits);
+            pair32_id_bits, pair32_epoch_bits, pair32_tier_bits);
     }
     if (compact_isa_on)
         fprintf(stderr,
                 "[ECG_EXTRACT2C] PR compact record decoded in the ISA "
-                "(id_bits=%u epoch_bits=%u)\n",
-                pair32_id_bits, pair32_epoch_bits);
+                "(id_bits=%u epoch_bits=%u tier_bits=%u)\n",
+                pair32_id_bits, pair32_epoch_bits, pair32_tier_bits);
     if (compact_reuse_bind_flowthrough_on)
         fprintf(stderr,
                 "[ECG_REUSE_BIND_LOAD_C_FLOW] PR compact FlowThrough record load "
                 "+ computed-address computed-address property load ACTIVE "
-                "(id_bits=%u epoch_bits=%u)\n",
-                pair32_id_bits, pair32_epoch_bits);
+                "(id_bits=%u epoch_bits=%u tier_bits=%u)\n",
+                pair32_id_bits, pair32_epoch_bits, pair32_tier_bits);
     if (pair_extract_only) {
         fprintf(stderr,
             ecg_flow_load_on
@@ -779,8 +801,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
         if (compact_reuse_bind_flowthrough_on) {
             error = PageRankPullGSCompactReuseBindFlowthroughIteration(
                 g, scores, outgoing_contrib, in_edge_pair32_flat,
-                pair32_id_bits, pair32_epoch_bits, edge_epoch_count,
-                base_score);
+                pair32_id_bits, pair32_epoch_bits, pair32_tier_bits,
+                edge_epoch_count, base_score);
             if (error < epsilon) break;
             continue;
         }
@@ -833,7 +855,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                                 gem5_ecg_bind_iload_compact_traced(
                                     outgoing_contrib.data(),
                                     *record_ptr,
-                                    pair32_id_bits, pair32_epoch_bits);
+                                    pair32_id_bits, pair32_epoch_bits,
+                                    pair32_tier_bits);
                             ScoreT delivered;
                             std::memcpy(
                                 &delivered, &bits, sizeof(ScoreT));
@@ -845,7 +868,8 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                                 gem5_ecg_bind_iload_compact(
                                     outgoing_contrib.data(),
                                     *record_ptr,
-                                    pair32_id_bits, pair32_epoch_bits);
+                                    pair32_id_bits, pair32_epoch_bits,
+                                    pair32_tier_bits);
                             ScoreT delivered;
                             std::memcpy(
                                 &delivered, &bits, sizeof(ScoreT));
@@ -869,7 +893,7 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     for (; record_ptr != record_end; ++record_ptr) {
                         const uint64_t rec = ecg_reuse_plan::widenReusePlan32(
                             *record_ptr, pair32_id_bits,
-                            pair32_epoch_bits);
+                            pair32_epoch_bits, pair32_tier_bits);
                         const uint32_t bits = gem5_ecg_bind_iload_u32(
                             outgoing_contrib.data(), rec);
                         ScoreT delivered;
@@ -951,7 +975,7 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     const uint64_t rec = pair32_ok
                         ? ecg_reuse_plan::widenReusePlan32(
                               in_edge_pair32_flat[pos], pair32_id_bits,
-                              pair32_epoch_bits)
+                              pair32_epoch_bits, pair32_tier_bits)
                         : ecg_flow_load_on
                         ? gem5_ecg_flow_load_instruction(
                               &in_edge_pair_flat[pos])

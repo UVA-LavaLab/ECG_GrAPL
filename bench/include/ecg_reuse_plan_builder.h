@@ -18,6 +18,10 @@ namespace ecg_reuse_plan {
 
 static constexpr uint16_t kReusePlanEpochMask = 0x7FFFu;
 static constexpr uint32_t kReusePlanMaxEpochCount = 1u << 15;
+// Tier width carried by the COMPACT 32-bit record. The canonical 64-bit wire
+// format always reserves 2 tier bits; the compact record may drop them.
+static constexpr uint32_t kReusePlanDefaultTierBits = 2;
+static constexpr uint32_t kReusePlanTierlessTierBits = 0;
 static constexpr uint32_t kCompactWeightedDestMask = 0x00FFFFFFu;
 static constexpr uint32_t kCompactWeightedMaxVertices = 1u << 24;
 static constexpr uint32_t kCompactWeightedMaxWeight = 0xFFu;
@@ -48,13 +52,34 @@ inline uint64_t packReusePlanRecord(uint32_t dest, uint8_t tier,
 // information fits in one 32-bit word and the record SUBSTITUTES for the edge
 // instead of adding to it:
 //
-//     dest[id_bits] | tier[2] | first[epoch_bits] | second[epoch_bits]
+//     dest[id_bits] | tier[tier_bits] | first[epoch_bits] | second[epoch_bits]
 //
 // For a 65,536-vertex graph with 32 epochs that is 16 + 2 + 5 + 5 = 28 bits.
 // This is what lets gem5 and Sniper stream the width cache_sim already models;
 // without it the shared rule reports a budget width the backends cannot deliver.
+//
+// tier_bits is CONFIGURABLE, because those two bits are exactly what decides
+// whether a larger graph still fits: an n18 graph with 128 epochs needs
+// 18 + 0 + 7 + 7 = 32 bits and fits only when the tier is dropped, while
+// 18 + 2 + 7 + 7 = 34 bits does not fit at all. Only 0 and 2 are defined --
+// 2 is the canonical width shared with the 64-bit record, and 0 is tierless.
+// Any other width fails closed rather than packing a field no decoder
+// implements.
+inline bool reusePlan32TierBitsSupported(uint32_t tier_bits) {
+    return tier_bits == kReusePlanTierlessTierBits ||
+           tier_bits == kReusePlanDefaultTierBits;
+}
+
+// Branch-free and correct at tier_bits == 0, where the mask is empty, the
+// carried tier is always 0, and the first epoch starts immediately above the
+// destination bits.
+inline uint32_t reusePlan32TierMask(uint32_t tier_bits) {
+    return (1u << tier_bits) - 1u;
+}
+
 inline bool canPackReusePlan32(uint32_t num_vertices, uint32_t ne,
-                               uint32_t tier_bits = 2) {
+                               uint32_t tier_bits = kReusePlanDefaultTierBits) {
+    if (!reusePlan32TierBitsSupported(tier_bits)) return false;
     uint32_t id_bits = 1;
     while (id_bits < 32 && (uint64_t(1) << id_bits) < num_vertices) ++id_bits;
     uint32_t epoch_bits = 1;
@@ -76,15 +101,18 @@ inline uint32_t reusePlan32EpochBits(uint32_t ne) {
 
 inline uint32_t packReusePlanRecord32(
         uint32_t dest, uint8_t tier, uint16_t first, uint16_t second,
-        uint32_t id_bits, uint32_t epoch_bits) {
+        uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
     const uint32_t id_mask = (id_bits >= 32) ? 0xFFFFFFFFu
                                              : ((1u << id_bits) - 1u);
     const uint32_t ep_mask = (1u << epoch_bits) - 1u;
+    const uint32_t tier_mask = reusePlan32TierMask(tier_bits);
+    const uint32_t first_shift = id_bits + tier_bits;
     return (dest & id_mask) |
-           (static_cast<uint32_t>(tier & 0x3u) << id_bits) |
-           ((static_cast<uint32_t>(first) & ep_mask) << (id_bits + 2)) |
+           ((static_cast<uint32_t>(tier) & tier_mask) << id_bits) |
+           ((static_cast<uint32_t>(first) & ep_mask) << first_shift) |
            ((static_cast<uint32_t>(second) & ep_mask)
-                << (id_bits + 2 + epoch_bits));
+                << (first_shift + epoch_bits));
 }
 
 inline uint32_t extractReusePlan32Dest(uint32_t record, uint32_t id_bits) {
@@ -93,33 +121,41 @@ inline uint32_t extractReusePlan32Dest(uint32_t record, uint32_t id_bits) {
     return record & id_mask;
 }
 
-inline uint8_t extractReusePlan32Tier(uint32_t record, uint32_t id_bits) {
-    return static_cast<uint8_t>((record >> id_bits) & 0x3u);
+inline uint8_t extractReusePlan32Tier(
+        uint32_t record, uint32_t id_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
+    return static_cast<uint8_t>(
+        (record >> id_bits) & reusePlan32TierMask(tier_bits));
 }
 
 inline uint16_t extractReusePlan32First(
-        uint32_t record, uint32_t id_bits, uint32_t epoch_bits) {
+        uint32_t record, uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
     return static_cast<uint16_t>(
-        (record >> (id_bits + 2)) & ((1u << epoch_bits) - 1u));
+        (record >> (id_bits + tier_bits)) & ((1u << epoch_bits) - 1u));
 }
 
 inline uint16_t extractReusePlan32Second(
-        uint32_t record, uint32_t id_bits, uint32_t epoch_bits) {
+        uint32_t record, uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
     return static_cast<uint16_t>(
-        (record >> (id_bits + 2 + epoch_bits)) & ((1u << epoch_bits) - 1u));
+        (record >> (id_bits + tier_bits + epoch_bits)) &
+        ((1u << epoch_bits) - 1u));
 }
 
 // Widen a compact 32-bit record to the 64-bit wire format the ReusePlan ISA helpers
 // consume. This is a register operation: the 4-byte load already happened, so
 // the memory traffic is 4 bytes per edge while the delivered value keeps the
-// canonical layout every backend already understands.
-inline uint64_t widenReusePlan32(uint32_t record, uint32_t id_bits,
-                                 uint32_t epoch_bits) {
+// canonical layout every backend already understands. A tierless record widens
+// with tier=0; the canonical 64-bit layout itself never changes.
+inline uint64_t widenReusePlan32(
+        uint32_t record, uint32_t id_bits, uint32_t epoch_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
     return packReusePlanRecord(
         extractReusePlan32Dest(record, id_bits),
-        extractReusePlan32Tier(record, id_bits),
-        extractReusePlan32First(record, id_bits, epoch_bits),
-        extractReusePlan32Second(record, id_bits, epoch_bits));
+        extractReusePlan32Tier(record, id_bits, tier_bits),
+        extractReusePlan32First(record, id_bits, epoch_bits, tier_bits),
+        extractReusePlan32Second(record, id_bits, epoch_bits, tier_bits));
 }
 
 inline uint32_t extractReusePlanDest(uint64_t record) {
@@ -608,21 +644,23 @@ void buildInEdgeReusePlanRecords(
 
 // Compact 32-bit twin of buildInEdgeReusePlanRecords. Identical epoch and tier
 // computation -- it calls the same nextReusePlanForLine -- so the only
-// difference is the container width. Returns false when the fields do not fit,
-// leaving the caller to use the 64-bit form.
+// difference is the container width and the configured tier width. Returns
+// false when the fields do not fit or the tier width is undefined, leaving the
+// caller to use the 64-bit form.
 template <typename GraphT>
 bool buildInEdgeReusePlanRecords32(
         const GraphT& g, uint32_t numVtxPerLine, uint32_t ne, bool linemin,
         std::vector<uint64_t>& record_off,
         std::vector<uint32_t>& records,
-        bool push_out_edges = false) {
+        bool push_out_edges = false,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
     const uint32_t n = static_cast<uint32_t>(g.num_nodes());
     record_off.assign(static_cast<size_t>(n) + 1, 0);
     records.clear();
     if (n == 0) return false;
     if (numVtxPerLine == 0) numVtxPerLine = 16;
     ne = normalizeReusePlanEpochCount(ne);
-    if (!canPackReusePlan32(n, ne)) return false;
+    if (!canPackReusePlan32(n, ne, tier_bits)) return false;
     const uint32_t id_bits = reusePlan32IdBits(n);
     const uint32_t epoch_bits = reusePlan32EpochBits(ne);
 
@@ -651,7 +689,7 @@ bool buildInEdgeReusePlanRecords32(
                 numVtxPerLine, ne, linemin);
             records[record_off[src] + edge] = packReusePlanRecord32(
                 accessed[edge], pair.tier, pair.first, pair.second,
-                id_bits, epoch_bits);
+                id_bits, epoch_bits, tier_bits);
         }
     }
     return true;

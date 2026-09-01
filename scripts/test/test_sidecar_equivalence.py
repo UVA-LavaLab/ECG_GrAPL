@@ -418,9 +418,13 @@ def test_compact_two_stamp_record_packs_and_round_trips():
     assert "nextReusePlanForAccess" in body, (
         "the compact builder computes epochs its own way, so a width change "
         "would silently change the policy")
-    assert "if (!canPackReusePlan32(n, ne)) return false;" in body, (
-        "the compact builder does not check feasibility, so it could silently "
-        "truncate destinations or epochs")
+    assert "if (!canPackReusePlan32(n, ne, tier_bits)) return false;" in body, (
+        "the compact builder does not check feasibility at the configured "
+        "tier width, so it could silently truncate destinations or epochs")
+    assert "reusePlan32TierBitsSupported" in header, (
+        "an undefined tier width must fail closed, not pack a field no "
+        "decoder implements")
+    assert "packReusePlanRecord32(\n" in header
 
 
 def test_reuse_plan_preserves_same_reader_line_order():
@@ -581,6 +585,11 @@ def test_compact_records_decode_identically_to_the_64_bit_form():
     assert "ALL EQUIVALENT" in out, out[-2000:]
     assert "IN CSR OFFSETS AND DESTINATIONS MATCH" in out, out[-2000:]
     assert "OUT CSR OFFSETS AND DESTINATIONS MATCH" in out, out[-2000:]
+    # The tierless width is not a separate policy: it must decode to the same
+    # destinations and stamps as the tiered record on the same graph.
+    assert "TIERLESS RECORDS EQUIVALENT" in out, out[-2000:]
+    assert "N18 128-EPOCH TIERLESS BOUNDARY OK" in out, out[-2000:]
+    assert out.count("tierless records checked") >= 2, out[-1000:]
     # Guard against a vacuous pass if the builder silently refused every size.
     assert out.count("records checked") >= 3, (
         "too few epoch counts exercised; the compact builder may be refusing "
@@ -600,6 +609,7 @@ def test_reuse_plan_sidecar_is_deterministic_and_fail_closed(tmp_path):
         "ECG_REUSE_PLAN_SIDECAR_VPL": "16",
         "ECG_REUSE_PLAN_SIDECAR_LINEMIN": "1",
         "ECG_REUSE_PLAN_SIDECAR_PUSH": "0",
+        "ECG_RECORD_TIER_BITS": "2",
         "OMP_NUM_THREADS": "4",
     }
     command = [
@@ -616,6 +626,7 @@ def test_reuse_plan_sidecar_is_deterministic_and_fail_closed(tmp_path):
             capture_output=True, text=True, timeout=300)
         assert result.returncode == 0, result.stdout + result.stderr
         assert "[ReusePlan-SIDECAR-OK" in result.stdout
+        assert "tier_bits=2" in result.stdout
     assert first.read_bytes() == second.read_bytes()
 
     verify_env = {
@@ -637,6 +648,115 @@ def test_reuse_plan_sidecar_is_deterministic_and_fail_closed(tmp_path):
     assert rejected.returncode != 0
     assert "payload hash mismatch" in (
         rejected.stdout + rejected.stderr)
+
+
+def test_reuse_plan_sidecar_binds_the_tier_width(tmp_path):
+    """The same bytes decode to different epochs at a different tier width.
+
+    A tierless record starts its first stamp immediately above the destination
+    bits, so a sidecar built with two tier bits and read as tierless would
+    deliver plausible-looking but wrong epochs on every edge. The provenance
+    must therefore be in the file, not in the caller's memory of how it was
+    generated.
+    """
+    tool = ROOT / "bench/bin_sim/reuse_plan_sidecar"
+    if not tool.exists():
+        pytest.skip("ReusePlan sidecar generator not built")
+    base_env = {
+        **os.environ,
+        "ECG_REUSE_PLAN_SIDECAR_RECORD_BYTES": "4",
+        "ECG_REUSE_PLAN_SIDECAR_EPOCHS": "16",
+        "ECG_REUSE_PLAN_SIDECAR_VPL": "16",
+        "ECG_REUSE_PLAN_SIDECAR_LINEMIN": "1",
+        "ECG_REUSE_PLAN_SIDECAR_PUSH": "0",
+        "OMP_NUM_THREADS": "4",
+    }
+    command = [
+        str(tool), "-g", "10", "-k", "4",
+        "-o", "5", "-n", "1", "-i", "1",
+    ]
+    outputs = {}
+    for tier_bits in ("2", "0"):
+        output = tmp_path / f"tier{tier_bits}.bin"
+        result = subprocess.run(
+            command,
+            env={
+                **base_env,
+                "ECG_REUSE_PLAN_SIDECAR": str(output),
+                "ECG_RECORD_TIER_BITS": tier_bits,
+            },
+            cwd=ROOT, capture_output=True, text=True, timeout=300)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert f"tier_bits={tier_bits}" in result.stdout
+        outputs[tier_bits] = output
+    assert outputs["2"].read_bytes() != outputs["0"].read_bytes(), (
+        "dropping the tier bits did not change the packed records, so the "
+        "tier width is not reaching the packer")
+
+    # Each sidecar must be rejected by the other tier width, in both
+    # directions, with a message that says to regenerate it.
+    for built, read_as in (("2", "0"), ("0", "2")):
+        rejected = subprocess.run(
+            command,
+            env={
+                **base_env,
+                "ECG_REUSE_PLAN_SIDECAR": str(outputs[built]),
+                "ECG_REUSE_PLAN_SIDECAR_VERIFY_ONLY": "1",
+                "ECG_RECORD_TIER_BITS": read_as,
+            },
+            cwd=ROOT, capture_output=True, text=True, timeout=300)
+        combined = rejected.stdout + rejected.stderr
+        assert rejected.returncode != 0, combined
+        assert "tier_bits mismatch" in combined, combined
+
+    # An undefined tier width must never produce a sidecar at all.
+    unsupported = subprocess.run(
+        command,
+        env={
+            **base_env,
+            "ECG_REUSE_PLAN_SIDECAR": str(tmp_path / "tier3.bin"),
+            "ECG_RECORD_TIER_BITS": "3",
+        },
+        cwd=ROOT, capture_output=True, text=True, timeout=300)
+    assert unsupported.returncode != 0
+    assert "unsupported ECG_RECORD_TIER_BITS" in (
+        unsupported.stdout + unsupported.stderr)
+
+    # The canonical 64-bit payload always carries two tier bits. A tierless
+    # header on that payload would make cache_sim and detailed simulators
+    # interpret the same configuration differently, so generation fails.
+    wide_tierless = subprocess.run(
+        command,
+        env={
+            **base_env,
+            "ECG_REUSE_PLAN_SIDECAR": str(tmp_path / "wide-tier0.bin"),
+            "ECG_REUSE_PLAN_SIDECAR_RECORD_BYTES": "8",
+            "ECG_RECORD_TIER_BITS": "0",
+        },
+        cwd=ROOT, capture_output=True, text=True, timeout=300)
+    combined = wide_tierless.stdout + wide_tierless.stderr
+    assert wide_tierless.returncode != 0, combined
+    assert "wide sidecar requires tier_bits=2" in combined, combined
+
+    # A pre-tier-width sidecar carries no tier provenance, so it must be
+    # regenerated rather than reinterpreted at whatever width happens to be
+    # configured now.
+    legacy = tmp_path / "legacy.bin"
+    blob = bytearray(outputs["2"].read_bytes())
+    blob[8:12] = (1).to_bytes(4, "little")  # header.version = 1
+    legacy.write_bytes(blob)
+    stale = subprocess.run(
+        command,
+        env={
+            **base_env,
+            "ECG_REUSE_PLAN_SIDECAR": str(legacy),
+            "ECG_REUSE_PLAN_SIDECAR_VERIFY_ONLY": "1",
+            "ECG_RECORD_TIER_BITS": "2",
+        },
+        cwd=ROOT, capture_output=True, text=True, timeout=300)
+    combined = stale.stdout + stale.stderr
+    assert stale.returncode != 0, combined
+    assert "version mismatch" in combined, combined
 
 
 @pytest.mark.skipif(not (GEM5_PR.exists() and GRAPH.exists()),
@@ -698,23 +818,40 @@ def test_the_compact_format_has_one_definition_in_three_places():
     decoder = (ROOT / "bench/include/gem5_sim/gem5/src/arch/riscv/isa"
                / "decoder.isa").read_text()
     start = decoder.index("0x02: ecg_extract2c")
-    body = decoder[start:start + 2600]
-    # Same field order and offsets as packReusePlanRecord32.
+    body = decoder[start:start + 3400]
+    # Same field order and offsets as packReusePlanRecord32, now with a
+    # configurable tier width.
     assert "record & id_mask" in body, "dest must occupy the low id_bits"
-    assert "(record >> id_bits) & 0x3U" in body, "tier sits directly above dest"
-    assert "(record >> (id_bits + 2)) & ep_mask" in body, (
-        "the first stamp sits above the 2 tier bits")
-    assert "(record >> (id_bits + 2 + epoch_bits)) & ep_mask" in body, (
+    assert "(record >> id_bits) & tier_mask" in body, (
+        "tier sits directly above dest and is tier_bits wide")
+    assert "(record >> (id_bits + tier_bits)) & ep_mask" in body, (
+        "the first stamp sits directly above the tier field, which is empty "
+        "at tier_bits=0")
+    assert "(record >> (id_bits + tier_bits + epoch_bits)) &" in body, (
         "the second stamp sits above the first")
+    # tier_bits=0 is a legal width, so the decoder must distinguish "tierless"
+    # from "the guest never declared a tier width".
+    assert "(fmt & 0x80000000U) == 0" in body, (
+        "the decoder must reject a format word with no tier-width marker "
+        "instead of assuming the canonical two bits")
+    assert "tier_bits != 0 && tier_bits != 2" in body, (
+        "only the two defined tier widths may decode")
     # Must deliver through the same path as the 64-bit instruction, or the two
     # widths would mean different policies.
     assert "setDecodedEcgExtractHint2" in body
     assert "storeEcgMetadataByVertex" in body
 
     builder = (ROOT / "bench/include/ecg_reuse_plan_builder.h").read_text()
-    assert "(static_cast<uint32_t>(tier & 0x3u) << id_bits)" in builder, (
+    assert "((static_cast<uint32_t>(tier) & tier_mask) << id_bits)" in builder, (
         "the packer's layout changed; the gem5 decoder still implements the "
         "old one and will deliver wrong epochs without failing")
+    for site in ("ecg_flow_load_compact", "ecg_bind_iload_compact"):
+        index = decoder.index(site)
+        window = decoder[index:index + 3000]
+        assert "(compact >> (id_bits + tier_bits)) & epoch_mask" in window, (
+            f"{site} still decodes the first stamp at a fixed tier offset")
+        assert "(fmt & 0x80000000U) == 0" in window, (
+            f"{site} accepts a format word that declares no tier width")
 
 
 def test_built_kernels_are_newer_than_the_sources_they_embed():

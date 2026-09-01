@@ -286,6 +286,8 @@ struct ReusePlanPairStream {
     std::vector<uint32_t> compact_records;
     uint32_t compact_id_bits = 1;
     uint32_t compact_epoch_bits = 1;
+    uint32_t compact_tier_bits =
+        ecg_reuse_plan::kReusePlanDefaultTierBits;
     bool compact = false;
 
     uint64_t record(uint64_t index) const {
@@ -293,7 +295,8 @@ struct ReusePlanPairStream {
             return ecg_reuse_plan::widenReusePlan32(
                 compact_records[index],
                 compact_id_bits,
-                compact_epoch_bits);
+                compact_epoch_bits,
+                compact_tier_bits);
         }
         return wide_records[index];
     }
@@ -325,9 +328,13 @@ bool build_reuse_plan_pair_stream(
         const char* kernel, ReusePlanPairStream& stream) {
     const uint32_t num_nodes = static_cast<uint32_t>(graph.num_nodes());
     auto metadata = ::ecg_metadata::configure(num_nodes, epoch_count);
+    // The tier width is configured, so take it from the same shared rule the
+    // other backends use rather than assuming the canonical two bits.
+    const uint32_t tier_bits = static_cast<uint32_t>(metadata.tier_bits);
     const bool use_compact =
         metadata.record_bytes == sizeof(uint32_t) &&
-        ecg_reuse_plan::canPackReusePlan32(num_nodes, epoch_count);
+        ecg_reuse_plan::canPackReusePlan32(
+            num_nodes, epoch_count, tier_bits);
     ::ecg_metadata::declareContainerBytes(
         metadata, use_compact ? sizeof(uint32_t) : sizeof(uint64_t));
     ::ecg_metadata::announce(metadata, "sniper-sg_kernel");
@@ -338,7 +345,7 @@ bool build_reuse_plan_pair_stream(
         if (!ecg_reuse_plan::buildInEdgeReusePlanRecords32(
                 graph, vertices_per_line, epoch_count,
                 /*linemin=*/true, stream.offsets,
-                stream.compact_records, push_out_edges)) {
+                stream.compact_records, push_out_edges, tier_bits)) {
             std::fprintf(
                 stderr,
                 "sniper-sg %s: compact ReusePlan record construction failed\n",
@@ -350,20 +357,24 @@ bool build_reuse_plan_pair_stream(
             ecg_reuse_plan::reusePlan32IdBits(num_nodes);
         stream.compact_epoch_bits =
             ecg_reuse_plan::reusePlan32EpochBits(epoch_count);
+        stream.compact_tier_bits = tier_bits;
         std::fprintf(
             stderr,
             "[ECG-PAIR32 sim=sniper kernel=%s records=%llu "
-            "id_bits=%u epoch_bits=%u (4-byte, substitutes for the CSR edge)]\n",
+            "id_bits=%u epoch_bits=%u tier_bits=%u "
+            "(4-byte, substitutes for the CSR edge)]\n",
             kernel,
             static_cast<unsigned long long>(stream.compact_records.size()),
             stream.compact_id_bits,
-            stream.compact_epoch_bits);
+            stream.compact_epoch_bits,
+            stream.compact_tier_bits);
         stream.wide_records.resize(stream.compact_records.size());
         for (size_t index = 0; index < stream.compact_records.size(); ++index) {
             stream.wide_records[index] = ecg_reuse_plan::widenReusePlan32(
                 stream.compact_records[index],
                 stream.compact_id_bits,
-                stream.compact_epoch_bits);
+                stream.compact_epoch_bits,
+                stream.compact_tier_bits);
         }
         graphbrew_sniper::require_canonical_reuse_plan_offsets(
             graph, stream.offsets, stream.compact_records.size(),
@@ -454,6 +465,8 @@ int run_pr(const Graph& graph, int max_iters) {
     uint32_t epoch_pack_id_mask = 1;
     uint32_t reuse_plan32_id_bits = 1;
     uint32_t reuse_plan32_epoch_bits = 1;
+    uint32_t reuse_plan32_tier_bits =
+        ecg_reuse_plan::kReusePlanDefaultTierBits;
     bool epoch_packed_ok = false;
     bool reuse_plan_ok = false;
     bool reuse_plan32_ok = false;
@@ -476,6 +489,9 @@ int run_pr(const Graph& graph, int max_iters) {
         // header cache_sim and gem5 use, so the three cannot disagree about
         // record width or whether a packed record fits.
         auto ecg_meta = ::ecg_metadata::configure(nn, ecg_epoch_count);
+        // Configured tier width, from the same shared rule as gem5 and the
+        // host sidecar generator, so the three cannot pack different layouts.
+        reuse_plan32_tier_bits = static_cast<uint32_t>(ecg_meta.tier_bits);
         // The shared rule computes the budget a record could occupy; a backend that
         // materialises it wider must say so. Sniper's two-epoch ReusePlan array used to
         // be uint64_t unconditionally while the receipt printed the 4-byte
@@ -485,7 +501,8 @@ int run_pr(const Graph& graph, int max_iters) {
             (ecg_extract_on && ecg_reuse_plan_depth == 2) || reuse_plan_transport_matched;
         const bool use_compact_pair =
             sniper_pair_requested && ecg_meta.record_bytes == 4 &&
-            ecg_reuse_plan::canPackReusePlan32(nn, ecg_epoch_count);
+            ecg_reuse_plan::canPackReusePlan32(
+                nn, ecg_epoch_count, reuse_plan32_tier_bits);
         if (sniper_pair_requested)
             ::ecg_metadata::declareContainerBytes(
                 ecg_meta, use_compact_pair ? 4 : 8);
@@ -529,17 +546,20 @@ int run_pr(const Graph& graph, int max_iters) {
             if (use_compact_pair &&
                 ecg_reuse_plan::buildInEdgeReusePlanRecords32(
                     graph, num_vtx_per_line, ecg_epoch_count,
-                    /*linemin=*/true, reuse_plan_off, reuse_plan32_flat)) {
+                    /*linemin=*/true, reuse_plan_off, reuse_plan32_flat,
+                    /*push_out_edges=*/false, reuse_plan32_tier_bits)) {
                 reuse_plan32_ok = true;
                 reuse_plan32_id_bits = ecg_reuse_plan::reusePlan32IdBits(nn);
                 reuse_plan32_epoch_bits =
                     ecg_reuse_plan::reusePlan32EpochBits(ecg_epoch_count);
                 std::fprintf(stderr,
                              "[ECG-PAIR32 sim=sniper kernel=pr records=%llu "
-                             "id_bits=%u epoch_bits=%u (4-byte, substitutes "
+                             "id_bits=%u epoch_bits=%u tier_bits=%u "
+                             "(4-byte, substitutes "
                              "for the CSR edge)]\n",
                              (unsigned long long)reuse_plan32_flat.size(),
-                             reuse_plan32_id_bits, reuse_plan32_epoch_bits);
+                             reuse_plan32_id_bits, reuse_plan32_epoch_bits,
+                             reuse_plan32_tier_bits);
             }
             ecg_reuse_plan::buildInEdgeReusePlanRecords(
                 graph, num_vtx_per_line, ecg_epoch_count,
@@ -780,7 +800,8 @@ int run_pr(const Graph& graph, int max_iters) {
                         const uint64_t rec = reuse_plan32_ok
                             ? ecg_reuse_plan::widenReusePlan32(
                                   reuse_plan32_flat[pos], reuse_plan32_id_bits,
-                                  reuse_plan32_epoch_bits)
+                                  reuse_plan32_epoch_bits,
+                                  reuse_plan32_tier_bits)
                             : reuse_plan_flat[pos];
                         const NodeID neighbor = static_cast<NodeID>(
                             ecg_reuse_plan::extractReusePlanDest(rec));
@@ -794,7 +815,8 @@ int run_pr(const Graph& graph, int max_iters) {
                         const uint64_t rec = reuse_plan32_ok
                             ? ecg_reuse_plan::widenReusePlan32(
                                   reuse_plan32_flat[pos], reuse_plan32_id_bits,
-                                  reuse_plan32_epoch_bits)
+                                  reuse_plan32_epoch_bits,
+                                  reuse_plan32_tier_bits)
                             : reuse_plan_flat[pos];
                         const NodeID neighbor = static_cast<NodeID>(
                             ecg_reuse_plan::extractReusePlanDest(rec));

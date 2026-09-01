@@ -134,7 +134,7 @@ def reuse_plan_sidecar_options(options: str) -> list[str]:
 
 def ensure_reuse_plan_sidecar(
         args: argparse.Namespace, env: dict[str, str],
-        record_bytes: int) -> Path:
+        record_bytes: int, tier_bits: int) -> Path:
     if args.benchmark != "pr":
         raise RuntimeError(
             "host-generated ReusePlan sidecars are currently implemented "
@@ -142,6 +142,7 @@ def ensure_reuse_plan_sidecar(
     if record_bytes not in (4, 8):
         raise RuntimeError(
             f"unsupported ReusePlan sidecar width: {record_bytes}")
+    validated_ecg_record_tier_bits(tier_bits, "ECG_RECORD_TIER_BITS")
     if not REUSE_PLAN_SIDECAR_TOOL.is_file():
         raise RuntimeError(
             f"missing ReusePlan sidecar generator: "
@@ -168,6 +169,10 @@ def ensure_reuse_plan_sidecar(
         "graph": graph_fingerprint,
         "options": reuse_plan_sidecar_options(args.options),
         "record_bytes": record_bytes,
+        # The tier width changes the packed bits, so a sidecar built for one
+        # width must never be reused for the other. It is part of the cache
+        # identity, not just of the header the guest re-validates.
+        "tier_bits": tier_bits,
         "epochs": int(args.ecg_epochs),
         "vertices_per_line": REUSE_PLAN_PR_VERTICES_PER_LINE,
         "linemin": 1,
@@ -185,6 +190,7 @@ def ensure_reuse_plan_sidecar(
     generator_env.update({
         "ECG_REUSE_PLAN_SIDECAR": str(sidecar),
         "ECG_REUSE_PLAN_SIDECAR_RECORD_BYTES": str(record_bytes),
+        "ECG_RECORD_TIER_BITS": str(tier_bits),
         "ECG_REUSE_PLAN_SIDECAR_EPOCHS": str(int(args.ecg_epochs)),
         "ECG_REUSE_PLAN_SIDECAR_VPL":
             str(REUSE_PLAN_PR_VERTICES_PER_LINE),
@@ -1354,20 +1360,22 @@ def parse_ecg_log_stats(
             stats[out_key] = float(value) if "." in value else int(value)
     sidecar = re.search(
         r"\[ReusePlan-SIDECAR sim=gem5 active=1 "
-        r"record_bytes=(\d+) records=(\d+) graph_hash=(\d+) "
-        r"payload_hash=(\d+)\]",
+        r"record_bytes=(\d+) tier_bits=(\d+) records=(\d+) "
+        r"graph_hash=(\d+) payload_hash=(\d+)\]",
         text)
     if sidecar:
         stats.update({
             "gem5_reuse_plan_sidecar_active": 1,
             "gem5_reuse_plan_sidecar_record_bytes":
                 int(sidecar.group(1)),
-            "gem5_reuse_plan_sidecar_records":
+            "gem5_reuse_plan_sidecar_tier_bits":
                 int(sidecar.group(2)),
+            "gem5_reuse_plan_sidecar_records":
+                int(sidecar.group(3)),
             "gem5_reuse_plan_sidecar_graph_hash":
-                sidecar.group(3),
-            "gem5_reuse_plan_sidecar_payload_hash":
                 sidecar.group(4),
+            "gem5_reuse_plan_sidecar_payload_hash":
+                sidecar.group(5),
         })
     trace = re.search(
         r"\[T_OPT-TRACE accesses=(\d+) property_accesses=(\d+) "
@@ -1652,6 +1660,38 @@ def explicit_ecg_record_bytes(default: int) -> int:
     return width
 
 
+SUPPORTED_ECG_RECORD_TIER_BITS = (0, 2)
+
+
+def validated_ecg_record_tier_bits(raw: Any, source: str) -> int:
+    """Only the two widths the compact record layout defines are runnable."""
+    try:
+        tier_bits = int(str(raw), 10)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"{source} must be an integer, got {raw!r}") from exc
+    if tier_bits not in SUPPORTED_ECG_RECORD_TIER_BITS:
+        raise RuntimeError(
+            f"{source}={tier_bits} is not a defined compact ReusePlan tier "
+            f"width; only {SUPPORTED_ECG_RECORD_TIER_BITS} are implemented")
+    return tier_bits
+
+
+def explicit_ecg_record_tier_bits(default: int = 2) -> int:
+    explicit = explicit_cell_mechanism_env()
+    raw = explicit.get("ECG_RECORD_TIER_BITS")
+    if raw is None:
+        return default
+    return validated_ecg_record_tier_bits(raw, "ECG_RECORD_TIER_BITS")
+
+
+def env_ecg_record_tier_bits(env: dict[str, str], default: int = 2) -> int:
+    raw = env.get("ECG_RECORD_TIER_BITS")
+    if raw is None or raw == "":
+        return default
+    return validated_ecg_record_tier_bits(raw, "ECG_RECORD_TIER_BITS")
+
+
 def require_sniper_reuse_plan_certification_budget(
         env: dict[str, str]) -> int:
     raw = env.get("ECG_REUSE_PLAN_DELIVERY_TRACE", "0") or "0"
@@ -1676,6 +1716,12 @@ def apply_sniper_transport_cell_env(env: dict[str, str]) -> None:
             "ECG_EDGE_RECORD_BYTES"):
         if key in explicit:
             env[key] = str(explicit[key])
+    # The tier width changes the compact record layout, so Sniper must receive
+    # it with the other transport widths or it packs a different record than
+    # gem5 for the same cell. Validate it here so an undefined width fails
+    # before the run rather than being clamped inside the guest.
+    if "ECG_RECORD_TIER_BITS" in explicit:
+        env["ECG_RECORD_TIER_BITS"] = str(explicit_ecg_record_tier_bits())
 
 
 def apply_explicit_cell_mechanism_env(
@@ -2587,9 +2633,12 @@ def apply_gem5_compact_reuse_bind_flowthrough_receipt(
         require_trace_receipts: bool = True,
         performance_requested: bool = False) -> bool:
     """Validate the proposal path, with traces required only for mechanism rows."""
+    # tier_bits is read from the guest, never assumed: the compact record is
+    # tierless whenever the two tier bits are what stops the fields fitting,
+    # and a hardcoded 2 would misreport exactly the cells that need it.
     format_receipt = re.search(
         r"\[ECG_REUSE_BIND_LOAD_C_FLOW\][^\n]*"
-        r"id_bits=(\d+) epoch_bits=(\d+)", log_text)
+        r"id_bits=(\d+) epoch_bits=(\d+) tier_bits=(\d+)", log_text)
     active = "[ECG_REUSE_BIND_LOAD_C_FLOW]" in log_text
     row["gem5_compact_reuse_bind_flowthrough_active"] = int(active)
     if active:
@@ -2625,7 +2674,7 @@ def apply_gem5_compact_reuse_bind_flowthrough_receipt(
     if format_receipt:
         row["proposal_compact_id_bits"] = int(format_receipt.group(1))
         row["proposal_compact_epoch_bits"] = int(format_receipt.group(2))
-        row["proposal_compact_tier_bits"] = 2
+        row["proposal_compact_tier_bits"] = int(format_receipt.group(3))
     row["proposal_performance_mode_active"] = int(
         performance_requested and active and format_receipt is not None)
     if requested and not active:
@@ -3615,8 +3664,14 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             env.get(
                 "ECG_EXPECT_BYTES_PER_EDGE",
                 env.get("ECG_EDGE_RECORD_BYTES", "8")))
+        # Fail closed on an undefined tier width here rather than letting the
+        # guest abort mid-cell, and keep the value the explicit-cell
+        # environment asked for -- including the tierless 0 that a compact
+        # record needs to fit at all.
+        record_tier_bits = env_ecg_record_tier_bits(env)
+        env["ECG_RECORD_TIER_BITS"] = str(record_tier_bits)
         reuse_plan_sidecar = ensure_reuse_plan_sidecar(
-            args, env, record_bytes)
+            args, env, record_bytes, record_tier_bits)
         env["GEM5_REUSE_PLAN_SIDECAR"] = str(reuse_plan_sidecar)
         env["GEM5_REUSE_PLAN_SIDECAR_REQUIRED"] = "1"
         if not args.dry_run:
@@ -3931,6 +3986,12 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         # compact 4-byte record. Anyone re-parsing the combined CSV would have
         # concluded both width stages streamed 8 bytes. The guest receipt is the
         # only source of truth for what was actually streamed, so promote it.
+        tier_receipt = re.search(
+            r"\[ECG-METADATA [^\]]*tier_bits=(\d+)", log_text)
+        if tier_receipt:
+            # The guest's own attestation of the tier width it packed; the
+            # runner's request is not evidence that the guest honoured it.
+            base["ecg_record_tier_bits"] = int(tier_receipt.group(1))
         receipt = re.search(
             r"\[ECG-METADATA [^\]]*bytes_per_edge=([0-9.]+)[^\]]*\]", log_text)
         if receipt:

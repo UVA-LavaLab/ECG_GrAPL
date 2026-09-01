@@ -70,32 +70,51 @@
                         Rd = rvZext(dest_id);
                     }});
                     // COMPACT two-epoch ReusePlan delivery. Rs1 holds the 32-bit record
-                    // dest[id_bits] | tier[2] | first[eb] | second[eb]; Rs2
-                    // holds the loop-invariant format word
-                    // (id_bits | epoch_bits << 8). Widening in the decoder is
+                    // dest[id_bits] | tier[tier_bits] | first[eb] | second[eb];
+                    // Rs2 holds the loop-invariant format word
+                    //   fmt[5:0]   = id_bits
+                    //   fmt[13:8]  = epoch_bits
+                    //   fmt[21:16] = tier_bits (0 or 2)
+                    //   fmt[31]    = tier width present
+                    // Widening in the decoder is
                     // the whole point: in software it costs about 16
                     // instructions per edge with runtime shift amounts, which
                     // at low DRAM utilisation costs more time than the halved
                     // record saves. The delivered metadata is identical to
                     // ecg_extract2, so the two widths cannot mean different
-                    // policies.
+                    // policies. A tierless record delivers tier=0; the
+                    // canonical 64-bit layout below never changes.
                     0x02: ecg_extract2c({{
                         const uint32_t record = static_cast<uint32_t>(Rs1);
                         const uint32_t fmt = static_cast<uint32_t>(Rs2);
                         uint32_t id_bits = fmt & 0x3FU;
                         uint32_t epoch_bits = (fmt >> 8) & 0x3FU;
+                        const uint32_t tier_bits = (fmt >> 16) & 0x3FU;
+                        // tier_bits=0 is a legal width, so an absent presence
+                        // marker cannot be read as "tierless": it means the
+                        // guest never declared a tier width at all.
+                        panic_if(
+                            (fmt & 0x80000000U) == 0,
+                            "Compact ReusePlan format word declares no tier "
+                            "width: fmt=%#x", fmt);
+                        panic_if(
+                            tier_bits != 0 && tier_bits != 2,
+                            "Invalid compact ReusePlan tier width: "
+                            "tier_bits=%u", tier_bits);
                         if (id_bits == 0 || id_bits > 32) id_bits = 32;
                         if (epoch_bits == 0 || epoch_bits > 16) epoch_bits = 16;
                         const uint32_t id_mask = (id_bits >= 32)
                             ? 0xFFFFFFFFU : ((1U << id_bits) - 1U);
                         const uint32_t ep_mask = (1U << epoch_bits) - 1U;
+                        const uint32_t tier_mask = (1U << tier_bits) - 1U;
                         uint32_t dest_id = record & id_mask;
                         uint8_t c_tier = static_cast<uint8_t>(
-                            (record >> id_bits) & 0x3U);
+                            (record >> id_bits) & tier_mask);
                         uint16_t c_epoch1 = static_cast<uint16_t>(
-                            (record >> (id_bits + 2)) & ep_mask);
+                            (record >> (id_bits + tier_bits)) & ep_mask);
                         uint16_t c_epoch2 = static_cast<uint16_t>(
-                            (record >> (id_bits + 2 + epoch_bits)) & ep_mask);
+                            (record >> (id_bits + tier_bits + epoch_bits)) &
+                            ep_mask);
                         uint16_t current_epoch = static_cast<uint16_t>(
                             xc->readMiscReg(MISCREG_ECG_CUR_EPOCH));
                         uint16_t context_id = static_cast<uint16_t>(
@@ -210,7 +229,8 @@
                 // four bytes, while rd receives the canonical
                 // dest32|tier2|epoch1_15|epoch2_15 mask consumed by ReuseBind.
                 // Field widths are loop-invariant architectural state in CSR
-                // 0x802, written before the ROI.
+                // 0x802, written before the ROI. A tierless compact record
+                // widens with tier=0; the canonical mask is unchanged.
                 0x7: ecg_flow_load_compact({{
                     const uint64_t compact =
                         static_cast<uint32_t>(Mem_uw);
@@ -218,24 +238,32 @@
                         xc->readMiscReg(MISCREG_ECG_RECORD_FORMAT));
                     const uint32_t id_bits = fmt & 0x3FU;
                     const uint32_t epoch_bits = (fmt >> 8) & 0x3FU;
+                    const uint32_t tier_bits = (fmt >> 16) & 0x3FU;
+                    panic_if(
+                        (fmt & 0x80000000U) == 0,
+                        "Compact FlowThrough ReusePlan format declares no "
+                        "tier width: fmt=%#x", fmt);
                     panic_if(
                         id_bits == 0 || epoch_bits == 0 ||
-                        id_bits + 2 + 2 * epoch_bits > 32,
+                        (tier_bits != 0 && tier_bits != 2) ||
+                        id_bits + tier_bits + 2 * epoch_bits > 32,
                         "Invalid compact FlowThrough ReusePlan format: "
-                        "id_bits=%u epoch_bits=%u",
-                        id_bits, epoch_bits);
+                        "id_bits=%u epoch_bits=%u tier_bits=%u",
+                        id_bits, epoch_bits, tier_bits);
                     const uint64_t id_mask =
                         (uint64_t{1} << id_bits) - 1;
                     const uint64_t epoch_mask =
                         (uint64_t{1} << epoch_bits) - 1;
+                    const uint64_t tier_mask =
+                        (uint64_t{1} << tier_bits) - 1;
                     const uint32_t dest_id = static_cast<uint32_t>(
                         compact & id_mask);
                     const uint8_t tier = static_cast<uint8_t>(
-                        (compact >> id_bits) & 0x3U);
+                        (compact >> id_bits) & tier_mask);
                     const uint16_t epoch1 = static_cast<uint16_t>(
-                        (compact >> (id_bits + 2)) & epoch_mask);
+                        (compact >> (id_bits + tier_bits)) & epoch_mask);
                     const uint16_t epoch2 = static_cast<uint16_t>(
-                        (compact >> (id_bits + 2 + epoch_bits)) &
+                        (compact >> (id_bits + tier_bits + epoch_bits)) &
                         epoch_mask);
                     Rd =
                         static_cast<uint64_t>(dest_id) |
@@ -605,6 +633,8 @@
                     // architectural state in CSR 0x802:
                     //   fmt[5:0]   = id_bits
                     //   fmt[13:8]  = epoch_bits
+                    //   fmt[21:16] = tier_bits (0 or 2)
+                    //   fmt[31]    = tier width present
                     // The CSR is written once before the ROI, so the hot path
                     // remains one record load plus one governed property load.
                     0x0B: decode ECG_WIDTH {
@@ -619,24 +649,33 @@
                             xc->readMiscReg(MISCREG_ECG_RECORD_FORMAT));
                         const uint32_t id_bits = fmt & 0x3FU;
                         const uint32_t epoch_bits = (fmt >> 8) & 0x3FU;
+                        const uint32_t tier_bits = (fmt >> 16) & 0x3FU;
+                        panic_if(
+                            (fmt & 0x80000000U) == 0,
+                            "Compact ReusePlan record format declares no tier "
+                            "width: fmt=%#x", fmt);
                         panic_if(
                             id_bits == 0 || epoch_bits == 0 ||
-                            id_bits + 2 + 2 * epoch_bits > 32,
+                            (tier_bits != 0 && tier_bits != 2) ||
+                            id_bits + tier_bits + 2 * epoch_bits > 32,
                             "Invalid compact ReusePlan record format: id_bits=%u "
-                            "epoch_bits=%u", id_bits, epoch_bits);
+                            "epoch_bits=%u tier_bits=%u",
+                            id_bits, epoch_bits, tier_bits);
 
                         const uint64_t id_mask =
                             (uint64_t{1} << id_bits) - 1;
                         const uint64_t epoch_mask =
                             (uint64_t{1} << epoch_bits) - 1;
+                        const uint64_t tier_mask =
+                            (uint64_t{1} << tier_bits) - 1;
                         const uint32_t dest_id = static_cast<uint32_t>(
                             compact & id_mask);
                         const uint8_t tier = static_cast<uint8_t>(
-                            (compact >> id_bits) & 0x3U);
+                            (compact >> id_bits) & tier_mask);
                         const uint16_t epoch1 = static_cast<uint16_t>(
-                            (compact >> (id_bits + 2)) & epoch_mask);
+                            (compact >> (id_bits + tier_bits)) & epoch_mask);
                         const uint16_t epoch2 = static_cast<uint16_t>(
-                            (compact >> (id_bits + 2 + epoch_bits)) &
+                            (compact >> (id_bits + tier_bits + epoch_bits)) &
                             epoch_mask);
                         const uint64_t canonical =
                             static_cast<uint64_t>(dest_id) |

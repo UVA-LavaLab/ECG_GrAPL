@@ -330,10 +330,6 @@ inline void setDecodedEcgExtractHint2(
         uint32_t real_vertex, uint8_t tier,
         uint16_t first, uint16_t second, uint8_t width_bytes = 4,
         uint16_t current_epoch = 0, uint16_t context_id = 0) {
-    if (tier == 0) {
-        clearDecodedEcgExtractHint();
-        return;
-    }
     static std::atomic<uint64_t> trace_sequence{0};
     static const uint64_t trace_limit = []() {
         const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");
@@ -369,10 +365,6 @@ inline void setDecodedEcgExtractHint2Silent(
         uint32_t real_vertex, uint8_t tier,
         uint16_t first, uint16_t second,
         uint16_t current_epoch = 0, uint16_t context_id = 0) {
-    if (tier == 0) {
-        clearDecodedEcgExtractHint();
-        return;
-    }
     decodedEcgEpochStorage().store(first, std::memory_order_release);
     decodedEcgEpoch2Storage().store(second, std::memory_order_release);
     decodedEcgEpochCountStorage().store(2, std::memory_order_release);

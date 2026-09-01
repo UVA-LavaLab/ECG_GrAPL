@@ -16,7 +16,10 @@
 namespace ecg_reuse_plan {
 
 constexpr uint64_t REUSE_PLAN_SIDECAR_MAGIC = 0x3150435350524745ULL;
-constexpr uint32_t REUSE_PLAN_SIDECAR_VERSION = 1;
+// v2 binds the compact record's tier width into the header. A v1 sidecar
+// carried no tier width at all, so it can only be regenerated, never
+// reinterpreted: the same bytes decode to different epochs at tier_bits=0.
+constexpr uint32_t REUSE_PLAN_SIDECAR_VERSION = 2;
 constexpr uint32_t REUSE_PLAN_BUILDER_VERSION = 2;
 
 struct ReusePlanSidecarHeader {
@@ -30,7 +33,7 @@ struct ReusePlanSidecarHeader {
     uint32_t linemin = 0;
     uint32_t hot_fraction_ppm = 0;
     uint32_t vertices = 0;
-    uint32_t reserved = 0;
+    uint32_t tier_bits = kReusePlanDefaultTierBits;
     uint64_t directed_edges = 0;
     uint64_t offset_count = 0;
     uint64_t record_count = 0;
@@ -119,6 +122,19 @@ bool writeReusePlanSidecar(
         const std::vector<uint64_t>& offsets,
         const std::vector<RecordT>& records,
         std::string& error) {
+    if (!reusePlan32TierBitsSupported(header.tier_bits)) {
+        error = "unsupported sidecar tier width";
+        return false;
+    }
+    if constexpr (sizeof(RecordT) != 4) {
+        if (header.tier_bits != kReusePlanDefaultTierBits) {
+            error = "wide sidecar requires tier_bits=2";
+            return false;
+        }
+    }
+    header.magic = REUSE_PLAN_SIDECAR_MAGIC;
+    header.version = REUSE_PLAN_SIDECAR_VERSION;
+    header.builder_version = REUSE_PLAN_BUILDER_VERSION;
     header.record_bytes = sizeof(RecordT);
     header.offset_count = offsets.size();
     header.record_count = records.size();
@@ -163,10 +179,15 @@ bool loadReusePlanSidecar(
         const std::string& path, const GraphT& graph,
         bool push_out_edges, uint32_t num_vtx_per_line,
         uint32_t epochs, bool linemin, double hot_fraction,
+        uint32_t tier_bits,
         std::vector<uint64_t>& offsets,
         std::vector<RecordT>& records,
         ReusePlanSidecarHeader& header,
         std::string& error) {
+    if (!reusePlan32TierBitsSupported(tier_bits)) {
+        error = "unsupported sidecar tier width";
+        return false;
+    }
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         error = "cannot open sidecar";
@@ -177,11 +198,30 @@ bool loadReusePlanSidecar(
     const uint64_t edges =
         static_cast<uint64_t>(graph.num_edges_directed());
     const uint64_t expected_records = edges;
-    if (!input ||
-        header.magic != REUSE_PLAN_SIDECAR_MAGIC ||
-        header.version != REUSE_PLAN_SIDECAR_VERSION ||
-        header.builder_version != REUSE_PLAN_BUILDER_VERSION ||
-        header.record_bytes != sizeof(RecordT) ||
+    if (!input || header.magic != REUSE_PLAN_SIDECAR_MAGIC) {
+        error = "sidecar magic mismatch";
+        return false;
+    }
+    // Version and tier width are reported separately from the rest of the
+    // configuration: a sidecar written before the tier width was recorded, or
+    // one written for the other tier width, decodes to different epochs from
+    // the same bytes and must be regenerated rather than reinterpreted.
+    if (header.version != REUSE_PLAN_SIDECAR_VERSION ||
+        header.builder_version != REUSE_PLAN_BUILDER_VERSION) {
+        error = "sidecar version mismatch; regenerate the sidecar";
+        return false;
+    }
+    if (header.tier_bits != tier_bits) {
+        error = "sidecar tier_bits mismatch; regenerate the sidecar";
+        return false;
+    }
+    if constexpr (sizeof(RecordT) != 4) {
+        if (header.tier_bits != kReusePlanDefaultTierBits) {
+            error = "wide sidecar requires tier_bits=2";
+            return false;
+        }
+    }
+    if (header.record_bytes != sizeof(RecordT) ||
         header.push_out_edges != (push_out_edges ? 1U : 0U) ||
         header.num_vtx_per_line != num_vtx_per_line ||
         header.epochs != normalizeReusePlanEpochCount(epochs) ||
@@ -189,7 +229,6 @@ bool loadReusePlanSidecar(
         header.hot_fraction_ppm !=
             sidecarHotFractionPpm(hot_fraction) ||
         header.vertices != vertices ||
-        header.reserved != 0 ||
         header.directed_edges != edges ||
         header.offset_count != static_cast<uint64_t>(vertices) + 1 ||
         header.record_count != expected_records) {

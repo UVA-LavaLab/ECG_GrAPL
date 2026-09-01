@@ -370,10 +370,6 @@ void recordEcgReusePlan(uint32_t core_id, uint32_t vertex,
                         uint8_t tier, uint16_t first, uint16_t second)
 {
     if (core_id >= MAX_TRACKED_CORES) return;
-    if (tier == 0) {
-        clearEcgReusePlan(core_id, vertex);
-        return;
-    }
     static std::atomic<uint64_t> trace_sequence{0};
     static const uint64_t trace_limit = []() {
         const char* value = std::getenv("ECG_REUSE_PLAN_DELIVERY_TRACE");

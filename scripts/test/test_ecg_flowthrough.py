@@ -374,7 +374,8 @@ def test_reuse_plan_transport_supports_full_algorithm_suite():
         "graph_cache_context_sniper.cc")
     sniper_harness = read("bench/include/sniper_sim/sniper_harness.h")
     assert "clearEcgReusePlan" in sniper_context
-    assert "if (tier == 0)" in sniper_context
+    assert "if (tier == 0)" not in sniper_context
+    assert "m.count[i].store(2" in sniper_context
     assert "SNIPER_ECG_CLEAR_EXTRACT2" in sniper_harness
     for kernel in ("sssp", "bc", "cc"):
         standalone = read(f"bench/src_sniper/{kernel}.cc")
