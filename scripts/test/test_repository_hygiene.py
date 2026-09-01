@@ -81,6 +81,8 @@ def test_public_documentation_and_figures_are_tracked():
         "scripts/docs/export_ecg_paper_pdfs.py",
         "scripts/docs/check_ecg_paper_figures.py",
         "scripts/experiments/ecg/configs/pagerank_study.json",
+        "scripts/experiments/ecg/configs/transport_literature_scale.json",
+        "scripts/experiments/ecg/analysis/transport_scale_gate.py",
     }
     required.update(
         str(path.relative_to(ROOT))

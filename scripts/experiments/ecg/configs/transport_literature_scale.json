@@ -1,0 +1,402 @@
+{
+  "version": 1,
+  "id": "transport_literature_scale",
+  "scope": "Confirmatory six-graph n18 PageRank timing campaign plus five compact-eligible full-graph width comparisons. It isolates compact ReusePlan transport and structural FlowThrough while replacement stays pure LRU in both arms.",
+  "independent_of_replacement_campaign": true,
+  "simulator": "gem5",
+  "cpu_type": "O3",
+  "isa_variant": "computed",
+  "reuse_plan_timing_mode": "compact_trace_free",
+  "reuse_plan_epochs": 16,
+  "compact_tier_bits": 2,
+  "benchmark": "pr",
+  "prefetcher": "none",
+  "iterations": [
+    1,
+    8
+  ],
+  "options_template": "-f {graph_path} -o 0 -n 1 -i {iterations} -t 0",
+  "graphs": [
+    {
+      "name": "web-Google-final-n18",
+      "path": "results/graphs/web-Google-final-n18/web-Google-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 642172,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 642172,
+          "checksum": "ecd582fd90602cdc"
+        },
+        "8": {
+          "edges": 5137376,
+          "checksum": "3831a3f90260cd0e"
+        }
+      }
+    },
+    {
+      "name": "soc-pokec-final-n18",
+      "path": "results/graphs/soc-pokec-final-n18/soc-pokec-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 680132,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 680132,
+          "checksum": "2eda61f23fd506d1"
+        },
+        "8": {
+          "edges": 5441056,
+          "checksum": "f25c3fd3c12826b9"
+        }
+      }
+    },
+    {
+      "name": "cit-Patents-final-n18",
+      "path": "results/graphs/cit-Patents-final-n18/cit-Patents-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 509878,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 509878,
+          "checksum": "cb6060edcd912c9b"
+        },
+        "8": {
+          "edges": 4079024,
+          "checksum": "1c1f4afe24c68199"
+        }
+      }
+    },
+    {
+      "name": "roadNet-CA-final-n18",
+      "path": "results/graphs/roadNet-CA-final-n18/roadNet-CA-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 555588,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 555588,
+          "checksum": "ef480227f4243c62"
+        },
+        "8": {
+          "edges": 4444704,
+          "checksum": "1e7f3196ba667ddb"
+        }
+      }
+    },
+    {
+      "name": "soc-LiveJournal1-final-n18",
+      "path": "results/graphs/soc-LiveJournal1-final-n18/soc-LiveJournal1-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 677614,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 677614,
+          "checksum": "75c895255263a267"
+        },
+        "8": {
+          "edges": 5420912,
+          "checksum": "3714644927ace9ac"
+        }
+      }
+    },
+    {
+      "name": "com-Orkut-final-n18",
+      "path": "results/graphs/com-Orkut-final-n18/com-Orkut-final-n18-dbg.sg",
+      "vertices": 262144,
+      "directed_edges": 700000,
+      "l1d_size": "32kB",
+      "l2_size": "128kB",
+      "l3_size": "512kB",
+      "l1d_ways": 8,
+      "l2_ways": 8,
+      "l3_ways": 16,
+      "line_size": 64,
+      "compact_id_bits": 18,
+      "compact_epoch_bits": 4,
+      "semantic_receipts": {
+        "1": {
+          "edges": 700000,
+          "checksum": "b13b60d593dcb83f"
+        },
+        "8": {
+          "edges": 5600000,
+          "checksum": "7d6eaf25f9927c38"
+        }
+      }
+    }
+  ],
+  "semantic_receipt_provenance": {
+    "command": "setarch x86_64 -R bench/bin_gem5/pr -f {graph_path} -o 0 -n 1 -i {iterations} -t 0",
+    "graph_source": "Generated literature-scale corpus n18 DBG samples.",
+    "reason_for_t0": "Disable convergence-based early exit so requested and executed iteration counts match.",
+    "receipt_source": "Graph identity, cache geometry, and iteration-1/iteration-8 semantic receipts are copied unchanged from pagerank_literature_scale.json; they are not re-derived here."
+  },
+  "policies": {
+    "all": [
+      "LRU",
+      "ECG:REUSE_PLAN_LRU_FLOWTHROUGH"
+    ],
+    "timing_baseline": "LRU",
+    "transport_candidate": "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+    "victim_policy_of_record": "LRU",
+    "note": "Both arms select victims with pure LRU. The candidate differs only in graph representation, request path, and record transport."
+  },
+  "policy_output_labels": {
+    "timing_baseline": "LRU",
+    "transport_candidate": "ECG_REUSE_PLAN_LRU_FLOWTHROUGH"
+  },
+  "record_format": {
+    "gem5_timing_record_bytes": 4,
+    "cache_compact_record_bytes": 4,
+    "cache_wide_record_bytes": 8,
+    "sniper_transport_record_bytes": 8,
+    "compact_tier_bits": 2,
+    "compact_epoch_bits": 4,
+    "record_replaces_edge": true,
+    "compact_record_feasibility": "Every n18 timing sample uses 18 destination bits, 2 tier bits, and two 4-bit epochs: 28 total bits.",
+    "full_graph_compact_eligible_graphs": [
+      "web-Google",
+      "soc-pokec",
+      "cit-Patents",
+      "roadNet-CA",
+      "com-Orkut"
+    ],
+    "full_graph_compact_exclusions": {
+      "soc-LiveJournal1": "The full graph needs 23 destination bits; 23 + 2 tier bits + two 4-bit epochs = 33 bits, so no 32-bit compact record exists for this role."
+    }
+  },
+  "roles": {
+    "60_gem5_proposal_reuse_bind_o3": "Mechanism existence and binding evidence. Complete and valid rows are required, and its timing is never admissible.",
+    "96_gem5_transport_i1": "Screen timing: six-graph iteration-1 gem5 O3 PageRank, LRU versus the compact transport candidate under symmetric structural FlowThrough.",
+    "97_gem5_transport_i8": "Robustness timing: the same six graphs at iteration 8.",
+    "98_cache_sim_transport_wide16": "Five-graph 8-byte wide-record cache_sim control over the compact-eligible corpus.",
+    "99_cache_sim_transport_compact16": "Five-graph 4-byte compact-record cache_sim role matched cell-for-cell against the wide control.",
+    "100_sniper_transport_matched": "Bounded matched-work Sniper corroboration of demand LLC misses with 8-byte transport records."
+  },
+  "metrics": {
+    "primary": [
+      "sim_ticks",
+      "dram_offchip_bytes"
+    ],
+    "secondary": [
+      "l3_misses",
+      "roi_insts",
+      "ipc",
+      "dram_bus_util_pct"
+    ],
+    "aggregation": "geometric_mean_of_per_cell_ratios",
+    "tie_band": 0.02,
+    "fields": {
+      "gem5_time": "sim_ticks",
+      "gem5_traffic": "dram_offchip_bytes",
+      "cache_traffic": "total_offchip_traffic",
+      "cache_llc_misses": "l3_misses",
+      "sniper_llc_misses": "l3_misses"
+    },
+    "sniper_llc_miss_field_note": "Sniper l3_misses is its demand LLC load-miss count. It excludes writeback bytes and is not an off-chip traffic metric; the Sniper role therefore supports only a demand-LLC-miss non-regression statement."
+  },
+  "decision": {
+    "screen": {
+      "max_time_ratio_vs_lru": 0.98,
+      "max_traffic_ratio_vs_lru": 1.02,
+      "max_time_ratio_per_cell": 1.02,
+      "max_traffic_ratio_per_cell": 1.02,
+      "stop_if_screen_fails": true
+    },
+    "complete": {
+      "max_time_ratio_vs_lru_i8": 0.98,
+      "max_traffic_ratio_vs_lru_i8": 1.02,
+      "max_time_ratio_per_cell": 1.02,
+      "max_traffic_ratio_per_cell": 1.02,
+      "max_compact_wide_traffic_ratio_aggregate": 0.98,
+      "max_compact_wide_traffic_ratio_per_cell": 1.02,
+      "max_compact_wide_llc_miss_ratio_per_cell": 1.02,
+      "max_sniper_llc_miss_ratio_aggregate": 1.02,
+      "max_sniper_llc_miss_ratio_per_cell": 1.02,
+      "sniper_timing_admissible": false,
+      "mechanism_stage_timing_admissible": false
+    },
+    "thresholds_frozen_before_this_campaign_runs": true,
+    "thresholds_informed_by_prior_transport_control_rows": true,
+    "threshold_basis": "The 0.98 and 1.02 limits are the existing frozen +/-2% tie band: 0.98 is required for a positive aggregate timing or compact-width claim, while 1.02 is the maximum material-regression bound."
+  },
+  "prior_evidence": {
+    "classification": "Exploratory evidence used to choose a confirmatory transport-only scope. These rows are not reused as campaign evidence.",
+    "authoritative_receipt": "results/ecg_experiments/aggregates/literature_scale/symmetric_14b82753_early_stop_gate.json",
+    "git_commit": "14b82753e824670f1a0e1e2f7d6833f051b2e353",
+    "comparison": "LRU versus ECG_REUSE_PLAN_LRU_FLOWTHROUGH under symmetric structural FlowThrough at iteration 1.",
+    "aggregate_time_ratio": 0.8050035925960729,
+    "aggregate_traffic_ratio": 0.9998478030389389,
+    "per_graph": {
+      "web-Google-final-n18": {
+        "time_ratio": 0.870003670,
+        "traffic_ratio": 0.999872390
+      },
+      "soc-pokec-final-n18": {
+        "time_ratio": 0.796943952,
+        "traffic_ratio": 1.0
+      },
+      "cit-Patents-final-n18": {
+        "time_ratio": 0.837747136,
+        "traffic_ratio": 0.999847232
+      },
+      "roadNet-CA-final-n18": {
+        "time_ratio": 0.799112069,
+        "traffic_ratio": 0.999737573
+      },
+      "soc-LiveJournal1-final-n18": {
+        "time_ratio": 0.800754874,
+        "traffic_ratio": 0.999921018
+      },
+      "com-Orkut-final-n18": {
+        "time_ratio": 0.732179922,
+        "traffic_ratio": 0.999708636
+      }
+    },
+    "exclusion_reason": "The confirmatory campaign uses a new commit, manifest, sidecar version, simulator binary, and gate receipt. Earlier rows cannot authorize or populate it."
+  },
+  "variant_receipts": {
+    "ECG_REUSE_PLAN_LRU_FLOWTHROUGH": {
+      "requested": "lru_only",
+      "effective": 6,
+      "dueling": 0
+    }
+  },
+  "row_requirements": {
+    "gem5_timing_both_arms": {
+      "simulator": "gem5",
+      "gem5_cpu_type": "O3",
+      "timing_valid_for_speedup": "1",
+      "gem5_structural_flowthrough_receipt": "1",
+      "gem5_structural_flowthrough_miss_targets": "positive"
+    },
+    "gem5_timing_candidate": {
+      "ecg_record_bytes": 4,
+      "edge_stream_bytes_per_edge": 4,
+      "ecg_record_replaces_edge": 1,
+      "gem5_reuse_plan_sidecar_active": "1",
+      "gem5_reuse_plan_sidecar_record_bytes": 4,
+      "gem5_reuse_plan_sidecar_tier_bits": 2,
+      "gem5_reuse_plan_sidecar_records": "equals_graph_directed_edges",
+      "proposal_path_active": "1",
+      "proposal_performance_mode_active": "1",
+      "gem5_compact_reuse_bind_flowthrough_active": "1",
+      "gem5_ecg_delivery": "ecg.flow.load.compact+ecg.bind.load.f32",
+      "gem5_variant_effective_receipt": 6,
+      "gem5_reuse_plan_coverage_validated": 1,
+      "gem5_reuse_plan_victim_selections": "positive",
+      "gem5_reuse_plan_victim_stamped_ways": "positive"
+    },
+    "cache_rows_both_arms": {
+      "simulator": "cache_sim",
+      "timing_valid_for_speedup": "0",
+      "structural_flowthrough_accesses": "positive",
+      "ecg_epochs_effective": 16
+    },
+    "cache_rows_candidate": {
+      "ecg_variant_effective": "lru_only",
+      "ecg_record_replaces_edge": 1
+    },
+    "sniper_rows_both_arms": {
+      "simulator": "sniper",
+      "timing_valid_for_speedup": "0",
+      "sniper_queue_model": "windowed_mg1",
+      "semantic_work_matched": "1",
+      "sniper_structural_flowthrough_receipt": "1"
+    },
+    "sniper_rows_candidate": {
+      "ecg_variant_effective": "lru_only",
+      "sniper_transport_record_bytes": 8,
+      "sniper_transport_receipts_validated": "1",
+      "sniper_reuse_plan_epoch_context_validated": "1",
+      "sniper_reuse_bind_exact_validated": "1",
+      "sniper_reuse_bind_bad_consumes": 0
+    }
+  },
+  "resource_scope": {
+    "screen": "Both arms keep the full 16-way LLC data capacity and identical cache geometry.",
+    "reuse_plan_data_ways": 16,
+    "reuse_plan_metadata_bits_per_line": 49,
+    "lower_hardware_cost_claim_allowed": false,
+    "charged_in_roi": {
+      "reuse_plan": "4-byte replacement records substituted for the CSR destination array plus FlowThrough placement"
+    },
+    "declared_outside_roi": {
+      "reuse_plan": "validated precomputed record sidecar"
+    }
+  },
+  "allowed_claims": [
+    "Compact ReusePlan record transport plus structural FlowThrough changes PageRank execution time and off-chip traffic relative to an identical LRU cell that also runs structural FlowThrough.",
+    "On the five full graphs whose destination identifiers fit the 32-bit format, the 4-byte compact record substitutes for the CSR destination array with matched semantic outputs against the 8-byte wide control.",
+    "Bounded matched-work Sniper rows show whether demand LLC load misses remain within the frozen 1.02 non-regression bound under 8-byte transport records."
+  ],
+  "disallowed_claims": [
+    "Any ReusePlan replacement-policy claim; victim selection is pure LRU in both arms of this campaign.",
+    "Any comparison against SRRIP, GRASP, P-OPT, or any other replacement baseline.",
+    "Any timing claim from Sniper rows or from the mechanism stage.",
+    "Any Sniper off-chip byte-traffic claim; the Sniper role reports demand LLC load misses and excludes writeback bytes.",
+    "Any compact full-graph claim for soc-LiveJournal1, whose 33-bit field budget does not fit the 32-bit format.",
+    "Any hardware-cost or area advantage claim.",
+    "Any claim drawn from runs produced under a different commit, manifest, or transport configuration."
+  ],
+  "replacement_campaign_relationship": {
+    "separate_campaign": "reuse_plan_literature_scale_campaign",
+    "authority": "The replacement campaign's own receipts remain authoritative for replacement claims and are neither reused nor revised here.",
+    "receipt_reuse_allowed": false
+  },
+  "execution": {
+    "ready": true,
+    "policy_sharding_allowed": false,
+    "maximum_policy_runtime_seconds": 43200,
+    "sequence": [
+      "Run stage 60 and stage 96 together and evaluate the screen phase.",
+      "A screen GO receipt bound to git HEAD, the manifest hash, and this configuration hash authorizes stages 97, 98, 99, and 100.",
+      "Run stages 97 through 100, then evaluate the complete phase."
+    ],
+    "note": "Run whole cells without policy sharding. ReusePlan records and DBG order are precomputed once."
+  },
+  "sampling_caveat": "Architectural timing uses uniform n18 samples. Full-graph record-width, traffic, and semantic-substitution evidence comes from the cache_sim roles; Sniper adds bounded matched-work corroboration only."
+}

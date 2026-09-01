@@ -70,6 +70,7 @@
     "reuse_plan_pagerank_study": "Deterministic sampled PageRank study with static rrip_first+FlowThrough as the primary design.",
     "reuse_plan_final_campaign": "Stopped scale-limited pilot retained for auditability; not a publication campaign.",
     "reuse_plan_literature_scale_campaign": "Six-core literature-scale campaign with preordered graphs, sidecar-based gem5 timing, full-graph cache evidence, and bounded matched-work Sniper corroboration.",
+    "reuse_plan_transport_campaign": "Transport-only campaign that holds replacement at pure LRU in both arms and isolates compact ReusePlan record transport and structural FlowThrough.",
     "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
@@ -86,6 +87,11 @@
     "reuse_plan_literature_scale_campaign": {
       "status": "ready",
       "reason": "Run stages 60/90/91 first and require the literature-scale screen gate to pass before stages 92-95.",
+      "require_clean_worktree": true
+    },
+    "reuse_plan_transport_campaign": {
+      "status": "ready",
+      "reason": "Run stages 60/96 first and require the transport screen gate to report GO before stages 97-100.",
       "require_clean_worktree": true
     },
     "reuse_plan_twitter_scale_stress": {
@@ -2117,7 +2123,8 @@
       "profiles": [
         "ecg_proposal_reuse_bind_o3_gate",
         "reuse_plan_final_campaign",
-        "reuse_plan_literature_scale_campaign"
+        "reuse_plan_literature_scale_campaign",
+        "reuse_plan_transport_campaign"
       ],
       "suite": "gem5",
       "graph_set": "synthetic_kron12_all",
@@ -2955,6 +2962,123 @@
         "ECG_EDGE_RECORD_BYTES": "8",
         "ECG_EXPECT_BYTES_PER_EDGE": "8"
       }
+    },
+    {
+      "name": "96_gem5_transport_i1",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_transport_campaign"],
+      "suite": "gem5",
+      "screen_config": "scripts/experiments/ecg/configs/transport_literature_scale.json",
+      "screen_iteration": 1,
+      "flowthrough": "all",
+      "out_subdir": "96_gem5_transport_i1",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
+      },
+      "notes": "Transport screen cell. Both arms select victims with LRU and both run structural FlowThrough, so only graph representation, request path, and record transport differ."
+    },
+    {
+      "name": "97_gem5_transport_i8",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_transport_campaign"],
+      "suite": "gem5",
+      "screen_config": "scripts/experiments/ecg/configs/transport_literature_scale.json",
+      "screen_iteration": 8,
+      "flowthrough": "all",
+      "out_subdir": "97_gem5_transport_i8",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops",
+        "GEM5_REUSE_PLAN_COVERAGE_REQUIRED": "1"
+      },
+      "notes": "Iteration-8 robustness role. Requires a valid transport screen GO receipt."
+    },
+    {
+      "name": "98_cache_sim_transport_wide16",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_transport_campaign"],
+      "suite": "cache-sim",
+      "graph_set": "literature_scale_compact16",
+      "benchmarks": ["pr", "bfs", "bc", "cc"],
+      "policies": [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "flowthrough": "all",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "computed",
+      "policy_sharding_allowed": false,
+      "out_subdir": "98_cache_sim_transport_wide16",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8"
+      },
+      "notes": "Five-graph 8-byte wide-record control matched cell-for-cell against stage 99. soc-LiveJournal1 is excluded because its 23 destination bits plus 2 tier bits and two 4-bit epochs require 33 bits."
+    },
+    {
+      "name": "99_cache_sim_transport_compact16",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_transport_campaign"],
+      "suite": "cache-sim",
+      "graph_set": "literature_scale_compact16",
+      "benchmarks": ["pr", "bfs", "bc", "cc"],
+      "policies": [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "flowthrough": "all",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "computed",
+      "policy_sharding_allowed": false,
+      "out_subdir": "99_cache_sim_transport_compact16",
+      "timeout_cache": 86400,
+      "env": {
+        "ECG_RECORD_VARIABLE_WIDTH": "1",
+        "ECG_EXPECT_BYTES_PER_EDGE": "4"
+      },
+      "notes": "Five-graph 4-byte compact-record role. Same graphs, kernels, policies, and FlowThrough setting as stage 98; no compact full-graph claim is made for soc-LiveJournal1."
+    },
+    {
+      "name": "100_sniper_transport_matched",
+      "kind": "roi_matrix",
+      "profiles": ["reuse_plan_transport_campaign"],
+      "suite": "sniper",
+      "graph_set": "literature_scale_sniper",
+      "benchmarks": ["pr", "cc"],
+      "policies": [
+        "LRU",
+        "ECG:REUSE_PLAN_LRU_FLOWTHROUGH"
+      ],
+      "prefetcher": "none",
+      "flowthrough": "all",
+      "ecg_charged": 1,
+      "ecg_epochs": 16,
+      "ecg_isa_variant": "computed",
+      "sniper_workload": "sg_kernel",
+      "sniper_frontend": "sift",
+      "allow_sniper_sg_kernel_workload": true,
+      "sniper_memory_limit_gb": 24,
+      "sniper_queue_model": "windowed_mg1",
+      "sniper_address_domain": "virtual",
+      "require_sniper_aslr_disable": true,
+      "sniper_require_fused_receipts": true,
+      "sniper_cores": 1,
+      "policy_sharding_allowed": false,
+      "out_subdir": "100_sniper_transport_matched",
+      "timeout_sniper": 86400,
+      "env": {
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8",
+        "ECG_REUSE_PLAN_DELIVERY_TRACE": "32"
+      },
+      "notes": "Bounded matched-work corroboration of demand LLC load misses only. Sniper exposes no byte-level off-chip traffic for this role, excludes writeback bytes from l3_misses, and supplies no admissible timing."
     }
   ]
 }

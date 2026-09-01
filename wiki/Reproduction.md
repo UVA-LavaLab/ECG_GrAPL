@@ -217,6 +217,12 @@ python3 scripts/experiments/ecg/analysis/pagerank_gate.py \
 
 ## 6. Final role-separated campaign
 
+The literature-scale replacement campaign below is gated by its own screen
+receipt, whose decision stands at STOP; replacement claims are therefore closed
+and its configuration, thresholds, and stages are frozen. The separately
+preregistered transport campaign later in this section is run and gated
+independently and never reuses these receipts.
+
 The checked-in `reuse_plan_final_campaign` profile is the stopped three-graph
 pilot. It remains as a record of that pilot, not as a publication profile.
 Publication runs must use the literature-scale corpus above and a revised scale
@@ -304,6 +310,75 @@ For Slurm arrays, export the same receipt as
 `slurm_experiment_shard.sbatch`. The stopped `reuse_plan_final_campaign`
 profile remains available only for `--list --dry-run` manifest enumeration and
 must not be executed.
+
+### Separate transport campaign
+
+The `reuse_plan_transport_campaign` profile holds replacement at pure LRU in
+both arms and isolates compact ReusePlan record transport and structural
+FlowThrough. It compares `LRU` against `ECG_REUSE_PLAN_LRU_FLOWTHROUGH` with
+`--flowthrough all` on both arms, so structural FlowThrough is symmetric. Its
+preregistration is
+[`transport_literature_scale.json`](https://github.com/UVA-LavaLab/ECG_GrAPL/blob/main/scripts/experiments/ecg/configs/transport_literature_scale.json).
+It makes no replacement-policy claim and no comparison against SRRIP, GRASP, or
+P-OPT. The profile requires a clean worktree.
+
+This is a confirmatory rerun. The configuration discloses the earlier
+iteration-1 transport-control rows that informed this narrower scope; those
+rows are not reused as evidence. The 0.98/1.02 limits retain the pre-existing
++/-2% tie band. Full-graph compact/wide cache_sim comparisons cover the five
+graphs whose identifiers fit the 32-bit record. `soc-LiveJournal1` is excluded
+because its `23 + 2 + 4 + 4 = 33` bit budget does not fit. Sniper contributes
+demand LLC load-miss counts only, not byte-level off-chip traffic or timing.
+
+Run the mechanism stage and the iteration-1 transport cells first, then
+evaluate the screen:
+
+```bash
+/usr/bin/python3.12 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile reuse_plan_transport_campaign \
+  --run-dir results/ecg_experiments/runs/transport_screen \
+  --only 60 96_gem5_transport_i1 --no-build --require-reference-python
+
+python3 scripts/experiments/ecg/analysis/transport_scale_gate.py \
+  --phase screen \
+  --input-run-dirs \
+    results/ecg_experiments/runs/transport_screen \
+  --output \
+    results/ecg_experiments/aggregates/transport_scale/screen_gate.json
+```
+
+The screen receipt is bound to the Git commit, the manifest hash, and the
+transport configuration hash. Continue only when it reports `"valid": true`,
+`"phase": "screen"`, and `"decision": "GO"`. A receipt with
+`"decision": "STOP"` is a valid measured outcome and closes the campaign.
+
+Run the iteration-8, full-graph, and matched-work roles only with that
+receipt. Stages 97 through 100 refuse to start without it, and the receipt is
+recomputed from its source run directories before any job is expanded:
+
+```bash
+/usr/bin/python3.12 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile reuse_plan_transport_campaign \
+  --run-dir results/ecg_experiments/runs/transport_full \
+  --only 97 98 99 100 \
+  --screen-gate \
+    results/ecg_experiments/aggregates/transport_scale/screen_gate.json \
+  --no-build
+
+python3 scripts/experiments/ecg/analysis/transport_scale_gate.py \
+  --phase complete \
+  --input-run-dirs \
+    results/ecg_experiments/runs/transport_screen \
+    results/ecg_experiments/runs/transport_full \
+  --corpus-receipt \
+    results/graphs/literature_scale_corpus.receipt.json \
+  --output \
+    results/ecg_experiments/aggregates/transport_scale/gate.json
+```
+
+Receipts from a different commit, manifest, or transport configuration are
+rejected, and the replacement campaign's receipts never authorize these
+stages. Sniper rows and the mechanism stage carry no admissible timing.
 
 ## 7. Cross-simulator consistency
 

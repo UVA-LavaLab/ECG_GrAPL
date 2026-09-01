@@ -19,8 +19,8 @@ semantic output are both verified.
 | **Sniper** | matched-work modeled cache and traffic evidence at larger scale | time is not ReuseBind speedup evidence; delivery and pipeline behavior are modeled |
 
 Only gem5 O3 execution time is used for architectural speedup. cache_sim does
-not model cycles or instructions. Sniper time is not used as ReuseBind speedup
-evidence. Every simulator is compared with its own same-build, same-cell
+not model cycles or instructions. Sniper time is not used as a ReuseBind
+speedup metric. Every simulator is compared with its own same-build, same-cell
 baseline; absolute miss rates and timing are not compared across simulators.
 
 The default indexed Sniper ReusePlan path uses per-edge delivery markers.
@@ -97,10 +97,10 @@ Counterfactual instruction normalization is a sensitivity, not a measurement.
 ## 5. P-OPT accounting
 
 Analytic P-OPT charges reserved LLC capacity and cumulative matrix traffic. It
-sets `popt_target_time_charged=0`, so target-time lookup latency and
-matrix-stream latency are omitted together with target-time bandwidth,
-queueing, and contention. Its timing is therefore an optimistic lower bound,
-not a realistic target-time implementation.
+sets `popt_target_time_charged=0`, so matrix-stream latency is omitted, as are
+target-time lookup latency, target-time bandwidth, queueing, and contention.
+Its timing is therefore an optimistic P-OPT bound, specifically a lower bound
+on time, not a realistic target-time implementation.
 
 The reference matrix assumes an ordered sweep. Final reference rows are
 limited to PageRank and Connected Components. BFS and SSSP comparisons are
@@ -132,7 +132,71 @@ Selector generations 1 and 2 did not satisfy the retained representativeness
 and regret checks. They are retained as negative diagnostics and must not be
 presented as detailed-simulator performance policies.
 
-## 7. Publication policy
+## 7. Two separate campaigns
+
+The replacement campaign and the transport campaign are preregistered
+separately, run separately, and gated separately. Evidence and receipts are
+never shared between them.
+
+### 7.1 Replacement campaign
+
+The literature-scale replacement campaign compares ReusePlan victim selection
+against SRRIP, GRASP, and P-OPT under `pagerank_literature_scale.json`. Its
+screen decision stands at STOP, so it supports no ReusePlan replacement claim
+against those baselines. That decision remains the authoritative record for
+replacement, and its configuration, thresholds, and stages are frozen. Rows and
+receipts produced under earlier commits are not admissible evidence for either
+campaign.
+
+### 7.2 Transport campaign
+
+The transport campaign isolates compact ReusePlan record transport and
+structural FlowThrough while replacement stays pure LRU. Its configuration is
+`transport_literature_scale.json`; its manifest profile is
+`reuse_plan_transport_campaign`.
+
+- The comparison is `LRU` against `ECG_REUSE_PLAN_LRU_FLOWTHROUGH`. Both arms
+  select victims with LRU and both run `--flowthrough all`, so structural
+  FlowThrough is symmetric and only graph representation, request path, and
+  record transport differ.
+- Timing uses the same six 262,144-vertex PageRank samples, geometries, and
+  iteration-1/iteration-8 semantic receipts as the replacement screen, with
+  gem5 O3, the computed-address compact trace-free path, 16 epochs, 2 tier
+  bits, 4-byte records, and no prefetcher.
+- Full-graph 8-byte and 4-byte cache_sim roles are matched cell for cell over
+  `pr`, `bfs`, `bc`, and `cc` on the five compact-eligible graphs.
+  `soc-LiveJournal1` is excluded from this width comparison because its full
+  graph needs 23 destination bits, and `23 + 2 + 4 + 4 = 33` does not fit a
+  32-bit record.
+- Bounded matched-work Sniper rows with 8-byte records corroborate demand LLC
+  load misses only. Sniper does not expose byte-level off-chip traffic for
+  this role, and its LLC load-miss count excludes writeback bytes.
+
+Admissible claims are limited to transport and placement: PageRank execution
+time and off-chip traffic against an identical LRU cell, full-graph record
+substitution at 4 bytes against the matched 8-byte control on the five
+compact-eligible graphs, and Sniper demand-LLC-miss non-regression. No
+replacement-policy claim, no comparison against SRRIP, GRASP, or P-OPT, no
+Sniper byte-traffic claim, no hardware-cost claim, and no timing claim from
+Sniper or from the mechanism stage may be drawn from it.
+
+This is a confirmatory campaign, not a first observation. Earlier symmetric
+iteration-1 rows at commit `14b82753` already contained the same LRU transport
+control; they informed the transport-only scope but are excluded from the new
+campaign evidence. The configuration records those prior ratios explicitly.
+The new thresholds use the existing frozen +/-2% tie band rather than being
+selected from the confirmatory rows: an aggregate ratio of at most 0.98 is
+required for a positive timing or compact-width claim, while 1.02 is the
+maximum material-regression bound.
+
+The screen therefore requires an aggregate geometric-mean time ratio of at
+most 0.98 and an aggregate traffic ratio of at most 1.02, with every per-cell
+time and traffic ratio at most 1.02. The complete phase repeats those limits at
+iteration 8, requires an aggregate compact/wide off-chip traffic ratio of at
+most 0.98 with per-cell traffic and LLC-miss ratios at most 1.02, and requires
+Sniper aggregate and per-cell demand-LLC-miss ratios at most 1.02.
+
+## 8. Publication policy
 
 Preliminary numbers and intermediate choices remain local. Tables and measured
 figures are published only after the final frozen campaign, preprocessing

@@ -655,7 +655,7 @@ def test_public_documents_use_the_expected_reading_flow():
             "reuse-plan-flowthrough-f06-structural-fairness.svg"):
         assert figure in wiki
         assert list((ROOT / "fig/wiki").rglob(figure))
-    assert "checked graph now exposes time" in wiki
+    assert "checked adjacency entry at outer vertex/current epoch 8" in wiki
     assert "```mermaid" not in wiki
 
     # Public documents use direct technical language rather than internal

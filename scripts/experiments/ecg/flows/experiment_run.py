@@ -405,14 +405,6 @@ def apply_screen_config(
         "ecg_isa_variant": screen["isa_variant"],
         "ecg_epochs": int(screen["reuse_plan_epochs"]),
         "gem5_compact_reuse_bind_performance": True,
-        "popt_reserve_model": "size_correct",
-        "popt_property_bytes": int(screen["popt_model"]["property_bytes"]),
-        "popt_active_columns": int(
-            screen["popt_model"]["reserved_column_slots"]),
-        "popt_num_epochs": int(screen["popt_model"]["epochs"]),
-        "popt_min_data_ways": int(
-            screen["popt_model"]["minimum_data_ways"]),
-        "popt_matrix_stream": "analytic",
         "env": screen_env,
         "timeout_gem5": int(
             screen["execution"]["maximum_policy_runtime_seconds"]),
@@ -420,6 +412,26 @@ def apply_screen_config(
         "_screen_iteration": iteration,
         "_screen_config_data": screen,
     })
+    # A screen configuration only carries P-OPT reservation settings when
+    # P-OPT is one of its roles. Transport-only campaigns declare no
+    # popt_model and must not acquire reserved-way settings implicitly.
+    popt_model = screen.get("popt_model")
+    if isinstance(popt_model, dict):
+        merged.update({
+            "popt_reserve_model": "size_correct",
+            "popt_property_bytes": int(popt_model["property_bytes"]),
+            "popt_active_columns": int(
+                popt_model["reserved_column_slots"]),
+            "popt_num_epochs": int(popt_model["epochs"]),
+            "popt_min_data_ways": int(popt_model["minimum_data_ways"]),
+            "popt_matrix_stream": "analytic",
+        })
+    elif any(
+            str(policy).upper().startswith("POPT")
+            for policy in screen["policies"]["all"]):
+        raise SystemExit(
+            f"screen config {path_text} requests P-OPT policies without a "
+            f"popt_model")
     graphs = []
     for cell in screen["graphs"]:
         graph = dict(cell)
@@ -1785,17 +1797,20 @@ def current_git_head() -> str:
 
 def recompute_screen_gate(
         payload: dict[str, Any], manifest_path: Path,
-        screen_path: Path) -> dict[str, Any]:
+        screen_path: Path,
+        gate_script: str = "analysis/literature_scale_gate.py",
+        config_option: str = "--screen-config",
+        campaign: str = "literature-scale") -> dict[str, Any]:
     run_dirs = payload.get("run_dirs")
     if not isinstance(run_dirs, list) or not run_dirs:
         raise SystemExit(
-            "literature-scale screen gate has no source run directories")
+            f"{campaign} screen gate has no source run directories")
     command = [
         sys.executable, "-I",
-        str(ECG_DIR / "analysis/literature_scale_gate.py"),
+        str(ECG_DIR / gate_script),
         "--phase", "screen",
         "--manifest", str(manifest_path),
-        "--screen-config", str(screen_path),
+        config_option, str(screen_path),
         "--input-run-dirs", *[str(path) for path in run_dirs],
     ]
     result = subprocess.run(
@@ -1803,28 +1818,50 @@ def recompute_screen_gate(
         capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise SystemExit(
-            "literature-scale screen authorization could not be "
+            f"{campaign} screen authorization could not be "
             f"recomputed:\n{result.stderr}")
     try:
         return json.loads(result.stdout)
     except json.JSONDecodeError as error:
         raise SystemExit(
-            "recomputed literature-scale screen gate is malformed") from error
+            f"recomputed {campaign} screen gate is malformed") from error
+
+
+LITERATURE_FULL_STAGES = {
+    "92_cache_sim_literature_scale_wide16",
+    "93_cache_sim_literature_scale_popt",
+    "94_cache_sim_literature_scale_compact16",
+    "95_sniper_literature_scale_matched",
+}
+TRANSPORT_SCREEN_STAGES = (
+    "60_gem5_proposal_reuse_bind_o3",
+    "96_gem5_transport_i1",
+)
+TRANSPORT_FULL_STAGES = {
+    "97_gem5_transport_i8",
+    "98_cache_sim_transport_wide16",
+    "99_cache_sim_transport_compact16",
+    "100_sniper_transport_matched",
+}
+TRANSPORT_PROFILE = "reuse_plan_transport_campaign"
+TRANSPORT_CONFIG = ECG_DIR / "configs/transport_literature_scale.json"
 
 
 def validate_screen_authorization(
         args: argparse.Namespace, jobs: list[Job],
         manifest_path: Path) -> dict[str, Any] | None:
-    full_stages = {
-        "92_cache_sim_literature_scale_wide16",
-        "93_cache_sim_literature_scale_popt",
-        "94_cache_sim_literature_scale_compact16",
-        "95_sniper_literature_scale_matched",
-    }
-    if not any(job.stage in full_stages for job in jobs):
+    job_stages = {job.stage for job in jobs}
+    literature = bool(job_stages & LITERATURE_FULL_STAGES)
+    transport = bool(job_stages & TRANSPORT_FULL_STAGES)
+    if not (literature or transport):
         return None
     if args.dry_run or args.list or args.check_graphs:
         return None
+    if literature and transport:
+        raise SystemExit(
+            "literature-scale and transport full roles cannot share one run")
+    if transport:
+        return validate_transport_authorization(args, manifest_path)
     if not args.screen_gate:
         raise SystemExit(
             "literature-scale full roles require --screen-gate PATH")
@@ -1879,6 +1916,89 @@ def validate_screen_authorization(
     }
 
 
+def expected_transport_screen_rows(
+        manifest: dict[str, Any],
+        config: dict[str, Any]) -> dict[str, int]:
+    """Screen row counts implied by the manifest and transport config."""
+    stages_by_name = {
+        str(stage["name"]): merged_defaults(manifest, stage)
+        for stage in manifest.get("stages", [])
+        if TRANSPORT_PROFILE in stage.get("profiles", [])
+    }
+    expected = {}
+    for name in TRANSPORT_SCREEN_STAGES:
+        if name not in stages_by_name:
+            raise SystemExit(
+                f"transport stage {name} is missing from the manifest")
+        stage = stages_by_name[name]
+        if name == "96_gem5_transport_i1":
+            graphs = len(config["graphs"])
+            benchmarks = 1
+            policies = len(config["policies"]["all"])
+        else:
+            graphs = len(manifest["graph_sets"][stage["graph_set"]])
+            benchmarks = len(stage["benchmarks"])
+            policies = len(stage["policies"])
+        expected[name] = graphs * benchmarks * policies
+    return expected
+
+
+def validate_transport_authorization(
+        args: argparse.Namespace,
+        manifest_path: Path) -> dict[str, Any]:
+    if not args.screen_gate:
+        raise SystemExit(
+            "transport full roles require --screen-gate PATH")
+    path = resolve_path(args.screen_gate)
+    try:
+        payload = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as error:
+        raise SystemExit(
+            f"cannot read transport screen gate {path}: {error}") from error
+    manifest = load_manifest(manifest_path)
+    config = load_manifest(TRANSPORT_CONFIG)
+    expected_stage_rows = expected_transport_screen_rows(manifest, config)
+    recomputed = recompute_screen_gate(
+        payload, manifest_path, TRANSPORT_CONFIG,
+        gate_script="analysis/transport_scale_gate.py",
+        config_option="--transport-config",
+        campaign="transport")
+    valid = (
+        payload.get("valid") is True and
+        payload.get("phase") == "screen" and
+        payload.get("campaign") == TRANSPORT_PROFILE and
+        payload.get("decision") == "GO" and
+        payload.get("stage_rows") == expected_stage_rows and
+        payload.get("row_count") == sum(expected_stage_rows.values()) and
+        recomputed.get("valid") is True and
+        recomputed.get("phase") == "screen" and
+        recomputed.get("campaign") == payload.get("campaign") and
+        recomputed.get("decision") == "GO" and
+        recomputed.get("cell_count") == payload.get("cell_count") and
+        recomputed.get("row_count") == payload.get("row_count") and
+        recomputed.get("stage_rows") == payload.get("stage_rows") and
+        recomputed.get("run_dirs") == payload.get("run_dirs") and
+        payload.get("git_head") == current_git_head() and
+        recomputed.get("git_head") == payload.get("git_head") and
+        payload.get("manifest_sha256") == file_sha256(manifest_path) and
+        recomputed.get("manifest_sha256") ==
+            payload.get("manifest_sha256") and
+        payload.get("screen_config_sha256") ==
+            file_sha256(TRANSPORT_CONFIG) and
+        recomputed.get("screen_config_sha256") ==
+            payload.get("screen_config_sha256"))
+    if not valid:
+        raise SystemExit(
+            "transport screen authorization is stale or not GO")
+    return {
+        "path": str(path),
+        "sha256": file_sha256(path),
+        "git_head": payload["git_head"],
+        "manifest_sha256": payload["manifest_sha256"],
+        "screen_config_sha256": payload["screen_config_sha256"],
+    }
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run manifest-defined ReusePlan experiment profiles.")
@@ -1899,8 +2019,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--screen-gate", default="",
         help=(
-            "Validated literature-scale screen GO receipt required before "
-            "stages 92-95 execute."))
+            "Validated screen GO receipt required before the "
+            "literature-scale stages 92-95 or the transport stages "
+            "97-100 execute."))
     parser.add_argument("--graph-dir", default=str(PROJECT_ROOT / "results" / "graphs"), help="Graph root for manifest graph names without explicit paths.")
     parser.add_argument("--only", nargs="+", default=[], help="Only stages whose name contains one of these tokens.")
     parser.add_argument("--skip", nargs="+", default=[], help="Skip stages whose name contains one of these tokens.")
