@@ -1,8 +1,17 @@
-# ECG wiki figures
+# ECG figures
 
-This directory contains ECG's published SVG figures and matching Draw.io
-mirrors. This file records the deterministic generation contract, visual roles,
-provenance, and page registration.
+This directory contains ECG's published SVG figures, editable Draw.io mirrors,
+and tightly cropped vector PDFs for conference-paper embedding. This file
+records the deterministic generation contract, visual roles, provenance, and
+page registration.
+
+Two independent collections are generated from the same primitives:
+
+- the wiki plates in `fig/wiki` and `fig/wiki_src`; and
+- the compact conference-paper set in `fig/paper` and `fig/paper_src`.
+
+Each collection has its own generator, register, and validator. Generating one
+collection never rewrites the other.
 
 ## Generated-mode contract
 
@@ -117,3 +126,52 @@ latency, bandwidth, queueing, and contention are omitted.
 | [`property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg`](wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg) | From adjacency entry 4 -> 7 to LLC line 0x80000040 | [`Property-to-Cache-Walkthrough.md`](../wiki/Property-to-Cache-Walkthrough.md) Figure 1 |
 | [`property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg`](wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg) | ReusePlan state placement across software, core, and LLC | [`Property-to-Cache-Walkthrough.md`](../wiki/Property-to-Cache-Walkthrough.md) Figure 2 |
 | [`evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg`](wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg) | Evaluation evidence and admissible claims | [`Evaluation-Methodology.md`](../wiki/Evaluation-Methodology.md) Figure 1 |
+
+## Conference-paper figure set
+
+The paper set is generated deterministically from
+`scripts/docs/generate_ecg_paper_figures.py` and the same
+`scripts/docs/ecg_figure_lib.py` primitives.
+
+```text
+fig/paper/ecg-paper/ecg-paper-fNN-<topic>.svg
+fig/paper_src/ecg-paper/ecg-paper-fNN-<topic>.drawio
+```
+
+Run:
+
+```bash
+python3 scripts/docs/generate_ecg_paper_figures.py
+python3 scripts/docs/export_ecg_paper_pdfs.py
+python3 scripts/docs/generate_ecg_paper_figures.py --check
+python3 scripts/docs/export_ecg_paper_pdfs.py --check
+python3 scripts/docs/check_ecg_paper_figures.py
+```
+
+The PDF exporter uses headless Chrome for vector rendering and Ghostscript for
+stable metadata. Each PDF page is cropped to the SVG canvas, embeds the source
+SVG SHA-256, and is suitable for direct `\includegraphics` use in LaTeX.
+
+The paper contract adds page-oriented constraints on top of the shared
+schema, palette, accessibility, parity, and determinism rules:
+
+- exactly six figures, each carrying one concept;
+- a landscape 1200 px canvas between 420 px and 650 px tall;
+- live text of at least 17 px, so a two-column reduction stays readable;
+- separated plates instead of card grids or dense multi-panel plates; and
+- no owning wiki page, so the set is validated without an embedding check.
+
+The paper figures describe implemented and modeled architecture only. They
+state no measured results, and the validator rejects marketing language and
+percent/speedup claims in live text.
+
+## Paper figure register
+
+| SVG | PDF | Draw.io mirror | Visible title | Concept |
+|---|---|---|---|---|
+| `paper/ecg-paper/ecg-paper-f01-offline-plan.svg` | `paper/ecg-paper/ecg-paper-f01-offline-plan.pdf` | `paper_src/ecg-paper/ecg-paper-f01-offline-plan.drawio` | Offline ReusePlan construction and the measured-ROI boundary | traversal-selected CSR rows to edge-aligned records; construction ends before the ROI |
+| `paper/ecg-paper/ecg-paper-f02-compact-record.svg` | `paper/ecg-paper/ecg-paper-f02-compact-record.pdf` | `paper_src/ecg-paper/ecg-paper-f02-compact-record.drawio` | Compact ReusePlan record: 32-bit budget and edge substitution | destination, optional carried tier, two epochs, and fail-closed width binding |
+| `paper/ecg-paper/ecg-paper-f03-request-path.svg` | `paper/ecg-paper/ecg-paper-f03-request-path.pdf` | `paper_src/ecg-paper/ecg-paper-f03-request-path.drawio` | Record load and property load through the RISC-V request path | decode, AGU, LSQ, Request extension, MSHR, and LLC for both loads |
+| `paper/ecg-paper/ecg-paper-f04-llc-decision.svg` | `paper/ecg-paper/ecg-paper-f04-llc-decision.pdf` | `paper_src/ecg-paper/ecg-paper-f04-llc-decision.drawio` | LLC ReuseBind acceptance and victim selection | validation, line-local metadata, RRIP eligibility, and future distance |
+| `paper/ecg-paper/ecg-paper-f05-flowthrough.svg` | `paper/ecg-paper/ecg-paper-f05-flowthrough.pdf` | `paper_src/ecg-paper/ecg-paper-f05-flowthrough.drawio` | FlowThrough separates service from LLC fill allocation | hit bypass, all-no-allocate miss, and the allocating merge-target corner case |
+| `paper/ecg-paper/ecg-paper-f06-evidence-boundary.svg` | `paper/ecg-paper/ecg-paper-f06-evidence-boundary.pdf` | `paper_src/ecg-paper/ecg-paper-f06-evidence-boundary.drawio` | Evidence boundary for ECG evaluation claims | simulator roles, receipt gates, and the optimistic analytic P-OPT bound |

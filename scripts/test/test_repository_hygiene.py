@@ -77,6 +77,9 @@ def test_public_documentation_and_figures_are_tracked():
         "scripts/docs/ecg_figure_lib.py",
         "scripts/docs/generate_ecg_figures.py",
         "scripts/docs/check_wiki_figures.py",
+        "scripts/docs/generate_ecg_paper_figures.py",
+        "scripts/docs/export_ecg_paper_pdfs.py",
+        "scripts/docs/check_ecg_paper_figures.py",
         "scripts/experiments/ecg/configs/pagerank_study.json",
     }
     required.update(
@@ -84,6 +87,9 @@ def test_public_documentation_and_figures_are_tracked():
         for base, pattern in (
             (ROOT / "fig/wiki", "*.svg"),
             (ROOT / "fig/wiki_src", "*.drawio"),
+            (ROOT / "fig/paper", "*.svg"),
+            (ROOT / "fig/paper", "*.pdf"),
+            (ROOT / "fig/paper_src", "*.drawio"),
         )
         for path in base.rglob(pattern))
     assert required <= tracked
@@ -203,7 +209,7 @@ def test_retired_mechanism_names_are_absent():
         if relative in {
                 "wiki/assets/logo.svg",
                 "wiki/assets/logo.png",
-        } or relative.startswith(
+        } or relative.endswith(".pdf") or relative.startswith(
                 ("bench/include/external/", "bench/include/graphbrew/")):
             continue
         if any(term in relative.lower() for term in forbidden_paths):

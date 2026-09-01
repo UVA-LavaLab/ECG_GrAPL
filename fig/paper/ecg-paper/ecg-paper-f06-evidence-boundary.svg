@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="644" viewBox="0 0 1200 644" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">Evidence boundary for ECG evaluation claims</title>
+  <desc id="desc">Four evidence sources are separated: gem5 O3 supplies architectural timing, cache_sim supplies functional cache and traffic evidence, Sniper supplies matched-work modeled cache and traffic evidence, and analytic P-OPT supplies an optimistic timing bound because target-time latency, bandwidth, queueing, and contention are omitted. A candidate result row is admissible only after the mechanism receipt gate and the semantic receipt gate both pass.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C63C4A"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6558C5"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#98A2B3"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#182230"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
+        [fill="#F8FAFC"]{fill:#172033}[stroke="#F8FAFC"]{stroke:#172033}
+        [fill="#EFF6FF"]{fill:#172554}[stroke="#EFF6FF"]{stroke:#172554}
+        [fill="#ECFDF5"]{fill:#073B34}[stroke="#ECFDF5"]{stroke:#073B34}
+        [fill="#FFF7ED"]{fill:#422A12}[stroke="#FFF7ED"]{stroke:#422A12}
+        [fill="#FFF1F2"]{fill:#421B22}[stroke="#FFF1F2"]{stroke:#421B22}
+        [fill="#F5F3FF"]{fill:#292349}[stroke="#F5F3FF"]{stroke:#292349}
+        [fill="#182230"]{fill:#F8FAFC}[stroke="#182230"]{stroke:#F8FAFC}
+        [fill="#475467"]{fill:#94A3B8}[stroke="#475467"]{stroke:#94A3B8}
+        [fill="#98A2B3"]{fill:#A8B0BF}[stroke="#98A2B3"]{stroke:#A8B0BF}
+        [fill="#2563EB"]{fill:#7FB0FF}[stroke="#2563EB"]{stroke:#7FB0FF}
+        [fill="#0F8A72"]{fill:#5ED0B0}[stroke="#0F8A72"]{stroke:#5ED0B0}
+        [fill="#C56A13"]{fill:#F0B36A}[stroke="#C56A13"]{stroke:#F0B36A}
+        [fill="#6558C5"]{fill:#ADA4FF}[stroke="#6558C5"]{stroke:#ADA4FF}
+        [fill="#C63C4A"]{fill:#F48B98}[stroke="#C63C4A"]{stroke:#F48B98}
+      }
+      .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
+      .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="644" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Evidence boundary for ECG evaluation claims</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Each source supports a different claim, and both receipt gates must pass.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="32" y="133" text-anchor="start" class="sans label" fill="#98A2B3" font-weight="700">EVIDENCE SOURCES AND THEIR LIMITS</text>
+  <rect x="32" y="150" width="272" height="152" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="32" data-y="150" data-width="272" data-height="152"/>
+  <text x="46" y="182" text-anchor="start" class="sans label" fill="#0F8A72" font-weight="700">gem5 O3 timing</text>
+  <text x="46" y="214" text-anchor="start" class="sans subtitle" fill="#182230">architectural execution</text>
+  <text x="46" y="240" text-anchor="start" class="sans subtitle" fill="#182230">time and ISA path</text>
+  <text x="46" y="266" text-anchor="start" class="sans subtitle" fill="#182230">sampled, bounded runs</text>
+  <rect x="320" y="150" width="272" height="152" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="320" data-y="150" data-width="272" data-height="152"/>
+  <text x="334" y="182" text-anchor="start" class="sans label" fill="#2563EB" font-weight="700">cache_sim traffic</text>
+  <text x="334" y="214" text-anchor="start" class="sans subtitle" fill="#182230">functional cache and</text>
+  <text x="334" y="240" text-anchor="start" class="sans subtitle" fill="#182230">traffic accounting</text>
+  <text x="334" y="266" text-anchor="start" class="sans subtitle" fill="#182230">no cycle or instruction</text>
+  <text x="334" y="292" text-anchor="start" class="sans subtitle" fill="#182230">model</text>
+  <rect x="608" y="150" width="272" height="152" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="608" data-y="150" data-width="272" data-height="152"/>
+  <text x="622" y="182" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Sniper matched work</text>
+  <text x="622" y="214" text-anchor="start" class="sans subtitle" fill="#182230">modeled cache and traffic</text>
+  <text x="622" y="240" text-anchor="start" class="sans subtitle" fill="#182230">at larger scale</text>
+  <text x="622" y="266" text-anchor="start" class="sans subtitle" fill="#182230">time is not speedup</text>
+  <text x="622" y="292" text-anchor="start" class="sans subtitle" fill="#182230">evidence</text>
+  <rect x="896" y="150" width="272" height="152" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="896" data-y="150" data-width="272" data-height="152"/>
+  <text x="910" y="182" text-anchor="start" class="sans label" fill="#C56A13" font-weight="700">Analytic P-OPT bound</text>
+  <text x="910" y="214" text-anchor="start" class="sans subtitle" fill="#182230">charges reserved ways</text>
+  <text x="910" y="240" text-anchor="start" class="sans subtitle" fill="#182230">and matrix bytes</text>
+  <text x="910" y="266" text-anchor="start" class="sans subtitle" fill="#182230">target-time cost omitted</text>
+  <path d="M168 302 L168 340" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="gem5 O3 timing"/>
+  <path d="M456 302 L456 340" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="cache_sim traffic"/>
+  <path d="M744 302 L744 340" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Sniper matched work"/>
+  <path d="M1032 302 L1032 340" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Analytic P-OPT bound"/>
+  <rect x="32" y="340" width="1136" height="54" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="32" data-y="340" data-width="1136" data-height="54"/>
+  <text x="46" y="374" text-anchor="start" class="sans subtitle" fill="#182230">Candidate result row: time, total off-chip traffic, retired instructions, activity receipts</text>
+  <path d="M212 394 L212 424" fill="none" stroke="#182230" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-ink)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Candidate result row"/>
+  <rect x="32" y="424" width="360" height="136" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="32" data-y="424" data-width="360" data-height="136"/>
+  <text x="46" y="456" text-anchor="start" class="sans label" fill="#C63C4A" font-weight="700">Mechanism receipt gate</text>
+  <text x="46" y="488" text-anchor="start" class="sans subtitle" fill="#182230">requested and effective agree</text>
+  <text x="46" y="514" text-anchor="start" class="sans subtitle" fill="#182230">activity counters are positive</text>
+  <text x="46" y="540" text-anchor="start" class="sans subtitle" fill="#182230">width and substitution agree</text>
+  <rect x="420" y="424" width="360" height="136" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="420" data-y="424" data-width="360" data-height="136"/>
+  <text x="434" y="456" text-anchor="start" class="sans label" fill="#C63C4A" font-weight="700">Semantic receipt gate</text>
+  <text x="434" y="488" text-anchor="start" class="sans subtitle" fill="#182230">kernel output agrees across</text>
+  <text x="434" y="514" text-anchor="start" class="sans subtitle" fill="#182230">every matched policy row</text>
+  <text x="434" y="540" text-anchor="start" class="sans subtitle" fill="#182230">a failed peer invalidates timing</text>
+  <rect x="808" y="424" width="360" height="136" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="808" data-y="424" data-width="360" data-height="136"/>
+  <text x="822" y="456" text-anchor="start" class="sans label" fill="#0F8A72" font-weight="700">Admissible row</text>
+  <text x="822" y="488" text-anchor="start" class="sans subtitle" fill="#182230">both gates passed</text>
+  <text x="822" y="514" text-anchor="start" class="sans subtitle" fill="#182230">eligible for a reported claim</text>
+  <text x="822" y="540" text-anchor="start" class="sans subtitle" fill="#182230">no result is claimed here</text>
+  <path d="M392 492 L420 492" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Mechanism receipt"/>
+  <path d="M780 492 L808 492" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Semantic receipt"/>
+  <text x="32" y="590" text-anchor="start" class="sans subtitle" fill="#182230">popt_target_time_charged = 0, so analytic P-OPT timing is an optimistic bound rather than a target-time implementation.</text>
+  <text x="32" y="618" text-anchor="start" class="sans subtitle" fill="#182230">The figure states evidence scope and admissibility; it reports no measurements.</text>
+</svg>

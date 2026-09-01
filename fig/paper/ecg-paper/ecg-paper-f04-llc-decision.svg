@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="648" viewBox="0 0 1200 648" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">LLC ReuseBind acceptance and victim selection</title>
+  <desc id="desc">The upper band validates an incoming property Request: the ReuseBind extension must be valid, the execution context nonzero, and the destination must map to the accessed property block, after which the line-local stamp holds tier, two epochs, count, context, and validity. The lower band orders victim selection: RRIP eligibility, the oldest non-property line, the farthest effective future distance across property candidates with zero distance for an unstamped line, and a stable set-order tie-break.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C63C4A"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6558C5"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#98A2B3"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#182230"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
+        [fill="#F8FAFC"]{fill:#172033}[stroke="#F8FAFC"]{stroke:#172033}
+        [fill="#EFF6FF"]{fill:#172554}[stroke="#EFF6FF"]{stroke:#172554}
+        [fill="#ECFDF5"]{fill:#073B34}[stroke="#ECFDF5"]{stroke:#073B34}
+        [fill="#FFF7ED"]{fill:#422A12}[stroke="#FFF7ED"]{stroke:#422A12}
+        [fill="#FFF1F2"]{fill:#421B22}[stroke="#FFF1F2"]{stroke:#421B22}
+        [fill="#F5F3FF"]{fill:#292349}[stroke="#F5F3FF"]{stroke:#292349}
+        [fill="#182230"]{fill:#F8FAFC}[stroke="#182230"]{stroke:#F8FAFC}
+        [fill="#475467"]{fill:#94A3B8}[stroke="#475467"]{stroke:#94A3B8}
+        [fill="#98A2B3"]{fill:#A8B0BF}[stroke="#98A2B3"]{stroke:#A8B0BF}
+        [fill="#2563EB"]{fill:#7FB0FF}[stroke="#2563EB"]{stroke:#7FB0FF}
+        [fill="#0F8A72"]{fill:#5ED0B0}[stroke="#0F8A72"]{stroke:#5ED0B0}
+        [fill="#C56A13"]{fill:#F0B36A}[stroke="#C56A13"]{stroke:#F0B36A}
+        [fill="#6558C5"]{fill:#ADA4FF}[stroke="#6558C5"]{stroke:#ADA4FF}
+        [fill="#C63C4A"]{fill:#F48B98}[stroke="#C63C4A"]{stroke:#F48B98}
+      }
+      .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
+      .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="648" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">LLC ReuseBind acceptance and victim selection</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Line-local stamp state, RRIP eligibility, and effective future distance.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="32" y="133" text-anchor="start" class="sans label" fill="#98A2B3" font-weight="700">REQUEST AND CONTEXT VALIDATION</text>
+  <rect x="32" y="150" width="300" height="140" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="32" data-y="150" data-width="300" data-height="140"/>
+  <text x="46" y="182" text-anchor="start" class="sans label" fill="#2563EB" font-weight="700">Property Request at the LLC</text>
+  <text x="46" y="214" text-anchor="start" class="sans subtitle" fill="#182230">hit or fill with ReuseBind</text>
+  <text x="46" y="240" text-anchor="start" class="sans subtitle" fill="#182230">execution context id</text>
+  <text x="46" y="266" text-anchor="start" class="sans subtitle" fill="#182230">destination vertex</text>
+  <polygon points="560,150.0 730.0,220 560,290.0 390.0,220" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="560" data-cy="220" data-width="340" data-height="140"/>
+  <text x="560" y="210" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">Accept ReuseBind?</text>
+  <text x="560" y="240" text-anchor="middle" class="sans subtitle" fill="#182230">context and block match</text>
+  <rect x="790" y="150" width="378" height="140" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="790" data-y="150" data-width="378" data-height="140"/>
+  <text x="804" y="182" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Line-local metadata</text>
+  <text x="804" y="214" text-anchor="start" class="sans subtitle" fill="#182230">accepted stamp: tier, epochs</text>
+  <text x="804" y="240" text-anchor="start" class="sans subtitle" fill="#182230">count, context, stamp-valid</text>
+  <text x="804" y="266" text-anchor="start" class="sans subtitle" fill="#182230">cleared on invalidation</text>
+  <path d="M332 220 L390 220" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="hit or fill with ReuseBind"/>
+  <path d="M730 220 L790 220" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="accepted stamp"/>
+  <path d="M560 290 L560 318" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="no stamp"/>
+  <text x="32" y="336" text-anchor="start" class="sans subtitle" fill="#C63C4A">conflicted, invalid context, or block mismatch -&gt; no stamp; an unstamped line has effective distance 0</text>
+  <text x="32" y="372" text-anchor="start" class="sans label" fill="#98A2B3" font-weight="700">VICTIM SELECTION IN SET ORDER (rrip_first)</text>
+  <rect x="32" y="390" width="254" height="190" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="32" data-y="390" data-width="254" data-height="190"/>
+  <text x="46" y="422" text-anchor="start" class="sans label" fill="#0F8A72" font-weight="700">1. RRIP eligibility</text>
+  <text x="46" y="454" text-anchor="start" class="sans subtitle" fill="#182230">age the set until a</text>
+  <text x="46" y="480" text-anchor="start" class="sans subtitle" fill="#182230">way reaches rrpvMax</text>
+  <rect x="322" y="390" width="254" height="190" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="322" data-y="390" data-width="254" data-height="190"/>
+  <text x="336" y="422" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">2. Recency choice</text>
+  <text x="336" y="454" text-anchor="start" class="sans subtitle" fill="#182230">eligible ways only:</text>
+  <text x="336" y="480" text-anchor="start" class="sans subtitle" fill="#182230">oldest non-property</text>
+  <text x="336" y="506" text-anchor="start" class="sans subtitle" fill="#182230">line is taken</text>
+  <rect x="612" y="390" width="254" height="190" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="612" data-y="390" data-width="254" data-height="190"/>
+  <text x="626" y="422" text-anchor="start" class="sans label" fill="#C56A13" font-weight="700">3. Future distance</text>
+  <text x="626" y="454" text-anchor="start" class="sans subtitle" fill="#182230">no structural line:</text>
+  <text x="626" y="480" text-anchor="start" class="sans subtitle" fill="#182230">farthest effective</text>
+  <text x="626" y="506" text-anchor="start" class="sans subtitle" fill="#182230">distance over property</text>
+  <text x="626" y="532" text-anchor="start" class="sans subtitle" fill="#182230">candidates;</text>
+  <text x="626" y="558" text-anchor="start" class="sans subtitle" fill="#182230">unstamped distance = 0</text>
+  <rect x="902" y="390" width="254" height="190" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="902" data-y="390" data-width="254" data-height="190"/>
+  <text x="916" y="422" text-anchor="start" class="sans label" fill="#182230" font-weight="700">4. Stable set order</text>
+  <text x="916" y="454" text-anchor="start" class="sans subtitle" fill="#182230">a remaining tie uses</text>
+  <text x="916" y="480" text-anchor="start" class="sans subtitle" fill="#182230">deterministic set order</text>
+  <path d="M286 485 L322 485" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="eligible ways"/>
+  <path d="M576 485 L612 485" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="no structural line"/>
+  <path d="M866 485 L902 485" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="a remaining tie"/>
+  <text x="32" y="624" text-anchor="start" class="mono subtitle" fill="#182230">distance(e,c) = (e + N - (c mod N)) mod N ; effective = min(d1, d2) ; unstamped = 0</text>
+</svg>

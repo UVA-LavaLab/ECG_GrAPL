@@ -57,7 +57,8 @@ KERNELS_SNIPER := sg_kernel pr bfs sssp bc cc cc_sv \
 .PHONY: all artifact converter all-sim all-gem5 all-sniper \
 	sim-% gem5-% gem5-m5ops-% gem5-riscv-m5ops-% sniper-% \
 	setup-gem5 setup-gem5-guest-tools setup-sniper test verify clean clean-sim clean-gem5-bin \
-	clean-sniper-bin generate-wiki-figures check-wiki-figures help
+	clean-sniper-bin generate-wiki-figures check-wiki-figures \
+	generate-paper-figures export-paper-pdfs check-paper-figures help
 
 all: all-sim
 
@@ -75,6 +76,9 @@ help:
 	@echo "  make sniper-sg_kernel         Build canonical Sniper workload"
 	@echo "  make generate-wiki-figures    Regenerate SVG and Draw.io figures"
 	@echo "  make check-wiki-figures       Validate figure and mirror contract"
+	@echo "  make generate-paper-figures   Regenerate the paper figure set"
+	@echo "  make export-paper-pdfs        Export tight vector PDFs for the paper"
+	@echo "  make check-paper-figures      Validate the paper figure contract"
 	@echo "  make test                     Run Python artifact tests"
 
 $(BIN_DIR) $(BIN_SIM_DIR) $(BIN_GEM5_DIR) $(BIN_SNIPER_DIR):
@@ -263,6 +267,18 @@ generate-wiki-figures:
 check-wiki-figures:
 	$(PYTHON) scripts/docs/generate_ecg_figures.py --check
 	$(PYTHON) scripts/docs/check_wiki_figures.py
+
+generate-paper-figures:
+	$(PYTHON) scripts/docs/generate_ecg_paper_figures.py
+	$(PYTHON) scripts/docs/export_ecg_paper_pdfs.py
+
+export-paper-pdfs:
+	$(PYTHON) scripts/docs/export_ecg_paper_pdfs.py
+
+check-paper-figures:
+	$(PYTHON) scripts/docs/generate_ecg_paper_figures.py --check
+	$(PYTHON) scripts/docs/export_ecg_paper_pdfs.py --check
+	$(PYTHON) scripts/docs/check_ecg_paper_figures.py
 
 verify:
 	$(PYTHON) scripts/experiments/ecg/verify/equiv_kernels.py \

@@ -12,6 +12,11 @@ from typing import Iterable, Sequence
 CANVAS_WIDTH = 1200
 SCHEMA = "ecg-public/v1"
 
+# Output collections. "wiki" is the published wiki plate set; "paper" is the
+# compact conference-paper set. Each collection owns its own SVG and Draw.io
+# roots so the two sets never overwrite one another.
+COLLECTIONS = ("wiki", "paper")
+
 INK = "#182230"
 BORDER = "#475467"
 GRAY = "#98A2B3"
@@ -75,10 +80,14 @@ class Figure:
         subtitle: str,
         description: str,
         height: int,
+        collection: str = "wiki",
     ) -> None:
         if height < 300:
             raise ValueError("figure height must leave room for a real plate")
+        if collection not in COLLECTIONS:
+            raise ValueError(f"unsupported figure collection: {collection}")
         self.root = root
+        self.collection = collection
         self.target = target
         self.title = title
         self.subtitle = subtitle
@@ -544,6 +553,7 @@ class Figure:
         width: float = 3,
         label_at: tuple[float, float] | None = None,
         label_anchor: str = "middle",
+        label_size: float = 16,
         underlay: bool = False,
     ) -> None:
         if kind not in {"transfer", "control", "loop", "dependency", "model-edge"}:
@@ -615,7 +625,7 @@ class Figure:
         )
         if label_at and label:
             visible = label if not cadence else f"{label} | {cadence}"
-            label_width = _estimate_text(visible, 16, False, True)
+            label_width = _estimate_text(visible, label_size, False, True)
             label_left = (
                 label_at[0] - label_width / 2
                 if label_anchor == "middle"
@@ -624,8 +634,10 @@ class Figure:
                 else label_at[0]
             )
             self._svg.append(
-                f'<rect x="{label_left - 5:.2f}" y="{label_at[1] - 17:.2f}" '
-                f'width="{label_width + 10:.2f}" height="22" rx="3" '
+                f'<rect x="{label_left - 5:.2f}" '
+                f'y="{label_at[1] - label_size - 1:.2f}" '
+                f'width="{label_width + 10:.2f}" '
+                f'height="{label_size + 6:.0f}" rx="3" '
                 f'fill="{WHITE}" fill-opacity="0.96" '
                 f'data-label-background="true"/>'
             )
@@ -633,7 +645,7 @@ class Figure:
                 label_at[0],
                 label_at[1],
                 visible,
-                size=16,
+                size=label_size,
                 bold=True,
                 color=color,
                 anchor=label_anchor,
@@ -752,11 +764,11 @@ class Figure:
 
     def save(self) -> tuple[Path, Path]:
         svg_path = (
-            self.root / "fig" / "wiki" / self.target.slug
+            self.root / "fig" / self.collection / self.target.slug
             / f"{self.target.stem}.svg"
         )
         drawio_path = (
-            self.root / "fig" / "wiki_src" / self.target.slug
+            self.root / "fig" / f"{self.collection}_src" / self.target.slug
             / f"{self.target.stem}.drawio"
         )
         svg_path.parent.mkdir(parents=True, exist_ok=True)
@@ -837,11 +849,13 @@ class Figure:
         return svg_path, drawio_path
 
 
-def clean_generated_roots(root: Path) -> None:
+def clean_generated_roots(root: Path, collection: str = "wiki") -> None:
     """Remove only generated SVG/Draw.io files, retaining directory roots."""
+    if collection not in COLLECTIONS:
+        raise ValueError(f"unsupported figure collection: {collection}")
     for base, suffix in (
-        (root / "fig" / "wiki", ".svg"),
-        (root / "fig" / "wiki_src", ".drawio"),
+        (root / "fig" / collection, ".svg"),
+        (root / "fig" / f"{collection}_src", ".drawio"),
     ):
         if not base.exists():
             continue
