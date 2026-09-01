@@ -332,6 +332,11 @@ def validate_cache_row(
         if str(row.get("ecg_variant_effective")) != "lru_only":
             errors.append(
                 f"{key}/{policy} does not use the LRU victim variant")
+        if str(row.get(
+                "ecg_flowthrough_subsumed_by_structural")) != "1":
+            errors.append(
+                f"{key}/{policy} does not prove symmetric structural "
+                "FlowThrough subsumed the duplicate static path")
     elif policy != labels["baseline"]:
         errors.append(f"{key}/{policy} is outside the transport roster")
     return errors

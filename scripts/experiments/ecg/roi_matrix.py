@@ -3345,21 +3345,33 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
             "edge_stream_bytes_per_edge": 8,
             "ecg_record_replaces_edge": 1,
         })
+    structural_flowthrough_active = (
+        args.flowthrough == "all" and
+        "[STRUCTURAL-FLOWTHROUGH sim=cache_sim active=1]" in log_text and
+        int(row.get("structural_flowthrough_accesses") or 0) > 0)
+    static_flowthrough_subsumed = (
+        transport.flowthrough and
+        not transport.flowthrough_adaptive and
+        structural_flowthrough_active)
+    row["ecg_flowthrough_subsumed_by_structural"] = int(
+        static_flowthrough_subsumed)
     if transport.flowthrough:
         expected = (
             "[ECG-FLOWTHROUGH sim=cache_sim active=1 adaptive=1]"
             if transport.flowthrough_adaptive else
             "[ECG-FLOWTHROUGH sim=cache_sim active=1")
-        if expected not in log_text:
-            row["status"] = "error"
-            row["error"] = "FlowThrough requested but cache_sim FlowThrough path was inactive"
+        if expected not in log_text and not static_flowthrough_subsumed:
+            mark_row_error(
+                row,
+                "FlowThrough requested but cache_sim FlowThrough path "
+                "was inactive")
     if (
             args.flowthrough == "all" and
-            ("[STRUCTURAL-FLOWTHROUGH sim=cache_sim active=1]" not in log_text or
-             int(row.get("structural_flowthrough_accesses") or 0) <= 0)):
-        row["status"] = "error"
-        row["error"] = (
-            "structural FlowThrough requested but cache_sim path was inactive: "
+            not structural_flowthrough_active):
+        mark_row_error(
+            row,
+            "structural FlowThrough requested but cache_sim path was "
+            "inactive: "
             f"accesses={row.get('structural_flowthrough_accesses', 0)}")
     apply_overhead_metrics(row)
     row.update(parse_ecg_log_stats(log_path))

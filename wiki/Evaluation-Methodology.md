@@ -196,6 +196,15 @@ iteration 8, requires an aggregate compact/wide off-chip traffic ratio of at
 most 0.98 with per-cell traffic and LLC-miss ratios at most 1.02, and requires
 Sniper aggregate and per-cell demand-LLC-miss ratios at most 1.02.
 
+Configuration version 2 records one validation amendment discovered before
+any full cache role was accepted. When `--flowthrough all` is active, the
+common structural no-allocate path intentionally supersedes the candidate's
+duplicate static record no-allocate path. cache_sim now records that
+subsumption explicitly and accepts it only when structural FlowThrough is
+active with positive accesses. The first screen receipt and attempted full
+cache run are invalidated by the configuration amendment; no threshold,
+policy, stage, or claim changed.
+
 ## 8. Publication policy
 
 Preliminary numbers and intermediate choices remain local. Tables and measured

@@ -2,7 +2,9 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 from types import SimpleNamespace
 
@@ -192,6 +194,7 @@ def cache_row(stage, graph, benchmark, policy, traffic, misses):
             "edge_stream_bytes_per_edge": "4" if compact else "8",
             "ecg_record_replaces_edge": "1",
             "ecg_variant_effective": "lru_only",
+            "ecg_flowthrough_subsumed_by_structural": "1",
         })
     return row
 
@@ -295,6 +298,7 @@ def complete_rows(
 
 
 def test_transport_config_is_frozen_and_replacement_free():
+    assert CONFIG["version"] == 2
     assert CONFIG["id"] == "transport_literature_scale"
     assert CONFIG["policies"]["all"] == [
         "LRU", "ECG:REUSE_PLAN_LRU_FLOWTHROUGH"]
@@ -342,6 +346,17 @@ def test_transport_config_is_frozen_and_replacement_free():
     for term in ("replacement", "srrip", "grasp", "p-opt"):
         assert term in disallowed
     assert CONFIG["execution"]["policy_sharding_allowed"] is False
+    assert len(CONFIG["amendments"]) == 1
+    amendment = CONFIG["amendments"][0]
+    assert amendment["version"] == 2
+    assert "supersedes" in amendment["reason"]
+    assert amendment["threshold_changes"] is False
+    assert amendment["policy_changes"] is False
+    assert amendment["stage_roster_changes"] is False
+    assert amendment["invalidated_screen_receipt"].endswith(
+        "screen_1ba60b1e.json")
+    assert amendment["invalidated_full_run"].endswith(
+        "transport_full_cache_1ba60b1e")
     assert CONFIG["record_format"][
         "full_graph_compact_eligible_graphs"] == [
             "web-Google", "soc-pokec", "cit-Patents",
@@ -433,6 +448,57 @@ def test_transport_expected_cell_shapes():
     assert sum(len(roster) for roster in screen.values()) == 15
     assert len(complete) == 59
     assert sum(len(roster) for roster in complete.values()) == 119
+
+
+def test_symmetric_structural_flowthrough_subsumes_static_cache_path(
+        tmp_path):
+    binary = ROOT / "bench/bin_sim/pr"
+    if not binary.is_file():
+        pytest.skip("cache_sim PageRank binary is not built")
+    out_dir = tmp_path / "subsumed"
+    environment = dict(os.environ)
+    environment["GRAPHBREW_EXPLICIT_CELL_ENV"] = json.dumps({
+        "ECG_EDGE_RECORD_BYTES": "8",
+        "ECG_EXPECT_BYTES_PER_EDGE": "8",
+    })
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/experiments/ecg/roi_matrix.py",
+            "--suite", "cache-sim",
+            "--benchmark", "pr",
+            "--options", "-g 10 -k 4 -o 5 -n 1 -i 1",
+            "--policies", "LRU", "ECG:REUSE_PLAN_LRU_FLOWTHROUGH",
+            "--prefetcher", "none",
+            "--flowthrough", "all",
+            "--ecg-charged", "1",
+            "--ecg-epochs", "16",
+            "--ecg-isa-variant", "computed",
+            "--cache-sim-omp-threads", "1",
+            "--l1d-size", "4kB",
+            "--l2-size", "8kB",
+            "--l3-sizes", "32kB",
+            "--l3-ways", "8",
+            "--out-dir", str(out_dir),
+            "--require-cache-sim-aslr-disable",
+            "--no-build",
+        ],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = {
+        row["policy_label"]: row
+        for row in json.loads((out_dir / "roi_matrix.json").read_text())
+    }
+    candidate = rows[CANDIDATE]
+    assert candidate["status"] == "ok"
+    assert candidate["flowthrough"] == "all"
+    assert candidate["structural_flowthrough_accesses"] > 0
+    assert candidate["ecg_flowthrough_subsumed_by_structural"] == 1
 
 
 def test_screen_gate_reports_go_on_complete_evidence():

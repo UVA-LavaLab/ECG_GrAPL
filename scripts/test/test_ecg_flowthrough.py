@@ -462,7 +462,8 @@ def test_flowthrough_is_policy_isolated_and_verified():
     assert '"CACHE_FAST": "0"' in runner
     assert '"CACHE_SAMPLED": "0"' in runner
     assert '"CACHE_MULTICORE": "0"' in runner
-    assert "FlowThrough requested but cache_sim FlowThrough path was inactive" in runner
+    assert "FlowThrough requested but cache_sim FlowThrough path " in runner
+    assert "ecg_flowthrough_subsumed_by_structural" in runner
     assert '"ECG:REUSE_PLAN_FLOWTHROUGH"' in policy_specs
     assert '"ecg_flowthrough"' in runner
     assert "--flowthrough" in verifier

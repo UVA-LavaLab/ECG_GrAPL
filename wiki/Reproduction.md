@@ -330,6 +330,13 @@ graphs whose identifiers fit the 32-bit record. `soc-LiveJournal1` is excluded
 because its `23 + 2 + 4 + 4 = 33` bit budget does not fit. Sniper contributes
 demand LLC load-miss counts only, not byte-level off-chip traffic or timing.
 
+Configuration version 2 also records a validation-only amendment. Under
+`--flowthrough all`, symmetric structural FlowThrough supersedes the
+candidate's duplicate static record FlowThrough path. The cache_sim row must
+report this subsumption explicitly. The version-1 screen receipt and first
+full-cache attempt are invalid and must not authorize or populate version 2;
+the thresholds, policies, stage roster, and admissible claims are unchanged.
+
 Run the mechanism stage and the iteration-1 transport cells first, then
 evaluate the screen:
 

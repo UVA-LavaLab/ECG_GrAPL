@@ -3018,7 +3018,7 @@
         "ECG_EDGE_RECORD_BYTES": "8",
         "ECG_EXPECT_BYTES_PER_EDGE": "8"
       },
-      "notes": "Five-graph 8-byte wide-record control matched cell-for-cell against stage 99. soc-LiveJournal1 is excluded because its 23 destination bits plus 2 tier bits and two 4-bit epochs require 33 bits."
+      "notes": "Five-graph 8-byte wide-record control matched cell-for-cell against stage 99. Symmetric structural FlowThrough supersedes the duplicate static record FlowThrough path and must emit the explicit subsumption receipt. soc-LiveJournal1 is excluded because its 23 destination bits plus 2 tier bits and two 4-bit epochs require 33 bits."
     },
     {
       "name": "99_cache_sim_transport_compact16",
@@ -3043,7 +3043,7 @@
         "ECG_RECORD_VARIABLE_WIDTH": "1",
         "ECG_EXPECT_BYTES_PER_EDGE": "4"
       },
-      "notes": "Five-graph 4-byte compact-record role. Same graphs, kernels, policies, and FlowThrough setting as stage 98; no compact full-graph claim is made for soc-LiveJournal1."
+      "notes": "Five-graph 4-byte compact-record role. Same graphs, kernels, policies, and FlowThrough setting as stage 98. Symmetric structural FlowThrough supersedes the duplicate static record FlowThrough path and must emit the explicit subsumption receipt; no compact full-graph claim is made for soc-LiveJournal1."
     },
     {
       "name": "100_sniper_transport_matched",

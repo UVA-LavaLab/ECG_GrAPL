@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "id": "transport_literature_scale",
   "scope": "Confirmatory six-graph n18 PageRank timing campaign plus five compact-eligible full-graph width comparisons. It isolates compact ReusePlan transport and structural FlowThrough while replacement stays pure LRU in both arms.",
   "independent_of_replacement_campaign": true,
@@ -298,6 +298,17 @@
     },
     "exclusion_reason": "The confirmatory campaign uses a new commit, manifest, sidecar version, simulator binary, and gate receipt. Earlier rows cannot authorize or populate it."
   },
+  "amendments": [
+    {
+      "version": 2,
+      "reason": "The first authorized full cache cell showed that global symmetric structural FlowThrough intentionally supersedes the candidate's duplicate static record FlowThrough path, but roi_matrix still required both receipt banners. Version 2 records the subsumption explicitly and accepts it only when structural FlowThrough is active and positive.",
+      "threshold_changes": false,
+      "policy_changes": false,
+      "stage_roster_changes": false,
+      "invalidated_screen_receipt": "results/ecg_experiments/aggregates/transport_scale/screen_1ba60b1e.json",
+      "invalidated_full_run": "results/ecg_experiments/runs/transport_full_cache_1ba60b1e"
+    }
+  ],
   "variant_receipts": {
     "ECG_REUSE_PLAN_LRU_FLOWTHROUGH": {
       "requested": "lru_only",
@@ -338,7 +349,8 @@
     },
     "cache_rows_candidate": {
       "ecg_variant_effective": "lru_only",
-      "ecg_record_replaces_edge": 1
+      "ecg_record_replaces_edge": 1,
+      "ecg_flowthrough_subsumed_by_structural": 1
     },
     "sniper_rows_both_arms": {
       "simulator": "sniper",
