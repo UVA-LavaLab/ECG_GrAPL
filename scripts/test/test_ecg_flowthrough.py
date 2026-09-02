@@ -224,10 +224,12 @@ def test_sniper_flowthrough_preserves_nuca_lookup_and_skips_miss_fill():
     assert "recordEcgPlacementMiss" in setup
     assert "lookupFusedReusePlanPair" in context
     assert "reuse_plan_offsets_path" in context
-    assert "reuse_plan_line_offsets" in context
-    assert "std::lower_bound" in context
+    assert "reuse_plan_dest_offsets" in context
+    assert "findFusedDestination" in context
     assert "Sniper fused ReusePlan sideband is missing or incomplete" in context
-    assert "Sniper fused ReusePlan line has inconsistent" in context
+    assert "Sniper fused ReusePlan line has inconsistent" not in context
+    assert "exact_property_address" in context
+    assert "bound_address" in context
     assert '((record >> 32) & 0x3ULL) == 0' in context
     harness = read("bench/include/sniper_sim/sniper_harness.h")
     assert "sniper_write_binary_atomic" in harness

@@ -298,7 +298,7 @@ def complete_rows(
 
 
 def test_transport_config_is_frozen_and_replacement_free():
-    assert CONFIG["version"] == 2
+    assert CONFIG["version"] == 3
     assert CONFIG["id"] == "transport_literature_scale"
     assert CONFIG["policies"]["all"] == [
         "LRU", "ECG:REUSE_PLAN_LRU_FLOWTHROUGH"]
@@ -346,17 +346,31 @@ def test_transport_config_is_frozen_and_replacement_free():
     for term in ("replacement", "srrip", "grasp", "p-opt"):
         assert term in disallowed
     assert CONFIG["execution"]["policy_sharding_allowed"] is False
-    assert len(CONFIG["amendments"]) == 1
-    amendment = CONFIG["amendments"][0]
-    assert amendment["version"] == 2
-    assert "supersedes" in amendment["reason"]
-    assert amendment["threshold_changes"] is False
-    assert amendment["policy_changes"] is False
-    assert amendment["stage_roster_changes"] is False
-    assert amendment["invalidated_screen_receipt"].endswith(
+    assert len(CONFIG["amendments"]) == 2
+    flowthrough_amendment, fused_binding_amendment = CONFIG["amendments"]
+    assert flowthrough_amendment["version"] == 2
+    assert "supersedes" in flowthrough_amendment["reason"]
+    assert flowthrough_amendment["threshold_changes"] is False
+    assert flowthrough_amendment["policy_changes"] is False
+    assert flowthrough_amendment["stage_roster_changes"] is False
+    assert flowthrough_amendment["invalidated_screen_receipt"].endswith(
         "screen_1ba60b1e.json")
-    assert amendment["invalidated_full_run"].endswith(
+    assert flowthrough_amendment["invalidated_full_run"].endswith(
         "transport_full_cache_1ba60b1e")
+    assert fused_binding_amendment["version"] == 3
+    assert "exact bound property address" in fused_binding_amendment["reason"]
+    assert fused_binding_amendment["threshold_changes"] is False
+    assert fused_binding_amendment["policy_changes"] is False
+    assert fused_binding_amendment["stage_roster_changes"] is False
+    assert fused_binding_amendment["claim_changes"] is False
+    assert fused_binding_amendment["invalidated_screen_receipt"].endswith(
+        "screen_6178a96d.json")
+    assert len(fused_binding_amendment["invalidated_full_runs"]) == 3
+    sniper_binding = CONFIG["record_format"]["sniper_fused_binding"]
+    assert "exact bound property address" in sniper_binding[
+        "certified_prefix_key"]
+    assert "not collapsed" in sniper_binding["sideband_index"]
+    assert "pure LRU" in sniper_binding["scope"]
     assert CONFIG["record_format"][
         "full_graph_compact_eligible_graphs"] == [
             "web-Google", "soc-pokec", "cit-Patents",

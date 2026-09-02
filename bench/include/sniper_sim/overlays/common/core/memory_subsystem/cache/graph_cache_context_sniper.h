@@ -77,7 +77,7 @@ void recordCertifiedReusePlanFallback();
 bool consumeBoundReusePlanLoad(
     uint32_t core_id, uint64_t line_addr, uint64_t line_size,
     uint16_t* current_epoch = nullptr, uint16_t* context_id = nullptr,
-    uint64_t* trace_sequence = nullptr);
+    uint64_t* trace_sequence = nullptr, uint64_t* bound_address = nullptr);
 void beginEcgContext();
 void endEcgContext();
 uint16_t currentEcgContextId();
@@ -172,14 +172,10 @@ struct GraphCacheContext {
     uint64_t structural_flowthrough_base = 0;
     uint64_t structural_flowthrough_upper = 0;
     std::vector<uint64_t> reuse_plan_offsets;
-    std::vector<uint64_t> reuse_plan_line_offsets;
-    std::vector<uint32_t> reuse_plan_line_ids;
-    std::vector<uint64_t> reuse_plan_line_records;
-    std::vector<uint64_t> reuse_plan_line_indices;
-    std::vector<uint64_t> reuse_plan_line8_offsets;
-    std::vector<uint32_t> reuse_plan_line8_ids;
-    std::vector<uint64_t> reuse_plan_line8_records;
-    std::vector<uint64_t> reuse_plan_line8_indices;
+    std::vector<uint64_t> reuse_plan_dest_offsets;
+    std::vector<uint32_t> reuse_plan_dest_ids;
+    std::vector<uint64_t> reuse_plan_dest_records;
+    std::vector<uint64_t> reuse_plan_dest_indices;
     mutable std::atomic<uint64_t> reuse_plan_profile_calls{0};
     mutable std::atomic<uint64_t> reuse_plan_profile_found{0};
     mutable std::atomic<uint64_t> reuse_plan_profile_total_ns{0};
@@ -214,10 +210,11 @@ struct GraphCacheContext {
     bool isEcgEpochData(uint64_t addr) const;
     bool isFlowThroughData(uint64_t addr) const;
     bool isStructuralFlowThroughData(uint64_t addr) const;
-    bool lookupFusedReusePlanPair(uint64_t line_addr, uint32_t core_id,
+    bool lookupFusedReusePlanPair(uint64_t property_addr, uint32_t core_id,
                            uint8_t& tier,
                            uint16_t& first, uint16_t& second,
-                           uint64_t trace_sequence = ~uint64_t{0}) const;
+                           uint64_t trace_sequence = ~uint64_t{0},
+                           bool exact_property_address = false) const;
     bool isEdgeData(uint64_t addr) const;
     uint32_t classifyBucket(uint64_t addr) const;
     uint32_t findNextRefAtVertex(

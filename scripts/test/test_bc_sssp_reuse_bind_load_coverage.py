@@ -65,7 +65,8 @@ def test_bc_masks_depth_and_path_counts():
     assert "[ECG-ReuseBind-ACCEPT sim=gem5" in gem5_policy
     assert "traceAcceptedReusePlan(" in gem5_policy
     assert '"path_counts"' in sniper_context
-    assert "reuse_plan_line8_offsets" in sniper_context
+    assert "reuse_plan_dest_offsets" in sniper_context
+    assert "exact_property_address" in sniper_context
     runner = read("scripts/experiments/ecg/roi_matrix.py")
     assert roi_matrix.ecg_epoch_region("bc") == "depth,path_counts"
     assert roi_matrix.gem5_ecg_epoch_region_indices("bc") == "1,2"

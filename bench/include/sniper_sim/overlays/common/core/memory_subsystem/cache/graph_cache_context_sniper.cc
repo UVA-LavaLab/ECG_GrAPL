@@ -1,4 +1,5 @@
 #include "graph_cache_context_sniper.h"
+#include "ecg_fused_reuse_plan_index.h"
 #include "ecg_victim_policy.h"  // shared GRASP insertion-tier classifier
 
 #include <algorithm>
@@ -704,79 +705,46 @@ bool GraphCacheContext::loadFromSideband(const std::string& path)
                 static_cast<unsigned>((record >> 49) & 0x7FFFULL));
         }
     }
-    reuse_plan_line_offsets.clear();
-    reuse_plan_line_ids.clear();
-    reuse_plan_line_records.clear();
-    reuse_plan_line_indices.clear();
-    reuse_plan_line8_offsets.clear();
-    reuse_plan_line8_ids.clear();
-    reuse_plan_line8_records.clear();
-    reuse_plan_line8_indices.clear();
+    reuse_plan_dest_offsets.clear();
+    reuse_plan_dest_ids.clear();
+    reuse_plan_dest_records.clear();
+    reuse_plan_dest_indices.clear();
     if (fused_reuse_plan_enabled) {
         struct IndexedReusePlanRecord {
-            uint32_t line_id;
+            uint32_t dest_vertex;
             uint64_t record;
             uint64_t raw_index;
         };
-        auto build_line_index = [&](
-                uint32_t vertices_per_line,
-                std::vector<uint64_t>& offsets,
-                std::vector<uint32_t>& ids,
-                std::vector<uint64_t>& records,
-                std::vector<uint64_t>& indices) {
-            offsets.assign(
-                static_cast<size_t>(topology.num_vertices) + 1, 0);
-            std::vector<IndexedReusePlanRecord> source_lines;
-            for (uint32_t src = 0; src < topology.num_vertices; ++src) {
-                const uint64_t begin = reuse_plan_offsets[src];
-                const uint64_t end = reuse_plan_offsets[src + 1];
-                source_lines.clear();
-                source_lines.reserve(static_cast<size_t>(end - begin));
-                for (uint64_t index = begin; index < end; ++index) {
-                    const uint64_t record = raw_reuse_plan_records[index];
-                    if (((record >> 32) & 0x3ULL) == 0) continue;
-                    source_lines.push_back({
-                        static_cast<uint32_t>(record) / vertices_per_line,
-                        record,
-                        index,
-                    });
-                }
-                std::stable_sort(
-                    source_lines.begin(), source_lines.end(),
-                    [](const IndexedReusePlanRecord& left,
-                       const IndexedReusePlanRecord& right) {
-                        return left.line_id < right.line_id;
-                    });
-                uint32_t previous_line = UINT32_MAX;
-                for (const IndexedReusePlanRecord& indexed : source_lines) {
-                    if (indexed.line_id == previous_line) {
-                        if ((indexed.record >> 32) !=
-                            (records.back() >> 32)) {
-                            std::fprintf(
-                                stderr,
-                                "[FATAL] Sniper fused ReusePlan line has inconsistent "
-                                "tier/epoch hints (src=%u line=%u vpl=%u)\n",
-                                src, indexed.line_id, vertices_per_line);
-                            std::abort();
-                        }
-                        continue;
-                    }
-                    ids.push_back(indexed.line_id);
-                    records.push_back(indexed.record);
-                    indices.push_back(indexed.raw_index);
-                    previous_line = indexed.line_id;
-                }
-                offsets[src + 1] = records.size();
+        reuse_plan_dest_offsets.assign(
+            static_cast<size_t>(topology.num_vertices) + 1, 0);
+        std::vector<IndexedReusePlanRecord> source_records;
+        for (uint32_t src = 0; src < topology.num_vertices; ++src) {
+            const uint64_t begin = reuse_plan_offsets[src];
+            const uint64_t end = reuse_plan_offsets[src + 1];
+            source_records.clear();
+            source_records.reserve(static_cast<size_t>(end - begin));
+            for (uint64_t index = begin; index < end; ++index) {
+                const uint64_t record = raw_reuse_plan_records[index];
+                if (((record >> 32) & 0x3ULL) == 0) continue;
+                source_records.push_back({
+                    static_cast<uint32_t>(record),
+                    record,
+                    index,
+                });
             }
-        };
-        const uint32_t primary_vpl = ecgVerticesPerLine();
-        build_line_index(
-            primary_vpl, reuse_plan_line_offsets, reuse_plan_line_ids,
-            reuse_plan_line_records, reuse_plan_line_indices);
-        if (primary_vpl != 8) {
-            build_line_index(
-                8, reuse_plan_line8_offsets, reuse_plan_line8_ids,
-                reuse_plan_line8_records, reuse_plan_line8_indices);
+            std::stable_sort(
+                source_records.begin(), source_records.end(),
+                [](const IndexedReusePlanRecord& left,
+                   const IndexedReusePlanRecord& right) {
+                    return left.dest_vertex < right.dest_vertex;
+                });
+            for (const IndexedReusePlanRecord& indexed : source_records) {
+                reuse_plan_dest_ids.push_back(indexed.dest_vertex);
+                reuse_plan_dest_records.push_back(indexed.record);
+                reuse_plan_dest_indices.push_back(indexed.raw_index);
+            }
+            reuse_plan_dest_offsets[src + 1] =
+                reuse_plan_dest_records.size();
         }
     }
     topology.max_degree = static_cast<uint32_t>(parseJsonUint(content, "\"max_degree\""));
@@ -1010,9 +978,9 @@ bool GraphCacheContext::isStructuralFlowThroughData(uint64_t addr) const
 }
 
 bool GraphCacheContext::lookupFusedReusePlanPair(
-        uint64_t line_addr, uint32_t core_id,
+        uint64_t property_addr, uint32_t core_id,
         uint8_t& tier, uint16_t& first, uint16_t& second,
-        uint64_t trace_sequence) const
+        uint64_t trace_sequence, bool exact_property_address) const
 {
     using Clock = std::chrono::steady_clock;
     const bool profile = reuse_planLookupProfileEnabled();
@@ -1031,58 +999,55 @@ bool GraphCacheContext::lookupFusedReusePlanPair(
     } total_timer{this, profile, total_start};
     if (profile)
         reuse_plan_profile_calls.fetch_add(1, std::memory_order_relaxed);
-    if (reuse_plan_offsets.empty())
+    if (reuse_plan_offsets.empty() || reuse_plan_dest_offsets.empty())
         return false;
     const auto classify_start = profile ? Clock::now() : Clock::time_point{};
     const uint32_t src = currentVertexForPopt(core_id);
-    const uint32_t line_vertex = vertexForAddress(line_addr);
-    if (line_vertex == UINT32_MAX) return false;
-    const uint32_t elem_size = propertyElemSizeForAddress(line_addr);
+    const uint32_t requested_vertex = vertexForAddress(property_addr);
+    if (requested_vertex == UINT32_MAX) return false;
+    const uint32_t elem_size = propertyElemSizeForAddress(property_addr);
     const uint32_t vertices_per_line =
-        elem_size > 0 ? std::max<uint32_t>(1, 64 / elem_size)
+        elem_size > 0
+            ? std::max<uint32_t>(
+                  1, static_cast<uint32_t>(rereference.cache_line_size) /
+                         elem_size)
                       : ecgVerticesPerLine();
-    const bool use_line8 =
-        vertices_per_line == 8 && !reuse_plan_line8_offsets.empty();
-    const auto& line_offsets =
-        use_line8 ? reuse_plan_line8_offsets : reuse_plan_line_offsets;
-    const auto& line_ids = use_line8 ? reuse_plan_line8_ids : reuse_plan_line_ids;
-    const auto& line_records =
-        use_line8 ? reuse_plan_line8_records : reuse_plan_line_records;
-    const auto& line_indices =
-        use_line8 ? reuse_plan_line8_indices : reuse_plan_line_indices;
-    if (line_offsets.empty() || line_ids.empty() ||
-        line_records.empty() || line_indices.empty() ||
-        static_cast<size_t>(src + 1) >= line_offsets.size())
+    if (reuse_plan_dest_ids.empty() || reuse_plan_dest_records.empty() ||
+        reuse_plan_dest_indices.empty() ||
+        static_cast<size_t>(src + 1) >= reuse_plan_dest_offsets.size())
         return false;
-    const uint32_t line_id = line_vertex / vertices_per_line;
+    const uint32_t line_id = requested_vertex / vertices_per_line;
+    const uint32_t first_vertex = exact_property_address
+        ? requested_vertex : line_id * vertices_per_line;
+    const uint32_t past_last_vertex = exact_property_address
+        ? requested_vertex + 1 : first_vertex + vertices_per_line;
+    const uint64_t line_addr =
+        property_addr & ~(rereference.cache_line_size - 1);
     if (profile) {
         const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - classify_start).count();
         reuse_plan_profile_classify_ns.fetch_add(
             static_cast<uint64_t>(ns), std::memory_order_relaxed);
     }
-    const uint64_t indexed_begin = line_offsets[src];
+    const uint64_t indexed_begin = reuse_plan_dest_offsets[src];
     const uint64_t indexed_end = std::min<uint64_t>(
-        line_offsets[src + 1], line_records.size());
+        reuse_plan_dest_offsets[src + 1], reuse_plan_dest_records.size());
     const auto search_start = profile ? Clock::now() : Clock::time_point{};
-    const auto found = std::lower_bound(
-        line_ids.begin() + indexed_begin,
-        line_ids.begin() + indexed_end,
-        line_id);
+    uint64_t indexed_position = 0;
+    const bool found = ecg_reuse_plan::findFusedDestination(
+        reuse_plan_dest_ids, indexed_begin, indexed_end,
+        first_vertex, past_last_vertex, indexed_position);
     if (profile) {
         const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             Clock::now() - search_start).count();
         reuse_plan_profile_search_ns.fetch_add(
             static_cast<uint64_t>(ns), std::memory_order_relaxed);
     }
-    if (found == line_ids.begin() + indexed_end || *found != line_id)
-        return false;
+    if (!found) return false;
     if (profile)
         reuse_plan_profile_found.fetch_add(1, std::memory_order_relaxed);
-    const uint64_t indexed_position =
-        static_cast<uint64_t>(found - line_ids.begin());
-    const uint64_t record = line_records[indexed_position];
-    const uint64_t raw_index = line_indices[indexed_position];
+    const uint64_t record = reuse_plan_dest_records[indexed_position];
+    const uint64_t raw_index = reuse_plan_dest_indices[indexed_position];
     const uint64_t raw_begin = reuse_plan_offsets[src];
     const uint64_t raw_end = reuse_plan_offsets[src + 1];
     const uint32_t dest = static_cast<uint32_t>(record);
@@ -1113,10 +1078,14 @@ bool GraphCacheContext::lookupFusedReusePlanPair(
         emit_validation) {
         std::fprintf(stderr,
             "[ECG-ReusePlan-FUSED-RECV sim=sniper seq=%llu src=%u "
-            "line=%u addr_line=0x%llx vpl=%u index=%llu begin=%llu end=%llu "
-            "dest=%u tier=%u epoch1=%u epoch2=%u]\n",
+            "line=%u addr=0x%llx addr_line=0x%llx exact=%u requested=%u "
+            "vpl=%u index=%llu begin=%llu end=%llu dest=%u tier=%u "
+            "epoch1=%u epoch2=%u]\n",
             (unsigned long long)receipt, src,
-            line_id, (unsigned long long)line_addr, vertices_per_line,
+            line_id, (unsigned long long)property_addr,
+            (unsigned long long)line_addr,
+            static_cast<unsigned>(exact_property_address),
+            requested_vertex, vertices_per_line,
             (unsigned long long)raw_index,
             (unsigned long long)raw_begin,
             (unsigned long long)raw_end,
@@ -1352,7 +1321,7 @@ void recordCertifiedReusePlanFallback()
 bool consumeBoundReusePlanLoad(
         uint32_t core_id, uint64_t line_addr, uint64_t line_size,
         uint16_t* current_epoch, uint16_t* context_id,
-        uint64_t* trace_sequence)
+        uint64_t* trace_sequence, uint64_t* bound_address)
 {
     if (core_id >= MAX_TRACKED_CORES || line_size == 0) return false;
     auto& state = boundReusePlanLoadState();
@@ -1373,6 +1342,7 @@ bool consumeBoundReusePlanLoad(
         *context_id = state.context_id[core_id].load(
             std::memory_order_relaxed);
     }
+    if (bound_address) *bound_address = address;
     const uint64_t sequence =
         boundReusePlanConsumeSequence().fetch_add(1, std::memory_order_relaxed);
     if (trace_sequence) *trace_sequence = sequence;

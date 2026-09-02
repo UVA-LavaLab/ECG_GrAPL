@@ -3078,7 +3078,7 @@
         "ECG_EXPECT_BYTES_PER_EDGE": "8",
         "ECG_REUSE_PLAN_DELIVERY_TRACE": "32"
       },
-      "notes": "Bounded matched-work corroboration of demand LLC load misses only. Sniper exposes no byte-level off-chip traffic for this role, excludes writeback bytes from l3_misses, and supplies no admissible timing."
+      "notes": "Bounded matched-work corroboration of demand LLC load misses only. The certified prefix binds each fused record by current source plus exact bound property address, preserving distinct per-edge hints for vertices that share a line; marker-free fallback is line-range lookup under pure LRU replacement. Sniper exposes no byte-level off-chip traffic for this role, excludes writeback bytes from l3_misses, and supplies no admissible timing."
     }
   ]
 }

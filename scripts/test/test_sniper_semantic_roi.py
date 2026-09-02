@@ -4,6 +4,8 @@ from scripts.experiments.ecg.roi_matrix import (
     validate_sniper_exact_bind_trace,
 )
 from types import SimpleNamespace
+import shutil
+import subprocess
 import sys
 
 import pytest
@@ -48,11 +50,12 @@ def test_exact_bind_trace_matches_receipt_line(tmp_path: Path):
         "[ECG-ReusePlan-BIND-CONSUME sim=sniper seq=0 core=0 "
         "bound=0x1044 line=0x1040 size=64 current=17 context=3]\n"
         "[ECG-ReusePlan-FUSED-RECV sim=sniper seq=0 src=5 line=1 "
-        "addr_line=0x1040 vpl=16 index=7 begin=2 end=9 "
+        "addr=0x1044 addr_line=0x1040 exact=1 requested=17 "
+        "vpl=16 index=7 begin=2 end=9 "
         "dest=17 tier=1 epoch1=20 epoch2=21]\n")
     assert validate_sniper_exact_bind_trace(log) == (1, 0)
 
-    log.write_text(log.read_text().replace("addr_line=0x1040", "addr_line=0x1080"))
+    log.write_text(log.read_text().replace("addr=0x1044", "addr=0x1048"))
     assert validate_sniper_exact_bind_trace(log) == (1, 1)
 
 
@@ -62,7 +65,8 @@ def test_exact_bind_trace_rejects_invalid_context_and_line_size(tmp_path: Path):
         "[ECG-ReusePlan-BIND-CONSUME sim=sniper seq=0 core=0 "
         "bound=0x1044 line=0x1040 size=63 current=17 context=0]\n"
         "[ECG-ReusePlan-FUSED-RECV sim=sniper seq=0 src=5 line=1 "
-        "addr_line=0x1040 vpl=16 index=7 begin=2 end=9 "
+        "addr=0x1044 addr_line=0x1040 exact=1 requested=17 "
+        "vpl=16 index=7 begin=2 end=9 "
         "dest=17 tier=1 epoch1=20 epoch2=21]\n")
     assert validate_sniper_exact_bind_trace(log) == (1, 1)
 
@@ -74,10 +78,62 @@ def test_exact_bind_trace_rejects_duplicate_sequence(tmp_path: Path):
         "bound=0x1044 line=0x1040 size=64 current=17 context=3]\n")
     receipt = (
         "[ECG-ReusePlan-FUSED-RECV sim=sniper seq=0 src=5 line=1 "
-        "addr_line=0x1040 vpl=16 index=7 begin=2 end=9 "
+        "addr=0x1044 addr_line=0x1040 exact=1 requested=17 "
+        "vpl=16 index=7 begin=2 end=9 "
         "dest=17 tier=1 epoch1=20 epoch2=21]\n")
     log.write_text(bind + bind + receipt)
     assert validate_sniper_exact_bind_trace(log) == (1, 1)
+
+
+def test_fused_index_preserves_distinct_same_line_records(tmp_path: Path):
+    compiler = shutil.which("g++")
+    if compiler is None:
+        pytest.skip("g++ not available")
+    source = tmp_path / "fused_index_test.cc"
+    binary = tmp_path / "fused_index_test"
+    source.write_text(
+        """
+#include <cstdint>
+#include <vector>
+
+#include "ecg_fused_reuse_plan_index.h"
+
+int main() {
+    const std::vector<uint32_t> destinations{16, 17};
+    const std::vector<uint64_t> records{
+        (uint64_t{1} << 32) | (uint64_t{3} << 34) | uint64_t{16},
+        (uint64_t{2} << 32) | (uint64_t{9} << 34) | uint64_t{17},
+    };
+    uint64_t position = 99;
+    if (!ecg_reuse_plan::findFusedDestination(
+            destinations, 0, 2, 16, 17, position) ||
+        position != 0 || records[position] == records[1]) {
+        return 1;
+    }
+    if (!ecg_reuse_plan::findFusedDestination(
+            destinations, 0, 2, 17, 18, position) ||
+        position != 1 || records[position] == records[0]) {
+        return 2;
+    }
+    if (!ecg_reuse_plan::findFusedDestination(
+            destinations, 0, 2, 16, 32, position) ||
+        position != 0) {
+        return 3;
+    }
+    return 0;
+}
+""")
+    subprocess.run(
+        [
+            compiler, "-std=c++17", "-O2",
+            "-I", str(
+                ROOT / "bench/include/sniper_sim/overlays/common/core/"
+                "memory_subsystem/cache"),
+            str(source), "-o", str(binary),
+        ],
+        check=True,
+    )
+    subprocess.run([str(binary)], check=True)
 
 
 def test_exact_bind_certification_requires_stable_trace_budget():
@@ -247,7 +303,8 @@ def test_exact_bind_trace_requires_full_trace_budget(tmp_path: Path):
         "[ECG-ReusePlan-BIND-CONSUME sim=sniper seq=0 core=0 "
         "bound=0x1044 line=0x1040 size=64 current=17 context=3]\n"
         "[ECG-ReusePlan-FUSED-RECV sim=sniper seq=0 src=5 line=1 "
-        "addr_line=0x1040 vpl=16 index=7 begin=2 end=9 "
+        "addr=0x1044 addr_line=0x1040 exact=1 requested=17 "
+        "vpl=16 index=7 begin=2 end=9 "
         "dest=17 tier=1 epoch1=20 epoch2=21]\n")
     # Without a declared budget one paired transaction is internally consistent.
     assert validate_sniper_exact_bind_trace(log) == (1, 0)

@@ -205,6 +205,18 @@ active with positive accesses. The first screen receipt and attempted full
 cache run are invalidated by the configuration amendment; no threshold,
 policy, stage, or claim changed.
 
+Configuration version 3 records a second validation amendment discovered in
+the first Sniper role. Distinct per-edge records may target different vertices
+within one property cache line and legitimately carry different future hints.
+The Sniper fused sideband now preserves all destination records and binds the
+certified prefix by current source plus the original bound property address,
+rather than collapsing records by source and cache line. The marker-free
+post-prefix lookup remains line-granular, but the Sniper role uses pure LRU
+replacement and supplies no admissible timing, so those hints cannot affect
+the campaign's victim choice. All version-2 screen and full-role evidence is
+invalidated; thresholds, policies, stage roster, and admissible claims remain
+unchanged.
+
 ## 8. Publication policy
 
 Preliminary numbers and intermediate choices remain local. Tables and measured

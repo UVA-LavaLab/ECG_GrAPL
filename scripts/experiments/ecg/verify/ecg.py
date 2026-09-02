@@ -86,8 +86,9 @@ REUSE_PLAN_REQUEST_RE = re.compile(
     r"current=(\d+) context=(\d+)\]")
 REUSE_PLAN_FUSED_RECV_RE = re.compile(
     r"\[ECG-ReusePlan-FUSED-RECV sim=sniper seq=(\d+) src=(\d+) "
-    r"line=(\d+) addr_line=0x([0-9a-fA-F]+) vpl=(\d+) "
-    r"index=(\d+) begin=(\d+) end=(\d+) "
+    r"line=(\d+) addr=0x([0-9a-fA-F]+) "
+    r"addr_line=0x([0-9a-fA-F]+) exact=(\d+) requested=(\d+) "
+    r"vpl=(\d+) index=(\d+) begin=(\d+) end=(\d+) "
     r"dest=(\d+) tier=(\d+) epoch1=(\d+) epoch2=(\d+)\]")
 REUSE_PLAN_BIND_CONSUME_RE = re.compile(
     r"\[ECG-ReusePlan-BIND-CONSUME sim=sniper seq=(\d+) core=(\d+) "
@@ -854,7 +855,8 @@ def verify_reuse_plan_trace(
             groups = fused.groups()
             receipt = (
                 int(groups[0]), int(groups[1]), int(groups[2]),
-                int(groups[3], 16), *map(int, groups[4:]),
+                int(groups[3], 16), int(groups[4], 16),
+                *map(int, groups[5:]),
             )
             if receipt[0] in {item[0] for item in fused_receipts}:
                 duplicate_fused_sequences.add(receipt[0])
@@ -906,9 +908,12 @@ def verify_reuse_plan_trace(
     if sideband and fused_receipts:
         required = set(range(32))
         fused_valid = all(
-            begin <= index < end and vpl > 0 and dest // vpl == line_id and
+            begin <= index < end and vpl > 0 and
+            requested // vpl == line_id and dest // vpl == line_id and
+            exact in (0, 1) and (not exact or requested == dest) and
             1 <= tier <= 3
-            for (_seq, _src, line_id, _addr_line, vpl, index, begin, end,
+            for (_seq, _src, line_id, _addr, _addr_line, exact,
+                 requested, vpl, index, begin, end,
                  dest, tier, _first, _second) in fused_receipts
         )
         receipt_by_seq = {
@@ -931,7 +936,10 @@ def verify_reuse_plan_trace(
             len(fused_receipts) == len(receipt_by_seq) and
             all(
                 receipt_by_seq[sequence][3] ==
-                bound_consumes[sequence][2]
+                bound_consumes[sequence][1] and
+                receipt_by_seq[sequence][4] ==
+                bound_consumes[sequence][2] and
+                receipt_by_seq[sequence][5] == 1
                 for sequence in required
             )
         )
@@ -941,11 +949,11 @@ def verify_reuse_plan_trace(
         expected_tier_valid = all(
             0 <= fields[1] <= 3 for fields in expected.values()
         )
-        # Fused Sniper delivery is property-line coalesced: multiple raw edge
-        # records can target one line, so request order is not expected to match
-        # the raw sideband sequence. validate_sniper_fused_receipts independently
-        # checks every receipt's raw index and exact packed record against the
-        # exported ReusePlan files; this verifier additionally pins line/dest/tier shape.
+        # Fused Sniper delivery is bound by exact property address for the
+        # certified prefix. Request order is not expected to match the raw
+        # sideband sequence because private-cache hits do not reach the LLC.
+        # validate_sniper_fused_receipts independently checks each selected raw
+        # record against the exported ReusePlan files.
         exact_bind_ok = receipt_bind_match if require_exact_bind else True
         delivery_ok = (
             set(expected) == required and
@@ -959,9 +967,12 @@ def verify_reuse_plan_trace(
     elif sideband:
         required = set(range(32))
         fused_valid = all(
-            begin <= index < end and vpl > 0 and dest // vpl == line_id and
+            begin <= index < end and vpl > 0 and
+            requested // vpl == line_id and dest // vpl == line_id and
+            exact in (0, 1) and (not exact or requested == dest) and
             1 <= tier <= 3
-            for (_seq, _src, line_id, _addr_line, vpl, index, begin, end,
+            for (_seq, _src, line_id, _addr, _addr_line, exact,
+                 requested, vpl, index, begin, end,
                  dest, tier, _first, _second) in fused_receipts
         )
         tier_valid = all(
@@ -1113,7 +1124,7 @@ def verify_reuse_plan_trace(
         coverage["reuse_plan_exact_bind_required"] = require_exact_bind
         coverage["reuse_plan_fused_receipts"] = len(fused_receipts)
         coverage["reuse_plan_fused_vertices_per_line"] = sorted({
-            receipt[4] for receipt in fused_receipts
+            receipt[7] for receipt in fused_receipts
         })
     if bad or not live or not delivery_ok:
         ok = False

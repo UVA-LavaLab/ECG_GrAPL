@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "id": "transport_literature_scale",
   "scope": "Confirmatory six-graph n18 PageRank timing campaign plus five compact-eligible full-graph width comparisons. It isolates compact ReusePlan transport and structural FlowThrough while replacement stays pure LRU in both arms.",
   "independent_of_replacement_campaign": true,
@@ -206,6 +206,12 @@
     ],
     "full_graph_compact_exclusions": {
       "soc-LiveJournal1": "The full graph needs 23 destination bits; 23 + 2 tier bits + two 4-bit epochs = 33 bits, so no 32-bit compact record exists for this role."
+    },
+    "sniper_fused_binding": {
+      "certified_prefix_key": "current source vertex plus exact bound property address",
+      "sideband_index": "All per-source destination records are preserved; records with different destinations are not collapsed when they share a cache line.",
+      "marker_free_fallback": "After the certified exact-bind prefix, lookup selects the first destination in the requested property-line range.",
+      "scope": "The Sniper transport role keeps replacement at pure LRU, so fallback metadata cannot affect victim choice; Sniper timing remains inadmissible."
     }
   },
   "roles": {
@@ -307,6 +313,20 @@
       "stage_roster_changes": false,
       "invalidated_screen_receipt": "results/ecg_experiments/aggregates/transport_scale/screen_1ba60b1e.json",
       "invalidated_full_run": "results/ecg_experiments/runs/transport_full_cache_1ba60b1e"
+    },
+    {
+      "version": 3,
+      "reason": "The first version-2 Sniper cell exposed an invalid fused-sideband assumption: two per-edge records for distinct vertices in one property cache line were required to carry identical tier/epoch hints. Version 3 preserves every destination record and binds the certified prefix with the exact bound property address instead of discarding its within-line offset.",
+      "threshold_changes": false,
+      "policy_changes": false,
+      "stage_roster_changes": false,
+      "claim_changes": false,
+      "invalidated_screen_receipt": "results/ecg_experiments/aggregates/transport_scale/screen_6178a96d.json",
+      "invalidated_full_runs": [
+        "results/ecg_experiments/runs/transport_full_cache_6178a96d",
+        "results/ecg_experiments/runs/transport_full_gem5_i8_6178a96d",
+        "results/ecg_experiments/runs/transport_full_sniper_6178a96d"
+      ]
     }
   ],
   "variant_receipts": {

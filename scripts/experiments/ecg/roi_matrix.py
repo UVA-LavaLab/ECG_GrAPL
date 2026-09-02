@@ -1046,8 +1046,9 @@ def validate_sniper_fused_receipts(
         log_path: Path, paths: dict[str, Path]) -> tuple[int, int]:
     receipt_re = re.compile(
         r"\[ECG-ReusePlan-FUSED-RECV sim=sniper seq=(\d+) src=(\d+) "
-        r"line=(\d+) addr_line=0x([0-9a-fA-F]+) vpl=(\d+) "
-        r"index=(\d+) begin=(\d+) end=(\d+) "
+        r"line=(\d+) addr=0x([0-9a-fA-F]+) "
+        r"addr_line=0x([0-9a-fA-F]+) exact=(\d+) requested=(\d+) "
+        r"vpl=(\d+) index=(\d+) begin=(\d+) end=(\d+) "
         r"dest=(\d+) tier=(\d+) epoch1=(\d+) epoch2=(\d+)\]")
     if not log_path.exists():
         return 0, 0
@@ -1059,7 +1060,8 @@ def validate_sniper_fused_receipts(
                 groups = match.groups()
                 receipts.append((
                     int(groups[0]), int(groups[1]), int(groups[2]),
-                    int(groups[3], 16), *map(int, groups[4:]),
+                    int(groups[3], 16), int(groups[4], 16),
+                    *map(int, groups[5:]),
                 ))
     if not receipts:
         return 0, 0
@@ -1098,7 +1100,8 @@ def validate_sniper_fused_receipts(
                 previous = current
             sideband_valid = sideband_valid and previous == record_count
             bad = 0 if sideband_valid else max(1, len(receipts))
-            for (_seq, src, line_id, _addr_line, vpl, index, begin, end,
+            for (_seq, src, line_id, _addr, _addr_line, exact,
+                 requested, vpl, index, begin, end,
                  dest, tier, first, second) in receipts:
                 valid = (
                     src + 1 < offset_count and
@@ -1115,7 +1118,10 @@ def validate_sniper_fused_receipts(
                         ((record >> 32) & 0x3) == tier and
                         ((record >> 34) & 0x7FFF) == first and
                         ((record >> 49) & 0x7FFF) == second and
-                        dest // vpl == line_id
+                        dest // vpl == line_id and
+                        requested // vpl == line_id and
+                        exact in (0, 1) and
+                        (not exact or requested == dest)
                     )
                 bad += not valid
     except (OSError, ValueError, struct.error):
@@ -1137,7 +1143,10 @@ def validate_sniper_exact_bind_trace(
         r"current=(\d+) context=(\d+)\]")
     receipt_re = re.compile(
         r"\[ECG-ReusePlan-FUSED-RECV sim=sniper seq=(\d+) src=(\d+) "
-        r"line=(\d+) addr_line=0x([0-9a-fA-F]+)")
+        r"line=(\d+) addr=0x([0-9a-fA-F]+) "
+        r"addr_line=0x([0-9a-fA-F]+) exact=(\d+) requested=(\d+) "
+        r"vpl=(\d+) index=\d+ begin=\d+ end=\d+ "
+        r"dest=(\d+)")
     if not log_path.exists():
         return 0, 0
     binds = {}
@@ -1162,7 +1171,15 @@ def validate_sniper_exact_bind_trace(
                 sequence = int(receipt.group(1))
                 if sequence in receipts:
                     duplicate_receipts.add(sequence)
-                receipts[sequence] = int(receipt.group(4), 16)
+                receipts[sequence] = (
+                    int(receipt.group(3)),
+                    int(receipt.group(4), 16),
+                    int(receipt.group(5), 16),
+                    int(receipt.group(6)),
+                    int(receipt.group(7)),
+                    int(receipt.group(8)),
+                    int(receipt.group(9)),
+                )
     if not binds and not receipts:
         return 0, 0
     bad = (
@@ -1176,10 +1193,14 @@ def validate_sniper_exact_bind_trace(
         bad += max(1, expected_count - len(set(binds) & set(receipts)))
     for sequence in set(binds) & set(receipts):
         _core, bound, line, size, current, context = binds[sequence]
+        line_id, address, address_line, exact, requested, vpl, dest = (
+            receipts[sequence])
         valid = (
             size > 0 and (size & (size - 1)) == 0 and
             (bound & ~(size - 1)) == line and
-            receipts[sequence] == line and
+            address == bound and address_line == line and exact == 1 and
+            vpl > 0 and requested == dest and
+            requested // vpl == line_id and dest // vpl == line_id and
             0 <= current <= 0x7FFF and context > 0
         )
         bad += not valid

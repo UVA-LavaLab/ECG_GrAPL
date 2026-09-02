@@ -471,12 +471,13 @@ CacheSetECG::prepareInsertion(IntPtr addr, UInt32 set_index)
       const uint32_t requester_core = requesterCoreOr(m_core_id);
       UInt16 current_epoch = 0, context_id = 0;
       uint64_t bind_sequence = ~uint64_t{0};
+      uint64_t bound_address = 0;
       const bool consumed =
          graphbrew::sniper::consumeBoundReusePlanLoad(
               requester_core,
               static_cast<uint64_t>(m_pending_insert_addr),
               m_blocksize, &current_epoch, &context_id,
-              &bind_sequence);
+              &bind_sequence, &bound_address);
       const bool certified_fallback =
          !consumed &&
          graphbrew::sniper::boundReusePlanCertificationFinished(
@@ -490,12 +491,16 @@ CacheSetECG::prepareInsertion(IntPtr addr, UInt32 set_index)
       if (consumed || certified_fallback) {
          UInt8 tier = 0;
          UInt16 first = 0, second = 0;
+         const uint64_t lookup_address = consumed
+            ? bound_address
+            : static_cast<uint64_t>(m_pending_insert_addr);
          if (context_id != 0 &&
              graphbrew::sniper::globalContext().lookupFusedReusePlanPair(
-                 static_cast<uint64_t>(m_pending_insert_addr),
+                 lookup_address,
                  requester_core, tier, first, second,
                  consumed ? bind_sequence
-                          : std::numeric_limits<uint64_t>::max() - 1)) {
+                          : std::numeric_limits<uint64_t>::max() - 1,
+                 consumed)) {
             if (certified_fallback)
                graphbrew::sniper::recordCertifiedReusePlanFallback();
             m_pending_exact_reuse_plan_valid = true;
@@ -596,15 +601,16 @@ CacheSetECG::lookupLineEcgReusePlan(
    current_epoch = context.currentEcgEpoch(requester_core);
    if (sniperReusePlanExactBindEnabled()) {
       uint64_t bind_sequence = ~uint64_t{0};
+      uint64_t bound_address = 0;
       if (!graphbrew::sniper::consumeBoundReusePlanLoad(
               requester_core, static_cast<uint64_t>(line_addr),
               m_blocksize, &current_epoch, &context_id,
-              &bind_sequence)) {
+              &bind_sequence, &bound_address)) {
          return false;
       }
       if (context_id != 0 && context.lookupFusedReusePlanPair(
-              static_cast<uint64_t>(line_addr), requester_core,
-              tier, first, second, bind_sequence)) {
+              bound_address, requester_core,
+              tier, first, second, bind_sequence, true)) {
          count = 2;
          return true;
       }
