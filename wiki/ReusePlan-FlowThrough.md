@@ -110,6 +110,11 @@ becomes dead only in the final iteration. The record replaces the ordinary
 four-byte destination entry; it is not a sidecar and does not require
 FlowThrough.
 
+Because dead/wrap state is defined against a finite iteration horizon,
+next-use-record runs require convergence stopping to be disabled (`-t 0`).
+Otherwise the executed final iteration could differ from the horizon encoded
+offline, so both cache_sim and gem5 fail before the ROI.
+
 Weighted SSSP has two supported transport formats:
 
 - a compact 64-bit substitute with 24-bit destination, 8-bit positive weight,
@@ -178,13 +183,16 @@ generations did not satisfy the retained representativeness and regret checks.
 They remain admission diagnostics and are not used as gem5 or Sniper
 performance policies. Admission diagnostics are separate from victim selection.
 
-`next_use_lru` is an exploratory cache_sim-only successor. It evicts a
-known-dead governed property line first. Otherwise it preserves global LRU for
-non-property and unknown lines, and refines the victim only when global LRU
-already selected a finite-use governed property line. A finite bucket that has
-passed becomes dead only when every property access is guaranteed to refresh
-LLC metadata; without that guarantee it becomes unknown, preventing stale
-private-cache hits from creating false-dead evictions.
+`next_use_lru` is an exploratory successor implemented in cache_sim and as a
+gem5 request-bound mechanism. It evicts a known-dead governed property line
+first. Otherwise it preserves global LRU for non-property and unknown lines,
+and refines the victim only when global LRU already selected a finite-use
+governed property line. A finite bucket that has passed becomes dead only when
+every property access is guaranteed to refresh LLC metadata; without that
+guarantee it becomes unknown, preventing stale private-cache hits from creating
+false-dead evictions. The initial gem5 path software-decodes the compact record
+before the existing ReuseBind property load, so its cache metrics are useful
+but its timing is not admissible.
 
 ## 5. FlowThrough cache behavior
 

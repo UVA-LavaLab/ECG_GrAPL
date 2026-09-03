@@ -31,6 +31,65 @@ inline bool requestBoundEcgProducerEnabled() {
     return enabled;
 }
 
+inline bool nextUseLruEnabled() {
+    static const bool enabled = []() {
+        const char* value = std::getenv("ECG_NEXT_USE_LRU");
+        return value && value[0] && std::string(value) != "0";
+    }();
+    return enabled;
+}
+
+inline uint32_t nextUseBits() {
+    static const uint32_t bits = []() {
+        const char* value = std::getenv("ECG_NEXT_USE_BITS");
+        if (!value || !value[0]) {
+            std::fprintf(
+                stderr,
+                "[FATAL] ECG_NEXT_USE_LRU requires ECG_NEXT_USE_BITS\n");
+            std::abort();
+        }
+        int parsed = std::atoi(value);
+        if (parsed < 1 || parsed > 15) {
+            std::fprintf(
+                stderr,
+                "[FATAL] ECG_NEXT_USE_BITS must be in [1,15]\n");
+            std::abort();
+        }
+        return static_cast<uint32_t>(parsed);
+    }();
+    return bits;
+}
+
+inline void traceNextUseRequest(
+        const char* stage, uint64_t addr, bool property,
+        bool request, uint8_t state, uint16_t next_use,
+        uint16_t current, uint16_t context, uint32_t dest) {
+    if (!property || graph::getCurrentContextHint() == 0) return;
+    static const uint64_t limit = []() {
+        const char* value = std::getenv("ECG_NEXT_USE_TRACE");
+        return value
+            ? static_cast<uint64_t>(std::strtoull(value, nullptr, 10))
+            : 0;
+    }();
+    if (limit == 0) return;
+    static std::atomic<uint64_t> sequence{0};
+    const uint64_t index =
+        sequence.fetch_add(1, std::memory_order_relaxed);
+    if (index >= limit) return;
+    std::fprintf(
+        stderr,
+        "[ECG-NEXT-USE-REQUEST seq=%llu stage=%s addr=0x%llx "
+        "property=%u request=%u state=%u next=%u current=%u "
+        "context=%u dest=%u]\n",
+        (unsigned long long)index, stage,
+        (unsigned long long)addr,
+        property ? 1u : 0u, request ? 1u : 0u,
+        static_cast<unsigned>(state),
+        static_cast<unsigned>(next_use),
+        static_cast<unsigned>(current),
+        static_cast<unsigned>(context), dest);
+}
+
 inline void traceAcceptedReusePlan(
         uint32_t request_sequence, uint32_t request_dest,
         uint32_t fill_dest, bool request_bound,
@@ -229,6 +288,86 @@ GraphEcgRP::touch(
 {
     auto data = std::static_pointer_cast<EcgReplData>(replacement_data);
 
+    if (ecgMode == graph::ECGMode::ECG_EXACT_STORED &&
+        nextUseLruEnabled()) {
+        tryLoadContext();
+        uint64_t addr = data->line_addr;
+        if (pkt && pkt->req) {
+            addr = pkt->req->hasVaddr() ? pkt->req->getVaddr()
+                                        : pkt->req->getPaddr();
+            data->line_addr = addr & ~uint64_t(63);
+        }
+        data->lastTouchTick = curTick();
+        data->is_property_data =
+            ctx.loaded && ctx.isEcgEpochData(addr);
+        data->rrpv = 0;
+        data->ecg_dbg_tier = 0;
+        data->ecg_epoch = 0;
+        data->ecg_epoch2 = 0;
+        data->ecg_context_id = 0;
+        data->ecg_epoch_count = 0;
+        data->ecg_epoch_valid = false;
+        if (data->is_property_data && pkt && pkt->req) {
+            uint16_t next_use = 0, unused = 0;
+            uint16_t current = 0, context = 0;
+            uint8_t state = 0, popt = 0, count = 0;
+            uint32_t dest = 0, sequence = 0;
+            bool got = graph::readEcgReusePlan(
+                pkt->req, next_use, unused, state, popt,
+                count, dest, current, context, sequence);
+            uint64_t region_base = 0;
+            uint32_t elem = 0;
+            uint32_t vertex = UINT32_MAX;
+            for (uint32_t i = 0; i < ctx.num_regions; ++i) {
+                const auto& region = ctx.regions[i];
+                if (addr >= region.base_address &&
+                    addr < region.upper_bound) {
+                    region_base = region.base_address;
+                    elem = region.elem_size;
+                    vertex = graph::addressToVertex(
+                        addr, region.base_address,
+                        region.upper_bound, region.elem_size);
+                    break;
+                }
+            }
+            if (got && elem > 0) {
+                const uint64_t dest_line =
+                    (region_base +
+                     static_cast<uint64_t>(dest) * elem) &
+                    ~uint64_t(63);
+                got = dest_line == (addr & ~uint64_t(63));
+            }
+            if (!got && !requestBoundEcgProducerEnabled() &&
+                vertex != UINT32_MAX) {
+                const bool got_state =
+                    graph::lookupDecodedEcgRequestState(
+                        current, context, sequence);
+                const bool got_legacy = got_state || legacyRequestState(
+                    current, context, sequence);
+                got = got_legacy && graph::lookupDecodedEcgHint2(
+                    vertex, state, next_use, unused, count);
+                if (got) dest = vertex;
+            }
+            traceNextUseRequest(
+                "touch", addr, data->is_property_data, got,
+                state, next_use, current, context, dest);
+            if (got && (state == 1 || state == 2) && context != 0) {
+                data->ecg_dbg_tier = state;
+                data->ecg_epoch = next_use;
+                data->ecg_epoch2 = 0;
+                data->ecg_context_id = context;
+                data->ecg_epoch_count = 1;
+                data->ecg_epoch_valid = true;
+                ++onlineDuelingStats.nextUseMetadataAccepts;
+            }
+        } else {
+            traceNextUseRequest(
+                "touch", addr, data->is_property_data,
+                false, 0, 0, 0, 0, 0);
+        }
+        return;
+    }
+
     if (ecgMode == graph::ECGMode::ECG_GRASP_POPT) {
         tryLoadContext();
         uint64_t addr = data->line_addr;
@@ -369,6 +508,11 @@ GraphEcgRP::touch(
     const std::shared_ptr<ReplacementData>& replacement_data) const
 {
     auto data = std::static_pointer_cast<EcgReplData>(replacement_data);
+    if (ecgMode == graph::ECGMode::ECG_EXACT_STORED &&
+        nextUseLruEnabled()) {
+        data->rrpv = 0;
+        return;
+    }
     if (data->rrpv > 0) data->rrpv--;
 }
 
@@ -381,6 +525,86 @@ GraphEcgRP::reset(
     data->valid = true;
 
     tryLoadContext();
+
+    if (ecgMode == graph::ECGMode::ECG_EXACT_STORED &&
+        nextUseLruEnabled()) {
+        data->rrpv = (rrpvMax > 0) ? rrpvMax - 1 : 0;
+        data->ecg_dbg_tier = 0;
+        data->ecg_popt_hint = 0;
+        data->ecg_epoch = 0;
+        data->ecg_epoch2 = 0;
+        data->ecg_context_id = 0;
+        data->ecg_epoch_count = 0;
+        data->ecg_epoch_valid = false;
+        data->is_property_data = false;
+        if (pkt && pkt->req) {
+            const uint64_t addr = pkt->req->hasVaddr()
+                ? pkt->req->getVaddr() : pkt->req->getPaddr();
+            data->line_addr = addr & ~uint64_t(63);
+            data->lastTouchTick = curTick();
+            data->is_property_data =
+                ctx.loaded && ctx.isEcgEpochData(addr);
+            if (data->is_property_data) {
+                uint16_t next_use = 0, unused = 0;
+                uint16_t current = 0, context = 0;
+                uint8_t state = 0, popt = 0, count = 0;
+                uint32_t dest = 0, sequence = 0;
+                bool got = graph::readEcgReusePlan(
+                    pkt->req, next_use, unused, state, popt,
+                    count, dest, current, context, sequence);
+                uint64_t region_base = 0;
+                uint32_t elem = 0;
+                uint32_t vertex = UINT32_MAX;
+                for (uint32_t i = 0; i < ctx.num_regions; ++i) {
+                    const auto& region = ctx.regions[i];
+                    if (addr >= region.base_address &&
+                        addr < region.upper_bound) {
+                        region_base = region.base_address;
+                        elem = region.elem_size;
+                        vertex = graph::addressToVertex(
+                            addr, region.base_address,
+                            region.upper_bound, region.elem_size);
+                        break;
+                    }
+                }
+                if (got && elem > 0) {
+                    const uint64_t dest_line =
+                        (region_base +
+                         static_cast<uint64_t>(dest) * elem) &
+                        ~uint64_t(63);
+                    got = dest_line == (addr & ~uint64_t(63));
+                }
+                if (!got && !requestBoundEcgProducerEnabled() &&
+                    vertex != UINT32_MAX) {
+                    const bool got_state =
+                        graph::lookupDecodedEcgRequestState(
+                            current, context, sequence);
+                    const bool got_legacy = got_state || legacyRequestState(
+                        current, context, sequence);
+                    got = got_legacy && graph::lookupDecodedEcgHint2(
+                        vertex, state, next_use, unused, count);
+                    if (got) dest = vertex;
+                }
+                traceNextUseRequest(
+                    "reset", addr, data->is_property_data, got,
+                    state, next_use, current, context, dest);
+                if (got && (state == 1 || state == 2) &&
+                    context != 0) {
+                    data->ecg_dbg_tier = state;
+                    data->ecg_epoch = next_use;
+                    data->ecg_context_id = context;
+                    data->ecg_epoch_count = 1;
+                    data->ecg_epoch_valid = true;
+                    ++onlineDuelingStats.nextUseMetadataAccepts;
+                }
+            } else {
+                traceNextUseRequest(
+                    "reset", addr, false,
+                    false, 0, 0, 0, 0, 0);
+            }
+        }
+        return;
+    }
 
     if (pkt && pkt->req) {
         uint64_t addr = pkt->req->hasVaddr() ? pkt->req->getVaddr()
@@ -664,6 +888,87 @@ GraphEcgRP::getVictim(const ReplacementCandidates& candidates) const
     }
     for (const auto& candidate : candidates) {
         if (!getData(candidate)->valid) return candidate;
+    }
+
+    if (ecgMode == graph::ECGMode::ECG_EXACT_STORED &&
+        nextUseLruEnabled() && ctx.loaded) {
+        static const bool announced = []() {
+            std::fprintf(
+                stderr,
+                "[ECG-VARIANT-RECEIPT sim=gem5 requested=next_use_lru "
+                "effective=%d dueling=0]\n",
+                ecg_policy::NEXT_USE_LRU);
+            return true;
+        }();
+        (void)announced;
+        (void)nextUseBits();
+        const uint32_t current =
+            victimRequestValid ? victimCurrentEpoch : 0;
+        const uint16_t active_context =
+            graph::getCurrentContextHint();
+        const size_t count = candidates.size();
+        if (count > 64) std::abort();
+        ecg_policy::WayState ways[64];
+        uint64_t finite_ways = 0;
+        uint64_t dead_ways = 0;
+        uint64_t unknown_ways = 0;
+        for (size_t i = 0; i < count; ++i) {
+            const auto data = getData(candidates[i]);
+            ways[i].prop =
+                ctx.isEcgEpochData(data->line_addr);
+            ways[i].rrpv = data->rrpv;
+            ways[i].recency = data->lastTouchTick;
+            ways[i].dbg = 0;
+            ways[i].dist = 0;
+            ways[i].stamped = false;
+            ways[i].next_use = data->ecg_epoch;
+            ways[i].future_state =
+                ecg_policy::FutureState::UNKNOWN;
+            if (ways[i].prop && data->ecg_epoch_valid &&
+                data->ecg_context_id == active_context) {
+                if (data->ecg_dbg_tier == 1) {
+                    ways[i].future_state =
+                        ecg_policy::FutureState::FINITE;
+                    ways[i].stamped = true;
+                } else if (data->ecg_dbg_tier == 2) {
+                    ways[i].future_state =
+                        ecg_policy::FutureState::DEAD;
+                    ways[i].stamped = true;
+                }
+            }
+            ways[i].future_state =
+                ecg_policy::effectiveFutureState(
+                    ways[i].future_state,
+                    ways[i].next_use, current,
+                    /*refresh_guaranteed=*/false);
+            if (ways[i].future_state ==
+                ecg_policy::FutureState::FINITE) {
+                ++finite_ways;
+            } else if (ways[i].future_state ==
+                       ecg_policy::FutureState::DEAD) {
+                ++dead_ways;
+            } else {
+                ++unknown_ways;
+            }
+        }
+        ++onlineDuelingStats.nextUseVictimSelections;
+        onlineDuelingStats.nextUseFiniteWays += finite_ways;
+        onlineDuelingStats.nextUseDeadWays += dead_ways;
+        onlineDuelingStats.nextUseUnknownWays += unknown_ways;
+        ecg_policy::VictimReason reason =
+            ecg_policy::VictimReason::LRU;
+        const size_t victim = ecg_policy::selectVictim(
+            ways, count, ecg_policy::NEXT_USE_LRU,
+            rrpvMax, &reason);
+        if (reason == ecg_policy::VictimReason::DEAD_PROPERTY) {
+            ++onlineDuelingStats.nextUseDeadVictims;
+        } else if (reason ==
+                   ecg_policy::VictimReason::NEXT_USE_PROPERTY) {
+            ++onlineDuelingStats.nextUseRefineVictims;
+        } else {
+            ++onlineDuelingStats.nextUseLruVictims;
+        }
+        return candidates[victim];
     }
 
     if (ecgMode == graph::ECGMode::ECG_COMBINED) {
@@ -1107,6 +1412,30 @@ GraphEcgRP::OnlineDuelingStats::OnlineDuelingStats(
     ADD_STAT(
         victimEpochVsRecencyDecisiveSelections,
         "RRIP-first victims changed versus a property-recency no-epoch shadow"),
+    ADD_STAT(
+        nextUseMetadataAccepts,
+        "Next-use metadata records accepted on LLC hit or fill"),
+    ADD_STAT(
+        nextUseVictimSelections,
+        "Next-use victim selections"),
+    ADD_STAT(
+        nextUseFiniteWays,
+        "Finite next-use ways observed across selections"),
+    ADD_STAT(
+        nextUseDeadWays,
+        "Known-dead next-use ways observed across selections"),
+    ADD_STAT(
+        nextUseUnknownWays,
+        "Unknown next-use ways observed across selections"),
+    ADD_STAT(
+        nextUseDeadVictims,
+        "Victims selected because a property line was known dead"),
+    ADD_STAT(
+        nextUseRefineVictims,
+        "Finite-property LRU victims refined by next use"),
+    ADD_STAT(
+        nextUseLruVictims,
+        "Next-use selections preserving global LRU"),
     ADD_STAT(
         victimWaySelections,
         "Victim selections by candidate-way index")

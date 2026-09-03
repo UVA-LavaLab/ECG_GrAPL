@@ -80,6 +80,95 @@ PageRankPullGSCompactReuseBindFlowthroughIteration(
     return error;
 }
 
+static __attribute__((noinline)) double
+PageRankPullGSNextUseIteration(
+        const Graph& g,
+        pvector<ScoreT>& scores,
+        pvector<ScoreT>& outgoing_contrib,
+        const pvector<uint32_t>& records,
+        uint32_t record_id_bits,
+        uint32_t record_next_use_bits,
+        int iteration, int iteration_count,
+        ScoreT base_score) {
+    double error = 0;
+    const uint32_t span =
+        uint32_t{1} << record_next_use_bits;
+    uint64_t begin = static_cast<uint64_t>(g.in_offset(0));
+    for (NodeID u = 0; u < g.num_nodes(); ++u) {
+        GEM5_SET_VERTEX(u);
+        if (gem5_ecg_epoch_csr_enabled()) {
+            const uint32_t current =
+                static_cast<uint32_t>(iteration) * span +
+                ecg_reuse_plan::quantizeNextUsePosition(
+                    static_cast<uint32_t>(u),
+                    static_cast<uint32_t>(g.num_nodes()),
+                    record_next_use_bits);
+            if (current > UINT16_MAX) std::abort();
+            gem5_ecg_update_current_epoch_csr(
+                static_cast<uint16_t>(current));
+        }
+
+        const uint64_t end =
+            static_cast<uint64_t>(g.in_offset(u + 1));
+        const uint32_t* record_ptr = records.data() + begin;
+        const uint32_t* const record_end = records.data() + end;
+        ScoreT incoming_total = 0;
+        for (; record_ptr != record_end; ++record_ptr) {
+            const uint32_t record = *record_ptr;
+            const uint32_t dest =
+                ecg_reuse_plan::extractNextUseRecord32Dest(
+                    record, record_id_bits);
+            const uint32_t next_bucket =
+                ecg_reuse_plan::extractNextUseRecord32Position(
+                    record, record_id_bits,
+                    record_next_use_bits, 0);
+            const auto record_state =
+                ecg_reuse_plan::extractNextUseRecord32State(
+                    record, record_id_bits,
+                    record_next_use_bits, 0);
+            ecg_reuse_plan::NextUseState effective_state =
+                record_state;
+            uint32_t next_use = 0;
+            if (record_state ==
+                    ecg_reuse_plan::NextUseState::FINITE) {
+                next_use =
+                    static_cast<uint32_t>(iteration) * span +
+                    next_bucket;
+            } else if (record_state ==
+                       ecg_reuse_plan::NextUseState::WRAP) {
+                if (iteration + 1 < iteration_count) {
+                    effective_state =
+                        ecg_reuse_plan::NextUseState::FINITE;
+                    next_use =
+                        static_cast<uint32_t>(iteration + 1) * span +
+                        next_bucket;
+                } else {
+                    effective_state =
+                        ecg_reuse_plan::NextUseState::DEAD;
+                }
+            }
+            if (next_use > ecg_reuse_plan::kReusePlanEpochMask)
+                std::abort();
+            const uint64_t canonical =
+                ecg_reuse_plan::packReusePlanRecord(
+                    dest, static_cast<uint8_t>(effective_state),
+                    static_cast<uint16_t>(next_use), 0);
+            incoming_total += gem5_ecg_bind_load_f32(
+                &outgoing_contrib[dest], canonical);
+        }
+        begin = end;
+
+        const ScoreT old_score = scores[u];
+        const ScoreT new_score =
+            base_score + kDamp * incoming_total;
+        scores[u] = new_score;
+        error += fabs(new_score - old_score);
+        outgoing_contrib[u] =
+            new_score / g.out_degree(u);
+    }
+    return error;
+}
+
 pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                                      double epsilon = 0) {
     const ScoreT init_score = 1.0f / g.num_nodes();
@@ -95,6 +184,21 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
 
     const int ecg_reuse_plan_depth =
         gem5_env_int_clamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
+    const bool next_use_record_requested = []() {
+        const char* value = std::getenv("ECG_NEXT_USE_RECORD");
+        return value && value[0] && std::string(value) != "0";
+    }();
+    const uint32_t next_use_bits = next_use_record_requested
+        ? static_cast<uint32_t>(
+              gem5_env_int_clamped("ECG_NEXT_USE_BITS", 0, 1, 15))
+        : 0;
+    if (next_use_record_requested && epsilon > 0) {
+        std::fprintf(
+            stderr,
+            "[FATAL] ECG_NEXT_USE_RECORD requires -t 0 so the "
+            "finite iteration horizon matches the executed traversal\n");
+        std::abort();
+    }
     uint32_t requested_epoch_count = static_cast<uint32_t>(
         gem5_env_int_clamped("ECG_EDGE_MASK_EPOCHS", 65535, 2, 65535));
     if (ecg_reuse_plan_depth == 2)
@@ -136,7 +240,7 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     constexpr int kNumVtxPerLine = 64 / sizeof(ScoreT);  // 16 floats per line
     constexpr int kNumEpochs = 256;
     int popt_num_cache_lines = (g.num_nodes() + kNumVtxPerLine - 1) / kNumVtxPerLine;
-    if (ecg_reuse_plan_depth != 2) {
+    if (ecg_reuse_plan_depth != 2 && !next_use_record_requested) {
         makeOffsetMatrix(g, popt_matrix, kNumVtxPerLine, kNumEpochs);
         gem5_export_popt_matrix(popt_matrix.data(), popt_num_cache_lines,
                                 kNumEpochs, g.num_nodes());
@@ -240,6 +344,11 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     // its next-ref epoch with the footprint of a single 4-byte CSR edge.
     pvector<uint32_t> in_edge_packed_flat;
     vector<uint64_t> packed_off;
+    pvector<uint32_t> in_edge_next_use_flat;
+    vector<uint64_t> next_use_off;
+    bool next_use_record_on = false;
+    bool next_use_offsets_match_csr = false;
+    uint32_t next_use_id_bits = 1;
     pvector<uint64_t> in_edge_pair_flat;
     pvector<uint32_t> in_edge_pair32_flat;
     bool pair32_ok = false;
@@ -258,7 +367,46 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     bool ecg_extract_enabled = gem5_ecg_extract_enabled();
     const bool ecg_flow_load_on =
         gem5_ecg_flow_load_enabled();
-    const bool ecg_plan_load_on = gem5_ecg_plan_load_enabled();
+    const bool ecg_plan_load_on =     gem5_ecg_plan_load_enabled();
+    if (next_use_record_requested) {
+    std::vector<uint32_t> next_use_records;
+    next_use_record_on =
+        ecg_reuse_plan::buildInEdgeNextUseRecords32Flat(
+            g, kNumVtxPerLine, next_use_bits, true,
+            next_use_off, next_use_records, 0);
+    if (!next_use_record_on) {
+        std::fprintf(
+            stderr,
+            "[FATAL] gem5 next-use record does not fit 32 bits\n");
+        std::abort();
+    }
+    next_use_id_bits =
+        ecg_reuse_plan::reusePlan32IdBits(
+            static_cast<uint32_t>(g.num_nodes()));
+    in_edge_next_use_flat = pvector<uint32_t>(
+        next_use_records.size(), uint32_t(0), kDataAlign);
+    std::copy(
+        next_use_records.begin(), next_use_records.end(),
+        in_edge_next_use_flat.begin());
+    gem5_require_canonical_reuse_plan_offsets(
+        g, next_use_off, in_edge_next_use_flat.size(),
+        /*push_out_edges=*/false, "pr-next-use",
+        /*emit_receipt=*/false);
+    next_use_offsets_match_csr = true;
+    auto next_use_meta = ::ecg_metadata::configure(
+        static_cast<uint64_t>(g.num_nodes()), 2);
+    ::ecg_metadata::announce(next_use_meta, "pr-next-use");
+    ::ecg_metadata::enforceExpectedBytesPerEdge(
+        next_use_meta, "pr-next-use");
+    std::fprintf(
+        stderr,
+        "[ECG-NEXT-USE-RECORD bits=32 id_bits=%u tier_bits=0 "
+        "next_bits=%u state_bits=%u records=%llu]\n",
+        next_use_id_bits, next_use_bits,
+        ecg_reuse_plan::kNextUseStateBits,
+        static_cast<unsigned long long>(
+            in_edge_next_use_flat.size()));
+    }
     const bool ecg_bind_iload_on =
         gem5_ecg_pload_enabled() && ecg_reuse_plan_depth == 2;
     const bool ecg_bind_computed_address_on =
@@ -603,7 +751,9 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
         !ecg_load_enabled &&
         packed_stream_compatible;
     const uint64_t structural_substitute_base =
-        pair_extract_only && pair32_ok && !in_edge_pair32_flat.empty()
+        next_use_record_on && !in_edge_next_use_flat.empty()
+            ? reinterpret_cast<uint64_t>(in_edge_next_use_flat.data())
+            : pair_extract_only && pair32_ok && !in_edge_pair32_flat.empty()
             ? reinterpret_cast<uint64_t>(in_edge_pair32_flat.data())
             : pair_extract_only && !pair32_ok &&
                     !in_edge_pair_flat.empty()
@@ -612,7 +762,9 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                     ? reinterpret_cast<uint64_t>(in_edge_packed_flat.data())
                     : 0;
     const uint64_t structural_substitute_size =
-        pair_extract_only && pair32_ok
+        next_use_record_on
+            ? in_edge_next_use_flat.size() * sizeof(uint32_t)
+            : pair_extract_only && pair32_ok
             ? in_edge_pair32_flat.size() * sizeof(uint32_t)
             : pair_extract_only && !pair32_ok
                 ? in_edge_pair_flat.size() * sizeof(uint64_t)
@@ -622,24 +774,37 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     gem5_export_context(
         regions, 2, g, GEM5_SIDEBAND_PATH,
         edge_regions, num_edge_regions, edge_epoch_count,
-        pair32_ok && !in_edge_pair32_flat.empty()
+        next_use_record_on && !in_edge_next_use_flat.empty()
+            ? reinterpret_cast<uint64_t>(in_edge_next_use_flat.data())
+            : pair32_ok && !in_edge_pair32_flat.empty()
             ? reinterpret_cast<uint64_t>(in_edge_pair32_flat.data())
             : pair_ok && !in_edge_pair_flat.empty()
             ? reinterpret_cast<uint64_t>(in_edge_pair_flat.data())
             : (packed_ok && !in_edge_packed_flat.empty()
                 ? reinterpret_cast<uint64_t>(in_edge_packed_flat.data()) : 0),
-        pair32_ok ? in_edge_pair32_flat.size() * sizeof(uint32_t)
+        next_use_record_on
+            ? in_edge_next_use_flat.size() * sizeof(uint32_t)
+            : pair32_ok ? in_edge_pair32_flat.size() * sizeof(uint32_t)
                 : pair_ok ? in_edge_pair_flat.size() * sizeof(uint64_t)
                 : (packed_ok
                     ? in_edge_packed_flat.size() * sizeof(uint32_t) : 0),
         g.in_index_storage(), g.in_index_storage_bytes(),
-        pair_ok
+        next_use_record_on
+            ? (next_use_off.empty() ? nullptr : next_use_off.data())
+            : pair_ok
             ? (pair_off.empty() ? nullptr : pair_off.data())
             : (packed_off.empty() ? nullptr : packed_off.data()),
-        (pair_ok ? pair_off.size() : packed_off.size()) * sizeof(uint64_t),
+        (next_use_record_on
+            ? next_use_off.size()
+            : pair_ok ? pair_off.size() : packed_off.size()) *
+            sizeof(uint64_t),
         g.out_index_storage(), g.out_index_storage_bytes(),
         structural_substitute_base, structural_substitute_size,
-        structural_substitute_base ? "packed-substitute" : nullptr);
+        structural_substitute_base
+            ? next_use_record_on
+                ? "next-use-substitute"
+                : "packed-substitute"
+            : nullptr);
 
     for (NodeID n = 0; n < g.num_nodes(); n++)
         outgoing_contrib[n] = init_score / g.out_degree(n);
@@ -735,15 +900,24 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
         std::abort();
     }
     static bool csr_substitution_receipt_emitted = false;
-    if (pair_extract_only && !csr_substitution_receipt_emitted) {
+    if ((pair_extract_only || next_use_record_on) &&
+        !csr_substitution_receipt_emitted) {
         fprintf(stderr,
                 "[ECG-CSR-SUBSTITUTION sim=gem5 kernel=pr active=1 valid=%d "
                 "offset_source=csr direction=in rows=%llu records=%llu]\n",
-                (int)pair_offsets_match_csr,
+                (int)(next_use_record_on
+                    ? next_use_offsets_match_csr
+                    : pair_offsets_match_csr),
                 (unsigned long long)g.num_nodes(),
-                (unsigned long long)pair_record_count);
+                (unsigned long long)(next_use_record_on
+                    ? in_edge_next_use_flat.size()
+                    : pair_record_count));
         csr_substitution_receipt_emitted = true;
     }
+    if (next_use_record_on)
+        fprintf(stderr,
+                "[ECG_NEXT_USE_BIND_LOAD] PR four-byte record + "
+                "request-bound property load ACTIVE\n");
     if (pair32_ok) {
         gem5_ecg_write_record_format_csr(
             pair32_id_bits, pair32_epoch_bits, pair32_tier_bits);
@@ -798,6 +972,14 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     for (int iter = 0; iter < max_iters; iter++) {
         ++executed_iters;
         double error = 0;
+        if (next_use_record_on) {
+            error = PageRankPullGSNextUseIteration(
+                g, scores, outgoing_contrib,
+                in_edge_next_use_flat, next_use_id_bits,
+                next_use_bits, iter, max_iters, base_score);
+            if (error < epsilon) break;
+            continue;
+        }
         if (compact_reuse_bind_flowthrough_on) {
             error = PageRankPullGSCompactReuseBindFlowthroughIteration(
                 g, scores, outgoing_contrib, in_edge_pair32_flat,

@@ -49,6 +49,15 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
     // Registers property arrays so cache policies know hot/warm/cold regions.
     // Auto-computes hot fraction from degree distribution (self-tuning).
     GraphCacheContext graph_ctx;
+    const bool next_use_record_requested =
+        std::getenv("ECG_NEXT_USE_RECORD") != nullptr;
+    if (next_use_record_requested && epsilon > 0) {
+        std::fprintf(
+            stderr,
+            "[FATAL] ECG_NEXT_USE_RECORD requires -t 0 so the "
+            "finite iteration horizon matches the executed traversal\n");
+        std::abort();
+    }
 
     // Build degree array for topology init
     pvector<uint32_t> degrees(g.num_nodes());
@@ -76,7 +85,7 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
         bool popt_prefetch = pfx_env && (atoi(pfx_env) == 2 || atoi(pfx_env) == 4 || atoi(pfx_env) == 6 || atoi(pfx_env) == 7);
         const bool matrix_free_reuse_plan = GraphSimMatrixFreeReusePlan();
         const bool matrix_free_next_use =
-            std::getenv("ECG_NEXT_USE_RECORD") != nullptr;
+            next_use_record_requested;
         if (policy == EvictionPolicy::POPT ||
             (policy == EvictionPolicy::ECG &&
              !matrix_free_reuse_plan && !matrix_free_next_use) ||
@@ -99,7 +108,7 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
     cache.initGraphContext(&graph_ctx);
     auto vertex_masks = graph_ctx.computeVertexMasks(g);  // uint32_t per vertex
     graph_ctx.initMaskArray32(vertex_masks.data(), vertex_masks.size());
-    if (std::getenv("ECG_NEXT_USE_RECORD"))
+    if (next_use_record_requested)
         graph_ctx.buildInEdgeNextUseRecords(g);
     graph_ctx.printSummary();
     int pfx_lookahead = GraphSimEnvIntClamped("ECG_PREFETCH_LOOKAHEAD", 0, 0, 64);

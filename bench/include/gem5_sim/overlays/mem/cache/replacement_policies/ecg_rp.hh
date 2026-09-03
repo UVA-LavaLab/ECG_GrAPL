@@ -107,6 +107,14 @@ class GraphEcgRP : public Base
         statistics::Scalar victimEpochEligibleSelections;
         statistics::Scalar victimEpochDecisiveSelections;
         statistics::Scalar victimEpochVsRecencyDecisiveSelections;
+        statistics::Scalar nextUseMetadataAccepts;
+        statistics::Scalar nextUseVictimSelections;
+        statistics::Scalar nextUseFiniteWays;
+        statistics::Scalar nextUseDeadWays;
+        statistics::Scalar nextUseUnknownWays;
+        statistics::Scalar nextUseDeadVictims;
+        statistics::Scalar nextUseRefineVictims;
+        statistics::Scalar nextUseLruVictims;
         statistics::Vector victimWaySelections;
     } onlineDuelingStats;
 };

@@ -143,6 +143,7 @@ def benchmark_environment(args):
         "ECG_RECORD_TIER_BITS",
         "ECG_NEXT_USE_RECORD",
         "ECG_NEXT_USE_BITS",
+        "ECG_NEXT_USE_LRU",
         "ECG_VIRTUAL_ID_BITS",
         "ECG_EDGE_MASK_CHARGED",
         # The enforcement knob itself. Without it the guest cannot abort on a
@@ -188,7 +189,8 @@ def parse_args():
         help="Cache replacement policy for L3 (default: LRU)")
     parser.add_argument("--ecg-mode", default="DBG_PRIMARY",
         choices=["DBG_PRIMARY", "POPT_PRIMARY", "ECG_GRASP_POPT", "DBG_ONLY",
-                 "ECG_EMBEDDED", "ECG_COMBINED"],
+                 "ECG_EMBEDDED", "ECG_EPOCH_EMBEDDED", "ECG_COMBINED",
+                 "ECG_EXACT", "ECG_EXACT_STORED", "ECG_EXACT_MASK"],
         help="ECG eviction mode (only used with --policy ECG)")
     parser.add_argument("--l1-policy", default="LRU",
         help="L1 cache replacement policy (default: LRU)")

@@ -353,6 +353,22 @@ GEM5_STAT_KEYS = {
     "gem5_reuse_plan_victim_epoch_vs_recency_decisive_selections":
         "system.l3cache.replacement_policy."
         "victimEpochVsRecencyDecisiveSelections",
+    "gem5_next_use_metadata_accepts":
+        "system.l3cache.replacement_policy.nextUseMetadataAccepts",
+    "gem5_next_use_victim_selections":
+        "system.l3cache.replacement_policy.nextUseVictimSelections",
+    "gem5_next_use_finite_ways":
+        "system.l3cache.replacement_policy.nextUseFiniteWays",
+    "gem5_next_use_dead_ways":
+        "system.l3cache.replacement_policy.nextUseDeadWays",
+    "gem5_next_use_unknown_ways":
+        "system.l3cache.replacement_policy.nextUseUnknownWays",
+    "gem5_next_use_dead_victims":
+        "system.l3cache.replacement_policy.nextUseDeadVictims",
+    "gem5_next_use_refine_victims":
+        "system.l3cache.replacement_policy.nextUseRefineVictims",
+    "gem5_next_use_lru_victims":
+        "system.l3cache.replacement_policy.nextUseLruVictims",
     # Demand-load (cpu.data) L3 stats EXCLUDING prefetcher fills. The L2 stream
     # prefetcher otherwise dominates overall::total (>>demand). Sniper's NUCA
     # counters do not provide this split, so the pipeline treats its prefetched
@@ -3009,6 +3025,7 @@ def apply_gem5_variant_receipt(
         "degree_first": 5, "traversal": 5, "lru_only": 6,
         "record_lru": 7, "rrip_no_epoch": 8,
         "rrip_no_epoch_recency": 9, "future_tier_first": 10,
+        "next_use_lru": 11,
     }.get(requested)
     row["gem5_variant_requested_receipt"] = actual_requested
     row["gem5_variant_effective_receipt"] = effective
@@ -3058,6 +3075,7 @@ def apply_sniper_variant_receipt(
         "degree_first": 5, "traversal": 5, "lru_only": 6,
         "record_lru": 7, "rrip_no_epoch": 8,
         "rrip_no_epoch_recency": 9, "future_tier_first": 10,
+        "next_use_lru": 11,
     }.get(requested)
     row["sniper_variant_requested_receipt"] = actual_requested
     row["sniper_variant_effective_receipt"] = effective
@@ -3534,6 +3552,7 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         spec.policy == "ECG" and
         spec.ecg_mode == "ECG_GRASP_POPT" and
         transport.reuse_plan_depth == 2)
+    is_next_use_ecg = spec.label == "ECG_NEXT_USE_LRU"
     reuse_plan_coverage_requested = requires_gem5_reuse_plan_coverage(
         spec, transport,
         env.get("GEM5_REUSE_PLAN_COVERAGE_REQUIRED") == "1")
@@ -3584,6 +3603,25 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         env["GEM5_ECG_EPOCH_CSR"] = "1"
         gem5_ecg_epoch_channel = "csr"
         gem5_ecg_context_id = "runtime-monotonic"
+    if is_next_use_ecg:
+        env.update({
+            "ECG_NEXT_USE_RECORD": "1",
+            "ECG_NEXT_USE_LRU": "1",
+            "ECG_NEXT_USE_BITS": "8",
+            "ECG_RECORD_TIER_BITS": "0",
+            "ECG_EDGE_MASK_EPOCHS": "256",
+            "ECG_EDGE_MASK_CHARGED": "1",
+            "ECG_EXPECT_BYTES_PER_EDGE": "4",
+            "GEM5_ECG_EPOCH_CSR": "1",
+        })
+        if args.gem5_cpu_type == "O3":
+            env["GEM5_ECG_PRODUCER"] = "1"
+        else:
+            env.pop("GEM5_ECG_PRODUCER", None)
+        ecg_variant = "next_use_lru"
+        gem5_ecg_epoch_channel = "csr"
+        gem5_ecg_context_id = "runtime-monotonic"
+        gem5_ecg_delivery = "packed4+next_use+ecg.bind.load.f32"
     requested_ecg_load = os.environ.get("GEM5_FORCE_ECG_LOAD") == "1"
     env.pop("GEM5_FORCE_ECG_LOAD", None)
     env.pop("GEM5_FORCE_ECG_PLOAD", None)
@@ -3887,6 +3925,13 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         base["timing_caveat"] = (
             "Synthetic compact FlowThrough plus ReuseBind O3 correctness gate; "
             "this row is not performance evidence.")
+    elif is_next_use_ecg:
+        base["timing_model"] = "next_use_mechanism_probe"
+        base["timing_valid_for_speedup"] = "0"
+        base["timing_caveat"] = (
+            "The four-byte next-use record is software-decoded before the "
+            "existing request-bound ReuseBind load; cache metrics are "
+            "admissible, timing is not.")
     elif (
             compact_reuse_bind_flowthrough_cell_requested and
             compact_reuse_bind_performance_requested and
@@ -3971,10 +4016,19 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             effective_l3_size, effective_l3_ways)
         apply_gem5_compact_fused_receipt(
             base, log_text, compact_fused_cell_requested)
+        apply_next_use_record_receipt(
+            base, log_text, required=is_next_use_ecg)
+        if is_next_use_ecg:
+            base["gem5_next_use_bind_active"] = int(
+                "[ECG_NEXT_USE_BIND_LOAD]" in log_text)
+            if not base["gem5_next_use_bind_active"]:
+                mark_row_error(
+                    base, "gem5 next-use ReuseBind marker missing")
         apply_gem5_csr_substitution_receipt(
             base, log_text, args.benchmark, required=(
-                is_reuse_plan_ecg and
-                transport.reuse_plan_depth == 2 and
+                (is_reuse_plan_ecg and
+                 transport.reuse_plan_depth == 2 or
+                 is_next_use_ecg) and
                 int(base.get("ecg_record_replaces_edge") or 0) == 1))
         apply_gem5_compact_reuse_bind_flowthrough_receipt(
             base, log_text, compact_reuse_bind_flowthrough_cell_requested,
@@ -4037,7 +4091,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             base["timing_caveat"] = " ".join(
                 part for part in (caveat, trace_caveat) if part)
         apply_gem5_variant_receipt(
-            base, log_text, ecg_variant, required=is_reuse_plan_ecg,
+            base, log_text, ecg_variant,
+            required=is_reuse_plan_ecg or is_next_use_ecg,
             expected_dueling=int(transport.set_dueling))
         if spec.policy == "ECG":
             mode_receipt = re.search(

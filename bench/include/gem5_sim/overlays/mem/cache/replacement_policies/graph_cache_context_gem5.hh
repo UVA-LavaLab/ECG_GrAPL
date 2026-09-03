@@ -23,6 +23,7 @@
 #define __MEM_CACHE_REPLACEMENT_POLICIES_GRAPH_CACHE_CONTEXT_GEM5_HH__
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -556,7 +557,12 @@ using ECGMode = ecg_mode::Mode;
 
 inline ECGMode stringToECGMode(const std::string& s) {
     const ECGMode mode = ecg_mode::parse(s);
-    if (!ecg_mode::supportedByAllBackends(mode)) {
+    const char* next_use = std::getenv("ECG_NEXT_USE_LRU");
+    const bool next_use_stored =
+        mode == ECGMode::ECG_EXACT_STORED &&
+        next_use && next_use[0] && std::strcmp(next_use, "0") != 0;
+    if (!ecg_mode::supportedByAllBackends(mode) &&
+        !next_use_stored) {
         std::fprintf(
             stderr, "[graphctx] FATAL: ECG mode '%s' is cache_sim-only\n",
             ecg_mode::name(mode));

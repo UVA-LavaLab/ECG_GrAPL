@@ -147,8 +147,12 @@ int main(int argc, char* argv[]) {
     uint64_t total_csr_checked = 0;
     {
         std::vector<std::vector<uint32_t>> records;
+        std::vector<uint64_t> flat_offsets;
+        std::vector<uint32_t> flat_records;
         if (!ecg_reuse_plan::buildInEdgeNextUseRecords32(
-                g, 16, 8, true, records, 0)) {
+                g, 16, 8, true, records, 0) ||
+            !ecg_reuse_plan::buildInEdgeNextUseRecords32Flat(
+                g, 16, 8, true, flat_offsets, flat_records, 0)) {
             printf("NEXT-USE RECORD CONSTRUCTION FAILED\n");
             return 1;
         }
@@ -163,6 +167,14 @@ int main(int argc, char* argv[]) {
                     return 1;
                 }
                 const uint32_t record = records[src][edge++];
+                const uint64_t flat_position =
+                    flat_offsets[src] + edge - 1;
+                if (flat_position >= flat_records.size() ||
+                    flat_records[flat_position] != record) {
+                    printf("NEXT-USE FLAT RECORD MISMATCH "
+                           "src=%u edge=%zu\n", src, edge - 1);
+                    return 1;
+                }
                 if (ecg_reuse_plan::extractNextUseRecord32Dest(
                         record, id_bits) !=
                         static_cast<uint32_t>(dest_raw) ||
@@ -179,8 +191,12 @@ int main(int argc, char* argv[]) {
                 printf("NEXT-USE ROW TOO LONG src=%u\n", src);
                 return 1;
             }
+            if (flat_offsets[src + 1] - flat_offsets[src] != edge) {
+                printf("NEXT-USE FLAT OFFSET MISMATCH src=%u\n", src);
+                return 1;
+            }
         }
-        if (checked == 0) {
+        if (checked == 0 || checked != flat_records.size()) {
             printf("NO NEXT-USE RECORDS CHECKED\n");
             return 1;
         }

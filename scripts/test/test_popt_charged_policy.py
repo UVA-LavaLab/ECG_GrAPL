@@ -271,6 +271,32 @@ def test_next_use_record_receipt_is_fail_closed():
     assert overflow["status"] == "error"
 
 
+def test_next_use_gem5_mechanism_is_request_bound():
+    guest = (PROJECT_ROOT / "bench/src_gem5/pr.cc").read_text()
+    policy = (
+        PROJECT_ROOT / "bench/include/gem5_sim/overlays/mem/cache/"
+        "replacement_policies/ecg_rp.cc").read_text()
+    runner = (
+        PROJECT_ROOT / "scripts/experiments/ecg/roi_matrix.py").read_text()
+
+    assert "PageRankPullGSNextUseIteration" in guest
+    assert "gem5_ecg_bind_load_f32" in guest
+    assert "[ECG_NEXT_USE_BIND_LOAD]" in guest
+    assert "buildInEdgeNextUseRecords32Flat" in guest
+    assert policy.count(
+        "ecgMode == graph::ECGMode::ECG_EXACT_STORED") >= 4
+    assert "graph::readEcgReusePlan" in policy
+    assert "ecg_policy::effectiveFutureState" in policy
+    assert "nextUseMetadataAccepts" in policy
+    assert '"timing_model"] = "next_use_mechanism_probe"' in runner
+    assert (
+        '"timing_valid_for_speedup"] = "0"' in runner)
+    assert "ECG_NEXT_USE_RECORD requires -t 0" in guest
+    cache_guest = (
+        PROJECT_ROOT / "bench/src_sim/pr.cc").read_text()
+    assert "ECG_NEXT_USE_RECORD requires -t 0" in cache_guest
+
+
 def test_ecg_pfx_gem5_returns_unsupported_without_launch(tmp_path):
     args = roi_matrix.parse_args(["--suite", "gem5", "--prefetcher", "ECG_PFX"])
     spec = roi_matrix.parse_policy_spec("LRU")

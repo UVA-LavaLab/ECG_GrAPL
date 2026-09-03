@@ -684,6 +684,59 @@ bool buildInEdgeNextUseRecords32(
     return true;
 }
 
+template <typename GraphT>
+bool buildInEdgeNextUseRecords32Flat(
+        const GraphT& g, uint32_t numVtxPerLine,
+        uint32_t next_use_bits, bool linemin,
+        std::vector<uint64_t>& record_off,
+        std::vector<uint32_t>& records,
+        uint32_t tier_bits = kReusePlanTierlessTierBits) {
+    const uint32_t n = static_cast<uint32_t>(g.num_nodes());
+    record_off.assign(static_cast<size_t>(n) + 1, 0);
+    records.clear();
+    if (n == 0 || !canPackNextUseRecord32(
+            n, next_use_bits, tier_bits)) {
+        return false;
+    }
+    if (numVtxPerLine == 0) numVtxPerLine = 16;
+    const uint32_t id_bits = reusePlan32IdBits(n);
+
+    std::vector<uint64_t> off;
+    std::vector<uint32_t> readers;
+    buildReaderCsr(g, false, off, readers);
+    std::vector<uint8_t> reuse_tiers;
+    if (tier_bits > 0) {
+        reuse_tiers =
+            buildReuseTiers(off, n, configuredReuseHotFraction());
+    } else {
+        reuse_tiers.assign(n, 0);
+    }
+    for (uint32_t src = 0; src < n; ++src) {
+        record_off[src + 1] =
+            record_off[src] + static_cast<uint64_t>(g.in_degree(src));
+    }
+    records.assign(record_off[n], 0);
+
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic, 128)
+#endif
+    for (int64_t src_i = 0; src_i < static_cast<int64_t>(n); ++src_i) {
+        const uint32_t src = static_cast<uint32_t>(src_i);
+        std::vector<uint32_t> accessed;
+        accessedVertices(g, src, false, accessed);
+        for (size_t edge = 0; edge < accessed.size(); ++edge) {
+            const NextUsePlan plan = nextUsePlanForAccess(
+                off, readers, reuse_tiers, n, src,
+                accessed, edge, numVtxPerLine,
+                next_use_bits, linemin);
+            records[record_off[src] + edge] = packNextUseRecord32(
+                accessed[edge], plan.tier, plan.next_use,
+                plan.state, id_bits, next_use_bits, tier_bits);
+        }
+    }
+    return true;
+}
+
 // Build one per-edge next-reference epoch. PR uses pull/in edges by default;
 // BFS/SSSP use push_out_edges=true.
 template <typename GraphT>
