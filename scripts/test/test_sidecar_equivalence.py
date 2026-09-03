@@ -909,7 +909,8 @@ def test_built_kernels_are_newer_than_the_sources_they_embed():
     for kernel in (
             "pr", "pr_spmv", "bfs", "bc", "cc", "cc_sv", "sssp", "tc",
             "ecg_preprocess", "reuse_plan_sidecar",
-            "test_ecg_reuse_plan", "test_ecg_reuse_plan32"):
+            "test_ecg_reuse_plan", "test_ecg_reuse_plan32",
+            "test_ecg_ref32"):
         source = ROOT / f"bench/src_sim/{kernel}.cc"
         binary_dependencies[ROOT / f"bench/bin_sim/{kernel}"] = (
             sim_headers + [source])

@@ -311,6 +311,30 @@ For Slurm arrays, export the same receipt as
 profile remains available only for `--list --dry-run` manifest enumeration and
 must not be executed.
 
+### REF32 cache-quality probe
+
+REF32 requires a certified preordered `*-dbg.sg` graph, `-o 0`, a fixed
+iteration horizon (`-t 0`), the accurate single-core cache simulator, and no
+generic prefetcher. A focused Patents comparison is:
+
+```bash
+python3 scripts/experiments/ecg/roi_matrix.py \
+  --suite cache-sim --benchmark pr \
+  --options \
+    '-f results/graphs/cit-Patents-final-n18/cit-Patents-final-n18-dbg.sg -o 0 -n 1 -i 1 -t 0' \
+  --policies LRU GRASP POPT:UNCHARGED POPT \
+    ECG:REF32_R_COMMIT ECG:REF32_RP_COMMIT \
+  --l1d-size 32kB --l1d-ways 8 \
+  --l2-size 128kB --l2-ways 8 \
+  --l3-sizes 512kB --l3-ways 16 \
+  --cache-sim-omp-threads 1 --prefetcher none --flowthrough off \
+  --out-dir results/ecg_experiments/probes/ref32_patents
+```
+
+Accept only rows with validated REF32 record, commit-channel, prefetch,
+resource, DBG-order, geometry, policy, and semantic receipts. These runs
+provide cache and traffic evidence only; they do not provide a speedup claim.
+
 ### Separate transport campaign
 
 The `reuse_plan_transport_campaign` profile holds replacement at pure LRU in

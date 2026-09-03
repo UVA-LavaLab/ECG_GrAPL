@@ -50,6 +50,7 @@
 
 #include "../ecg_mode6_builder.h"
 #include "../ecg_mode.h"
+#include "../ecg_ref32.h"
 #include "../ecg_reuse_plan_builder.h"
 #include "../ecg_victim_policy.h"
 
@@ -798,6 +799,13 @@ struct AccessHints {
     uint32_t edge_next_use = 0;
     uint8_t  edge_future_state = 0;
     bool     edge_next_use_valid = false;
+    uint64_t edge_ref_sequence = 0;
+    uint32_t edge_ref_distance = 0;
+    uint8_t  edge_ref_state = 0;
+    bool     edge_ref_valid = false;
+    uint8_t  edge_ref_action = 0;
+    uint64_t edge_ref_prefetch_address = 0;
+    bool     edge_ref_prefetch_valid = false;
 
     // ECG mask encoding constants (2-bit, from ECG -M flag graphConfig.h)
     static constexpr uint8_t MASK_HOT      = 0x03;  // 11
@@ -1390,6 +1398,16 @@ struct GraphCacheContext {
     uint32_t next_use_record_bits = 0;
     uint32_t next_use_record_tier_bits = 0;
     bool next_use_record_enabled = false;
+    ecg_ref32::FlatRecords ref32_records;
+    uint32_t ref32_record_id_bits = 0;
+    uint32_t ref32_reference_bits =
+        ecg_ref32::kDefaultReferenceBits;
+    uint32_t ref32_action_bits =
+        ecg_ref32::kDefaultActionBits;
+    uint32_t ref32_deadline_bits =
+        ecg_ref32::kDefaultDeadlineBits;
+    bool ref32_record_enabled = false;
+    bool ref32_exact_diagnostic = false;
 
     // === OUT-edge per-edge masks (dual-direction capability) ===
     // The mirror of in_edge_masks_by_src for kernels that traverse the OUT edge
@@ -1942,6 +1960,10 @@ struct GraphCacheContext {
                addr < regions[index].upper_bound;
     }
 
+    bool isRef32Data(uint64_t addr) const {
+        return isEcgEpochData(addr);
+    }
+
     // Find the property region containing an address.
     const PropertyRegion* findRegion(uint64_t addr) const {
         for (uint32_t i = 0; i < num_regions; ++i) {
@@ -2323,6 +2345,7 @@ struct GraphCacheContext {
                 "[FATAL] ECG_NEXT_USE_RECORD requires ECG_NEXT_USE_BITS\n");
             std::abort();
         }
+
         int parsed_bits = std::atoi(bits_value);
         if (parsed_bits < 1) parsed_bits = 1;
         if (parsed_bits > 15) parsed_bits = 15;
@@ -2361,6 +2384,81 @@ struct GraphCacheContext {
             next_use_record_bits,
             ecg_reuse_plan::kNextUseStateBits,
             static_cast<unsigned long long>(g.num_edges_directed()));
+    }
+
+    template<typename GraphT>
+    void buildInEdgeRef32Records(const GraphT& g) {
+        const char* reference_value =
+            std::getenv("ECG_REF32_REFERENCE_BITS");
+        const char* action_value =
+            std::getenv("ECG_REF32_ACTION_BITS");
+        const char* deadline_value =
+            std::getenv("ECG_REF32_DEADLINE_BITS");
+        ref32_reference_bits = reference_value
+            ? static_cast<uint32_t>(std::atoi(reference_value))
+            : ecg_ref32::kDefaultReferenceBits;
+        ref32_action_bits = action_value
+            ? static_cast<uint32_t>(std::atoi(action_value))
+            : ecg_ref32::kDefaultActionBits;
+        ref32_deadline_bits = deadline_value
+            ? static_cast<uint32_t>(std::atoi(deadline_value))
+            : ecg_ref32::kDefaultDeadlineBits;
+        ref32_record_id_bits = ecg_ref32::bitsForVertices(
+            static_cast<uint64_t>(g.num_nodes()));
+        ref32_record_enabled =
+            ecg_ref32::buildInEdgeRecords32(
+                g, 16, ref32_records,
+                ref32_reference_bits, ref32_action_bits);
+        ref32_exact_diagnostic =
+            std::getenv("ECG_REF32_EXACT") != nullptr;
+        if (!ref32_exact_diagnostic) {
+            ref32_records.exact_distances.clear();
+            ref32_records.exact_distances.shrink_to_fit();
+        }
+        const uint64_t max_forward =
+            ref32_deadline_bits >= 2 && ref32_deadline_bits <= 31
+            ? (uint64_t{1} << (ref32_deadline_bits - 1)) - 1
+            : 0;
+        if (ref32_records.records.size() > max_forward)
+            ref32_record_enabled = false;
+        if (!ref32_record_enabled) {
+            std::fprintf(
+                stderr,
+                "[FATAL] ECG_REF32 requires a valid 32-bit n18-or-smaller "
+                "record (vertices=%u id_bits=%u reference_bits=%u "
+                "state_bits=%u action_bits=%u deadline_bits=%u "
+                "records=%llu)\n",
+                static_cast<unsigned>(g.num_nodes()),
+                ref32_record_id_bits,
+                ref32_reference_bits,
+                ecg_ref32::kStateBits,
+                ref32_action_bits,
+                ref32_deadline_bits,
+                static_cast<unsigned long long>(
+                    ref32_records.records.size()));
+            std::abort();
+        }
+        std::fprintf(
+            stderr,
+            "[ECG-REF32-RECORD bits=32 id_bits=%u reference_bits=%u "
+            "state_bits=%u action_bits=%u exact_sidecar=%u "
+            "deadline_bits=%u records=%llu actions=%llu "
+            "matrix_free=1 local_grasp=1]\n",
+            ref32_record_id_bits,
+            ref32_reference_bits,
+            ecg_ref32::kStateBits,
+            ref32_action_bits,
+            ref32_exact_diagnostic ? 1u : 0u,
+            ref32_deadline_bits,
+            static_cast<unsigned long long>(ref32_records.records.size()),
+            static_cast<unsigned long long>(std::count_if(
+                ref32_records.records.begin(),
+                ref32_records.records.end(),
+                [&](uint32_t record) {
+                    return ecg_ref32::extractAction(
+                        record, ref32_record_id_bits,
+                        ref32_reference_bits, ref32_action_bits) != 0;
+                })));
     }
 
     template<typename GraphT>
@@ -3072,6 +3170,13 @@ struct GraphCacheContext {
         hints_for_thread().edge_next_use = 0;
         hints_for_thread().edge_future_state = 0;
         hints_for_thread().edge_next_use_valid = false;
+        hints_for_thread().edge_ref_distance = 0;
+        hints_for_thread().edge_ref_state =
+            static_cast<uint8_t>(ecg_ref32::State::UNKNOWN);
+        hints_for_thread().edge_ref_valid = false;
+        hints_for_thread().edge_ref_action = 0;
+        hints_for_thread().edge_ref_prefetch_address = 0;
+        hints_for_thread().edge_ref_prefetch_valid = false;
     }
 
     void printECGStats(std::ostream& os = std::cout) const {

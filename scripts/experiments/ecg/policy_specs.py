@@ -311,6 +311,38 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ecg_variant="next_use_lru",
         )
     if upper in (
+        "ECG:REF32_EXACT_COMMIT", "ECG_REF32_EXACT_COMMIT",
+    ):
+        return PolicySpec(
+            label="ECG_REF32_EXACT_COMMIT",
+            policy="ECG",
+            ecg_mode="ECG_REF32",
+        )
+    if upper in ("ECG:REF32_R_COMMIT", "ECG_REF32_R_COMMIT"):
+        return PolicySpec(
+            label="ECG_REF32_R_COMMIT",
+            policy="ECG",
+            ecg_mode="ECG_REF32",
+        )
+    if upper in ("ECG:REF32_T", "ECG_REF32_T"):
+        return PolicySpec(
+            label="ECG_REF32_T",
+            policy="LRU",
+            ecg_mode="ECG_REF32",
+        )
+    if upper in ("ECG:REF32_P", "ECG_REF32_P"):
+        return PolicySpec(
+            label="ECG_REF32_P",
+            policy="LRU",
+            ecg_mode="ECG_REF32",
+        )
+    if upper in ("ECG:REF32_RP_COMMIT", "ECG_REF32_RP_COMMIT"):
+        return PolicySpec(
+            label="ECG_REF32_RP_COMMIT",
+            policy="ECG",
+            ecg_mode="ECG_REF32",
+        )
+    if upper in (
         "ECG:REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
         "ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
     ):

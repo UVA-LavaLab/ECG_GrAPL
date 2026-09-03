@@ -89,6 +89,23 @@ VALIDATED_GEM5_GUEST: Path | None = None
 VALIDATED_GEM5_GUEST_SHA256 = ""
 PLANNING_MISSING_GEM5_GUEST_SHA256 = (
     "planning-missing-gem5-guest-sha256")
+REF32_POLICY_LABELS = frozenset({
+    "ECG_REF32_EXACT_COMMIT",
+    "ECG_REF32_R_COMMIT",
+    "ECG_REF32_T",
+    "ECG_REF32_P",
+    "ECG_REF32_RP_COMMIT",
+})
+REF32_COMMIT_LABELS = frozenset({
+    "ECG_REF32_EXACT_COMMIT",
+    "ECG_REF32_R_COMMIT",
+    "ECG_REF32_RP_COMMIT",
+})
+REF32_PREFETCH_LABELS = frozenset({
+    "ECG_REF32_P",
+    "ECG_REF32_RP_COMMIT",
+})
+REF32_EXACT_LABEL = "ECG_REF32_EXACT_COMMIT"
 
 
 def fixed_runtime_mount_name(
@@ -1521,6 +1538,37 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
                 "ECG_EDGE_MASK_CHARGED": "1",
                 "ECG_EXPECT_BYTES_PER_EDGE": "4",
             })
+        if spec.label in REF32_POLICY_LABELS:
+            env.update({
+                "ECG_REF32_RECORD": "1",
+                "ECG_RECORD_TIER_BITS": "0",
+                "ECG_RECORD_POPT_BITS": "0",
+                "ECG_RECORD_PREFETCH_BITS": "4",
+                "ECG_EDGE_RECORD_BYTES": "4",
+                "ECG_EDGE_MASK_CHARGED": "1",
+                "ECG_EXPECT_BYTES_PER_EDGE": "4",
+                "ECG_PREFETCH_MODE": "0",
+                "ECG_REF32_DEADLINE_BITS": "21",
+            })
+            if spec.label == REF32_EXACT_LABEL:
+                env["ECG_REF32_EXACT"] = "1"
+            if spec.label in REF32_COMMIT_LABELS:
+                env.update({
+                    "ECG_REF32_COMMIT_CHANNEL": "1",
+                    "ECG_REF32_UPDATE_QUEUE": "16",
+                    "ECG_REF32_UPDATE_LATENCY": "8",
+                    "ECG_REF32_UPDATE_BANDWIDTH": "1",
+                })
+            env["ECG_REF32_REFERENCE_BITS"] = "8"
+            env["ECG_REF32_ACTION_BITS"] = "4"
+            if spec.label in REF32_PREFETCH_LABELS:
+                env.update({
+                    "ECG_REF32_PREFETCH": "1",
+                    "ECG_REF32_PREFETCH_QUEUE": "8",
+                    "ECG_REF32_PREFETCH_LATENCY": "8",
+                    "ECG_REF32_PREFETCH_BANDWIDTH": "1",
+                    "ECG_REF32_PREFETCH_INTERVAL": "8",
+                })
         if spec.ecg_mode == "ECG_GRASP_POPT":
             env.update({
                 "ECG_EXACT_REREF": "1",
@@ -1821,6 +1869,235 @@ def apply_next_use_record_receipt(
     if not valid:
         mark_row_error(row, "invalid next-use packed-record receipt")
     return valid
+
+
+def apply_ref32_record_receipt(
+        row: dict[str, Any], log_text: str, *,
+        required: bool = False, exact_expected: bool = False) -> bool:
+    receipt = re.search(
+        r"\[ECG-REF32-RECORD bits=(\d+) id_bits=(\d+) "
+        r"reference_bits=(\d+) state_bits=(\d+) action_bits=(\d+) "
+        r"exact_sidecar=(\d+) deadline_bits=(\d+) records=(\d+) "
+        r"actions=(\d+) matrix_free=(\d+) "
+        r"local_grasp=(\d+)\]",
+        log_text)
+    if not receipt:
+        if required:
+            mark_row_error(row, "REF32 packed-record receipt missing")
+        return False
+    (
+        total_bits, id_bits, reference_bits, state_bits, action_bits,
+        exact_sidecar, deadline_bits, records, actions,
+        matrix_free, local_grasp,
+    ) = map(int, receipt.groups())
+    valid = (
+        total_bits == 32 and
+        id_bits + reference_bits + state_bits + action_bits <= total_bits and
+        0 < id_bits <= 18 and
+        reference_bits == 8 and
+        state_bits == 2 and action_bits == 4 and
+        exact_sidecar == int(exact_expected) and records > 0 and
+        deadline_bits == 21 and
+        matrix_free == 1 and local_grasp == 1)
+    row.update({
+        "ecg_ref32_record_validated": int(valid),
+        "ecg_ref32_id_bits": id_bits,
+        "ecg_ref32_reference_bits": reference_bits,
+        "ecg_ref32_state_bits": state_bits,
+        "ecg_ref32_action_bits": action_bits,
+        "ecg_ref32_exact_sidecar": exact_sidecar,
+        "ecg_ref32_deadline_bits": deadline_bits,
+        "ecg_ref32_records": records,
+        "ecg_ref32_actions_encoded": actions,
+        "ecg_ref32_matrix_free": matrix_free,
+        "ecg_ref32_local_grasp": local_grasp,
+        "ecg_record_replaces_edge": 1,
+    })
+    if not valid:
+        mark_row_error(row, "invalid REF32 packed-record receipt")
+    return valid
+
+
+def apply_ref32_commit_receipt(
+        row: dict[str, Any], log_text: str, required: bool = False) -> bool:
+    receipt = re.search(
+        r"\[ECG-REF32-COMMIT queue=(\d+) latency=(\d+) bandwidth=(\d+) "
+        r"tag_bits=(\d+) deadline_bits=(\d+) state_bits=(\d+) "
+        r"generated=(\d+) coalesced=(\d+) queue_dropped=(\d+) "
+        r"applied=(\d+) not_resident=(\d+) expired=(\d+) "
+        r"bandwidth_deferred=(\d+) max_occupancy=(\d+) pending=(\d+)\]",
+        log_text)
+    if not receipt:
+        if required:
+            mark_row_error(row, "REF32 commit-channel receipt missing")
+        return False
+    (
+        queue, latency, bandwidth, tag_bits, deadline_bits, state_bits,
+        generated, coalesced, queue_dropped, applied, not_resident,
+        expired, bandwidth_deferred, max_occupancy, pending,
+    ) = map(int, receipt.groups())
+    valid = (
+        queue == 16 and latency == 8 and bandwidth == 1 and
+        tag_bits == 48 and deadline_bits == 21 and state_bits == 2 and
+        generated > 0 and max_occupancy <= queue and pending == 0 and
+        generated == coalesced + queue_dropped + applied +
+            not_resident + expired)
+    row.update({
+        "ecg_ref32_commit_validated": int(valid),
+        "ecg_ref32_commit_queue_entries": queue,
+        "ecg_ref32_commit_latency_requests": latency,
+        "ecg_ref32_commit_bandwidth_per_request": bandwidth,
+        "ecg_ref32_commit_tag_bits": tag_bits,
+        "ecg_ref32_commit_deadline_bits": deadline_bits,
+        "ecg_ref32_commit_state_bits": state_bits,
+        "ecg_ref32_commit_generated": generated,
+        "ecg_ref32_commit_coalesced": coalesced,
+        "ecg_ref32_commit_queue_dropped": queue_dropped,
+        "ecg_ref32_commit_applied": applied,
+        "ecg_ref32_commit_not_resident": not_resident,
+        "ecg_ref32_commit_expired": expired,
+        "ecg_ref32_commit_bandwidth_deferred": bandwidth_deferred,
+        "ecg_ref32_commit_max_occupancy": max_occupancy,
+        "ecg_ref32_commit_pending": pending,
+    })
+    if not valid:
+        mark_row_error(row, "invalid REF32 commit-channel receipt")
+    return valid
+
+
+def apply_ref32_prefetch_receipt(
+        row: dict[str, Any], log_text: str, required: bool = False) -> bool:
+    receipt = re.search(
+        r"\[ECG-REF32-PREFETCH queue=(\d+) latency=(\d+) bandwidth=(\d+) "
+        r"issue_interval=(\d+) lookahead_records=(\d+) placement=(\w+) "
+        r"actions_seen=(\d+) rate_limited=(\d+) "
+        r"resident_duplicates=(\d+) pending_duplicates=(\d+) "
+        r"admission_dropped=(\d+) queue_dropped=(\d+) "
+        r"requests_issued=(\d+) fills_completed=(\d+) "
+        r"late_merged=(\d+) completion_resident=(\d+) "
+        r"completion_admission_dropped=(\d+) bandwidth_deferred=(\d+) "
+        r"max_occupancy=(\d+) demand_displacements=(\d+) "
+        r"evicted_before_use=(\d+) pending=(\d+)\]",
+        log_text)
+    if not receipt:
+        if required:
+            mark_row_error(row, "REF32 prefetch receipt missing")
+        return False
+    groups = list(receipt.groups())
+    placement = groups.pop(5)
+    (
+        queue, latency, bandwidth, issue_interval, lookahead_records,
+        actions_seen, rate_limited, resident_duplicates,
+        pending_duplicates, admission_dropped, queue_dropped,
+        requests_issued, fills_completed, late_merged,
+        completion_resident, completion_admission_dropped,
+        bandwidth_deferred, max_occupancy, demand_displacements,
+        evicted_before_use, pending,
+    ) = map(int, groups)
+    valid = (
+        queue == 8 and latency == 8 and bandwidth == 1 and
+        issue_interval == 8 and lookahead_records == 16 and
+        placement == "llc" and actions_seen > 0 and
+        max_occupancy <= queue and pending == 0 and
+        actions_seen == rate_limited + resident_duplicates +
+            pending_duplicates + admission_dropped + queue_dropped +
+            requests_issued and
+        requests_issued == fills_completed + completion_resident +
+            completion_admission_dropped)
+    row.update({
+        "ecg_ref32_prefetch_validated": int(valid),
+        "ecg_ref32_prefetch_queue_entries": queue,
+        "ecg_ref32_prefetch_latency_requests": latency,
+        "ecg_ref32_prefetch_bandwidth_per_request": bandwidth,
+        "ecg_ref32_prefetch_issue_interval": issue_interval,
+        "ecg_ref32_prefetch_lookahead_records": lookahead_records,
+        "ecg_ref32_prefetch_placement": placement,
+        "ecg_ref32_prefetch_actions_seen": actions_seen,
+        "ecg_ref32_prefetch_rate_limited": rate_limited,
+        "ecg_ref32_prefetch_resident_duplicates": resident_duplicates,
+        "ecg_ref32_prefetch_pending_duplicates": pending_duplicates,
+        "ecg_ref32_prefetch_admission_dropped": admission_dropped,
+        "ecg_ref32_prefetch_queue_dropped": queue_dropped,
+        "ecg_ref32_prefetch_requests_issued": requests_issued,
+        "ecg_ref32_prefetch_fills_completed": fills_completed,
+        "ecg_ref32_prefetch_late_merged": late_merged,
+        "ecg_ref32_prefetch_completion_resident": completion_resident,
+        "ecg_ref32_prefetch_completion_admission_dropped":
+            completion_admission_dropped,
+        "ecg_ref32_prefetch_bandwidth_deferred": bandwidth_deferred,
+        "ecg_ref32_prefetch_max_occupancy": max_occupancy,
+        "ecg_ref32_prefetch_demand_displacements": demand_displacements,
+        "ecg_ref32_prefetch_evicted_before_use": evicted_before_use,
+        "ecg_ref32_prefetch_pending": pending,
+    })
+    if not valid:
+        mark_row_error(row, "invalid REF32 prefetch receipt")
+    return valid
+
+
+def apply_ref32_resource_receipt(
+        row: dict[str, Any], log_text: str, required: bool = False) -> bool:
+    receipt = re.search(
+        r"\[ECG-REF32-RESOURCES line_bits=(\d+) lines=(\d+) "
+        r"line_state_bits=(\d+) commit_entries=(\d+) "
+        r"commit_entry_bits=(\d+) prefetch_entries=(\d+) "
+        r"prefetch_entry_bits=(\d+) lookahead_records=(\d+) "
+        r"lookahead_bits=(\d+) control_bits=(\d+) "
+        r"record_extra_bits=(\d+) total_bits=(\d+) "
+        r"popt_matrix_bits=(\d+) reduction_x=([0-9.]+)\]",
+        log_text)
+    if not receipt:
+        if required:
+            mark_row_error(row, "REF32 resource receipt missing")
+        return False
+    integer_values = list(map(int, receipt.groups()[:-1]))
+    reduction_x = float(receipt.group(14))
+    (
+        line_bits, lines, line_state_bits, commit_entries,
+        commit_entry_bits, prefetch_entries, prefetch_entry_bits,
+        lookahead_records, lookahead_bits, control_bits,
+        record_extra_bits, total_bits, popt_matrix_bits,
+    ) = integer_values
+    expected_total = (
+        line_state_bits +
+        commit_entries * commit_entry_bits +
+        prefetch_entries * prefetch_entry_bits +
+        lookahead_bits + control_bits + record_extra_bits)
+    valid = (
+        line_bits == 24 and lines > 0 and
+        line_state_bits == line_bits * lines and
+        commit_entry_bits == 93 and prefetch_entry_bits == 70 and
+        lookahead_bits == lookahead_records * 32 and
+        record_extra_bits == 0 and total_bits == expected_total and
+        popt_matrix_bits > total_bits and reduction_x > 100.0)
+    row.update({
+        "ecg_ref32_resource_validated": int(valid),
+        "ecg_ref32_resource_line_bits": line_bits,
+        "ecg_ref32_resource_lines": lines,
+        "ecg_ref32_resource_line_state_bits": line_state_bits,
+        "ecg_ref32_resource_commit_entries": commit_entries,
+        "ecg_ref32_resource_commit_entry_bits": commit_entry_bits,
+        "ecg_ref32_resource_prefetch_entries": prefetch_entries,
+        "ecg_ref32_resource_prefetch_entry_bits": prefetch_entry_bits,
+        "ecg_ref32_resource_lookahead_records": lookahead_records,
+        "ecg_ref32_resource_lookahead_bits": lookahead_bits,
+        "ecg_ref32_resource_control_bits": control_bits,
+        "ecg_ref32_resource_record_extra_bits": record_extra_bits,
+        "ecg_ref32_resource_total_bits": total_bits,
+        "ecg_ref32_popt_matrix_bits": popt_matrix_bits,
+        "ecg_ref32_resource_reduction_x": reduction_x,
+    })
+    if not valid:
+        mark_row_error(row, "invalid REF32 resource receipt")
+    return valid
+
+
+def ref32_dbg_order_certified(options: str) -> bool:
+    tokens = shlex.split(options)
+    for index, token in enumerate(tokens[:-1]):
+        if token == "-f":
+            return Path(tokens[index + 1]).name.endswith("-dbg.sg")
+    return False
 
 
 def apply_gem5_compact_fused_receipt(
@@ -3258,6 +3535,27 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
     })
     apply_next_use_record_receipt(
         row, log_text, required=spec.label == "ECG_NEXT_USE_LRU")
+    is_ref32 = spec.label in REF32_POLICY_LABELS
+    if is_ref32:
+        row["ecg_ref32_dbg_order_certified"] = int(
+            ref32_dbg_order_certified(args.options))
+        if not row["ecg_ref32_dbg_order_certified"]:
+            mark_row_error(
+                row,
+                "REF32 local GRASP tier requires a certified -dbg.sg graph")
+    apply_ref32_record_receipt(
+        row, log_text, required=is_ref32,
+        exact_expected=spec.label == REF32_EXACT_LABEL)
+    is_ref32_commit = spec.label in REF32_COMMIT_LABELS
+    apply_ref32_commit_receipt(
+        row, log_text, required=is_ref32_commit)
+    is_ref32_prefetch = spec.label in REF32_PREFETCH_LABELS
+    apply_ref32_prefetch_receipt(
+        row, log_text, required=is_ref32_prefetch)
+    is_ref32_exact = spec.label == REF32_EXACT_LABEL
+    if not is_ref32_exact:
+        apply_ref32_resource_receipt(
+            row, log_text, required=is_ref32)
     metadata_receipt = re.search(
         r"\[ECG-METADATA [^\]]*record_bytes=(\d+)"
         r"[^\]]*bytes_per_edge=([0-9.]+)[^\]]*\]",
@@ -3275,7 +3573,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         else:
             row["edge_stream_bytes_per_edge"] = (
                 int(row.get("graph_edge_bytes") or 0) + record_bytes)
-    elif transport.reuse_plan_depth > 0:
+    elif transport.reuse_plan_depth > 0 or is_ref32:
         mark_row_error(
             row, "ReusePlan row emitted no ECG-METADATA record-width receipt")
 
@@ -3346,6 +3644,40 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "ecg_dueling_completed_windows",
         "ecg_dueling_winner_changes",
         "ecg_reuse_admission_updates",
+        "ecg_ref32_governed_hits",
+        "ecg_ref32_governed_misses",
+        "governed_property_hits",
+        "governed_property_misses",
+        "ecg_ref32_dead_bypasses",
+        "ecg_ref32_dead_victims",
+        "ecg_ref32_non_property_victims",
+        "ecg_ref32_unknown_victims",
+        "ecg_ref32_finite_victims",
+        "ecg_ref32_commit_generated",
+        "ecg_ref32_commit_coalesced",
+        "ecg_ref32_commit_queue_dropped",
+        "ecg_ref32_commit_applied",
+        "ecg_ref32_commit_not_resident",
+        "ecg_ref32_commit_expired",
+        "ecg_ref32_commit_bandwidth_deferred",
+        "ecg_ref32_commit_max_occupancy",
+        "ecg_ref32_commit_pending",
+        "ecg_ref32_prefetch_actions_seen",
+        "ecg_ref32_prefetch_rate_limited",
+        "ecg_ref32_prefetch_resident_duplicates",
+        "ecg_ref32_prefetch_pending_duplicates",
+        "ecg_ref32_prefetch_admission_dropped",
+        "ecg_ref32_prefetch_queue_dropped",
+        "ecg_ref32_prefetch_requests_issued",
+        "ecg_ref32_prefetch_fills_completed",
+        "ecg_ref32_prefetch_late_merged",
+        "ecg_ref32_prefetch_completion_resident",
+        "ecg_ref32_prefetch_completion_admission_dropped",
+        "ecg_ref32_prefetch_bandwidth_deferred",
+        "ecg_ref32_prefetch_max_occupancy",
+        "ecg_ref32_prefetch_demand_displacements",
+        "ecg_ref32_prefetch_evicted_before_use",
+        "ecg_ref32_prefetch_pending",
         "ecg_admission_leader_accesses_grasp",
         "ecg_admission_leader_accesses_future",
         "ecg_admission_leader_misses_grasp",
@@ -3466,6 +3798,18 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     log_path = out_dir / "logs" / f"{label}.log"
     sidebands = gem5_sideband_paths(gem5_out)
     charge = policy_cache_geometry(args, spec, l3_size)
+    if spec.label in REF32_POLICY_LABELS:
+        row = base_row("gem5", args, spec, l3_size, charge)
+        row.update({
+            "section": 0,
+            "log_path": str(log_path),
+            "gem5_out": str(gem5_out),
+            "status": "unsupported",
+            "error": (
+                "REF32 requires native commit-update and delayed LLC-only "
+                "prefetch plumbing before gem5 cache or timing rows are valid"),
+        })
+        return [row]
     if args.prefetcher == "ECG_PFX" and not args.allow_gem5_ecg_pfx:
         row = base_row("gem5", args, spec, l3_size, charge)
         row.update({
@@ -4379,6 +4723,17 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     sidebands = sniper_sideband_paths(sniper_out)
     charge = policy_cache_geometry(args, spec, l3_size)
     row = base_row("sniper", args, spec, l3_size, charge)
+    if spec.label in REF32_POLICY_LABELS:
+        row.update({
+            "section": 0,
+            "log_path": str(log_path),
+            "sniper_out": str(sniper_out),
+            "status": "unsupported",
+            "error": (
+                "REF32 requires native commit-update and delayed LLC-only "
+                "prefetch plumbing before Sniper rows are valid"),
+        })
+        return [row]
     sniper_root = sniper_root_path(args)
     sniper_runner = sniper_runner_path(args)
     unsafe_sniper_workload = args.sniper_workload in ("benchmark", "sg_kernel")

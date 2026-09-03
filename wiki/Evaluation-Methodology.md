@@ -217,6 +217,40 @@ the campaign's victim choice. All version-2 screen and full-role evidence is
 invalidated; thresholds, policies, stage roster, and admissible claims remain
 unchanged.
 
+### 7.3 REF32 original-goal recovery
+
+`ECG_REF32_RP_COMMIT` is a separate candidate that returns to the original ECG
+goal: improve cache behavior relative to GRASP and P-OPT without retaining
+P-OPT's runtime rereference matrix.
+
+For certified n18 DBG-ordered PageRank graphs, each 32-bit edge record contains
+an 18-bit destination, an 8-bit forward property-line reference, a 2-bit
+finite/dead/wrap/unknown state, and a 4-bit forward-record prefetch action. The
+reference uses a five-bit exponent and three-bit mantissa. A 21-bit per-LLC-line
+deadline covers the complete recorded iteration while preserving safe modular
+expiry; a passed prediction becomes unknown, never dead.
+
+Private-cache hits update LLC metadata through a bounded commit-only channel:
+16 entries, eight governed requests of latency, one update per governed request,
+and cache-line coalescing. The selective prefetch path has eight pending entries,
+the same eight-request latency, one issue per eight governed requests, and an
+LLC-only fill. It reads the selected destination from a 16-record lookahead
+buffer, rejects resident or pending duplicates, and checks replacement
+admission before issuing.
+
+The record substitutes for the ordinary 4-byte CSR destination and has no
+sidecar. At a 512 KiB, 64-byte-line LLC, the accounted added state is 24 bits per
+line plus the two bounded queues, 16-record lookahead buffer, and control state:
+199,232 bits total. The corresponding n18, 256-epoch P-OPT matrix is 33,554,432
+bits, a 168.4x reduction before counting P-OPT's reserved LLC capacity.
+
+REF32 rows are accepted only when the graph filename certifies DBG order, the
+record/commit/prefetch/resource receipts validate, no runtime P-OPT matrix is
+present, semantic output matches, both queues drain, and the record remains four
+bytes. Cache-simulator LLC misses, governed-property misses, and off-chip
+traffic are admissible. Timing is not: detailed-simulator request, commit, and
+prefetch implementations must be validated before any speedup claim.
+
 ## 8. Publication policy
 
 Preliminary numbers and intermediate choices remain local. Tables and measured

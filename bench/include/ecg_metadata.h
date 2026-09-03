@@ -43,6 +43,7 @@
 //                             width can be swept WITHOUT changing topology
 //   ECG_NEXT_USE_RECORD       replace epoch stamps with next-use + state
 //   ECG_NEXT_USE_BITS         required absolute next-use bucket width
+//   ECG_REF32_RECORD          destination + 8-bit reference + state + action
 //   ECG_EDGE_MASK_CHARGED     0 = metadata delivered free (oracle ceiling)
 //   ECG_FLOWTHROUGH         metadata stream does not allocate in LLC
 #ifndef ECG_METADATA_H
@@ -74,7 +75,9 @@ struct Config {
     int record_bytes = 4;    // PackedRecord container width
     int payload_bits = 0;    // Sidecar bits per edge
     int next_use_bits = 0;
+    int reference_bits = 0;
     int future_state_bits = 0;
+    int prefetch_action_bits = 0;
     bool charged = true;
     bool flowthrough = false;
     bool packed_fits = true; // did the packed record fit 4 bytes?
@@ -114,6 +117,17 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
     c.charged = envInt("ECG_EDGE_MASK_CHARGED", 1, 0, 1) > 0;
     c.flowthrough = envInt("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
     const char* next_use_record = std::getenv("ECG_NEXT_USE_RECORD");
+    const char* ref32_record = std::getenv("ECG_REF32_RECORD");
+    if (next_use_record && next_use_record[0] &&
+        std::string(next_use_record) != "0" &&
+        ref32_record && ref32_record[0] &&
+        std::string(ref32_record) != "0") {
+        std::fprintf(
+            stderr,
+            "[FATAL] ECG_NEXT_USE_RECORD and ECG_REF32_RECORD are "
+            "mutually exclusive\n");
+        std::abort();
+    }
     if (next_use_record && next_use_record[0] &&
         std::string(next_use_record) != "0") {
         const char* next_use_bits = std::getenv("ECG_NEXT_USE_BITS");
@@ -128,6 +142,16 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
         c.epoch_bits = 0;
         c.next_use_bits = envInt("ECG_NEXT_USE_BITS", 0, 1, 15);
         c.future_state_bits = 2;
+    } else if (ref32_record && ref32_record[0] &&
+               std::string(ref32_record) != "0") {
+        c.stamps = 0;
+        c.epoch_bits = 0;
+        c.tier_bits = 0;
+        c.reference_bits =
+            envInt("ECG_REF32_REFERENCE_BITS", 8, 5, 12);
+        c.future_state_bits = 2;
+        c.prefetch_action_bits =
+            envInt("ECG_REF32_ACTION_BITS", 4, 0, 12);
     }
     const int epoch_payload_bits =
         c.next_use_bits > 0 ? 0 : c.epoch_bits * c.stamps;
@@ -139,10 +163,12 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
     c.payload_bits = forced_payload > 0
         ? forced_payload
         : epoch_payload_bits + c.tier_bits +
-          c.next_use_bits + c.future_state_bits;
+          c.next_use_bits + c.reference_bits +
+          c.future_state_bits + c.prefetch_action_bits;
 
     const int needed = c.id_bits + epoch_payload_bits + c.tier_bits +
                        c.next_use_bits + c.future_state_bits +
+                       c.reference_bits + c.prefetch_action_bits +
                        envInt("ECG_RECORD_POPT_BITS", 0, 0, 8) +
                        envInt("ECG_RECORD_PREFETCH_BITS", 0, 0, 32);
     c.packed_fits = needed <= 32;
@@ -211,6 +237,9 @@ inline void declareContainerBytes(Config& c, int container_bytes) {
         (c.id_bits +
          (c.next_use_bits > 0 ? 0 : c.epoch_bits * c.stamps) +
          c.tier_bits + c.next_use_bits + c.future_state_bits) <=
+            container_bytes * 8 &&
+        (c.id_bits + c.reference_bits + c.prefetch_action_bits +
+         c.future_state_bits) <=
             container_bytes * 8;
 }
 
@@ -232,11 +261,12 @@ inline void announce(const Config& c, const char* kernel) {
     std::fprintf(stderr,
         "[ECG-METADATA kernel=%s delivery=%s stamps=%d epoch_bits=%d "
         "tier_bits=%d id_bits=%d record_bytes=%d payload_bits=%d "
-        "next_use_bits=%d state_bits=%d "
+        "next_use_bits=%d reference_bits=%d state_bits=%d action_bits=%d "
         "bytes_per_edge=%.3f charged=%d flowthrough=%d packed_fits=%d]\n",
         kernel, deliveryName(c), c.stamps, c.epoch_bits, c.tier_bits,
         c.id_bits, c.record_bytes, c.payload_bits,
-        c.next_use_bits, c.future_state_bits, bytesPerEdge(c),
+        c.next_use_bits, c.reference_bits, c.future_state_bits,
+        c.prefetch_action_bits, bytesPerEdge(c),
         c.charged ? 1 : 0, c.flowthrough ? 1 : 0, c.packed_fits ? 1 : 0);
 }
 

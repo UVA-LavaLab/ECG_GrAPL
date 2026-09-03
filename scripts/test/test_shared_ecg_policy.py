@@ -63,6 +63,7 @@ def test_ecg_mode_is_one_byte_identical_definition():
         "ECG_EXACT_STORED": 8,
         "ECG_EXACT_MASK": 9,
         "ECG_GRASP_POPT": 10,
+        "ECG_REF32": 11,
     }
     for name, value in expected.items():
         assert re.search(rf"\b{name}\s*=\s*{value}\b", text)

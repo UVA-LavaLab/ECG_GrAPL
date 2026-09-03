@@ -21,6 +21,7 @@ enum class Mode : uint8_t {
     ECG_EXACT_STORED = 8,
     ECG_EXACT_MASK = 9,
     ECG_GRASP_POPT = 10,
+    ECG_REF32 = 11,
 };
 
 inline const char* name(Mode mode) {
@@ -36,6 +37,7 @@ inline const char* name(Mode mode) {
         case Mode::ECG_EXACT_STORED: return "ECG_EXACT_STORED";
         case Mode::ECG_EXACT_MASK: return "ECG_EXACT_MASK";
         case Mode::ECG_GRASP_POPT: return "ECG_GRASP_POPT";
+        case Mode::ECG_REF32: return "ECG_REF32";
     }
     return "UNKNOWN";
 }
@@ -70,12 +72,14 @@ inline Mode parse(const std::string& text) {
     if (text == "ECG_GRASP_POPT" || text == "GRASP_POPT" ||
         text == "ecg_grasp_popt" || text == "grasp_popt")
         return Mode::ECG_GRASP_POPT;
+    if (text == "ECG_REF32" || text == "ecg_ref32" || text == "ref32")
+        return Mode::ECG_REF32;
     std::fprintf(
         stderr,
         "[FATAL] unknown ECG mode '%s'; expected DBG_PRIMARY, POPT_PRIMARY, "
         "POPT_TIE, DBG_ONLY, ECG_EMBEDDED, ECG_EPOCH_EMBEDDED, "
         "ECG_COMBINED, ECG_EXACT, ECG_EXACT_STORED, ECG_EXACT_MASK, or "
-        "ECG_GRASP_POPT\n",
+        "ECG_GRASP_POPT, or ECG_REF32\n",
         text.c_str());
     std::abort();
 }

@@ -239,6 +239,20 @@ def test_reuse_plan_policy_aliases_are_first_class(monkeypatch):
     assert next_use.ecg_variant == "next_use_lru"
     assert module.ecg_transport_for(
         next_use, "pr") == module.EcgTransport()
+    ref32_exact = module.parse_policy_spec("ECG:REF32_EXACT_COMMIT")
+    ref32_quantized = module.parse_policy_spec("ECG:REF32_R_COMMIT")
+    assert ref32_exact.label == "ECG_REF32_EXACT_COMMIT"
+    assert ref32_exact.ecg_mode == "ECG_REF32"
+    assert ref32_quantized.label == "ECG_REF32_R_COMMIT"
+    assert ref32_quantized.ecg_mode == "ECG_REF32"
+    assert module.ecg_transport_for(
+        ref32_exact, "pr") == module.EcgTransport()
+    assert module.parse_policy_spec(
+        "ECG:REF32_R_COMMIT").label == "ECG_REF32_R_COMMIT"
+    assert module.parse_policy_spec("ECG:REF32_T").policy == "LRU"
+    assert module.parse_policy_spec("ECG:REF32_P").policy == "LRU"
+    assert module.parse_policy_spec(
+        "ECG:REF32_RP_COMMIT").policy == "ECG"
     for label, variant in (
             ("ECG:REUSE_PLAN_GRASP_FLOWTHROUGH", "grasp_only"),
             ("ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH", "epoch_first"),

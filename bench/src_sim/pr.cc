@@ -1,4 +1,5 @@
 #include <atomic>
+#include <type_traits>
 // Copyright (c) 2024, UVA LavaLab
 // PageRank with Cache Simulation
 // Tracks all memory accesses to graph data structures
@@ -20,6 +21,7 @@
 #include "cache_sim/graph_sim.h"
 // P-OPT rereference matrix builder
 #include "graphbrew/partition/cagra/popt.h"
+#include "ecg_ref32.h"
 // Shared ECG epoch helpers for cache_sim, gem5, and Sniper
 #include "ecg_reuse_plan_builder.h"
 
@@ -51,11 +53,27 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
     GraphCacheContext graph_ctx;
     const bool next_use_record_requested =
         std::getenv("ECG_NEXT_USE_RECORD") != nullptr;
+    const bool ref32_record_requested =
+        std::getenv("ECG_REF32_RECORD") != nullptr;
+    if (ref32_record_requested && omp_get_max_threads() != 1) {
+        std::fprintf(
+            stderr,
+            "[FATAL] ECG_REF32_RECORD requires OMP_NUM_THREADS=1 for "
+            "deterministic request-sequence semantics\n");
+        std::abort();
+    }
     if (next_use_record_requested && epsilon > 0) {
         std::fprintf(
             stderr,
             "[FATAL] ECG_NEXT_USE_RECORD requires -t 0 so the "
             "finite iteration horizon matches the executed traversal\n");
+        std::abort();
+    }
+    if (ref32_record_requested && epsilon > 0) {
+        std::fprintf(
+            stderr,
+            "[FATAL] ECG_REF32_RECORD requires -t 0 so the finite "
+            "iteration horizon matches the executed traversal\n");
         std::abort();
     }
 
@@ -86,11 +104,15 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
         const bool matrix_free_reuse_plan = GraphSimMatrixFreeReusePlan();
         const bool matrix_free_next_use =
             next_use_record_requested;
+        const bool matrix_free_ref32 =
+            ref32_record_requested;
         if (policy == EvictionPolicy::POPT ||
             (policy == EvictionPolicy::ECG &&
-             !matrix_free_reuse_plan && !matrix_free_next_use) ||
+             !matrix_free_reuse_plan && !matrix_free_next_use &&
+             !matrix_free_ref32) ||
             (popt_prefetch &&
-             !matrix_free_reuse_plan && !matrix_free_next_use)) {
+             !matrix_free_reuse_plan && !matrix_free_next_use &&
+             !matrix_free_ref32)) {
             constexpr int numVtxPerLine = 64 / sizeof(ScoreT);
             constexpr int numEpochs = 256;
             buildAndRegisterReref(g, graph_ctx, /*natural_csr=*/true, "PR(pull/in)",
@@ -106,10 +128,16 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
     // Compute per-vertex ECG mask array (supports 8/16/32-bit widths)
     graph_ctx.initMaskConfig();
     cache.initGraphContext(&graph_ctx);
-    auto vertex_masks = graph_ctx.computeVertexMasks(g);  // uint32_t per vertex
-    graph_ctx.initMaskArray32(vertex_masks.data(), vertex_masks.size());
+    std::vector<uint32_t> vertex_masks;
+    if (!ref32_record_requested) {
+        vertex_masks = graph_ctx.computeVertexMasks(g);
+        graph_ctx.initMaskArray32(
+            vertex_masks.data(), vertex_masks.size());
+    }
     if (next_use_record_requested)
         graph_ctx.buildInEdgeNextUseRecords(g);
+    if (ref32_record_requested)
+        graph_ctx.buildInEdgeRef32Records(g);
     graph_ctx.printSummary();
     int pfx_lookahead = GraphSimEnvIntClamped("ECG_PREFETCH_LOOKAHEAD", 0, 0, 64);
     int pfx_top_k = GraphSimEnvIntClamped("ECG_PREFETCH_TOP_K", 1, 1, 64);
@@ -150,12 +178,16 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
     cache.resetStats();
     const auto in_edge_base = g.num_nodes() > 0
         ? g.in_neigh(0).begin() : nullptr;
-    const auto next_use_meta = ::ecg_metadata::configure(
+    const auto edge_record_meta = ::ecg_metadata::configure(
         static_cast<uint64_t>(g.num_nodes()), 2);
-    if (graph_ctx.next_use_record_enabled) {
-        ::ecg_metadata::announce(next_use_meta, "pr-next-use");
+    if (graph_ctx.next_use_record_enabled ||
+        graph_ctx.ref32_record_enabled) {
+        ::ecg_metadata::announce(
+            edge_record_meta,
+            graph_ctx.ref32_record_enabled ? "pr-ref32" : "pr-next-use");
         ::ecg_metadata::enforceExpectedBytesPerEdge(
-            next_use_meta, "pr-next-use");
+            edge_record_meta,
+            graph_ctx.ref32_record_enabled ? "pr-ref32" : "pr-next-use");
     }
     
     for (int iter = 0; iter < max_iters; iter++) {
@@ -175,6 +207,126 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
             // Iterate over incoming neighbors with CSR edge tracking
             auto in_neigh = g.in_neigh(u);
 
+            if (graph_ctx.ref32_record_enabled) {
+                const uint64_t row_begin =
+                    graph_ctx.ref32_records.offsets[u];
+                const uint64_t row_end =
+                    graph_ctx.ref32_records.offsets[u + 1];
+                size_t edge_pos = 0;
+                for (auto it = in_neigh.begin();
+                     it != in_neigh.end(); ++it, ++edge_pos) {
+                    const uint64_t record_index = row_begin + edge_pos;
+                    if (record_index >= row_end ||
+                        record_index >=
+                            graph_ctx.ref32_records.records.size()) {
+                        std::fprintf(
+                            stderr,
+                            "[FATAL] REF32 record row shorter than CSR "
+                            "(src=%u edge=%llu begin=%llu end=%llu)\n",
+                            static_cast<unsigned>(u),
+                            static_cast<unsigned long long>(edge_pos),
+                            static_cast<unsigned long long>(row_begin),
+                            static_cast<unsigned long long>(row_end));
+                        std::abort();
+                    }
+                    auto& hints = graph_ctx.hints_for_thread();
+                    hints.edge_ref_sequence =
+                        static_cast<uint64_t>(iter) *
+                            graph_ctx.ref32_records.records.size() +
+                        record_index;
+                    SIM_ECG_EDGE(
+                        cache, edge_record_meta, it, in_edge_base,
+                        reinterpret_cast<uint64_t>(in_edge_base),
+                        ::ecg_metadata::kInSidecarBase);
+                    const uint32_t record =
+                        graph_ctx.ref32_records.records[record_index];
+                    const auto decoded = ecg_ref32::decodeRecord32(
+                        record, graph_ctx.ref32_record_id_bits,
+                        graph_ctx.ref32_reference_bits,
+                        graph_ctx.ref32_action_bits);
+                    const NodeID v =
+                        static_cast<NodeID>(decoded.destination);
+                    if (v != *it) {
+                        std::fprintf(
+                            stderr,
+                            "[FATAL] REF32 destination mismatch "
+                            "(src=%u edge=%llu record=%u csr=%u)\n",
+                            static_cast<unsigned>(u),
+                            static_cast<unsigned long long>(edge_pos),
+                            static_cast<unsigned>(v),
+                            static_cast<unsigned>(*it));
+                        std::abort();
+                    }
+                    ecg_ref32::State runtime_state = decoded.state;
+                    if (runtime_state == ecg_ref32::State::WRAP) {
+                        runtime_state = iter + 1 < max_iters
+                            ? ecg_ref32::State::FINITE
+                            : ecg_ref32::State::DEAD;
+                    }
+                    hints.edge_ref_state =
+                        static_cast<uint8_t>(runtime_state);
+                    hints.edge_ref_valid =
+                        runtime_state != ecg_ref32::State::UNKNOWN;
+                    hints.edge_ref_distance =
+                        graph_ctx.ref32_exact_diagnostic
+                        ? graph_ctx.ref32_records
+                              .exact_distances[record_index]
+                        : decoded.distance;
+                    hints.edge_ref_action = decoded.action;
+                    hints.edge_ref_prefetch_address = 0;
+                    hints.edge_ref_prefetch_valid = false;
+                    const uint32_t prefetch_delta =
+                        ecg_ref32::actionDelta(
+                            decoded.action,
+                            graph_ctx.ref32_action_bits);
+                    const uint64_t target_index =
+                        record_index + prefetch_delta;
+                    if (prefetch_delta > 0 &&
+                        target_index <
+                            graph_ctx.ref32_records.records.size()) {
+                        const auto target =
+                            ecg_ref32::decodeRecord32(
+                                graph_ctx.ref32_records
+                                    .records[target_index],
+                                graph_ctx.ref32_record_id_bits,
+                                graph_ctx.ref32_reference_bits,
+                                graph_ctx.ref32_action_bits);
+                        if (target.destination <
+                            static_cast<uint32_t>(g.num_nodes())) {
+                            hints.edge_ref_prefetch_address =
+                                reinterpret_cast<uint64_t>(
+                                    &contrib_ptr[target.destination]);
+                            hints.edge_ref_prefetch_valid = true;
+                        }
+                    }
+                    SIM_CACHE_READ_MASKED(
+                        cache, contrib_ptr, v, graph_ctx, 0);
+                    incoming_total += outgoing_contrib[v];
+                }
+                if (row_begin + edge_pos != row_end) {
+                    std::fprintf(
+                        stderr,
+                        "[FATAL] REF32 record row longer than CSR "
+                        "(src=%u csr=%llu records=%llu)\n",
+                        static_cast<unsigned>(u),
+                        static_cast<unsigned long long>(edge_pos),
+                        static_cast<unsigned long long>(
+                            row_end - row_begin));
+                    std::abort();
+                }
+                graph_ctx.clearEdgeEpoch();
+                SIM_CACHE_READ(cache, scores_ptr, u);
+                ScoreT old_score = scores[u];
+                ScoreT new_score = base_score + kDamp * incoming_total;
+                SIM_CACHE_WRITE(cache, scores_ptr, u);
+                scores[u] = new_score;
+                error += fabs(new_score - old_score);
+                SIM_CACHE_WRITE(cache, contrib_ptr, u);
+                outgoing_contrib[u] =
+                    new_score / g.out_degree(u);
+                continue;
+            }
+
             if (graph_ctx.next_use_record_enabled) {
                 const auto& records =
                     graph_ctx.in_edge_next_use_records_by_src[u];
@@ -193,7 +345,7 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                     }
                     const uint32_t record = records[edge_pos];
                     SIM_ECG_EDGE(
-                        cache, next_use_meta, it, in_edge_base,
+                        cache, edge_record_meta, it, in_edge_base,
                         reinterpret_cast<uint64_t>(in_edge_base),
                         ::ecg_metadata::kInSidecarBase);
                     const NodeID v = static_cast<NodeID>(
@@ -695,6 +847,11 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
         if (error < epsilon)
             break;
     }
+
+    if constexpr (std::is_same_v<
+            std::decay_t<CacheType>, CacheHierarchy>) {
+        cache.flushRef32CommitUpdates();
+    }
     
     return scores;
 }
@@ -742,6 +899,14 @@ int main(int argc, char *argv[]) {
     bool sampled = IsSampledMode();
     bool ultrafast = IsUltraFastMode();
     bool fast = IsFastMode();
+    if (std::getenv("ECG_REF32_RECORD") &&
+        (multicore || sampled || ultrafast || fast)) {
+        std::fprintf(
+            stderr,
+            "[FATAL] ECG_REF32_RECORD requires the accurate single-core "
+            "CacheHierarchy (disable multicore/sampled/fast modes)\n");
+        return 2;
+    }
     
     if (multicore) {
         // Multi-core cache simulation (private L1/L2, shared L3)

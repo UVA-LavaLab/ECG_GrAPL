@@ -75,6 +75,8 @@ inline int GraphSimEcgRecordBytes(uint64_t num_vertices, int epoch_bits) {
         "ECG_RECORD_POPT_BITS", 0, 0, 8);
     int prefetch_bits = GraphSimEnvIntClamped(
         "ECG_RECORD_PREFETCH_BITS", 0, 0, 32);
+    const bool ref32_record =
+        std::getenv("ECG_REF32_RECORD") != nullptr;
     int reuse_plan_depth = GraphSimEnvIntClamped(
         "ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
     // two-epoch ReusePlan historically returned 8 bytes unconditionally, skipping the
@@ -95,6 +97,13 @@ inline int GraphSimEcgRecordBytes(uint64_t num_vertices, int epoch_bits) {
     int epoch_payload_bits = epoch_bits * std::max(1, reuse_plan_depth);
     int needed = id_bits + epoch_payload_bits +
                  tier_bits + popt_bits + prefetch_bits;
+    if (ref32_record)
+        needed = id_bits +
+            GraphSimEnvIntClamped(
+                "ECG_REF32_REFERENCE_BITS", 8, 5, 12) +
+            2 +
+            GraphSimEnvIntClamped(
+                "ECG_REF32_ACTION_BITS", 4, 0, 12);
     if (needed <= 32) return 4;
     if (needed <= 64) return 8;
     return 16;

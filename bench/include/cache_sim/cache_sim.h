@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <list>
+#include <deque>
 #include <random>
 #include <algorithm>
 #include <iostream>
@@ -22,6 +23,7 @@
 #include <mutex>
 #include <memory>
 #include <stdexcept>
+#include <limits>
 #include <atomic>
 #include <omp.h>
 #include <chrono>
@@ -560,7 +562,17 @@ struct CacheLine {
     uint32_t ecg_next_use = 0;  // quantized absolute next-use position
     ecg_policy::FutureState ecg_future_state =
         ecg_policy::FutureState::UNKNOWN;
+    uint32_t ecg_ref32_deadline = 0;
+    uint64_t ecg_ref32_exact_deadline = 0;
+    ecg_ref32::State ecg_ref32_state = ecg_ref32::State::UNKNOWN;
+    bool ecg_ref32_prefetch = false;
     bool pin = false;            // PIN policy: line is pinned in cache (high-reuse region)
+};
+
+enum class Ref32UpdateResult : uint8_t {
+    APPLIED = 0,
+    NOT_RESIDENT = 1,
+    EXPIRED = 2,
 };
 
 // ============================================================================
@@ -1042,6 +1054,10 @@ public:
                 // Hit!
                 stats_.hits++;
                 if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_hits++;
+                if (isGovernedProperty(address))
+                    ++governed_property_hits_;
+                if (isRef32Governed(address))
+                    ++ref32_governed_hits_;
                 updateOnHit(set, i, set_idx);
                 if (is_write) {
                     set[i].dirty = true;
@@ -1054,6 +1070,10 @@ public:
         // Miss
         stats_.misses++;
         if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_misses++;
+        if (isGovernedProperty(address))
+            ++governed_property_misses_;
+        if (isRef32Governed(address))
+            ++ref32_governed_misses_;
         recordAdmissionAccess(set_idx, true);
         return false;
     }
@@ -1082,7 +1102,10 @@ public:
         if (policy_ != EvictionPolicy::ECG || !graph_ctx_) return;
         ECGMode mode = graph_ctx_->mask_config.enabled
             ? graph_ctx_->mask_config.ecg_mode : ECGMode::DBG_PRIMARY;
-        if (mode != ECGMode::ECG_EXACT_STORED && mode != ECGMode::ECG_GRASP_POPT) return;
+        if (mode != ECGMode::ECG_EXACT_STORED &&
+            mode != ECGMode::ECG_GRASP_POPT) {
+            return;
+        }
         if (mode == ECGMode::ECG_GRASP_POPT &&
             !graph_ctx_->isEcgEpochData(address)) return;
         std::lock_guard<std::mutex> lock(mutex_);
@@ -1125,6 +1148,81 @@ public:
         return false;
     }
 
+    bool canAdmitRef32Prefetch(
+            uint64_t address, uint64_t current_sequence) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto& set = cache_[getSetIndex(address)];
+        for (const auto& line : set) {
+            if (!line.valid)
+                return true;
+        }
+        if (policy_ == EvictionPolicy::LRU)
+            return true;
+        if (!ref32Enabled())
+            return false;
+        for (const auto& line : set) {
+            if (line.ecg_ref32_state == ecg_ref32::State::DEAD ||
+                !graph_ctx_->isEcgEpochData(line.line_addr)) {
+                return true;
+            }
+            const ecg_ref32::EffectiveFuture future =
+                graph_ctx_->ref32_exact_diagnostic
+                ? ecg_ref32::resolveExactFuture(
+                    line.ecg_ref32_state,
+                    line.ecg_ref32_exact_deadline,
+                    current_sequence)
+                : ecg_ref32::resolveQuantizedFuture(
+                    line.ecg_ref32_state,
+                    line.ecg_ref32_deadline,
+                    current_sequence,
+                    configuredRef32DeadlineBits());
+            const uint8_t score =
+                future.state == ecg_ref32::State::FINITE
+                ? ecg_ref32::distanceRRPV(future.remaining)
+                : std::max<uint8_t>(
+                    line.rrpv,
+                    ecg_policy::graspTierRRPV(
+                        graph_ctx_->classifyGRASP(
+                            line.line_addr, size_bytes_), 7));
+            if (score >= 7)
+                return true;
+        }
+        return false;
+    }
+
+    Ref32UpdateResult applyRef32CommitUpdate(
+            uint64_t address, ecg_ref32::State state,
+            uint32_t quantized_deadline, uint64_t exact_deadline,
+            uint64_t current_sequence) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!isRef32Governed(address))
+            return Ref32UpdateResult::NOT_RESIDENT;
+        const uint64_t tag = getTag(address);
+        auto& set = cache_[getSetIndex(address)];
+        for (size_t way = 0; way < associativity_; ++way) {
+            if (!set[way].valid || set[way].tag != tag)
+                continue;
+            ecg_ref32::EffectiveFuture future;
+            if (state == ecg_ref32::State::FINITE) {
+                future = graph_ctx_->ref32_exact_diagnostic
+                    ? ecg_ref32::resolveExactFuture(
+                        state, exact_deadline, current_sequence)
+                    : ecg_ref32::resolveQuantizedFuture(
+                        state, quantized_deadline, current_sequence,
+                        configuredRef32DeadlineBits());
+                if (future.state != ecg_ref32::State::FINITE)
+                    return Ref32UpdateResult::EXPIRED;
+            }
+            set[way].ecg_ref32_state = state;
+            set[way].ecg_ref32_deadline = quantized_deadline;
+            set[way].ecg_ref32_exact_deadline = exact_deadline;
+            set[way].rrpv = state == ecg_ref32::State::DEAD
+                ? 7 : ecg_ref32::distanceRRPV(future.remaining);
+            return Ref32UpdateResult::APPLIED;
+        }
+        return Ref32UpdateResult::NOT_RESIDENT;
+    }
+
     void updatePrefetchHit(uint64_t address) {
         if (policy_ != EvictionPolicy::HAWKEYE || !hawkeye_state_) return;
         std::lock_guard<std::mutex> lock(mutex_);
@@ -1148,6 +1246,11 @@ public:
     void insert(
         uint64_t address, bool is_write, bool is_prefetch = false) {
         std::lock_guard<std::mutex> lock(mutex_);
+
+        if (!is_prefetch && shouldBypassRef32(address)) {
+            ++ref32_dead_bypasses_;
+            return;
+        }
         
         uint64_t tag = getTag(address);
         size_t set_idx = getSetIndex(address);
@@ -1178,6 +1281,12 @@ public:
         // Evict if necessary
         if (set[victim_idx].valid) {
             stats_.evictions++;
+            if (is_prefetch) {
+                if (set[victim_idx].ecg_ref32_prefetch)
+                    ++ref32_prefetch_evictions_;
+                else
+                    ++ref32_prefetch_demand_displacements_;
+            }
             if (set[victim_idx].dirty) {
                 stats_.writebacks++;
             }
@@ -1195,6 +1304,10 @@ public:
         set[victim_idx].ecg_next_use = 0;
         set[victim_idx].ecg_future_state =
             ecg_policy::FutureState::UNKNOWN;
+        set[victim_idx].ecg_ref32_deadline = 0;
+        set[victim_idx].ecg_ref32_exact_deadline = 0;
+        set[victim_idx].ecg_ref32_state = ecg_ref32::State::UNKNOWN;
+        set[victim_idx].ecg_ref32_prefetch = is_prefetch;
 
         if (policy_ == EvictionPolicy::HAWKEYE && hawkeye_state_) {
             const uint64_t signature = currentHawkeyeSite();
@@ -1288,7 +1401,21 @@ public:
                 graph_ctx_->isEcgEpochData(address) &&
                 access_hints->edge_grasp_tier_valid;
 
-            if (mode == ECGMode::ECG_EXACT_MASK) {
+            if (mode == ECGMode::ECG_REF32) {
+                if (graph_ctx_) {
+                    set[victim_idx].ecg_dbg_tier =
+                        static_cast<uint8_t>(graph_ctx_->classifyGRASP(
+                            address, size_bytes_));
+                    if (is_prefetch) {
+                        set[victim_idx].rrpv = 7;
+                    } else {
+                        set[victim_idx].rrpv =
+                            ecg_policy::graspTierRRPV(
+                                set[victim_idx].ecg_dbg_tier, 7);
+                        stampRef32(set[victim_idx]);
+                    }
+                }
+            } else if (mode == ECGMode::ECG_EXACT_MASK) {
                 // Precomputed exact 5-bit next-ref carried on the demand (per-edge
                 // mask POPT field, bits [26:33]). Map near->keep (low RRPV),
                 // far->evict (high RRPV). Set fresh at every access; eviction is
@@ -1367,7 +1494,13 @@ public:
             }
 
             // Store ECG mask fields for eviction tiebreaking
-            if (graph_ctx_ && graph_ctx_->mask_array.enabled) {
+            if (mode == ECGMode::ECG_REF32 && graph_ctx_) {
+                set[victim_idx].ecg_dbg_tier =
+                    static_cast<uint8_t>(graph_ctx_->classifyGRASP(
+                        address, size_bytes_));
+                set[victim_idx].ecg_epoch_valid = false;
+                set[victim_idx].ecg_epoch_sched_n = 0;
+            } else if (graph_ctx_ && graph_ctx_->mask_array.enabled) {
                 uint32_t mask_entry = graph_ctx_->hints_for_thread().mask;
                 set[victim_idx].ecg_dbg_tier =
                     (mode == ECGMode::ECG_GRASP_POPT)
@@ -1436,6 +1569,17 @@ public:
     void resetStats() {
         stats_.reset();
         reuse_admission_updates_ = 0;
+        ref32_governed_hits_ = 0;
+        ref32_governed_misses_ = 0;
+        governed_property_hits_ = 0;
+        governed_property_misses_ = 0;
+        ref32_dead_bypasses_ = 0;
+        ref32_dead_victims_ = 0;
+        ref32_non_property_victims_ = 0;
+        ref32_unknown_victims_ = 0;
+        ref32_finite_victims_ = 0;
+        ref32_prefetch_demand_displacements_ = 0;
+        ref32_prefetch_evictions_ = 0;
         admission_selector_.reset();
         admission_follower_selections_.fill(0);
         admission_completed_windows_ = 0;
@@ -1464,6 +1608,39 @@ public:
     }
     uint64_t getReuseAdmissionUpdates() const {
         return reuse_admission_updates_;
+    }
+    uint64_t getRef32GovernedHits() const {
+        return ref32_governed_hits_;
+    }
+    uint64_t getRef32GovernedMisses() const {
+        return ref32_governed_misses_;
+    }
+    uint64_t getGovernedPropertyHits() const {
+        return governed_property_hits_;
+    }
+    uint64_t getGovernedPropertyMisses() const {
+        return governed_property_misses_;
+    }
+    uint64_t getRef32DeadBypasses() const {
+        return ref32_dead_bypasses_;
+    }
+    uint64_t getRef32DeadVictims() const {
+        return ref32_dead_victims_;
+    }
+    uint64_t getRef32NonPropertyVictims() const {
+        return ref32_non_property_victims_;
+    }
+    uint64_t getRef32UnknownVictims() const {
+        return ref32_unknown_victims_;
+    }
+    uint64_t getRef32FiniteVictims() const {
+        return ref32_finite_victims_;
+    }
+    uint64_t getRef32PrefetchDemandDisplacements() const {
+        return ref32_prefetch_demand_displacements_;
+    }
+    uint64_t getRef32PrefetchEvictions() const {
+        return ref32_prefetch_evictions_;
     }
     uint64_t getAdmissionLeaderAccesses(uint8_t arm) const {
         return admission_selector_.totalAccesses(arm);
@@ -1581,6 +1758,7 @@ private:
         std::vector<CacheLine>& set, size_t idx, size_t set_idx) {
         set[idx].last_access = global_time_++;
         set[idx].access_count++;
+        set[idx].ecg_ref32_prefetch = false;
         
         // SRRIP: reset RRPV to 0 on hit
         if (policy_ == EvictionPolicy::SRRIP) {
@@ -1625,7 +1803,13 @@ private:
             ECGMode mode = (graph_ctx_ && graph_ctx_->mask_config.enabled)
                 ? graph_ctx_->mask_config.ecg_mode : ECGMode::DBG_PRIMARY;
 
-            if (mode == ECGMode::ECG_EXACT_MASK) {
+            if (mode == ECGMode::ECG_REF32) {
+                if (graph_ctx_ &&
+                    graph_ctx_->isEcgEpochData(set[idx].line_addr) &&
+                    graph_ctx_->hints_for_thread().edge_ref_valid) {
+                    stampRef32(set[idx]);
+                }
+            } else if (mode == ECGMode::ECG_EXACT_MASK) {
                 // Re-apply the FRESH per-edge 5-bit at this re-reference (each edge
                 // carries its own hint), so RRPV tracks the current next-ref —
                 // this freshness is what the eviction-time recompute gave for free.
@@ -2138,6 +2322,7 @@ private:
                     hints.edge_future_state);
             return;
         }
+
         if (!nextUseLiveEnabled())
             return;
         const uint32_t current =
@@ -2162,6 +2347,74 @@ private:
                   (absolute * levels) / (vertices - 1))
             : 0;
         line.ecg_future_state = ecg_policy::FutureState::FINITE;
+    }
+
+    bool ref32Enabled() const {
+        return policy_ == EvictionPolicy::ECG && graph_ctx_ &&
+            graph_ctx_->mask_config.ecg_mode == ECGMode::ECG_REF32;
+    }
+
+    static uint32_t configuredRef32DeadlineBits() {
+        static const uint32_t bits = []() {
+            const char* value = std::getenv("ECG_REF32_DEADLINE_BITS");
+            int parsed = value
+                ? std::atoi(value)
+                : static_cast<int>(ecg_ref32::kDefaultDeadlineBits);
+            if (parsed < 2) parsed = 2;
+            if (parsed > 31) parsed = 31;
+            return static_cast<uint32_t>(parsed);
+        }();
+        return bits;
+    }
+
+    bool isGovernedProperty(uint64_t address) const {
+        return graph_ctx_ && graph_ctx_->isRef32Data(address);
+    }
+
+    bool isRef32Governed(uint64_t address) const {
+        return ref32Enabled() && graph_ctx_->isRef32Data(address);
+    }
+
+    bool shouldBypassRef32(uint64_t address) const {
+        if (!isRef32Governed(address))
+            return false;
+        const auto& hints = graph_ctx_->hints_for_thread();
+        return hints.edge_ref_valid &&
+            static_cast<ecg_ref32::State>(hints.edge_ref_state) ==
+                ecg_ref32::State::DEAD;
+    }
+
+    void stampRef32(CacheLine& line) {
+        line.ecg_ref32_deadline = 0;
+        line.ecg_ref32_exact_deadline = 0;
+        line.ecg_ref32_state = ecg_ref32::State::UNKNOWN;
+        if (!isRef32Governed(line.line_addr))
+            return;
+        const auto& hints = graph_ctx_->hints_for_thread();
+        if (!hints.edge_ref_valid)
+            return;
+        const auto state =
+            static_cast<ecg_ref32::State>(hints.edge_ref_state);
+        line.ecg_ref32_state = state;
+        if (state == ecg_ref32::State::DEAD) {
+            line.rrpv = 7;
+            return;
+        }
+        if (state != ecg_ref32::State::FINITE)
+            return;
+        const uint32_t distance = std::max<uint32_t>(
+            1, hints.edge_ref_distance);
+        const uint32_t deadline_bits = configuredRef32DeadlineBits();
+        const uint32_t mask =
+            (uint32_t{1} << deadline_bits) - 1u;
+        const uint32_t max_forward =
+            (uint32_t{1} << (deadline_bits - 1)) - 1u;
+        line.ecg_ref32_deadline = static_cast<uint32_t>(
+            hints.edge_ref_sequence +
+            std::min<uint32_t>(distance, max_forward)) & mask;
+        line.ecg_ref32_exact_deadline =
+            hints.edge_ref_sequence + distance;
+        line.rrpv = ecg_ref32::distanceRRPV(distance);
     }
 
     uint32_t currentNextUseBucket() const {
@@ -2189,6 +2442,45 @@ private:
         // Determine ECG mode
         ECGMode mode = (graph_ctx_ && graph_ctx_->mask_config.enabled)
             ? graph_ctx_->mask_config.ecg_mode : ECGMode::DBG_PRIMARY;
+
+        if (mode == ECGMode::ECG_REF32 && graph_ctx_) {
+            ecg_ref32::WayState ways[64];
+            for (size_t i = 0; i < associativity_; ++i) {
+                ways[i].property =
+                    graph_ctx_->isEcgEpochData(set[i].line_addr);
+                ways[i].rrpv = set[i].rrpv;
+                ways[i].recency = set[i].last_access;
+                ways[i].grasp_tier =
+                    static_cast<uint8_t>(graph_ctx_->classifyGRASP(
+                        set[i].line_addr, size_bytes_));
+                ways[i].state = set[i].ecg_ref32_state;
+                ways[i].quantized_deadline =
+                    set[i].ecg_ref32_deadline;
+                ways[i].exact_deadline =
+                    set[i].ecg_ref32_exact_deadline;
+            }
+            ecg_ref32::VictimReason reason;
+            const size_t victim = ecg_ref32::selectVictim(
+                ways, associativity_,
+                graph_ctx_->hints_for_thread().edge_ref_sequence,
+                graph_ctx_->ref32_exact_diagnostic, &reason,
+                configuredRef32DeadlineBits());
+            switch (reason) {
+                case ecg_ref32::VictimReason::DEAD_PROPERTY:
+                    ++ref32_dead_victims_;
+                    break;
+                case ecg_ref32::VictimReason::NON_PROPERTY:
+                    ++ref32_non_property_victims_;
+                    break;
+                case ecg_ref32::VictimReason::UNKNOWN_PROPERTY:
+                    ++ref32_unknown_victims_;
+                    break;
+                case ecg_ref32::VictimReason::FINITE_PROPERTY:
+                    ++ref32_finite_victims_;
+                    break;
+            }
+            return victim;
+        }
 
         // ── Phase 0: Evict non-property data first (matching P-OPT Phase 1) ──
         // Non-property data (CSR edges, offsets, streaming) has no oracle
@@ -2708,6 +3000,17 @@ private:
     uint64_t dueling_completed_windows_ = 0;
     uint64_t dueling_winner_changes_ = 0;
     uint64_t reuse_admission_updates_ = 0;
+    uint64_t ref32_governed_hits_ = 0;
+    uint64_t ref32_governed_misses_ = 0;
+    uint64_t governed_property_hits_ = 0;
+    uint64_t governed_property_misses_ = 0;
+    uint64_t ref32_dead_bypasses_ = 0;
+    uint64_t ref32_dead_victims_ = 0;
+    uint64_t ref32_non_property_victims_ = 0;
+    uint64_t ref32_unknown_victims_ = 0;
+    uint64_t ref32_finite_victims_ = 0;
+    uint64_t ref32_prefetch_demand_displacements_ = 0;
+    uint64_t ref32_prefetch_evictions_ = 0;
     ecg_policy::OnlineAdmissionSelector admission_selector_{[]() {
         const char* value =
             std::getenv("CACHE_ECG_ADMISSION_SET_OFFSET");
@@ -2819,9 +3122,32 @@ public:
         EvictionPolicy l2_policy,
         EvictionPolicy l3_policy
     ) : line_size_(line_size), enabled_(true) {
+        if (ref32_commit_channel_ && refresh_exact_stamp_) {
+            throw std::invalid_argument(
+                "ECG_REF32_COMMIT_CHANNEL and ECG_STORED_REFRESH are "
+                "mutually exclusive");
+        }
         l1_ = std::make_unique<CacheLevel>("L1", l1_size, line_size, l1_ways, l1_policy);
         l2_ = std::make_unique<CacheLevel>("L2", l2_size, line_size, l2_ways, l2_policy);
         l3_ = std::make_unique<CacheLevel>("L3", l3_size, line_size, l3_ways, l3_policy);
+        if (ref32_commit_channel_) {
+            std::cerr
+                << "[ECG-REF32-COMMIT-CONFIG queue="
+                << ref32_commit_queue_limit_
+                << " latency=" << ref32_commit_latency_
+                << " bandwidth=" << ref32_commit_bandwidth_
+                << " tag_bits=48 deadline_bits="
+                << ref32_commit_deadline_bits_ << " state_bits=2]\n";
+        }
+        if (ref32_prefetch_enabled_) {
+            std::cerr
+                << "[ECG-REF32-PREFETCH-CONFIG queue="
+                << ref32_prefetch_queue_limit_
+                << " latency=" << ref32_prefetch_latency_
+                << " bandwidth=" << ref32_prefetch_bandwidth_
+                << " issue_interval=" << ref32_prefetch_issue_interval_
+                << " lookahead_records=16 placement=llc]\n";
+        }
     }
 
     // Configure from environment variables
@@ -2849,6 +3175,20 @@ public:
         if (!enabled_) return;
 
         const uint64_t line_addr = lineAddress(address);
+        const bool ref32_record_request =
+            isCurrentRef32RecordRequest(address);
+        const bool ref32_commit_request =
+            ref32_commit_channel_ && ref32_record_request;
+        if (ref32_commit_request) {
+            processRef32CommitUpdates(
+                graph_ctx_->hints_for_thread().edge_ref_sequence);
+        }
+        if (ref32_prefetch_enabled_ && ref32_record_request) {
+            const uint64_t sequence =
+                graph_ctx_->hints_for_thread().edge_ref_sequence;
+            processRef32Prefetches(sequence);
+            completeLateRef32Prefetch(line_addr, sequence);
+        }
         const bool was_prefetched = hasPrefetchedLine(line_addr);
         
         total_accesses_++;
@@ -2905,6 +3245,10 @@ public:
             // Hawkeye is LLC-only: a private-cache hit does not reach or retrain
             // LLC replacement state, matching the hardware visibility boundary.
             if (was_prefetched) markPrefetchUseful(line_addr);
+            if (ref32_commit_request)
+                enqueueRef32CommitUpdate(line_addr);
+            if (ref32_prefetch_enabled_ && ref32_record_request)
+                issueCurrentRef32Prefetch();
             return;  // L1 hit
         }
         
@@ -2912,6 +3256,10 @@ public:
         if (l2_->access(address, is_write)) {
             if (was_prefetched) markPrefetchUseful(line_addr);
             l1_->insert(address, is_write);  // Bring to L1
+            if (ref32_commit_request)
+                enqueueRef32CommitUpdate(line_addr);
+            if (ref32_prefetch_enabled_ && ref32_record_request)
+                issueCurrentRef32Prefetch();
             return;  // L2 hit
         }
         
@@ -2924,6 +3272,8 @@ public:
             if (was_prefetched) markPrefetchUseful(line_addr);
             l2_->insert(address, is_write);  // Bring to L2
             l1_->insert(address, is_write);  // Bring to L1
+            if (ref32_prefetch_enabled_ && ref32_record_request)
+                issueCurrentRef32Prefetch();
             return;  // L3 hit
         }
         
@@ -2936,6 +3286,8 @@ public:
         l3_->insert(address, is_write);
         l2_->insert(address, is_write);
         l1_->insert(address, is_write);
+        if (ref32_prefetch_enabled_ && ref32_record_request)
+            issueCurrentRef32Prefetch();
     }
 
     // ECG FlowThrough: an explicit non-temporal packed-edge request preserves
@@ -3163,6 +3515,40 @@ public:
         pfx_mtlb_lru_.clear();
         pfx_mtlb_pos_.clear();
         pfx_mtlb_misses_ = 0;
+        ref32_commit_updates_.clear();
+        ref32_commit_generated_ = 0;
+        ref32_commit_coalesced_ = 0;
+        ref32_commit_queue_dropped_ = 0;
+        ref32_commit_applied_ = 0;
+        ref32_commit_not_resident_ = 0;
+        ref32_commit_expired_ = 0;
+        ref32_commit_bandwidth_deferred_ = 0;
+        ref32_commit_max_occupancy_ = 0;
+        ref32_commit_last_sequence_ =
+            std::numeric_limits<uint64_t>::max();
+        ref32_prefetch_updates_.clear();
+        ref32_prefetch_actions_seen_ = 0;
+        ref32_prefetch_rate_limited_ = 0;
+        ref32_prefetch_resident_duplicates_ = 0;
+        ref32_prefetch_pending_duplicates_ = 0;
+        ref32_prefetch_admission_dropped_ = 0;
+        ref32_prefetch_queue_dropped_ = 0;
+        ref32_prefetch_requests_issued_ = 0;
+        ref32_prefetch_fills_completed_ = 0;
+        ref32_prefetch_late_merged_ = 0;
+        ref32_prefetch_completion_resident_ = 0;
+        ref32_prefetch_completion_admission_dropped_ = 0;
+        ref32_prefetch_bandwidth_deferred_ = 0;
+        ref32_prefetch_max_occupancy_ = 0;
+        ref32_prefetch_last_issue_sequence_ =
+            std::numeric_limits<uint64_t>::max();
+        ref32_prefetch_last_process_sequence_ =
+            std::numeric_limits<uint64_t>::max();
+        ref32_resource_snapshot_valid_ = false;
+        ref32_resource_deployable_snapshot_ = false;
+        ref32_resource_line_count_snapshot_ = 0;
+        ref32_resource_popt_bits_snapshot_ = 0;
+        ref32_resource_total_bits_snapshot_ = 0;
         // Reset alongside the demand/fill counters, or the prefetcher counts
         // would span the pre-ROI warm replay while everything else is ROI-only.
         stride_pf_issued_ = 0;
@@ -3172,6 +3558,99 @@ public:
         popt_stream_columns_ = 0;
         std::lock_guard<std::mutex> lock(prefetch_mutex_);
         prefetched_lines_.clear();
+    }
+
+    void flushRef32CommitUpdates() {
+        if (!ref32ResourcesActive())
+            return;
+        captureRef32ResourceSnapshot();
+        uint64_t sequence = graph_ctx_
+            ? graph_ctx_->hints_for_thread().edge_ref_sequence : 0;
+        if (ref32_commit_channel_) {
+            while (!ref32_commit_updates_.empty()) {
+                sequence = std::max<uint64_t>(
+                    sequence + 1,
+                    ref32_commit_updates_.front().ready_sequence);
+                processRef32CommitUpdates(sequence, true);
+            }
+            std::cerr
+                << "[ECG-REF32-COMMIT queue=" << ref32_commit_queue_limit_
+                << " latency=" << ref32_commit_latency_
+                << " bandwidth=" << ref32_commit_bandwidth_
+                << " tag_bits=48 deadline_bits="
+                << ref32_commit_deadline_bits_ << " state_bits=2"
+                << " generated=" << ref32_commit_generated_
+                << " coalesced=" << ref32_commit_coalesced_
+                << " queue_dropped=" << ref32_commit_queue_dropped_
+                << " applied=" << ref32_commit_applied_
+                << " not_resident=" << ref32_commit_not_resident_
+                << " expired=" << ref32_commit_expired_
+                << " bandwidth_deferred=" << ref32_commit_bandwidth_deferred_
+                << " max_occupancy=" << ref32_commit_max_occupancy_
+                << " pending=" << ref32_commit_updates_.size()
+                << "]\n";
+        }
+        if (ref32DeployableResourcesActive()) {
+            std::cerr
+                << "[ECG-REF32-RESOURCES line_bits=24 lines="
+                << ref32ResourceLineCount()
+                << " line_state_bits=" << ref32LineStateBits()
+                << " commit_entries="
+                << (ref32_commit_channel_ ? ref32_commit_queue_limit_ : 0)
+                << " commit_entry_bits=93 prefetch_entries="
+                << (ref32_prefetch_enabled_
+                    ? ref32_prefetch_queue_limit_ : 0)
+                << " prefetch_entry_bits=70 lookahead_records="
+                << (ref32_prefetch_enabled_ ? 16 : 0)
+                << " lookahead_bits="
+                << (ref32_prefetch_enabled_ ? 512 : 0)
+                << " control_bits=64 record_extra_bits=0 total_bits="
+                << ref32TotalResourceBits()
+                << " popt_matrix_bits=" << ref32PoptMatrixBits()
+                << " reduction_x=" << std::fixed << std::setprecision(3)
+                << ref32ResourceReduction()
+                << std::defaultfloat << "]\n";
+        }
+        if (ref32_prefetch_enabled_) {
+            while (!ref32_prefetch_updates_.empty()) {
+                sequence = std::max<uint64_t>(
+                    sequence + 1,
+                    ref32_prefetch_updates_.front().ready_sequence);
+                processRef32Prefetches(sequence, true);
+            }
+            std::cerr
+                << "[ECG-REF32-PREFETCH queue="
+                << ref32_prefetch_queue_limit_
+                << " latency=" << ref32_prefetch_latency_
+                << " bandwidth=" << ref32_prefetch_bandwidth_
+                << " issue_interval=" << ref32_prefetch_issue_interval_
+                << " lookahead_records=16 placement=llc"
+                << " actions_seen=" << ref32_prefetch_actions_seen_
+                << " rate_limited=" << ref32_prefetch_rate_limited_
+                << " resident_duplicates="
+                << ref32_prefetch_resident_duplicates_
+                << " pending_duplicates="
+                << ref32_prefetch_pending_duplicates_
+                << " admission_dropped="
+                << ref32_prefetch_admission_dropped_
+                << " queue_dropped=" << ref32_prefetch_queue_dropped_
+                << " requests_issued=" << ref32_prefetch_requests_issued_
+                << " fills_completed=" << ref32_prefetch_fills_completed_
+                << " late_merged=" << ref32_prefetch_late_merged_
+                << " completion_resident="
+                << ref32_prefetch_completion_resident_
+                << " completion_admission_dropped="
+                << ref32_prefetch_completion_admission_dropped_
+                << " bandwidth_deferred="
+                << ref32_prefetch_bandwidth_deferred_
+                << " max_occupancy=" << ref32_prefetch_max_occupancy_
+                << " demand_displacements="
+                << l3_->getRef32PrefetchDemandDisplacements()
+                << " evicted_before_use="
+                << prefetch_evicted_before_use_.load()
+                << " pending=" << ref32_prefetch_updates_.size()
+                << "]\n";
+        }
     }
 
     // Enable/disable simulation
@@ -3521,6 +4000,101 @@ public:
            << l3_->getDuelingWinnerChanges() << ",\n";
         ss << "  \"ecg_reuse_admission_updates\": "
            << l3_->getReuseAdmissionUpdates() << ",\n";
+        ss << "  \"ecg_ref32_governed_hits\": "
+           << l3_->getRef32GovernedHits() << ",\n";
+        ss << "  \"ecg_ref32_governed_misses\": "
+           << l3_->getRef32GovernedMisses() << ",\n";
+        ss << "  \"governed_property_hits\": "
+           << l3_->getGovernedPropertyHits() << ",\n";
+        ss << "  \"governed_property_misses\": "
+           << l3_->getGovernedPropertyMisses() << ",\n";
+        ss << "  \"ecg_ref32_dead_bypasses\": "
+           << l3_->getRef32DeadBypasses() << ",\n";
+        ss << "  \"ecg_ref32_dead_victims\": "
+           << l3_->getRef32DeadVictims() << ",\n";
+        ss << "  \"ecg_ref32_non_property_victims\": "
+           << l3_->getRef32NonPropertyVictims() << ",\n";
+        ss << "  \"ecg_ref32_unknown_victims\": "
+           << l3_->getRef32UnknownVictims() << ",\n";
+        ss << "  \"ecg_ref32_finite_victims\": "
+           << l3_->getRef32FiniteVictims() << ",\n";
+        ss << "  \"ecg_ref32_commit_generated\": "
+           << ref32_commit_generated_ << ",\n";
+        ss << "  \"ecg_ref32_commit_coalesced\": "
+           << ref32_commit_coalesced_ << ",\n";
+        ss << "  \"ecg_ref32_commit_queue_dropped\": "
+           << ref32_commit_queue_dropped_ << ",\n";
+        ss << "  \"ecg_ref32_commit_applied\": "
+           << ref32_commit_applied_ << ",\n";
+        ss << "  \"ecg_ref32_commit_not_resident\": "
+           << ref32_commit_not_resident_ << ",\n";
+        ss << "  \"ecg_ref32_commit_expired\": "
+           << ref32_commit_expired_ << ",\n";
+        ss << "  \"ecg_ref32_commit_bandwidth_deferred\": "
+           << ref32_commit_bandwidth_deferred_ << ",\n";
+        ss << "  \"ecg_ref32_commit_max_occupancy\": "
+           << ref32_commit_max_occupancy_ << ",\n";
+        ss << "  \"ecg_ref32_commit_pending\": "
+           << ref32_commit_updates_.size() << ",\n";
+        ss << "  \"ecg_ref32_prefetch_actions_seen\": "
+           << ref32_prefetch_actions_seen_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_rate_limited\": "
+           << ref32_prefetch_rate_limited_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_resident_duplicates\": "
+           << ref32_prefetch_resident_duplicates_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_pending_duplicates\": "
+           << ref32_prefetch_pending_duplicates_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_admission_dropped\": "
+           << ref32_prefetch_admission_dropped_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_queue_dropped\": "
+           << ref32_prefetch_queue_dropped_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_requests_issued\": "
+           << ref32_prefetch_requests_issued_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_fills_completed\": "
+           << ref32_prefetch_fills_completed_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_late_merged\": "
+           << ref32_prefetch_late_merged_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_completion_resident\": "
+           << ref32_prefetch_completion_resident_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_completion_admission_dropped\": "
+           << ref32_prefetch_completion_admission_dropped_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_bandwidth_deferred\": "
+           << ref32_prefetch_bandwidth_deferred_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_max_occupancy\": "
+           << ref32_prefetch_max_occupancy_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_demand_displacements\": "
+           << l3_->getRef32PrefetchDemandDisplacements() << ",\n";
+        ss << "  \"ecg_ref32_prefetch_evicted_before_use\": "
+           << prefetch_evicted_before_use_ << ",\n";
+        ss << "  \"ecg_ref32_prefetch_pending\": "
+           << ref32_prefetch_updates_.size() << ",\n";
+        ss << "  \"ecg_ref32_resource_line_bits\": "
+           << (ref32DeployableResourcesActive() ? 24 : 0) << ",\n";
+        ss << "  \"ecg_ref32_resource_lines\": "
+           << ref32ResourceLineCount() << ",\n";
+        ss << "  \"ecg_ref32_resource_line_state_bits\": "
+           << ref32LineStateBits() << ",\n";
+        ss << "  \"ecg_ref32_resource_commit_queue_bits\": "
+           << (ref32DeployableResourcesActive() &&
+               ref32_commit_channel_
+               ? ref32_commit_queue_limit_ * 93u : 0u) << ",\n";
+        ss << "  \"ecg_ref32_resource_prefetch_queue_bits\": "
+           << (ref32DeployableResourcesActive() &&
+               ref32_prefetch_enabled_
+               ? ref32_prefetch_queue_limit_ * 70u : 0u) << ",\n";
+        ss << "  \"ecg_ref32_resource_lookahead_bits\": "
+           << (ref32DeployableResourcesActive() &&
+               ref32_prefetch_enabled_ ? 512 : 0) << ",\n";
+        ss << "  \"ecg_ref32_resource_control_bits\": "
+           << (ref32DeployableResourcesActive() ? 64 : 0) << ",\n";
+        ss << "  \"ecg_ref32_resource_record_extra_bits\": 0,\n";
+        ss << "  \"ecg_ref32_resource_total_bits\": "
+           << ref32TotalResourceBits() << ",\n";
+        ss << "  \"ecg_ref32_popt_matrix_bits\": "
+           << ref32PoptMatrixBits() << ",\n";
+        ss << "  \"ecg_ref32_resource_reduction_x\": "
+           << std::fixed << std::setprecision(6)
+           << ref32ResourceReduction() << ",\n";
         static constexpr const char* kAdmissionArmNames[] = {
             "grasp", "future"
         };
@@ -3597,6 +4171,320 @@ public:
     }
 
 private:
+    struct Ref32CommitUpdate {
+        uint64_t line_addr = 0;
+        uint64_t ready_sequence = 0;
+        uint32_t quantized_deadline = 0;
+        uint64_t exact_deadline = 0;
+        ecg_ref32::State state = ecg_ref32::State::UNKNOWN;
+    };
+
+    bool ref32ResourcesActive() const {
+        return graph_ctx_ &&
+            graph_ctx_->mask_config.ecg_mode == ECGMode::ECG_REF32;
+    }
+
+    bool ref32DeployableResourcesActive() const {
+        if (ref32_resource_snapshot_valid_)
+            return ref32_resource_deployable_snapshot_;
+        return ref32ResourcesActive() &&
+            !graph_ctx_->ref32_exact_diagnostic;
+    }
+
+    uint64_t ref32ResourceLineCount() const {
+        if (ref32_resource_snapshot_valid_)
+            return ref32_resource_line_count_snapshot_;
+        return ref32DeployableResourcesActive()
+            ? l3_->getSizeBytes() / l3_->getLineSize() : 0;
+    }
+
+    uint64_t ref32LineStateBits() const {
+        return ref32ResourceLineCount() * 24u;
+    }
+
+    uint64_t ref32PoptMatrixBits() const {
+        if (ref32_resource_snapshot_valid_)
+            return ref32_resource_popt_bits_snapshot_;
+        if (!ref32DeployableResourcesActive())
+            return 0;
+        const uint64_t vertices =
+            graph_ctx_->topology.num_vertices;
+        const uint64_t property_lines = (vertices + 15u) / 16u;
+        return property_lines * 256u * 8u;
+    }
+
+    uint64_t ref32TotalResourceBits() const {
+        if (ref32_resource_snapshot_valid_)
+            return ref32_resource_total_bits_snapshot_;
+        if (!ref32DeployableResourcesActive())
+            return 0;
+        return ref32LineStateBits() +
+            (ref32_commit_channel_
+                ? ref32_commit_queue_limit_ * 93u : 0u) +
+            (ref32_prefetch_enabled_
+                ? ref32_prefetch_queue_limit_ * 70u + 512u : 0u) +
+            64u;
+    }
+
+    void captureRef32ResourceSnapshot() {
+        ref32_resource_snapshot_valid_ = true;
+        ref32_resource_deployable_snapshot_ =
+            ref32ResourcesActive() &&
+            !graph_ctx_->ref32_exact_diagnostic;
+        if (!ref32_resource_deployable_snapshot_)
+            return;
+        ref32_resource_line_count_snapshot_ =
+            l3_->getSizeBytes() / l3_->getLineSize();
+        const uint64_t vertices =
+            graph_ctx_->topology.num_vertices;
+        ref32_resource_popt_bits_snapshot_ =
+            ((vertices + 15u) / 16u) * 256u * 8u;
+        ref32_resource_total_bits_snapshot_ =
+            ref32_resource_line_count_snapshot_ * 24u +
+            (ref32_commit_channel_
+                ? ref32_commit_queue_limit_ * 93u : 0u) +
+            (ref32_prefetch_enabled_
+                ? ref32_prefetch_queue_limit_ * 70u + 512u : 0u) +
+            64u;
+    }
+
+    double ref32ResourceReduction() const {
+        const uint64_t total = ref32TotalResourceBits();
+        return total > 0
+            ? static_cast<double>(ref32PoptMatrixBits()) /
+                static_cast<double>(total)
+            : 0.0;
+    }
+
+    struct Ref32PrefetchUpdate {
+        uint64_t line_addr = 0;
+        uint64_t ready_sequence = 0;
+    };
+
+    static uint32_t ref32CommitEnv(
+            const char* name, uint32_t fallback, uint32_t maximum) {
+        const char* value = std::getenv(name);
+        long parsed = value ? std::strtol(value, nullptr, 10)
+                            : static_cast<long>(fallback);
+        if (parsed < 1) parsed = 1;
+        if (parsed > static_cast<long>(maximum))
+            parsed = static_cast<long>(maximum);
+        return static_cast<uint32_t>(parsed);
+    }
+
+    bool isCurrentRef32RecordRequest(uint64_t address) const {
+        if (!graph_ctx_ ||
+            graph_ctx_->mask_config.ecg_mode != ECGMode::ECG_REF32 ||
+            !graph_ctx_->isEcgEpochData(address)) {
+            return false;
+        }
+        const auto& hints = graph_ctx_->hints_for_thread();
+        return hints.edge_ref_valid &&
+            static_cast<ecg_ref32::State>(hints.edge_ref_state) !=
+                ecg_ref32::State::UNKNOWN;
+    }
+
+    bool ref32PrefetchPending(uint64_t line_addr) const {
+        return std::any_of(
+            ref32_prefetch_updates_.begin(),
+            ref32_prefetch_updates_.end(),
+            [&](const Ref32PrefetchUpdate& update) {
+                return update.line_addr == line_addr;
+            });
+    }
+
+    void completeRef32Prefetch(
+            const Ref32PrefetchUpdate& update,
+            uint64_t current_sequence) {
+        if (l1_->contains(update.line_addr) ||
+            l2_->contains(update.line_addr) ||
+            l3_->contains(update.line_addr)) {
+            ++ref32_prefetch_completion_resident_;
+            return;
+        }
+        if (!l3_->canAdmitRef32Prefetch(
+                update.line_addr, current_sequence)) {
+            ++ref32_prefetch_completion_admission_dropped_;
+            return;
+        }
+        l3_->insert(update.line_addr, false, true);
+        markPrefetchFill(update.line_addr);
+        ++ref32_prefetch_fills_completed_;
+    }
+
+    void processRef32Prefetches(
+            uint64_t current_sequence, bool force = false) {
+        if (!ref32_prefetch_enabled_)
+            return;
+        if (!force &&
+            ref32_prefetch_last_process_sequence_ == current_sequence) {
+            return;
+        }
+        ref32_prefetch_last_process_sequence_ = current_sequence;
+        uint32_t budget = ref32_prefetch_bandwidth_;
+        while (budget > 0 && !ref32_prefetch_updates_.empty()) {
+            const Ref32PrefetchUpdate& front =
+                ref32_prefetch_updates_.front();
+            if (front.ready_sequence > current_sequence)
+                break;
+            const Ref32PrefetchUpdate update = front;
+            ref32_prefetch_updates_.pop_front();
+            completeRef32Prefetch(update, current_sequence);
+            --budget;
+        }
+        if (!ref32_prefetch_updates_.empty() &&
+            ref32_prefetch_updates_.front().ready_sequence <=
+                current_sequence) {
+            ++ref32_prefetch_bandwidth_deferred_;
+        }
+    }
+
+    void completeLateRef32Prefetch(
+            uint64_t line_addr, uint64_t current_sequence) {
+        auto found = std::find_if(
+            ref32_prefetch_updates_.begin(),
+            ref32_prefetch_updates_.end(),
+            [&](const Ref32PrefetchUpdate& update) {
+                return update.line_addr == line_addr;
+            });
+        if (found == ref32_prefetch_updates_.end())
+            return;
+        const Ref32PrefetchUpdate update = *found;
+        ref32_prefetch_updates_.erase(found);
+        ++ref32_prefetch_late_merged_;
+        completeRef32Prefetch(update, current_sequence);
+    }
+
+    void issueCurrentRef32Prefetch() {
+        const auto& hints = graph_ctx_->hints_for_thread();
+        if (!hints.edge_ref_prefetch_valid ||
+            hints.edge_ref_action == 0) {
+            return;
+        }
+        ++ref32_prefetch_actions_seen_;
+        const uint64_t sequence = hints.edge_ref_sequence;
+        if (ref32_prefetch_last_issue_sequence_ !=
+                std::numeric_limits<uint64_t>::max() &&
+            sequence - ref32_prefetch_last_issue_sequence_ <
+                ref32_prefetch_issue_interval_) {
+            ++ref32_prefetch_rate_limited_;
+            return;
+        }
+        const uint64_t target =
+            lineAddress(hints.edge_ref_prefetch_address);
+        if (l1_->contains(target) || l2_->contains(target) ||
+            l3_->contains(target)) {
+            ++ref32_prefetch_resident_duplicates_;
+            return;
+        }
+        if (ref32PrefetchPending(target)) {
+            ++ref32_prefetch_pending_duplicates_;
+            return;
+        }
+        if (ref32_prefetch_updates_.size() >=
+            ref32_prefetch_queue_limit_) {
+            ++ref32_prefetch_queue_dropped_;
+            return;
+        }
+        if (!l3_->canAdmitRef32Prefetch(target, sequence)) {
+            ++ref32_prefetch_admission_dropped_;
+            return;
+        }
+
+        ++prefetch_requests_;
+        ++prefetch_fills_;
+        ++ref32_prefetch_requests_issued_;
+        recordPrefetchTranslation(target);
+        Ref32PrefetchUpdate update;
+        update.line_addr = target;
+        update.ready_sequence =
+            sequence + ref32_prefetch_latency_;
+        ref32_prefetch_updates_.push_back(update);
+        ref32_prefetch_last_issue_sequence_ = sequence;
+        ref32_prefetch_max_occupancy_ = std::max<uint64_t>(
+            ref32_prefetch_max_occupancy_,
+            ref32_prefetch_updates_.size());
+    }
+
+    void enqueueRef32CommitUpdate(uint64_t line_addr) {
+        const auto& hints = graph_ctx_->hints_for_thread();
+        const auto state =
+            static_cast<ecg_ref32::State>(hints.edge_ref_state);
+        ++ref32_commit_generated_;
+        const uint32_t distance = std::max<uint32_t>(
+            1, hints.edge_ref_distance);
+        const uint32_t deadline_mask =
+            (uint32_t{1} << ref32_commit_deadline_bits_) - 1u;
+        const uint32_t max_forward =
+            (uint32_t{1} << (ref32_commit_deadline_bits_ - 1)) - 1u;
+        const uint32_t quantized_deadline = static_cast<uint32_t>(
+            hints.edge_ref_sequence +
+            std::min<uint32_t>(distance, max_forward)) & deadline_mask;
+        const uint64_t exact_deadline =
+            hints.edge_ref_sequence + distance;
+
+        for (auto& update : ref32_commit_updates_) {
+            if (update.line_addr != line_addr)
+                continue;
+            update.quantized_deadline = quantized_deadline;
+            update.exact_deadline = exact_deadline;
+            update.state = state;
+            ++ref32_commit_coalesced_;
+            return;
+        }
+        if (ref32_commit_updates_.size() >=
+            ref32_commit_queue_limit_) {
+            ++ref32_commit_queue_dropped_;
+            return;
+        }
+        Ref32CommitUpdate update;
+        update.line_addr = line_addr;
+        update.ready_sequence =
+            hints.edge_ref_sequence + ref32_commit_latency_;
+        update.quantized_deadline = quantized_deadline;
+        update.exact_deadline = exact_deadline;
+        update.state = state;
+        ref32_commit_updates_.push_back(update);
+        ref32_commit_max_occupancy_ = std::max<uint64_t>(
+            ref32_commit_max_occupancy_,
+            ref32_commit_updates_.size());
+    }
+
+    void processRef32CommitUpdates(
+            uint64_t current_sequence, bool force = false) {
+        if (!ref32_commit_channel_)
+            return;
+        if (!force && ref32_commit_last_sequence_ == current_sequence)
+            return;
+        ref32_commit_last_sequence_ = current_sequence;
+        uint32_t budget = ref32_commit_bandwidth_;
+        while (budget > 0 && !ref32_commit_updates_.empty()) {
+            const Ref32CommitUpdate& front =
+                ref32_commit_updates_.front();
+            if (front.ready_sequence > current_sequence)
+                break;
+            const Ref32CommitUpdate update = front;
+            ref32_commit_updates_.pop_front();
+            const Ref32UpdateResult result =
+                l3_->applyRef32CommitUpdate(
+                    update.line_addr, update.state,
+                    update.quantized_deadline, update.exact_deadline,
+                    current_sequence);
+            if (result == Ref32UpdateResult::APPLIED)
+                ++ref32_commit_applied_;
+            else if (result == Ref32UpdateResult::NOT_RESIDENT)
+                ++ref32_commit_not_resident_;
+            else
+                ++ref32_commit_expired_;
+            --budget;
+        }
+        if (!ref32_commit_updates_.empty() &&
+            ref32_commit_updates_.front().ready_sequence <=
+                current_sequence) {
+            ++ref32_commit_bandwidth_deferred_;
+        }
+    }
+
     static size_t getEnvSize(const char* name, size_t default_val) {
         const char* val = std::getenv(name);
         if (!val) return default_val;
@@ -3709,6 +4597,66 @@ private:
     // L3 metadata transaction per inner-cache hit). Isolates how much of the refresh
     // win needs the aggressive broadcast vs is recoverable by the free piggybacked form.
     bool refresh_llc_only_ = std::getenv("ECG_REFRESH_LLC_ONLY") != nullptr;
+    bool ref32_commit_channel_ = []() {
+        const char* value = std::getenv("ECG_REF32_COMMIT_CHANNEL");
+        return value && value[0] && std::string(value) != "0";
+    }();
+    uint32_t ref32_commit_queue_limit_ =
+        ref32CommitEnv("ECG_REF32_UPDATE_QUEUE", 16, 256);
+    uint32_t ref32_commit_latency_ =
+        ref32CommitEnv("ECG_REF32_UPDATE_LATENCY", 8, 4096);
+    uint32_t ref32_commit_bandwidth_ =
+        ref32CommitEnv("ECG_REF32_UPDATE_BANDWIDTH", 1, 16);
+    uint32_t ref32_commit_deadline_bits_ =
+        ref32CommitEnv(
+            "ECG_REF32_DEADLINE_BITS",
+            ecg_ref32::kDefaultDeadlineBits, 31);
+    std::deque<Ref32CommitUpdate> ref32_commit_updates_;
+    uint64_t ref32_commit_generated_ = 0;
+    uint64_t ref32_commit_coalesced_ = 0;
+    uint64_t ref32_commit_queue_dropped_ = 0;
+    uint64_t ref32_commit_applied_ = 0;
+    uint64_t ref32_commit_not_resident_ = 0;
+    uint64_t ref32_commit_expired_ = 0;
+    uint64_t ref32_commit_bandwidth_deferred_ = 0;
+    uint64_t ref32_commit_max_occupancy_ = 0;
+    uint64_t ref32_commit_last_sequence_ =
+        std::numeric_limits<uint64_t>::max();
+    bool ref32_prefetch_enabled_ = []() {
+        const char* value = std::getenv("ECG_REF32_PREFETCH");
+        return value && value[0] && std::string(value) != "0";
+    }();
+    uint32_t ref32_prefetch_queue_limit_ =
+        ref32CommitEnv("ECG_REF32_PREFETCH_QUEUE", 8, 256);
+    uint32_t ref32_prefetch_latency_ =
+        ref32CommitEnv("ECG_REF32_PREFETCH_LATENCY", 8, 4096);
+    uint32_t ref32_prefetch_bandwidth_ =
+        ref32CommitEnv("ECG_REF32_PREFETCH_BANDWIDTH", 1, 16);
+    uint32_t ref32_prefetch_issue_interval_ =
+        ref32CommitEnv("ECG_REF32_PREFETCH_INTERVAL", 8, 4096);
+    std::deque<Ref32PrefetchUpdate> ref32_prefetch_updates_;
+    uint64_t ref32_prefetch_actions_seen_ = 0;
+    uint64_t ref32_prefetch_rate_limited_ = 0;
+    uint64_t ref32_prefetch_resident_duplicates_ = 0;
+    uint64_t ref32_prefetch_pending_duplicates_ = 0;
+    uint64_t ref32_prefetch_admission_dropped_ = 0;
+    uint64_t ref32_prefetch_queue_dropped_ = 0;
+    uint64_t ref32_prefetch_requests_issued_ = 0;
+    uint64_t ref32_prefetch_fills_completed_ = 0;
+    uint64_t ref32_prefetch_late_merged_ = 0;
+    uint64_t ref32_prefetch_completion_resident_ = 0;
+    uint64_t ref32_prefetch_completion_admission_dropped_ = 0;
+    uint64_t ref32_prefetch_bandwidth_deferred_ = 0;
+    uint64_t ref32_prefetch_max_occupancy_ = 0;
+    uint64_t ref32_prefetch_last_issue_sequence_ =
+        std::numeric_limits<uint64_t>::max();
+    uint64_t ref32_prefetch_last_process_sequence_ =
+        std::numeric_limits<uint64_t>::max();
+    bool ref32_resource_snapshot_valid_ = false;
+    bool ref32_resource_deployable_snapshot_ = false;
+    uint64_t ref32_resource_line_count_snapshot_ = 0;
+    uint64_t ref32_resource_popt_bits_snapshot_ = 0;
+    uint64_t ref32_resource_total_bits_snapshot_ = 0;
     bool adaptive_flowthrough_ = []() {
         const char* value = std::getenv("ECG_FLOWTHROUGH_ADAPTIVE");
         return value && value[0] && std::string(value) != "0";

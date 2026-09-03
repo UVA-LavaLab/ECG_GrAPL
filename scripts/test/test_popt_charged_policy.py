@@ -271,6 +271,151 @@ def test_next_use_record_receipt_is_fail_closed():
     assert overflow["status"] == "error"
 
 
+def test_ref32_sets_isolated_matrix_free_env(tmp_path):
+    args = roi_matrix.parse_args(["--suite", "cache-sim"])
+    exact = roi_matrix.parse_policy_spec("ECG:REF32_EXACT_COMMIT")
+    quantized = roi_matrix.parse_policy_spec("ECG:REF32_R_COMMIT")
+
+    exact_env = roi_matrix.cache_sim_env(
+        args, exact, "512kB", "16", tmp_path / "exact.json")
+    quantized_env = roi_matrix.cache_sim_env(
+        args, quantized, "512kB", "16", tmp_path / "quantized.json")
+
+    for env in (exact_env, quantized_env):
+        assert env["ECG_MODE"] == "ECG_REF32"
+        assert env["ECG_REF32_RECORD"] == "1"
+        assert env["ECG_RECORD_TIER_BITS"] == "0"
+        assert env["ECG_RECORD_POPT_BITS"] == "0"
+        assert env["ECG_RECORD_PREFETCH_BITS"] == "4"
+        assert env["ECG_EDGE_RECORD_BYTES"] == "4"
+        assert env["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
+        assert env["ECG_PREFETCH_MODE"] == "0"
+        assert env["ECG_REF32_DEADLINE_BITS"] == "21"
+        assert "ECG_NEXT_USE_RECORD" not in env
+    assert exact_env["ECG_REF32_EXACT"] == "1"
+    assert "ECG_REF32_EXACT" not in quantized_env
+
+    assert quantized_env["ECG_REF32_COMMIT_CHANNEL"] == "1"
+    assert quantized_env["ECG_REF32_UPDATE_QUEUE"] == "16"
+    assert quantized_env["ECG_REF32_UPDATE_LATENCY"] == "8"
+    assert quantized_env["ECG_REF32_UPDATE_BANDWIDTH"] == "1"
+    assert "ECG_STORED_REFRESH" not in quantized_env
+
+    combined = roi_matrix.cache_sim_env(
+        args, roi_matrix.parse_policy_spec("ECG:REF32_RP_COMMIT"),
+        "512kB", "16", tmp_path / "combined.json")
+    assert combined["ECG_REF32_COMMIT_CHANNEL"] == "1"
+    assert combined["ECG_REF32_PREFETCH"] == "1"
+    assert combined["ECG_REF32_PREFETCH_QUEUE"] == "8"
+    assert combined["ECG_REF32_PREFETCH_INTERVAL"] == "8"
+
+
+def test_ref32_record_receipt_is_fail_closed():
+    text = (
+        "[ECG-REF32-RECORD bits=32 id_bits=18 reference_bits=8 "
+        "state_bits=2 action_bits=4 exact_sidecar=0 deadline_bits=21 "
+        "records=680108 actions=500000 "
+        "matrix_free=1 local_grasp=1]")
+    row = {"status": "ok"}
+    assert roi_matrix.apply_ref32_record_receipt(
+        row, text, required=True, exact_expected=False)
+    assert row["ecg_ref32_record_validated"] == 1
+    assert row["ecg_record_replaces_edge"] == 1
+
+    wrong_exact = {"status": "ok"}
+    assert not roi_matrix.apply_ref32_record_receipt(
+        wrong_exact, text, required=True, exact_expected=True)
+    assert wrong_exact["status"] == "error"
+
+    overflow = {"status": "ok"}
+    assert not roi_matrix.apply_ref32_record_receipt(
+        overflow,
+        text.replace("id_bits=18", "id_bits=19"),
+        required=True,
+        exact_expected=False,
+    )
+    assert overflow["status"] == "error"
+
+def test_ref32_commit_receipt_is_fail_closed():
+    text = (
+        "[ECG-REF32-COMMIT queue=16 latency=8 bandwidth=1 tag_bits=48 "
+        "deadline_bits=21 state_bits=2 generated=100 coalesced=20 "
+        "queue_dropped=3 applied=60 not_resident=10 expired=7 "
+        "bandwidth_deferred=4 max_occupancy=16 pending=0]")
+    row = {"status": "ok"}
+    assert roi_matrix.apply_ref32_commit_receipt(
+        row, text, required=True)
+    assert row["ecg_ref32_commit_validated"] == 1
+
+    pending = {"status": "ok"}
+    assert not roi_matrix.apply_ref32_commit_receipt(
+        pending, text.replace("pending=0", "pending=1"), required=True)
+    assert pending["status"] == "error"
+
+
+def test_ref32_prefetch_receipt_is_fail_closed():
+    text = (
+        "[ECG-REF32-PREFETCH queue=8 latency=8 bandwidth=1 "
+        "issue_interval=8 lookahead_records=16 placement=llc "
+        "actions_seen=100 rate_limited=50 resident_duplicates=20 "
+        "pending_duplicates=5 admission_dropped=5 queue_dropped=0 "
+        "requests_issued=20 fills_completed=15 late_merged=4 "
+        "completion_resident=3 completion_admission_dropped=2 "
+        "bandwidth_deferred=0 max_occupancy=4 demand_displacements=1 "
+        "evicted_before_use=2 pending=0]")
+    row = {"status": "ok"}
+    assert roi_matrix.apply_ref32_prefetch_receipt(
+        row, text, required=True)
+    assert row["ecg_ref32_prefetch_validated"] == 1
+
+
+def test_ref32_requires_certified_dbg_order():
+    assert roi_matrix.ref32_dbg_order_certified(
+        "-f results/graphs/g/g-final-n18-dbg.sg -o 0 -i 1 -t 0")
+    assert not roi_matrix.ref32_dbg_order_certified(
+        "-f results/graphs/g/g-final-n18.sg -o 0 -i 1 -t 0")
+    assert not roi_matrix.ref32_dbg_order_certified("-g 10 -i 1 -t 0")
+
+
+def test_ref32_resource_receipt_is_fail_closed():
+    text = (
+        "[ECG-REF32-RESOURCES line_bits=24 lines=8192 "
+        "line_state_bits=196608 commit_entries=16 "
+        "commit_entry_bits=93 prefetch_entries=8 "
+        "prefetch_entry_bits=70 lookahead_records=16 "
+        "lookahead_bits=512 control_bits=64 record_extra_bits=0 "
+        "total_bits=199232 popt_matrix_bits=33554432 "
+        "reduction_x=168.419]")
+    row = {"status": "ok"}
+    assert roi_matrix.apply_ref32_resource_receipt(
+        row, text, required=True)
+    assert row["ecg_ref32_resource_validated"] == 1
+
+    hidden_sideband = {"status": "ok"}
+    assert not roi_matrix.apply_ref32_resource_receipt(
+        hidden_sideband,
+        text.replace("record_extra_bits=0", "record_extra_bits=8")
+            .replace("total_bits=199232", "total_bits=199240"),
+        required=True,
+    )
+    assert hidden_sideband["status"] == "error"
+
+
+def test_ref32_detailed_backends_are_explicitly_unsupported(tmp_path):
+    spec = roi_matrix.parse_policy_spec("ECG:REF32_RP_COMMIT")
+    gem5_args = roi_matrix.parse_args(["--suite", "gem5"])
+    gem5_row = roi_matrix.run_gem5(
+        gem5_args, tmp_path, spec, "512kB")[0]
+    assert gem5_row["status"] == "unsupported"
+    assert "native commit-update" in gem5_row["error"]
+
+    sniper_args = roi_matrix.parse_args(["--suite", "sniper"])
+    sniper_row = roi_matrix.run_sniper(
+        sniper_args, tmp_path, spec, "512kB")[0]
+    assert sniper_row["status"] == "unsupported"
+    assert "native commit-update" in sniper_row["error"]
+
+
 def test_next_use_gem5_mechanism_is_request_bound():
     guest = (PROJECT_ROOT / "bench/src_gem5/pr.cc").read_text()
     policy = (
