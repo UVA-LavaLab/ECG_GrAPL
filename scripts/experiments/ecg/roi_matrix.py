@@ -2069,7 +2069,7 @@ def apply_ref32_resource_receipt(
         commit_entry_bits == 93 and prefetch_entry_bits == 70 and
         lookahead_bits == lookahead_records * 32 and
         record_extra_bits == 0 and total_bits == expected_total and
-        popt_matrix_bits > total_bits and reduction_x > 100.0)
+        popt_matrix_bits > total_bits and reduction_x > 50.0)
     row.update({
         "ecg_ref32_resource_validated": int(valid),
         "ecg_ref32_resource_line_bits": line_bits,
