@@ -779,6 +779,8 @@ struct GraphTopology {
 struct AccessHints {
     uint32_t current_src = UINT32_MAX;  // Outer-loop vertex (regInd in P-OPT)
     uint32_t current_dst = UINT32_MAX;  // Inner-loop neighbor (irregInd in P-OPT)
+    uint32_t current_iteration = 0;
+    uint32_t iteration_count = 1;
     uint32_t mask = 0;                  // ECG MASK hint (supports 8/16/32-bit widths)
     uint8_t  mask_bits = 2;             // Number of mask bits (2=ECG default, 4/8 for finer control)
     uint8_t  _pad1 = 0;
@@ -793,6 +795,9 @@ struct AccessHints {
     uint8_t  edge_epoch_sched_n = 0;
     uint8_t  edge_grasp_tier = 0;       // ReusePlan-carried 1/2/3 hot/moderate/cold tier
     bool     edge_grasp_tier_valid = false;
+    uint32_t edge_next_use = 0;
+    uint8_t  edge_future_state = 0;
+    bool     edge_next_use_valid = false;
 
     // ECG mask encoding constants (2-bit, from ECG -M flag graphConfig.h)
     static constexpr uint8_t MASK_HOT      = 0x03;  // 11
@@ -1380,6 +1385,11 @@ struct GraphCacheContext {
     std::vector<std::vector<uint16_t>> in_edge_epoch_sched_by_src;
     std::vector<std::vector<uint8_t>> in_edge_grasp_tier_by_src;
     uint32_t edge_epoch_reuse_plan_depth = 0;  // K (0 = disabled / single-epoch legacy path)
+    std::vector<std::vector<uint32_t>> in_edge_next_use_records_by_src;
+    uint32_t next_use_record_id_bits = 0;
+    uint32_t next_use_record_bits = 0;
+    uint32_t next_use_record_tier_bits = 0;
+    bool next_use_record_enabled = false;
 
     // === OUT-edge per-edge masks (dual-direction capability) ===
     // The mirror of in_edge_masks_by_src for kernels that traverse the OUT edge
@@ -2305,6 +2315,55 @@ struct GraphCacheContext {
     }
 
     template<typename GraphT>
+    void buildInEdgeNextUseRecords(const GraphT& g) {
+        const char* bits_value = std::getenv("ECG_NEXT_USE_BITS");
+        if (!bits_value || !bits_value[0]) {
+            std::fprintf(
+                stderr,
+                "[FATAL] ECG_NEXT_USE_RECORD requires ECG_NEXT_USE_BITS\n");
+            std::abort();
+        }
+        int parsed_bits = std::atoi(bits_value);
+        if (parsed_bits < 1) parsed_bits = 1;
+        if (parsed_bits > 15) parsed_bits = 15;
+        const char* tier_value = std::getenv("ECG_RECORD_TIER_BITS");
+        int parsed_tier = tier_value ? std::atoi(tier_value) : 2;
+        next_use_record_bits = static_cast<uint32_t>(parsed_bits);
+        next_use_record_tier_bits = static_cast<uint32_t>(parsed_tier);
+        next_use_record_id_bits =
+            ecg_reuse_plan::reusePlan32IdBits(
+                static_cast<uint32_t>(g.num_nodes()));
+        exact_nv = static_cast<uint32_t>(g.num_nodes());
+        next_use_record_enabled =
+            ecg_reuse_plan::buildInEdgeNextUseRecords32(
+                g, 16, next_use_record_bits, true,
+                in_edge_next_use_records_by_src,
+                next_use_record_tier_bits);
+        if (!next_use_record_enabled) {
+            std::fprintf(
+                stderr,
+                "[FATAL] next-use record does not fit 32 bits "
+                "(vertices=%u id_bits=%u tier_bits=%u next_bits=%u "
+                "state_bits=%u)\n",
+                static_cast<unsigned>(g.num_nodes()),
+                next_use_record_id_bits,
+                next_use_record_tier_bits,
+                next_use_record_bits,
+                ecg_reuse_plan::kNextUseStateBits);
+            std::abort();
+        }
+        std::fprintf(
+            stderr,
+            "[ECG-NEXT-USE-RECORD bits=32 id_bits=%u tier_bits=%u "
+            "next_bits=%u state_bits=%u records=%llu]\n",
+            next_use_record_id_bits,
+            next_use_record_tier_bits,
+            next_use_record_bits,
+            ecg_reuse_plan::kNextUseStateBits,
+            static_cast<unsigned long long>(g.num_edges_directed()));
+    }
+
+    template<typename GraphT>
     void buildReusePlanEpochSchedule(
             const GraphT& g, bool push_out_edges, uint32_t ne, bool linemin,
             std::vector<std::vector<uint16_t>>& target,
@@ -3010,6 +3069,9 @@ struct GraphCacheContext {
             hints_for_thread().edge_grasp_tier = 0;
             hints_for_thread().edge_grasp_tier_valid = false;
         }
+        hints_for_thread().edge_next_use = 0;
+        hints_for_thread().edge_future_state = 0;
+        hints_for_thread().edge_next_use_valid = false;
     }
 
     void printECGStats(std::ostream& os = std::cout) const {

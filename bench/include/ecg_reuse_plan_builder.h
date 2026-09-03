@@ -33,6 +33,96 @@ struct ReusePlan {
     bool valid = false;
 };
 
+inline bool reusePlan32TierBitsSupported(uint32_t tier_bits);
+inline uint32_t reusePlan32TierMask(uint32_t tier_bits);
+inline uint32_t reusePlan32IdBits(uint32_t num_vertices);
+inline uint32_t extractReusePlan32Dest(uint32_t record, uint32_t id_bits);
+inline uint8_t extractReusePlan32Tier(
+    uint32_t record, uint32_t id_bits, uint32_t tier_bits);
+
+enum class NextUseState : uint8_t {
+    UNKNOWN = 0,
+    FINITE = 1,
+    DEAD = 2,
+    WRAP = 3,
+};
+
+struct NextUsePlan {
+    uint16_t next_use = 0;
+    uint8_t tier = 0;
+    NextUseState state = NextUseState::UNKNOWN;
+};
+
+static constexpr uint32_t kNextUseStateBits = 2;
+
+inline bool canPackNextUseRecord32(
+        uint32_t num_vertices, uint32_t next_use_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
+    if (!reusePlan32TierBitsSupported(tier_bits) ||
+        next_use_bits == 0 || next_use_bits > 15) {
+        return false;
+    }
+    return reusePlan32IdBits(num_vertices) + tier_bits +
+        next_use_bits + kNextUseStateBits <= 32;
+}
+
+inline uint32_t packNextUseRecord32(
+        uint32_t dest, uint8_t tier, uint16_t next_use,
+        NextUseState state, uint32_t id_bits, uint32_t next_use_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
+    const uint32_t id_mask = id_bits >= 32
+        ? 0xFFFFFFFFu : ((uint32_t{1} << id_bits) - 1u);
+    const uint32_t tier_mask = reusePlan32TierMask(tier_bits);
+    const uint32_t next_mask =
+        (uint32_t{1} << next_use_bits) - 1u;
+    const uint32_t next_shift = id_bits + tier_bits;
+    const uint32_t state_shift = next_shift + next_use_bits;
+    return (dest & id_mask) |
+        ((static_cast<uint32_t>(tier) & tier_mask) << id_bits) |
+        ((static_cast<uint32_t>(next_use) & next_mask) << next_shift) |
+        ((static_cast<uint32_t>(state) &
+          ((uint32_t{1} << kNextUseStateBits) - 1u)) << state_shift);
+}
+
+inline uint32_t extractNextUseRecord32Dest(
+        uint32_t record, uint32_t id_bits) {
+    return extractReusePlan32Dest(record, id_bits);
+}
+
+inline uint8_t extractNextUseRecord32Tier(
+        uint32_t record, uint32_t id_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
+    return extractReusePlan32Tier(record, id_bits, tier_bits);
+}
+
+inline uint16_t extractNextUseRecord32Position(
+        uint32_t record, uint32_t id_bits, uint32_t next_use_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
+    return static_cast<uint16_t>(
+        (record >> (id_bits + tier_bits)) &
+        ((uint32_t{1} << next_use_bits) - 1u));
+}
+
+inline NextUseState extractNextUseRecord32State(
+        uint32_t record, uint32_t id_bits, uint32_t next_use_bits,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
+    return static_cast<NextUseState>(
+        (record >> (id_bits + tier_bits + next_use_bits)) &
+        ((uint32_t{1} << kNextUseStateBits) - 1u));
+}
+
+inline uint16_t quantizeNextUsePosition(
+        uint32_t position, uint32_t num_vertices,
+        uint32_t next_use_bits) {
+    if (num_vertices <= 1 || next_use_bits == 0)
+        return 0;
+    const uint32_t levels =
+        (uint32_t{1} << next_use_bits) - 1u;
+    return static_cast<uint16_t>(
+        (static_cast<uint64_t>(position) * levels) /
+        (num_vertices - 1));
+}
+
 // Tiered two-epoch ReusePlan wire format shared by cache_sim/gem5/Sniper:
 // dest[0:32] | tier[32:34] | first[34:49] | second[49:64].
 // Tier 1/2/3 means hot/moderate/cold. Tier 0 is reserved for invalid metadata.
@@ -468,6 +558,130 @@ inline ReusePlan nextReusePlanForAccess(
     }
     pair.valid = true;
     return pair;
+}
+
+inline NextUsePlan nextUsePlanForAccess(
+        const std::vector<uint64_t>& off,
+        const std::vector<uint32_t>& readers,
+        const std::vector<uint8_t>& reuse_tiers,
+        uint32_t n, uint32_t src,
+        const std::vector<uint32_t>& accessed, size_t edge_pos,
+        uint32_t numVtxPerLine, uint32_t next_use_bits,
+        bool linemin) {
+    NextUsePlan plan;
+    if (edge_pos >= accessed.size() || n == 0 ||
+        next_use_bits == 0 || next_use_bits > 15) {
+        return plan;
+    }
+    const uint32_t dest = accessed[edge_pos];
+    if (dest >= n) return plan;
+    if (numVtxPerLine == 0) numVtxPerLine = 16;
+    const uint32_t v0 = linemin
+        ? (dest / numVtxPerLine) * numVtxPerLine : dest;
+    const uint32_t v1 = linemin
+        ? std::min<uint32_t>(v0 + numVtxPerLine, n)
+        : std::min<uint32_t>(dest + 1, n);
+    uint8_t hottest_tier = 3;
+    for (uint32_t vertex = v0; vertex < v1; ++vertex) {
+        if (vertex < reuse_tiers.size())
+            hottest_tier = std::min(
+                hottest_tier, reuse_tiers[vertex]);
+    }
+    plan.tier = hottest_tier;
+
+    if (linemin) {
+        const uint32_t line = dest / numVtxPerLine;
+        for (size_t next = edge_pos + 1;
+             next < accessed.size(); ++next) {
+            const uint32_t next_dest = accessed[next];
+            if (next_dest < n &&
+                next_dest / numVtxPerLine == line) {
+                plan.next_use = quantizeNextUsePosition(
+                    src, n, next_use_bits);
+                plan.state = NextUseState::FINITE;
+                return plan;
+            }
+        }
+    }
+
+    uint32_t next_reader = UINT32_MAX;
+    uint32_t first_reader = UINT32_MAX;
+    for (uint32_t vertex = v0; vertex < v1; ++vertex) {
+        const uint64_t begin_offset = off[vertex];
+        const uint64_t end_offset = off[vertex + 1];
+        if (begin_offset >= end_offset) continue;
+        const auto begin = readers.begin() +
+            static_cast<std::ptrdiff_t>(begin_offset);
+        const auto end = readers.begin() +
+            static_cast<std::ptrdiff_t>(end_offset);
+        first_reader = std::min(first_reader, *begin);
+        const auto found = std::upper_bound(begin, end, src);
+        if (found != end)
+            next_reader = std::min(next_reader, *found);
+    }
+    if (next_reader == UINT32_MAX) {
+        if (first_reader == UINT32_MAX) {
+            plan.state = NextUseState::DEAD;
+        } else {
+            plan.next_use = quantizeNextUsePosition(
+                first_reader, n, next_use_bits);
+            plan.state = NextUseState::WRAP;
+        }
+        return plan;
+    }
+    plan.next_use = quantizeNextUsePosition(
+        next_reader, n, next_use_bits);
+    plan.state = NextUseState::FINITE;
+    return plan;
+}
+
+template <typename GraphT>
+bool buildInEdgeNextUseRecords32(
+        const GraphT& g, uint32_t numVtxPerLine,
+        uint32_t next_use_bits, bool linemin,
+        std::vector<std::vector<uint32_t>>& records,
+        uint32_t tier_bits = kReusePlanDefaultTierBits) {
+    const uint32_t n = static_cast<uint32_t>(g.num_nodes());
+    records.clear();
+    records.resize(n);
+    if (n == 0 || !canPackNextUseRecord32(
+            n, next_use_bits, tier_bits)) {
+        return false;
+    }
+    if (numVtxPerLine == 0) numVtxPerLine = 16;
+    const uint32_t id_bits = reusePlan32IdBits(n);
+
+    std::vector<uint64_t> off;
+    std::vector<uint32_t> readers;
+    buildReaderCsr(g, false, off, readers);
+    std::vector<uint8_t> reuse_tiers;
+    if (tier_bits > 0) {
+        reuse_tiers =
+            buildReuseTiers(off, n, configuredReuseHotFraction());
+    } else {
+        reuse_tiers.assign(n, 0);
+    }
+
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic, 128)
+#endif
+    for (int64_t src_i = 0; src_i < static_cast<int64_t>(n); ++src_i) {
+        const uint32_t src = static_cast<uint32_t>(src_i);
+        std::vector<uint32_t> accessed;
+        accessedVertices(g, src, false, accessed);
+        auto& row = records[src];
+        row.resize(accessed.size());
+        for (size_t edge = 0; edge < accessed.size(); ++edge) {
+            const NextUsePlan plan = nextUsePlanForAccess(
+                off, readers, reuse_tiers, n, src,
+                accessed, edge, numVtxPerLine,
+                next_use_bits, linemin);
+            row[edge] = packNextUseRecord32(
+                accessed[edge], plan.tier, plan.next_use,
+                plan.state, id_bits, next_use_bits, tier_bits);
+        }
+    }
+    return true;
 }
 
 // Build one per-edge next-reference epoch. PR uses pull/in edges by default;

@@ -135,6 +135,26 @@ int main() {
             epoch_victim, no_epoch_victim, ok ? "OK" : "FAIL");
         if (ok) g_pass++; else g_fail++;
     }
+    if (var == "next_use_lru") {
+        const bool ok =
+            ecg_policy::effectiveFutureState(
+                ecg_policy::FutureState::FINITE, 7, 8) ==
+                ecg_policy::FutureState::DEAD &&
+            ecg_policy::effectiveFutureState(
+                ecg_policy::FutureState::FINITE, 7, 8, false) ==
+                ecg_policy::FutureState::UNKNOWN &&
+            ecg_policy::effectiveFutureState(
+                ecg_policy::FutureState::FINITE, 8, 8) ==
+                ecg_policy::FutureState::FINITE &&
+            ecg_policy::effectiveFutureState(
+                ecg_policy::FutureState::UNKNOWN, 1, 8) ==
+                ecg_policy::FutureState::UNKNOWN;
+        printf(
+            "    %-46s [%s]\n",
+            "passed finite bucket becomes known-dead",
+            ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
+    }
     {
         ecg_policy::WayState ways[3] = {
             {true, 7, 10, 0, 31, true},
@@ -168,6 +188,71 @@ int main() {
         printf(
             "    %-46s expect=way1 got=way%zu  [%s]\n",
             "degree tie reports stamped epoch participation",
+            victim, ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
+    }
+    if (var == "next_use_lru") {
+        ecg_policy::WayState ways[3] = {
+            {false, 7, 1, 0, 0, false, 0,
+             ecg_policy::FutureState::UNKNOWN},
+            {true, 7, 20, 0, 0, true, 0,
+             ecg_policy::FutureState::DEAD},
+            {true, 7, 30, 0, 0, true, 12,
+             ecg_policy::FutureState::FINITE},
+        };
+        ecg_policy::VictimReason reason;
+        const size_t victim = ecg_policy::selectVictim(
+            ways, 3, ecg_policy::NEXT_USE_LRU, 7, &reason);
+        const bool ok = (
+            victim == 1 &&
+            reason == ecg_policy::VictimReason::DEAD_PROPERTY);
+        printf(
+            "    %-46s expect=way1 got=way%zu  [%s]\n",
+            "next_use_lru overrides LRU for known-dead property",
+            victim, ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
+    }
+    if (var == "next_use_lru") {
+        ecg_policy::WayState ways[3] = {
+            {false, 7, 1, 0, 0, false, 0,
+             ecg_policy::FutureState::UNKNOWN},
+            {true, 7, 20, 0, 0, true, 15,
+             ecg_policy::FutureState::FINITE},
+            {true, 7, 30, 0, 0, true, 5,
+             ecg_policy::FutureState::FINITE},
+        };
+        ecg_policy::VictimReason reason;
+        const size_t victim = ecg_policy::selectVictim(
+            ways, 3, ecg_policy::NEXT_USE_LRU, 7, &reason);
+        const bool ok = (
+            victim == 0 &&
+            reason == ecg_policy::VictimReason::LRU);
+        printf(
+            "    %-46s expect=way0 got=way%zu  [%s]\n",
+            "next_use_lru preserves ungoverned global LRU",
+            victim, ok ? "OK" : "FAIL");
+        if (ok) g_pass++; else g_fail++;
+    }
+    if (var == "next_use_lru") {
+        ecg_policy::WayState ways[4] = {
+            {true, 7, 1, 0, 0, true, 3,
+             ecg_policy::FutureState::FINITE},
+            {true, 7, 20, 0, 0, true, 14,
+             ecg_policy::FutureState::FINITE},
+            {true, 7, 2, 0, 0, false, 0,
+             ecg_policy::FutureState::UNKNOWN},
+            {false, 7, 30, 0, 0, false, 0,
+             ecg_policy::FutureState::UNKNOWN},
+        };
+        ecg_policy::VictimReason reason;
+        const size_t victim = ecg_policy::selectVictim(
+            ways, 4, ecg_policy::NEXT_USE_LRU, 7, &reason);
+        const bool ok = (
+            victim == 1 &&
+            reason == ecg_policy::VictimReason::NEXT_USE_PROPERTY);
+        printf(
+            "    %-46s expect=way1 got=way%zu  [%s]\n",
+            "next_use_lru refines a governed property LRU victim",
             victim, ok ? "OK" : "FAIL");
         if (ok) g_pass++; else g_fail++;
     }
@@ -344,6 +429,8 @@ int main() {
         check(L3, "equal future uses coldest tier (way2)",
               {{paddr(0),7,10,10,1},{paddr(1),7,10,20,2},{paddr(2),7,10,30,3},{paddr(3),7,10,40,1},
                {paddr(4),7,10,50,1},{paddr(5),7,10,60,1},{paddr(6),7,10,70,1},{paddr(7),7,10,80,1}}, 2);
+    } else if (var == "next_use_lru") {
+        // The controlled FutureState cases above exercise this selector directly.
     } else if (var == "admission_dueling") {
         ecg_policy::OnlineAdmissionSelector selector;
         size_t leaders[ecg_policy::ADMIT_ARM_COUNT] = {};

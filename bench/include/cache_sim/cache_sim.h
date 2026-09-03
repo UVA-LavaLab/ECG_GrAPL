@@ -557,6 +557,9 @@ struct CacheLine {
     uint16_t ecg_epoch_sched[ECG_REUSE_PLAN_DEPTHMAX] = {0, 0, 0, 0};
     uint8_t  ecg_epoch_sched_n = 0;
     uint32_t ecg_exact_pred = UINT32_MAX; // ECG_EXACT_STORED: exact next-ref STAMPED at access (precomputed-mask model)
+    uint32_t ecg_next_use = 0;  // quantized absolute next-use position
+    ecg_policy::FutureState ecg_future_state =
+        ecg_policy::FutureState::UNKNOWN;
     bool pin = false;            // PIN policy: line is pinned in cache (high-reuse region)
 };
 
@@ -1088,8 +1091,13 @@ public:
         auto& set = cache_[set_idx];
         for (size_t i = 0; i < associativity_; i++) {
             if (set[i].valid && set[i].tag == tag) {
-                if (mode == ECGMode::ECG_EXACT_STORED)
-                    set[i].ecg_exact_pred = computeExactPredForStamp(set[i].line_addr);
+                if (mode == ECGMode::ECG_EXACT_STORED) {
+                    if (nextUseLruEnabled())
+                        stampQuantizedNextUse(set[i]);
+                    else
+                        set[i].ecg_exact_pred =
+                            computeExactPredForStamp(set[i].line_addr);
+                }
                 else if (graph_ctx_->hints_for_thread().edge_epoch_valid) {
                     // ECG_GRASP_POPT: refresh the stored epoch only on a real delivery
                     set[i].ecg_epoch = graph_ctx_->hints_for_thread().edge_epoch;
@@ -1184,6 +1192,9 @@ public:
         set[victim_idx].access_count = 1;
         set[victim_idx].rrpv = 2;  // For SRRIP: long re-reference (M-1 = 2, per Jaleel ISCA'10)
         set[victim_idx].line_addr = address & ~(uint64_t(line_size_ - 1));  // Store line-aligned address
+        set[victim_idx].ecg_next_use = 0;
+        set[victim_idx].ecg_future_state =
+            ecg_policy::FutureState::UNKNOWN;
 
         if (policy_ == EvictionPolicy::HAWKEYE && hawkeye_state_) {
             const uint64_t signature = currentHawkeyeSite();
@@ -1412,7 +1423,11 @@ public:
             // STORED hint, never recomputing. This isolates the only difference
             // from live ECG_EXACT: staleness (stamp at last access vs at evict).
             if (mode == ECGMode::ECG_EXACT_STORED) {
-                set[victim_idx].ecg_exact_pred = computeExactPredForStamp(set[victim_idx].line_addr);
+                if (nextUseLruEnabled())
+                    stampQuantizedNextUse(set[victim_idx]);
+                else
+                    set[victim_idx].ecg_exact_pred =
+                        computeExactPredForStamp(set[victim_idx].line_addr);
             }
         }
     }
@@ -1630,7 +1645,11 @@ private:
                 // mask does (each edge consumed carries its own hint). Without
                 // this, the prediction would be frozen at first-fill position.
                 if (mode == ECGMode::ECG_EXACT_STORED) {
-                    set[idx].ecg_exact_pred = computeExactPredForStamp(set[idx].line_addr);
+                    if (nextUseLruEnabled())
+                        stampQuantizedNextUse(set[idx]);
+                    else
+                        set[idx].ecg_exact_pred =
+                            computeExactPredForStamp(set[idx].line_addr);
                 }
             } else {
                 bool admitted = false;
@@ -2061,6 +2080,108 @@ private:
         return cur + d;                            // absolute next-reference position
     }
 
+    static bool nextUseLruEnabled() {
+        static const bool enabled = []() {
+            const char* value = std::getenv("ECG_NEXT_USE_LRU");
+            return value && value[0] && std::string(value) != "0";
+        }();
+        return enabled;
+    }
+
+    static bool nextUseLiveEnabled() {
+        static const bool enabled = []() {
+            const char* value = std::getenv("ECG_NEXT_USE_LIVE");
+            return value && value[0] && std::string(value) != "0";
+        }();
+        return enabled;
+    }
+
+    static bool nextUseRefreshGuaranteed() {
+        static const bool guaranteed = []() {
+            const bool refresh =
+                std::getenv("ECG_STORED_REFRESH") != nullptr;
+            const bool llc_only =
+                std::getenv("ECG_REFRESH_LLC_ONLY") != nullptr;
+            return refresh && !llc_only;
+        }();
+        return guaranteed;
+    }
+
+    static uint32_t configuredNextUseBits() {
+        static const uint32_t bits = []() {
+            const char* value = std::getenv("ECG_NEXT_USE_BITS");
+            if (!value || !value[0]) {
+                std::fprintf(
+                    stderr,
+                    "[FATAL] ECG_NEXT_USE_LRU requires "
+                    "ECG_NEXT_USE_BITS\n");
+                std::abort();
+            }
+            int parsed = std::atoi(value);
+            if (parsed < 1) parsed = 1;
+            if (parsed > 15) parsed = 15;
+            return static_cast<uint32_t>(parsed);
+        }();
+        return bits;
+    }
+
+    void stampQuantizedNextUse(CacheLine& line) {
+        line.ecg_next_use = 0;
+        line.ecg_future_state = ecg_policy::FutureState::UNKNOWN;
+        if (!graph_ctx_ || !graph_ctx_->isPropertyData(line.line_addr))
+            return;
+        const auto& hints = graph_ctx_->hints_for_thread();
+        if (hints.edge_next_use_valid) {
+            line.ecg_next_use = hints.edge_next_use;
+            line.ecg_future_state =
+                static_cast<ecg_policy::FutureState>(
+                    hints.edge_future_state);
+            return;
+        }
+        if (!nextUseLiveEnabled())
+            return;
+        const uint32_t current =
+            hints.current_src;
+        const uint32_t vertices = graph_ctx_->exact_nv;
+        if (current == UINT32_MAX || vertices == 0)
+            return;
+        const uint32_t distance =
+            graph_ctx_->exactNextRef(line.line_addr, current);
+        if (distance == UINT32_MAX) {
+            line.ecg_future_state = ecg_policy::FutureState::DEAD;
+            return;
+        }
+        const uint32_t bits = configuredNextUseBits();
+        const uint32_t levels = (uint32_t{1} << bits) - 1;
+        const uint64_t absolute =
+            std::min<uint64_t>(
+                static_cast<uint64_t>(current) + distance,
+                vertices - 1);
+        line.ecg_next_use = vertices > 1
+            ? static_cast<uint32_t>(
+                  (absolute * levels) / (vertices - 1))
+            : 0;
+        line.ecg_future_state = ecg_policy::FutureState::FINITE;
+    }
+
+    uint32_t currentNextUseBucket() const {
+        if (!graph_ctx_ || graph_ctx_->exact_nv == 0)
+            return 0;
+        const uint32_t current =
+            graph_ctx_->hints_for_thread().current_src;
+        if (current == UINT32_MAX)
+            return 0;
+        const uint32_t levels =
+            (uint32_t{1} << configuredNextUseBits()) - 1;
+        const uint32_t within_iteration = graph_ctx_->exact_nv > 1
+            ? static_cast<uint32_t>(
+                  (static_cast<uint64_t>(current) * levels) /
+                  (graph_ctx_->exact_nv - 1))
+            : 0;
+        return graph_ctx_->hints_for_thread().current_iteration *
+            (levels + 1) + within_iteration;
+    }
+
     size_t findVictimECG(std::vector<CacheLine>& set) {
         uint8_t rrpv_max = (graph_ctx_ && graph_ctx_->mask_config.enabled)
             ? graph_ctx_->mask_config.rrpv_max : 7;
@@ -2133,6 +2254,31 @@ private:
         // at eviction. The only semantic difference from ECG_EXACT is staleness
         // (stamp taken at last access position, not the eviction position).
         if (mode == ECGMode::ECG_EXACT_STORED && graph_ctx_) {
+            if (nextUseLruEnabled()) {
+                constexpr uint8_t RRPV_MAX = 7;
+                const uint32_t current_bucket = currentNextUseBucket();
+                ecg_policy::WayState ways[64];
+                for (size_t i = 0; i < associativity_; ++i) {
+                    ways[i].prop =
+                        graph_ctx_->isPropertyData(set[i].line_addr);
+                    ways[i].rrpv = set[i].rrpv;
+                    ways[i].recency = set[i].last_access;
+                    ways[i].dbg = set[i].ecg_dbg_tier;
+                    ways[i].dist = 0;
+                    ways[i].stamped =
+                        set[i].ecg_future_state !=
+                        ecg_policy::FutureState::UNKNOWN;
+                    ways[i].next_use = set[i].ecg_next_use;
+                    ways[i].future_state =
+                        ecg_policy::effectiveFutureState(
+                            set[i].ecg_future_state,
+                            ways[i].next_use, current_bucket,
+                            nextUseRefreshGuaranteed());
+                }
+                return ecg_policy::selectVictim(
+                    ways, associativity_,
+                    ecg_policy::NEXT_USE_LRU, RRPV_MAX);
+            }
             for (size_t i = 0; i < associativity_; i++) {
                 if (!graph_ctx_->isPropertyData(set[i].line_addr)) return i;
             }

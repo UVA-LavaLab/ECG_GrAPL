@@ -303,6 +303,13 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ecg_flowthrough_adaptive=True,
             ecg_transport_pinned=True,
         )
+    if upper in ("ECG:NEXT_USE_LRU", "ECG_NEXT_USE_LRU"):
+        return PolicySpec(
+            label="ECG_NEXT_USE_LRU",
+            policy="ECG",
+            ecg_mode="ECG_EXACT_STORED",
+            ecg_variant="next_use_lru",
+        )
     if upper in (
         "ECG:REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
         "ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",

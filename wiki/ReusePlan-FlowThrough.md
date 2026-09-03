@@ -97,6 +97,19 @@ Unused upper compact bits are zero/reserved; they are not alignment bits. The
 record-load execution helper widens a compact value into the canonical 64-bit
 metadata layout using the configured record-format CSR.
 
+The exploratory finite-horizon successor uses a different compact record:
+
+```text
+destination[id_bits] | absolute-next-use[8] | state[2]
+```
+
+For an n18 graph this consumes 28 bits; an n22 graph uses exactly 32. The state
+distinguishes unknown, finite in the current sweep, known dead, and wrap to the
+next sweep. A wrap is expanded to the following iteration at runtime and
+becomes dead only in the final iteration. The record replaces the ordinary
+four-byte destination entry; it is not a sidecar and does not require
+FlowThrough.
+
 Weighted SSSP has two supported transport formats:
 
 - a compact 64-bit substitute with 24-bit destination, 8-bit positive weight,
@@ -164,6 +177,14 @@ the no-epoch controls are explicit ablations. The two online-selector
 generations did not satisfy the retained representativeness and regret checks.
 They remain admission diagnostics and are not used as gem5 or Sniper
 performance policies. Admission diagnostics are separate from victim selection.
+
+`next_use_lru` is an exploratory cache_sim-only successor. It evicts a
+known-dead governed property line first. Otherwise it preserves global LRU for
+non-property and unknown lines, and refines the victim only when global LRU
+already selected a finite-use governed property line. A finite bucket that has
+passed becomes dead only when every property access is guaranteed to refresh
+LLC metadata; without that guarantee it becomes unknown, preventing stale
+private-cache hits from creating false-dead evictions.
 
 ## 5. FlowThrough cache behavior
 

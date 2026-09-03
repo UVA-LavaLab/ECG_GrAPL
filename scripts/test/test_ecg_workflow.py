@@ -233,6 +233,12 @@ def test_reuse_plan_policy_aliases_are_first_class(monkeypatch):
     assert module.ecg_transport_for(
         lru_ss, "pr") == module.EcgTransport(
             2, True, False, False, True)
+    next_use = module.parse_policy_spec("ECG:NEXT_USE_LRU")
+    assert next_use.label == "ECG_NEXT_USE_LRU"
+    assert next_use.ecg_mode == "ECG_EXACT_STORED"
+    assert next_use.ecg_variant == "next_use_lru"
+    assert module.ecg_transport_for(
+        next_use, "pr") == module.EcgTransport()
     for label, variant in (
             ("ECG:REUSE_PLAN_GRASP_FLOWTHROUGH", "grasp_only"),
             ("ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH", "epoch_first"),

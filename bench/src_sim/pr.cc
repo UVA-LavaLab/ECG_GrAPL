@@ -75,9 +75,13 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
         const char* pfx_env = getenv("ECG_PREFETCH_MODE");
         bool popt_prefetch = pfx_env && (atoi(pfx_env) == 2 || atoi(pfx_env) == 4 || atoi(pfx_env) == 6 || atoi(pfx_env) == 7);
         const bool matrix_free_reuse_plan = GraphSimMatrixFreeReusePlan();
+        const bool matrix_free_next_use =
+            std::getenv("ECG_NEXT_USE_RECORD") != nullptr;
         if (policy == EvictionPolicy::POPT ||
-            (policy == EvictionPolicy::ECG && !matrix_free_reuse_plan) ||
-            (popt_prefetch && !matrix_free_reuse_plan)) {
+            (policy == EvictionPolicy::ECG &&
+             !matrix_free_reuse_plan && !matrix_free_next_use) ||
+            (popt_prefetch &&
+             !matrix_free_reuse_plan && !matrix_free_next_use)) {
             constexpr int numVtxPerLine = 64 / sizeof(ScoreT);
             constexpr int numEpochs = 256;
             buildAndRegisterReref(g, graph_ctx, /*natural_csr=*/true, "PR(pull/in)",
@@ -95,6 +99,8 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
     cache.initGraphContext(&graph_ctx);
     auto vertex_masks = graph_ctx.computeVertexMasks(g);  // uint32_t per vertex
     graph_ctx.initMaskArray32(vertex_masks.data(), vertex_masks.size());
+    if (std::getenv("ECG_NEXT_USE_RECORD"))
+        graph_ctx.buildInEdgeNextUseRecords(g);
     graph_ctx.printSummary();
     int pfx_lookahead = GraphSimEnvIntClamped("ECG_PREFETCH_LOOKAHEAD", 0, 0, 64);
     int pfx_top_k = GraphSimEnvIntClamped("ECG_PREFETCH_TOP_K", 1, 1, 64);
@@ -135,6 +141,13 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
     cache.resetStats();
     const auto in_edge_base = g.num_nodes() > 0
         ? g.in_neigh(0).begin() : nullptr;
+    const auto next_use_meta = ::ecg_metadata::configure(
+        static_cast<uint64_t>(g.num_nodes()), 2);
+    if (graph_ctx.next_use_record_enabled) {
+        ::ecg_metadata::announce(next_use_meta, "pr-next-use");
+        ::ecg_metadata::enforceExpectedBytesPerEdge(
+            next_use_meta, "pr-next-use");
+    }
     
     for (int iter = 0; iter < max_iters; iter++) {
         double error = 0;
@@ -145,9 +158,116 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
 
             // P-OPT: update current destination vertex for rereference lookup
             SIM_SET_VERTEX(cache, u);
+            graph_ctx.hints_for_thread().current_iteration =
+                static_cast<uint32_t>(iter);
+            graph_ctx.hints_for_thread().iteration_count =
+                static_cast<uint32_t>(max_iters);
 
             // Iterate over incoming neighbors with CSR edge tracking
             auto in_neigh = g.in_neigh(u);
+
+            if (graph_ctx.next_use_record_enabled) {
+                const auto& records =
+                    graph_ctx.in_edge_next_use_records_by_src[u];
+                size_t edge_pos = 0;
+                for (auto it = in_neigh.begin();
+                     it != in_neigh.end(); ++it, ++edge_pos) {
+                    if (edge_pos >= records.size()) {
+                        std::fprintf(
+                            stderr,
+                            "[FATAL] next-use record row shorter than CSR "
+                            "(src=%u edge=%llu records=%llu)\n",
+                            static_cast<unsigned>(u),
+                            static_cast<unsigned long long>(edge_pos),
+                            static_cast<unsigned long long>(records.size()));
+                        std::abort();
+                    }
+                    const uint32_t record = records[edge_pos];
+                    SIM_ECG_EDGE(
+                        cache, next_use_meta, it, in_edge_base,
+                        reinterpret_cast<uint64_t>(in_edge_base),
+                        ::ecg_metadata::kInSidecarBase);
+                    const NodeID v = static_cast<NodeID>(
+                        ecg_reuse_plan::extractNextUseRecord32Dest(
+                            record, graph_ctx.next_use_record_id_bits));
+                    if (v != *it) {
+                        std::fprintf(
+                            stderr,
+                            "[FATAL] next-use record destination mismatch "
+                            "(src=%u edge=%llu record=%u csr=%u)\n",
+                            static_cast<unsigned>(u),
+                            static_cast<unsigned long long>(edge_pos),
+                            static_cast<unsigned>(v),
+                            static_cast<unsigned>(*it));
+                        std::abort();
+                    }
+                    auto& hints = graph_ctx.hints_for_thread();
+                    const uint32_t next_bucket =
+                        ecg_reuse_plan::extractNextUseRecord32Position(
+                            record, graph_ctx.next_use_record_id_bits,
+                            graph_ctx.next_use_record_bits,
+                            graph_ctx.next_use_record_tier_bits);
+                    const auto record_state =
+                        ecg_reuse_plan::extractNextUseRecord32State(
+                            record, graph_ctx.next_use_record_id_bits,
+                            graph_ctx.next_use_record_bits,
+                            graph_ctx.next_use_record_tier_bits);
+                    const uint32_t span =
+                        uint32_t{1} << graph_ctx.next_use_record_bits;
+                    if (record_state ==
+                            ecg_reuse_plan::NextUseState::FINITE) {
+                        hints.edge_next_use =
+                            static_cast<uint32_t>(iter) * span +
+                            next_bucket;
+                        hints.edge_future_state = static_cast<uint8_t>(
+                            ecg_reuse_plan::NextUseState::FINITE);
+                        hints.edge_next_use_valid = true;
+                    } else if (record_state ==
+                               ecg_reuse_plan::NextUseState::WRAP) {
+                        const bool has_next_iteration =
+                            iter + 1 < max_iters;
+                        hints.edge_next_use = has_next_iteration
+                            ? static_cast<uint32_t>(iter + 1) *
+                                  span + next_bucket
+                            : 0;
+                        hints.edge_future_state = static_cast<uint8_t>(
+                            has_next_iteration
+                                ? ecg_reuse_plan::NextUseState::FINITE
+                                : ecg_reuse_plan::NextUseState::DEAD);
+                        hints.edge_next_use_valid = true;
+                    } else {
+                        hints.edge_next_use = 0;
+                        hints.edge_future_state = static_cast<uint8_t>(
+                            record_state);
+                        hints.edge_next_use_valid =
+                            record_state ==
+                            ecg_reuse_plan::NextUseState::DEAD;
+                    }
+                    hints.edge_grasp_tier =
+                        ecg_reuse_plan::extractNextUseRecord32Tier(
+                            record, graph_ctx.next_use_record_id_bits,
+                            graph_ctx.next_use_record_tier_bits);
+                    hints.edge_grasp_tier_valid =
+                        hints.edge_grasp_tier != 0;
+                    SIM_CACHE_READ_MASKED(
+                        cache, contrib_ptr, v, graph_ctx, 0);
+                    incoming_total += outgoing_contrib[v];
+                }
+                // These sequential updates carry no edge record. Clear the
+                // irregular-load hint rather than mis-stamping them with the
+                // preceding neighbor's next use.
+                graph_ctx.clearEdgeEpoch();
+                SIM_CACHE_READ(cache, scores_ptr, u);
+                ScoreT old_score = scores[u];
+                ScoreT new_score = base_score + kDamp * incoming_total;
+                SIM_CACHE_WRITE(cache, scores_ptr, u);
+                scores[u] = new_score;
+                error += fabs(new_score - old_score);
+                SIM_CACHE_WRITE(cache, contrib_ptr, u);
+                outgoing_contrib[u] =
+                    new_score / g.out_degree(u);
+                continue;
+            }
 
             // === Mode 6: per-edge ECG mask path ===
             // Each src has a precomputed mask per edge in its in_neigh list.

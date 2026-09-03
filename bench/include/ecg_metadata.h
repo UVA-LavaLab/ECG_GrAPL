@@ -41,6 +41,8 @@
 //   ECG_RECORD_VARIABLE_WIDTH compute two-epoch ReusePlan width instead of forcing 8
 //   ECG_VIRTUAL_ID_BITS       pretend the graph needs N id bits, so format
 //                             width can be swept WITHOUT changing topology
+//   ECG_NEXT_USE_RECORD       replace epoch stamps with next-use + state
+//   ECG_NEXT_USE_BITS         required absolute next-use bucket width
 //   ECG_EDGE_MASK_CHARGED     0 = metadata delivered free (oracle ceiling)
 //   ECG_FLOWTHROUGH         metadata stream does not allocate in LLC
 #ifndef ECG_METADATA_H
@@ -71,6 +73,8 @@ struct Config {
     int id_bits = 1;         // destination bits the graph actually needs
     int record_bytes = 4;    // PackedRecord container width
     int payload_bits = 0;    // Sidecar bits per edge
+    int next_use_bits = 0;
+    int future_state_bits = 0;
     bool charged = true;
     bool flowthrough = false;
     bool packed_fits = true; // did the packed record fit 4 bytes?
@@ -109,6 +113,24 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
     c.id_bits = virtual_id_bits > 0 ? virtual_id_bits : bitsFor(num_vertices);
     c.charged = envInt("ECG_EDGE_MASK_CHARGED", 1, 0, 1) > 0;
     c.flowthrough = envInt("ECG_FLOWTHROUGH", 0, 0, 1) > 0;
+    const char* next_use_record = std::getenv("ECG_NEXT_USE_RECORD");
+    if (next_use_record && next_use_record[0] &&
+        std::string(next_use_record) != "0") {
+        const char* next_use_bits = std::getenv("ECG_NEXT_USE_BITS");
+        if (!next_use_bits || !next_use_bits[0]) {
+            std::fprintf(
+                stderr,
+                "[FATAL] ECG_NEXT_USE_RECORD requires "
+                "ECG_NEXT_USE_BITS\n");
+            std::abort();
+        }
+        c.stamps = 0;
+        c.epoch_bits = 0;
+        c.next_use_bits = envInt("ECG_NEXT_USE_BITS", 0, 1, 15);
+        c.future_state_bits = 2;
+    }
+    const int epoch_payload_bits =
+        c.next_use_bits > 0 ? 0 : c.epoch_bits * c.stamps;
 
     // Sidecar payload carries stamps and tier ONLY; no destination id, because
     // the unmodified CSR edge still delivers it. This is the whole reason the
@@ -116,9 +138,11 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
     const int forced_payload = envInt("ECG_SIDECAR_PAYLOAD_BITS", 0, 0, 64);
     c.payload_bits = forced_payload > 0
         ? forced_payload
-        : c.epoch_bits * c.stamps + c.tier_bits;
+        : epoch_payload_bits + c.tier_bits +
+          c.next_use_bits + c.future_state_bits;
 
-    const int needed = c.id_bits + c.epoch_bits * c.stamps + c.tier_bits +
+    const int needed = c.id_bits + epoch_payload_bits + c.tier_bits +
+                       c.next_use_bits + c.future_state_bits +
                        envInt("ECG_RECORD_POPT_BITS", 0, 0, 8) +
                        envInt("ECG_RECORD_PREFETCH_BITS", 0, 0, 32);
     c.packed_fits = needed <= 32;
@@ -184,7 +208,9 @@ inline void declareContainerBytes(Config& c, int container_bytes) {
     if (container_bytes <= 0) return;
     c.record_bytes = container_bytes;
     c.packed_fits = c.packed_fits &&
-        (c.id_bits + c.epoch_bits * c.stamps + c.tier_bits) <=
+        (c.id_bits +
+         (c.next_use_bits > 0 ? 0 : c.epoch_bits * c.stamps) +
+         c.tier_bits + c.next_use_bits + c.future_state_bits) <=
             container_bytes * 8;
 }
 
@@ -206,9 +232,11 @@ inline void announce(const Config& c, const char* kernel) {
     std::fprintf(stderr,
         "[ECG-METADATA kernel=%s delivery=%s stamps=%d epoch_bits=%d "
         "tier_bits=%d id_bits=%d record_bytes=%d payload_bits=%d "
+        "next_use_bits=%d state_bits=%d "
         "bytes_per_edge=%.3f charged=%d flowthrough=%d packed_fits=%d]\n",
         kernel, deliveryName(c), c.stamps, c.epoch_bits, c.tier_bits,
-        c.id_bits, c.record_bytes, c.payload_bits, bytesPerEdge(c),
+        c.id_bits, c.record_bytes, c.payload_bits,
+        c.next_use_bits, c.future_state_bits, bytesPerEdge(c),
         c.charged ? 1 : 0, c.flowthrough ? 1 : 0, c.packed_fits ? 1 : 0);
 }
 

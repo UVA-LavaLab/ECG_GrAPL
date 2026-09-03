@@ -227,6 +227,50 @@ def test_ecg_pfx_prefetcher_sets_cache_sim_env(tmp_path):
     assert row["ecg_prefetch_lookahead"] == "6"
 
 
+def test_next_use_lru_sets_packed_hardware_free_env(tmp_path):
+    args = roi_matrix.parse_args(["--suite", "cache-sim"])
+    spec = roi_matrix.parse_policy_spec("ECG:NEXT_USE_LRU")
+
+    env = roi_matrix.cache_sim_env(
+        args, spec, "512kB", "16", tmp_path / "out.json")
+
+    assert env["ECG_MODE"] == "ECG_EXACT_STORED"
+    assert env["ECG_VARIANT"] == "next_use_lru"
+    assert env["ECG_NEXT_USE_RECORD"] == "1"
+    assert env["ECG_NEXT_USE_LRU"] == "1"
+    assert env["ECG_NEXT_USE_BITS"] == "8"
+    assert env["ECG_RECORD_TIER_BITS"] == "0"
+    assert env["ECG_EDGE_MASK_CHARGED"] == "1"
+    assert env["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
+    assert "ECG_STORED_REFRESH" not in env
+
+
+def test_next_use_record_receipt_is_fail_closed():
+    row = {"status": "ok"}
+    assert roi_matrix.apply_next_use_record_receipt(
+        row,
+        "[ECG-NEXT-USE-RECORD bits=32 id_bits=18 tier_bits=0 "
+        "next_bits=8 state_bits=2 records=680108]",
+        required=True,
+    )
+    assert row["ecg_next_use_record_validated"] == 1
+    assert row["ecg_record_replaces_edge"] == 1
+
+    missing = {"status": "ok"}
+    assert not roi_matrix.apply_next_use_record_receipt(
+        missing, "", required=True)
+    assert missing["status"] == "error"
+
+    overflow = {"status": "ok"}
+    assert not roi_matrix.apply_next_use_record_receipt(
+        overflow,
+        "[ECG-NEXT-USE-RECORD bits=32 id_bits=23 tier_bits=0 "
+        "next_bits=8 state_bits=2 records=1]",
+        required=True,
+    )
+    assert overflow["status"] == "error"
+
+
 def test_ecg_pfx_gem5_returns_unsupported_without_launch(tmp_path):
     args = roi_matrix.parse_args(["--suite", "gem5", "--prefetcher", "ECG_PFX"])
     spec = roi_matrix.parse_policy_spec("LRU")

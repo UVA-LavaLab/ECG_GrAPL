@@ -43,6 +43,7 @@ enum Variant {
     RRIP_NO_EPOCH = 8, // rrip_first eligibility/records-first with epoch disabled
     RRIP_NO_EPOCH_RECENCY = 9, // same, but property ties use recency
     FUTURE_TIER_FIRST = 10, // future distance, then cold tier, then recency
+    NEXT_USE_LRU = 11, // known-dead override; otherwise refine property LRU
 };
 
 enum class VictimReason : uint8_t {
@@ -55,7 +56,24 @@ enum class VictimReason : uint8_t {
     PROPERTY_FALLBACK,
     PROPERTY_RECENCY,
     FUTURE_TIER_PROPERTY,
+    DEAD_PROPERTY,
+    NEXT_USE_PROPERTY,
 };
+
+enum class FutureState : uint8_t {
+    UNKNOWN = 0,
+    FINITE = 1,
+    DEAD = 2,
+};
+
+inline FutureState effectiveFutureState(
+        FutureState state, uint32_t next_use, uint32_t current,
+        bool refresh_guaranteed = true) {
+    if (state != FutureState::FINITE || next_use >= current)
+        return state;
+    return refresh_guaranteed ? FutureState::DEAD
+                              : FutureState::UNKNOWN;
+}
 
 inline int parseVariant(const char* value) {
     if (!value || !value[0]) return RRIP_FIRST;
@@ -75,6 +93,8 @@ inline int parseVariant(const char* value) {
         return RRIP_NO_EPOCH_RECENCY;
     if (variant == "future_tier_first")
         return FUTURE_TIER_FIRST;
+    if (variant == "next_use_lru")
+        return NEXT_USE_LRU;
     std::fprintf(stderr, "[FATAL] unknown ECG_VARIANT=%s\n", value);
     std::abort();
 }
@@ -453,6 +473,8 @@ struct WayState {
     uint8_t  dbg;      // DBG degree tier (shortcircuit all-property tiebreak)
     uint32_t dist;     // raw circular next-ref distance (stored_epoch + ne - cur_epoch) % ne
     bool     stamped;  // epoch is meaningful here (property line with a live stamp)
+    uint32_t next_use = 0; // quantized absolute future position
+    FutureState future_state = FutureState::UNKNOWN;
 };
 
 inline bool victimUsedEpoch(
@@ -537,6 +559,56 @@ inline size_t selectVictim(WayState* ways, size_t n, int variant,
             }
         }
         return selected(victim, VictimReason::LRU);
+    }
+
+    // Preserve global LRU for ungoverned traffic. A known-dead property line is
+    // always safe to discard before a line that may be reused. Otherwise, only
+    // refine an LRU choice that is already a governed finite-use property line.
+    if (variant == NEXT_USE_LRU) {
+        size_t lru = 0;
+        uint64_t oldest = ways[0].recency;
+        for (size_t i = 1; i < n; ++i) {
+            if (ways[i].recency < oldest) {
+                oldest = ways[i].recency;
+                lru = i;
+            }
+        }
+
+        size_t dead = n;
+        uint64_t deadOldest = 0;
+        for (size_t i = 0; i < n; ++i) {
+            if (ways[i].prop &&
+                ways[i].future_state == FutureState::DEAD &&
+                (dead == n || ways[i].recency < deadOldest)) {
+                dead = i;
+                deadOldest = ways[i].recency;
+            }
+        }
+        if (dead != n)
+            return selected(dead, VictimReason::DEAD_PROPERTY);
+
+        if (!ways[lru].prop ||
+            ways[lru].future_state != FutureState::FINITE) {
+            return selected(lru, VictimReason::LRU);
+        }
+
+        size_t victim = lru;
+        uint32_t farthest = ways[lru].next_use;
+        uint64_t victimOldest = ways[lru].recency;
+        for (size_t i = 0; i < n; ++i) {
+            if (!ways[i].prop ||
+                ways[i].future_state != FutureState::FINITE) {
+                continue;
+            }
+            if (ways[i].next_use > farthest ||
+                (ways[i].next_use == farthest &&
+                 ways[i].recency < victimOldest)) {
+                victim = i;
+                farthest = ways[i].next_use;
+                victimOldest = ways[i].recency;
+            }
+        }
+        return selected(victim, VictimReason::NEXT_USE_PROPERTY);
     }
 
     if (variant == RECORD_LRU) {

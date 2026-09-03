@@ -1496,6 +1496,15 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
         env["ECG_MODE"] = spec.ecg_mode
         env["ECG_VARIANT"] = effective_ecg_variant(
             args, transport.reuse_plan_depth, spec)
+        if spec.label == "ECG_NEXT_USE_LRU":
+            env.update({
+                "ECG_NEXT_USE_RECORD": "1",
+                "ECG_NEXT_USE_LRU": "1",
+                "ECG_NEXT_USE_BITS": "8",
+                "ECG_RECORD_TIER_BITS": "0",
+                "ECG_EDGE_MASK_CHARGED": "1",
+                "ECG_EXPECT_BYTES_PER_EDGE": "4",
+            })
         if spec.ecg_mode == "ECG_GRASP_POPT":
             env.update({
                 "ECG_EXACT_REREF": "1",
@@ -1764,6 +1773,38 @@ def apply_explicit_cell_mechanism_env(
         )
         if allowed:
             env[str(key)] = str(value)
+
+
+def apply_next_use_record_receipt(
+        row: dict[str, Any], log_text: str, required: bool = False) -> bool:
+    receipt = re.search(
+        r"\[ECG-NEXT-USE-RECORD bits=(\d+) id_bits=(\d+) "
+        r"tier_bits=(\d+) next_bits=(\d+) state_bits=(\d+) "
+        r"records=(\d+)\]",
+        log_text)
+    if not receipt:
+        if required:
+            mark_row_error(row, "next-use packed-record receipt missing")
+        return False
+    total_bits, id_bits, tier_bits, next_bits, state_bits, records = (
+        map(int, receipt.groups()))
+    valid = (
+        total_bits == 32 and
+        id_bits + tier_bits + next_bits + state_bits <= total_bits and
+        tier_bits == 0 and state_bits == 2 and
+        next_bits > 0 and records > 0)
+    row.update({
+        "ecg_next_use_record_validated": int(valid),
+        "ecg_next_use_id_bits": id_bits,
+        "ecg_next_use_tier_bits": tier_bits,
+        "ecg_next_use_bits": next_bits,
+        "ecg_next_use_state_bits": state_bits,
+        "ecg_next_use_records": records,
+        "ecg_record_replaces_edge": 1,
+    })
+    if not valid:
+        mark_row_error(row, "invalid next-use packed-record receipt")
+    return valid
 
 
 def apply_gem5_compact_fused_receipt(
@@ -3197,6 +3238,8 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "total_accesses": data.get("total_accesses"),
         "memory_accesses": data.get("memory_accesses"),
     })
+    apply_next_use_record_receipt(
+        row, log_text, required=spec.label == "ECG_NEXT_USE_LRU")
     metadata_receipt = re.search(
         r"\[ECG-METADATA [^\]]*record_bytes=(\d+)"
         r"[^\]]*bytes_per_edge=([0-9.]+)[^\]]*\]",

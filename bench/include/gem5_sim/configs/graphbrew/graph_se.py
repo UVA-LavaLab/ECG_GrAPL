@@ -141,6 +141,8 @@ def benchmark_environment(args):
         "ECG_DELIVERY",
         "ECG_SIDECAR_PAYLOAD_BITS",
         "ECG_RECORD_TIER_BITS",
+        "ECG_NEXT_USE_RECORD",
+        "ECG_NEXT_USE_BITS",
         "ECG_VIRTUAL_ID_BITS",
         "ECG_EDGE_MASK_CHARGED",
         # The enforcement knob itself. Without it the guest cannot abort on a

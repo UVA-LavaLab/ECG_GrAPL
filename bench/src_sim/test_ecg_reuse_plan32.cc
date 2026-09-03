@@ -33,6 +33,36 @@ bool checkTierWidthBoundary() {
         printf("N18 TIERED RECORD MUST NOT FIT IN 32 BITS\n");
         return false;
     }
+    if (!ecg_reuse_plan::canPackNextUseRecord32(n18, 8, 0) ||
+        !ecg_reuse_plan::canPackNextUseRecord32(1u << 22, 8, 0) ||
+        ecg_reuse_plan::canPackNextUseRecord32(1u << 23, 8, 0)) {
+        printf("NEXT-USE 32-BIT WIDTH BOUNDARY MISMATCH\n");
+        return false;
+    }
+    for (uint32_t dest : {0u, 1u, n18 - 1u}) {
+        for (uint16_t next : {
+                uint16_t(0), uint16_t(127), uint16_t(255)}) {
+            for (auto state : {
+                    ecg_reuse_plan::NextUseState::FINITE,
+                    ecg_reuse_plan::NextUseState::DEAD,
+                    ecg_reuse_plan::NextUseState::WRAP}) {
+                const uint32_t record =
+                    ecg_reuse_plan::packNextUseRecord32(
+                        dest, 0, next, state, 18, 8, 0);
+                if (ecg_reuse_plan::extractNextUseRecord32Dest(
+                        record, 18) != dest ||
+                    ecg_reuse_plan::extractNextUseRecord32Tier(
+                        record, 18, 0) != 0 ||
+                    ecg_reuse_plan::extractNextUseRecord32Position(
+                        record, 18, 8, 0) != next ||
+                    ecg_reuse_plan::extractNextUseRecord32State(
+                        record, 18, 8, 0) != state) {
+                    printf("NEXT-USE 32-BIT ROUND TRIP MISMATCH\n");
+                    return false;
+                }
+            }
+        }
+    }
     // Undefined tier widths fail closed instead of packing a field no
     // decoder implements.
     for (uint32_t tier_bits : {1u, 3u, 4u, 8u}) {
@@ -115,6 +145,48 @@ int main(int argc, char* argv[]) {
     Graph g = b.MakeGraph();
     const uint32_t n = static_cast<uint32_t>(g.num_nodes());
     uint64_t total_csr_checked = 0;
+    {
+        std::vector<std::vector<uint32_t>> records;
+        if (!ecg_reuse_plan::buildInEdgeNextUseRecords32(
+                g, 16, 8, true, records, 0)) {
+            printf("NEXT-USE RECORD CONSTRUCTION FAILED\n");
+            return 1;
+        }
+        const uint32_t id_bits =
+            ecg_reuse_plan::reusePlan32IdBits(n);
+        uint64_t checked = 0;
+        for (uint32_t src = 0; src < n; ++src) {
+            size_t edge = 0;
+            for (auto dest_raw : g.in_neigh(src)) {
+                if (edge >= records[src].size()) {
+                    printf("NEXT-USE ROW TOO SHORT src=%u\n", src);
+                    return 1;
+                }
+                const uint32_t record = records[src][edge++];
+                if (ecg_reuse_plan::extractNextUseRecord32Dest(
+                        record, id_bits) !=
+                        static_cast<uint32_t>(dest_raw) ||
+                    ecg_reuse_plan::extractNextUseRecord32State(
+                        record, id_bits, 8, 0) ==
+                        ecg_reuse_plan::NextUseState::UNKNOWN) {
+                    printf("NEXT-USE RECORD MISMATCH src=%u edge=%zu\n",
+                           src, edge - 1);
+                    return 1;
+                }
+                ++checked;
+            }
+            if (edge != records[src].size()) {
+                printf("NEXT-USE ROW TOO LONG src=%u\n", src);
+                return 1;
+            }
+        }
+        if (checked == 0) {
+            printf("NO NEXT-USE RECORDS CHECKED\n");
+            return 1;
+        }
+        printf("NEXT-USE RECORDS CHECKED: %llu\n",
+               static_cast<unsigned long long>(checked));
+    }
 
     for (uint32_t ne : {8u, 16u, 32u, 64u}) {
         std::vector<uint64_t> off64, rec64;
