@@ -360,6 +360,29 @@ directed Twitter graph, the runner enables the in-place two-pass builder, which
 uses O(property-lines) auxiliary memory and emits progress receipts rather
 than allocating O(edges) destination, distance, and lookahead arrays.
 
+Run the full directed Twitter proof with:
+
+```bash
+python3 scripts/experiments/ecg/roi_matrix.py \
+  --suite cache-sim --benchmark pr \
+  --options \
+    '-f results/graphs/twitter-2010/twitter-2010-dbg.sg -o 0 -n 1 -i 1 -t 0' \
+  --policies LRU SRRIP GRASP:PAPER POPT:UNCHARGED POPT \
+    ECG:REF32_SCALE_R_COMMIT ECG:REF32_SCALE_RP_COMMIT \
+  --l1d-size 32kB --l1d-ways 8 \
+  --l2-size 128kB --l2-ways 8 \
+  --l3-sizes 8MB --l3-ways 16 \
+  --cache-sim-omp-threads 1 \
+  --popt-reserve-model size_correct \
+  --popt-property-bytes 4 --popt-active-columns 2 \
+  --popt-num-epochs 256 --popt-matrix-stream analytic \
+  --prefetcher none --flowthrough off \
+  --out-dir results/ecg_experiments/runs/twitter_ref32
+```
+
+Require all rows to report one iteration, 1,468,364,884 semantic edges, and
+score checksum `df4fdaf1e3957ce9`.
+
 ### Separate transport campaign
 
 The `reuse_plan_transport_campaign` profile holds replacement at pure LRU in

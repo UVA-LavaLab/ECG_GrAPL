@@ -279,6 +279,25 @@ full-capacity P-OPT in LLC misses, aggregate traffic no worse than P-OPT, and
 validated 32-bit record, 32-bit deadline, bounded-channel, prefetch, and
 resource receipts. Full Twitter evidence remains a separate required gate.
 
+The certified Twitter gate completed on graph SHA-256
+`7942eb7fb4376e66f2e0e0a569e6d1093659d9949e24d899d02509674d828be3`.
+All seven policies executed one complete sweep of 1,468,364,884 directed
+edges and produced score checksum `df4fdaf1e3957ce9`.
+
+At an 8 MiB, 16-way LLC, scale6 replacement-only records 326,257,584
+LLC misses. The combined replacement-plus-prefetch policy records 292,056,469:
+35.5% fewer than LRU, 32.1% fewer than SRRIP, 23.2% fewer than
+`GRASP_PAPER`, and 21.3% fewer than full-capacity uncharged P-OPT. Its
+off-chip traffic is 12.1% below uncharged P-OPT.
+
+The combined row issues 34,273,001 prefetches, of which 34,200,921 are useful.
+The commit and prefetch queues report zero capacity drops, with maximum
+occupancies of eight and one entries respectively. Accounted REF32 state is
+4,590,584 bits versus 5,331,486,720 bits for the 256-epoch P-OPT matrix, a
+1,161.4x reduction. The authoritative matrix is
+`results/ecg_experiments/runs/twitter_ref32_7669a3aa/roi_matrix.json`
+(SHA-256 `610cc706b51d65aabb1a22dee652669e8a75ca1783e24abf223990ca89a1c48f`).
+
 REF32 rows are accepted only when the graph filename certifies DBG order, the
 record/commit/prefetch/resource receipts validate, no runtime P-OPT matrix is
 present, semantic output matches, both queues drain, and the record remains four
