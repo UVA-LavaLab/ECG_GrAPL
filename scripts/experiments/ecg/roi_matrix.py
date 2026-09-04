@@ -6984,7 +6984,9 @@ def main(argv: list[str]) -> int:
                 f"{label} size must contain an integral number of "
                 "cache sets")
         sets = size_bytes // set_bytes
-        if (sets & (sets - 1)) != 0:
+        if (
+                (sets & (sets - 1)) != 0 and
+                not (label == "L3" and args.suite == "cache-sim")):
             raise SystemExit(
                 f"{label} cache set count must be a power of two")
     if (

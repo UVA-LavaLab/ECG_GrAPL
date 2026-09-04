@@ -277,6 +277,22 @@ void testCacheIntegration() {
           "governed LLC miss is counted independently");
 }
 
+void testNonPowerOfTwoSharedCacheGeometry() {
+    cache_sim::CacheLevel cache(
+        "L3", 3 * 2 * 64, 64, 2, cache_sim::EvictionPolicy::LRU);
+    check(cache.getNumSets() == 3 &&
+          cache.setIndexForAddress(0) == 0 &&
+          cache.setIndexForAddress(64) == 1 &&
+          cache.setIndexForAddress(128) == 2 &&
+          cache.setIndexForAddress(192) == 0,
+          "non-power-of-two LLC uses modulo set indexing");
+
+    cache.insert(0, false);
+    cache.insert(192, false);
+    check(cache.contains(0) && cache.contains(192),
+          "non-power-of-two LLC tags distinguish lines in one set");
+}
+
 void testDelayedLlcOnlyPrefetch() {
     setenv("ECG_REF32_PREFETCH", "1", 1);
     setenv("ECG_REF32_PREFETCH_QUEUE", "8", 1);
@@ -354,6 +370,7 @@ int main() {
     testBuilder();
     testFreshnessAndVictims();
     testCacheIntegration();
+    testNonPowerOfTwoSharedCacheGeometry();
     testDelayedLlcOnlyPrefetch();
     std::printf("REF32 TESTS: %s\n", failures == 0 ? "PASS" : "FAIL");
     return failures == 0 ? 0 : 1;

@@ -96,7 +96,7 @@ namespace topt {
     inline std::vector<uint8_t>  trace_prop_bypass;
     inline thread_local bool current_request_bypass = false;
     inline uint32_t offset_bits = 6;
-    inline uint32_t index_bits = 0;
+    inline uint64_t num_sets = 1;
     inline uint32_t ways = 16;
     inline bool geom_captured = false;
     inline size_t roi_start_index = 0;
@@ -104,6 +104,12 @@ namespace topt {
     inline bool roi_started = false;
     inline uint64_t trace_hash = 1469598103934665603ULL;
     inline uint64_t trace_line_hash = 1469598103934665603ULL;
+
+    inline uint64_t set_index(uint64_t line) {
+        return (num_sets & (num_sets - 1)) == 0
+            ? line & (num_sets - 1)
+            : line % num_sets;
+    }
 
     class RequestClassScope {
       public:
@@ -149,8 +155,7 @@ namespace topt {
         next_use.assign(T, UINT32_MAX);
         if (T == 0) return;
         const uint32_t ob = offset_bits;
-        const uint64_t num_sets = (index_bits > 0) ? (1ULL << index_bits) : 1ULL;
-        const uint64_t set_mask = num_sets - 1;
+        const uint64_t set_count = num_sets;
         static const bool seq = std::getenv("TOPT_SEQ") != nullptr;
         int nthreads = 1;
         if (!seq) {
@@ -163,7 +168,7 @@ namespace topt {
             omp_set_num_threads(nthreads);
         }
         auto t0 = std::chrono::steady_clock::now();
-        if (seq || num_sets <= 1) {
+        if (seq || set_count <= 1) {
             std::unordered_map<uint64_t, uint32_t> np;
             np.reserve(T / 4 + 16);
             for (size_t i = T; i-- > 0; ) {
@@ -178,42 +183,44 @@ namespace topt {
             std::vector<size_t> cstart(P + 1);
             for (int p = 0; p <= P; ++p) cstart[p] = (T * (size_t)p) / P;
             // Step 1: per-thread per-set histogram (fully parallel, no contention).
-            std::vector<uint64_t> cnt((size_t)P * num_sets, 0);
+            std::vector<uint64_t> cnt((size_t)P * set_count, 0);
             #pragma omp parallel num_threads(P)
             {
                 int p = omp_get_thread_num();
-                uint64_t* c = &cnt[(size_t)p * num_sets];
-                for (size_t i = cstart[p]; i < cstart[p + 1]; ++i) c[(tp[i] >> ob) & set_mask]++;
+                uint64_t* c = &cnt[(size_t)p * set_count];
+                for (size_t i = cstart[p]; i < cstart[p + 1]; ++i)
+                    ++c[set_index(tp[i] >> ob)];
             }
             // Step 2: exclusive prefix over (set, thread) -> global start per (thread,set).
-            std::vector<uint64_t> off(num_sets + 1, 0);
-            std::vector<uint64_t> tstart((size_t)P * num_sets);
+            std::vector<uint64_t> off(set_count + 1, 0);
+            std::vector<uint64_t> tstart((size_t)P * set_count);
             {
                 uint64_t running = 0;
-                for (uint64_t s = 0; s < num_sets; ++s) {
+                for (uint64_t s = 0; s < set_count; ++s) {
                     off[s] = running;
                     for (int p = 0; p < P; ++p) {
-                        tstart[(size_t)p * num_sets + s] = running;
-                        running += cnt[(size_t)p * num_sets + s];
+                        tstart[(size_t)p * set_count + s] = running;
+                        running += cnt[(size_t)p * set_count + s];
                     }
                 }
-                off[num_sets] = running;
+                off[set_count] = running;
             }
             // Step 3: scatter (fully parallel; each thread owns disjoint slots, order preserved).
             std::vector<uint32_t> by_set(T);
             #pragma omp parallel num_threads(P)
             {
                 int p = omp_get_thread_num();
-                std::vector<uint64_t> cur(num_sets);
-                for (uint64_t s = 0; s < num_sets; ++s) cur[s] = tstart[(size_t)p * num_sets + s];
+                std::vector<uint64_t> cur(set_count);
+                for (uint64_t s = 0; s < set_count; ++s)
+                    cur[s] = tstart[(size_t)p * set_count + s];
                 for (size_t i = cstart[p]; i < cstart[p + 1]; ++i) {
-                    uint64_t s = (tp[i] >> ob) & set_mask;
+                    uint64_t s = set_index(tp[i] >> ob);
                     by_set[cur[s]++] = (uint32_t)i;
                 }
             }
             // Step 4: per-set next-occurrence (parallel over sets; small per-set line map).
             #pragma omp parallel for schedule(dynamic, 8)
-            for (uint64_t s = 0; s < num_sets; ++s) {
+            for (uint64_t s = 0; s < set_count; ++s) {
                 std::unordered_map<uint64_t, uint32_t> last;
                 for (uint64_t k = off[s + 1]; k-- > off[s]; ) {
                     uint32_t i = by_set[k];
@@ -239,14 +246,13 @@ namespace topt {
         hits = 0; misses = 0;
         const size_t T = t.size();
         if (T == 0) return;
-        const uint64_t num_sets = (index_bits > 0) ? (1ULL << index_bits) : 1ULL;
-        const uint64_t set_mask = num_sets - 1;
+        const uint64_t set_count = num_sets;
         std::vector<uint32_t> next_use;
         compute_next_use(t, next_use);
-        std::vector<std::unordered_map<uint64_t, uint32_t>> resident(num_sets);
+        std::vector<std::unordered_map<uint64_t, uint32_t>> resident(set_count);
         for (size_t i = 0; i < T; ++i) {
             uint64_t line = t[i] >> offset_bits;
-            uint64_t s = line & set_mask;
+            uint64_t s = set_index(line);
             auto& R = resident[s];
             auto it = R.find(line);
             if (it != R.end()) {
@@ -279,15 +285,14 @@ namespace topt {
         hits = 0; misses = 0;
         const size_t T = trace.size();
         if (T == 0 || trace_is_prop.size() != T) return;
-        const uint64_t num_sets = (index_bits > 0) ? (1ULL << index_bits) : 1ULL;
-        const uint64_t set_mask = num_sets - 1;
+        const uint64_t set_count = num_sets;
         std::vector<uint32_t> next_use;
         compute_next_use(trace, next_use);
         struct Rl { uint32_t nu; uint8_t prop; };
-        std::vector<std::unordered_map<uint64_t, Rl>> res(num_sets);
+        std::vector<std::unordered_map<uint64_t, Rl>> res(set_count);
         for (size_t i = 0; i < T; ++i) {
             uint64_t line = trace[i] >> offset_bits;
-            uint64_t s = line & set_mask;
+            uint64_t s = set_index(line);
             uint8_t prop = trace_is_prop[i];
             auto& M = res[s];
             auto it = M.find(line);
@@ -323,7 +328,6 @@ namespace topt {
             std::cerr << "[T_OPT] no ROI L3 accesses recorded\n";
             return;
         }
-        const uint64_t num_sets = (index_bits > 0) ? (1ULL << index_bits) : 1ULL;
         const size_t roi_accesses = trace.size() - roi_start_index;
         const size_t roi_property_accesses =
             trace_prop.size() - roi_property_start_index;
@@ -365,8 +369,13 @@ namespace topt {
         return e;
     }();
 
-    inline void capture_geom(uint32_t ob, uint32_t ib, uint32_t w) {
-        if (!geom_captured) { offset_bits = ob; index_bits = ib; ways = w; geom_captured = true; }
+    inline void capture_geom(uint32_t ob, uint64_t sets, uint32_t w) {
+        if (!geom_captured) {
+            offset_bits = ob;
+            num_sets = sets;
+            ways = w;
+            geom_captured = true;
+        }
     }
     inline void record(
             uint64_t address, bool is_property, bool is_write) {
@@ -1001,9 +1010,8 @@ public:
                 "P-OPT and ECG support at most 64 cache ways");
         }
         num_sets_ = size_bytes / (line_size * associativity);
-        if ((num_sets_ & (num_sets_ - 1)) != 0)
-            throw std::invalid_argument(
-                "cache set count must be a power of two");
+        power_of_two_sets_ =
+            (num_sets_ & (num_sets_ - 1)) == 0;
         
         // Calculate bit widths
         offset_bits_ = log2i(line_size);
@@ -1033,7 +1041,8 @@ public:
 
         // T-OPT: record the L3 input stream (post-L1/L2). Only the LLC level.
         if (topt::enabled && (name_ == "L3" || name_ == "L3-Shared")) {
-            topt::capture_geom(offset_bits_, index_bits_, (uint32_t)associativity_);
+            topt::capture_geom(
+                offset_bits_, num_sets_, (uint32_t)associativity_);
             bool is_prop = graph_ctx_ && graph_ctx_->isPropertyData(address);
             topt::record(address, is_prop, is_write);
         }
@@ -1747,11 +1756,17 @@ private:
     }
 
     uint64_t getTag(uint64_t address) const {
-        return address >> (offset_bits_ + index_bits_);
+        const uint64_t line = address >> offset_bits_;
+        return power_of_two_sets_
+            ? address >> (offset_bits_ + index_bits_)
+            : line / num_sets_;
     }
 
     size_t getSetIndex(uint64_t address) const {
-        return (address >> offset_bits_) & ((1ULL << index_bits_) - 1);
+        const uint64_t line = address >> offset_bits_;
+        return power_of_two_sets_
+            ? line & (num_sets_ - 1)
+            : static_cast<size_t>(line % num_sets_);
     }
 
     void updateOnHit(
@@ -2969,6 +2984,7 @@ private:
     size_t num_sets_;
     size_t offset_bits_;
     size_t index_bits_;
+    bool power_of_two_sets_ = true;
     EvictionPolicy policy_;
     
     std::vector<std::vector<CacheLine>> cache_;

@@ -51,8 +51,8 @@ def output_descriptor(path: Path) -> dict:
             "L3 size must contain an integral number of cache sets",
         ),
         (
-            ["--l3-sizes", "3MB"],
-            "L3 cache set count must be a power of two",
+            ["--l2-size", "3MB"],
+            "L2 cache set count must be a power of two",
         ),
         (
             ["--line-size", "96"],
@@ -75,6 +75,18 @@ def test_roi_matrix_rejects_unsafe_cache_geometry(
     ], cwd=ROOT, capture_output=True, text=True)
     assert result.returncode != 0
     assert message in result.stderr
+
+
+def test_roi_matrix_accepts_non_power_of_two_l3_for_cache_sim():
+    result = subprocess.run([
+        sys.executable,
+        str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "cache-sim",
+        "--dry-run",
+        "--policies", "LRU",
+        "--l3-sizes", "3MB",
+    ], cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 def test_controlled_profiles_fail_before_running_dirty_worktree(
