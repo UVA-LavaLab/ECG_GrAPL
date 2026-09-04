@@ -1,6 +1,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -17,6 +18,7 @@ MANIFEST = (
 SCREEN = (
     ROOT / "scripts/experiments/ecg/configs/"
     "pagerank_literature_scale.json")
+CONVERTER = ROOT / "bench/bin/converter"
 
 
 def load_module():
@@ -117,6 +119,28 @@ def test_parse_pagerank_semantic_receipt():
     }
     with pytest.raises(ValueError, match="receipt is missing"):
         module.parse_pr_receipt("no receipt")
+
+
+def test_low_memory_flag_preserves_following_reorder_option(tmp_path):
+    if not CONVERTER.is_file():
+        pytest.skip("converter binary not built")
+    edge_list = tmp_path / "varying-degree.el"
+    edge_list.write_text(
+        "0 1\n0 2\n0 3\n0 4\n1 0\n2 0\n3 0\n4 0\n4 1\n")
+    original_base = tmp_path / "original"
+    subprocess.run(
+        [str(CONVERTER), "-f", str(edge_list), "-b", str(original_base)],
+        cwd=ROOT, check=True, capture_output=True, text=True)
+    reordered_base = tmp_path / "reordered"
+    result = subprocess.run(
+        [
+            str(CONVERTER), "-f", str(original_base.with_suffix(".sg")),
+            "-m", "-o", "5", "-b", str(reordered_base),
+        ],
+        cwd=ROOT, check=True, capture_output=True, text=True)
+    assert "DBG Map Time" in result.stdout
+    assert original_base.with_suffix(".sg").read_bytes() != \
+        reordered_base.with_suffix(".sg").read_bytes()
 
 
 def test_rebuilt_timing_sample_invalidates_semantic_receipt(

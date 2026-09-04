@@ -34,7 +34,7 @@ protected:
     int argc_;
     char **argv_;
     std::string name_;
-    std::string get_args_ = "f:g:hk:su:m:o:zj:SlD:";
+    std::string get_args_ = "f:g:hk:su:mo:zj:SlD:";
     std::vector<std::string> help_strings_;
     std::vector<std::pair<ReorderingAlgo, std::vector<std::string> > >
     reorder_options_;
