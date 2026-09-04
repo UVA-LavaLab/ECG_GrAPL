@@ -10,7 +10,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 from typing import Any
@@ -93,7 +92,20 @@ def decompress_gzip(source: Path, destination: Path) -> None:
     temporary = destination.with_suffix(destination.suffix + ".tmp")
     temporary.unlink(missing_ok=True)
     with gzip.open(source, "rb") as compressed, temporary.open("wb") as out:
-        shutil.copyfileobj(compressed, out, 16 * 1024 * 1024)
+        completed = 0
+        next_report = 1 << 30
+        while True:
+            chunk = compressed.read(16 * 1024 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
+            completed += len(chunk)
+            if completed >= next_report:
+                print(
+                    f"[graph-corpus] decompress {source.name} "
+                    f"output_gib={completed / (1 << 30):.1f}",
+                    flush=True)
+                next_report += 1 << 30
         out.flush()
         os.fsync(out.fileno())
     os.replace(temporary, destination)
@@ -101,7 +113,7 @@ def decompress_gzip(source: Path, destination: Path) -> None:
 
 def convert(
         edge_list: Path, output: Path, symmetrize: bool,
-        reorder: int = 0) -> None:
+        reorder: int = 0, low_memory: bool = False) -> None:
     if not CONVERTER.is_file():
         raise SystemExit(
             f"missing converter {CONVERTER}; run make converter")
@@ -111,6 +123,7 @@ def convert(
     command = [
         str(CONVERTER), "-f", str(edge_list),
         *([] if not symmetrize else ["-s"]),
+        *([] if not low_memory else ["-m"]),
         "-o", str(reorder),
         "-b", str(temporary_base),
     ]
@@ -458,7 +471,9 @@ def main(argv: list[str]) -> int:
                     raise SystemExit(
                         f"missing edge list for {graph['name']}: "
                         f"{edge_list}")
-                convert(edge_list, sg, bool(graph["symmetrize"]))
+                convert(
+                    edge_list, sg, bool(graph["symmetrize"]),
+                    low_memory=graph.get("role") == "scale_stress")
             if not args.download_only and (
                     args.force_convert or not dbg_sg.is_file()):
                 if not sg.is_file():
@@ -467,7 +482,8 @@ def main(argv: list[str]) -> int:
                         f"{sg}")
                 convert(
                     sg, dbg_sg, False,
-                    int(graph.get("reorder", 5)))
+                    int(graph.get("reorder", 5)),
+                    low_memory=graph.get("role") == "scale_stress")
     if args.prepare_samples or args.samples_only:
         for graph in selected:
             prepare_timing_sample(
