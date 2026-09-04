@@ -380,6 +380,11 @@ python3 scripts/experiments/ecg/roi_matrix.py \
   --out-dir results/ecg_experiments/runs/twitter_ref32
 ```
 
+This 8 MiB run is the primary target configuration. `size_correct` reserves
+enough ways for the two complete resident P-OPT columns; on Twitter that is 10
+of 16 ways, not a fixed two-way reservation. `POPT:UNCHARGED` remains in the
+matrix to separate replacement quality from that graph-scaled storage cost.
+
 Require all rows to report one iteration, 1,468,364,884 semantic edges, and
 score checksum `df4fdaf1e3957ce9`.
 

@@ -110,6 +110,31 @@ sweep-order epoch assumption, so those rows remain diagnostic.
 The two resident columns are current and next. Initial loading belongs to
 cumulative stream traffic, not a third resident column.
 
+`size_correct` scales the reservation with both the graph and LLC rather than
+assuming that "two columns" means two cache ways:
+
+```
+column_bytes = ceil(vertices * property_bytes / line_size)
+reserved_ways = ceil(2 * column_bytes / bytes_per_way)
+```
+
+This matches the pinned P-OPT artifact's `registerOffsetMatrix()` rule: for
+PageRank, `m_startWay` is the ceiling of two irregular-data columns divided by
+one way's capacity, and ordinary data replacement considers only ways
+`m_startWay..15`. The charged row is therefore a scalability projection for
+the evaluated graph and LLC, not a claim that every P-OPT experiment reserves
+a fixed two ways.
+
+For Twitter-2010 at the primary 8 MiB, 16-way LLC, one column is 2,603,265
+bytes and the two resident columns require 10 ways, leaving six data ways.
+Full-capacity uncharged P-OPT records 371,203,581 LLC misses, 18.0% fewer than
+LRU's 452,625,102, so the replacement policy itself remains beneficial.
+Size-correct charged P-OPT records 483,462,525 demand misses; the loss of ten
+data ways accounts for the large gap, while the complete 256-column stream
+adds another 10,413,060 miss-equivalent transfers. Charged P-OPT being worse
+than LRU at this Twitter/8 MiB design point is thus a scaling result, not a
+contradiction of P-OPT's results on different graph/cache ratios.
+
 ### 5.1 GRASP paper baseline
 
 `GRASP_PAPER` preserves the upstream trace simulator's PageRank mapping:
