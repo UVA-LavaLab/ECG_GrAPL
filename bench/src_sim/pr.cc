@@ -1,4 +1,5 @@
 #include <atomic>
+#include <cstring>
 #include <type_traits>
 // Copyright (c) 2024, UVA LavaLab
 // PageRank with Cache Simulation
@@ -190,7 +191,9 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
             graph_ctx.ref32_record_enabled ? "pr-ref32" : "pr-next-use");
     }
     
+    int executed_iters = 0;
     for (int iter = 0; iter < max_iters; iter++) {
+        ++executed_iters;
         double error = 0;
         
         #pragma omp parallel for reduction(+ : error) schedule(dynamic, 64)
@@ -885,6 +888,24 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
             std::decay_t<CacheType>, CacheHierarchy>) {
         cache.flushRef32CommitUpdates();
     }
+
+    uint64_t checksum = 1469598103934665603ULL;
+    for (ScoreT score : scores) {
+        uint32_t bits = 0;
+        std::memcpy(&bits, &score, sizeof(bits));
+        checksum ^= bits;
+        checksum *= 1099511628211ULL;
+    }
+    const uint64_t semantic_edges =
+        static_cast<uint64_t>(executed_iters) *
+        static_cast<uint64_t>(g.num_edges_directed());
+    std::fprintf(
+        stderr,
+        "[ECG-PR-RESULT iterations=%d semantic_edges=%llu "
+        "score_checksum=%016llx]\n",
+        executed_iters,
+        static_cast<unsigned long long>(semantic_edges),
+        static_cast<unsigned long long>(checksum));
     
     return scores;
 }

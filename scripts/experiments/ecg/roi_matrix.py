@@ -3582,6 +3582,14 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "total_accesses": data.get("total_accesses"),
         "memory_accesses": data.get("memory_accesses"),
     })
+    pr_result = re.search(
+        r"\[ECG-PR-RESULT iterations=(\d+) semantic_edges=(\d+) "
+        r"score_checksum=([0-9a-fA-F]+)\]",
+        log_text)
+    if pr_result:
+        row["pr_iterations"] = int(pr_result.group(1))
+        row["pr_semantic_edges"] = int(pr_result.group(2))
+        row["pr_score_checksum"] = pr_result.group(3).lower()
     apply_next_use_record_receipt(
         row, log_text, required=spec.label == "ECG_NEXT_USE_LRU")
     is_ref32 = spec.label in REF32_POLICY_LABELS
@@ -6291,6 +6299,49 @@ def certify_gem5_pr_results(
                 f"{detail}"))
 
 
+def certify_cache_sim_pr_results(
+        rows: list[dict[str, Any]], args: argparse.Namespace) -> None:
+    if args.benchmark != "pr" or args.suite not in ("cache-sim", "both"):
+        return
+    cache_rows = [
+        row for row in rows
+        if row.get("simulator") == "cache_sim"
+    ]
+    if not any(
+            row.get("policy_label") in REF32_POLICY_LABELS
+            for row in cache_rows):
+        return
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in cache_rows:
+        key = (
+            row.get("options"), row.get("l3_size"), row.get("l3_ways"),
+            row.get("prefetcher"))
+        groups.setdefault(key, []).append(row)
+    for group_rows in groups.values():
+        receipts = {
+            (
+                row.get("pr_iterations"),
+                row.get("pr_semantic_edges"),
+                row.get("pr_score_checksum"),
+            )
+            for row in group_rows
+        }
+        receipt = next(iter(receipts), (None, None, None))
+        matched = (
+            len(receipts) == 1 and
+            all(value is not None for value in receipt))
+        if matched:
+            for row in group_rows:
+                row["pr_result_matched"] = 1
+            continue
+        detail = sorted(str(value) for value in receipts)
+        for row in group_rows:
+            row["pr_result_matched"] = 0
+            mark_row_error(row, (
+                "cache_sim PageRank semantic receipt mismatch or missing: "
+                f"{detail}"))
+
+
 def certify_detailed_kernel_results(
         rows: list[dict[str, Any]], args: argparse.Namespace) -> None:
     """Require identical full-kernel outputs across matched detailed rows."""
@@ -6992,6 +7043,7 @@ def main(argv: list[str]) -> int:
 
     certify_sniper_semantic_work(rows, args, policies)
     certify_cache_sim_trace_identity(rows, args, policies)
+    certify_cache_sim_pr_results(rows, args)
     certify_gem5_pr_results(rows, args)
     certify_detailed_kernel_results(rows, args)
     if not args.dry_run:

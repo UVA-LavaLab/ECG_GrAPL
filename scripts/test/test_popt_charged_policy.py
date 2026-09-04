@@ -453,6 +453,31 @@ def test_ref32_detailed_backends_are_explicitly_unsupported(tmp_path):
     assert "native commit-update" in sniper_row["error"]
 
 
+def test_cache_sim_ref32_pagerank_receipts_fail_closed():
+    args = Namespace(benchmark="pr", suite="cache-sim")
+    common = {
+        "simulator": "cache_sim",
+        "options": "-f graph-dbg.sg -i 1 -t 0",
+        "l3_size": "512kB",
+        "l3_ways": "16",
+        "prefetcher": "none",
+        "status": "ok",
+        "pr_iterations": 1,
+        "pr_semantic_edges": 100,
+        "pr_score_checksum": "deadbeef",
+    }
+    rows = [
+        dict(common, policy_label="LRU"),
+        dict(common, policy_label="ECG_REF32_SCALE_RP_COMMIT"),
+    ]
+    roi_matrix.certify_cache_sim_pr_results(rows, args)
+    assert all(row["pr_result_matched"] == 1 for row in rows)
+
+    rows[1]["pr_score_checksum"] = "bad"
+    roi_matrix.certify_cache_sim_pr_results(rows, args)
+    assert all(row["status"] == "error" for row in rows)
+
+
 def test_next_use_gem5_mechanism_is_request_bound():
     guest = (PROJECT_ROOT / "bench/src_gem5/pr.cc").read_text()
     policy = (
