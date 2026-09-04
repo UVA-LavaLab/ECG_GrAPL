@@ -75,6 +75,7 @@ struct Config {
     int record_bytes = 4;    // PackedRecord container width
     int payload_bits = 0;    // Sidecar bits per edge
     int next_use_bits = 0;
+    int ref_token_bits = 0;
     int reference_bits = 0;
     int future_state_bits = 0;
     int prefetch_action_bits = 0;
@@ -147,11 +148,16 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
         c.stamps = 0;
         c.epoch_bits = 0;
         c.tier_bits = 0;
-        c.reference_bits =
-            envInt("ECG_REF32_REFERENCE_BITS", 8, 5, 12);
-        c.future_state_bits = 2;
-        c.prefetch_action_bits =
-            envInt("ECG_REF32_ACTION_BITS", 4, 0, 12);
+        const char* ref_format = std::getenv("ECG_REF32_FORMAT");
+        if (ref_format && std::string(ref_format) == "scale6") {
+            c.ref_token_bits = 6;
+        } else {
+            c.reference_bits =
+                envInt("ECG_REF32_REFERENCE_BITS", 8, 5, 12);
+            c.future_state_bits = 2;
+            c.prefetch_action_bits =
+                envInt("ECG_REF32_ACTION_BITS", 4, 0, 12);
+        }
     }
     const int epoch_payload_bits =
         c.next_use_bits > 0 ? 0 : c.epoch_bits * c.stamps;
@@ -164,11 +170,13 @@ inline Config configure(uint64_t num_vertices, uint32_t num_epochs) {
         ? forced_payload
         : epoch_payload_bits + c.tier_bits +
           c.next_use_bits + c.reference_bits +
-          c.future_state_bits + c.prefetch_action_bits;
+          c.ref_token_bits + c.future_state_bits +
+          c.prefetch_action_bits;
 
     const int needed = c.id_bits + epoch_payload_bits + c.tier_bits +
                        c.next_use_bits + c.future_state_bits +
-                       c.reference_bits + c.prefetch_action_bits +
+                       c.ref_token_bits + c.reference_bits +
+                       c.prefetch_action_bits +
                        envInt("ECG_RECORD_POPT_BITS", 0, 0, 8) +
                        envInt("ECG_RECORD_PREFETCH_BITS", 0, 0, 32);
     c.packed_fits = needed <= 32;
@@ -238,7 +246,8 @@ inline void declareContainerBytes(Config& c, int container_bytes) {
          (c.next_use_bits > 0 ? 0 : c.epoch_bits * c.stamps) +
          c.tier_bits + c.next_use_bits + c.future_state_bits) <=
             container_bytes * 8 &&
-        (c.id_bits + c.reference_bits + c.prefetch_action_bits +
+        (c.id_bits + c.ref_token_bits + c.reference_bits +
+         c.prefetch_action_bits +
          c.future_state_bits) <=
             container_bytes * 8;
 }
@@ -261,11 +270,13 @@ inline void announce(const Config& c, const char* kernel) {
     std::fprintf(stderr,
         "[ECG-METADATA kernel=%s delivery=%s stamps=%d epoch_bits=%d "
         "tier_bits=%d id_bits=%d record_bytes=%d payload_bits=%d "
-        "next_use_bits=%d reference_bits=%d state_bits=%d action_bits=%d "
+        "next_use_bits=%d token_bits=%d reference_bits=%d "
+        "state_bits=%d action_bits=%d "
         "bytes_per_edge=%.3f charged=%d flowthrough=%d packed_fits=%d]\n",
         kernel, deliveryName(c), c.stamps, c.epoch_bits, c.tier_bits,
         c.id_bits, c.record_bytes, c.payload_bits,
-        c.next_use_bits, c.reference_bits, c.future_state_bits,
+        c.next_use_bits, c.ref_token_bits, c.reference_bits,
+        c.future_state_bits,
         c.prefetch_action_bits, bytesPerEdge(c),
         c.charged ? 1 : 0, c.flowthrough ? 1 : 0, c.packed_fits ? 1 : 0);
 }

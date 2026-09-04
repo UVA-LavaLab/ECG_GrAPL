@@ -335,6 +335,14 @@ Accept only rows with validated REF32 record, commit-channel, prefetch,
 resource, DBG-order, geometry, policy, and semantic receipts. These runs
 provide cache and traffic evidence only; they do not provide a speedup claim.
 
+Twitter-scale encoding is screened before converting the billion-edge graph by
+using `ECG:REF32_SCALE_R_COMMIT` and
+`ECG:REF32_SCALE_RP_COMMIT`. These policies force a 26-bit destination and the
+six-bit scale token while retaining a four-byte edge record. On the full
+directed Twitter graph, the runner enables the in-place two-pass builder, which
+uses O(property-lines) auxiliary memory and emits progress receipts rather
+than allocating O(edges) destination, distance, and lookahead arrays.
+
 ### Separate transport campaign
 
 The `reuse_plan_transport_campaign` profile holds replacement at pure LRU in

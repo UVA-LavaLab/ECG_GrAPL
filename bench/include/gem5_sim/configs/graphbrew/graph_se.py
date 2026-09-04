@@ -145,6 +145,7 @@ def benchmark_environment(args):
         "ECG_NEXT_USE_BITS",
         "ECG_NEXT_USE_LRU",
         "ECG_REF32_RECORD",
+        "ECG_REF32_FORMAT",
         "ECG_REF32_REFERENCE_BITS",
         "ECG_REF32_ACTION_BITS",
         "ECG_VIRTUAL_ID_BITS",

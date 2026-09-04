@@ -2,8 +2,11 @@
 #define GRAPHBREW_ECG_REF32_H
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <vector>
 
@@ -19,6 +22,8 @@ static constexpr uint32_t kMaxIdBits = 32 - kMetadataBits;
 static constexpr uint32_t kExponentBits = 5;
 static constexpr uint32_t kDefaultDeadlineBits = 21;
 static constexpr uint32_t kMaxFiniteDistance = 0x7FFFFFFFu;
+static constexpr uint32_t kScaleTokenBits = 6;
+static constexpr uint32_t kScaleMaxIdBits = 32 - kScaleTokenBits;
 
 enum class State : uint8_t {
     UNKNOWN = 0,
@@ -33,6 +38,11 @@ struct DecodedRecord {
     State state = State::UNKNOWN;
     uint8_t action = 0;
     bool distance_valid = false;
+};
+
+enum class Format : uint8_t {
+    FULL14 = 0,
+    SCALE6 = 1,
 };
 
 inline uint32_t bitsForVertices(uint64_t num_vertices) {
@@ -234,12 +244,140 @@ inline DecodedRecord decodeRecord32(
     return decoded;
 }
 
+inline bool canPackScaleRecord32(
+        uint64_t num_vertices, uint32_t id_bits = 0) {
+    const uint32_t required =
+        id_bits ? id_bits : bitsForVertices(num_vertices);
+    return num_vertices > 0 && required <= kScaleMaxIdBits;
+}
+
+inline uint8_t scaleDistanceBucket(uint64_t distance) {
+    if (distance == 0) distance = 1;
+    uint32_t bucket = 0;
+    while (bucket < 30 &&
+           (uint64_t{1} << (bucket + 1)) <= distance) {
+        ++bucket;
+    }
+    return static_cast<uint8_t>(bucket);
+}
+
+inline uint32_t decodeScaleDistanceUpper(uint8_t bucket) {
+    const uint32_t clamped = std::min<uint32_t>(bucket, 30);
+    return clamped == 30
+        ? kMaxFiniteDistance
+        : (uint32_t{1} << (clamped + 1)) - 1u;
+}
+
+// Six-bit Twitter token:
+//   0 unknown, 1 dead, 2..32 finite-current, 33..63 wrap.
+inline uint8_t encodeScaleToken(uint64_t distance, State state) {
+    if (state == State::UNKNOWN) return 0;
+    if (state == State::DEAD) return 1;
+    const uint8_t bucket = scaleDistanceBucket(distance);
+    return static_cast<uint8_t>(
+        (state == State::WRAP ? 33u : 2u) + bucket);
+}
+
+inline State decodeScaleState(uint8_t token) {
+    if (token == 0) return State::UNKNOWN;
+    if (token == 1) return State::DEAD;
+    return token >= 33 ? State::WRAP : State::FINITE;
+}
+
+inline uint32_t decodeScaleDistance(uint8_t token) {
+    if (token < 2) return 0;
+    const uint8_t bucket = token >= 33
+        ? static_cast<uint8_t>(token - 33)
+        : static_cast<uint8_t>(token - 2);
+    return decodeScaleDistanceUpper(bucket);
+}
+
+inline uint32_t packScaleRecord32(
+        uint32_t destination, uint8_t token, uint32_t id_bits) {
+    const uint32_t id_mask =
+        id_bits >= 32 ? 0xFFFFFFFFu : ((uint32_t{1} << id_bits) - 1u);
+    return (destination & id_mask) |
+        ((static_cast<uint32_t>(token) & 0x3Fu) << id_bits);
+}
+
+inline DecodedRecord decodeScaleRecord32(
+        uint32_t record, uint32_t id_bits) {
+    DecodedRecord decoded;
+    decoded.destination = extractDestination(record, id_bits);
+    const uint8_t token =
+        static_cast<uint8_t>((record >> id_bits) & 0x3Fu);
+    decoded.state = decodeScaleState(token);
+    decoded.distance = decodeScaleDistance(token);
+    decoded.distance_valid =
+        decoded.state == State::FINITE || decoded.state == State::WRAP;
+    return decoded;
+}
+
 struct FlatRecords {
     std::vector<uint64_t> offsets;
     std::vector<uint32_t> records;
     // Diagnostic-only exact distances. The deployable path consumes records.
     std::vector<uint32_t> exact_distances;
 };
+
+inline uint32_t selectScalePrefetchDelta(
+        const uint32_t* records, uint64_t record_count, uint64_t position,
+        uint32_t id_bits, uint32_t vertices_per_line = 16) {
+    if (!records || position >= record_count || vertices_per_line == 0)
+        return 0;
+    const uint32_t current_line =
+        decodeScaleRecord32(records[position], id_bits).destination /
+        vertices_per_line;
+    uint64_t best = std::numeric_limits<uint64_t>::max();
+    uint32_t best_distance = std::numeric_limits<uint32_t>::max();
+    uint32_t best_lead_error = std::numeric_limits<uint32_t>::max();
+    for (uint32_t lead = 8; lead <= 15; ++lead) {
+        const uint64_t candidate = position + lead;
+        if (candidate >= record_count)
+            break;
+        const DecodedRecord decoded =
+            decodeScaleRecord32(records[candidate], id_bits);
+        const uint32_t candidate_line =
+            decoded.destination / vertices_per_line;
+        if (candidate_line == current_line)
+            continue;
+        bool first_in_window = true;
+        for (uint64_t prior = position + 1;
+             prior < candidate; ++prior) {
+            if (decodeScaleRecord32(
+                    records[prior], id_bits).destination /
+                    vertices_per_line == candidate_line) {
+                first_in_window = false;
+                break;
+            }
+
+        }
+        if (!first_in_window)
+            continue;
+        const uint32_t distance =
+            decoded.distance_valid ? decoded.distance : kMaxFiniteDistance;
+        const uint32_t lead_error =
+            lead > 10 ? lead - 10 : 10 - lead;
+        if (best == std::numeric_limits<uint64_t>::max() ||
+            distance < best_distance ||
+            (distance == best_distance &&
+             lead_error < best_lead_error)) {
+            best = candidate;
+            best_distance = distance;
+            best_lead_error = lead_error;
+        }
+    }
+    return best == std::numeric_limits<uint64_t>::max()
+        ? 0 : static_cast<uint32_t>(best - position);
+}
+
+inline uint32_t selectScalePrefetchDelta(
+        const std::vector<uint32_t>& records, uint64_t position,
+        uint32_t id_bits, uint32_t vertices_per_line = 16) {
+    return selectScalePrefetchDelta(
+        records.data(), records.size(), position,
+        id_bits, vertices_per_line);
+}
 
 inline bool buildFlatRecordsFromDestinations(
         uint32_t num_vertices, uint32_t vertices_per_line,
@@ -256,6 +394,7 @@ inline bool buildFlatRecordsFromDestinations(
         offsets.back() != destinations.size()) {
         return false;
     }
+
     for (size_t i = 1; i < offsets.size(); ++i) {
         if (offsets[i] < offsets[i - 1])
             return false;
@@ -365,6 +504,137 @@ inline bool buildFlatRecordsFromDestinations(
     return true;
 }
 
+inline bool buildFlatScaleRecordsFromDestinations(
+        uint32_t num_vertices, uint32_t vertices_per_line,
+        const std::vector<uint64_t>& offsets,
+        const std::vector<uint32_t>& destinations,
+        FlatRecords& output, uint32_t id_bits = 26) {
+    output = FlatRecords{};
+    if (!canPackScaleRecord32(num_vertices, id_bits) ||
+        vertices_per_line == 0 || offsets.empty() ||
+        offsets.front() != 0 || offsets.back() != destinations.size()) {
+        return false;
+    }
+
+    for (size_t i = 1; i < offsets.size(); ++i) {
+        if (offsets[i] < offsets[i - 1])
+            return false;
+    }
+    const uint32_t line_count =
+        (num_vertices + vertices_per_line - 1) / vertices_per_line;
+    const uint64_t no_position = std::numeric_limits<uint64_t>::max();
+    std::vector<uint64_t> first(line_count, no_position);
+    std::vector<uint64_t> next(line_count, no_position);
+    std::vector<uint32_t> lines(destinations.size(), 0);
+    for (uint64_t position = 0; position < destinations.size(); ++position) {
+        const uint32_t destination = destinations[position];
+        if (destination >= num_vertices)
+            return false;
+        const uint32_t line = destination / vertices_per_line;
+        lines[position] = line;
+        if (first[line] == no_position)
+            first[line] = position;
+    }
+    output.offsets = offsets;
+    output.records.resize(destinations.size());
+    const uint64_t span = destinations.size();
+    for (uint64_t position = span; position-- > 0;) {
+        const uint32_t line = lines[position];
+        const bool current_iteration = next[line] != no_position;
+        const uint64_t distance = current_iteration
+            ? next[line] - position
+            : span - position + first[line];
+        output.records[position] = packScaleRecord32(
+            destinations[position],
+            encodeScaleToken(
+                distance,
+                current_iteration ? State::FINITE : State::WRAP),
+            id_bits);
+        next[line] = position;
+    }
+    return true;
+}
+
+template <typename EdgeT>
+bool buildScaleRecordsInPlace(
+        EdgeT* edges, uint64_t edge_count, uint32_t num_vertices,
+        uint32_t vertices_per_line, uint32_t id_bits = 26) {
+    static_assert(sizeof(EdgeT) == sizeof(uint32_t),
+                  "REF32 in-place records require 32-bit edges");
+    if (!edges || edge_count == 0 ||
+        !canPackScaleRecord32(num_vertices, id_bits) ||
+        vertices_per_line == 0) {
+        return false;
+    }
+    const uint32_t id_mask =
+        id_bits == 32 ? UINT32_MAX : (uint32_t{1} << id_bits) - 1u;
+    const uint32_t line_count =
+        (num_vertices + vertices_per_line - 1) / vertices_per_line;
+    const uint64_t no_position = std::numeric_limits<uint64_t>::max();
+    std::vector<uint64_t> first(line_count, no_position);
+    std::vector<uint64_t> next(line_count, no_position);
+    const uint64_t progress_interval = []() {
+        const char* value = std::getenv("ECG_REF32_PROGRESS_EDGES");
+        const uint64_t parsed = value
+            ? std::strtoull(value, nullptr, 10) : (uint64_t{1} << 26);
+        return std::max<uint64_t>(1, parsed);
+    }();
+    const auto build_start = std::chrono::steady_clock::now();
+    auto report = [&](const char* pass, uint64_t completed) {
+        const double seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - build_start).count();
+        std::fprintf(
+            stderr,
+            "[ECG-REF32-BUILD storage=inplace pass=%s completed=%llu "
+            "edges=%llu percent=%.3f elapsed_s=%.3f aux_bytes=%llu]\n",
+            pass,
+            static_cast<unsigned long long>(completed),
+            static_cast<unsigned long long>(edge_count),
+            edge_count > 0
+                ? 100.0 * static_cast<double>(completed) /
+                    static_cast<double>(edge_count)
+                : 100.0,
+            seconds,
+            static_cast<unsigned long long>(
+                2ULL * line_count * sizeof(uint64_t)));
+    };
+
+    for (uint64_t position = 0; position < edge_count; ++position) {
+        const uint32_t destination =
+            static_cast<uint32_t>(edges[position]) & id_mask;
+        if (destination >= num_vertices)
+            return false;
+        const uint32_t line = destination / vertices_per_line;
+        if (first[line] == no_position)
+            first[line] = position;
+        if ((position + 1) % progress_interval == 0)
+            report("first", position + 1);
+    }
+    report("first", edge_count);
+    for (uint64_t position = edge_count; position-- > 0;) {
+        const uint32_t destination =
+            static_cast<uint32_t>(edges[position]) & id_mask;
+        const uint32_t line = destination / vertices_per_line;
+        const bool current_iteration = next[line] != no_position;
+        const uint64_t distance = current_iteration
+            ? next[line] - position
+            : edge_count - position + first[line];
+        const uint32_t record = packScaleRecord32(
+            destination,
+            encodeScaleToken(
+                distance,
+                current_iteration ? State::FINITE : State::WRAP),
+            id_bits);
+        edges[position] = static_cast<EdgeT>(record);
+        next[line] = position;
+        const uint64_t completed = edge_count - position;
+        if (completed % progress_interval == 0)
+            report("reverse", completed);
+    }
+    report("reverse", edge_count);
+    return true;
+}
+
 template <typename GraphT>
 bool buildInEdgeRecords32(
         const GraphT& graph, uint32_t vertices_per_line,
@@ -379,6 +649,7 @@ bool buildInEdgeRecords32(
         offsets[source + 1] =
             offsets[source] + static_cast<uint64_t>(graph.in_degree(source));
     }
+
     std::vector<uint32_t> destinations;
     destinations.reserve(static_cast<size_t>(offsets.back()));
     for (uint32_t source = 0; source < num_vertices; ++source) {
@@ -388,6 +659,29 @@ bool buildInEdgeRecords32(
     return buildFlatRecordsFromDestinations(
         num_vertices, vertices_per_line, offsets, destinations, output,
         reference_bits, action_bits);
+}
+
+template <typename GraphT>
+bool buildInEdgeScaleRecords32(
+        const GraphT& graph, uint32_t vertices_per_line,
+        FlatRecords& output, uint32_t id_bits = 26) {
+    const uint32_t num_vertices =
+        static_cast<uint32_t>(graph.num_nodes());
+    std::vector<uint64_t> offsets(
+        static_cast<size_t>(num_vertices) + 1, 0);
+    for (uint32_t source = 0; source < num_vertices; ++source) {
+        offsets[source + 1] =
+            offsets[source] + static_cast<uint64_t>(graph.in_degree(source));
+    }
+    std::vector<uint32_t> destinations;
+    destinations.reserve(static_cast<size_t>(offsets.back()));
+    for (uint32_t source = 0; source < num_vertices; ++source) {
+        for (auto destination : graph.in_neigh(source))
+            destinations.push_back(static_cast<uint32_t>(destination));
+    }
+    return buildFlatScaleRecordsFromDestinations(
+        num_vertices, vertices_per_line, offsets, destinations,
+        output, id_bits);
 }
 
 struct EffectiveFuture {
@@ -402,16 +696,18 @@ inline EffectiveFuture resolveQuantizedFuture(
     effective.state = state;
     if (state != State::FINITE)
         return effective;
-    if (deadline_bits < 2 || deadline_bits > 31) {
+    if (deadline_bits < 2 || deadline_bits > 32) {
         effective.state = State::UNKNOWN;
         return effective;
     }
-    const uint32_t mask = (uint32_t{1} << deadline_bits) - 1u;
+    const uint32_t mask = deadline_bits == 32
+        ? UINT32_MAX : (uint32_t{1} << deadline_bits) - 1u;
     const uint32_t current =
         static_cast<uint32_t>(current_sequence) & mask;
     const uint32_t remaining = (deadline - current) & mask;
-    const uint32_t max_forward =
-        (uint32_t{1} << (deadline_bits - 1)) - 1u;
+    const uint32_t max_forward = deadline_bits == 32
+        ? kMaxFiniteDistance
+        : (uint32_t{1} << (deadline_bits - 1)) - 1u;
     if (remaining > max_forward) {
         effective.state = State::UNKNOWN;
         return effective;

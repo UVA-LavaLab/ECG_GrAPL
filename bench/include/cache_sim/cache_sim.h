@@ -2361,7 +2361,7 @@ private:
                 ? std::atoi(value)
                 : static_cast<int>(ecg_ref32::kDefaultDeadlineBits);
             if (parsed < 2) parsed = 2;
-            if (parsed > 31) parsed = 31;
+            if (parsed > 32) parsed = 32;
             return static_cast<uint32_t>(parsed);
         }();
         return bits;
@@ -2405,10 +2405,11 @@ private:
         const uint32_t distance = std::max<uint32_t>(
             1, hints.edge_ref_distance);
         const uint32_t deadline_bits = configuredRef32DeadlineBits();
-        const uint32_t mask =
-            (uint32_t{1} << deadline_bits) - 1u;
-        const uint32_t max_forward =
-            (uint32_t{1} << (deadline_bits - 1)) - 1u;
+        const uint32_t mask = deadline_bits == 32
+            ? UINT32_MAX : (uint32_t{1} << deadline_bits) - 1u;
+        const uint32_t max_forward = deadline_bits == 32
+            ? ecg_ref32::kMaxFiniteDistance
+            : (uint32_t{1} << (deadline_bits - 1)) - 1u;
         line.ecg_ref32_deadline = static_cast<uint32_t>(
             hints.edge_ref_sequence +
             std::min<uint32_t>(distance, max_forward)) & mask;
@@ -3592,15 +3593,18 @@ public:
         }
         if (ref32DeployableResourcesActive()) {
             std::cerr
-                << "[ECG-REF32-RESOURCES line_bits=24 lines="
+                << "[ECG-REF32-RESOURCES line_bits="
+                << ref32ResourceLineBits() << " lines="
                 << ref32ResourceLineCount()
                 << " line_state_bits=" << ref32LineStateBits()
                 << " commit_entries="
                 << (ref32_commit_channel_ ? ref32_commit_queue_limit_ : 0)
-                << " commit_entry_bits=93 prefetch_entries="
+                << " commit_entry_bits=" << ref32CommitEntryBits()
+                << " prefetch_entries="
                 << (ref32_prefetch_enabled_
                     ? ref32_prefetch_queue_limit_ : 0)
-                << " prefetch_entry_bits=70 lookahead_records="
+                << " prefetch_entry_bits=" << ref32PrefetchEntryBits()
+                << " lookahead_records="
                 << (ref32_prefetch_enabled_ ? 16 : 0)
                 << " lookahead_bits="
                 << (ref32_prefetch_enabled_ ? 512 : 0)
@@ -4069,7 +4073,8 @@ public:
         ss << "  \"ecg_ref32_prefetch_pending\": "
            << ref32_prefetch_updates_.size() << ",\n";
         ss << "  \"ecg_ref32_resource_line_bits\": "
-           << (ref32DeployableResourcesActive() ? 24 : 0) << ",\n";
+           << (ref32DeployableResourcesActive()
+               ? ref32ResourceLineBits() : 0) << ",\n";
         ss << "  \"ecg_ref32_resource_lines\": "
            << ref32ResourceLineCount() << ",\n";
         ss << "  \"ecg_ref32_resource_line_state_bits\": "
@@ -4077,11 +4082,13 @@ public:
         ss << "  \"ecg_ref32_resource_commit_queue_bits\": "
            << (ref32DeployableResourcesActive() &&
                ref32_commit_channel_
-               ? ref32_commit_queue_limit_ * 93u : 0u) << ",\n";
+               ? ref32_commit_queue_limit_ *
+                    ref32CommitEntryBits() : 0u) << ",\n";
         ss << "  \"ecg_ref32_resource_prefetch_queue_bits\": "
            << (ref32DeployableResourcesActive() &&
                ref32_prefetch_enabled_
-               ? ref32_prefetch_queue_limit_ * 70u : 0u) << ",\n";
+               ? ref32_prefetch_queue_limit_ *
+                    ref32PrefetchEntryBits() : 0u) << ",\n";
         ss << "  \"ecg_ref32_resource_lookahead_bits\": "
            << (ref32DeployableResourcesActive() &&
                ref32_prefetch_enabled_ ? 512 : 0) << ",\n";
@@ -4198,8 +4205,20 @@ private:
             ? l3_->getSizeBytes() / l3_->getLineSize() : 0;
     }
 
+    uint32_t ref32ResourceLineBits() const {
+        return ref32_commit_deadline_bits_ + 3u;
+    }
+
+    uint32_t ref32CommitEntryBits() const {
+        return 51u + 2u * ref32_commit_deadline_bits_;
+    }
+
+    uint32_t ref32PrefetchEntryBits() const {
+        return 49u + ref32_commit_deadline_bits_;
+    }
+
     uint64_t ref32LineStateBits() const {
-        return ref32ResourceLineCount() * 24u;
+        return ref32ResourceLineCount() * ref32ResourceLineBits();
     }
 
     uint64_t ref32PoptMatrixBits() const {
@@ -4220,9 +4239,11 @@ private:
             return 0;
         return ref32LineStateBits() +
             (ref32_commit_channel_
-                ? ref32_commit_queue_limit_ * 93u : 0u) +
+                ? ref32_commit_queue_limit_ *
+                    ref32CommitEntryBits() : 0u) +
             (ref32_prefetch_enabled_
-                ? ref32_prefetch_queue_limit_ * 70u + 512u : 0u) +
+                ? ref32_prefetch_queue_limit_ *
+                    ref32PrefetchEntryBits() + 512u : 0u) +
             64u;
     }
 
@@ -4240,11 +4261,14 @@ private:
         ref32_resource_popt_bits_snapshot_ =
             ((vertices + 15u) / 16u) * 256u * 8u;
         ref32_resource_total_bits_snapshot_ =
-            ref32_resource_line_count_snapshot_ * 24u +
+            ref32_resource_line_count_snapshot_ *
+                ref32ResourceLineBits() +
             (ref32_commit_channel_
-                ? ref32_commit_queue_limit_ * 93u : 0u) +
+                ? ref32_commit_queue_limit_ *
+                    ref32CommitEntryBits() : 0u) +
             (ref32_prefetch_enabled_
-                ? ref32_prefetch_queue_limit_ * 70u + 512u : 0u) +
+                ? ref32_prefetch_queue_limit_ *
+                    ref32PrefetchEntryBits() + 512u : 0u) +
             64u;
     }
 
@@ -4414,9 +4438,13 @@ private:
         const uint32_t distance = std::max<uint32_t>(
             1, hints.edge_ref_distance);
         const uint32_t deadline_mask =
-            (uint32_t{1} << ref32_commit_deadline_bits_) - 1u;
+            ref32_commit_deadline_bits_ == 32
+            ? UINT32_MAX
+            : (uint32_t{1} << ref32_commit_deadline_bits_) - 1u;
         const uint32_t max_forward =
-            (uint32_t{1} << (ref32_commit_deadline_bits_ - 1)) - 1u;
+            ref32_commit_deadline_bits_ == 32
+            ? ecg_ref32::kMaxFiniteDistance
+            : (uint32_t{1} << (ref32_commit_deadline_bits_ - 1)) - 1u;
         const uint32_t quantized_deadline = static_cast<uint32_t>(
             hints.edge_ref_sequence +
             std::min<uint32_t>(distance, max_forward)) & deadline_mask;
@@ -4610,7 +4638,7 @@ private:
     uint32_t ref32_commit_deadline_bits_ =
         ref32CommitEnv(
             "ECG_REF32_DEADLINE_BITS",
-            ecg_ref32::kDefaultDeadlineBits, 31);
+            ecg_ref32::kDefaultDeadlineBits, 32);
     std::deque<Ref32CommitUpdate> ref32_commit_updates_;
     uint64_t ref32_commit_generated_ = 0;
     uint64_t ref32_commit_coalesced_ = 0;

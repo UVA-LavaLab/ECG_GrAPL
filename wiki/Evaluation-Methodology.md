@@ -230,6 +230,13 @@ reference uses a five-bit exponent and three-bit mantissa. A 21-bit per-LLC-line
 deadline covers the complete recorded iteration while preserving safe modular
 expiry; a passed prediction becomes unknown, never dead.
 
+For n19 through n26 graphs, including Twitter-2010, the record switches to the
+scale6 layout: a 26-bit destination plus one six-bit future token. Token zero is
+unknown, token one is dead, and the remaining values encode finite-current or
+wrap distances in 31 logarithmic classes. The prefetch target is derived from
+the same 16-record lookahead buffer, so it consumes no additional edge bits.
+The LLC stores a 32-bit iteration position plus state and prefetch origin.
+
 Private-cache hits update LLC metadata through a bounded commit-only channel:
 16 entries, eight governed requests of latency, one update per governed request,
 and cache-line coalescing. The selective prefetch path has eight pending entries,
@@ -243,6 +250,17 @@ sidecar. At a 512 KiB, 64-byte-line LLC, the accounted added state is 24 bits pe
 line plus the two bounded queues, 16-record lookahead buffer, and control state:
 199,232 bits total. The corresponding n18, 256-epoch P-OPT matrix is 33,554,432
 bits, a 168.4x reduction before counting P-OPT's reserved LLC capacity.
+
+At Twitter-2010 scale (41,652,230 vertices, 1,468,364,884 edges) and an 8 MiB
+LLC, scale6 accounts for about 560 KiB of LLC/control state. P-OPT's
+256-epoch matrix is about 635.6 MiB, a 1,161x reduction. The packed Twitter
+record stream remains the original four bytes per edge; no sidecar is added.
+
+Before full Twitter conversion, the scale6 format is forced onto all six n18
+graphs with a virtual 26-bit ID width. Promotion requires every graph to beat
+full-capacity P-OPT in LLC misses, aggregate traffic no worse than P-OPT, and
+validated 32-bit record, 32-bit deadline, bounded-channel, prefetch, and
+resource receipts. Full Twitter evidence remains a separate required gate.
 
 REF32 rows are accepted only when the graph filename certifies DBG order, the
 record/commit/prefetch/resource receipts validate, no runtime P-OPT matrix is

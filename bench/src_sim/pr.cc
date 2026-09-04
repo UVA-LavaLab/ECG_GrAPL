@@ -209,16 +209,21 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
 
             if (graph_ctx.ref32_record_enabled) {
                 const uint64_t row_begin =
-                    graph_ctx.ref32_records.offsets[u];
+                    graph_ctx.ref32_inplace_records
+                    ? static_cast<uint64_t>(g.in_offset(u))
+                    : graph_ctx.ref32_records.offsets[u];
                 const uint64_t row_end =
-                    graph_ctx.ref32_records.offsets[u + 1];
+                    graph_ctx.ref32_inplace_records
+                    ? static_cast<uint64_t>(g.in_offset(u + 1))
+                    : graph_ctx.ref32_records.offsets[u + 1];
                 size_t edge_pos = 0;
                 for (auto it = in_neigh.begin();
                      it != in_neigh.end(); ++it, ++edge_pos) {
                     const uint64_t record_index = row_begin + edge_pos;
                     if (record_index >= row_end ||
-                        record_index >=
-                            graph_ctx.ref32_records.records.size()) {
+                        (!graph_ctx.ref32_inplace_records &&
+                         record_index >=
+                            graph_ctx.ref32_records.records.size())) {
                         std::fprintf(
                             stderr,
                             "[FATAL] REF32 record row shorter than CSR "
@@ -232,21 +237,27 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                     auto& hints = graph_ctx.hints_for_thread();
                     hints.edge_ref_sequence =
                         static_cast<uint64_t>(iter) *
-                            graph_ctx.ref32_records.records.size() +
+                            graph_ctx.ref32_record_count +
                         record_index;
                     SIM_ECG_EDGE(
                         cache, edge_record_meta, it, in_edge_base,
                         reinterpret_cast<uint64_t>(in_edge_base),
                         ::ecg_metadata::kInSidecarBase);
                     const uint32_t record =
-                        graph_ctx.ref32_records.records[record_index];
-                    const auto decoded = ecg_ref32::decodeRecord32(
-                        record, graph_ctx.ref32_record_id_bits,
-                        graph_ctx.ref32_reference_bits,
-                        graph_ctx.ref32_action_bits);
+                        graph_ctx.ref32_inplace_records
+                        ? static_cast<uint32_t>(*it)
+                        : graph_ctx.ref32_records.records[record_index];
+                    const auto decoded =
+                        graph_ctx.ref32_scale_format
+                        ? ecg_ref32::decodeScaleRecord32(
+                            record, graph_ctx.ref32_record_id_bits)
+                        : ecg_ref32::decodeRecord32(
+                            record, graph_ctx.ref32_record_id_bits,
+                            graph_ctx.ref32_reference_bits,
+                            graph_ctx.ref32_action_bits);
                     const NodeID v =
                         static_cast<NodeID>(decoded.destination);
-                    if (v != *it) {
+                    if (!graph_ctx.ref32_inplace_records && v != *it) {
                         std::fprintf(
                             stderr,
                             "[FATAL] REF32 destination mismatch "
@@ -272,22 +283,44 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                         ? graph_ctx.ref32_records
                               .exact_distances[record_index]
                         : decoded.distance;
-                    hints.edge_ref_action = decoded.action;
-                    hints.edge_ref_prefetch_address = 0;
-                    hints.edge_ref_prefetch_valid = false;
                     const uint32_t prefetch_delta =
-                        ecg_ref32::actionDelta(
+                        graph_ctx.ref32_scale_format
+                        ? (graph_ctx.ref32_inplace_records
+                            ? ecg_ref32::selectScalePrefetchDelta(
+                                reinterpret_cast<const uint32_t*>(
+                                    in_edge_base),
+                                graph_ctx.ref32_record_count,
+                                record_index,
+                                graph_ctx.ref32_record_id_bits)
+                            : ecg_ref32::selectScalePrefetchDelta(
+                                graph_ctx.ref32_records.records,
+                                record_index,
+                                graph_ctx.ref32_record_id_bits))
+                        : ecg_ref32::actionDelta(
                             decoded.action,
                             graph_ctx.ref32_action_bits);
+                    hints.edge_ref_action =
+                        prefetch_delta > 0 ? 1 : 0;
+                    hints.edge_ref_prefetch_address = 0;
+                    hints.edge_ref_prefetch_valid = false;
                     const uint64_t target_index =
                         record_index + prefetch_delta;
                     if (prefetch_delta > 0 &&
                         target_index <
-                            graph_ctx.ref32_records.records.size()) {
+                            graph_ctx.ref32_record_count) {
+                        const uint32_t target_record =
+                            graph_ctx.ref32_inplace_records
+                            ? reinterpret_cast<const uint32_t*>(
+                                in_edge_base)[target_index]
+                            : graph_ctx.ref32_records
+                                .records[target_index];
                         const auto target =
-                            ecg_ref32::decodeRecord32(
-                                graph_ctx.ref32_records
-                                    .records[target_index],
+                            graph_ctx.ref32_scale_format
+                            ? ecg_ref32::decodeScaleRecord32(
+                                target_record,
+                                graph_ctx.ref32_record_id_bits)
+                            : ecg_ref32::decodeRecord32(
+                                target_record,
                                 graph_ctx.ref32_record_id_bits,
                                 graph_ctx.ref32_reference_bits,
                                 graph_ctx.ref32_action_bits);

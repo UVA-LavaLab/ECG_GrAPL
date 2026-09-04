@@ -253,6 +253,9 @@ def test_reuse_plan_policy_aliases_are_first_class(monkeypatch):
     assert module.parse_policy_spec("ECG:REF32_P").policy == "LRU"
     assert module.parse_policy_spec(
         "ECG:REF32_RP_COMMIT").policy == "ECG"
+    assert module.parse_policy_spec(
+        "ECG:REF32_SCALE_RP_COMMIT").label == \
+        "ECG_REF32_SCALE_RP_COMMIT"
     for label, variant in (
             ("ECG:REUSE_PLAN_GRASP_FLOWTHROUGH", "grasp_only"),
             ("ECG:REUSE_PLAN_EPOCH_FLOWTHROUGH", "epoch_first"),

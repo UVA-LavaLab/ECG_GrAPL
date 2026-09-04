@@ -95,15 +95,20 @@ REF32_POLICY_LABELS = frozenset({
     "ECG_REF32_T",
     "ECG_REF32_P",
     "ECG_REF32_RP_COMMIT",
+    "ECG_REF32_SCALE_R_COMMIT",
+    "ECG_REF32_SCALE_RP_COMMIT",
 })
 REF32_COMMIT_LABELS = frozenset({
     "ECG_REF32_EXACT_COMMIT",
     "ECG_REF32_R_COMMIT",
     "ECG_REF32_RP_COMMIT",
+    "ECG_REF32_SCALE_R_COMMIT",
+    "ECG_REF32_SCALE_RP_COMMIT",
 })
 REF32_PREFETCH_LABELS = frozenset({
     "ECG_REF32_P",
     "ECG_REF32_RP_COMMIT",
+    "ECG_REF32_SCALE_RP_COMMIT",
 })
 REF32_EXACT_LABEL = "ECG_REF32_EXACT_COMMIT"
 
@@ -1543,13 +1548,29 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
                 "ECG_REF32_RECORD": "1",
                 "ECG_RECORD_TIER_BITS": "0",
                 "ECG_RECORD_POPT_BITS": "0",
-                "ECG_RECORD_PREFETCH_BITS": "4",
+                "ECG_RECORD_PREFETCH_BITS": "0",
                 "ECG_EDGE_RECORD_BYTES": "4",
                 "ECG_EDGE_MASK_CHARGED": "1",
                 "ECG_EXPECT_BYTES_PER_EDGE": "4",
                 "ECG_PREFETCH_MODE": "0",
-                "ECG_REF32_DEADLINE_BITS": "21",
             })
+            is_scale_ref32 = spec.label in (
+                "ECG_REF32_SCALE_R_COMMIT",
+                "ECG_REF32_SCALE_RP_COMMIT")
+            if is_scale_ref32:
+                env.update({
+                    "ECG_REF32_FORMAT": "scale6",
+                    "ECG_VIRTUAL_ID_BITS": "26",
+                    "ECG_REF32_DEADLINE_BITS": "32",
+                })
+                if "twitter-2010-dbg.sg" in args.options:
+                    env["ECG_REF32_INPLACE"] = "1"
+            else:
+                env.update({
+                    "ECG_REF32_REFERENCE_BITS": "8",
+                    "ECG_REF32_ACTION_BITS": "4",
+                    "ECG_REF32_DEADLINE_BITS": "21",
+                })
             if spec.label == REF32_EXACT_LABEL:
                 env["ECG_REF32_EXACT"] = "1"
             if spec.label in REF32_COMMIT_LABELS:
@@ -1559,8 +1580,6 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
                     "ECG_REF32_UPDATE_LATENCY": "8",
                     "ECG_REF32_UPDATE_BANDWIDTH": "1",
                 })
-            env["ECG_REF32_REFERENCE_BITS"] = "8"
-            env["ECG_REF32_ACTION_BITS"] = "4"
             if spec.label in REF32_PREFETCH_LABELS:
                 env.update({
                     "ECG_REF32_PREFETCH": "1",
@@ -1873,12 +1892,14 @@ def apply_next_use_record_receipt(
 
 def apply_ref32_record_receipt(
         row: dict[str, Any], log_text: str, *,
-        required: bool = False, exact_expected: bool = False) -> bool:
+        required: bool = False, exact_expected: bool = False,
+        expected_format: str = "full14") -> bool:
     receipt = re.search(
-        r"\[ECG-REF32-RECORD bits=(\d+) id_bits=(\d+) "
-        r"reference_bits=(\d+) state_bits=(\d+) action_bits=(\d+) "
+        r"\[ECG-REF32-RECORD format=(\w+) bits=(\d+) id_bits=(\d+) "
+        r"token_bits=(\d+) reference_bits=(\d+) "
+        r"state_bits=(\d+) action_bits=(\d+) "
         r"exact_sidecar=(\d+) deadline_bits=(\d+) records=(\d+) "
-        r"actions=(\d+) matrix_free=(\d+) "
+        r"actions=(\d+) storage=(\w+) matrix_free=(\d+) "
         r"local_grasp=(\d+)\]",
         log_text)
     if not receipt:
@@ -1886,22 +1907,41 @@ def apply_ref32_record_receipt(
             mark_row_error(row, "REF32 packed-record receipt missing")
         return False
     (
-        total_bits, id_bits, reference_bits, state_bits, action_bits,
+        record_format, total_bits, id_bits, token_bits,
+        reference_bits, state_bits, action_bits,
         exact_sidecar, deadline_bits, records, actions,
-        matrix_free, local_grasp,
-    ) = map(int, receipt.groups())
+        storage, matrix_free, local_grasp,
+    ) = (
+        receipt.group(1),
+        *map(int, receipt.groups()[1:11]),
+        receipt.group(12),
+        *map(int, receipt.groups()[12:]),
+    )
+    if expected_format == "scale6":
+        layout_valid = (
+            record_format == "scale6" and id_bits == 26 and
+            token_bits == 6 and reference_bits == 0 and
+            state_bits == 0 and action_bits == 0 and
+            deadline_bits == 32 and exact_sidecar == 0)
+    else:
+        layout_valid = (
+            record_format == "full14" and 0 < id_bits <= 18 and
+            token_bits == 0 and reference_bits == 8 and
+            state_bits == 2 and action_bits == 4 and
+            deadline_bits == 21 and
+            exact_sidecar == int(exact_expected))
     valid = (
         total_bits == 32 and
-        id_bits + reference_bits + state_bits + action_bits <= total_bits and
-        0 < id_bits <= 18 and
-        reference_bits == 8 and
-        state_bits == 2 and action_bits == 4 and
-        exact_sidecar == int(exact_expected) and records > 0 and
-        deadline_bits == 21 and
+        id_bits + token_bits + reference_bits +
+            state_bits + action_bits <= total_bits and
+        layout_valid and records > 0 and
+        storage in ("separate", "inplace") and
         matrix_free == 1 and local_grasp == 1)
     row.update({
         "ecg_ref32_record_validated": int(valid),
+        "ecg_ref32_format": record_format,
         "ecg_ref32_id_bits": id_bits,
+        "ecg_ref32_token_bits": token_bits,
         "ecg_ref32_reference_bits": reference_bits,
         "ecg_ref32_state_bits": state_bits,
         "ecg_ref32_action_bits": action_bits,
@@ -1909,6 +1949,7 @@ def apply_ref32_record_receipt(
         "ecg_ref32_deadline_bits": deadline_bits,
         "ecg_ref32_records": records,
         "ecg_ref32_actions_encoded": actions,
+        "ecg_ref32_storage": storage,
         "ecg_ref32_matrix_free": matrix_free,
         "ecg_ref32_local_grasp": local_grasp,
         "ecg_record_replaces_edge": 1,
@@ -1919,7 +1960,8 @@ def apply_ref32_record_receipt(
 
 
 def apply_ref32_commit_receipt(
-        row: dict[str, Any], log_text: str, required: bool = False) -> bool:
+        row: dict[str, Any], log_text: str, required: bool = False,
+        expected_deadline_bits: int = 21) -> bool:
     receipt = re.search(
         r"\[ECG-REF32-COMMIT queue=(\d+) latency=(\d+) bandwidth=(\d+) "
         r"tag_bits=(\d+) deadline_bits=(\d+) state_bits=(\d+) "
@@ -1938,7 +1980,8 @@ def apply_ref32_commit_receipt(
     ) = map(int, receipt.groups())
     valid = (
         queue == 16 and latency == 8 and bandwidth == 1 and
-        tag_bits == 48 and deadline_bits == 21 and state_bits == 2 and
+        tag_bits == 48 and deadline_bits == expected_deadline_bits and
+        state_bits == 2 and
         generated > 0 and max_occupancy <= queue and pending == 0 and
         generated == coalesced + queue_dropped + applied +
             not_resident + expired)
@@ -2064,9 +2107,10 @@ def apply_ref32_resource_receipt(
         prefetch_entries * prefetch_entry_bits +
         lookahead_bits + control_bits + record_extra_bits)
     valid = (
-        line_bits == 24 and lines > 0 and
+        line_bits >= 24 and lines > 0 and
         line_state_bits == line_bits * lines and
-        commit_entry_bits == 93 and prefetch_entry_bits == 70 and
+        commit_entry_bits == 51 + 2 * (line_bits - 3) and
+        prefetch_entry_bits == 49 + (line_bits - 3) and
         lookahead_bits == lookahead_records * 32 and
         record_extra_bits == 0 and total_bits == expected_total and
         popt_matrix_bits > total_bits and reduction_x > 50.0)
@@ -3545,10 +3589,20 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
                 "REF32 local GRASP tier requires a certified -dbg.sg graph")
     apply_ref32_record_receipt(
         row, log_text, required=is_ref32,
-        exact_expected=spec.label == REF32_EXACT_LABEL)
+        exact_expected=spec.label == REF32_EXACT_LABEL,
+        expected_format=(
+            "scale6" if spec.label in (
+                "ECG_REF32_SCALE_R_COMMIT",
+                "ECG_REF32_SCALE_RP_COMMIT")
+            else "full14"))
     is_ref32_commit = spec.label in REF32_COMMIT_LABELS
     apply_ref32_commit_receipt(
-        row, log_text, required=is_ref32_commit)
+        row, log_text, required=is_ref32_commit,
+        expected_deadline_bits=(
+            32 if spec.label in (
+                "ECG_REF32_SCALE_R_COMMIT",
+                "ECG_REF32_SCALE_RP_COMMIT")
+            else 21))
     is_ref32_prefetch = spec.label in REF32_PREFETCH_LABELS
     apply_ref32_prefetch_receipt(
         row, log_text, required=is_ref32_prefetch)

@@ -343,6 +343,22 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ecg_mode="ECG_REF32",
         )
     if upper in (
+        "ECG:REF32_SCALE_R_COMMIT", "ECG_REF32_SCALE_R_COMMIT",
+    ):
+        return PolicySpec(
+            label="ECG_REF32_SCALE_R_COMMIT",
+            policy="ECG",
+            ecg_mode="ECG_REF32",
+        )
+    if upper in (
+        "ECG:REF32_SCALE_RP_COMMIT", "ECG_REF32_SCALE_RP_COMMIT",
+    ):
+        return PolicySpec(
+            label="ECG_REF32_SCALE_RP_COMMIT",
+            policy="ECG",
+            ecg_mode="ECG_REF32",
+        )
+    if upper in (
         "ECG:REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
         "ECG_REUSE_PLAN_ONLINE_ADAPTIVE_FLOWTHROUGH",
     ):

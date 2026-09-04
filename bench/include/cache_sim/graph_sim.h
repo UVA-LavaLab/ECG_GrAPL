@@ -98,12 +98,15 @@ inline int GraphSimEcgRecordBytes(uint64_t num_vertices, int epoch_bits) {
     int needed = id_bits + epoch_payload_bits +
                  tier_bits + popt_bits + prefetch_bits;
     if (ref32_record)
-        needed = id_bits +
-            GraphSimEnvIntClamped(
+        needed = id_bits + (
+            std::getenv("ECG_REF32_FORMAT") &&
+            std::string(std::getenv("ECG_REF32_FORMAT")) == "scale6"
+            ? 6
+            : GraphSimEnvIntClamped(
                 "ECG_REF32_REFERENCE_BITS", 8, 5, 12) +
-            2 +
-            GraphSimEnvIntClamped(
-                "ECG_REF32_ACTION_BITS", 4, 0, 12);
+              2 +
+              GraphSimEnvIntClamped(
+                "ECG_REF32_ACTION_BITS", 4, 0, 12));
     if (needed <= 32) return 4;
     if (needed <= 64) return 8;
     return 16;

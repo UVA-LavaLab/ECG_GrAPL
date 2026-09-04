@@ -41,6 +41,7 @@
 #include <iomanip>
 #include <sstream>
 #include <cmath>
+#include <type_traits>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -1406,6 +1407,9 @@ struct GraphCacheContext {
         ecg_ref32::kDefaultActionBits;
     uint32_t ref32_deadline_bits =
         ecg_ref32::kDefaultDeadlineBits;
+    bool ref32_scale_format = false;
+    bool ref32_inplace_records = false;
+    uint64_t ref32_record_count = 0;
     bool ref32_record_enabled = false;
     bool ref32_exact_diagnostic = false;
 
@@ -2388,6 +2392,12 @@ struct GraphCacheContext {
 
     template<typename GraphT>
     void buildInEdgeRef32Records(const GraphT& g) {
+        const char* format_value =
+            std::getenv("ECG_REF32_FORMAT");
+        ref32_scale_format = format_value &&
+            std::string(format_value) == "scale6";
+        ref32_inplace_records =
+            std::getenv("ECG_REF32_INPLACE") != nullptr;
         const char* reference_value =
             std::getenv("ECG_REF32_REFERENCE_BITS");
         const char* action_value =
@@ -2403,62 +2413,112 @@ struct GraphCacheContext {
         ref32_deadline_bits = deadline_value
             ? static_cast<uint32_t>(std::atoi(deadline_value))
             : ecg_ref32::kDefaultDeadlineBits;
-        ref32_record_id_bits = ecg_ref32::bitsForVertices(
+        const char* virtual_id_value =
+            std::getenv("ECG_VIRTUAL_ID_BITS");
+        const uint32_t actual_id_bits = ecg_ref32::bitsForVertices(
             static_cast<uint64_t>(g.num_nodes()));
-        ref32_record_enabled =
-            ecg_ref32::buildInEdgeRecords32(
-                g, 16, ref32_records,
-                ref32_reference_bits, ref32_action_bits);
+        const uint32_t virtual_id_bits = virtual_id_value
+            ? static_cast<uint32_t>(std::atoi(virtual_id_value)) : 0;
+        ref32_record_id_bits = std::max(
+            actual_id_bits, virtual_id_bits);
+        if (ref32_scale_format) {
+            ref32_reference_bits = 0;
+            ref32_action_bits = 0;
+            if (ref32_inplace_records) {
+                if (!g.directed() || g.num_nodes() == 0) {
+                    std::fprintf(
+                        stderr,
+                        "[FATAL] REF32 in-place records require a non-empty "
+                        "directed graph with distinct in/out CSR storage\n");
+                    std::abort();
+                }
+                auto raw = g.in_neigh(0).begin();
+                using RawEdge = typename std::remove_pointer<
+                    decltype(raw)>::type;
+                using Edge = typename std::remove_const<RawEdge>::type;
+                Edge* writable = const_cast<Edge*>(raw);
+                ref32_record_enabled =
+                    ecg_ref32::buildScaleRecordsInPlace(
+                        writable,
+                        static_cast<uint64_t>(g.num_edges_directed()),
+                        static_cast<uint32_t>(g.num_nodes()),
+                        16, ref32_record_id_bits);
+                ref32_records = ecg_ref32::FlatRecords{};
+            } else {
+                ref32_record_enabled =
+                    ecg_ref32::buildInEdgeScaleRecords32(
+                        g, 16, ref32_records,
+                        ref32_record_id_bits);
+            }
+        } else {
+            ref32_record_enabled =
+                ecg_ref32::buildInEdgeRecords32(
+                    g, 16, ref32_records,
+                    ref32_reference_bits, ref32_action_bits);
+        }
         ref32_exact_diagnostic =
+            !ref32_scale_format &&
             std::getenv("ECG_REF32_EXACT") != nullptr;
+        ref32_record_count = ref32_inplace_records
+            ? static_cast<uint64_t>(g.num_edges_directed())
+            : ref32_records.records.size();
         if (!ref32_exact_diagnostic) {
             ref32_records.exact_distances.clear();
             ref32_records.exact_distances.shrink_to_fit();
         }
         const uint64_t max_forward =
-            ref32_deadline_bits >= 2 && ref32_deadline_bits <= 31
-            ? (uint64_t{1} << (ref32_deadline_bits - 1)) - 1
+            ref32_deadline_bits >= 2 && ref32_deadline_bits <= 32
+            ? (ref32_deadline_bits == 32
+                ? static_cast<uint64_t>(ecg_ref32::kMaxFiniteDistance)
+                : (uint64_t{1} << (ref32_deadline_bits - 1)) - 1)
             : 0;
-        if (ref32_records.records.size() > max_forward)
+        if (ref32_record_count > max_forward)
             ref32_record_enabled = false;
         if (!ref32_record_enabled) {
             std::fprintf(
                 stderr,
-                "[FATAL] ECG_REF32 requires a valid 32-bit n18-or-smaller "
-                "record (vertices=%u id_bits=%u reference_bits=%u "
+                "[FATAL] ECG_REF32 record does not fit its selected format "
+                "(format=%s vertices=%u id_bits=%u reference_bits=%u "
                 "state_bits=%u action_bits=%u deadline_bits=%u "
                 "records=%llu)\n",
+                ref32_scale_format ? "scale6" : "full14",
                 static_cast<unsigned>(g.num_nodes()),
                 ref32_record_id_bits,
                 ref32_reference_bits,
-                ecg_ref32::kStateBits,
+                ref32_scale_format ? 0u : ecg_ref32::kStateBits,
                 ref32_action_bits,
                 ref32_deadline_bits,
                 static_cast<unsigned long long>(
-                    ref32_records.records.size()));
+                    ref32_record_count));
             std::abort();
         }
         std::fprintf(
             stderr,
-            "[ECG-REF32-RECORD bits=32 id_bits=%u reference_bits=%u "
+            "[ECG-REF32-RECORD format=%s bits=32 id_bits=%u "
+            "token_bits=%u reference_bits=%u "
             "state_bits=%u action_bits=%u exact_sidecar=%u "
-            "deadline_bits=%u records=%llu actions=%llu "
+            "deadline_bits=%u records=%llu actions=%llu storage=%s "
             "matrix_free=1 local_grasp=1]\n",
+            ref32_scale_format ? "scale6" : "full14",
             ref32_record_id_bits,
+            ref32_scale_format ? ecg_ref32::kScaleTokenBits : 0u,
             ref32_reference_bits,
-            ecg_ref32::kStateBits,
+            ref32_scale_format ? 0u : ecg_ref32::kStateBits,
             ref32_action_bits,
             ref32_exact_diagnostic ? 1u : 0u,
             ref32_deadline_bits,
-            static_cast<unsigned long long>(ref32_records.records.size()),
-            static_cast<unsigned long long>(std::count_if(
-                ref32_records.records.begin(),
-                ref32_records.records.end(),
-                [&](uint32_t record) {
-                    return ecg_ref32::extractAction(
-                        record, ref32_record_id_bits,
-                        ref32_reference_bits, ref32_action_bits) != 0;
-                })));
+            static_cast<unsigned long long>(ref32_record_count),
+            ref32_scale_format ? 0ULL :
+                static_cast<unsigned long long>(std::count_if(
+                    ref32_records.records.begin(),
+                    ref32_records.records.end(),
+                    [&](uint32_t record) {
+                        return ecg_ref32::extractAction(
+                            record, ref32_record_id_bits,
+                            ref32_reference_bits,
+                            ref32_action_bits) != 0;
+                    })),
+            ref32_inplace_records ? "inplace" : "separate");
     }
 
     template<typename GraphT>

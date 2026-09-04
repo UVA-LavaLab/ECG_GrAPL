@@ -286,7 +286,7 @@ def test_ref32_sets_isolated_matrix_free_env(tmp_path):
         assert env["ECG_REF32_RECORD"] == "1"
         assert env["ECG_RECORD_TIER_BITS"] == "0"
         assert env["ECG_RECORD_POPT_BITS"] == "0"
-        assert env["ECG_RECORD_PREFETCH_BITS"] == "4"
+        assert env["ECG_RECORD_PREFETCH_BITS"] == "0"
         assert env["ECG_EDGE_RECORD_BYTES"] == "4"
         assert env["ECG_EXPECT_BYTES_PER_EDGE"] == "4"
         assert env["ECG_PREFETCH_MODE"] == "0"
@@ -309,12 +309,22 @@ def test_ref32_sets_isolated_matrix_free_env(tmp_path):
     assert combined["ECG_REF32_PREFETCH_QUEUE"] == "8"
     assert combined["ECG_REF32_PREFETCH_INTERVAL"] == "8"
 
+    scale = roi_matrix.cache_sim_env(
+        args, roi_matrix.parse_policy_spec(
+            "ECG:REF32_SCALE_RP_COMMIT"),
+        "8MB", "16", tmp_path / "scale.json")
+    assert scale["ECG_REF32_FORMAT"] == "scale6"
+    assert scale["ECG_VIRTUAL_ID_BITS"] == "26"
+    assert scale["ECG_REF32_DEADLINE_BITS"] == "32"
+    assert scale["ECG_REF32_PREFETCH"] == "1"
+
 
 def test_ref32_record_receipt_is_fail_closed():
     text = (
-        "[ECG-REF32-RECORD bits=32 id_bits=18 reference_bits=8 "
+        "[ECG-REF32-RECORD format=full14 bits=32 id_bits=18 "
+        "token_bits=0 reference_bits=8 "
         "state_bits=2 action_bits=4 exact_sidecar=0 deadline_bits=21 "
-        "records=680108 actions=500000 "
+        "records=680108 actions=500000 storage=separate "
         "matrix_free=1 local_grasp=1]")
     row = {"status": "ok"}
     assert roi_matrix.apply_ref32_record_receipt(
@@ -336,6 +346,17 @@ def test_ref32_record_receipt_is_fail_closed():
     )
     assert overflow["status"] == "error"
 
+    scale = {"status": "ok"}
+    assert roi_matrix.apply_ref32_record_receipt(
+        scale,
+        "[ECG-REF32-RECORD format=scale6 bits=32 id_bits=26 "
+        "token_bits=6 reference_bits=0 state_bits=0 action_bits=0 "
+        "exact_sidecar=0 deadline_bits=32 records=1468364884 "
+        "actions=0 storage=inplace matrix_free=1 local_grasp=1]",
+        required=True,
+        expected_format="scale6",
+    )
+
 def test_ref32_commit_receipt_is_fail_closed():
     text = (
         "[ECG-REF32-COMMIT queue=16 latency=8 bandwidth=1 tag_bits=48 "
@@ -351,6 +372,11 @@ def test_ref32_commit_receipt_is_fail_closed():
     assert not roi_matrix.apply_ref32_commit_receipt(
         pending, text.replace("pending=0", "pending=1"), required=True)
     assert pending["status"] == "error"
+
+    scale = {"status": "ok"}
+    assert roi_matrix.apply_ref32_commit_receipt(
+        scale, text.replace("deadline_bits=21", "deadline_bits=32"),
+        required=True, expected_deadline_bits=32)
 
 
 def test_ref32_prefetch_receipt_is_fail_closed():
