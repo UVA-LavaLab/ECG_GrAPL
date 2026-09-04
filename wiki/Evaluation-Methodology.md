@@ -323,6 +323,36 @@ occupancies of eight and one entries respectively. Accounted REF32 state is
 `results/ecg_experiments/runs/twitter_ref32_7669a3aa/roi_matrix.json`
 (SHA-256 `610cc706b51d65aabb1a22dee652669e8a75ca1783e24abf223990ca89a1c48f`).
 
+To expose a configuration where the size-correct P-OPT charge remains
+beneficial, the same seven-policy Twitter matrix was also run at a 16 MiB,
+16-way LLC. The two resident P-OPT columns then reserve five ways and leave
+eleven data ways:
+
+| Policy | LLC misses | Reduction versus LRU |
+|---|---:|---:|
+| LRU | 388,828,693 | -- |
+| SRRIP | 365,844,751 | 5.9% |
+| `GRASP_PAPER` | 314,999,063 | 19.0% |
+| Full-capacity uncharged P-OPT | 296,111,526 | 23.9% |
+| Size-correct charged P-OPT | 340,362,063 | 12.5% |
+| Scale6 replacement-only | 265,597,230 | 31.7% |
+| Scale6 replacement + prefetch | 238,918,842 | 38.5% |
+
+Thus charged P-OPT beats both LRU and SRRIP at this capacity. Adding its
+10,413,060 analytic matrix-stream reads to 341,476,852 raw off-chip transfers
+gives 351,889,912 transfers, 9.8% below LRU. Scale6 combined records
+266,758,802 off-chip transfers, 24.2% below that matrix-inclusive charged
+P-OPT value and 10.3% below uncharged P-OPT.
+
+Scale6 replacement-only remains 10.3% below full-capacity uncharged P-OPT in
+LLC misses, while combined Scale6 is 19.3% below uncharged P-OPT and 29.8%
+below charged P-OPT. Both bounded queues report zero drops. Accounted Scale6
+state is 9,178,104 bits, a 580.9x reduction from P-OPT's complete matrix. The
+seven rows again report one iteration, 1,468,364,884 semantic edges, and
+checksum `df4fdaf1e3957ce9`. The complete 16 MiB matrix is
+`results/ecg_experiments/runs/twitter_ref32_16mb_2dbb6680/roi_matrix.json`
+(SHA-256 `608370f0d2a9dd72d8319bcadfee2837c1a58bc34da734dc520d90d418f0a0e5`).
+
 REF32 rows are accepted only when the graph filename certifies DBG order, the
 record/commit/prefetch/resource receipts validate, no runtime P-OPT matrix is
 present, semantic output matches, both queues drain, and the record remains four

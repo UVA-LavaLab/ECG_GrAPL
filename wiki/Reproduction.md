@@ -388,6 +388,17 @@ matrix to separate replacement quality from that graph-scaled storage cost.
 Require all rows to report one iteration, 1,468,364,884 semantic edges, and
 score checksum `df4fdaf1e3957ce9`.
 
+For the charged-P-OPT-positive comparison point, rerun the same command with:
+
+```text
+--l3-sizes 16MB
+--out-dir results/ecg_experiments/runs/twitter_ref32_16mb_2dbb6680
+```
+
+At 16 MiB, size-correct P-OPT reserves five of 16 ways and leaves eleven data
+ways. The expected `roi_matrix.json` SHA-256 is
+`608370f0d2a9dd72d8319bcadfee2837c1a58bc34da734dc520d90d418f0a0e5`.
+
 ### Separate transport campaign
 
 The `reuse_plan_transport_campaign` profile holds replacement at pure LRU in
