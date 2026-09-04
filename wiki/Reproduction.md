@@ -399,6 +399,43 @@ At 16 MiB, size-correct P-OPT reserves five of 16 ways and leaves eleven data
 ways. The expected `roi_matrix.json` SHA-256 is
 `608370f0d2a9dd72d8319bcadfee2837c1a58bc34da734dc520d90d418f0a0e5`.
 
+For the P-OPT paper's 24 MiB, 16-way LLC geometry, rerun the seven-policy
+command with:
+
+```text
+--l3-sizes 24MB
+--out-dir results/ecg_experiments/runs/twitter_ref32_24mb_6a1b9f29
+```
+
+The cache simulator uses the paper's modulo set mapping for this
+non-power-of-two set count. Size-correct full P-OPT reserves four ways for
+Twitter's current and next columns. The expected `roi_matrix.json` SHA-256 is
+`a145ba982e8fcfaa198899382f7c026606a58647aa0d5b642b20d2d75a708d0d`.
+
+The two-way result is a deliberately infeasible sensitivity, not a P-OPT
+baseline. It is reproduced by preserving the 24 MiB cache's 24,576 sets while
+exposing 14 data ways:
+
+```bash
+python3 scripts/experiments/ecg/roi_matrix.py \
+  --suite cache-sim --benchmark pr \
+  --options \
+    '-f results/graphs/twitter-2010/twitter-2010-dbg.sg -o 0 -n 1 -i 1 -t 0' \
+  --policies POPT:UNCHARGED \
+  --l1d-size 32kB --l1d-ways 8 \
+  --l2-size 128kB --l2-ways 8 \
+  --l3-sizes 21MB --l3-ways 14 \
+  --cache-sim-omp-threads 1 \
+  --prefetcher none --flowthrough off \
+  --out-dir \
+    results/ecg_experiments/runs/twitter_popt_24mb_fixed2_sensitivity \
+  --timeout-cache 172800 --no-build
+```
+
+Add 10,413,060 matrix-stream transfers when comparing this diagnostic against
+charged policies. Its expected `roi_matrix.json` SHA-256 is
+`7dfbc7c7ff2c9104a6bc095694842a88023a86c78e804f13896eb364b0a77a53`.
+
 ### Separate transport campaign
 
 The `reuse_plan_transport_campaign` profile holds replacement at pure LRU in

@@ -353,6 +353,51 @@ checksum `df4fdaf1e3957ce9`. The complete 16 MiB matrix is
 `results/ecg_experiments/runs/twitter_ref32_16mb_2dbb6680/roi_matrix.json`
 (SHA-256 `608370f0d2a9dd72d8319bcadfee2837c1a58bc34da734dc520d90d418f0a0e5`).
 
+The P-OPT paper's baseline LLC is 3 MiB per core across eight cores: 24 MiB,
+16-way. Its non-power-of-two set mapping uses modulo indexing. Section VII-B
+and Figure 11 explicitly scale the reserved-way count with graph size: full
+two-column P-OPT uses two ways near 18--21 million vertices, three ways at
+32 million, and four ways near 40--43 million. Twitter's 41,652,230 vertices
+therefore require four ways at 24 MiB, not two.
+
+The paper-geometry Twitter matrix gives:
+
+| Policy | LLC misses | Reduction versus LRU |
+|---|---:|---:|
+| LRU | 348,781,423 | -- |
+| SRRIP | 324,925,497 | 6.8% |
+| `GRASP_PAPER` | 276,638,624 | 20.7% |
+| Full-capacity uncharged P-OPT | 252,862,518 | 27.5% |
+| Size-correct four-way P-OPT | 286,310,073 | 17.9% |
+| Scale6 replacement-only | 230,428,305 | 33.9% |
+| Scale6 replacement + prefetch | 208,422,358 | 40.2% |
+
+At this graph size, charged two-column P-OPT has 3.5% more demand LLC misses
+than `GRASP_PAPER`. Including 10,413,060 matrix-stream transfers raises its
+miss-equivalent total to 296,723,133, 7.3% above GRASP. This does not
+contradict the paper: Twitter was not one of its inputs, and Section VII-B
+identifies the growing metadata reservation as the large-graph limitation.
+
+An explicitly infeasible two-way sensitivity retains the 24 MiB cache's 24,576
+sets but exposes 14 data ways. It records 268,219,327 demand misses, 3.0% fewer
+than GRASP. The two ways hold only 3,145,728 bytes, however, while Twitter's
+two active columns require 5,206,530 bytes. After adding the same matrix
+stream, the sensitivity reaches 278,632,387 miss-equivalent transfers, 0.7%
+above GRASP. It is not a valid full P-OPT result. The paper's valid
+lower-footprint alternative is P-OPT-SE, which stores one column and changes
+the metadata encoding and replacement information; it must be evaluated as a
+separate policy rather than represented by undercharging full P-OPT.
+
+Scale6 combined has 24.7% fewer LLC misses than GRASP, 27.2% fewer than
+size-correct charged P-OPT, and 17.6% fewer than full-capacity uncharged P-OPT.
+Replacement-only Scale6 also beats GRASP by 16.7% and uncharged P-OPT by 8.9%.
+The authoritative 24 MiB matrix is
+`results/ecg_experiments/runs/twitter_ref32_24mb_6a1b9f29/roi_matrix.json`
+(SHA-256 `a145ba982e8fcfaa198899382f7c026606a58647aa0d5b642b20d2d75a708d0d`).
+The two-way diagnostic is
+`results/ecg_experiments/runs/twitter_popt_24mb_fixed2_sensitivity/roi_matrix.json`
+(SHA-256 `7dfbc7c7ff2c9104a6bc095694842a88023a86c78e804f13896eb364b0a77a53`).
+
 REF32 rows are accepted only when the graph filename certifies DBG order, the
 record/commit/prefetch/resource receipts validate, no runtime P-OPT matrix is
 present, semantic output matches, both queues drain, and the record remains four
