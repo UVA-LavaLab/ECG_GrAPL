@@ -1980,8 +1980,13 @@ private:
         // which models no fills; that made them pathological at low pressure —
         // evicting valid lines while empty ways sat idle — and unfairly weakened
         // the GRASP baseline relative to SRRIP/ECG. Fixed: always invalid-first.)
-        for (size_t i = 0; i < associativity_; i++) {
-            if (!set[i].valid) return i;
+        const bool replayOfficialGraspEmptyWayBehavior =
+            policy_ == EvictionPolicy::GRASP &&
+            std::getenv("GRASP_OFFICIAL_TRACE_EMPTY_WAYS") != nullptr;
+        if (!replayOfficialGraspEmptyWayBehavior) {
+            for (size_t i = 0; i < associativity_; i++) {
+                if (!set[i].valid) return i;
+            }
         }
         
         // All lines valid, use eviction policy

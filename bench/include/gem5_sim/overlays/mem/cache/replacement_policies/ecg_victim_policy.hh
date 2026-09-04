@@ -818,6 +818,20 @@ inline uint32_t classifyGraspTier(uint64_t addr, uint64_t base, uint64_t upper,
     return 3;                             // COLD        -> evict-first insertion
 }
 
+inline uint32_t classifyGraspTierCapacity(
+        uint64_t addr, uint64_t base, uint64_t upper,
+        uint64_t llc_size, double capacity_fraction) {
+    if (addr < base || addr >= upper + 8) return 0;
+    const uint64_t hot_bytes = static_cast<uint64_t>(
+        capacity_fraction * static_cast<double>(llc_size));
+    uint64_t hot_bound = std::min<uint64_t>(upper, base + hot_bytes) + 8;
+    uint64_t moderate_bound =
+        std::min<uint64_t>(upper, base + 2 * hot_bytes) + 8;
+    if (addr < hot_bound) return 1;
+    if (addr < moderate_bound) return 2;
+    return 3;
+}
+
 // GRASP insertion RRPV for a degree tier (1/2/3 from classifyGraspTier; 0 or
 // out-of-region maps to cold). P_RRIP=1 (protected), I_RRIP=rrpvMax-1,
 // M_RRIP=rrpvMax — i.e. 1 / 6 / 7 for a 3-bit RRPV.

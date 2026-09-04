@@ -227,6 +227,17 @@ def test_ecg_pfx_prefetcher_sets_cache_sim_env(tmp_path):
     assert row["ecg_prefetch_lookahead"] == "6"
 
 
+def test_grasp_paper_sets_capacity_relative_boundaries(tmp_path):
+    args = roi_matrix.parse_args(["--suite", "cache-sim"])
+    spec = roi_matrix.parse_policy_spec("GRASP:PAPER")
+    env = roi_matrix.cache_sim_env(
+        args, spec, "1MB", "16", tmp_path / "grasp.json")
+    assert spec.label == "GRASP_PAPER"
+    assert spec.policy == "GRASP"
+    assert env["GRASP_BOUNDARY_MODE"] == "capacity"
+    assert env["GRASP_HOT_FRACTION"] == "0.50"
+
+
 def test_next_use_lru_sets_packed_hardware_free_env(tmp_path):
     args = roi_matrix.parse_args(["--suite", "cache-sim"])
     spec = roi_matrix.parse_policy_spec("ECG:NEXT_USE_LRU")

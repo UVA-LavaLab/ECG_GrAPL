@@ -1831,15 +1831,22 @@ struct GraphCacheContext {
     // proportional vertex fraction instead of a fixed LLC byte range (which
     // under-protects at scale). llc_size is no longer used for the boundary.
     uint32_t classifyGRASP(uint64_t addr, size_t llc_size) const {
-        (void)llc_size;
         // The per-region GRASP tier math lives in ecg_policy::classifyGraspTier
         // (shared with gem5 + Sniper). hot_fraction = grasp_hot_percent/100 (default
         // 0.15). Returns the first region's tier; cold if in none.
         for (uint32_t i = 0; i < num_regions; ++i) {
             const PropertyRegion& r = regions[i];
             if (!r.grasp_region) continue;
-            uint32_t tier = ecg_policy::classifyGraspTier(
-                addr, r.base_address, r.upper_bound, r.grasp_hot_percent / 100.0);
+            const char* mode = std::getenv("GRASP_BOUNDARY_MODE");
+            const bool capacity_relative =
+                mode && std::string(mode) == "capacity";
+            uint32_t tier = capacity_relative
+                ? ecg_policy::classifyGraspTierCapacity(
+                    addr, r.base_address, r.upper_bound, llc_size,
+                    r.grasp_hot_percent / 100.0)
+                : ecg_policy::classifyGraspTier(
+                    addr, r.base_address, r.upper_bound,
+                    r.grasp_hot_percent / 100.0);
             if (tier != 0) return tier;
         }
         return 3;  // Not in any property region → cold

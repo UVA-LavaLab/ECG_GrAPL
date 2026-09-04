@@ -110,6 +110,23 @@ sweep-order epoch assumption, so those rows remain diagnostic.
 The two resident columns are current and next. Initial loading belongs to
 cumulative stream traffic, not a third resident column.
 
+### 5.1 GRASP paper baseline
+
+`GRASP_PAPER` preserves the upstream trace simulator's PageRank mapping:
+each registered property region receives a high-reuse boundary equal to 50%
+of LLC capacity, with the moderate boundary at twice that allocation. It is
+separate from the older `GRASP` array-relative 15% sensitivity retained for
+historical result compatibility.
+
+At upstream GRASP commit `6e3814430265fc4f2513c95ef131a6522bc9d389`,
+the official 1 MiB, 16-way web-Google PageRank trace contains 9,887,515
+accesses. After the artifact's missing-return undefined behavior is repaired
+with one `return 0`, the official simulator reports 8,687,691 LRU misses and
+6,397,965 GRASP misses. `grasp_trace_replay` reproduces both counts exactly;
+its optional empty-way behavior is confined to artifact replay because the
+official trace simulator may replace a cold line while invalid ways remain.
+Normal cache_sim, gem5, and Sniper retain real-cache invalid-way-first fills.
+
 ## 6. Workloads and campaign roles
 
 The literature-scale PageRank screen uses fixed 262,144-vertex samples of

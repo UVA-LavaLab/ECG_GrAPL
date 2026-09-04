@@ -1530,6 +1530,11 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             cache_sim_ecg_epoch_region_indices(args.benchmark),
     })
     env.update(ecg_pfx_env(args))
+    if spec.label == "GRASP_PAPER":
+        env.update({
+            "GRASP_BOUNDARY_MODE": "capacity",
+            "GRASP_HOT_FRACTION": "0.50",
+        })
     if spec.ecg_mode:
         env["ECG_MODE"] = spec.ecg_mode
         env["ECG_VARIANT"] = effective_ecg_variant(

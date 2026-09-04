@@ -310,6 +310,11 @@ def parse_policy_spec(text: str) -> PolicySpec:
             ecg_mode="ECG_EXACT_STORED",
             ecg_variant="next_use_lru",
         )
+    if upper in ("GRASP:PAPER", "GRASP_PAPER"):
+        return PolicySpec(
+            label="GRASP_PAPER",
+            policy="GRASP",
+        )
     if upper in (
         "ECG:REF32_EXACT_COMMIT", "ECG_REF32_EXACT_COMMIT",
     ):

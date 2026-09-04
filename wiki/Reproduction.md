@@ -335,6 +335,23 @@ Accept only rows with validated REF32 record, commit-channel, prefetch,
 resource, DBG-order, geometry, policy, and semantic receipts. These runs
 provide cache and traffic evidence only; they do not provide a speedup claim.
 
+To reproduce the official GRASP PageRank example after cloning commit
+`6e3814430265fc4f2513c95ef131a6522bc9d389`, add the missing `return 0;` to
+`trace-based-simulators/common.h::add_border_boundry`, build the upstream LRU
+and GRASP simulators, then compare with:
+
+```bash
+bench/bin_sim/grasp_trace_replay \
+  results/external/grasp-upstream/datasets/\
+PageRankOpt.web-Google.cvgr.dbg.lru.llc.trace 1 LRU
+
+bench/bin_sim/grasp_trace_replay \
+  results/external/grasp-upstream/datasets/\
+PageRankOpt.web-Google.cvgr.dbg.lru.llc.trace 1 GRASP
+```
+
+Expected misses are 8,687,691 for LRU and 6,397,965 for GRASP.
+
 Twitter-scale encoding is screened before converting the billion-edge graph by
 using `ECG:REF32_SCALE_R_COMMIT` and
 `ECG:REF32_SCALE_RP_COMMIT`. These policies force a 26-bit destination and the

@@ -1143,21 +1143,24 @@ uint32_t GraphCacheContext::findNextRefAtVertex(
 
 uint32_t GraphCacheContext::classifyGRASP(uint64_t addr, uint64_t llc_size) const
 {
-    // GRASP-faithful (ligra.h add_region): the hot region is a fraction of the
-    // VERTEX SPACE (frontier_frac x n) = a fraction of the property ARRAY, not of
-    // the LLC. Auto-scales with graph size. Default ~0.15 (~Faldu's vertex-relative
-    // "10%"). Override via GRASP_HOT_FRACTION (0<f<=1) for sensitivity sweeps.
     static const double hot_fraction = [](){
         const char* e = std::getenv("GRASP_HOT_FRACTION");
         double v = e ? std::atof(e) : 0.15;
         return (v > 0.0 && v <= 1.0) ? v : 0.15;
     }();
-    (void)llc_size;
+    static const bool capacity_relative = []() {
+        const char* mode = std::getenv("GRASP_BOUNDARY_MODE");
+        return mode && std::string(mode) == "capacity";
+    }();
     for (uint32_t i = 0; i < num_regions; ++i) {
         if (!regions[i].grasp_region) continue;
-        // Per-region tier math shared with cache_sim and gem5.
-        uint32_t tier = ecg_policy::classifyGraspTier(
-            addr, regions[i].base_address, regions[i].upper_bound, hot_fraction);
+        uint32_t tier = capacity_relative
+            ? ecg_policy::classifyGraspTierCapacity(
+                addr, regions[i].base_address,
+                regions[i].upper_bound, llc_size, hot_fraction)
+            : ecg_policy::classifyGraspTier(
+                addr, regions[i].base_address,
+                regions[i].upper_bound, hot_fraction);
         if (tier != 0) return tier;
     }
     return 3;

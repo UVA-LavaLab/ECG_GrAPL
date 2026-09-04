@@ -974,15 +974,18 @@ struct GraphCacheContext {
 
     uint32_t classifyGRASP(uint64_t addr, size_t llc_size,
                            double hot_fraction = 0.15) const {
-        // GRASP-faithful: hot region = a fraction of the property ARRAY (vertex
-        // space), auto-scaling with graph size. The per-region tier math is
-        // ecg_policy::classifyGraspTier (shared with cache_sim + Sniper). ECG
-        // DBG-tier callers use the default ~0.15 (~Faldu's vertex-relative 10%).
-        (void)llc_size;
+        const char* mode = std::getenv("GRASP_BOUNDARY_MODE");
+        const bool capacity_relative =
+            mode && std::string(mode) == "capacity";
         for (uint32_t i = 0; i < num_regions; ++i) {
             if (!regions[i].grasp_region) continue;
-            uint32_t tier = ecg_policy::classifyGraspTier(
-                addr, regions[i].base_address, regions[i].upper_bound, hot_fraction);
+            uint32_t tier = capacity_relative
+                ? ecg_policy::classifyGraspTierCapacity(
+                    addr, regions[i].base_address,
+                    regions[i].upper_bound, llc_size, hot_fraction)
+                : ecg_policy::classifyGraspTier(
+                    addr, regions[i].base_address,
+                    regions[i].upper_bound, hot_fraction);
             if (tier != 0) return tier;
         }
         return 3;
