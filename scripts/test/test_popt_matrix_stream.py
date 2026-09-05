@@ -31,6 +31,7 @@ pytestmark = pytest.mark.skipif(
 def run_pr(iterations: int, extra_env: dict | None = None) -> dict:
     """Run PageRank on a small synthetic graph and return the stats JSON."""
     env = dict(os.environ)
+    env.pop("POPT_SE_POSTFINAL", None)
     env.update({
         "OMP_NUM_THREADS": "1",
         "CACHE_ULTRAFAST": "0",
@@ -54,10 +55,12 @@ def run_pr(iterations: int, extra_env: dict | None = None) -> dict:
         return json.loads(out.read_text())
 
 
-def test_stream_is_charged_once_per_sweep():
+@pytest.mark.parametrize("postfinal", [None, "later_lower_bound", "distant"])
+def test_stream_is_charged_once_per_sweep(postfinal):
     """Columns must scale with iterations, not be fixed at one sweep."""
-    one = run_pr(1)
-    two = run_pr(2)
+    env = {"POPT_SE_POSTFINAL": postfinal} if postfinal else {}
+    one = run_pr(1, env)
+    two = run_pr(2, env)
     c1 = one["popt_matrix_stream_columns_simulated"]
     c2 = two["popt_matrix_stream_columns_simulated"]
     assert c1 > 0, "matrix stream never fired"
@@ -82,10 +85,12 @@ def test_stream_is_off_by_default():
     assert stats["popt_matrix_stream_lines_simulated"] == 0
 
 
-def test_stream_adds_traffic_without_a_prefetcher():
+@pytest.mark.parametrize("postfinal", [None, "later_lower_bound", "distant"])
+def test_stream_adds_traffic_without_a_prefetcher(postfinal):
     """A cold sequential stream must cost real memory traffic."""
-    off = run_pr(1, {"POPT_MATRIX_STREAM_SIM": "0"})
-    on = run_pr(1)
+    env = {"POPT_SE_POSTFINAL": postfinal} if postfinal else {}
+    off = run_pr(1, {**env, "POPT_MATRIX_STREAM_SIM": "0"})
+    on = run_pr(1, env)
     added = on["total_memory_traffic"] - off["total_memory_traffic"]
     lines = on["popt_matrix_stream_lines_simulated"]
     # Nearly every line of a cold stream misses; allow slack for the few served

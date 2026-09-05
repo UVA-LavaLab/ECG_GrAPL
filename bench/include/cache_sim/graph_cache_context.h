@@ -54,6 +54,7 @@
 #include "../ecg_ref32.h"
 #include "../ecg_reuse_plan_builder.h"
 #include "../ecg_victim_policy.h"
+#include "../popt_rereference.h"
 
 namespace cache_sim {
 
@@ -669,11 +670,14 @@ struct RereferenceConfig {
     uint32_t sub_epoch_size = 0;      // Vertices per sub-epoch (epoch_size / 128)
     uint32_t line_size = 64;          // Cache line size in bytes
     uint32_t _pad = 0;
+    popt_reref::Encoding encoding = popt_reref::Encoding::Full;
+    popt_reref::PostFinal postfinal = popt_reref::PostFinal::Later;
 
     // Algorithm 2: compute next-reference distance for a cache line
     uint32_t findNextRef(uint32_t cline_id, uint32_t current_vertex) const {
-        if (matrix == nullptr || cline_id >= num_cache_lines) return 127;
-        if (epoch_size == 0 || sub_epoch_size == 0) return 127;
+        const uint32_t max_rank = popt_reref::maxRank(encoding);
+        if (matrix == nullptr || cline_id >= num_cache_lines) return max_rank;
+        if (epoch_size == 0 || sub_epoch_size == 0) return max_rank;
         struct PositionCache {
             const RereferenceConfig* owner = nullptr;
             uint32_t vertex = UINT32_MAX;
@@ -698,9 +702,14 @@ struct RereferenceConfig {
                 (current_vertex % epoch_size) / sub_epoch_size;
         }
         const uint32_t epoch_id = cache.epoch_id;
-        if (epoch_id >= num_epochs) return 127;
+        if (epoch_id >= num_epochs) return max_rank;
 
         uint8_t entry = matrix[epoch_id * num_cache_lines + cline_id];
+        if (encoding == popt_reref::Encoding::SingleEpoch) {
+            return popt_reref::singleEpochNextRef(
+                entry, cache.current_sub_epoch, epoch_id + 1 < num_epochs,
+                postfinal);
+        }
         constexpr uint8_t MSB = 0x80;
         constexpr uint8_t MASK = 0x7F;
 
@@ -1583,14 +1592,19 @@ struct GraphCacheContext {
     // Call after makeOffsetMatrix() from popt.h.
     void initRereference(const uint8_t* matrix, uint32_t num_cache_lines,
                          uint32_t num_epochs, uint32_t num_vertices,
-                         uint32_t line_size) {
+                         uint32_t line_size,
+                         popt_reref::Encoding encoding = popt_reref::Encoding::Full,
+                         popt_reref::PostFinal postfinal = popt_reref::PostFinal::Later) {
         rereference.matrix = matrix;
         rereference.num_cache_lines = num_cache_lines;
         rereference.num_epochs = num_epochs;
         rereference.epoch_size = (num_vertices + num_epochs - 1) / num_epochs;
-        rereference.sub_epoch_size = (rereference.epoch_size + 127) / 128;
+        const uint32_t bins = popt_reref::subEpochBins(encoding);
+        rereference.sub_epoch_size = (rereference.epoch_size + bins - 1) / bins;
         rereference.line_size = line_size;
         rereference._pad = 0;
+        rereference.encoding = encoding;
+        rereference.postfinal = postfinal;
     }
 
     // Real-time per-direction reref load: repoint the single reserved reref way at a
@@ -1986,10 +2000,11 @@ struct GraphCacheContext {
 
     // Compute P-OPT rereference distance for a cache line address.
     uint32_t findNextRef(uint64_t line_addr) const {
-        if (rereference.matrix == nullptr) return 127;
-        if (hints_for_thread().current_src == UINT32_MAX) return 127;  // No vertex context set
+        const uint32_t max_rank = popt_reref::maxRank(rereference.encoding);
+        if (rereference.matrix == nullptr) return max_rank;
+        if (hints_for_thread().current_src == UINT32_MAX) return max_rank;
         const PropertyRegion* r = findRegion(line_addr);
-        if (r == nullptr) return 127;
+        if (r == nullptr) return max_rank;
         uint32_t cline_id = static_cast<uint32_t>(
             (line_addr - r->base_address) / rereference.line_size);
         return rereference.findNextRef(cline_id, hints_for_thread().current_src);

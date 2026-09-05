@@ -724,6 +724,9 @@ def apply_overhead_metrics(row: dict[str, Any]) -> None:
         if charged:
             row["popt_charged_total_memory_traffic"] = (
                 int(traffic) + stream_lines)
+    offchip = row.get("total_offchip_traffic")
+    if offchip not in (None, ""):
+        row["total_offchip_traffic_with_overhead"] = int(offchip) + stream_lines
 
 
 def annotate_l3_pressure(row: dict[str, Any]) -> dict[str, Any]:
@@ -840,6 +843,12 @@ def popt_charge_metadata(args: argparse.Namespace, spec: PolicySpec, l3_size: st
         "popt_matrix_stream_cache_lines": 0,
         "popt_estimated_vertices": "",
     }
+    if spec.popt_se_postfinal is not None:
+        metadata.update({
+            "popt_reserve_model": "size_correct",
+            "popt_se_postfinal": spec.popt_se_postfinal,
+            "popt_se_reconstruction": 1,
+        })
     if not spec.charge_popt_overhead:
         return metadata
 
@@ -851,7 +860,9 @@ def popt_charge_metadata(args: argparse.Namespace, spec: PolicySpec, l3_size: st
     line_size = parse_size_bytes(args.line_size)
     assoc = max(int(args.l3_ways), 1)
     property_bytes = max(int(args.popt_property_bytes), 1)
-    active_columns = max(int(args.popt_active_columns), 1)
+    active_columns = (
+        1 if spec.popt_se_postfinal is not None
+        else max(int(args.popt_active_columns), 1))
     num_epochs = max(int(args.popt_num_epochs), 1)
     min_data_ways = max(min(int(args.popt_min_data_ways), assoc), 1)
 
@@ -860,7 +871,7 @@ def popt_charge_metadata(args: argparse.Namespace, spec: PolicySpec, l3_size: st
     matrix_bytes = active_columns * column_bytes
     sets = max(requested_bytes // (assoc * line_size), 1)
     bytes_per_way = sets * line_size
-    reserve_model = getattr(args, "popt_reserve_model", "fixed_one")
+    reserve_model = metadata["popt_reserve_model"]
     matrix_fits = True
     if reserve_model == "size_correct":
         # Reference-compatible charge: P-OPT keeps
@@ -904,6 +915,7 @@ def popt_charge_metadata(args: argparse.Namespace, spec: PolicySpec, l3_size: st
         "popt_matrix_active_columns": active_columns,
         "popt_matrix_column_bytes": column_bytes,
         "popt_matrix_stream_bytes": stream_bytes,
+        "popt_backing_matrix_bytes": stream_bytes,
         "popt_matrix_stream_cache_lines": stream_cache_lines,
         "popt_estimated_vertices": vertices,
     })
@@ -999,7 +1011,7 @@ def run_command(
         key: value for key, value in sanitize_subprocess_environment(
             env).items()
         if key.startswith((
-            "CACHE_", "ECG_", "GEM5_", "GRAPHBREW_", "OMP_", "TOPT_"
+            "CACHE_", "ECG_", "GEM5_", "GRAPHBREW_", "OMP_", "POPT_", "TOPT_"
         )) or key == "T_OPT"
     }
     stdout_path.with_suffix(
@@ -1530,6 +1542,9 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             cache_sim_ecg_epoch_region_indices(args.benchmark),
     })
     env.update(ecg_pfx_env(args))
+    env.pop("POPT_SE_POSTFINAL", None)
+    if spec.popt_se_postfinal is not None:
+        env["POPT_SE_POSTFINAL"] = spec.popt_se_postfinal
     if spec.label == "GRASP_PAPER":
         env.update({
             "GRASP_BOUNDARY_MODE": "capacity",
@@ -3539,6 +3554,42 @@ def sniper_mask_mode_ecg_variant(
     return effective_ecg_variant(args, reuse_plan_depth, spec)
 
 
+def apply_popt_se_receipt(
+        row: dict[str, Any], log_text: str, spec: PolicySpec) -> bool:
+    if spec.popt_se_postfinal is None:
+        return True
+    row["popt_se_validated"] = 0
+    receipt = re.search(
+        r"\[POPT-SE encoding=single_epoch value_bits=6 sub_epoch_bins=64 "
+        r"postfinal=(later_lower_bound|distant) active_columns=1 epochs=256 "
+        r"cache_lines=(\d+) vertices=(\d+) one_column_lookup=1 reconstruction=1\]",
+        log_text)
+    if not receipt:
+        mark_row_error(row, "P-OPT-SE emitted no valid one-column encoding receipt")
+        return False
+    postfinal, lines_text, vertices_text = receipt.groups()
+    lines, vertices = int(lines_text), int(vertices_text)
+    estimated = row.get("popt_estimated_vertices")
+    if (postfinal != spec.popt_se_postfinal or vertices <= 0 or
+            lines != (vertices + 15) // 16 or
+            (estimated not in (None, "") and int(estimated) != vertices)):
+        mark_row_error(row, "P-OPT-SE encoding receipt differs from the requested policy/graph")
+        return False
+    row.update({
+        "popt_se_validated": 1,
+        "popt_se_reconstruction": 1,
+        "popt_se_postfinal": postfinal,
+        "popt_matrix_encoding": "single_epoch",
+        "popt_value_bits": 6,
+        "popt_sub_epoch_bins": 64,
+        "popt_runtime_active_columns": 1,
+        "popt_runtime_epochs": 256,
+        "popt_backing_matrix_bytes": 256 * lines,
+        "popt_estimated_vertices": vertices,
+    })
+    return True
+
+
 def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size: str) -> list[dict[str, Any]]:
     if spec.policy == "HAWKEYE" and spec.label != "HAWKEYE_PROXY":
         raise RuntimeError(
@@ -3557,6 +3608,12 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         raise RuntimeError(
             "Controlled cache_sim runs require setarch -R, but setarch is unavailable.")
     charge = policy_cache_geometry(args, spec, l3_size)
+    if (spec.popt_se_postfinal is not None and spec.charge_popt_overhead and
+            (not charge.get("popt_matrix_fits") or
+             not charge.get("popt_estimated_vertices"))):
+        row = base_row("cache_sim", args, spec, l3_size, charge)
+        mark_row_error(row, "P-OPT-SE resident column does not fit or graph size is unknown")
+        return [row]
     effective_l3_size = str(charge["popt_effective_l3_size"])
     effective_l3_ways = str(charge["popt_effective_l3_ways"])
     env = cache_sim_env(args, spec, effective_l3_size, effective_l3_ways, json_path)
@@ -3590,6 +3647,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         row["pr_iterations"] = int(pr_result.group(1))
         row["pr_semantic_edges"] = int(pr_result.group(2))
         row["pr_score_checksum"] = pr_result.group(3).lower()
+    apply_popt_se_receipt(row, log_text, spec)
     apply_next_use_record_receipt(
         row, log_text, required=spec.label == "ECG_NEXT_USE_LRU")
     is_ref32 = spec.label in REF32_POLICY_LABELS
@@ -3865,14 +3923,17 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     log_path = out_dir / "logs" / f"{label}.log"
     sidebands = gem5_sideband_paths(gem5_out)
     charge = policy_cache_geometry(args, spec, l3_size)
-    if spec.label in REF32_POLICY_LABELS:
+    if spec.label in REF32_POLICY_LABELS or spec.popt_se_postfinal is not None:
         row = base_row("gem5", args, spec, l3_size, charge)
         row.update({
             "section": 0,
             "log_path": str(log_path),
             "gem5_out": str(gem5_out),
             "status": "unsupported",
+            "timing_valid_for_speedup": "0",
             "error": (
+                "P-OPT-SE reconstruction is cache_sim-only; no gem5 SE decoder exists"
+                if spec.popt_se_postfinal is not None else
                 "REF32 requires native commit-update and delayed LLC-only "
                 "prefetch plumbing before gem5 cache or timing rows are valid"),
         })
@@ -4790,13 +4851,15 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     sidebands = sniper_sideband_paths(sniper_out)
     charge = policy_cache_geometry(args, spec, l3_size)
     row = base_row("sniper", args, spec, l3_size, charge)
-    if spec.label in REF32_POLICY_LABELS:
+    if spec.label in REF32_POLICY_LABELS or spec.popt_se_postfinal is not None:
         row.update({
             "section": 0,
             "log_path": str(log_path),
             "sniper_out": str(sniper_out),
             "status": "unsupported",
             "error": (
+                "P-OPT-SE reconstruction is cache_sim-only; no Sniper SE decoder exists"
+                if spec.popt_se_postfinal is not None else
                 "REF32 requires native commit-update and delayed LLC-only "
                 "prefetch plumbing before Sniper rows are valid"),
         })
@@ -6308,7 +6371,8 @@ def certify_cache_sim_pr_results(
         if row.get("simulator") == "cache_sim"
     ]
     if not any(
-            row.get("policy_label") in REF32_POLICY_LABELS
+            row.get("policy_label") in REF32_POLICY_LABELS or
+            row.get("popt_se_reconstruction") == 1
             for row in cache_rows):
         return
     groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
@@ -6947,6 +7011,15 @@ def main(argv: list[str]) -> int:
     else:
         policy_texts = DEFAULT_POLICIES
     policies = [parse_policy_spec(p) for p in policy_texts]
+    if any(spec.popt_se_postfinal is not None for spec in policies):
+        if (args.suite != "cache-sim" or args.benchmark != "pr" or
+                int(args.cache_sim_omp_threads) != 1 or
+                parse_size_bytes(str(args.line_size)) != 64 or
+                int(args.popt_property_bytes) != 4 or
+                int(args.popt_num_epochs) != 256):
+            raise SystemExit(
+                "P-OPT-SE is supported only for serial cache-sim PageRank "
+                "with 64B lines, 4B properties, and 256 epochs")
     try:
         l1d_ways = int(args.l1d_ways)
         l2_ways = int(args.l2_ways)

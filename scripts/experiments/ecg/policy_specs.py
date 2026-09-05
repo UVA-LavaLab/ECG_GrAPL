@@ -54,6 +54,7 @@ class PolicySpec:
     ecg_reuse_admission: bool = False
     ecg_combined_admission: bool = False
     ecg_online_admission: bool = False
+    popt_se_postfinal: str | None = None
 
     @property
     def safe_label(self) -> str:
@@ -415,6 +416,18 @@ def parse_policy_spec(text: str) -> PolicySpec:
             policy="ECG",
             ecg_mode=mode,
             charge_popt_overhead=charge_popt,
+        )
+    if upper in ("POPT_SE", "POPT:SE", "P_OPT_SE",
+                 "POPT_SE_DISTANT", "POPT:SE_DISTANT", "P_OPT_SE_DISTANT"):
+        if not explicit_charge:
+            charge_popt = True
+        distant = upper.endswith("_DISTANT")
+        label = "POPT_SE_DISTANT" if distant else "POPT_SE"
+        return PolicySpec(
+            label=label if charge_popt else f"{label}_UNCHARGED",
+            policy="POPT",
+            charge_popt_overhead=charge_popt,
+            popt_se_postfinal="distant" if distant else "later_lower_bound",
         )
     if upper in ("P_OPT", "POPT"):
         if not explicit_charge:

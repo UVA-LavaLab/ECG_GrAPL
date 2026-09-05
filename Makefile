@@ -31,7 +31,9 @@ endif
 
 DEP_GAPBS := $(wildcard $(INCLUDE_GAPBS)/*.h)
 DEP_GRAPH := $(wildcard $(INCLUDE_GRAPHBREW)/reorder/*.h) \
-	$(wildcard $(INCLUDE_GRAPHBREW)/partition/*.h)
+	$(wildcard $(INCLUDE_GRAPHBREW)/partition/*.h) \
+	$(wildcard $(INCLUDE_GRAPHBREW)/partition/cagra/*.h) \
+	$(INC_DIR)/popt_rereference.h
 DEP_EXTERNAL := $(wildcard $(INCLUDE_EXTERNAL)/rabbit/*.hpp) \
 	$(wildcard $(INCLUDE_EXTERNAL)/gorder/*.h) \
 	$(wildcard $(INCLUDE_EXTERNAL)/corder/*.h) \
@@ -50,7 +52,7 @@ DEP_ECG := $(wildcard $(INC_DIR)/ecg_*.h) \
 
 KERNELS_SIM := pr pr_spmv bfs bc cc cc_sv sssp tc ecg_preprocess \
 	reuse_plan_sidecar test_ecg_reuse_plan test_ecg_reuse_plan32 \
-	test_ecg_ref32 grasp_trace_replay
+	test_ecg_ref32 test_popt_single_epoch grasp_trace_replay
 KERNELS_GEM5 := pr pr_spmv bfs sssp cc cc_sv bc tc
 KERNELS_SNIPER := sg_kernel pr bfs sssp bc cc cc_sv \
 	pr_kernel_smoke bfs_kernel_smoke sssp_kernel_smoke hello_roi

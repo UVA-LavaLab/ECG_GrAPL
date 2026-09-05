@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import sys
 
+import pytest
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ROI_MATRIX_PATH = PROJECT_ROOT / "scripts" / "experiments" / "ecg" / "roi_matrix.py"
@@ -65,6 +67,129 @@ def test_popt_charged_size_correct_reserves_resident_matrix_columns():
     assert charge["popt_effective_l3_size"] == "3584B"
     assert charge["popt_matrix_fits"] == 1
     assert charge["popt_matrix_stream_cache_lines"] == 1024
+
+
+@pytest.mark.parametrize(
+    ("text", "label", "postfinal", "charged"),
+    [
+        ("POPT:SE", "POPT_SE", "later_lower_bound", True),
+        ("POPT_SE:UNCHARGED", "POPT_SE_UNCHARGED", "later_lower_bound", False),
+        ("POPT:SE_DISTANT", "POPT_SE_DISTANT", "distant", True),
+        ("POPT_SE_DISTANT_UNCHARGED", "POPT_SE_DISTANT_UNCHARGED", "distant", False),
+    ],
+)
+def test_single_epoch_policy_labels(text, label, postfinal, charged):
+    policy = roi_matrix.parse_policy_spec(text)
+    assert policy.policy == "POPT"
+    assert policy.label == label
+    assert policy.popt_se_postfinal == postfinal
+    assert policy.charge_popt_overhead == charged
+
+
+@pytest.mark.parametrize(("size", "ways"), [("8MB", 5), ("16MB", 3), ("24MB", 2)])
+def test_single_epoch_twitter_capacity_not_stream_is_halved(monkeypatch, size, ways):
+    monkeypatch.setattr(roi_matrix, "estimate_num_vertices", lambda _: 41652230)
+    args = _charge_args()
+    policy = roi_matrix.parse_policy_spec("POPT_SE")
+    charge = roi_matrix.popt_charge_metadata(args, policy, size)
+    assert charge["popt_reserve_model"] == "size_correct"
+    assert charge["popt_matrix_active_columns"] == 1
+    assert charge["popt_matrix_bytes"] == 2603265
+    assert charge["popt_backing_matrix_bytes"] == 666435840
+    assert charge["popt_matrix_stream_cache_lines"] == 10413060
+    assert charge["popt_reserved_ways"] == ways
+    assert charge["popt_effective_l3_ways"] == str(16 - ways)
+    assert args.popt_active_columns == "2"
+    full = roi_matrix.popt_charge_metadata(
+        _charge_args("size_correct"), roi_matrix.parse_policy_spec("POPT"), size)
+    assert full["popt_matrix_active_columns"] == 2
+    assert full["popt_matrix_stream_bytes"] == charge["popt_matrix_stream_bytes"]
+
+
+@pytest.mark.parametrize("arguments", [
+    ["--suite", "gem5"],
+    ["--suite", "sniper"],
+    ["--suite", "both"],
+    ["--benchmark", "bfs"],
+    ["--cache-sim-omp-threads", "2"],
+    ["--line-size", "128"],
+    ["--popt-property-bytes", "8"],
+    ["--popt-num-epochs", "128"],
+])
+def test_single_epoch_unsupported_configuration_fails_before_launch(arguments):
+    with pytest.raises(SystemExit, match="P-OPT-SE"):
+        roi_matrix.main([
+            "--suite", "cache-sim", "--policies", "POPT_SE", "--dry-run",
+            *arguments])
+
+
+def test_single_epoch_receipt_is_required_and_mode_checked():
+    policy = roi_matrix.parse_policy_spec("POPT_SE")
+    row = {"status": "ok", "popt_estimated_vertices": 1024}
+    receipt = (
+        "[POPT-SE encoding=single_epoch value_bits=6 sub_epoch_bins=64 "
+        "postfinal=later_lower_bound active_columns=1 epochs=256 "
+        "cache_lines=64 vertices=1024 one_column_lookup=1 reconstruction=1]")
+    assert roi_matrix.apply_popt_se_receipt(row, receipt, policy)
+    assert row["popt_se_validated"] == 1
+    assert row["popt_se_reconstruction"] == 1
+    for invalid in ("", receipt.replace("later_lower_bound", "distant"),
+                    receipt.replace("active_columns=1", "active_columns=2"),
+                    receipt.replace("cache_lines=64", "cache_lines=32")):
+        row = {"status": "ok", "popt_estimated_vertices": 1024}
+        assert not roi_matrix.apply_popt_se_receipt(row, invalid, policy)
+        assert row["status"] == "error"
+
+
+def test_single_epoch_environment_does_not_leak_to_full_popt(monkeypatch, tmp_path):
+    monkeypatch.setenv("POPT_SE_POSTFINAL", "distant")
+    args = roi_matrix.parse_args(["--suite", "cache-sim"])
+    for label, expected in (("POPT", None), ("POPT_SE", "later_lower_bound"),
+                            ("POPT_SE_DISTANT", "distant")):
+        env = roi_matrix.cache_sim_env(
+            args, roi_matrix.parse_policy_spec(label), "8MB", "16",
+            tmp_path / "stats.json")
+        assert env.get("POPT_SE_POSTFINAL") == expected
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_single_epoch_direct_backend_entry_fails_closed(backend, tmp_path):
+    args = roi_matrix.parse_args(["--suite", backend, "--policies", "POPT_SE"])
+    args.has_lru_baseline = False
+    run = getattr(roi_matrix, f"run_{backend}")
+    rows = run(args, tmp_path, roi_matrix.parse_policy_spec("POPT_SE"), "8MB")
+    assert rows[0]["status"] == "unsupported"
+    assert rows[0]["timing_valid_for_speedup"] == "0"
+    assert "P-OPT-SE" in rows[0]["error"]
+
+
+def test_single_epoch_infeasible_capacity_fails_before_running(tmp_path, monkeypatch):
+    args = roi_matrix.parse_args([
+        "--suite", "cache-sim", "--options", "-g 18 -i 1",
+        "--policies", "POPT_SE"])
+    args.has_lru_baseline = False
+    monkeypatch.setattr(
+        roi_matrix, "run_command",
+        lambda *args, **kwargs: pytest.fail("infeasible policy was launched"))
+    rows = roi_matrix.run_cache_sim(
+        args, tmp_path, roi_matrix.parse_policy_spec("POPT_SE"), "4kB")
+    assert rows[0]["status"] == "error"
+    assert "does not fit" in rows[0]["error"]
+
+
+def test_matrix_inclusive_offchip_traffic_keeps_writebacks():
+    row = {
+        "options": "-i 2", "line_size": "64",
+        "popt_overhead_charged": 1,
+        "popt_matrix_stream_cache_lines": 10,
+        "l3_misses": 100, "total_memory_traffic": 110,
+        "total_offchip_traffic": 117,
+    }
+    roi_matrix.apply_overhead_metrics(row)
+    assert row["total_memory_traffic_with_overhead"] == 130
+    assert row["total_offchip_traffic_with_overhead"] == 137
+    roi_matrix.apply_overhead_metrics(row)
+    assert row["total_offchip_traffic_with_overhead"] == 137
 
 
 def test_analytic_popt_stream_charge_scales_with_iterations():

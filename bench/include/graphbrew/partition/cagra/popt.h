@@ -40,6 +40,8 @@
 #include <pvector.h>
 #include <timer.h>
 
+#include "popt_rereference.h"
+
 // ============================================================================
 // GRAPH SLICING (CSR segmentation from Cagra)
 // ============================================================================
@@ -435,7 +437,8 @@ template <typename NodeID_, typename DestID_, bool invert>
 void makeOffsetMatrix(const CSRGraph<NodeID_, DestID_, invert> &g,
                       pvector<uint8_t> &offsetMatrix,
                       int numVtxPerLine, int numEpochs,
-                      bool traverseCSR = true)
+                      bool traverseCSR = true,
+                      popt_reref::Encoding encoding = popt_reref::Encoding::Full)
 {
     if (g.directed() == false)
         traverseCSR = true;
@@ -488,12 +491,13 @@ void makeOffsetMatrix(const CSRGraph<NodeID_, DestID_, invert> &g,
 
     // Step II: Convert adjacency matrix into offsets
     tm.Start();
-    uint8_t maxReref = 127;  // MSB reserved for type identification
-    NodeID_ subEpochSz = (epochSz + 127) / 128;  // 7 bits for intra-epoch info
+    const uint8_t maxReref = popt_reref::maxRank(encoding);
+    const NodeID_ bins = popt_reref::subEpochBins(encoding);
+    const NodeID_ subEpochSz = (epochSz + bins - 1) / bins;
     pvector<uint8_t> compressedOffsets(numCacheLines * numEpochs);
     uint8_t mask = 1;
     uint8_t orMask = mask << 7;
-    uint8_t andMask = ~orMask;
+    uint8_t andMask = maxReref;
 
     #pragma omp parallel for schedule(dynamic, chunkSz)
     for (NodeID_ c = 0; c < numCacheLines; ++c)
@@ -512,6 +516,11 @@ void makeOffsetMatrix(const CSRGraph<NodeID_, DestID_, invert> &g,
             else
             {
                 compressedOffsets[idx] = maxReref | orMask;  // No reference in this epoch.
+            }
+            if (encoding == popt_reref::Encoding::SingleEpoch &&
+                e + 1 < numEpochs &&
+                lastRef[idx + 1] != static_cast<NodeID_>(-1)) {
+                compressedOffsets[idx] |= popt_reref::kNextPresent;
             }
         }
     }
@@ -532,7 +541,11 @@ void makeOffsetMatrix(const CSRGraph<NodeID_, DestID_, invert> &g,
                 distToNext = 1;
             } else {
                 // No reference — store forward distance to next referenced epoch
-                compressedOffsets[idx] = ((distToNext < maxReref) ? distToNext : maxReref) | orMask;
+                const uint8_t next_present =
+                    encoding == popt_reref::Encoding::SingleEpoch
+                    ? compressedOffsets[idx] & popt_reref::kNextPresent : 0;
+                compressedOffsets[idx] =
+                    std::min(distToNext, maxReref) | orMask | next_present;
                 if (distToNext < maxReref) distToNext++;
             }
         }
@@ -574,10 +587,11 @@ template <typename NodeID_, typename DestID_, bool invert>
 inline const uint8_t* buildRerefMatrix(const CSRGraph<NodeID_, DestID_, invert> &g,
                                        bool natural_csr, const char *kernel,
                                        int numVtxPerLine, int numEpochs,
-                                       pvector<uint8_t> &storage)
+                                       pvector<uint8_t> &storage,
+                                       popt_reref::Encoding encoding = popt_reref::Encoding::Full)
 {
     makeOffsetMatrix(g, storage, numVtxPerLine, numEpochs,
-                     ecgRerefTraverseCSR(natural_csr, g, kernel));
+                     ecgRerefTraverseCSR(natural_csr, g, kernel), encoding);
     return storage.data();
 }
 

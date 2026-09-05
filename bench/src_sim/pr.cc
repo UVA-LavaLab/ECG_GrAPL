@@ -100,6 +100,17 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
     static pvector<uint8_t> popt_matrix;  // Must outlive graph_ctx
     {
         const EvictionPolicy policy = GraphSimEffectiveL3Policy();
+        const char* se_postfinal = std::getenv("POPT_SE_POSTFINAL");
+        if (se_postfinal &&
+            (policy != EvictionPolicy::POPT || omp_get_max_threads() != 1 ||
+             sizeof(ScoreT) != 4 ||
+             GetEnvSizeBytes("CACHE_LINE_SIZE", 64) != 64 ||
+             (std::string(se_postfinal) != "later_lower_bound" &&
+              std::string(se_postfinal) != "distant"))) {
+            throw std::invalid_argument(
+                "P-OPT-SE requires serial POPT PageRank, 4B properties, "
+                "64B lines and an explicit later_lower_bound or distant rule");
+        }
         const char* pfx_env = getenv("ECG_PREFETCH_MODE");
         bool popt_prefetch = pfx_env && (atoi(pfx_env) == 2 || atoi(pfx_env) == 4 || atoi(pfx_env) == 6 || atoi(pfx_env) == 7);
         const bool matrix_free_reuse_plan = GraphSimMatrixFreeReusePlan();
@@ -116,8 +127,28 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
              !matrix_free_ref32)) {
             constexpr int numVtxPerLine = 64 / sizeof(ScoreT);
             constexpr int numEpochs = 256;
-            buildAndRegisterReref(g, graph_ctx, /*natural_csr=*/true, "PR(pull/in)",
-                                  numVtxPerLine, numEpochs, popt_matrix);
+            if (se_postfinal) {
+                const auto encoding = popt_reref::Encoding::SingleEpoch;
+                const auto postfinal = std::string(se_postfinal) == "distant"
+                    ? popt_reref::PostFinal::Distant : popt_reref::PostFinal::Later;
+                buildRerefMatrix(g, true, "PR(pull/in)/SE", numVtxPerLine,
+                                 numEpochs, popt_matrix, encoding);
+                const uint32_t lines =
+                    (g.num_nodes() + numVtxPerLine - 1) / numVtxPerLine;
+                graph_ctx.initRereference(
+                    popt_matrix.data(), lines, numEpochs, g.num_nodes(), 64,
+                    encoding, postfinal);
+                graph_ctx.exact_vtx_per_line = numVtxPerLine;
+                std::cerr << "[POPT-SE encoding=single_epoch value_bits=6 "
+                          << "sub_epoch_bins=64 postfinal=" << se_postfinal
+                          << " active_columns=1 epochs=" << numEpochs
+                          << " cache_lines=" << lines
+                          << " vertices=" << std::to_string(g.num_nodes())
+                          << " one_column_lookup=1 reconstruction=1]\n";
+            } else {
+                buildAndRegisterReref(g, graph_ctx, true, "PR(pull/in)",
+                                      numVtxPerLine, numEpochs, popt_matrix);
+            }
             if (std::getenv("ECG_EXACT_REREF")) {
                 const char* eb = std::getenv("ECG_EXACT_BITS");
                 if (eb) graph_ctx.exact_bits = (uint32_t)atoi(eb);

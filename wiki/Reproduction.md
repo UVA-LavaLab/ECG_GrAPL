@@ -436,6 +436,41 @@ Add 10,413,060 matrix-stream transfers when comparing this diagnostic against
 charged policies. Its expected `roi_matrix.json` SHA-256 is
 `7dfbc7c7ff2c9104a6bc095694842a88023a86c78e804f13896eb364b0a77a53`.
 
+### Single-epoch P-OPT comparison
+
+`POPT_SE` and `POPT_SE_DISTANT` implement the paper's one-column format with
+two explicitly disclosed interpretations of its unspecified post-final-use
+case. The pinned public artifact does not include an SE implementation.
+Keep both reconstructions in the roster and ordinary P-OPT as a separate baseline:
+
+```bash
+python3 scripts/experiments/ecg/roi_matrix.py \
+  --suite cache-sim --benchmark pr \
+  --options \
+    '-f results/graphs/twitter-2010/twitter-2010-dbg.sg -o 0 -n 1 -i 1 -t 0' \
+  --policies LRU SRRIP GRASP:PAPER POPT:UNCHARGED POPT \
+    POPT_SE POPT_SE_DISTANT \
+    ECG:REF32_SCALE_R_COMMIT ECG:REF32_SCALE_RP_COMMIT \
+  --l1d-size 32kB --l1d-ways 8 \
+  --l2-size 128kB --l2-ways 8 \
+  --l3-sizes 8MB 24MB --l3-ways 16 \
+  --cache-sim-omp-threads 1 \
+  --popt-reserve-model size_correct \
+  --popt-property-bytes 4 --popt-active-columns 2 \
+  --popt-num-epochs 256 --popt-matrix-stream analytic \
+  --prefetcher none --flowthrough off \
+  --out-dir results/ecg_experiments/runs/twitter_popt_se \
+  --timeout-cache 5400 --no-build
+```
+
+The active-column setting above applies to ordinary P-OPT. SE always reserves
+one column, yielding five ways at 8 MiB and two at 24 MiB. All SE rows must
+report `popt_se_validated=1`, `popt_runtime_active_columns=1`, and the requested
+`popt_se_postfinal`; the full-roster PageRank checksum must agree. The
+complete matrix still streams once per iteration. Compare
+`total_offchip_traffic_with_overhead` for reads plus writes plus analytic
+matrix traffic, not `l3_misses` against a matrix-inclusive traffic total.
+
 ### Separate transport campaign
 
 The `reuse_plan_transport_campaign` profile holds replacement at pure LRU in

@@ -3752,7 +3752,9 @@ public:
     // demand path is what lets a CPU prefetcher cover it here, so results about
     // that coverage describe our accounting, not P-OPT hardware.
     void initPoptMatrixStream(uint32_t column_bytes, uint32_t epoch_size,
-                              uint32_t num_epochs) {
+                              uint32_t num_epochs, unsigned active_columns = 2) {
+        if (active_columns < 1 || active_columns > 2)
+            throw std::invalid_argument("P-OPT stream needs one or two resident columns");
         if (column_bytes == 0 || epoch_size == 0 || num_epochs == 0) return;
         popt_stream_column_bytes_ = column_bytes;
         // Round the per-epoch backing stride up to a line so distinct epochs
@@ -3761,6 +3763,7 @@ public:
             ((column_bytes + line_size_ - 1) / line_size_) * line_size_;
         popt_stream_epoch_size_ = epoch_size;
         popt_stream_num_epochs_ = num_epochs;
+        popt_stream_active_columns_ = active_columns;
         popt_stream_resident_[0] = UINT32_MAX;
         popt_stream_resident_[1] = UINT32_MAX;
         popt_stream_next_slot_ = 0;
@@ -3883,7 +3886,9 @@ private:
         if (r.matrix == nullptr || r.num_cache_lines == 0 || r.epoch_size == 0)
             return;
         // One matrix entry per cache line using the reference 1-byte encoding.
-        initPoptMatrixStream(r.num_cache_lines, r.epoch_size, r.num_epochs);
+        initPoptMatrixStream(
+            r.num_cache_lines, r.epoch_size, r.num_epochs,
+            r.encoding == popt_reref::Encoding::SingleEpoch ? 1 : 2);
     }
 
     void streamPoptMatrixIfEpochAdvanced(uint32_t vertex_id) {
@@ -3891,17 +3896,18 @@ private:
         if (!popt_stream_enabled_ || popt_stream_epoch_size_ == 0) return;
         const uint32_t epoch = vertex_id / popt_stream_epoch_size_;
         if (epoch >= popt_stream_num_epochs_) return;
-        // Two-column residency for the current and next columns.
+        // Full P-OPT has two resident columns; P-OPT-SE has only one.
         // Charging on "the epoch advanced" is wrong: a multi-iteration kernel
         // sweeps epochs 0..N-1 once per iteration and must pay for every sweep,
         // while a frontier kernel that oscillates across one boundary must not
         // pay twice for a column the hardware still holds. Residency answers
         // both. An earlier forward-progress-only rule silently charged
         // PageRank for a single sweep no matter how many iterations it ran.
-        if (popt_stream_resident_[0] == epoch || popt_stream_resident_[1] == epoch)
-            return;
+        for (unsigned slot = 0; slot < popt_stream_active_columns_; ++slot)
+            if (popt_stream_resident_[slot] == epoch) return;
         popt_stream_resident_[popt_stream_next_slot_] = epoch;
-        popt_stream_next_slot_ ^= 1;
+        popt_stream_next_slot_ =
+            (popt_stream_next_slot_ + 1) % popt_stream_active_columns_;
         popt_stream_columns_++;
         // Distinct backing address per epoch, so a column can never hit on a
         // stale line left by a different column that happened to share a slot.
@@ -3923,6 +3929,7 @@ private:
     uint64_t popt_stream_column_stride_ = 0;
     uint32_t popt_stream_epoch_size_ = 0;
     uint32_t popt_stream_num_epochs_ = 0;
+    unsigned popt_stream_active_columns_ = 2;
     uint32_t popt_stream_resident_[2] = {UINT32_MAX, UINT32_MAX};
     unsigned popt_stream_next_slot_ = 0;
     uint64_t popt_stream_lines_ = 0;

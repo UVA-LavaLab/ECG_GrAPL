@@ -37,6 +37,8 @@ against silent drift in either implementation.
 from __future__ import annotations
 
 import shutil
+import os
+import random
 import struct
 import subprocess
 from pathlib import Path
@@ -195,7 +197,9 @@ int main(int argc, char** argv) {
     buildCSR(N, edges, out_index, out_neigh);
     CSRGraph<NodeID, NodeID, true> g(static_cast<int64_t>(N), out_index, out_neigh);
     pvector<uint8_t> matrix;
-    makeOffsetMatrix(g, matrix, numVtxPerLine, numEpochs, /*traverseCSR=*/true);
+    const auto encoding = argc > base + 2 * E
+        ? popt_reref::Encoding::SingleEpoch : popt_reref::Encoding::Full;
+    makeOffsetMatrix(g, matrix, numVtxPerLine, numEpochs, true, encoding);
     std::ofstream out(out_path, std::ios::binary);
     out.write(reinterpret_cast<const char*>(matrix.data()),
               static_cast<std::streamsize>(matrix.size()));
@@ -231,11 +235,7 @@ def popt_dump_binary(tmp_path_factory) -> Path:
         str(binary),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        pytest.skip(
-            f"popt_dump compile failed (rc={result.returncode}):\n"
-            f"{result.stderr[-800:]}"
-        )
+    assert result.returncode == 0, result.stderr[-4000:]
     return binary
 
 
@@ -247,12 +247,17 @@ def _run_popt_dump(
     vtx_per_line: int,
     epochs: int,
     edges: Sequence[tuple[int, int]],
+    single_epoch: bool = False,
 ) -> bytes:
     out = tmp_path / "matrix.bin"
     cmd = [str(binary), str(out), str(vtx_per_line), str(epochs), str(n), str(len(edges))]
     for s, d in edges:
         cmd.extend([str(s), str(d)])
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    if single_epoch:
+        cmd.append("single_epoch")
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=60,
+        env={**os.environ, "OMP_NUM_THREADS": "1"})
     assert result.returncode == 0, (
         f"popt_dump exited rc={result.returncode}\nstderr:\n{result.stderr[-400:]}"
     )
@@ -299,6 +304,86 @@ GRAPH_CASES = [
         id="bipartite_chain_vpl4",
     ),
 ]
+
+
+def single_epoch_reference(n, edges, vertices_per_line):
+    """Derive bytes from sorted use sets, independently of the C++ passes."""
+    lines = (n + vertices_per_line - 1) // vertices_per_line
+    epoch_size = (n + 255) // 256
+    sub_size = (epoch_size + 63) // 64
+    uses = [dict() for _ in range(lines)]
+    for source, destination in edges:
+        epoch, position = divmod(destination, epoch_size)
+        line = source // vertices_per_line
+        uses[line][epoch] = max(uses[line].get(epoch, 0), position)
+    result = bytearray(lines * 256)
+    for line, positions in enumerate(uses):
+        for epoch in range(256):
+            flag = 0x40 if epoch + 1 in positions else 0
+            if epoch in positions:
+                payload = positions[epoch] // sub_size
+            else:
+                later = [e - epoch for e in positions if e > epoch]
+                payload = 0x80 | min(min(later, default=63), 63)
+            result[epoch * lines + line] = flag | payload
+    return bytes(result)
+
+
+@pytest.mark.parametrize("n,vtx_per_line", [(1025, 4), (40961, 256)])
+def test_single_epoch_matrix_matches_independent_reference(
+        popt_dump_binary, tmp_path, n, vtx_per_line):
+    rng = random.Random(420)
+    edges = [(rng.randrange(n), rng.randrange(n)) for _ in range(1500)]
+    edges.extend([(0, 0), (0, n - 1), (n - 1, n - 1)])
+    actual = _run_popt_dump(
+        popt_dump_binary, tmp_path, n=n, vtx_per_line=vtx_per_line,
+        epochs=256, edges=edges, single_epoch=True)
+    assert actual == single_epoch_reference(n, edges, vtx_per_line)
+
+
+def test_single_epoch_reference_hand_computed_entries():
+    matrix = single_epoch_reference(
+        65536, [(0, 20), (0, 276), (16, 511), (32, 65535)], 16)
+    lines = 4096
+    assert matrix[0] == 0x45
+    assert matrix[lines] == 0x05
+    assert matrix[1] == 0xc1
+    assert matrix[lines + 1] == 0x3f
+    assert matrix[2] == 0xbf
+    assert matrix[255 * lines + 2] == 0x3f
+    assert matrix[3] == 0xbf
+
+
+def test_single_epoch_cpp_regressions(tmp_path):
+    compiler = shutil.which("g++")
+    if compiler is None:
+        pytest.skip("g++ not available on PATH")
+    binary = tmp_path / "popt_single_epoch"
+    result = subprocess.run([
+        compiler, "-std=c++17", "-O2", "-fopenmp",
+        f"-I{PROJECT_ROOT / 'bench/include'}",
+        str(PROJECT_ROOT / "bench/src_sim/test_popt_single_epoch.cc"),
+        "-o", str(binary),
+    ], capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr[-4000:]
+    result = subprocess.run(
+        [str(binary)], capture_output=True, text=True, timeout=30,
+        env={**os.environ, "OMP_NUM_THREADS": "1"})
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("header", [
+    "bench/include/popt_rereference.h",
+    "bench/include/graphbrew/partition/cagra/popt.h",
+])
+def test_popt_headers_are_sim_build_dependencies(header):
+    result = subprocess.run(
+        ["make", "-qp", "bench/bin_sim/pr"], cwd=PROJECT_ROOT,
+        capture_output=True, text=True, timeout=30)
+    assert result.returncode in (0, 1), result.stderr
+    rule = next(line for line in result.stdout.splitlines()
+                if line.startswith("bench/bin_sim/pr:"))
+    assert header in rule.split(), f"{header} must invalidate the PR binary"
 
 
 @pytest.mark.parametrize("n,vtx_per_line,edges", GRAPH_CASES)

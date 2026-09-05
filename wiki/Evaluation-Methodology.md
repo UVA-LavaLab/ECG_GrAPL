@@ -152,6 +152,48 @@ its optional empty-way behavior is confined to artifact replay because the
 official trace simulator may replace a cold line while invalid ways remain.
 Normal cache_sim, gem5, and Sniper retain real-cache invalid-way-first fills.
 
+### 5.2 Single-epoch P-OPT reconstruction
+
+The [P-OPT paper](http://brandonlucia.com/pubs/POPT_HPCA21_CameraReady.pdf),
+Section VII-B, describes P-OPT-SE with one current-epoch column, bit 7
+distinguishing current-epoch presence, bit 6 indicating next-epoch presence,
+and six payload bits. The pinned public artifact does not implement SE. The
+paper also leaves unspecified the returned rank after the current epoch's
+last use when the next-epoch flag is clear. These rows are therefore
+paper-constrained reconstructions, not bit-exact reproductions of Figure 11.
+
+`POPT_SE` groups that unspecified later-use case at rank 2.
+`POPT_SE_DISTANT` instead assigns rank 63. Both use 64 subepoch bins,
+return rank 0 before or within the last-use subepoch and rank 1 for an
+upcoming next-epoch use, and decode absent-current-epoch distances from six
+bits. After the final epoch's last use they return 63. Neither decoder reads
+the next column. Both interpretations must be reported; their miss counts
+are not formal upper and lower bounds.
+
+SE is initially supported only by serial cache_sim PageRank with 4-byte
+properties, 64-byte lines, and 256 epochs. Other backends and geometries fail
+closed. The runner pins one active column and size-correct capacity charging
+per SE row without changing ordinary P-OPT rows in the same matrix.
+`:UNCHARGED` is available as a separate replacement-quality diagnostic.
+An accepted SE row requires its encoding and post-final-rule receipt and the
+same PageRank semantic result as every other policy in its group.
+
+One-column residency does not halve the backing matrix or its cumulative
+stream. Twitter still has 666,435,840 logical backing bytes and 256 streamed
+columns per complete traversal. SE's 2,603,265-byte active column reserves
+5, 3, and 2 ways at 8, 16, and 24 MiB respectively, versus full P-OPT's
+10, 5, and 4 ways. This differs from the old two-way diagnostic, which
+retained full two-column encoding and lookup without paying its capacity.
+
+Cost domains remain separate: `popt_backing_matrix_bytes` is the complete
+matrix in memory, `popt_matrix_bytes` is active-column payload, and
+`popt_reserved_bytes` is the whole-way LLC reservation. REF32's added
+per-line/controller state is on-chip storage. Ratios against the complete
+P-OPT matrix are total metadata-footprint ratios, not silicon-area savings.
+Area comparisons must also charge REF32's added state and controller logic.
+`total_offchip_traffic_with_overhead` includes reads, writebacks, and any
+analytic matrix stream; demand LLC misses are reported separately.
+
 ## 6. Workloads and campaign roles
 
 The literature-scale PageRank screen uses fixed 262,144-vertex samples of
@@ -360,7 +402,9 @@ two-column P-OPT uses two ways near 18--21 million vertices, three ways at
 32 million, and four ways near 40--43 million. Twitter's 41,652,230 vertices
 therefore require four ways at 24 MiB, not two.
 
-The paper-geometry Twitter matrix gives:
+The 24 MiB LLC comparison retains the project's 128 KiB L2, rather than the
+paper's 256 KiB L2; it is not a complete reproduction of the paper's system.
+The Twitter matrix gives:
 
 | Policy | LLC misses | Reduction versus LRU |
 |---|---:|---:|
