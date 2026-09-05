@@ -32,11 +32,159 @@ using namespace cache_sim;
 typedef float ScoreT;
 const float kDamp = 0.85;
 
+static uint64_t recordOption(const char* name, uint64_t fallback, uint64_t maximum) {
+    const char* raw = std::getenv(name);
+    if (!raw)
+        return fallback;
+    const std::string value(raw);
+    if (value.empty() || value.front() < '0' || value.front() > '9')
+        throw std::invalid_argument(std::string(name) + " must be unsigned");
+    std::size_t consumed = 0;
+    const uint64_t parsed = std::stoull(value, &consumed, 10);
+    if (consumed != value.size() || parsed > maximum)
+        throw std::invalid_argument(std::string(name) + " is outside its supported range");
+    return parsed;
+}
+
+static pvector<ScoreT> PageRankPullGSRecord_Sim(
+        const Graph& graph, CacheHierarchy& cache, int iterations, double epsilon) {
+    if (iterations <= 0 || epsilon != 0 || omp_get_max_threads() != 1 ||
+        graph.num_nodes() <= 0 || graph.num_edges_directed() == 0 ||
+        uint64_t(graph.num_nodes()) > INT32_MAX)
+        throw std::invalid_argument("Current ECG requires serial fixed-iteration signed-32 PageRank");
+    for (const char* name : {"ECG_REF32_RECORD", "ECG_NEXT_USE_RECORD", "ECG_REUSE_PLAN_DEPTH",
+                            "ECG_FLOWTHROUGH", "STRUCTURAL_FLOWTHROUGH"}) {
+        const char* value = std::getenv(name);
+        if (value && std::strcmp(value, "0") != 0)
+            throw std::invalid_argument(std::string("Current ECG cannot be mixed with ") + name);
+    }
+    ecg_record::Mechanism mechanism;
+    if (ecg_record::parseMechanismName(std::getenv("ECG_RECORD_MECHANISM"), mechanism) !=
+            ecg_record::Status::OK)
+        throw std::invalid_argument("Unknown current ECG mechanism");
+    const uint64_t bytes = recordOption("ECG_RECORD_BYTES", 0, 8);
+    if (bytes != 0 && bytes != 4 && bytes != 8)
+        throw std::invalid_argument("ECG_RECORD_BYTES must be zero, four or eight");
+    ecg_record::Requirements requirements;
+    requirements.vertex_count = graph.num_nodes();
+    requirements.record_count = graph.num_edges_directed();
+    requirements.traversal_count = iterations;
+    requirements.requested_record_bytes = bytes;
+    requirements.minimum_mantissa_bits = recordOption("ECG_RECORD_MIN_MANTISSA_BITS", 0, 61);
+    requirements.max_vertex_id_known = true;
+    const NodeID* source = graph.in_neigh(0).begin();
+    for (uint64_t index = 0; index < requirements.record_count; ++index) {
+        if (source[index] < 0 || source[index] >= graph.num_nodes())
+            throw std::invalid_argument("Current ECG source has an invalid vertex ID");
+        requirements.max_vertex_id = std::max<uint64_t>(requirements.max_vertex_id, source[index]);
+    }
+    ecg_record::Layout layout;
+    if (ecg_record::selectLayout(requirements, layout) != ecg_record::Status::OK)
+        throw std::invalid_argument("Current ECG cannot represent this graph");
+    ecg_record::BuildLimits limits;
+    limits.maximum_carrier_bytes = recordOption(
+        "ECG_RECORD_MAX_CARRIER_BYTES", limits.maximum_carrier_bytes, UINT64_MAX);
+    limits.maximum_auxiliary_bytes = recordOption(
+        "ECG_RECORD_MAX_AUXILIARY_BYTES", limits.maximum_auxiliary_bytes, UINT64_MAX);
+    ecg_record::RecordStream stream;
+    const auto built = ecg_record::buildRecords(requirements, layout, 16,
+        [source](std::size_t index) { return static_cast<uint64_t>(source[index]); }, stream, limits);
+    if (built != ecg_record::Status::OK)
+        throw std::invalid_argument(std::string("Current ECG construction failed: ") +
+                                    ecg_record::statusName(built));
+    constexpr std::size_t alignment = 2 * 1024 * 1024;
+    const ScoreT initial = 1.0f / graph.num_nodes();
+    const ScoreT base_score = (1.0f - kDamp) / graph.num_nodes();
+    pvector<ScoreT> scores(graph.num_nodes(), initial, alignment);
+    pvector<ScoreT> contribution(graph.num_nodes(), ScoreT(0), alignment);
+    pvector<uint32_t> degrees(graph.num_nodes());
+    for (NodeID node = 0; node < graph.num_nodes(); ++node) {
+        degrees[node] = graph.out_degree(node);
+        contribution[node] = initial / graph.out_degree(node);
+    }
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), graph.num_nodes(), graph.num_edges_directed(), graph.directed());
+    const uint64_t llc_bytes = GetEnvSizeBytes("CACHE_L3_SIZE", 8 * 1024 * 1024);
+    context.registerPropertyArray(scores.data(), graph.num_nodes(), 4, llc_bytes, 0.15, true);
+    context.registerPropertyArray(contribution.data(), graph.num_nodes(), 4, llc_bytes, 0.15, true);
+    cache.initGraphContext(&context);
+    ecg_record::NativeConfiguration configuration;
+    ecg_record::packLayout(layout, configuration.layout_descriptor);
+    configuration.record_base = reinterpret_cast<uint64_t>(stream.data());
+    configuration.property_base = reinterpret_cast<uint64_t>(contribution.data());
+    configuration.record_count = requirements.record_count;
+    configuration.vertex_count = requirements.vertex_count;
+    configuration.context = configuration.generation = 1;
+    configuration.control = ecg_record::kNativeEnable;
+    cache.configureRecord(configuration, stream, mechanism,
+        recordOption("ECG_RECORD_UPDATE_LATENCY", 8, 4096),
+        recordOption("ECG_RECORD_PREFETCH_LATENCY", 8, 4096),
+        recordOption("ECG_RECORD_PREFETCH_QUEUE", 16, 16));
+    for (NodeID node = 0; node < graph.num_nodes(); ++node) {
+        cache.readArray(scores.data(), node);
+        cache.writeArray(scores.data(), node);
+        cache.readArray(contribution.data(), node);
+        cache.writeArray(contribution.data(), node);
+    }
+    cache.resetStats();
+    std::cerr << "[ECG-RECORD-STREAM ";
+    ecg_record::writeLayoutFields(std::cerr, layout);
+    std::cerr << " records=" << requirements.record_count
+              << " vertex_count=" << requirements.vertex_count
+              << " max_vertex_id=" << requirements.max_vertex_id
+              << " source_stream_bytes=" << stream.stats.source_stream_bytes
+              << " retained_source_bytes=" << stream.stats.source_stream_bytes
+              << " carrier_payload_bytes=" << stream.stats.carrier_payload_bytes
+              << " carrier_allocation_bytes=" << stream.stats.carrier_allocation_bytes
+              << " construction_auxiliary_peak_bytes=" << stream.stats.auxiliary_peak_bytes
+              << " storage=separate source_immutable=1 matrix_bytes=0]\n";
+    const uint64_t in_index = reinterpret_cast<uint64_t>(graph.in_index_storage());
+    const uint64_t out_index = reinterpret_cast<uint64_t>(graph.out_index_storage());
+    for (int iteration = 0; iteration < iterations; ++iteration) {
+        cache.recordIteration(uint64_t(iteration) * requirements.record_count, iteration + 1 < iterations);
+        for (NodeID node = 0; node < graph.num_nodes(); ++node) {
+            cache.access(in_index + uint64_t(node) * sizeof(NodeID*));
+            cache.access(in_index + uint64_t(node + 1) * sizeof(NodeID*));
+            ScoreT incoming = 0;
+            for (uint64_t index = graph.in_offset(node); index < uint64_t(graph.in_offset(node + 1)); ++index) {
+                const uint64_t word = cache.recordLoad(index);
+                const uint64_t destination = cache.recordProperty(index, word);
+                incoming += contribution[destination];
+            }
+            const ScoreT score = base_score + kDamp * incoming;
+            cache.writeArray(scores.data(), node);
+            scores[node] = score;
+            cache.access(out_index + uint64_t(node) * sizeof(NodeID*));
+            cache.access(out_index + uint64_t(node + 1) * sizeof(NodeID*));
+            cache.writeArray(contribution.data(), node);
+            contribution[node] = score / graph.out_degree(node);
+        }
+    }
+    cache.finishRecord(requirements.record_count * iterations);
+    uint64_t checksum = 1469598103934665603ULL;
+    for (ScoreT score : scores) {
+        uint32_t bits = 0;
+        std::memcpy(&bits, &score, sizeof(bits));
+        checksum = (checksum ^ bits) * 1099511628211ULL;
+    }
+    std::fprintf(stderr,
+        "[ECG-PR-RESULT iterations=%d semantic_edges=%llu score_checksum=%016llx]\n",
+        iterations, static_cast<unsigned long long>(requirements.record_count * iterations),
+        static_cast<unsigned long long>(checksum));
+    return scores;
+}
+
 // PageRank with cache simulation - template version works with both cache types
 template<typename CacheType>
 pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                                     int max_iters, double epsilon = 0,
                                     bool logging_enabled = false) {
+    if (std::getenv("ECG_RECORD_MECHANISM")) {
+        if constexpr (std::is_same<CacheType, CacheHierarchy>::value)
+            return PageRankPullGSRecord_Sim(g, cache, max_iters, epsilon);
+        else
+            throw std::invalid_argument("Current ECG requires the accurate single-core hierarchy");
+    }
     const ScoreT init_score = 1.0f / g.num_nodes();
     const ScoreT base_score = (1.0f - kDamp) / g.num_nodes();
     pvector<ScoreT> scores(
@@ -975,6 +1123,8 @@ int main(int argc, char *argv[]) {
     CLPageRank cli(argc, argv, "pagerank-sim", 1e-4, 20);
     if (!cli.ParseArgs())
         return -1;
+    if (std::getenv("ECG_RECORD_MECHANISM") && cli.num_trials() != 1)
+        throw std::invalid_argument("Current ECG requires exactly one trial (-n 1)");
     
     Builder b(cli);
     Graph g = b.MakeGraph();
@@ -984,6 +1134,11 @@ int main(int argc, char *argv[]) {
     bool sampled = IsSampledMode();
     bool ultrafast = IsUltraFastMode();
     bool fast = IsFastMode();
+    if (std::getenv("ECG_RECORD_MECHANISM") &&
+        (multicore || sampled || ultrafast || fast)) {
+        std::fprintf(stderr, "[FATAL] Current ECG requires the accurate single-core hierarchy\n");
+        return 2;
+    }
     if (std::getenv("ECG_REF32_RECORD") &&
         (multicore || sampled || ultrafast || fast)) {
         std::fprintf(

@@ -32,6 +32,10 @@
 #include "graph_cache_context.h"
 #include "../ecg_victim_policy.h"
 #include "../hawkeye_policy.h"
+#include "../ecg_record_native.h"
+#include "../ecg_record_runtime.h"
+#include "../ecg_record_stream.h"
+#include "../ecg_record_window.h"
 
 namespace cache_sim {
 
@@ -575,6 +579,7 @@ struct CacheLine {
     uint64_t ecg_ref32_exact_deadline = 0;
     ecg_ref32::State ecg_ref32_state = ecg_ref32::State::UNKNOWN;
     bool ecg_ref32_prefetch = false;
+    ecg_record::LineMetadata record_metadata;
     bool pin = false;            // PIN policy: line is pinned in cache (high-reuse region)
 };
 
@@ -1036,8 +1041,11 @@ public:
     }
 
     // Access cache (returns true on hit, false on miss)
-    bool access(uint64_t address, bool is_write) {
+    bool access(uint64_t address, bool is_write,
+                const ecg_record::NativeLoadResult* record = nullptr) {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (record)
+            validateRecordObservation(address, is_write, *record);
 
         // T-OPT: record the L3 input stream (post-L1/L2). Only the LLC level.
         if (topt::enabled && (name_ == "L3" || name_ == "L3-Shared")) {
@@ -1068,6 +1076,8 @@ public:
                 if (isRef32Governed(address))
                     ++ref32_governed_hits_;
                 updateOnHit(set, i, set_idx);
+                if (record)
+                    observeRecord(set[i], *record);
                 if (is_write) {
                     set[i].dirty = true;
                 }
@@ -1253,9 +1263,17 @@ public:
 
     // Insert a line after a miss (called when lower level provides data)
     void insert(
-        uint64_t address, bool is_write, bool is_prefetch = false) {
+        uint64_t address, bool is_write, bool is_prefetch = false,
+        const ecg_record::NativeLoadResult* record = nullptr) {
         std::lock_guard<std::mutex> lock(mutex_);
+        if (record)
+            validateRecordObservation(address, is_write, *record);
 
+        if (record_configured_ && record_replacement_ && !is_prefetch &&
+            record && record->state == ecg_record::State::DEAD) {
+            ++record_dead_bypasses_;
+            return;
+        }
         if (!is_prefetch && shouldBypassRef32(address)) {
             ++ref32_dead_bypasses_;
             return;
@@ -1317,6 +1335,15 @@ public:
         set[victim_idx].ecg_ref32_exact_deadline = 0;
         set[victim_idx].ecg_ref32_state = ecg_ref32::State::UNKNOWN;
         set[victim_idx].ecg_ref32_prefetch = is_prefetch;
+        set[victim_idx].record_metadata.clear();
+        if (record_configured_) {
+            set[victim_idx].record_metadata.prefetch_origin = is_prefetch;
+            const uint8_t tier = recordTier(address);
+            set[victim_idx].rrpv = tier == 1 ? 1 : tier == 2 ? 6 : 7;
+            if (record)
+                observeRecord(set[victim_idx], *record);
+            return;
+        }
 
         if (policy_ == EvictionPolicy::HAWKEYE && hawkeye_state_) {
             const uint64_t signature = currentHawkeyeSite();
@@ -1602,6 +1629,7 @@ public:
     size_t getNumSets() const { return num_sets_; }
     EvictionPolicy getPolicy() const { return policy_; }
     std::string getEcgMode() const {
+        if (record_mode_snapshot_) return "RECORD";
         if (policy_ != EvictionPolicy::ECG) return "";
         return ECGModeToString(ecg_mode_snapshot_);
     }
@@ -1736,7 +1764,11 @@ public:
     // ================================================================
     void initGraphContext(const GraphCacheContext* ctx) {
         graph_ctx_ = ctx;
-        if (ctx) ecg_mode_snapshot_ = ctx->mask_config.ecg_mode;
+        if (ctx) {
+            ecg_mode_snapshot_ = ctx->mask_config.ecg_mode;
+            if (!record_configured_)
+                record_mode_snapshot_ = false;
+        }
     }
 
     // Test hook (NOT used in the simulation path): run the policy's victim
@@ -1748,7 +1780,141 @@ public:
         return getSetIndex(address);
     }
 
+    void configureRecord(
+            const ecg_record::NativeConfiguration& configuration, bool replacement) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ecg_record::Layout layout;
+        if (record_configured_ || !graph_ctx_ || line_size_ != 64 || associativity_ > 64 ||
+            ecg_record::validateNativeConfiguration(configuration, layout) != ecg_record::Status::OK ||
+            graph_ctx_->topology.num_vertices != configuration.vertex_count ||
+            graph_ctx_->topology.num_edges != configuration.record_count ||
+            !graph_ctx_->findRegion(configuration.property_base) ||
+            (replacement && policy_ != EvictionPolicy::ECG) ||
+            (!replacement && policy_ != EvictionPolicy::LRU))
+            throw std::invalid_argument("Invalid current ECG cache configuration");
+        record_configuration_ = configuration;
+        if (!record_receiver_.configure(
+                layout, configuration.record_count, configuration.context, configuration.generation))
+            throw std::invalid_argument("Invalid current ECG receiver configuration");
+        for (auto& set : cache_)
+            for (auto& line : set)
+                line.record_metadata.clear();
+        record_replacement_ = replacement;
+        record_dead_bypasses_ = 0;
+        record_mode_snapshot_ = true;
+        record_configured_ = true;
+    }
+
+    void disableRecord() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_configured_ = false;
+        record_receiver_.disable();
+    }
+
+    ecg_record::ApplyResult applyRecordUpdate(const ecg_record::CommitUpdate& update) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!record_configured_ || !record_replacement_)
+            return ecg_record::ApplyResult::UNSUPPORTED;
+        if (update.physical_line % line_size_ || update.property_vaddr % 4 ||
+            update.physical_line != (update.property_vaddr & ~uint64_t{63}) ||
+            !recordProperty(update.property_vaddr))
+            return ecg_record::ApplyResult::INVALID_ADDRESS;
+        auto& set = cache_[getSetIndex(update.physical_line)];
+        for (auto& line : set) {
+            if (line.valid && line.tag == getTag(update.physical_line))
+                return record_receiver_.apply(&line.record_metadata, update);
+        }
+        return record_receiver_.apply(nullptr, update);
+    }
+
+    bool canAdmitRecordPrefetch(uint64_t address, uint64_t sequence) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!record_configured_)
+            throw std::logic_error("Current ECG prefetch has no cache configuration");
+        if (!record_replacement_)
+            return true;
+        const auto& set = cache_[getSetIndex(address)];
+        std::array<ecg_record::WayState, 64> ways{};
+        std::array<bool, 64> valid{};
+        for (std::size_t index = 0; index < set.size(); ++index) {
+            ways[index] = recordWay(set[index]);
+            valid[index] = set[index].valid;
+        }
+        bool admit = false;
+        if (ecg_record::canAdmitPrefetch(
+                record_receiver_.layout(), ways.data(), valid.data(), set.size(), sequence, admit) !=
+                    ecg_record::Status::OK)
+            throw std::logic_error("Invalid current ECG prefetch admission");
+        return admit;
+    }
+
+    uint64_t recordDeadBypasses() const { return record_dead_bypasses_; }
+
+    bool lineSnapshotForTest(uint64_t address, CacheLine& output) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (const auto& line : cache_[getSetIndex(address)]) {
+            if (line.valid && line.tag == getTag(address)) {
+                output = line;
+                return true;
+            }
+        }
+        return false;
+    }
+
 private:
+    ecg_record::NativeConfiguration record_configuration_;
+    ecg_record::Receiver record_receiver_;
+    bool record_configured_ = false;
+    bool record_replacement_ = false;
+    bool record_mode_snapshot_ = false;
+    uint64_t record_dead_bypasses_ = 0;
+
+    bool recordProperty(uint64_t address) const {
+        return record_configured_ && address >= record_configuration_.property_base &&
+            address - record_configuration_.property_base < record_configuration_.vertex_count * 4;
+    }
+
+    uint8_t recordTier(uint64_t address) const {
+        return static_cast<uint8_t>(graph_ctx_->classifyGRASP(address, size_bytes_));
+    }
+
+    ecg_record::WayState recordWay(const CacheLine& line) const {
+        ecg_record::WayState way;
+        way.property = recordProperty(line.line_addr);
+        way.rrpv = line.rrpv;
+        way.recency = line.last_access;
+        way.grasp_tier = recordTier(line.line_addr);
+        way.state = ecg_record::victimState(
+            line.record_metadata, record_replacement_ && record_receiver_.watermarkValid());
+        way.deadline = line.record_metadata.value;
+        return way;
+    }
+
+    void validateRecordObservation(
+            uint64_t address, bool write, const ecg_record::NativeLoadResult& record) const {
+        if (write || !record_configured_ || record.property_address != address ||
+            !recordProperty(address) || record.sequence == 0 ||
+            record.context != record_configuration_.context ||
+            record.generation != record_configuration_.generation ||
+            (record.state != ecg_record::State::UNKNOWN &&
+             record.state != ecg_record::State::FINITE &&
+             record.state != ecg_record::State::DEAD))
+            throw std::logic_error("Invalid current ECG property observation");
+    }
+
+    void observeRecord(CacheLine& line, const ecg_record::NativeLoadResult& record) {
+        if (!record_configured_ || !recordProperty(record.property_address) ||
+            line.line_addr != (record.property_address & ~uint64_t{63}))
+            throw std::logic_error("Unbound current ECG cache observation");
+        if (!record_replacement_)
+            return;
+        const auto result = record_receiver_.observe(
+            line.record_metadata, record.context, record.generation, record.sequence);
+        if (result == ecg_record::ObservationResult::INVALID_CONTEXT ||
+            result == ecg_record::ObservationResult::INVALID_ORDER)
+            throw std::logic_error("Invalid current ECG observation ordering");
+    }
+
     static size_t log2i(size_t n) {
         size_t r = 0;
         while (n > 1) { n >>= 1; r++; }
@@ -1774,6 +1940,14 @@ private:
         set[idx].last_access = global_time_++;
         set[idx].access_count++;
         set[idx].ecg_ref32_prefetch = false;
+        if (record_configured_) {
+            set[idx].record_metadata.prefetch_origin = false;
+            if (recordProperty(set[idx].line_addr) && recordTier(set[idx].line_addr) == 1)
+                set[idx].rrpv = 0;
+            else if (set[idx].rrpv)
+                --set[idx].rrpv;
+            return;
+        }
         
         // SRRIP: reset RRPV to 0 on hit
         if (policy_ == EvictionPolicy::SRRIP) {
@@ -2002,6 +2176,19 @@ private:
             for (size_t i = 0; i < associativity_; i++) {
                 if (!set[i].valid) return i;
             }
+        }
+        if (record_configured_) {
+            if (!record_replacement_)
+                return findVictimLRU(set);
+            std::array<ecg_record::WayState, 64> ways{};
+            for (std::size_t index = 0; index < set.size(); ++index)
+                ways[index] = recordWay(set[index]);
+            std::size_t victim = 0;
+            if (ecg_record::selectVictim(
+                    record_receiver_.layout(), ways.data(), set.size(),
+                    record_receiver_.watermark(), victim) != ecg_record::Status::OK)
+                throw std::logic_error("Invalid current ECG victim selection");
+            return victim;
         }
         
         // All lines valid, use eviction policy
@@ -3193,10 +3380,20 @@ public:
     }
 
     // Main access function - simulates hierarchical access
-    void access(uint64_t address, bool is_write = false) {
+    void access(uint64_t address, bool is_write = false,
+                const ecg_record::NativeLoadResult* record = nullptr) {
         if (!enabled_) return;
 
         const uint64_t line_addr = lineAddress(address);
+        if (record_model_) {
+            advanceRecordStep();
+            while (recordPrefetchPending(line_addr)) {
+                ++record_wait_steps_;
+                advanceRecordStep();
+            }
+        } else if (record) {
+            throw std::logic_error("Current ECG access has no configured transport");
+        }
         const bool ref32_record_request =
             isCurrentRef32RecordRequest(address);
         const bool ref32_commit_request =
@@ -3286,7 +3483,7 @@ public:
         }
         
         // L2 miss, try L3
-        if (l3_->access(address, is_write)) {
+        if (l3_->access(address, is_write, record)) {
             // ECG_REFRESH_LLC_ONLY: the access reached L3, so stamping the epoch here
             // piggybacks an L3 access already in flight (HW-free). (L3-miss fills stamp
             // via insert() already, so the hit path is the only extra site needed.)
@@ -3305,11 +3502,170 @@ public:
         }
         memory_accesses_++;
         if (was_prefetched) markPrefetchEvictedBeforeUse(line_addr);
-        l3_->insert(address, is_write);
+        l3_->insert(address, is_write, false, record);
         l2_->insert(address, is_write);
         l1_->insert(address, is_write);
         if (ref32_prefetch_enabled_ && ref32_record_request)
             issueCurrentRef32Prefetch();
+    }
+
+    void configureRecord(
+            const ecg_record::NativeConfiguration& configuration,
+            const ecg_record::RecordStream& stream, ecg_record::Mechanism mechanism,
+            uint64_t update_latency = 8, uint64_t prefetch_latency = 8,
+            std::size_t prefetch_capacity = 16) {
+        if (record_model_ || record_loads_ != 0 || line_size_ != 64 || !graph_ctx_ ||
+            l1_->getPolicy() != EvictionPolicy::LRU || l2_->getPolicy() != EvictionPolicy::LRU ||
+            ref32_commit_channel_ || ref32_prefetch_enabled_ || refresh_exact_stamp_ ||
+            mechanism == ecg_record::Mechanism::INVALID || update_latency < 8 ||
+            update_latency > 4096 || prefetch_latency == 0 || prefetch_latency > 4096 ||
+            prefetch_capacity == 0 || prefetch_capacity > 16 ||
+            configuration.record_count != stream.size() ||
+            configuration.record_base != reinterpret_cast<uint64_t>(stream.data()) ||
+            configuration.iteration_base != 0)
+            throw std::invalid_argument("Invalid functional ECG record configuration");
+        ecg_record::Layout layout;
+        if (ecg_record::validateNativeConfiguration(configuration, layout) != ecg_record::Status::OK ||
+            !(layout == stream.layout))
+            throw std::invalid_argument("Functional ECG stream disagrees with its descriptor");
+        const bool replacement = mechanism == ecg_record::Mechanism::REPLACEMENT ||
+            mechanism == ecg_record::Mechanism::REPLACEMENT_PREFETCH;
+        l3_->configureRecord(configuration, replacement);
+        record_configuration_ = configuration;
+        record_stream_ = &stream;
+        record_mechanism_ = mechanism;
+        record_queue_ = std::make_unique<ecg_record::CommitQueue>(update_latency, 1);
+        record_prefetch_latency_ = prefetch_latency;
+        record_prefetch_capacity_ = prefetch_capacity;
+        record_replacement_ = replacement;
+        record_prefetch_ = mechanism == ecg_record::Mechanism::PREFETCH ||
+            mechanism == ecg_record::Mechanism::REPLACEMENT_PREFETCH;
+        if (record_window_.configure(layout, configuration.record_base, stream.size()) !=
+                ecg_record::Status::OK)
+            throw std::invalid_argument("Functional ECG record window does not fit");
+        record_model_ = true;
+    }
+
+    void recordIteration(uint64_t base, bool has_next) {
+        if (!record_model_ || record_pending_ || base != record_sequence_)
+            throw std::logic_error("Discontinuous functional ECG traversal");
+        auto configuration = record_configuration_;
+        configuration.iteration_base = base;
+        configuration.control = ecg_record::kNativeEnable |
+            (has_next ? ecg_record::kNativeHasNext : 0);
+        ecg_record::Layout layout;
+        if (ecg_record::validateNativeConfiguration(configuration, layout) != ecg_record::Status::OK)
+            throw std::invalid_argument("Functional ECG traversal overflows");
+        record_configuration_ = configuration;
+    }
+
+    uint64_t recordLoad(uint64_t index) {
+        if (!record_model_ || record_pending_)
+            throw std::logic_error("Functional ECG record load is not paired");
+        uint64_t address = 0;
+        if (ecg_record::recordAddress(record_stream_->layout, record_configuration_.record_base,
+                index, record_stream_->size(), address) != ecg_record::Status::OK)
+            throw std::invalid_argument("Invalid functional ECG record address");
+        const bool fill = !l1_->contains(address);
+        access(address);
+        const uint64_t word = record_stream_->word(index);
+        record_pending_address_ = address;
+        record_pending_word_ = word;
+        record_pending_ = true;
+        ++record_loads_;
+        if (record_prefetch_ && fill)
+            captureRecordLine(lineAddress(address));
+        return word;
+    }
+
+    uint64_t recordProperty(uint64_t index, uint64_t word) {
+        uint64_t address = 0;
+        if (!record_model_ || !record_pending_ ||
+            ecg_record::recordAddress(record_stream_->layout, record_configuration_.record_base,
+                index, record_stream_->size(), address) != ecg_record::Status::OK ||
+            address != record_pending_address_ || word != record_pending_word_)
+            throw std::logic_error("Functional ECG property is not bound to its actual record");
+        ecg_record::NativeLoadResult load;
+        uint64_t next = 0;
+        if (ecg_record::nativePropertyAccess(record_configuration_,
+                record_configuration_.property_base, word, address, load) != ecg_record::Status::OK ||
+            !ecg_record::checkedAdd(record_sequence_, 1, next) || load.sequence != next)
+            throw std::logic_error("Invalid functional ECG property operands");
+        access(load.property_address, false, &load);
+        record_sequence_ = load.sequence;
+        record_pending_ = false;
+        ++record_properties_;
+        if (record_replacement_) {
+            ecg_record::CommitUpdate update;
+            update.physical_line = lineAddress(load.property_address);
+            update.property_vaddr = load.property_address;
+            update.sequence = load.sequence;
+            update.deadline = load.deadline;
+            update.context = load.context;
+            update.generation = load.generation;
+            update.state = load.state;
+            ++record_generated_;
+            const auto status = record_queue_->enqueue(update, record_step_);
+            if (status == ecg_record::EnqueueStatus::ENQUEUED)
+                ++record_enqueued_;
+            else if (status == ecg_record::EnqueueStatus::COALESCED)
+                ++record_coalesced_;
+            else
+                throw std::logic_error("Functional ECG lost a required update");
+            record_max_updates_ = std::max<uint64_t>(record_max_updates_, record_queue_->pendingSize());
+        }
+        if (record_prefetch_)
+            selectRecordPrefetch(address, word);
+        return load.destination;
+    }
+
+    void finishRecord(uint64_t expected_work) {
+        if (!record_model_ || record_pending_ || record_loads_ != expected_work ||
+            record_properties_ != expected_work || record_sequence_ != expected_work)
+            throw std::logic_error("Functional ECG semantic work is incomplete");
+        const uint64_t limit = record_queue_->latencyCycles() + record_prefetch_latency_ + 64;
+        uint64_t attempts = 0;
+        while (!record_queue_->empty() || !record_prefetches_.empty()) {
+            if (++attempts > limit)
+                throw std::logic_error("Functional ECG did not drain within its bound");
+            advanceRecordStep();
+        }
+        if (record_generated_ != record_enqueued_ + record_coalesced_ ||
+            record_enqueued_ != record_delivered_ ||
+            record_delivered_ != record_applied_ + record_absent_ + record_stale_ + record_expired_)
+            throw std::logic_error("Functional ECG update accounting does not close");
+        std::cerr << "[ECG-RECORD-FUNCTIONAL ";
+        ecg_record::writeLayoutFields(std::cerr, record_stream_->layout);
+        std::cerr << " mechanism=" << ecg_record::mechanismName(record_mechanism_)
+                  << " record_loads=" << record_loads_
+                  << " record_read_bytes=" << record_loads_ * record_stream_->layout.record_bytes
+                  << " governed_loads=" << record_properties_
+                  << " generated=" << record_generated_ << " enqueued=" << record_enqueued_
+                  << " coalesced=" << record_coalesced_ << " delivered=" << record_delivered_
+                  << " applied=" << record_applied_ << " absent=" << record_absent_
+                  << " stale=" << record_stale_ << " expired=" << record_expired_
+                  << " max_update_occupancy=" << record_max_updates_
+                  << " dead_miss_bypasses=" << l3_->recordDeadBypasses()
+                  << " record_acquisition_requests=" << record_acquisitions_
+                  << " record_acquisition_bytes=" << record_acquisitions_ * 64
+                  << " record_buffer_bytes=" << (record_prefetch_ ? record_window_.bankCount() * 64 : 0)
+                  << " prefetch_candidates=" << record_candidates_
+                  << " prefetch_issued=" << record_prefetch_issued_
+                  << " prefetch_fills=" << record_prefetch_fills_
+                  << " prefetch_resident=" << record_prefetch_resident_
+                  << " prefetch_pending_duplicates=" << record_prefetch_duplicates_
+                  << " prefetch_admission_dropped=" << record_prefetch_admission_
+                  << " prefetch_queue_dropped=" << record_prefetch_queue_dropped_
+                  << " prefetch_completion_dropped=" << record_prefetch_completion_dropped_
+                  << " lookup_steps=" << record_lookup_steps_
+                  << " wait_steps=" << record_wait_steps_
+                  << " update_latency_steps=" << record_queue_->latencyCycles()
+                  << " prefetch_latency_steps=" << record_prefetch_latency_
+                  << " pending=0 accounting=1 timing_scope=access-step]\n";
+        record_model_ = false;
+        record_stream_ = nullptr;
+        l3_->disableRecord();
+        initGraphContext(nullptr);
     }
 
     // ECG FlowThrough: an explicit non-temporal packed-edge request preserves
@@ -4213,6 +4569,175 @@ private:
         uint64_t exact_deadline = 0;
         ecg_ref32::State state = ecg_ref32::State::UNKNOWN;
     };
+
+    struct RecordPrefetch {
+        uint64_t line = 0;
+        uint64_t ready_step = 0;
+    };
+
+    bool record_model_ = false;
+    bool record_replacement_ = false;
+    bool record_prefetch_ = false;
+    bool record_pending_ = false;
+    const ecg_record::RecordStream* record_stream_ = nullptr;
+    ecg_record::NativeConfiguration record_configuration_;
+    ecg_record::Mechanism record_mechanism_ = ecg_record::Mechanism::INVALID;
+    ecg_record::WindowBuffer record_window_;
+    std::unique_ptr<ecg_record::CommitQueue> record_queue_;
+    std::deque<RecordPrefetch> record_prefetches_;
+    uint64_t record_step_ = 0;
+    uint64_t record_sequence_ = 0;
+    uint64_t record_pending_address_ = 0;
+    uint64_t record_pending_word_ = 0;
+    uint64_t record_prefetch_latency_ = 8;
+    std::size_t record_prefetch_capacity_ = 16;
+    uint64_t record_loads_ = 0;
+    uint64_t record_properties_ = 0;
+    uint64_t record_generated_ = 0;
+    uint64_t record_enqueued_ = 0;
+    uint64_t record_coalesced_ = 0;
+    uint64_t record_delivered_ = 0;
+    uint64_t record_applied_ = 0;
+    uint64_t record_absent_ = 0;
+    uint64_t record_stale_ = 0;
+    uint64_t record_expired_ = 0;
+    uint64_t record_max_updates_ = 0;
+    uint64_t record_acquisitions_ = 0;
+    uint64_t record_candidates_ = 0;
+    uint64_t record_prefetch_issued_ = 0;
+    uint64_t record_prefetch_fills_ = 0;
+    uint64_t record_prefetch_resident_ = 0;
+    uint64_t record_prefetch_duplicates_ = 0;
+    uint64_t record_prefetch_admission_ = 0;
+    uint64_t record_prefetch_queue_dropped_ = 0;
+    uint64_t record_prefetch_completion_dropped_ = 0;
+    uint64_t record_lookup_steps_ = 0;
+    uint64_t record_wait_steps_ = 0;
+
+    bool recordPrefetchPending(uint64_t line) const {
+        return std::any_of(record_prefetches_.begin(), record_prefetches_.end(),
+            [line](const RecordPrefetch& request) { return request.line == line; });
+    }
+
+    void advanceRecordStep() {
+        if (!ecg_record::checkedAdd(record_step_, 1, record_step_))
+            throw std::overflow_error("Functional ECG access-step clock overflow");
+        const auto update = record_queue_->popReady(record_step_);
+        if (update.status == ecg_record::PopStatus::POPPED) {
+            ++record_delivered_;
+            switch (l3_->applyRecordUpdate(update.ready.update)) {
+              case ecg_record::ApplyResult::APPLIED: ++record_applied_; break;
+              case ecg_record::ApplyResult::NOT_RESIDENT: ++record_absent_; break;
+              case ecg_record::ApplyResult::STALE: ++record_stale_; break;
+              case ecg_record::ApplyResult::EXPIRED: ++record_expired_; break;
+              default: throw std::logic_error("Functional ECG receiver rejected an update");
+            }
+        } else if (update.status == ecg_record::PopStatus::INVALID_TIME) {
+            throw std::logic_error("Functional ECG update time moved backwards");
+        }
+        if (!record_prefetches_.empty() &&
+            record_prefetches_.front().ready_step <= record_step_) {
+            const auto prefetch = record_prefetches_.front();
+            record_prefetches_.pop_front();
+            ++record_lookup_steps_;
+            if (l1_->contains(prefetch.line) || l2_->contains(prefetch.line) ||
+                l3_->contains(prefetch.line) ||
+                !l3_->canAdmitRecordPrefetch(prefetch.line, record_sequence_)) {
+                ++record_prefetch_completion_dropped_;
+            } else {
+                l3_->insert(prefetch.line, false, true);
+                markPrefetchFill(prefetch.line);
+                ++record_prefetch_fills_;
+            }
+        }
+    }
+
+    void captureRecordLine(uint64_t line) {
+        std::array<uint8_t, 64> bytes{};
+        const uint64_t base = record_configuration_.record_base;
+        const uint8_t width = record_stream_->layout.record_bytes;
+        for (unsigned offset = 0; offset < 64; offset += width) {
+            const uint64_t address = line + offset;
+            if (address < base)
+                continue;
+            const uint64_t index = (address - base) / width;
+            if (index >= record_stream_->size())
+                continue;
+            const uint64_t word = record_stream_->word(index);
+            std::memcpy(bytes.data() + offset, &word, width);
+        }
+        uint64_t ready = 0;
+        if (!ecg_record::checkedAdd(record_step_, 1, ready))
+            throw std::overflow_error("Functional ECG record capture time overflow");
+        const auto status = record_window_.storeLine(line, line, bytes.data(), ready);
+        if (status != ecg_record::Status::OK && status != ecg_record::Status::NOT_READY)
+            throw std::logic_error("Functional ECG record capture failed");
+    }
+
+    void acquireRecordLine(uint64_t line) {
+        advanceRecordStep();
+        ++record_acquisitions_;
+        ++total_accesses_;
+        if (!l2_->access(line, false)) {
+            if (!l3_->access(line, false)) {
+                ++memory_accesses_;
+                l3_->insert(line, false);
+            }
+            l2_->insert(line, false);
+        }
+        captureRecordLine(line);
+    }
+
+    void selectRecordPrefetch(uint64_t address, uint64_t word) {
+        if (record_window_.pin(address) != ecg_record::Status::OK)
+            throw std::logic_error("Functional ECG window pinning failed");
+        for (uint64_t line = record_window_.firstLine(); ; line += 64) {
+            if (!record_window_.hasLine(line))
+                acquireRecordLine(line);
+            if (line == record_window_.lastLine())
+                break;
+        }
+        ecg_record::RecordWindow window;
+        auto status = record_window_.readWindow(
+            address, record_configuration_.vertex_count, record_step_, window);
+        if (status == ecg_record::Status::NOT_READY) {
+            ++record_wait_steps_;
+            advanceRecordStep();
+            status = record_window_.readWindow(
+                address, record_configuration_.vertex_count, record_step_, window);
+        }
+        if (status != ecg_record::Status::OK || window.words[0] != word)
+            throw std::logic_error("Functional ECG window lacks its actual captured bytes");
+        ecg_record::PrefetchTarget target;
+        if (ecg_record::selectWindowTarget(record_stream_->layout, window, 16, target) !=
+                ecg_record::Status::OK)
+            throw std::logic_error("Functional ECG window selection failed");
+        record_window_.unpin();
+        if (!target.valid)
+            return;
+        ++record_candidates_;
+        const uint64_t line = lineAddress(record_configuration_.property_base + target.destination * 4);
+        advanceRecordStep();
+        ++record_lookup_steps_;
+        if (l1_->contains(line) || l2_->contains(line) || l3_->contains(line)) {
+            ++record_prefetch_resident_;
+        } else if (recordPrefetchPending(line)) {
+            ++record_prefetch_duplicates_;
+        } else if (record_prefetches_.size() == record_prefetch_capacity_) {
+            ++record_prefetch_queue_dropped_;
+        } else if (!l3_->canAdmitRecordPrefetch(line, record_sequence_)) {
+            ++record_prefetch_admission_;
+        } else {
+            uint64_t ready = 0;
+            if (!ecg_record::checkedAdd(record_step_, record_prefetch_latency_, ready))
+                throw std::overflow_error("Functional ECG prefetch time overflow");
+            record_prefetches_.push_back({line, ready});
+            ++record_prefetch_issued_;
+            ++prefetch_requests_;
+            ++prefetch_fills_;
+            recordPrefetchTranslation(line);
+        }
+    }
 
     bool ref32ResourcesActive() const {
         return graph_ctx_ &&
