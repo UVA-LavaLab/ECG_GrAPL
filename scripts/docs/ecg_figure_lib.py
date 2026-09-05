@@ -670,7 +670,7 @@ class Figure:
             y + 6,
             subtitle,
             size=16,
-            color=GRAY,
+            color=BORDER if self.collection == "wiki" else GRAY,
             anchor="end",
             max_width=520,
         )
@@ -755,7 +755,7 @@ class Figure:
             self.text(
                 cursor + field_width / 2,
                 y + height / 2 + 22,
-                f"{bits} bits",
+                f"{bits} bit" if bits == 1 else f"{bits} bits",
                 size=16,
                 anchor="middle",
                 max_width=max(20, field_width - 12),

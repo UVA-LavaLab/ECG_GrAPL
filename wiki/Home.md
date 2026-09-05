@@ -2,39 +2,46 @@
   <img src="assets/logo.png" alt="ECG graph logo" width="180">
 </p>
 
-# ECG Next Documentation
+# ECG Scale6
 
-ECG Next is an experimental cache architecture for irregular graph-property
-loads. **ReusePlan** is the offline edge-aligned record derived from graph
-structure, **ReuseBind** attaches that metadata to the consuming property
-Request, and **FlowThrough** suppresses LLC fill allocation for eligible
-structural misses. These mechanisms do not change graph results or property
-values.
+The current ECG candidate packs graph-derived future reuse into the existing
+four-byte edge stream. **Scale6** uses a 26-bit property vertex and six-bit
+future token, with line-local LLC state, bounded commit refresh, and selective
+LLC-only prefetching. Property values and graph results are unchanged.
 
-### Figure 1 — ECG dataflow from graph preprocessing to LLC replacement
+### Figure 1 — Scale6: future reuse in the existing edge word
 
-![System overview tracing immutable graph-derived records through the two-load RISC-V path into validated LLC replacement state and bounded simulator evidence](../fig/wiki/home/home-f01-system-overview.svg)
+![Scale6 dataflow showing the in-place record builder, four-byte destination and token, ordinary private-cache service, bounded commit refresh, LLC-only prefetching, and the boundary between modeled cache evidence and a pending native port](../fig/wiki/home/home-f01-system-overview.svg)
 
-**Figure 1.** The diagram separates offline graph analysis, dynamic
-instructions, Request and cache state, victim selection, and evaluation scope.
-Graph direction is kernel-phase specific: PageRank uses in-neighbor rows;
-BFS, SSSP, BC forward, and CC use out-neighbor rows. BC backward traverses its
-runtime successor DAG rather than a static edge-aligned record array.
+**Figure 1.** Offline construction, demand data, commit refresh and prefetch
+are separate paths. The current cache_sim model supports full-graph cache and
+traffic evidence. It does not establish processor-cycle timing or physical area.
 
-## Documentation structure
+For PageRank pull, the outer vertex traverses in-neighbors `N_in(u)`, and the
+record names the property vertex whose contribution is read. Other graph
+traversals need metadata for their own actual request order; frontier-based
+kernels do not automatically inherit this fixed-sweep result.
 
-1. [ReusePlan and FlowThrough](ReusePlan-FlowThrough) defines construction,
-   record formats, victim selection, FlowThrough outcomes, and the
-   matched structural-array control.
-2. [RISC-V instruction path](RISC-V-Instruction-Path) follows the record and
-   property instructions through frontend decode, rename, LSQ Request
-   construction, MSHR target merge, writeback, and in-order retirement.
-3. [End-to-end property Request example](Property-to-Cache-Walkthrough) derives
-   one fixture adjacency entry and identifies its processor and cache state.
-4. [Evaluation methodology](Evaluation-Methodology) states what gem5,
-   cache_sim, Sniper, and analytic P-OPT can establish.
-5. [Build and reproduction](Reproduction) provides graph preparation, build,
-   test, and experiment commands.
+## Current status
 
-The figures describe implemented or explicitly modeled architecture. They do
-not report performance measurements.
+Full Twitter-2010 demonstrates that the four-byte format reaches 26-bit graph
+IDs. The 8 MiB LLC remains the primary target; 16 and 24 MiB are additional
+capacity points. P-OPT-SE is a separately labeled reconstruction, not an
+undercharged ordinary P-OPT row.
+
+The earlier ReuseBind RISC-V implementation is not a completed Scale6 port.
+Native request binding, retirement-only update transport, cycle-timed
+prefetching and physical-cost evidence remain required.
+
+## Documentation
+
+1. [Scale6 records and cache control](ReusePlan-FlowThrough) derives the token,
+   future bound, update path, prefetch window and capacity accounting.
+2. [RISC-V integration](RISC-V-Instruction-Path) distinguishes existing
+   ReuseBind support from the pending Scale6 implementation.
+3. [Checked edge-to-cache example](Property-to-Cache-Walkthrough) follows a
+   concrete word, property address, cache line and expiry.
+4. [Evaluation methodology](Evaluation-Methodology) separates demand misses,
+   all off-chip traffic, timing, and storage cost.
+5. [Reproduction](Reproduction) contains the supported build and experiment
+   commands.

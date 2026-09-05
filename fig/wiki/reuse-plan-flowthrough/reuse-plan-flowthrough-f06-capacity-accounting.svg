@@ -1,0 +1,285 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1140" viewBox="0 0 1200 1140" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">P-OPT columns and the LLC capacity budget</title>
+  <desc id="desc">For full Twitter, one one-byte-per-property-line column is 2,603,265 bytes. Full P-OPT keeps two columns and SE keeps one, while both retain 256 backing columns. Sixteen-way bars show the full and single-epoch reservations at 8, 16 and 24 MiB. ECG&#x27;s extra on-chip state is separately disclosed rather than compared to DRAM matrix storage as a silicon ratio.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C63C4A"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6558C5"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#98A2B3"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#182230"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
+        [fill="#F8FAFC"]{fill:#172033}[stroke="#F8FAFC"]{stroke:#172033}
+        [fill="#EFF6FF"]{fill:#172554}[stroke="#EFF6FF"]{stroke:#172554}
+        [fill="#ECFDF5"]{fill:#073B34}[stroke="#ECFDF5"]{stroke:#073B34}
+        [fill="#FFF7ED"]{fill:#422A12}[stroke="#FFF7ED"]{stroke:#422A12}
+        [fill="#FFF1F2"]{fill:#421B22}[stroke="#FFF1F2"]{stroke:#421B22}
+        [fill="#F5F3FF"]{fill:#292349}[stroke="#F5F3FF"]{stroke:#292349}
+        [fill="#182230"]{fill:#F8FAFC}[stroke="#182230"]{stroke:#F8FAFC}
+        [fill="#475467"]{fill:#94A3B8}[stroke="#475467"]{stroke:#94A3B8}
+        [fill="#98A2B3"]{fill:#A8B0BF}[stroke="#98A2B3"]{stroke:#A8B0BF}
+        [fill="#2563EB"]{fill:#7FB0FF}[stroke="#2563EB"]{stroke:#7FB0FF}
+        [fill="#0F8A72"]{fill:#5ED0B0}[stroke="#0F8A72"]{stroke:#5ED0B0}
+        [fill="#C56A13"]{fill:#F0B36A}[stroke="#C56A13"]{stroke:#F0B36A}
+        [fill="#6558C5"]{fill:#ADA4FF}[stroke="#6558C5"]{stroke:#ADA4FF}
+        [fill="#C63C4A"]{fill:#F48B98}[stroke="#C63C4A"]{stroke:#F48B98}
+      }
+      .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
+      .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1140" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">P-OPT columns and the LLC capacity budget</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">A resident epoch column is graph-sized. Two columns do not mean two cache ways.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">BACKING MATRIX IS NOT ALL IN THE LLC</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">Twitter: 41,652,230 vertices; 4-byte properties</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="209.0" width="330" height="130.0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
+  <ellipse cx="205.0" cy="209.0" rx="165.0" ry="12.0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
+  <ellipse cx="205.0" cy="339.0" rx="165.0" ry="12.0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
+  <text x="67" y="239" text-anchor="start" class="sans body" fill="#182230" font-weight="700">256 backing columns</text>
+  <text x="67" y="270" text-anchor="start" class="sans body" fill="#182230">635.6 MiB in memory</text>
+  <text x="67" y="301" text-anchor="start" class="sans body" fill="#182230">same backing size for SE</text>
+  <rect x="565" y="207" width="275" height="134" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="565" data-y="207" data-width="275" data-height="134"/>
+  <text x="579" y="235" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Full P-OPT</text>
+  <text x="579" y="264" text-anchor="start" class="sans body" fill="#182230">current + next</text>
+  <text x="579" y="289" text-anchor="start" class="sans body" fill="#182230">about 4.97 MiB payload</text>
+  <rect x="915" y="207" width="245" height="134" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="915" data-y="207" data-width="245" data-height="134"/>
+  <text x="929" y="235" text-anchor="start" class="sans label" fill="#182230" font-weight="700">P-OPT-SE</text>
+  <text x="929" y="264" text-anchor="start" class="sans body" fill="#182230">current only</text>
+  <text x="929" y="289" text-anchor="start" class="sans body" fill="#182230">about 2.48 MiB payload</text>
+  <path d="M370 273 L565 273" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="column" data-flow-cadence="per epoch"/>
+  <rect x="380.92" y="230.00" width="174.16" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="468" y="247" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">column | per epoch</text>
+  <text x="40" y="393" text-anchor="start" class="sans body" fill="#182230">column bytes = ceil(vertices x 4 / 64) = 2,603,265; no fixed-way shortcut.</text>
+  <text x="40" y="424" text-anchor="start" class="sans body" fill="#C56A13">One-column residency does not halve the 256-column stream over a complete traversal.</text>
+  <circle cx="44" cy="487" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="493" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="494" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">RESERVE ENOUGH WHOLE WAYS</text>
+  <text x="1158" y="493" text-anchor="end" class="sans body" fill="#475467">purple = matrix; blue = application data</text>
+  <line x1="24" y1="513" x2="1176" y2="513" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="513" x2="170" y2="513" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="250" y="548" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">FULL P-OPT: TWO COLUMNS</text>
+  <text x="750" y="548" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">P-OPT-SE: ONE COLUMN</text>
+  <text x="40" y="620" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">8 MiB</text>
+  <rect x="250" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="250" data-y="590" data-width="25" data-height="45"/>
+  <text x="262.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="275" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="275" data-y="590" data-width="25" data-height="45"/>
+  <text x="287.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="300" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="300" data-y="590" data-width="25" data-height="45"/>
+  <text x="312.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="325" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="325" data-y="590" data-width="25" data-height="45"/>
+  <text x="337.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="350" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="350" data-y="590" data-width="25" data-height="45"/>
+  <text x="362.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="375" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="375" data-y="590" data-width="25" data-height="45"/>
+  <text x="387.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="400" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="400" data-y="590" data-width="25" data-height="45"/>
+  <text x="412.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="425" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="425" data-y="590" data-width="25" data-height="45"/>
+  <text x="437.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="450" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450" data-y="590" data-width="25" data-height="45"/>
+  <text x="462.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="475" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="475" data-y="590" data-width="25" data-height="45"/>
+  <text x="487.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="500" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="500" data-y="590" data-width="25" data-height="45"/>
+  <text x="512.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="525" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="525" data-y="590" data-width="25" data-height="45"/>
+  <text x="537.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="550" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="550" data-y="590" data-width="25" data-height="45"/>
+  <text x="562.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="575" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="575" data-y="590" data-width="25" data-height="45"/>
+  <text x="587.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="600" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="600" data-y="590" data-width="25" data-height="45"/>
+  <text x="612.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="625" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="625" data-y="590" data-width="25" data-height="45"/>
+  <text x="637.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <text x="250" y="667" text-anchor="start" class="sans label" fill="#182230" font-weight="700">10 reserved / 6 data ways</text>
+  <rect x="750" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="750" data-y="590" data-width="25" data-height="45"/>
+  <text x="762.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="775" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="775" data-y="590" data-width="25" data-height="45"/>
+  <text x="787.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="800" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="800" data-y="590" data-width="25" data-height="45"/>
+  <text x="812.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="825" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="825" data-y="590" data-width="25" data-height="45"/>
+  <text x="837.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="850" y="590" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="850" data-y="590" data-width="25" data-height="45"/>
+  <text x="862.5" y="619" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="875" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="875" data-y="590" data-width="25" data-height="45"/>
+  <text x="887.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="900" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="900" data-y="590" data-width="25" data-height="45"/>
+  <text x="912.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="925" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="925" data-y="590" data-width="25" data-height="45"/>
+  <text x="937.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="950" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="950" data-y="590" data-width="25" data-height="45"/>
+  <text x="962.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="975" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="975" data-y="590" data-width="25" data-height="45"/>
+  <text x="987.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1000" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1000" data-y="590" data-width="25" data-height="45"/>
+  <text x="1012.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1025" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1025" data-y="590" data-width="25" data-height="45"/>
+  <text x="1037.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1050" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1050" data-y="590" data-width="25" data-height="45"/>
+  <text x="1062.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1075" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1075" data-y="590" data-width="25" data-height="45"/>
+  <text x="1087.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1100" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1100" data-y="590" data-width="25" data-height="45"/>
+  <text x="1112.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1125" y="590" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1125" data-y="590" data-width="25" data-height="45"/>
+  <text x="1137.5" y="619" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <text x="750" y="667" text-anchor="start" class="sans label" fill="#182230" font-weight="700">5 reserved / 11 data ways</text>
+  <text x="40" y="728" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">16 MiB</text>
+  <rect x="250" y="698" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="250" data-y="698" data-width="25" data-height="45"/>
+  <text x="262.5" y="727" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="275" y="698" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="275" data-y="698" data-width="25" data-height="45"/>
+  <text x="287.5" y="727" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="300" y="698" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="300" data-y="698" data-width="25" data-height="45"/>
+  <text x="312.5" y="727" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="325" y="698" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="325" data-y="698" data-width="25" data-height="45"/>
+  <text x="337.5" y="727" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="350" y="698" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="350" data-y="698" data-width="25" data-height="45"/>
+  <text x="362.5" y="727" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="375" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="375" data-y="698" data-width="25" data-height="45"/>
+  <text x="387.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="400" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="400" data-y="698" data-width="25" data-height="45"/>
+  <text x="412.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="425" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="425" data-y="698" data-width="25" data-height="45"/>
+  <text x="437.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="450" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450" data-y="698" data-width="25" data-height="45"/>
+  <text x="462.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="475" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="475" data-y="698" data-width="25" data-height="45"/>
+  <text x="487.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="500" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="500" data-y="698" data-width="25" data-height="45"/>
+  <text x="512.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="525" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="525" data-y="698" data-width="25" data-height="45"/>
+  <text x="537.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="550" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="550" data-y="698" data-width="25" data-height="45"/>
+  <text x="562.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="575" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="575" data-y="698" data-width="25" data-height="45"/>
+  <text x="587.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="600" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="600" data-y="698" data-width="25" data-height="45"/>
+  <text x="612.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="625" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="625" data-y="698" data-width="25" data-height="45"/>
+  <text x="637.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <text x="250" y="775" text-anchor="start" class="sans label" fill="#182230" font-weight="700">5 reserved / 11 data ways</text>
+  <rect x="750" y="698" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="750" data-y="698" data-width="25" data-height="45"/>
+  <text x="762.5" y="727" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="775" y="698" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="775" data-y="698" data-width="25" data-height="45"/>
+  <text x="787.5" y="727" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="800" y="698" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="800" data-y="698" data-width="25" data-height="45"/>
+  <text x="812.5" y="727" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="825" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="825" data-y="698" data-width="25" data-height="45"/>
+  <text x="837.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="850" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="850" data-y="698" data-width="25" data-height="45"/>
+  <text x="862.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="875" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="875" data-y="698" data-width="25" data-height="45"/>
+  <text x="887.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="900" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="900" data-y="698" data-width="25" data-height="45"/>
+  <text x="912.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="925" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="925" data-y="698" data-width="25" data-height="45"/>
+  <text x="937.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="950" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="950" data-y="698" data-width="25" data-height="45"/>
+  <text x="962.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="975" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="975" data-y="698" data-width="25" data-height="45"/>
+  <text x="987.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1000" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1000" data-y="698" data-width="25" data-height="45"/>
+  <text x="1012.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1025" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1025" data-y="698" data-width="25" data-height="45"/>
+  <text x="1037.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1050" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1050" data-y="698" data-width="25" data-height="45"/>
+  <text x="1062.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1075" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1075" data-y="698" data-width="25" data-height="45"/>
+  <text x="1087.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1100" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1100" data-y="698" data-width="25" data-height="45"/>
+  <text x="1112.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1125" y="698" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1125" data-y="698" data-width="25" data-height="45"/>
+  <text x="1137.5" y="727" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <text x="750" y="775" text-anchor="start" class="sans label" fill="#182230" font-weight="700">3 reserved / 13 data ways</text>
+  <text x="40" y="836" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">24 MiB</text>
+  <rect x="250" y="806" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="250" data-y="806" data-width="25" data-height="45"/>
+  <text x="262.5" y="835" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="275" y="806" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="275" data-y="806" data-width="25" data-height="45"/>
+  <text x="287.5" y="835" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="300" y="806" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="300" data-y="806" data-width="25" data-height="45"/>
+  <text x="312.5" y="835" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="325" y="806" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="325" data-y="806" data-width="25" data-height="45"/>
+  <text x="337.5" y="835" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="350" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="350" data-y="806" data-width="25" data-height="45"/>
+  <text x="362.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="375" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="375" data-y="806" data-width="25" data-height="45"/>
+  <text x="387.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="400" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="400" data-y="806" data-width="25" data-height="45"/>
+  <text x="412.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="425" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="425" data-y="806" data-width="25" data-height="45"/>
+  <text x="437.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="450" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450" data-y="806" data-width="25" data-height="45"/>
+  <text x="462.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="475" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="475" data-y="806" data-width="25" data-height="45"/>
+  <text x="487.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="500" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="500" data-y="806" data-width="25" data-height="45"/>
+  <text x="512.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="525" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="525" data-y="806" data-width="25" data-height="45"/>
+  <text x="537.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="550" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="550" data-y="806" data-width="25" data-height="45"/>
+  <text x="562.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="575" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="575" data-y="806" data-width="25" data-height="45"/>
+  <text x="587.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="600" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="600" data-y="806" data-width="25" data-height="45"/>
+  <text x="612.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="625" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="625" data-y="806" data-width="25" data-height="45"/>
+  <text x="637.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <text x="250" y="883" text-anchor="start" class="sans label" fill="#182230" font-weight="700">4 reserved / 12 data ways</text>
+  <rect x="750" y="806" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="750" data-y="806" data-width="25" data-height="45"/>
+  <text x="762.5" y="835" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="775" y="806" width="25" height="45" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="775" data-y="806" data-width="25" data-height="45"/>
+  <text x="787.5" y="835" text-anchor="middle" class="sans body" fill="#182230">M</text>
+  <rect x="800" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="800" data-y="806" data-width="25" data-height="45"/>
+  <text x="812.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="825" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="825" data-y="806" data-width="25" data-height="45"/>
+  <text x="837.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="850" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="850" data-y="806" data-width="25" data-height="45"/>
+  <text x="862.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="875" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="875" data-y="806" data-width="25" data-height="45"/>
+  <text x="887.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="900" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="900" data-y="806" data-width="25" data-height="45"/>
+  <text x="912.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="925" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="925" data-y="806" data-width="25" data-height="45"/>
+  <text x="937.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="950" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="950" data-y="806" data-width="25" data-height="45"/>
+  <text x="962.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="975" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="975" data-y="806" data-width="25" data-height="45"/>
+  <text x="987.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1000" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1000" data-y="806" data-width="25" data-height="45"/>
+  <text x="1012.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1025" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1025" data-y="806" data-width="25" data-height="45"/>
+  <text x="1037.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1050" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1050" data-y="806" data-width="25" data-height="45"/>
+  <text x="1062.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1075" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1075" data-y="806" data-width="25" data-height="45"/>
+  <text x="1087.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1100" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1100" data-y="806" data-width="25" data-height="45"/>
+  <text x="1112.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <rect x="1125" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1125" data-y="806" data-width="25" data-height="45"/>
+  <text x="1137.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
+  <text x="750" y="883" text-anchor="start" class="sans label" fill="#182230" font-weight="700">2 reserved / 14 data ways</text>
+  <text x="40" y="933" text-anchor="start" class="sans body" fill="#C63C4A">SE uses a different six-bit-value encoding. A two-way undercharge of full P-OPT is not SE.</text>
+  <circle cx="44" cy="976" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="982" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="983" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ECG COST IS NOT ZERO</text>
+  <text x="1158" y="982" text-anchor="end" class="sans body" fill="#475467">separate data capacity, on-chip state and backing storage</text>
+  <line x1="24" y1="1002" x2="1176" y2="1002" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="1002" x2="170" y2="1002" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="40" y="1032" text-anchor="start" class="sans body" fill="#182230">At 8 MiB: Scale6 retains 16 data ways and adds about 560 KiB of line/controller state.</text>
+  <text x="40" y="1064" text-anchor="start" class="sans body" fill="#C63C4A">That is not yet an equal-area comparison. Total metadata-footprint ratios are not silicon-area ratios.</text>
+  <text x="40" y="1097" text-anchor="start" class="sans body" fill="#475467">The two SE post-final interpretations are disclosed reconstructions, not bit-exact paper reproductions.</text>
+</svg>

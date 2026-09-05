@@ -1,120 +1,83 @@
-# Property-Load Request: End-to-End Example
+# A checked Scale6 edge-to-cache example
 
-This page derives one fixture-backed adjacency entry from graph structure,
-then traces its ReusePlan through instruction execution, ReuseBind attachment,
-cache access, and a later LLC victim-selection decision.
+This example uses the topology in `fig/ecg-figure-fixture.json`. Its sparse
+internal IDs make cache-line sharing visible. The fixture is undirected, so
+incoming and outgoing rows agree; PageRank pull traverses the in-neighbors.
+Weights in the source fixture are irrelevant to this property-access example.
 
-## 1. Figure fixture
+## 1. Record, address, and future bound
 
-`fig/ecg-figure-fixture.json` uses a nine-node, 17-edge weighted
-topology with fixture IDs `0..8`. A declared fixture-to-internal map places
-those vertices in a 32-entry property space so cache-line grouping remains
-visible.
-Here, the **outer vertex** is the vertex of the outer loop that owns the
-current adjacency row. The selected source edge is `4 -> 7`, mapped to internal
-source and destination vertices `8 -> 18`.
+### Figure 1 — One edge word, one property line, one update
 
-| Item | Derived value |
+![Checked Scale6 record 0x10000012 decoded into vertex 18 and token four, ordinary property address 0x80000048 and line 0x80000040, and the distinction between immediate LLC stamping, delayed refresh and safe expiry](../fig/wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg)
+
+**Figure 1.** Fixture adjacency `4 -> 7` maps to internal outer vertex `8`
+and property vertex `18`. The in-neighbor row is `[3, 6, 7, 11, 18]`, stored
+at edge positions `[14, 19)`. Position `18` is sequence `19` in the model's
+one-based governed-request coordinate.
+
+| Quantity | Derived value |
 |---|---|
-| source vertices in `N_in(18)` | internal IDs `8, 11, 15, 20` |
-| in-degree of destination vertex 18 | `d_in(18) = 4` |
-| stable in-degree-rank tier | `1` (hot) |
-| subsequent property-block access epochs after outer vertex 8 | `11, 15` |
-| property base | `0x8000_0000` |
-| property address | `0x8000_0000 + 18*4 = 0x8000_0048` |
-| 64-byte property line | `0x8000_0040`, vertices 16–31 |
-| compact width | `5 + 2 + 2*5 = 17` bits |
+| property vertex | `18` |
+| current edge position / sequence | `18` / `19` |
+| next access to the same property line | position `22`, sequence `23` |
+| true request distance | `22 - 18 = 4` |
+| finite token | `2 + floor(log2(4)) = 4` |
+| decoded upper-bound distance | `2^(2 + 1) - 1 = 7` |
+| packed word with forced 26-bit IDs | `(4 << 26) | 18 = 0x10000012` |
+| property address | `0x80000000 + 18 * 4 = 0x80000048` |
+| property cache line | `0x80000040`, vertices `16..31` |
+| candidate deadline | `19 + 7 = 26` |
 
-### Figure 1 — From adjacency entry 4 -> 7 to LLC line 0x80000040
+Vertex `20` shares this property line. The next-line-use calculation
+therefore scans all requests to vertices `16..31`, not just vertex `18`.
+The generator derives these values from the fixture rather than maintaining
+a separately typed diagram example.
 
-![End-to-end drawing of weighted graph adjacency entry 4 to 7, internal destination vertex 18, compact ReusePlan fields, the RISC-V instruction pair, separate record and property MSHRs, the LLC line schedule, and in-order retirement](../fig/wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg)
+## 2. Do not turn quantization into false certainty
 
-**Figure 1.** For the out-neighbor example, source vertex 4 processes adjacency
-entry `(4,7)` and reads property value `p[7]`; the fixture-to-internal mapping
-changes this to outer vertex 8 and destination vertex 18. Callouts `A` through
-`E` identify the corresponding ReusePlan, renamed operand, property Request,
-MSHR state, and LLC line state.
-The record and property Requests use separate address lanes and therefore
-separate MSHRs; only same-property-block targets can merge ReuseBind state.
+A demand LLC hit/fill can stamp the request-bound prediction. Holding this
+prediction fixed, its effective state becomes UNKNOWN at sequence `27`;
+that does not prove the line is dead. Subsequent hits and commit refreshes
+can replace the prediction with a newer one.
 
-At outer vertex 8, whose quantized current epoch is 8:
+The modeled commit channel has an eight-request delay. That is longer than
+this example's seven-request decoded bound, so a delayed copy of this exact
+prediction may already be expired. It must be discarded, not drawn as a
+freshly installed deadline at arrival. A newer coalesced update has its own
+sequence and deadline.
 
-```text
-d1 = (11 + 32 - 8) mod 32 = 3
-d2 = (15 + 32 - 8) mod 32 = 7
-nearest = 3
-```
+This is functional-model arithmetic, not an assertion that a completed gem5
+Scale6 instruction or retirement route exists.
 
-The current epoch used by a later victim decision may differ from the epoch at
-fill or refresh; the line stores absolute future epochs, not a permanently
-fixed distance.
+## 3. Storage ownership and lifetime
 
-## 2. Instruction and cache sequence
+### Figure 2 — Where Scale6 metadata lives
 
-1. The offline builder emits the edge-aligned logical record
-   `(destination=18, tier=1, epoch1=11, epoch2=15)`.
-2. `ecg.flow.load.compact` reads the record and returns a canonical ReusePlan
-   in an integer register. Its Request may use FlowThrough.
-3. `ecg.bind.load.u32` reads the computed address `0x8000_0048` and names the
-   ReusePlan register as `rs2`.
-4. The LSQ attaches the typed ReuseBind extension to that property Request.
-5. An LLC hit or fill accepts it only when context and destination line match.
-6. The property value writes back and retires normally.
-7. A later RRIP-first victim selection uses the stamp only if the line is
-   max-RRPV eligible and no eligible structural line wins first.
+![Containment map separating persistent CSR and property memory, temporary line-indexed preprocessing scratch, bounded commit and prefetch queues, sixteen-record lookahead, and 35 added bits per LLC line with the 8 MiB state total](../fig/wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg)
 
-FlowThrough changes record fill allocation. ReuseBind changes advisory
-property-line metadata. Neither changes the property value.
+**Figure 2.** Persistent graph records, temporary construction arrays, and
+runtime metadata have different lifetimes and cost domains. At an 8 MiB,
+64-byte-line LLC there are 131,072 lines. The accounted 35 added bits per line
+contribute 4,587,520 bits; the queues, lookahead and control add 3,064 bits,
+for 4,590,584 bits total, about 560 KiB.
 
-The Request extension also carries epoch count, current epoch, context ID,
-dynamic sequence, and a conflict bit. The two-epoch ReusePlan path uses the
-tier and both epochs. Legacy compatibility fields remain in the
-implementation for older single-epoch modes.
+The edge token has no added sidecar cost because it replaces unused space in
+the same four-byte destination record. The LLC/controller state is still an
+additional on-chip cost. Keeping all data ways is not automatically keeping
+the same silicon area.
 
-## 3. State placement
+Compare P-OPT's active payload, rounded reserved-way capacity, complete DRAM
+matrix and transfer traffic separately. A footprint ratio against the
+complete matrix is not an area measurement.
 
-### Figure 2 — ReusePlan state placement across software, core, and LLC
+## 4. Supported evidence
 
-![Architecture containment map placing immutable records, ECG control CSRs, renamed operands, load-queue state, typed Requests, MSHR merge state, and line-local LLC metadata](../fig/wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg)
+cache_sim implements this record and cache policy. Native Scale6 request
+binding, retirement delivery, cycle-timed prefetching and physical-cost
+qualification remain distinct work. The existing RISC-V ReuseBind path and
+older RTL components cannot stand in for that missing implementation.
 
-**Figure 2.** Containment denotes storage; the retained arrow denotes the
-property-response transfer and its per-hit/fill cadence.
-
-| State | Owner and lifetime |
-|---|---|
-| record/sidecar bytes | immutable memory input, validated before ROI |
-| record-format CSR | architectural context, configured before ROI |
-| current-epoch CSR | architectural context, changed at epoch boundaries |
-| context CSR | architectural execution identity |
-| ReusePlan physical register | record completion through dependent property issue |
-| ReuseBind Request extension | one dynamic property Request and compatible MSHR merge |
-| MSHR ECG state | active miss target list |
-| line tier/epochs/context | accepted LLC line until refresh, invalidation, or eviction |
-| property value | ordinary destination-register and ROB lifetime |
-
-## 4. Backend scope
-
-The shared `selectVictim` function makes the final victim decision from native
-per-way state, but the backends are not cycle-identical:
-
-- **gem5 O3** executes the experimental RISC-V path and provides architectural
-  timing evidence.
-- **cache_sim** models declared graph-data accesses, replacement, prefetching,
-  and traffic without cycles or instructions.
-- **Sniper** provides matched-work modeled cache/traffic evidence. The default
-  indexed ReusePlan path uses per-edge markers; computed fused sideband rows
-  are diagnostic and fail closed when one source-vertex/cache-line combination
-  requires inconsistent hints.
-
-Absolute miss rates are not compared across simulators.
-
-## 5. Implementation sources
-
-| Layer | Source |
-|---|---|
-| fixture and generated figures | `fig/ecg-figure-fixture.json`, `scripts/docs/generate_ecg_figures.py` |
-| construction and formats | `bench/include/ecg_reuse_plan_builder.h` |
-| distance and victim selection | `bench/include/ecg_victim_policy.h` |
-| gem5 Request/MSHR path | `bench/include/gem5_sim/overlays/mem/cache/` |
-| gem5 replacement adapter | `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_rp.cc` |
-| Sniper replacement adapter | `bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/cache_set_ecg.cc` |
+See [RISC-V integration](RISC-V-Instruction-Path),
+[Scale6 cache control](ReusePlan-FlowThrough), and
+[Evaluation methodology](Evaluation-Methodology).

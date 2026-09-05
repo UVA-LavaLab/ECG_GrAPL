@@ -3,12 +3,14 @@
 This page defines what each ECG experiment can establish. It contains no
 performance results.
 
-### Figure 1 — Evaluation evidence and admissible claims
+### Figure 1 — Cache evidence is not a timing or area result
 
-![Evidence hierarchy separating gem5 O3 architectural timing, cache_sim functional cache and traffic evidence, Sniper matched-work modeled cache and traffic evidence, row acceptance receipts, and optimistic P-OPT limits](../fig/wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg)
+![Scale6 evidence boundary separating implemented cache-simulator behavior from pending native gem5 and physical-cost work, with distinct demand, total traffic and storage metrics and fail-closed matched-work acceptance](../fig/wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg)
 
-**Figure 1.** A result row is accepted only after mechanism activity and
-semantic output are both verified.
+**Figure 1.** A result row requires matching work and active mechanisms.
+Scale6 currently supplies functional cache/traffic evidence, not native
+cycle timing or measured silicon area. The older gem5 and RTL implementations
+do not transfer that implementation status to Scale6.
 
 ## 1. Simulator roles
 

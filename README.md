@@ -1,73 +1,77 @@
 <p align="center"><img src="wiki/assets/logo.png" alt="ECG graph logo" width="180"></p>
 
-# ECG Next
+# ECG
 
-**ReusePlan, ReuseBind, and FlowThrough cache mechanisms for irregular graph
-analytics**
+**Scale6: edge-carried future reuse for graph-cache management**
 
-ECG Next derives line-level reuse guidance from the adjacency traversal used by
-each graph kernel. **ReusePlan** is the offline edge-aligned metadata record,
-**ReuseBind** is the Request extension attached to the consuming property load,
-and **FlowThrough** is the no-allocate decision for eligible structural misses.
-These mechanisms do not change graph results or property values.
+ECG studies whether compact, graph-derived reuse information can improve cache
+behavior without a runtime P-OPT rereference matrix. The current candidate is
+**REF32 Scale6**: a 26-bit property vertex and a six-bit future token packed into
+the existing four-byte edge word. It combines line-local LLC predictions,
+bounded commit updates that include private-cache hits, and selective LLC-only
+prefetching.
 
-For an out-neighbor traversal, property `p[v]` is read once for each source
-vertex in `N_in(v)`; its property-request count is therefore `d_in(v)`. For an
-in-neighbor (pull) traversal, `p[v]` is read once for each destination vertex in
-`N_out(v)`; its property-request count is therefore `d_out(v)`.
+The current evidence is **functional cache behavior and traffic in cache_sim**,
+including full Twitter-2010. The native Scale6 gem5 path and physical
+area/timing qualification are not complete. Earlier ReusePlan, ReuseBind and
+FlowThrough implementations remain in the repository as separate mechanisms
+and controls; their implementation status is not evidence for a completed
+Scale6 port.
 
 ## Architecture overview
 
-![System overview showing ECG offline record construction, the two-load RISC-V instruction path, LLC replacement state, and simulator evidence boundaries](fig/wiki/home/home-f01-system-overview.svg)
+![Scale6 architecture separating in-place four-byte record construction, ordinary property accesses, private-hit commit refresh, bounded LLC prefetching, and the unfinished native timing path](fig/wiki/home/home-f01-system-overview.svg)
 
-The architecture keeps four boundaries explicit:
+The current design keeps four boundaries explicit:
 
-1. **Offline construction:** a kernel-direction-aware graph pass emits immutable
-   ReusePlan records in canonical CSR order.
-2. **Two dynamic loads:** a record load produces an explicit register operand;
-   a dependent property load issues the consuming memory Request.
-3. **Request-bound state:** gem5 O3 attaches destination, tier, two epochs,
-   current epoch, context, and sequence to that property Request through
-   ReuseBind.
-4. **LLC policy:** RRIP-first forms the eligible set, selects the oldest
-   eligible non-property line when one exists, and otherwise selects the
-   property line with the largest valid reuse distance.
+1. **Offline construction:** a traversal-specific pass encodes the next
+   property-line use in the in-edge CSR. The directed in-place builder uses
+   two arrays indexed by property line rather than extra arrays indexed by edge.
+2. **One ordinary-width record:** destination and future token share 32 bits.
+   The token distinguishes unknown, dead, finite-current and next-traversal
+   reuse. It carries a logarithmic distance class, not an exact future position.
+3. **Fresh, bounded LLC state:** a 16-entry commit-update channel closes the
+   private-hit freshness gap. A 16-record lookahead feeds an eight-entry,
+   LLC-only prefetch queue. Model latency is in governed requests, not cycles.
+4. **Explicit cost:** Scale6 keeps the LLC data ways, but its added
+   per-line/controller state is not free. On-chip state, reserved LLC capacity,
+   and a backing matrix in DRAM are separate cost domains.
 
-FlowThrough preserves translation, private-cache behavior, LLC hits, miss
-service, and response. It changes only whether an eligible returning structural
-miss receives fill allocation in the LLC. If a coalesced MSHR also contains an
-allocating target, the shared fill still allocates.
+For PageRank pull, the **outer vertex** `u` traverses in-neighbors `N_in(u)`;
+the **property vertex** `v` is read for destinations in `N_out(v)`. Its access
+count is `d_out(v)`. An out-neighbor traversal over `N_out(u)` instead has
+access count `d_in(v)`. Reuse metadata must follow the traversal actually used.
 
-The request-bound `ECG_FLOWTHROUGH` flag is the ReusePlan design mechanism.
-For controlled comparisons, `STRUCTURAL_FLOWTHROUGH` / `--flowthrough all`
-applies the same no-allocate rule to the active structural array used by each
-policy, either CSR or the packed ReusePlan array.
+The primary Scale6 comparisons use **FlowThrough off**. Optional structural
+no-allocation controls must be applied symmetrically; they are not silently
+included in the replacement or prefetch claim.
 
 ## Evidence boundary
 
-| Backend | Role |
+| Surface | Current role and limitation |
 |---|---|
-| **gem5 O3** | architectural timing evidence and dynamic Request binding |
-| **cache_sim** | functional cache behavior and off-chip traffic evidence |
-| **Sniper** | matched-work modeled cache and traffic evidence |
-| **RTL models** | synthesizable metadata and physical-cost components |
+| **cache_sim** | Scale6 functional results, demand LLC misses, and off-chip reads plus writes |
+| **gem5 O3** | Native timing backend; existing legacy ReuseBind path, but Scale6 delivery/commit/prefetch is pending |
+| **Sniper** | Legacy matched-work modeled corroboration; Scale6 rows remain unsupported |
+| **RTL models** | Earlier metadata/cost components; not a completed Scale6 physical implementation |
 
-Only gem5 O3 time is architectural speedup evidence. Analytic P-OPT time is an
-optimistic lower bound because target-time lookup latency, matrix-stream
-latency, bandwidth, queueing, and contention are omitted.
+Only a supported native timing path can establish architectural speedup.
+Request-count latency in cache_sim cannot be reinterpreted as processor cycles.
+Likewise, total metadata-footprint ratios against P-OPT's complete DRAM matrix
+are not silicon-area reductions.
 
-Sniper includes per-edge markers in its indexed path and computed fused-sideband
-diagnostics; neither path is architectural ReuseBind speedup evidence.
-
-The gem5 mechanism is an experimental RISC-V custom-0 implementation. It is
-not a ratified RISC-V extension or an upstream gem5 feature.
+Charged P-OPT reserves enough ways for its active columns at each graph/cache
+size. `POPT_SE` and `POPT_SE_DISTANT` reconstruct the paper's one-column format
+under two disclosed interpretations of an unspecified case. Both retain the
+full backing-matrix stream charge; neither is a fixed-two-way undercharge of
+ordinary P-OPT.
 
 ## Documentation
 
-- [ReusePlan and FlowThrough](wiki/ReusePlan-FlowThrough.md)
-- [RISC-V instruction path](wiki/RISC-V-Instruction-Path.md)
-- [End-to-end property Request example](wiki/Property-to-Cache-Walkthrough.md)
-- [Evaluation methodology](wiki/Evaluation-Methodology.md)
+- [Scale6 records and cache control](wiki/ReusePlan-FlowThrough.md)
+- [RISC-V integration: existing support and Scale6 target](wiki/RISC-V-Instruction-Path.md)
+- [A checked edge-to-cache example](wiki/Property-to-Cache-Walkthrough.md)
+- [Evaluation methodology and results](wiki/Evaluation-Methodology.md)
 - [Related work](wiki/Related-Work.md)
 - [Build and reproduction](wiki/Reproduction.md)
 - [Repository hygiene](wiki/Repository-Hygiene.md)
@@ -76,14 +80,15 @@ not a ratified RISC-V extension or an upstream gem5 feature.
 
 | Path | Purpose |
 |---|---|
-| `bench/include/` | shared policy, metadata, ISA, and simulator integration |
+| `bench/include/` | shared record, policy, ISA and simulator integration |
 | `bench/src_sim/` | functional cache-simulator graph kernels |
-| `bench/src_gem5/` | gem5 graph kernels |
+| `bench/src_gem5/` | gem5 graph kernels and legacy request-bound delivery |
 | `bench/src_sniper/` | Sniper graph workload |
-| `bench/src_rtl/` | synthesizable ReusePlan cost models |
+| `bench/src_rtl/` | existing ReusePlan cost models |
 | `scripts/experiments/ecg/` | experiment runners and fail-closed gates |
-| `scripts/docs/` and `fig/` | deterministic public figure generation |
-| `wiki/` | architecture, methodology, and reproduction guides |
+| `scripts/docs/` and `fig/` | deterministic SVG figures and editable Draw.io mirrors |
+| `wiki/` | architecture, evidence, and reproduction guides |
 
-Generated experiment output remains under `results/` and is not tracked.
-Performance tables are published only after the frozen evaluation completes.
+Experiment output remains under `results/` and is not tracked. Wiki and
+conference-paper figures have separate generators and layouts; changing a
+wiki plate never compresses or overwrites its paper counterpart.

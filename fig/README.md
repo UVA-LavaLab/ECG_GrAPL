@@ -1,9 +1,9 @@
 # ECG figures
 
-This directory contains ECG's published SVG figures, editable Draw.io mirrors,
-and tightly cropped vector PDFs for conference-paper embedding. This file
-records the deterministic generation contract, visual roles, provenance, and
-page registration.
+This directory contains ECG's public SVG figures and editable Draw.io mirrors.
+The wiki collection describes the current Scale6 model and its pending native
+integration. The separate paper collection preserves the earlier ReusePlan
+layouts; it is not a completed Scale6 paper figure set.
 
 Two independent collections are generated from the same primitives:
 
@@ -53,7 +53,7 @@ orthogonal; only graph/model edges may be diagonal.
 | neutral / annotation | `#98A2B3` | `#F8FAFC` |
 | graph data / request data | `#2563EB` | `#EFF6FF` |
 | local compute / accepted state | `#0F8A72` | `#ECFDF5` |
-| transfer / FlowThrough | `#C56A13` | `#FFF7ED` |
+| transfer / prefetch / controls | `#C56A13` | `#FFF7ED` |
 | verification / rejection | `#C63C4A` | `#FFF1F2` |
 | policy / metadata state | `#6558C5` | `#F5F3FF` |
 
@@ -61,32 +61,36 @@ Visual styling uses dark navy headings, thin slate borders, mostly white or
 near-white surfaces, and one or two semantic accents per local flow. Full-panel
 fills are not the primary hierarchy cue.
 
-Instruction and pseudocode text uses the same semantic colors: record and
-FlowThrough mnemonics are amber, property-load mnemonics are green, register
-names and ReusePlan operands are purple, addresses/data are blue, and rejected
-or invalid state is red. SVG and Draw.io mirrors retain this token-level
-highlighting.
+Demand and graph-data paths are blue; future state, dependencies and commit
+refresh are purple; local computation is green; prefetch and transfer
+accounting are amber; invalid or unsupported states are red. Wiki annotation
+text uses higher-contrast slate, reserving pale gray for background graph
+edges. SVG and Draw.io mirrors retain the same labels and semantic roles.
 
 ## Sources and evidence scope
 
 The fixture-backed mechanism example is `fig/ecg-figure-fixture.json`. The
-generator derives its adjacency rows, degree-based property-request counts,
-tier, subsequent-access epochs, record width, property address, cache line, and
-circular distances. Tests independently recompute the same values.
+generator derives canonical request positions, next property-line use,
+logarithmic token, packed word, address and deadline. It forces the 26-bit
+Scale6 layout. Independent fixture derivation and the actual C++ token and
+lookup helpers pin those values.
 
 Architecture vocabulary and values trace to:
 
-- `bench/include/ecg_reuse_plan_builder.h` for records, tiers, epochs, and
-  weighted formats;
-- `bench/include/ecg_victim_policy.h` for line state, distance, insertion, and
-  victim selection;
+- `bench/include/ecg_ref32.h` for current records, quantization, builders,
+  prefetch selection, expiry and victim ranking;
+- `bench/include/cache_sim/cache_sim.h` for bounded update/prefetch channels,
+  line state and resource accounting;
+- `bench/include/cache_sim/graph_cache_context.h` and `bench/src_sim/pr.cc`
+  for record consumption, traversal position and context;
 - `bench/include/gem5_sim/overlays/arch/riscv/` and
-  `bench/include/gem5_sim/gem5_harness.h` for instruction roles;
+  `bench/include/gem5_sim/gem5_harness.h` for existing legacy instruction
+  roles, not a completed native Scale6 port;
 - `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh`
   and `bench/include/gem5_sim/overlays/mem/cache/mshr_ecg_merge.patch` for
   Request and MSHR state;
 - `bench/include/gem5_sim/overlays/mem/cache/base_flowthrough.patch` for
-  allocation behavior; and
+  legacy allocation controls, which remain off in primary Scale6 runs; and
 - `scripts/experiments/ecg/roi_matrix.py` for simulator roles and fail-closed
   row validation.
 
@@ -97,35 +101,43 @@ The construction, instruction, and cache figures use one common fixture:
 | Quantity | Value |
 |---|---|
 | adjacency entry | fixture `4 -> 7`; internal `8 -> 18` |
-| compact ReusePlan | destination `18`, tier `T1`, epochs `11` and `15` |
+| current / next property-line edge position | `18` / `22` |
+| governed request sequence | `19`, one-based |
+| true / decoded next-use distance | `4` / `7` requests |
+| Scale6 token and word | token `4`; `0x10000012` |
 | property address | `0x80000048` |
 | property line | `0x80000040`, containing vertices `16..31` |
-| current and nearest reuse distance | epoch `8`; `min(3, 7) = 3` |
+| deadline / expiry | deadline `26`; UNKNOWN at `27` if not refreshed |
 
-The figures describe implemented and modeled architecture. They do not report
-performance measurements. gem5 O3 provides architectural timing evidence;
-cache_sim provides functional cache/traffic evidence; Sniper provides
-matched-work modeled cache/traffic evidence. Analytic P-OPT timing remains an
-optimistic lower bound because target-time lookup latency, matrix-stream
-latency, bandwidth, queueing, and contention are omitted.
+The figures do not report speedup measurements. cache_sim implements Scale6
+and supplies cache/traffic evidence. The native gem5 Scale6 request,
+retirement and prefetch path remains pending; existing ReuseBind support does
+not establish it. Sniper Scale6 rows remain unsupported. State-bit accounting
+is not silicon area, and analytic P-OPT matrix traffic does not establish
+target-time stream latency.
+
+The prefetch window is explicitly illustrative: first appearances of lines
+D, E and F at leads 8, 10 and 13 have future bounds 31, 7 and 15. The actual
+C++ selector chooses E at lead 10. Commit FIFOs show 16 slots; prefetch FIFOs
+show eight.
 
 ## Figure register
 
 | Figure | Visible title | Embedding page |
 |---|---|---|
-| [`home/home-f01-system-overview.svg`](wiki/home/home-f01-system-overview.svg) | ECG dataflow from graph preprocessing to LLC replacement | [`Home.md`](../wiki/Home.md) Figure 1; repository README overview |
-| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg) | Constructing an edge-aligned ReusePlan | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 1 |
-| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f02-record-formats.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f02-record-formats.svg) | ReusePlan record formats and structural traffic | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 2 |
-| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg) | Quantized next-reference distance for one property line | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 3 |
-| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f04-llc-policy-pipeline.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f04-llc-policy-pipeline.svg) | ReuseBind acceptance and RRIP-first victim selection | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 4 |
-| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f05-flowthrough-outcomes.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f05-flowthrough-outcomes.svg) | FlowThrough lookup, service, and LLC fill allocation | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 5 |
-| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f06-structural-fairness.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-structural-fairness.svg) | FlowThrough mechanism and matched structural-array control | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 6 |
-| [`risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg) | RISC-V record-load and property-load instruction roles | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 1 |
-| [`risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg) | ReusePlan loads in an out-of-order core | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 2 |
-| [`risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg) | ReuseBind merge, response, and line-metadata lifetime | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 3 |
-| [`property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg`](wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg) | From adjacency entry 4 -> 7 to LLC line 0x80000040 | [`Property-to-Cache-Walkthrough.md`](../wiki/Property-to-Cache-Walkthrough.md) Figure 1 |
-| [`property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg`](wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg) | ReusePlan state placement across software, core, and LLC | [`Property-to-Cache-Walkthrough.md`](../wiki/Property-to-Cache-Walkthrough.md) Figure 2 |
-| [`evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg`](wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg) | Evaluation evidence and admissible claims | [`Evaluation-Methodology.md`](../wiki/Evaluation-Methodology.md) Figure 1 |
+| [`home/home-f01-system-overview.svg`](wiki/home/home-f01-system-overview.svg) | Scale6: future reuse in the existing edge word | [`Home.md`](../wiki/Home.md) Figure 1; repository README overview |
+| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg) | Building Scale6 records in traversal order | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 1 |
+| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f02-record-formats.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f02-record-formats.svg) | One 32-bit record, including Twitter-sized IDs | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 2 |
+| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg) | From the next use to a conservative deadline | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 3 |
+| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f04-llc-policy-pipeline.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f04-llc-policy-pipeline.svg) | Fresh LLC state and Scale6 victim selection | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 4 |
+| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f05-lookahead-prefetch.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f05-lookahead-prefetch.svg) | Selective prefetch from the record stream | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 5 |
+| [`reuse-plan-flowthrough/reuse-plan-flowthrough-f06-capacity-accounting.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-capacity-accounting.svg) | P-OPT columns and the LLC capacity budget | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 6 |
+| [`risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg) | RISC-V integration: existing path and next step | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 1 |
+| [`risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg) | Target Scale6 path through an out-of-order core | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 2 |
+| [`risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg) | Request lifetime is not metadata lifetime | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 3 |
+| [`property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg`](wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg) | One edge word, one property line, one update | [`Property-to-Cache-Walkthrough.md`](../wiki/Property-to-Cache-Walkthrough.md) Figure 1 |
+| [`property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg`](wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg) | Where Scale6 metadata lives | [`Property-to-Cache-Walkthrough.md`](../wiki/Property-to-Cache-Walkthrough.md) Figure 2 |
+| [`evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg`](wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg) | Cache evidence is not a timing or area result | [`Evaluation-Methodology.md`](../wiki/Evaluation-Methodology.md) Figure 1 |
 
 ## Conference-paper figure set
 

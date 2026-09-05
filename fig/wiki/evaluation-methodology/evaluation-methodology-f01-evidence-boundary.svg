@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1120" viewBox="0 0 1200 1120" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Evaluation evidence and admissible claims</title>
-  <desc id="desc">The figure separates the questions answered by gem5 O3, cache_sim, and Sniper; identifies semantic receipts and activity counters as acceptance gates; and marks analytic P-OPT timing as an optimistic bound because matrix-stream latency, queueing, and bandwidth are not target-time charged.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1240" viewBox="0 0 1200 1240" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">Cache evidence is not a timing or area result</title>
+  <desc id="desc">The plate separates current cache_sim results from the pending Scale6 gem5 implementation and physical-cost evidence. Demand misses, prefetch traffic, writebacks and P-OPT matrix traffic are distinct accounting terms. Acceptance requires matching PageRank results and bounded active mechanisms. The single-epoch baseline is labeled as a reconstruction.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,84 +34,94 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1120" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Evaluation evidence and admissible claims</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Rows are compared only with matching baselines inside the same simulator.</text>
+  <rect x="0" y="0" width="1200" height="1240" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Cache evidence is not a timing or area result</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Scale6 promotion needs matching work, active mechanisms, and a native implementation of the timed path.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">SIMULATOR ROLES</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#98A2B3">do not compare absolute rates or time across simulators</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">CURRENT EVIDENCE AND REMAINING WORK</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">do not transfer a legacy backend&#x27;s status to Scale6</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="190" width="1120" height="260" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="190" data-width="1120" data-height="260"/>
-  <line x1="320" y1="190" x2="320" y2="450" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="600" y1="190" x2="600" y2="450" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="880" y1="190" x2="880" y2="450" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="240" x2="1160" y2="240" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="180" y="222" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">gem5 O3</text>
-  <text x="460" y="222" text-anchor="middle" class="sans label" fill="#2563EB" font-weight="700">cache_sim</text>
-  <text x="740" y="222" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">Sniper</text>
-  <text x="1020" y="222" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">Claim output</text>
-  <text x="56" y="280" text-anchor="start" class="sans body" fill="#182230">architectural time</text>
-  <text x="56" y="310" text-anchor="start" class="sans body" fill="#182230">exact Request binding</text>
-  <text x="56" y="340" text-anchor="start" class="sans body" fill="#182230">native LSQ/MSHR/cache</text>
-  <text x="336" y="280" text-anchor="start" class="sans body" fill="#182230">functional victim logic</text>
-  <text x="336" y="310" text-anchor="start" class="sans body" fill="#182230">off-chip traffic</text>
-  <text x="336" y="340" text-anchor="start" class="sans body" fill="#182230">no cycle/instruction model</text>
-  <text x="616" y="280" text-anchor="start" class="sans body" fill="#182230">modeled cache direction</text>
-  <text x="616" y="310" text-anchor="start" class="sans body" fill="#182230">exact indexed markers</text>
-  <text x="616" y="340" text-anchor="start" class="sans body" fill="#182230">computed fused sideband</text>
-  <text x="616" y="370" text-anchor="start" class="sans body" fill="#182230">is diagnostic</text>
-  <text x="616" y="400" text-anchor="start" class="sans body" fill="#182230">inconsistent hints</text>
-  <text x="616" y="430" text-anchor="start" class="sans body" fill="#182230">fail closed</text>
-  <text x="896" y="280" text-anchor="start" class="sans body" fill="#182230">gem5: timing speedup</text>
-  <text x="896" y="310" text-anchor="start" class="sans body" fill="#182230">cache_sim: traffic</text>
-  <text x="896" y="340" text-anchor="start" class="sans body" fill="#182230">Sniper: corroboration</text>
-  <circle cx="44" cy="510" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="516" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="517" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ROW ACCEPTANCE</text>
-  <text x="1158" y="516" text-anchor="end" class="sans body" fill="#98A2B3">a success-shaped fallback is not a valid experiment row</text>
-  <line x1="24" y1="536" x2="1176" y2="536" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="536" x2="170" y2="536" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="565" width="300" height="170" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="565" data-width="300" data-height="170"/>
-  <text x="190" y="598" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">Mechanism receipt vector</text>
-  <text x="58" y="632" text-anchor="start" class="sans body" fill="#182230">requested == effective</text>
-  <text x="58" y="656" text-anchor="start" class="sans body" fill="#182230">carrier + events positive</text>
-  <text x="58" y="680" text-anchor="start" class="sans body" fill="#182230">width/substitution agree</text>
-  <text x="58" y="704" text-anchor="start" class="sans body" fill="#182230">P-OPT matrix active if required</text>
-  <rect x="420" y="565" width="300" height="170" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="420" data-y="565" data-width="300" data-height="170"/>
-  <text x="570" y="598" text-anchor="middle" class="sans label" fill="#6558C5" font-weight="700">Semantic receipt vector</text>
-  <text x="438" y="632" text-anchor="start" class="sans body" fill="#182230">kernel output / edge budget</text>
-  <text x="438" y="656" text-anchor="start" class="sans body" fill="#182230">all matched policy rows agree</text>
-  <text x="438" y="680" text-anchor="start" class="sans body" fill="#182230">failed peer invalidates timing</text>
-  <text x="438" y="704" text-anchor="start" class="sans body" fill="#182230">not gated by speculation counts</text>
-  <polygon points="825,587.5 910.0,650 825,712.5 740.0,650" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="diamond" data-cx="825" data-cy="650" data-width="170" data-height="125"/>
-  <text x="825" y="637" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">mechanism</text>
-  <text x="825" y="668" text-anchor="middle" class="sans body" fill="#182230">AND semantic</text>
-  <rect x="965" y="595" width="195" height="110" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="965" data-y="595" data-width="195" data-height="110"/>
-  <text x="1062" y="632" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">accepted row</text>
-  <text x="1062" y="668" text-anchor="middle" class="sans body" fill="#182230">eligible for claims</text>
-  <path d="M340 650 L420 650" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Mechanism receipt vector"/>
-  <path d="M720 650 L740 650" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Semantic receipt vector"/>
-  <path d="M910 650 L965 650" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="accepted row"/>
-  <circle cx="44" cy="842" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="848" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="849" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">CLAIM LIMITS</text>
-  <text x="1158" y="848" text-anchor="end" class="sans body" fill="#98A2B3">state what is omitted before interpreting a ratio</text>
-  <line x1="24" y1="868" x2="1176" y2="868" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="868" x2="170" y2="868" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="895" width="1120" height="165" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="895" data-width="1120" data-height="165"/>
-  <line x1="600" y1="895" x2="600" y2="1060" stroke="#182230" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="56" y="928" text-anchor="start" class="sans label" fill="#C56A13" font-weight="700">Analytic P-OPT boundary</text>
-  <text x="56" y="962" text-anchor="start" class="sans body" fill="#182230">charged: reserved ways + cumulative matrix bytes</text>
-  <text x="56" y="992" text-anchor="start" class="sans body" fill="#182230">omitted: target-time latency / bandwidth / queueing</text>
-  <text x="56" y="1022" text-anchor="start" class="mono body" fill="#C63C4A" font-weight="700">popt_target_time_charged = 0 -&gt; optimistic timing bound</text>
-  <text x="616" y="928" text-anchor="start" class="sans label" fill="#C63C4A" font-weight="700">Publication vector</text>
-  <text x="616" y="962" text-anchor="start" class="sans body" fill="#182230">time + total off-chip traffic + instructions</text>
-  <text x="616" y="992" text-anchor="start" class="sans body" fill="#182230">same-build, same-cell baseline; geometric mean</text>
-  <text x="616" y="1022" text-anchor="start" class="mono body" fill="#182230">exclude timing_valid_for_speedup = 0</text>
-  <path d="M120 1095 L1080 1095" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="publish only after the frozen campaign"/>
-  <rect x="421.72" y="1063.00" width="356.56" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="600" y="1080" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">publish only after the frozen campaign</text>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="205" width="1120" height="255" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="205" data-width="1120" data-height="255"/>
+  <line x1="40" y1="256.0" x2="1160" y2="256.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="307.0" x2="1160" y2="307.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="358.0" x2="1160" y2="358.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="409.0" x2="1160" y2="409.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="52" y="233" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Surface</text>
+  <text x="52" y="284" text-anchor="start" class="sans body" fill="#182230">cache_sim</text>
+  <text x="52" y="335" text-anchor="start" class="sans body" fill="#182230">gem5 O3</text>
+  <text x="52" y="386" text-anchor="start" class="sans body" fill="#182230">Sniper</text>
+  <text x="52" y="437" text-anchor="start" class="sans body" fill="#182230">physical cost</text>
+  <line x1="250" y1="205" x2="250" y2="460" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="262" y="233" text-anchor="start" class="sans label" fill="#182230" font-weight="700">What it can establish</text>
+  <text x="262" y="284" text-anchor="start" class="sans body" fill="#182230">functional cache behavior and traffic</text>
+  <text x="262" y="335" text-anchor="start" class="sans body" fill="#182230">architectural timing with native requests</text>
+  <text x="262" y="386" text-anchor="start" class="sans body" fill="#182230">matched-work modeled corroboration</text>
+  <text x="262" y="437" text-anchor="start" class="sans body" fill="#182230">synthesized storage and control cost</text>
+  <line x1="690" y1="205" x2="690" y2="460" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="702" y="233" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Scale6 status</text>
+  <text x="702" y="284" text-anchor="start" class="sans body" fill="#182230">implemented; full Twitter exercised</text>
+  <text x="702" y="335" text-anchor="start" class="sans body" fill="#182230">Scale6 delivery / commit / prefetch pending</text>
+  <text x="702" y="386" text-anchor="start" class="sans body" fill="#182230">Scale6 rows unsupported</text>
+  <text x="702" y="437" text-anchor="start" class="sans body" fill="#182230">Scale6 area / timing not established</text>
+  <text x="40" y="506" text-anchor="start" class="sans body" fill="#182230">The existing gem5 extension and RTL cost models are not evidence of a completed Scale6 port.</text>
+  <circle cx="44" cy="568" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="574" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="575" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">KEEP THE ACCOUNTING TERMS SEPARATE</text>
+  <text x="1158" y="574" text-anchor="end" class="sans body" fill="#475467">all metrics refer to the same graph work and geometry</text>
+  <line x1="24" y1="594" x2="1176" y2="594" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="594" x2="170" y2="594" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="633" width="280" height="149" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="633" data-width="280" data-height="149"/>
+  <text x="54" y="661" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Demand LLC misses</text>
+  <text x="54" y="690" text-anchor="start" class="sans body" fill="#182230">not all memory transfers</text>
+  <text x="54" y="715" text-anchor="start" class="sans body" fill="#182230">prefetch can hide a miss</text>
+  <text x="54" y="740" text-anchor="start" class="sans body" fill="#182230">do not rename it speedup</text>
+  <rect x="435" y="633" width="345" height="149" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="435" data-y="633" data-width="345" data-height="149"/>
+  <text x="449" y="661" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Off-chip traffic</text>
+  <text x="449" y="690" text-anchor="start" class="sans body" fill="#182230">demand + prefetch reads</text>
+  <text x="449" y="715" text-anchor="start" class="sans body" fill="#182230">+ dirty writebacks</text>
+  <text x="449" y="740" text-anchor="start" class="sans body" fill="#182230">+ analytic P-OPT matrix stream</text>
+  <rect x="895" y="633" width="265" height="149" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="895" data-y="633" data-width="265" data-height="149"/>
+  <text x="909" y="661" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Metadata cost</text>
+  <text x="909" y="690" text-anchor="start" class="sans body" fill="#182230">DRAM backing matrix</text>
+  <text x="909" y="715" text-anchor="start" class="sans body" fill="#182230">reserved LLC capacity</text>
+  <text x="909" y="740" text-anchor="start" class="sans body" fill="#182230">extra on-chip state / logic</text>
+  <path d="M320 707 L435 707" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="add all traffic"/>
+  <rect x="304.60" y="603.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="378" y="620" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">add all traffic</text>
+  <path d="M780 707 L895 707" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="separate domains"/>
+  <rect x="760.04" y="603.00" width="155.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="838" y="620" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">separate domains</text>
+  <text x="40" y="826" text-anchor="start" class="sans body" fill="#C63C4A">popt_target_time_charged = 0: analytic matrix charging does not model target-time stream latency.</text>
+  <text x="40" y="858" text-anchor="start" class="sans body" fill="#C56A13">POPT_SE and POPT_SE_DISTANT are disclosed reconstructions; report both post-final interpretations.</text>
+  <circle cx="44" cy="918" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="924" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="925" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">FAIL CLOSED BEFORE COMPARING</text>
+  <text x="1158" y="924" text-anchor="end" class="sans body" fill="#475467">cache counters alone are not sufficient</text>
+  <line x1="24" y1="944" x2="1176" y2="944" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="944" x2="170" y2="944" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="977" width="290" height="139" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="977" data-width="290" data-height="139"/>
+  <text x="54" y="1005" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Same work</text>
+  <text x="54" y="1034" text-anchor="start" class="sans body" fill="#182230">graph / order / iterations</text>
+  <text x="54" y="1059" text-anchor="start" class="sans body" fill="#182230">edge count + score checksum</text>
+  <text x="54" y="1084" text-anchor="start" class="sans body" fill="#182230">same requested cache geometry</text>
+  <rect x="452" y="977" width="295" height="139" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="452" data-y="977" data-width="295" data-height="139"/>
+  <text x="466" y="1005" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Active mechanism</text>
+  <text x="466" y="1034" text-anchor="start" class="sans body" fill="#182230">record width and format</text>
+  <text x="466" y="1059" text-anchor="start" class="sans body" fill="#182230">commit / prefetch / state</text>
+  <text x="466" y="1084" text-anchor="start" class="sans body" fill="#182230">bounded queues and final drain</text>
+  <rect x="870" y="977" width="290" height="139" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="870" data-y="977" data-width="290" data-height="139"/>
+  <text x="884" y="1005" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Admissible comparison</text>
+  <text x="884" y="1034" text-anchor="start" class="sans body" fill="#182230">all required policy rows</text>
+  <text x="884" y="1059" text-anchor="start" class="sans body" fill="#182230">no missing/conflicting receipt</text>
+  <text x="884" y="1084" text-anchor="start" class="sans body" fill="#182230">no unsupported timing claim</text>
+  <path d="M330 1046 L452 1046" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="same work"/>
+  <rect x="344.96" y="1132.00" width="92.08" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="391" y="1149" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">same work</text>
+  <path d="M747 1046 L870 1046" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="active mechanism"/>
+  <rect x="730.04" y="1132.00" width="155.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="808" y="1149" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">active mechanism</text>
+  <text x="40" y="1196" text-anchor="start" class="sans body" fill="#C63C4A">Missing, mismatched or unsupported evidence must fail closed before any comparison is reported.</text>
 </svg>

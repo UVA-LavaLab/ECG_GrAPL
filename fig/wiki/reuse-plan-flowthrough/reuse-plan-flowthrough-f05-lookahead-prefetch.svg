@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1190" viewBox="0 0 1200 1190" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">Selective prefetch from the record stream</title>
+  <desc id="desc">An illustrative 16-record window identifies the first occurrence of a distinct property line between leads eight and fifteen. Eligible candidates are ranked by decoded future distance, with ties favoring lead ten. Resident, pending and admission filters precede an eight-entry LLC-only queue. The request-based model is not a claim of native cycle timing.</desc>
+  <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
+<marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
+<marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
+<marker id="arrow-red" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C63C4A"/></marker>
+<marker id="arrow-purple" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#6558C5"/></marker>
+<marker id="arrow-gray" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#98A2B3"/></marker>
+<marker id="arrow-ink" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#182230"/></marker><style>
+      :root { color-scheme: light dark; }
+      @media (prefers-color-scheme: dark) {
+        [fill="#FFFFFF"]{fill:#111827}[stroke="#FFFFFF"]{stroke:#111827}
+        [fill="#F8FAFC"]{fill:#172033}[stroke="#F8FAFC"]{stroke:#172033}
+        [fill="#EFF6FF"]{fill:#172554}[stroke="#EFF6FF"]{stroke:#172554}
+        [fill="#ECFDF5"]{fill:#073B34}[stroke="#ECFDF5"]{stroke:#073B34}
+        [fill="#FFF7ED"]{fill:#422A12}[stroke="#FFF7ED"]{stroke:#422A12}
+        [fill="#FFF1F2"]{fill:#421B22}[stroke="#FFF1F2"]{stroke:#421B22}
+        [fill="#F5F3FF"]{fill:#292349}[stroke="#F5F3FF"]{stroke:#292349}
+        [fill="#182230"]{fill:#F8FAFC}[stroke="#182230"]{stroke:#F8FAFC}
+        [fill="#475467"]{fill:#94A3B8}[stroke="#475467"]{stroke:#94A3B8}
+        [fill="#98A2B3"]{fill:#A8B0BF}[stroke="#98A2B3"]{stroke:#A8B0BF}
+        [fill="#2563EB"]{fill:#7FB0FF}[stroke="#2563EB"]{stroke:#7FB0FF}
+        [fill="#0F8A72"]{fill:#5ED0B0}[stroke="#0F8A72"]{stroke:#5ED0B0}
+        [fill="#C56A13"]{fill:#F0B36A}[stroke="#C56A13"]{stroke:#F0B36A}
+        [fill="#6558C5"]{fill:#ADA4FF}[stroke="#6558C5"]{stroke:#ADA4FF}
+        [fill="#C63C4A"]{fill:#F48B98}[stroke="#C63C4A"]{stroke:#F48B98}
+      }
+      .sans{font-family:"Liberation Sans","DejaVu Sans",Arial,sans-serif}
+      .mono{font-family:"DejaVu Sans Mono","Liberation Mono",Consolas,monospace}
+      .title{font-size:32px;font-weight:700}
+      .subtitle{font-size:18px}
+      .heading{font-size:22px;font-weight:700}
+      .label{font-size:17px;font-weight:700}
+      .body{font-size:16px}
+</style></defs>
+  <rect x="0" y="0" width="1200" height="1190" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Selective prefetch from the record stream</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">No action bits are added to the edge word. All extra fills count as off-chip traffic.</text>
+  <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">A BOUNDED WINDOW, NOT A FUTURE TABLE</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">illustrative line IDs; separate from the checked fixture</text>
+  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="75" y="211" text-anchor="middle" class="sans body" fill="#182230">now</text>
+  <rect x="40" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="235" data-width="70" data-height="76"/>
+  <text x="75" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">A</text>
+  <text x="145" y="211" text-anchor="middle" class="sans body" fill="#182230">+1</text>
+  <rect x="110" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="110" data-y="235" data-width="70" data-height="76"/>
+  <text x="145" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">A</text>
+  <text x="215" y="211" text-anchor="middle" class="sans body" fill="#182230">+2</text>
+  <rect x="180" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="180" data-y="235" data-width="70" data-height="76"/>
+  <text x="215" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">B</text>
+  <text x="285" y="211" text-anchor="middle" class="sans body" fill="#182230">+3</text>
+  <rect x="250" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="250" data-y="235" data-width="70" data-height="76"/>
+  <text x="285" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">B</text>
+  <text x="355" y="211" text-anchor="middle" class="sans body" fill="#182230">+4</text>
+  <rect x="320" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="320" data-y="235" data-width="70" data-height="76"/>
+  <text x="355" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">C</text>
+  <text x="425" y="211" text-anchor="middle" class="sans body" fill="#182230">+5</text>
+  <rect x="390" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="390" data-y="235" data-width="70" data-height="76"/>
+  <text x="425" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">C</text>
+  <text x="495" y="211" text-anchor="middle" class="sans body" fill="#182230">+6</text>
+  <rect x="460" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="460" data-y="235" data-width="70" data-height="76"/>
+  <text x="495" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">A</text>
+  <text x="565" y="211" text-anchor="middle" class="sans body" fill="#182230">+7</text>
+  <rect x="530" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="530" data-y="235" data-width="70" data-height="76"/>
+  <text x="565" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">C</text>
+  <text x="635" y="211" text-anchor="middle" class="sans body" fill="#182230">+8</text>
+  <rect x="600" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="600" data-y="235" data-width="70" data-height="76"/>
+  <text x="635" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">D</text>
+  <text x="705" y="211" text-anchor="middle" class="sans body" fill="#182230">+9</text>
+  <rect x="670" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="670" data-y="235" data-width="70" data-height="76"/>
+  <text x="705" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">D</text>
+  <text x="775" y="211" text-anchor="middle" class="sans body" fill="#182230">+10</text>
+  <rect x="740" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#0F8A72" stroke-width="1.5" data-shape="rect" data-x="740" data-y="235" data-width="70" data-height="76"/>
+  <text x="775" y="282" text-anchor="middle" class="sans heading" fill="#0F8A72" font-weight="700">E</text>
+  <text x="845" y="211" text-anchor="middle" class="sans body" fill="#182230">+11</text>
+  <rect x="810" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="810" data-y="235" data-width="70" data-height="76"/>
+  <text x="845" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">D</text>
+  <text x="915" y="211" text-anchor="middle" class="sans body" fill="#182230">+12</text>
+  <rect x="880" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="880" data-y="235" data-width="70" data-height="76"/>
+  <text x="915" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">E</text>
+  <text x="985" y="211" text-anchor="middle" class="sans body" fill="#182230">+13</text>
+  <rect x="950" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="950" data-y="235" data-width="70" data-height="76"/>
+  <text x="985" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">F</text>
+  <text x="1055" y="211" text-anchor="middle" class="sans body" fill="#182230">+14</text>
+  <rect x="1020" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1020" data-y="235" data-width="70" data-height="76"/>
+  <text x="1055" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">F</text>
+  <text x="1125" y="211" text-anchor="middle" class="sans body" fill="#182230">+15</text>
+  <rect x="1090" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1090" data-y="235" data-width="70" data-height="76"/>
+  <text x="1125" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">F</text>
+  <line x1="600" y1="331" x2="1158" y2="331" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="880" y="365" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">candidate leads 8..15</text>
+  <text x="40" y="411" text-anchor="start" class="sans body" fill="#182230">Reject the current line and any line already seen earlier in the lookahead.</text>
+  <text x="40" y="442" text-anchor="start" class="sans body" fill="#182230">Rank eligible lines by the smallest decoded future bound; break ties toward lead 10.</text>
+  <circle cx="44" cy="503" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="509" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="510" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">SELECT, FILTER, THEN ENQUEUE</text>
+  <text x="1158" y="509" text-anchor="end" class="sans body" fill="#475467">the example chooses E at lead +10</text>
+  <line x1="24" y1="529" x2="1176" y2="529" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="529" x2="170" y2="529" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="563" width="370" height="172" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="563" data-width="370" data-height="172"/>
+  <line x1="40" y1="606.0" x2="410" y2="606.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="649.0" x2="410" y2="649.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="692.0" x2="410" y2="692.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="52" y="591" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Lead</text>
+  <text x="52" y="634" text-anchor="start" class="sans body" fill="#182230">+8</text>
+  <text x="52" y="677" text-anchor="start" class="sans body" fill="#182230">+10</text>
+  <text x="52" y="720" text-anchor="start" class="sans body" fill="#182230">+13</text>
+  <line x1="140" y1="563" x2="140" y2="735" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="152" y="591" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Line</text>
+  <text x="152" y="634" text-anchor="start" class="sans body" fill="#182230">D</text>
+  <text x="152" y="677" text-anchor="start" class="sans body" fill="#182230">E</text>
+  <text x="152" y="720" text-anchor="start" class="sans body" fill="#182230">F</text>
+  <line x1="220" y1="563" x2="220" y2="735" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="232" y="591" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Future bound</text>
+  <text x="232" y="634" text-anchor="start" class="sans body" fill="#182230">31</text>
+  <text x="232" y="677" text-anchor="start" class="sans body" fill="#182230">7 (selected)</text>
+  <text x="232" y="720" text-anchor="start" class="sans body" fill="#182230">15</text>
+  <rect x="510" y="596" width="265" height="144" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="510" data-y="596" data-width="265" data-height="144"/>
+  <text x="524" y="624" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Admission filters</text>
+  <text x="524" y="653" text-anchor="start" class="sans body" fill="#182230">already resident?</text>
+  <text x="524" y="678" text-anchor="start" class="sans body" fill="#182230">already pending?</text>
+  <text x="524" y="703" text-anchor="start" class="sans body" fill="#182230">admit this prefetch fill?</text>
+  <path d="M410 650 L510 650" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="candidate"/>
+  <rect x="413.96" y="611.00" width="92.08" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="460" y="628" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">candidate</text>
+  <text x="875" y="605" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">8-entry prefetch queue</text>
+  <rect x="875.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="875.0" data-y="619" data-width="35.0" data-height="42"/>
+  <rect x="910.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="910.0" data-y="619" data-width="35.0" data-height="42"/>
+  <rect x="945.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="945.0" data-y="619" data-width="35.0" data-height="42"/>
+  <rect x="980.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="980.0" data-y="619" data-width="35.0" data-height="42"/>
+  <rect x="1015.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1015.0" data-y="619" data-width="35.0" data-height="42"/>
+  <rect x="1050.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1050.0" data-y="619" data-width="35.0" data-height="42"/>
+  <rect x="1085.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1085.0" data-y="619" data-width="35.0" data-height="42"/>
+  <rect x="1120.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1120.0" data-y="619" data-width="35.0" data-height="42"/>
+  <text x="875" y="679" text-anchor="start" class="sans body" fill="#182230">head</text>
+  <text x="1155" y="679" text-anchor="end" class="sans body" fill="#182230">tail</text>
+  <path d="M775 650 L875 650" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="accepted"/>
+  <rect x="783.52" y="673.00" width="82.96" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="825" y="690" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">accepted</text>
+  <text x="40" y="792" text-anchor="start" class="sans body" fill="#C56A13">At most 1 issue per 8 governed requests; configured latency is 8 governed requests.</text>
+  <circle cx="44" cy="851" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="857" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="858" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">FILL THE LLC, NOT THE PRIVATE CACHES</text>
+  <text x="1158" y="857" text-anchor="end" class="sans body" fill="#475467">measure usefulness and total traffic separately</text>
+  <line x1="24" y1="877" x2="1176" y2="877" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="877" x2="170" y2="877" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="45" y="927.34" width="240" height="103.32" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
+  <ellipse cx="165.0" cy="927.34" rx="120.0" ry="11.34" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
+  <ellipse cx="165.0" cy="1030.66" rx="120.0" ry="11.34" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
+  <text x="73" y="960" text-anchor="start" class="sans body" fill="#182230" font-weight="700">Memory</text>
+  <text x="73" y="990" text-anchor="start" class="sans body" fill="#182230">one property cache line</text>
+  <rect x="500" y="927" width="290" height="102" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="500" data-y="927" data-width="290" data-height="102"/>
+  <text x="514" y="955" text-anchor="start" class="sans label" fill="#182230" font-weight="700">LLC prefetch fill</text>
+  <text x="514" y="984" text-anchor="start" class="sans body" fill="#182230">can satisfy a later demand</text>
+  <rect x="920" y="927" width="235" height="102" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="920" data-y="927" data-width="235" data-height="102"/>
+  <text x="934" y="955" text-anchor="start" class="sans label" fill="#182230" font-weight="700">L1D / L2</text>
+  <text x="934" y="984" text-anchor="start" class="sans body" fill="#182230">no prefetch allocation</text>
+  <path d="M285 980 L500 980" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="prefetch" data-flow-cadence="per line"/>
+  <rect x="300.36" y="940.00" width="183.28" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="392" y="957" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">prefetch | per line</text>
+  <text x="852" y="985" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">no fill</text>
+  <text x="40" y="1090" text-anchor="start" class="sans body" fill="#182230">Fewer demand misses can include prefetched traffic. Count reads + writebacks, not demand misses alone.</text>
+  <text x="40" y="1126" text-anchor="start" class="sans body" fill="#C63C4A">FlowThrough is OFF in the primary Scale6 comparisons; this prefetch path is a separate mechanism.</text>
+</svg>

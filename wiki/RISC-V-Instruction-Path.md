@@ -1,140 +1,96 @@
-# RISC-V Instruction Path
+# RISC-V integration: existing support and Scale6 target
 
-ECG implements an experimental custom-0 RISC-V instruction family in gem5.
-Matching guest kernels emit the encodings with `.insn`. This is a research ISA
-extension, not a ratified RISC-V extension or an upstream gem5 feature.
+The repository contains an experimental custom-0 RISC-V ReusePlan/ReuseBind
+implementation in gem5. **It is not the native Scale6 implementation.**
+Scale6 currently executes in cache_sim; its request format, retirement update
+channel and native prefetch delivery still need implementation and timing
+evidence.
 
-## 1. Instruction roles
+## 1. Reuse the execution discipline, not the old bit layout
 
-### Figure 1 — RISC-V record-load and property-load instruction roles
+### Figure 1 — RISC-V integration: existing path and next step
 
-![Three-panel instruction-role figure covering ECG control CSRs, record-load variants, computed and indexed property loads, and the explicit register dependency](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg)
+![Existing ReuseBind record-load and dependent property-load roles separated from the pending Scale6 contract for a 26-plus-six-bit record, translated dynamic request state, retirement-only refresh and real lookahead traffic](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg)
 
-**Figure 1.** Record acquisition and property access remain two dynamic loads.
+**Figure 1.** Existing record acquisition and property access remain two
+dynamic operations with an explicit renamed dependency. That foundation does
+not automatically implement the Scale6 token or its commit/prefetch channels.
+The lower panel is a target contract, not a list of completed opcodes.
 
-| Family | Inputs | Result | Request effect |
-|---|---|---|---|
-| `ecg.plan.load` | general record address | canonical 64-bit ReusePlan in integer `rd` | ordinary cacheable placement |
-| `ecg_plan_weighted_load` | sidecar address in `rs1`, destination in `rs2` | 32-bit weighted sidecar in `rd` | ordinary cacheable placement |
-| `ecg.flow.load` | general record address | canonical 64-bit ReusePlan in integer `rd` | sets record FlowThrough |
-| `ecg.flow.load.compact` | compact record address | canonical widened ReusePlan in integer `rd` | sets record FlowThrough |
-| `ecg_flow_weighted_load` | weighted sidecar address | 32-bit weighted sidecar in `rd` | sets record FlowThrough |
-| `ecg.bind.load.*` | computed property address in `rs1`, plan in `rs2` | typed property value | attaches ReuseBind |
-| `ecg.bind.iload.*` | property base in `rs1`, plan/destination in `rs2` | typed property value | indexed EA plus ReuseBind |
-
-There is no compact Plan-load encoding; compact unweighted acquisition is
-FlowThrough-only. The record-format CSR supplies compact `id_bits` and
-`epoch_bits`. The record-load execution helper consumes that width
-configuration and widens the returned compact value into the canonical
-destination/tier/two-epoch layout; the frontend decode stage only identifies
-the custom-0 role.
-The current-epoch CSR changes only at quantized traversal boundaries. A
-nonzero context CSR distinguishes overlapping executions.
-
-The request flags are distinct: `ECG_FLOWTHROUGH` is emitted by the
-request-bound record-load family, while `STRUCTURAL_FLOWTHROUGH` is the
-policy-independent fairness control applied to a validated structural-carrier
-region. Neither flag is attached to the property Request.
-
-## 2. Out-of-order request path
-
-### Figure 2 — ReusePlan loads in an out-of-order core
-
-![Cross-layer architecture diagram connecting graph adjacency 4 to 7, out-neighbor CSR row_ptr col_idx weight and ReusePlan arrays, the gem5 O3 ROB issue queue physical registers AGU LSQ and L1D datapath, separate record and property Requests, writeback, and in-order retirement](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
-
-**Figure 2.** Checked adjacency entry `4 -> 7` maps to internal source and
-destination vertices `8 -> 18` and supplies the fixture-derived operands and
-addresses.
-
-The top-level grouping follows gem5 O3CPU's documented **Fetch, Decode,
-Rename, IEW, Commit** pipeline. The datapath uses conventional
-microarchitecture notation: a segmented ROB and LSQ, an issue queue, a
-physical register file, issue-select readiness, an AGU, L1D, load-data
-writeback, dependency wakeup, and in-order retirement.
-The visual organization is informed by the
-[BOOM issue-unit](https://docs.boom-core.org/en/latest/sections/issue-units.html#issue-select-logic)
-and [LSU](https://docs.boom-core.org/en/latest/sections/load-store-unit.html)
-documentation, but the labeled behavior is ECG's gem5 O3 integration on a
-hypothetical core, not a BOOM implementation.
-
-The figure connects:
-
-1. the shared physical O3 load datapath;
-2. fixture out-neighbor traversal at source vertex `u=4`, its mapped internal
-   CSR row `u=8`, CSR arrays (`row_ptr`, `col_idx`, and `weight`), and the
-   edge-aligned ReusePlan array;
-3. the distinct I0 record and I1 property Requests from the LSQ through
-   private caches, MSHRs, and LLC lookup; and
-4. writeback and in-order retirement with request-specific cache effects.
-
-### Frontend decode, rename, and issue
-
-The frontend decode stage follows the normal custom-0 path. A record load
-allocates a ROB entry, load-queue entry, and renamed integer destination. The
-property instruction reads that renamed destination as `rs2`; issue therefore
-waits for both the property address/base and the ReusePlan operand.
-
-No shared metadata mailbox is used by the O3 path. TimingSimpleCPU can use a
-serialized mailbox-equivalent diagnostic because its loads cannot overlap, but
-that path is not evidence of out-of-order ReuseBind delivery.
-
-### Execute and LSQ Request construction
-
-The AGU forms:
-
-- record address plus immediate for `plan.load` and `flow.load`;
-- the software-computed address for `bind.load`; or
-- property base plus destination times element size for `bind.iload`.
-
-The LSQ applies ordinary memory-dependence, ordering, and replay rules. For a
-ReuseBind property load it then attaches:
-
-```text
-destination, tier, epoch1, epoch2, epoch_count,
-current_epoch, context_id, dynamic_sequence, conflicted
-```
-
-to that dynamic Request. The property Request never receives FlowThrough.
-
-### Cache service and retirement
-
-Private-cache and LLC hits return data normally. On a miss, compatible MSHR
-targets preserve the selected extension. The LLC accepts a live stamp only
-after validating context and destination cache block. The integer or floating
-property value writes back normally and the ROB retires precisely in order.
-
-## 3. MSHR metadata lifecycle
-
-### Figure 3 — ReuseBind merge, response, and line-metadata lifetime
-
-![Three-panel MSHR lifecycle showing typed Request fields, compatible and conflicting merges, independent allocOnFill aggregation, LLC acceptance, refresh, and invalidation](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg)
-
-**Figure 3.** ReuseBind validity and FlowThrough allocation are independent
-state machines.
-
-The MSHR rebuilds its ECG state whenever active targets change:
-
-- compatible ReuseBind targets require the same requestor and nonzero context;
-- the newest sequence supplies the selected payload;
-- equal sequences must carry identical payloads; and
-- targets with and without ReuseBind, context or requestor disagreement,
-  invalid context, or equal-sequence payload disagreement mark a conflict.
-
-The selected extension is copied to the downstream response. A conflict marker
-propagates, so the LLC cannot mistake a merged request for valid metadata.
-MSHR deallocation resets this state.
-
-`allocOnFill` is independent and combines with OR. A FlowThrough target cannot
-suppress an ordinary target's required LLC allocation.
-
-## 4. Implementation sources
-
-| Layer | Source |
+| Existing family | Role in the legacy implementation |
 |---|---|
-| instruction roles and memory semantics | `bench/include/gem5_sim/overlays/arch/riscv/isa/decoder_ecg_extract.isa` |
+| `ecg.plan.load` | ordinary-placement general ReusePlan acquisition |
+| `ecg.flow.load` / `.compact` | record acquisition with request-specific FlowThrough |
+| weighted record helpers | acquire the existing weighted sidecar formats |
+| `ecg.bind.load.*` | computed-address typed property load with ReuseBind |
+| `ecg.bind.iload.*` | indexed property load with ReuseBind |
+
+The old current-epoch/context/format CSRs and tier/two-epoch payload belong to
+that implementation. Scale6 uses a request-sequence future bound, not two
+outer-vertex epochs. Its final ISA representation is not asserted here.
+The research instruction family is neither a ratified RISC-V extension nor
+an upstream gem5 feature.
+
+## 2. The native Scale6 target
+
+### Figure 2 — Target Scale6 path through an out-of-order core
+
+![Target out-of-order core containing fetch, decode, rename, issue, physical register P17, the record-to-property dependency, AGU, LSQ, translation and private caches, plus the missing retirement-to-LLC metadata channel](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
+
+**Figure 2.** The checked word `0x10000012` names property vertex `18` and
+token `4`. Standard O3 mechanisms must preserve the association with its own
+property access. A private hit returns data without reaching the LLC, but
+the eventual committed access may still need to refresh resident LLC metadata.
+
+The native design must retain the dynamic token, traversal position, context
+and translated line identity through ordinary memory dependence, replay,
+exception and squash handling. It must not reconstruct the association
+through a shared last-request mailbox or an uncharged per-vertex oracle.
+
+Data completion and architectural retirement are different events. Ordinary
+data requests can be speculative; a retirement-only commit refresh must not
+be enqueued by a squashed load. The current O3 producer attaches legacy
+ReuseBind metadata at LSQ Request construction and does not provide this
+Scale6 retirement channel.
+
+## 3. MSHR lifetime versus metadata lifetime
+
+### Figure 3 — Request lifetime is not metadata lifetime
+
+![Existing ReuseBind MSHR compatibility and conflict propagation above a target Scale6 state machine distinguishing issue, completion, squash, retirement, commit-queue coalescing and independent LLC expiry](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg)
+
+**Figure 3.** Existing MSHR merge rules select compatible per-request
+metadata. Commit-update coalescing instead carries later committed knowledge
+about a resident line. These are not interchangeable mechanisms.
+
+Existing ReuseBind compatibility requires matching requestor and nonzero
+context. The newest sequence supplies the payload; equal sequences require
+identical payloads. Mixed ordinary/ReuseBind targets, incompatible contexts or
+payload conflicts propagate a conflict marker. The MSHR clears this state
+on release.
+
+`allocOnFill` is independent and combines with OR. The primary Scale6
+comparison does not enable FlowThrough. Future native refresh must also
+handle a line being evicted before an update arrives and must discard expired
+updates without inventing a new data allocation.
+
+## 4. What remains before timing claims
+
+The model's 16-entry commit queue, eight-request latency and eight-entry
+prefetch queue are not cycle-accurate gem5 structures. The native path must
+model latency, bandwidth, translation, queue pressure, ordering and drain.
+Lookahead must consume real carrier data rather than a free host-side future
+table. REF32 gem5 and Sniper rows therefore remain unsupported at the runner.
+
+## Implementation sources
+
+| Existing surface | Source |
+|---|---|
+| custom instruction roles | `bench/include/gem5_sim/overlays/arch/riscv/isa/decoder_ecg_extract.isa` |
 | decoder fields | `bench/include/gem5_sim/overlays/arch/riscv/isa/formats/ecg.isa` |
-| guest `.insn` emitters | `bench/include/gem5_sim/gem5_harness.h` |
+| guest emitters | `bench/include/gem5_sim/gem5_harness.h` |
+| dynamic producer state | `bench/include/gem5_sim/overlays/cpu/o3/dyn_inst_ecg_producer.patch` |
+| LSQ attachment | `bench/include/gem5_sim/overlays/cpu/o3/lsq_ecg_producer.patch` |
 | Request extension and merge rules | `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh` |
 | MSHR integration | `bench/include/gem5_sim/overlays/mem/cache/mshr_ecg_merge.patch` |
-| O3 attachment | `bench/include/gem5_sim/overlays/cpu/o3/lsq_ecg_producer.patch` |
-| graph-kernel call sites | `bench/src_gem5/` |
+| supported-backend gates | `scripts/experiments/ecg/roi_matrix.py` |
