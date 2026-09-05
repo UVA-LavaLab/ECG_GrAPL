@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1240" viewBox="0 0 1200 1240" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Cache evidence is not a timing or area result</title>
-  <desc id="desc">The plate separates current cache_sim results from native replacement qualification, pending prefetch and physical-cost evidence. Demand misses, prefetch traffic, writebacks and P-OPT matrix traffic are distinct accounting terms. Acceptance requires matching PageRank results and bounded active mechanisms. The single-epoch baseline is labeled as a reconstruction.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1270" viewBox="0 0 1200 1270" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">What each implementation can establish</title>
+  <desc id="desc">A support matrix distinguishes the richer Full14 functional format, the Scale6 large-graph format, and the current fixed-ABI native replacement path. Native prefetch and physical qualification are not implied by functional cache results. Demand misses, total traffic and runtime are kept distinct, and every comparison must match graph work and active mechanisms. P-OPT-SE remains a disclosed reconstruction.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,94 +34,101 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1240" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Cache evidence is not a timing or area result</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Scale6 promotion needs matching work, active mechanisms, and a native implementation of the timed path.</text>
+  <rect x="0" y="0" width="1200" height="1270" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">What each implementation can establish</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Separate encoding, cache behavior, native execution and physical cost before making a claim.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">CURRENT EVIDENCE AND REMAINING WORK</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">do not transfer a legacy backend&#x27;s status to Scale6</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">FORMAT SUPPORT IS NOT BACKEND SUPPORT</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">current implementation, not an aspirational diagram</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="164" x2="170" y2="164" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="205" width="1120" height="255" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="205" data-width="1120" data-height="255"/>
-  <line x1="40" y1="256.0" x2="1160" y2="256.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="307.0" x2="1160" y2="307.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="358.0" x2="1160" y2="358.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="409.0" x2="1160" y2="409.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="52" y="233" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Surface</text>
-  <text x="52" y="284" text-anchor="start" class="sans body" fill="#182230">cache_sim</text>
-  <text x="52" y="335" text-anchor="start" class="sans body" fill="#182230">gem5 O3</text>
-  <text x="52" y="386" text-anchor="start" class="sans body" fill="#182230">Sniper</text>
-  <text x="52" y="437" text-anchor="start" class="sans body" fill="#182230">physical cost</text>
-  <line x1="250" y1="205" x2="250" y2="460" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="262" y="233" text-anchor="start" class="sans label" fill="#182230" font-weight="700">What it can establish</text>
-  <text x="262" y="284" text-anchor="start" class="sans body" fill="#182230">functional cache behavior and traffic</text>
-  <text x="262" y="335" text-anchor="start" class="sans body" fill="#182230">architectural timing with native requests</text>
-  <text x="262" y="386" text-anchor="start" class="sans body" fill="#182230">matched-work modeled corroboration</text>
-  <text x="262" y="437" text-anchor="start" class="sans body" fill="#182230">synthesized storage and control cost</text>
-  <line x1="690" y1="205" x2="690" y2="460" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="702" y="233" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Scale6 status</text>
-  <text x="702" y="284" text-anchor="start" class="sans body" fill="#182230">implemented; full Twitter exercised</text>
-  <text x="702" y="335" text-anchor="start" class="sans body" fill="#182230">operands + replacement under qualification</text>
-  <text x="702" y="386" text-anchor="start" class="sans body" fill="#182230">Scale6 rows unsupported</text>
-  <text x="702" y="437" text-anchor="start" class="sans body" fill="#182230">Scale6 area / timing not established</text>
-  <text x="40" y="506" text-anchor="start" class="sans body" fill="#182230">The existing gem5 extension and RTL cost models are not evidence of a completed Scale6 port.</text>
-  <circle cx="44" cy="568" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="574" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="575" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">KEEP THE ACCOUNTING TERMS SEPARATE</text>
-  <text x="1158" y="574" text-anchor="end" class="sans body" fill="#475467">all metrics refer to the same graph work and geometry</text>
-  <line x1="24" y1="594" x2="1176" y2="594" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="594" x2="170" y2="594" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="633" width="280" height="149" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="633" data-width="280" data-height="149"/>
-  <text x="54" y="661" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Demand LLC misses</text>
-  <text x="54" y="690" text-anchor="start" class="sans body" fill="#182230">not all memory transfers</text>
-  <text x="54" y="715" text-anchor="start" class="sans body" fill="#182230">prefetch can hide a miss</text>
-  <text x="54" y="740" text-anchor="start" class="sans body" fill="#182230">do not rename it speedup</text>
-  <rect x="435" y="633" width="345" height="149" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="435" data-y="633" data-width="345" data-height="149"/>
-  <text x="449" y="661" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Off-chip traffic</text>
-  <text x="449" y="690" text-anchor="start" class="sans body" fill="#182230">demand + prefetch reads</text>
-  <text x="449" y="715" text-anchor="start" class="sans body" fill="#182230">+ dirty writebacks</text>
-  <text x="449" y="740" text-anchor="start" class="sans body" fill="#182230">+ analytic P-OPT matrix stream</text>
-  <rect x="895" y="633" width="265" height="149" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="895" data-y="633" data-width="265" data-height="149"/>
-  <text x="909" y="661" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Metadata cost</text>
-  <text x="909" y="690" text-anchor="start" class="sans body" fill="#182230">DRAM backing matrix</text>
-  <text x="909" y="715" text-anchor="start" class="sans body" fill="#182230">reserved LLC capacity</text>
-  <text x="909" y="740" text-anchor="start" class="sans body" fill="#182230">extra on-chip state / logic</text>
-  <path d="M320 707 L435 707" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="add all traffic"/>
-  <rect x="304.60" y="603.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="378" y="620" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">add all traffic</text>
-  <path d="M780 707 L895 707" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="separate domains"/>
-  <rect x="760.04" y="603.00" width="155.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="838" y="620" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">separate domains</text>
-  <text x="40" y="826" text-anchor="start" class="sans body" fill="#C63C4A">popt_target_time_charged = 0: analytic matrix charging does not model target-time stream latency.</text>
-  <text x="40" y="858" text-anchor="start" class="sans body" fill="#C56A13">POPT_SE and POPT_SE_DISTANT are disclosed reconstructions; report both post-final interpretations.</text>
-  <circle cx="44" cy="918" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="924" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="925" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">FAIL CLOSED BEFORE COMPARING</text>
-  <text x="1158" y="924" text-anchor="end" class="sans body" fill="#475467">cache counters alone are not sufficient</text>
-  <line x1="24" y1="944" x2="1176" y2="944" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="944" x2="170" y2="944" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="977" width="290" height="139" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="977" data-width="290" data-height="139"/>
-  <text x="54" y="1005" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Same work</text>
-  <text x="54" y="1034" text-anchor="start" class="sans body" fill="#182230">graph / order / iterations</text>
-  <text x="54" y="1059" text-anchor="start" class="sans body" fill="#182230">edge count + score checksum</text>
-  <text x="54" y="1084" text-anchor="start" class="sans body" fill="#182230">same requested cache geometry</text>
-  <rect x="452" y="977" width="295" height="139" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="452" data-y="977" data-width="295" data-height="139"/>
-  <text x="466" y="1005" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Active mechanism</text>
-  <text x="466" y="1034" text-anchor="start" class="sans body" fill="#182230">record width and format</text>
-  <text x="466" y="1059" text-anchor="start" class="sans body" fill="#182230">commit / prefetch / state</text>
-  <text x="466" y="1084" text-anchor="start" class="sans body" fill="#182230">bounded queues and final drain</text>
-  <rect x="870" y="977" width="290" height="139" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="870" data-y="977" data-width="290" data-height="139"/>
-  <text x="884" y="1005" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Admissible comparison</text>
-  <text x="884" y="1034" text-anchor="start" class="sans body" fill="#182230">all required policy rows</text>
-  <text x="884" y="1059" text-anchor="start" class="sans body" fill="#182230">no missing/conflicting receipt</text>
-  <text x="884" y="1084" text-anchor="start" class="sans body" fill="#182230">no unsupported timing claim</text>
-  <path d="M330 1046 L452 1046" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="same work"/>
-  <rect x="344.96" y="1132.00" width="92.08" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="391" y="1149" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">same work</text>
-  <path d="M747 1046 L870 1046" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="active mechanism"/>
-  <rect x="730.04" y="1132.00" width="155.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="808" y="1149" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">active mechanism</text>
-  <text x="40" y="1196" text-anchor="start" class="sans body" fill="#C63C4A">Missing, mismatched or unsupported evidence must fail closed before any comparison is reported.</text>
+  <rect x="40" y="201" width="1120" height="294" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="201" data-width="1120" data-height="294"/>
+  <line x1="40" y1="250.0" x2="1160" y2="250.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="299.0" x2="1160" y2="299.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="348.0" x2="1160" y2="348.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="397.0" x2="1160" y2="397.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="446.0" x2="1160" y2="446.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="52" y="229" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Surface</text>
+  <text x="52" y="278" text-anchor="start" class="sans body" fill="#182230">cache_sim / small graphs</text>
+  <text x="52" y="327" text-anchor="start" class="sans body" fill="#182230">cache_sim / Twitter</text>
+  <text x="52" y="376" text-anchor="start" class="sans body" fill="#182230">gem5 / RV64 O3</text>
+  <text x="52" y="425" text-anchor="start" class="sans body" fill="#182230">Sniper</text>
+  <text x="52" y="474" text-anchor="start" class="sans body" fill="#182230">RTL / physical cost</text>
+  <line x1="280" y1="201" x2="280" y2="495" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="292" y="229" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Encoding</text>
+  <text x="292" y="278" text-anchor="start" class="sans body" fill="#182230">Full14; ID width &lt;=18</text>
+  <text x="292" y="327" text-anchor="start" class="sans body" fill="#182230">Scale6; 26+6</text>
+  <text x="292" y="376" text-anchor="start" class="sans body" fill="#182230">fixed native 26+6</text>
+  <text x="292" y="425" text-anchor="start" class="sans body" fill="#182230">legacy paths</text>
+  <text x="292" y="474" text-anchor="start" class="sans body" fill="#182230">earlier components</text>
+  <line x1="515" y1="201" x2="515" y2="495" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="527" y="229" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Implemented mechanism</text>
+  <text x="527" y="278" text-anchor="start" class="sans body" fill="#182230">replacement + commit + prefetch</text>
+  <text x="527" y="327" text-anchor="start" class="sans body" fill="#182230">bounded in-place large-graph path</text>
+  <text x="527" y="376" text-anchor="start" class="sans body" fill="#182230">real loads + retirement + R-only</text>
+  <text x="527" y="425" text-anchor="start" class="sans body" fill="#182230">earlier modeled controls</text>
+  <text x="527" y="474" text-anchor="start" class="sans body" fill="#182230">not a complete REF32 realization</text>
+  <line x1="850" y1="201" x2="850" y2="495" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="862" y="229" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Evidence limit</text>
+  <text x="862" y="278" text-anchor="start" class="sans body" fill="#182230">functional cache / traffic</text>
+  <text x="862" y="327" text-anchor="start" class="sans body" fill="#182230">full Twitter cache / traffic</text>
+  <text x="862" y="376" text-anchor="start" class="sans body" fill="#182230">production timing gate closed</text>
+  <text x="862" y="425" text-anchor="start" class="sans body" fill="#182230">REF32 rows unsupported</text>
+  <text x="862" y="474" text-anchor="start" class="sans body" fill="#182230">no complete area / timing result</text>
+  <text x="40" y="538" text-anchor="start" class="sans body" fill="#182230">A small graph can use Full14 in cache_sim; it does not automatically change the current native instruction ABI.</text>
+  <circle cx="44" cy="601" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="607" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="608" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">COUNT TRAFFIC, THEN INTERPRET IT</text>
+  <text x="1158" y="607" text-anchor="end" class="sans body" fill="#475467">a demand-miss count is not a speedup result</text>
+  <line x1="24" y1="627" x2="1176" y2="627" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="627" x2="170" y2="627" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="665" width="310" height="180" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="665" data-width="310" data-height="180"/>
+  <text x="54" y="693" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Off-chip transfer accounting</text>
+  <text x="54" y="722" text-anchor="start" class="sans body" fill="#182230">demand line reads</text>
+  <text x="54" y="747" text-anchor="start" class="sans body" fill="#182230">prefetch line reads</text>
+  <text x="54" y="772" text-anchor="start" class="sans body" fill="#182230">dirty writebacks</text>
+  <text x="54" y="797" text-anchor="start" class="sans body" fill="#182230">baseline matrix-stream charge</text>
+  <rect x="510" y="665" width="650" height="79" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="510" data-y="665" data-width="650" data-height="79"/>
+  <text x="524" y="693" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Fewer demand misses may still mean more traffic</text>
+  <text x="524" y="722" text-anchor="start" class="sans body" fill="#182230">A prefetch can replace a demand miss with another memory read.</text>
+  <rect x="510" y="787" width="650" height="79" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="510" data-y="787" data-width="650" data-height="79"/>
+  <text x="524" y="815" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Cache behavior is not runtime or silicon area</text>
+  <text x="524" y="844" text-anchor="start" class="sans body" fill="#182230">Native time and physical cost need their own complete implementation.</text>
+  <path d="M350 707 L510 707" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="all reads / writes"/>
+  <rect x="342.92" y="627.00" width="174.16" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="430" y="644" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">all reads / writes</text>
+  <path d="M350 819 L510 819" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="separate metrics"/>
+  <rect x="352.04" y="891.00" width="155.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="430" y="908" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">separate metrics</text>
+  <circle cx="44" cy="971" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="977" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="978" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">MATCH WORK AND ACTIVE MECHANISMS</text>
+  <text x="1158" y="977" text-anchor="end" class="sans body" fill="#475467">fail closed rather than compare unlike runs</text>
+  <line x1="24" y1="997" x2="1176" y2="997" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="997" x2="170" y2="997" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="1032" width="300" height="126" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="1032" data-width="300" data-height="126"/>
+  <text x="54" y="1060" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Same computation</text>
+  <text x="54" y="1089" text-anchor="start" class="sans body" fill="#182230">graph / order / iterations</text>
+  <text x="54" y="1114" text-anchor="start" class="sans body" fill="#182230">edge count + score checksum</text>
+  <text x="54" y="1139" text-anchor="start" class="sans body" fill="#182230">same cache geometry</text>
+  <rect x="450" y="1032" width="300" height="126" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450" data-y="1032" data-width="300" data-height="126"/>
+  <text x="464" y="1060" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Active requested path</text>
+  <text x="464" y="1089" text-anchor="start" class="sans body" fill="#182230">selected format and policy</text>
+  <text x="464" y="1114" text-anchor="start" class="sans body" fill="#182230">bounded queues / traffic</text>
+  <text x="464" y="1139" text-anchor="start" class="sans body" fill="#182230">complete final receipts</text>
+  <rect x="860" y="1032" width="300" height="126" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="1032" data-width="300" data-height="126"/>
+  <text x="874" y="1060" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Scoped conclusion</text>
+  <text x="874" y="1089" text-anchor="start" class="sans body" fill="#182230">separate R / P / R+P</text>
+  <text x="874" y="1114" text-anchor="start" class="sans body" fill="#182230">charge baseline overhead</text>
+  <text x="874" y="1139" text-anchor="start" class="sans body" fill="#182230">no unsupported timing rows</text>
+  <path d="M340 1095 L450 1095" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="same work"/>
+  <rect x="348.96" y="994.00" width="92.08" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="395" y="1011" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">same work</text>
+  <path d="M750 1095 L860 1095" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="active path"/>
+  <rect x="749.84" y="994.00" width="110.32" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="805" y="1011" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">active path</text>
+  <text x="40" y="1205" text-anchor="start" class="sans body" fill="#182230">popt_target_time_charged = 0: matrix traffic is charged analytically, not as target-time stream latency.</text>
+  <text x="40" y="1237" text-anchor="start" class="sans body" fill="#475467">POPT_SE and POPT_SE_DISTANT are paper-constrained reconstructions; keep both interpretations visible.</text>
 </svg>

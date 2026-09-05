@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1140" viewBox="0 0 1200 1140" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">P-OPT columns and the LLC capacity budget</title>
-  <desc id="desc">For full Twitter, one one-byte-per-property-line column is 2,603,265 bytes. Full P-OPT keeps two columns and SE keeps one, while both retain 256 backing columns. Sixteen-way bars show the full and single-epoch reservations at 8, 16 and 24 MiB. ECG&#x27;s extra on-chip state is separately disclosed rather than compared to DRAM matrix storage as a silicon ratio.</desc>
+  <title id="title">Graph-sized matrices and cache-sized state</title>
+  <desc id="desc">For full Twitter, one one-byte-per-property-line column is 2,603,265 bytes. Full P-OPT keeps two columns and SE keeps one, while both retain 256 backing columns. Sixteen-way bars show the full and single-epoch reservations at 8, 16 and 24 MiB. Full14&#x27;s default twenty-one-bit deadline and Scale6&#x27;s thirty-two-bit deadline produce different cache-sized metadata budgets. Neither model count is a silicon-area ratio.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -35,8 +35,8 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1140" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">P-OPT columns and the LLC capacity budget</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">A resident epoch column is graph-sized. Two columns do not mean two cache ways.</text>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Graph-sized matrices and cache-sized state</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">P-OPT reserves active columns; ECG uses the edge word and additional per-cache-line state.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
@@ -275,11 +275,11 @@
   <text x="40" y="933" text-anchor="start" class="sans body" fill="#C63C4A">SE uses a different six-bit-value encoding. A two-way undercharge of full P-OPT is not SE.</text>
   <circle cx="44" cy="976" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="982" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="983" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ECG COST IS NOT ZERO</text>
-  <text x="1158" y="982" text-anchor="end" class="sans body" fill="#475467">separate data capacity, on-chip state and backing storage</text>
+  <text x="74" y="983" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ECG KEEPS THE DATA WAYS</text>
+  <text x="1158" y="982" text-anchor="end" class="sans body" fill="#475467">prediction state is additional storage</text>
   <line x1="24" y1="1002" x2="1176" y2="1002" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="1002" x2="170" y2="1002" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="40" y="1032" text-anchor="start" class="sans body" fill="#182230">At 8 MiB: Scale6 retains 16 data ways and adds about 560 KiB of line/controller state.</text>
-  <text x="40" y="1064" text-anchor="start" class="sans body" fill="#C63C4A">That is not yet an equal-area comparison. Total metadata-footprint ratios are not silicon-area ratios.</text>
-  <text x="40" y="1097" text-anchor="start" class="sans body" fill="#475467">The two SE post-final interpretations are disclosed reconstructions, not bit-exact paper reproductions.</text>
+  <text x="40" y="1032" text-anchor="start" class="sans body" fill="#182230">Full14 with D=21 adds 24 bits/line; Scale6 with D=32 adds 35. Both retain the ordinary data ways.</text>
+  <text x="40" y="1064" text-anchor="start" class="sans body" fill="#182230">At 8 MiB: about 384 KiB (Full14 model) or 560 KiB (Scale6 model), including both queues and lookahead.</text>
+  <text x="40" y="1097" text-anchor="start" class="sans body" fill="#475467">This is not yet an equal-area comparison. Backing matrices, active payloads, cache state and ports are distinct.</text>
 </svg>

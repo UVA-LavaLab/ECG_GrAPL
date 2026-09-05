@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1190" viewBox="0 0 1200 1190" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Selective prefetch from the record stream</title>
-  <desc id="desc">An illustrative 16-record window identifies the first occurrence of a distinct property line between leads eight and fifteen. Eligible candidates are ranked by decoded future distance, with ties favoring lead ten. Resident, pending and admission filters precede an eight-entry LLC-only queue. The request-based model is not a claim of native cycle timing.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1340" viewBox="0 0 1200 1340" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">Prefetch actions name a future record</title>
+  <desc id="desc">The running record&#x27;s sixteen-word window contains only property lines A and B. B is current and A first appears at lead one, so neither Full14 nor Scale6 issues a prefetch for this record. A second flow contrasts Full14&#x27;s offline encoded lead with Scale6&#x27;s runtime selection from record bytes. Both decode the target vertex from the selected future record and apply resident, pending and admission filters.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,136 +34,147 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1190" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Selective prefetch from the record stream</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">No action bits are added to the edge word. All extra fills count as off-chip traffic.</text>
+  <rect x="0" y="0" width="1200" height="1340" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Prefetch actions name a future record</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Reference distance predicts this line&#x27;s reuse; a prefetch lead selects another record&#x27;s property.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">A BOUNDED WINDOW, NOT A FUTURE TABLE</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">illustrative line IDs; separate from the checked fixture</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">THE EXAMPLE NEEDS NO PREFETCH</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">lookahead starts at the same CSR position j18</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="75" y="211" text-anchor="middle" class="sans body" fill="#182230">now</text>
-  <rect x="40" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="235" data-width="70" data-height="76"/>
-  <text x="75" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">A</text>
-  <text x="145" y="211" text-anchor="middle" class="sans body" fill="#182230">+1</text>
-  <rect x="110" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="110" data-y="235" data-width="70" data-height="76"/>
-  <text x="145" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">A</text>
-  <text x="215" y="211" text-anchor="middle" class="sans body" fill="#182230">+2</text>
-  <rect x="180" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="180" data-y="235" data-width="70" data-height="76"/>
-  <text x="215" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">B</text>
-  <text x="285" y="211" text-anchor="middle" class="sans body" fill="#182230">+3</text>
-  <rect x="250" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="250" data-y="235" data-width="70" data-height="76"/>
-  <text x="285" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">B</text>
-  <text x="355" y="211" text-anchor="middle" class="sans body" fill="#182230">+4</text>
-  <rect x="320" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="320" data-y="235" data-width="70" data-height="76"/>
-  <text x="355" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">C</text>
-  <text x="425" y="211" text-anchor="middle" class="sans body" fill="#182230">+5</text>
-  <rect x="390" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="390" data-y="235" data-width="70" data-height="76"/>
-  <text x="425" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">C</text>
-  <text x="495" y="211" text-anchor="middle" class="sans body" fill="#182230">+6</text>
-  <rect x="460" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="460" data-y="235" data-width="70" data-height="76"/>
-  <text x="495" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">A</text>
-  <text x="565" y="211" text-anchor="middle" class="sans body" fill="#182230">+7</text>
-  <rect x="530" y="235" width="70" height="76" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="530" data-y="235" data-width="70" data-height="76"/>
-  <text x="565" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">C</text>
-  <text x="635" y="211" text-anchor="middle" class="sans body" fill="#182230">+8</text>
-  <rect x="600" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="600" data-y="235" data-width="70" data-height="76"/>
-  <text x="635" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">D</text>
-  <text x="705" y="211" text-anchor="middle" class="sans body" fill="#182230">+9</text>
-  <rect x="670" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="670" data-y="235" data-width="70" data-height="76"/>
-  <text x="705" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">D</text>
-  <text x="775" y="211" text-anchor="middle" class="sans body" fill="#182230">+10</text>
-  <rect x="740" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#0F8A72" stroke-width="1.5" data-shape="rect" data-x="740" data-y="235" data-width="70" data-height="76"/>
-  <text x="775" y="282" text-anchor="middle" class="sans heading" fill="#0F8A72" font-weight="700">E</text>
-  <text x="845" y="211" text-anchor="middle" class="sans body" fill="#182230">+11</text>
-  <rect x="810" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="810" data-y="235" data-width="70" data-height="76"/>
-  <text x="845" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">D</text>
-  <text x="915" y="211" text-anchor="middle" class="sans body" fill="#182230">+12</text>
-  <rect x="880" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="880" data-y="235" data-width="70" data-height="76"/>
-  <text x="915" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">E</text>
-  <text x="985" y="211" text-anchor="middle" class="sans body" fill="#182230">+13</text>
-  <rect x="950" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="950" data-y="235" data-width="70" data-height="76"/>
-  <text x="985" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">F</text>
-  <text x="1055" y="211" text-anchor="middle" class="sans body" fill="#182230">+14</text>
-  <rect x="1020" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1020" data-y="235" data-width="70" data-height="76"/>
-  <text x="1055" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">F</text>
-  <text x="1125" y="211" text-anchor="middle" class="sans body" fill="#182230">+15</text>
-  <rect x="1090" y="235" width="70" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1090" data-y="235" data-width="70" data-height="76"/>
-  <text x="1125" y="282" text-anchor="middle" class="sans heading" fill="#182230" font-weight="700">F</text>
-  <line x1="600" y1="331" x2="1158" y2="331" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="880" y="365" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">candidate leads 8..15</text>
-  <text x="40" y="411" text-anchor="start" class="sans body" fill="#182230">Reject the current line and any line already seen earlier in the lookahead.</text>
-  <text x="40" y="442" text-anchor="start" class="sans body" fill="#182230">Rank eligible lines by the smallest decoded future bound; break ties toward lead 10.</text>
-  <circle cx="44" cy="503" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="509" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="510" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">SELECT, FILTER, THEN ENQUEUE</text>
-  <text x="1158" y="509" text-anchor="end" class="sans body" fill="#475467">the example chooses E at lead +10</text>
-  <line x1="24" y1="529" x2="1176" y2="529" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="529" x2="170" y2="529" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="563" width="370" height="172" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="563" data-width="370" data-height="172"/>
-  <line x1="40" y1="606.0" x2="410" y2="606.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="649.0" x2="410" y2="649.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="692.0" x2="410" y2="692.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="52" y="591" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Lead</text>
-  <text x="52" y="634" text-anchor="start" class="sans body" fill="#182230">+8</text>
-  <text x="52" y="677" text-anchor="start" class="sans body" fill="#182230">+10</text>
-  <text x="52" y="720" text-anchor="start" class="sans body" fill="#182230">+13</text>
-  <line x1="140" y1="563" x2="140" y2="735" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="152" y="591" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Line</text>
-  <text x="152" y="634" text-anchor="start" class="sans body" fill="#182230">D</text>
-  <text x="152" y="677" text-anchor="start" class="sans body" fill="#182230">E</text>
-  <text x="152" y="720" text-anchor="start" class="sans body" fill="#182230">F</text>
-  <line x1="220" y1="563" x2="220" y2="735" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="232" y="591" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Future bound</text>
-  <text x="232" y="634" text-anchor="start" class="sans body" fill="#182230">31</text>
-  <text x="232" y="677" text-anchor="start" class="sans body" fill="#182230">7 (selected)</text>
-  <text x="232" y="720" text-anchor="start" class="sans body" fill="#182230">15</text>
-  <rect x="510" y="596" width="265" height="144" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="510" data-y="596" data-width="265" data-height="144"/>
-  <text x="524" y="624" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Admission filters</text>
-  <text x="524" y="653" text-anchor="start" class="sans body" fill="#182230">already resident?</text>
-  <text x="524" y="678" text-anchor="start" class="sans body" fill="#182230">already pending?</text>
-  <text x="524" y="703" text-anchor="start" class="sans body" fill="#182230">admit this prefetch fill?</text>
-  <path d="M410 650 L510 650" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="candidate"/>
-  <rect x="413.96" y="611.00" width="92.08" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="460" y="628" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">candidate</text>
-  <text x="875" y="605" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">8-entry prefetch queue</text>
-  <rect x="875.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="875.0" data-y="619" data-width="35.0" data-height="42"/>
-  <rect x="910.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="910.0" data-y="619" data-width="35.0" data-height="42"/>
-  <rect x="945.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="945.0" data-y="619" data-width="35.0" data-height="42"/>
-  <rect x="980.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="980.0" data-y="619" data-width="35.0" data-height="42"/>
-  <rect x="1015.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1015.0" data-y="619" data-width="35.0" data-height="42"/>
-  <rect x="1050.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1050.0" data-y="619" data-width="35.0" data-height="42"/>
-  <rect x="1085.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1085.0" data-y="619" data-width="35.0" data-height="42"/>
-  <rect x="1120.0" y="619" width="35.0" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1120.0" data-y="619" data-width="35.0" data-height="42"/>
-  <text x="875" y="679" text-anchor="start" class="sans body" fill="#182230">head</text>
-  <text x="1155" y="679" text-anchor="end" class="sans body" fill="#182230">tail</text>
-  <path d="M775 650 L875 650" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="accepted"/>
-  <rect x="783.52" y="673.00" width="82.96" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="825" y="690" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">accepted</text>
-  <text x="40" y="792" text-anchor="start" class="sans body" fill="#C56A13">At most 1 issue per 8 governed requests; configured latency is 8 governed requests.</text>
-  <circle cx="44" cy="851" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="857" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="858" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">FILL THE LLC, NOT THE PRIVATE CACHES</text>
-  <text x="1158" y="857" text-anchor="end" class="sans body" fill="#475467">measure usefulness and total traffic separately</text>
-  <line x1="24" y1="877" x2="1176" y2="877" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="877" x2="170" y2="877" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="45" y="927.34" width="240" height="103.32" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
-  <ellipse cx="165.0" cy="927.34" rx="120.0" ry="11.34" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
-  <ellipse cx="165.0" cy="1030.66" rx="120.0" ry="11.34" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
-  <text x="73" y="960" text-anchor="start" class="sans body" fill="#182230" font-weight="700">Memory</text>
-  <text x="73" y="990" text-anchor="start" class="sans body" fill="#182230">one property cache line</text>
-  <rect x="500" y="927" width="290" height="102" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="500" data-y="927" data-width="290" data-height="102"/>
-  <text x="514" y="955" text-anchor="start" class="sans label" fill="#182230" font-weight="700">LLC prefetch fill</text>
-  <text x="514" y="984" text-anchor="start" class="sans body" fill="#182230">can satisfy a later demand</text>
-  <rect x="920" y="927" width="235" height="102" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="920" data-y="927" data-width="235" data-height="102"/>
-  <text x="934" y="955" text-anchor="start" class="sans label" fill="#182230" font-weight="700">L1D / L2</text>
-  <text x="934" y="984" text-anchor="start" class="sans body" fill="#182230">no prefetch allocation</text>
-  <path d="M285 980 L500 980" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="prefetch" data-flow-cadence="per line"/>
-  <rect x="300.36" y="940.00" width="183.28" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="392" y="957" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">prefetch | per line</text>
-  <text x="852" y="985" text-anchor="middle" class="sans label" fill="#C63C4A" font-weight="700">no fill</text>
-  <text x="40" y="1090" text-anchor="start" class="sans body" fill="#182230">Fewer demand misses can include prefetched traffic. Count reads + writebacks, not demand misses alone.</text>
-  <text x="40" y="1126" text-anchor="start" class="sans body" fill="#C63C4A">FlowThrough is OFF in the primary Scale6 comparisons; this prefetch path is a separate mechanism.</text>
+  <text x="75" y="219" text-anchor="middle" class="sans body" fill="#182230">now</text>
+  <rect x="40" y="244" width="70" height="81" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="244" data-width="70" data-height="81"/>
+  <text x="75" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">B</text>
+  <text x="75" y="308" text-anchor="middle" class="sans body" fill="#182230">18</text>
+  <text x="145" y="219" text-anchor="middle" class="sans body" fill="#182230">+1</text>
+  <rect x="110" y="244" width="70" height="81" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="110" data-y="244" data-width="70" data-height="81"/>
+  <text x="145" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="145" y="308" text-anchor="middle" class="sans body" fill="#182230">7</text>
+  <text x="215" y="219" text-anchor="middle" class="sans body" fill="#182230">+2</text>
+  <rect x="180" y="244" width="70" height="81" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="180" data-y="244" data-width="70" data-height="81"/>
+  <text x="215" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="215" y="308" text-anchor="middle" class="sans body" fill="#182230">8</text>
+  <text x="285" y="219" text-anchor="middle" class="sans body" fill="#182230">+3</text>
+  <rect x="250" y="244" width="70" height="81" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="250" data-y="244" data-width="70" data-height="81"/>
+  <text x="285" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="285" y="308" text-anchor="middle" class="sans body" fill="#182230">15</text>
+  <text x="355" y="219" text-anchor="middle" class="sans body" fill="#182230">+4</text>
+  <rect x="320" y="244" width="70" height="81" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="320" data-y="244" data-width="70" data-height="81"/>
+  <text x="355" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">B</text>
+  <text x="355" y="308" text-anchor="middle" class="sans body" fill="#182230">18</text>
+  <text x="425" y="219" text-anchor="middle" class="sans body" fill="#182230">+5</text>
+  <rect x="390" y="244" width="70" height="81" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="390" data-y="244" data-width="70" data-height="81"/>
+  <text x="425" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="425" y="308" text-anchor="middle" class="sans body" fill="#182230">11</text>
+  <text x="495" y="219" text-anchor="middle" class="sans body" fill="#182230">+6</text>
+  <rect x="460" y="244" width="70" height="81" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="460" data-y="244" data-width="70" data-height="81"/>
+  <text x="495" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">B</text>
+  <text x="495" y="308" text-anchor="middle" class="sans body" fill="#182230">18</text>
+  <text x="565" y="219" text-anchor="middle" class="sans body" fill="#182230">+7</text>
+  <rect x="530" y="244" width="70" height="81" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="530" data-y="244" data-width="70" data-height="81"/>
+  <text x="565" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">B</text>
+  <text x="565" y="308" text-anchor="middle" class="sans body" fill="#182230">20</text>
+  <text x="635" y="219" text-anchor="middle" class="sans body" fill="#182230">+8</text>
+  <rect x="600" y="244" width="70" height="81" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="600" data-y="244" data-width="70" data-height="81"/>
+  <text x="635" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="635" y="308" text-anchor="middle" class="sans body" fill="#182230">8</text>
+  <text x="705" y="219" text-anchor="middle" class="sans body" fill="#182230">+9</text>
+  <rect x="670" y="244" width="70" height="81" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="670" data-y="244" data-width="70" data-height="81"/>
+  <text x="705" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="705" y="308" text-anchor="middle" class="sans body" fill="#182230">11</text>
+  <text x="775" y="219" text-anchor="middle" class="sans body" fill="#182230">+10</text>
+  <rect x="740" y="244" width="70" height="81" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="740" data-y="244" data-width="70" data-height="81"/>
+  <text x="775" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="775" y="308" text-anchor="middle" class="sans body" fill="#182230">15</text>
+  <text x="845" y="219" text-anchor="middle" class="sans body" fill="#182230">+11</text>
+  <rect x="810" y="244" width="70" height="81" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="810" data-y="244" data-width="70" data-height="81"/>
+  <text x="845" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">B</text>
+  <text x="845" y="308" text-anchor="middle" class="sans body" fill="#182230">20</text>
+  <text x="915" y="219" text-anchor="middle" class="sans body" fill="#182230">+12</text>
+  <rect x="880" y="244" width="70" height="81" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="880" data-y="244" data-width="70" data-height="81"/>
+  <text x="915" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="915" y="308" text-anchor="middle" class="sans body" fill="#182230">1</text>
+  <text x="985" y="219" text-anchor="middle" class="sans body" fill="#182230">+13</text>
+  <rect x="950" y="244" width="70" height="81" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="950" data-y="244" data-width="70" data-height="81"/>
+  <text x="985" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="985" y="308" text-anchor="middle" class="sans body" fill="#182230">6</text>
+  <text x="1055" y="219" text-anchor="middle" class="sans body" fill="#182230">+14</text>
+  <rect x="1020" y="244" width="70" height="81" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1020" data-y="244" data-width="70" data-height="81"/>
+  <text x="1055" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">A</text>
+  <text x="1055" y="308" text-anchor="middle" class="sans body" fill="#182230">15</text>
+  <text x="1125" y="219" text-anchor="middle" class="sans body" fill="#182230">+15</text>
+  <rect x="1090" y="244" width="70" height="81" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1090" data-y="244" data-width="70" data-height="81"/>
+  <text x="1125" y="275" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">B</text>
+  <text x="1125" y="308" text-anchor="middle" class="sans body" fill="#182230">18</text>
+  <line x1="600" y1="350" x2="1158" y2="350" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="880" y="385" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">candidate leads 8..15</text>
+  <text x="40" y="426" text-anchor="start" class="sans body" fill="#182230">B is the current line. A first appears at +1, before the eligible window. Later A/B entries are not new candidates.</text>
+  <rect x="40" y="458" width="1120" height="51" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="458" data-width="1120" data-height="51"/>
+  <text x="600" y="490" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">Full14 action = 0; Scale6 selected lead = 0. No extra read for this record.</text>
+  <circle cx="44" cy="566" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="572" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="573" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">TWO WAYS TO SELECT A LEAD</text>
+  <text x="1158" y="572" text-anchor="end" class="sans body" fill="#475467">choose a format, not an additional edge stream</text>
+  <line x1="24" y1="592" x2="1176" y2="592" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="592" x2="170" y2="592" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="632" width="500" height="165" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="632" data-width="500" data-height="165"/>
+  <text x="54" y="660" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Full14: encode the choice offline</text>
+  <text x="54" y="689" text-anchor="start" class="sans body" fill="#182230">prioritize the largest backward gap</text>
+  <text x="54" y="714" text-anchor="start" class="sans body" fill="#182230">then next-use distance, then proximity to lead 10</text>
+  <text x="54" y="739" text-anchor="start" class="sans body" fill="#182230">4-bit action: lead; 2-bit action: {0,8,12,15}</text>
+  <rect x="660" y="632" width="500" height="165" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="660" data-y="632" data-width="500" data-height="165"/>
+  <text x="674" y="660" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Scale6: inspect the record window</text>
+  <text x="674" y="689" text-anchor="start" class="sans body" fill="#182230">first distinct line at a lead in 8..15</text>
+  <text x="674" y="714" text-anchor="start" class="sans body" fill="#182230">smallest decoded future bound wins</text>
+  <text x="674" y="739" text-anchor="start" class="sans body" fill="#182230">tie: closest to lead 10; no action field</text>
+  <rect x="415" y="871" width="370" height="130" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="415" data-y="871" data-width="370" data-height="130"/>
+  <text x="429" y="899" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Read target ID, then admit</text>
+  <text x="429" y="928" text-anchor="start" class="sans body" fill="#182230">target = R[j + lead].vertex</text>
+  <text x="429" y="953" text-anchor="start" class="sans body" fill="#182230">reject resident / pending / denied</text>
+  <text x="429" y="978" text-anchor="start" class="sans body" fill="#182230">reuse distance is not the target ID</text>
+  <path d="M290 797 L290 933 L415 933" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="decoded action"/>
+  <rect x="130.16" y="824.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="199" y="841" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">decoded action</text>
+  <path d="M910 797 L910 933 L785 933" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="selected lead"/>
+  <rect x="944.72" y="824.00" width="128.56" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="1009" y="841" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">selected lead</text>
+  <circle cx="44" cy="1057" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="1063" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="1064" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">PREFETCH FILLS ONLY THE LLC</text>
+  <text x="1158" y="1063" text-anchor="end" class="sans body" fill="#475467">functional model; native delivery is not implemented</text>
+  <line x1="24" y1="1083" x2="1176" y2="1083" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="1083" x2="170" y2="1083" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="40" y="1125" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">8-entry prefetch queue</text>
+  <rect x="40.0" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40.0" data-y="1139" data-width="33.75" data-height="42"/>
+  <rect x="73.75" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="73.75" data-y="1139" data-width="33.75" data-height="42"/>
+  <rect x="107.5" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="107.5" data-y="1139" data-width="33.75" data-height="42"/>
+  <rect x="141.25" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="141.25" data-y="1139" data-width="33.75" data-height="42"/>
+  <rect x="175.0" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="175.0" data-y="1139" data-width="33.75" data-height="42"/>
+  <rect x="208.75" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="208.75" data-y="1139" data-width="33.75" data-height="42"/>
+  <rect x="242.5" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="242.5" data-y="1139" data-width="33.75" data-height="42"/>
+  <rect x="276.25" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="276.25" data-y="1139" data-width="33.75" data-height="42"/>
+  <text x="40" y="1199" text-anchor="start" class="sans body" fill="#182230">head</text>
+  <text x="310" y="1199" text-anchor="end" class="sans body" fill="#182230">tail</text>
+  <rect x="480" y="1112.62" width="210" height="96.76" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
+  <ellipse cx="585.0" cy="1112.62" rx="105.0" ry="10.62" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
+  <ellipse cx="585.0" cy="1209.38" rx="105.0" ry="10.62" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
+  <text x="503" y="1144" text-anchor="start" class="sans body" fill="#182230" font-weight="700">Memory</text>
+  <text x="503" y="1174" text-anchor="start" class="sans body" fill="#182230">64-byte data line</text>
+  <rect x="890" y="1107" width="270" height="111" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="890" data-y="1107" data-width="270" data-height="111"/>
+  <text x="904" y="1135" text-anchor="start" class="sans label" fill="#182230" font-weight="700">LLC fill</text>
+  <text x="904" y="1164" text-anchor="start" class="sans body" fill="#182230">no L1D / L2 allocation</text>
+  <text x="904" y="1189" text-anchor="start" class="sans body" fill="#182230">count reads and writebacks</text>
+  <path d="M600 1001 L600 1030 L15 1030 L15 1160 L40 1160" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="accepted target"/>
+  <rect x="143.60" y="1000.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="217" y="1017" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">accepted target</text>
+  <path d="M310 1160 L480 1160" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="read request"/>
+  <rect x="335.28" y="1220.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="395" y="1237" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">read request</text>
+  <path d="M690 1160 L890 1160" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="prefetch fill" data-flow-cadence="one line"/>
+  <rect x="675.56" y="1241.00" width="228.88" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="790" y="1258" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">prefetch fill | one line</text>
+  <text x="40" y="1294" text-anchor="start" class="sans body" fill="#182230">Primary model: 8-request latency, at most 1 issue per 8 governed requests. FlowThrough is OFF.</text>
+  <text x="40" y="1326" text-anchor="start" class="sans body" fill="#475467">Useful prefetches can reduce demand misses; only total reads plus writebacks establish the traffic cost.</text>
 </svg>

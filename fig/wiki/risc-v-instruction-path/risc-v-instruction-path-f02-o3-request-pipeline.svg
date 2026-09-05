@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1380" viewBox="0 0 1200 1380" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Native Scale6 path through an out-of-order core</title>
-  <desc id="desc">An explicit register dependency connects the Scale6 record load to the property access. Standard fetch, decode, rename, issue, AGU, LSQ, translation and cache structures retain ordinary execution semantics. A separate retirement-only update route carries committed predictions to the LLC, including for private hits. Squashed operations cannot enqueue refreshes.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1540" viewBox="0 0 1200 1540" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">The mask follows the load through the core</title>
+  <desc id="desc">A detailed native RISC-V O3 datapath follows the same record and property loads. Fetch, decode, rename and dispatch feed an issue queue. I1 waits for I0&#x27;s renamed P17 operand. Both use the AGU, LSQ, address translation and private caches; returned bytes are assembled or written back to the appropriate register. Per-instruction hints stay in the ROB. Private misses expose only observations at the LLC, while a separate bounded retirement channel can update resident metadata even for private hits. No host-side future lookup supplies the operand.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,123 +34,152 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1380" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Native Scale6 path through an out-of-order core</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Real retirement supplies a bounded, separately timed metadata link; native prefetch is not implemented.</text>
+  <rect x="0" y="0" width="1200" height="1540" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">The mask follows the load through the core</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Blue carries addresses and values; purple carries dependencies and reuse state; green controls execution.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">A REAL WORD FROM THE EDGE STREAM</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">checked native operand example; replacement qualification</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="195" width="315" height="128" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="195" data-width="315" data-height="128"/>
-  <text x="54" y="223" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Incoming CSR row u=8</text>
-  <text x="54" y="252" text-anchor="start" class="sans body" fill="#182230">row_ptr[8]=14; row_ptr[9]=19</text>
-  <text x="54" y="277" text-anchor="start" class="sans body" fill="#182230">neighbors: 3, 6, 7, 11, 18</text>
-  <rect x="475" y="205" width="128.4375" height="104" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="475" data-y="205" data-width="128.4375" data-height="104"/>
-  <text x="539.21875" y="255.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">token 4</text>
-  <text x="539.21875" y="279.0" text-anchor="middle" class="sans body" fill="#182230">6 bits</text>
-  <rect x="603.4375" y="205" width="556.5625" height="104" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="603.4375" data-y="205" data-width="556.5625" data-height="104"/>
-  <text x="881.71875" y="255.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">vertex 18</text>
-  <text x="881.71875" y="279.0" text-anchor="middle" class="sans body" fill="#182230">26 bits</text>
-  <path d="M355 260 L475 260" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="record[18]" data-flow-cadence="one word"/>
-  <rect x="314.24" y="171.00" width="201.52" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="415" y="188" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">record[18] | one word</text>
-  <text x="40" y="360" text-anchor="start" class="sans body" fill="#182230">0x10000012 -&gt; p[18] at 0x80000048; sequence 19, decoded bound 7.</text>
-  <circle cx="44" cy="420" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="426" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="427" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ORDINARY O3 EXECUTION, EXPLICIT METADATA</text>
-  <text x="1158" y="426" text-anchor="end" class="sans body" fill="#475467">CPU stages are not a shortcut around memory ordering</text>
-  <line x1="24" y1="446" x2="1176" y2="446" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="446" x2="170" y2="446" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="475" width="1120" height="575" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="475" data-width="1120" data-height="575"/>
-  <rect x="65" y="511" width="170" height="70" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="511" data-width="170" data-height="70"/>
-  <text x="79" y="539" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Fetch</text>
-  <rect x="285" y="511" width="170" height="70" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="285" data-y="511" data-width="170" data-height="70"/>
-  <text x="299" y="539" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Decode</text>
-  <rect x="505" y="511" width="170" height="70" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="505" data-y="511" data-width="170" data-height="70"/>
-  <text x="519" y="539" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Rename</text>
-  <rect x="760" y="511" width="220" height="70" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="760" data-y="511" data-width="220" data-height="70"/>
-  <text x="774" y="539" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Issue / select</text>
-  <path d="M235 545 L285 545" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="instruction flow"/>
-  <path d="M455 545 L505 545" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="instruction flow"/>
-  <path d="M675 545 L760 545" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="instruction flow"/>
-  <text x="66" y="616" text-anchor="start" class="sans body" fill="#0F8A72">instruction flow</text>
-  <rect x="65" y="668" width="290" height="105" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="668" data-width="290" data-height="105"/>
-  <text x="79" y="696" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Record load I0</text>
-  <text x="79" y="725" text-anchor="start" class="sans body" fill="#182230">32-bit load -&gt; RV64 P17</text>
-  <rect x="460" y="668" width="225" height="130" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="460" data-y="668" data-width="225" data-height="130"/>
-  <line x1="460" y1="711.3333333333334" x2="685" y2="711.3333333333334" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="460" y1="754.6666666666666" x2="685" y2="754.6666666666666" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="476" y="695" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Physical registers</text>
-  <text x="476" y="739" text-anchor="start" class="sans body" fill="#182230">P17: seq19 / word</text>
-  <text x="476" y="782" text-anchor="start" class="sans body" fill="#182230">I1 reads P17</text>
-  <rect x="790" y="668" width="335" height="130" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="790" data-y="668" data-width="335" data-height="130"/>
-  <text x="804" y="696" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Property load I1</text>
-  <text x="804" y="725" text-anchor="start" class="sans body" fill="#182230">AGU: base + vertex x 4</text>
-  <text x="804" y="750" text-anchor="start" class="sans body" fill="#182230">LSQ: dynamic Request + metadata</text>
-  <path d="M955 581 L955 668" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="issue I1"/>
-  <rect x="993.52" y="607.00" width="82.96" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="1035" y="624" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">issue I1</text>
-  <path d="M355 729 L460 729" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="load result"/>
-  <rect x="351.84" y="631.00" width="110.32" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="407" y="648" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">load result</text>
-  <path d="M685 729 L790 729" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="I1 waits P17"/>
-  <rect x="678.28" y="631.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="738" y="648" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">I1 waits P17</text>
-  <rect x="65" y="867" width="620" height="131" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="867" data-width="620" data-height="131"/>
-  <line x1="65" y1="910.6666666666666" x2="685" y2="910.6666666666666" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="65" y1="954.3333333333334" x2="685" y2="954.3333333333334" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="82" y="895" text-anchor="start" class="sans label" fill="#182230" font-weight="700">ROB: completion is not retirement</text>
-  <text x="82" y="939" text-anchor="start" class="sans body" fill="#182230">I0 / I1 keep their ordinary replay and exception state</text>
-  <text x="82" y="982" text-anchor="start" class="sans body" fill="#182230">Only the oldest completed, non-squashed instruction retires</text>
-  <rect x="790" y="867" width="335" height="131" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="790" data-y="867" data-width="335" data-height="131"/>
-  <text x="804" y="895" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Translation + L1D / L2</text>
-  <text x="804" y="924" text-anchor="start" class="sans body" fill="#182230">data response + register writeback</text>
-  <text x="804" y="949" text-anchor="start" class="sans body" fill="#182230">private hits can bypass L3</text>
-  <path d="M955 798 L955 867" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="property Request" data-flow-cadence="one load"/>
-  <rect x="539.76" y="822.00" width="256.24" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="791" y="839" text-anchor="end" class="sans body" fill="#2563EB" font-weight="700">property Request | one load</text>
-  <path d="M790 934 L685 934" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="completion"/>
-  <rect x="687.40" y="895.00" width="101.20" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="738" y="912" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">completion</text>
-  <circle cx="44" cy="1110" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="1116" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="1117" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">A SEPARATE RETIREMENT-TO-LLC ROUTE</text>
-  <text x="1158" y="1116" text-anchor="end" class="sans body" fill="#475467">16 slots; &gt;=8 CPU cycles; 1 out/cycle; bounded capture</text>
-  <line x1="24" y1="1136" x2="1176" y2="1136" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="1136" x2="170" y2="1136" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="1169" width="270" height="105" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="1169" data-width="270" data-height="105"/>
-  <text x="54" y="1197" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Retired property load</text>
-  <text x="54" y="1226" text-anchor="start" class="sans body" fill="#182230">squashed load: no refresh</text>
-  <text x="470" y="1176" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Bounded commit transport</text>
-  <rect x="470.0" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="470.0" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="486.25" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="486.25" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="502.5" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="502.5" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="518.75" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="518.75" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="535.0" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="535.0" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="551.25" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="551.25" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="567.5" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="567.5" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="583.75" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="583.75" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="600.0" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="600.0" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="616.25" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="616.25" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="632.5" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="632.5" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="648.75" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="648.75" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="665.0" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="665.0" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="681.25" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="681.25" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="697.5" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="697.5" data-y="1190" data-width="16.25" data-height="42"/>
-  <rect x="713.75" y="1190" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="713.75" data-y="1190" data-width="16.25" data-height="42"/>
-  <text x="470" y="1250" text-anchor="start" class="sans body" fill="#182230">head</text>
-  <text x="730" y="1250" text-anchor="end" class="sans body" fill="#182230">tail</text>
-  <rect x="900" y="1169" width="260" height="105" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="900" data-y="1169" data-width="260" data-height="105"/>
-  <text x="914" y="1197" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Resident LLC metadata</text>
-  <text x="914" y="1226" text-anchor="start" class="sans body" fill="#182230">ordered, live updates only</text>
-  <path d="M310 1221 L470 1221" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="commit-only update"/>
-  <rect x="302.92" y="1290.00" width="174.16" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="390" y="1307" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">commit-only update</text>
-  <path d="M730 1221 L900 1221" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="timed delivery"/>
-  <rect x="746.16" y="1290.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="815" y="1307" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">timed delivery</text>
-  <text x="40" y="1344" text-anchor="start" class="sans body" fill="#C63C4A">Dedicated link / tag port; native prefetch, shared-port contention and production timing remain unqualified.</text>
+  <rect x="40" y="130" width="1120" height="52" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="130" data-width="1120" data-height="52"/>
+  <text x="58" y="162" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Same access: u=8 | CSR j=18 | request s=19 | property v=18 | line B</text>
+  <text x="40" y="212" text-anchor="start" class="sans body" fill="#182230">Native I0 reads 0x10000012; I1 returns p[18] = 1/128. P_B denotes its translated physical line.</text>
+  <rect x="40" y="235" width="745" height="855" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="235" data-width="745" data-height="855"/>
+  <text x="60" y="268" text-anchor="start" class="sans subtitle" fill="#182230" font-weight="700">RISC-V O3 core: two dependent loads</text>
+  <text x="65" y="291" text-anchor="start" class="sans body" fill="#0F8A72">instruction flow</text>
+  <rect x="65" y="305" width="150" height="60" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="305" data-width="150" data-height="60"/>
+  <text x="79" y="333" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Fetch</text>
+  <rect x="265" y="305" width="150" height="60" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="265" data-y="305" data-width="150" data-height="60"/>
+  <text x="279" y="333" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Decode</text>
+  <rect x="465" y="305" width="150" height="60" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="465" data-y="305" data-width="150" data-height="60"/>
+  <text x="479" y="333" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Rename</text>
+  <rect x="645" y="305" width="110" height="60" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="645" data-y="305" data-width="110" data-height="60"/>
+  <text x="659" y="333" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Dispatch</text>
+  <path d="M215 335 L265 335" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="instruction flow"/>
+  <path d="M415 335 L465 335" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="instruction flow"/>
+  <path d="M615 335 L645 335" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="instruction flow"/>
+  <path d="M700 365 L700 405 L205 405 L205 440" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="dispatch I0 / I1"/>
+  <rect x="342.04" y="373.00" width="155.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="420" y="390" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">dispatch I0 / I1</text>
+  <rect x="65" y="440" width="280" height="160" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="440" data-width="280" data-height="160"/>
+  <line x1="65" y1="493.3333333333333" x2="345" y2="493.3333333333333" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="65" y1="546.6666666666666" x2="345" y2="546.6666666666666" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="80" y="470" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Issue / select</text>
+  <text x="80" y="521" text-anchor="start" class="sans body" fill="#182230">I0: record address ready</text>
+  <text x="80" y="575" text-anchor="start" class="sans body" fill="#6558C5">I1: wait for P17</text>
+  <rect x="465" y="440" width="290" height="160" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="465" data-y="440" data-width="290" data-height="160"/>
+  <line x1="465" y1="493.3333333333333" x2="755" y2="493.3333333333333" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="465" y1="546.6666666666666" x2="755" y2="546.6666666666666" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="480" y="470" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Physical registers</text>
+  <text x="480" y="521" text-anchor="start" class="sans body" fill="#182230">P17 = 0x0000001310000012</text>
+  <text x="480" y="575" text-anchor="start" class="sans body" fill="#182230">F9 = 1/128 (F32 0x3C000000)</text>
+  <rect x="65" y="661" width="280" height="134" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="661" data-width="280" data-height="134"/>
+  <text x="79" y="689" text-anchor="start" class="sans label" fill="#182230" font-weight="700">AGU / payload decode</text>
+  <text x="79" y="718" text-anchor="start" class="sans body" fill="#182230">I0: RA=R+4j; s=j+1</text>
+  <text x="79" y="743" text-anchor="start" class="sans body" fill="#182230">I1: VA=Pbase+18x4</text>
+  <text x="79" y="768" text-anchor="start" class="sans body" fill="#182230">I1 hint: s19, deadline 26</text>
+  <rect x="455" y="661" width="300" height="134" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="455" data-y="661" data-width="300" data-height="134"/>
+  <text x="469" y="689" text-anchor="start" class="sans label" fill="#182230" font-weight="700">LSQ + translation</text>
+  <text x="469" y="718" text-anchor="start" class="sans body" fill="#182230">ordering, replay and faults</text>
+  <text x="469" y="743" text-anchor="start" class="sans body" fill="#182230">VA 0x80000048 -&gt; P_B+8</text>
+  <text x="469" y="768" text-anchor="start" class="sans body" fill="#182230">I1 observation: s19, ctx1</text>
+  <path d="M205 600 L205 661" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="issue"/>
+  <rect x="122.20" y="622.00" width="55.60" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="150" y="639" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">issue</text>
+  <path d="M465 521 L405 521 L405 699 L345 699" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="P17 dependency"/>
+  <rect x="425.00" y="616.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="430" y="633" text-anchor="start" class="sans body" fill="#6558C5" font-weight="700">P17 dependency</text>
+  <path d="M345 729 L455 729" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="load request" data-flow-cadence="I0 / I1"/>
+  <rect x="264.68" y="807.00" width="210.64" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="370" y="824" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">load request | I0 / I1</text>
+  <path d="M600 661 L600 600" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="writeback" data-flow-cadence="per load"/>
+  <text x="625" y="623" text-anchor="start" class="sans body" fill="#2563EB">writeback</text>
+  <text x="625" y="647" text-anchor="start" class="sans body" fill="#2563EB">per load</text>
+  <rect x="900" y="620" width="260" height="175" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="900" data-y="620" data-width="260" data-height="175"/>
+  <text x="914" y="648" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Private data hierarchy</text>
+  <text x="914" y="677" text-anchor="start" class="sans body" fill="#182230">record and property loads</text>
+  <text x="914" y="702" text-anchor="start" class="sans body" fill="#182230">L1D / L2 hit: return value</text>
+  <text x="914" y="727" text-anchor="start" class="sans body" fill="#182230">miss: fetch a cache line</text>
+  <text x="914" y="752" text-anchor="start" class="sans body" fill="#182230">no automatic LLC refresh</text>
+  <path d="M755 710 L900 710" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="request" data-flow-cadence="4 bytes"/>
+  <path d="M900 747 L755 747" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="response" data-flow-cadence="4 bytes"/>
+  <text x="826" y="666" text-anchor="middle" class="sans body" fill="#2563EB">4 bytes</text>
+  <text x="826" y="687" text-anchor="middle" class="sans body" fill="#2563EB">request</text>
+  <text x="826" y="780" text-anchor="middle" class="sans body" fill="#2563EB">response</text>
+  <text x="886" y="457" text-anchor="start" class="sans body" fill="#182230">I0: real record bytes</text>
+  <text x="886" y="486" text-anchor="start" class="sans body" fill="#182230">I1: real property bytes</text>
+  <text x="886" y="515" text-anchor="start" class="sans body" fill="#182230">Payload decode is not</text>
+  <text x="886" y="544" text-anchor="start" class="sans body" fill="#182230">frontend opcode decode.</text>
+  <rect x="65" y="853" width="690" height="132" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="853" data-width="690" data-height="132"/>
+  <line x1="65" y1="897.0" x2="755" y2="897.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="65" y1="941.0" x2="755" y2="941.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="77" y="881" text-anchor="start" class="sans label" fill="#182230" font-weight="700">ROB</text>
+  <text x="77" y="925" text-anchor="start" class="sans body" fill="#182230">I0</text>
+  <text x="77" y="969" text-anchor="start" class="sans body" fill="#182230">I1</text>
+  <line x1="185" y1="853" x2="185" y2="985" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="197" y="881" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Complete?</text>
+  <text x="197" y="925" text-anchor="start" class="sans body" fill="#182230">P17 ready</text>
+  <text x="197" y="969" text-anchor="start" class="sans body" fill="#182230">F9 ready</text>
+  <line x1="315" y1="853" x2="315" y2="985" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="327" y="881" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Retained dynamic state</text>
+  <text x="327" y="925" text-anchor="start" class="sans body" fill="#182230">RECORD: own position s19</text>
+  <text x="327" y="969" text-anchor="start" class="sans body" fill="#182230">PROPERTY: s19, D26, ctx1, own PA</text>
+  <path d="M600 795 L600 853" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="load completed"/>
+  <rect x="602.16" y="814.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="671" y="831" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">load completed</text>
+  <rect x="65" y="1010" width="690" height="58" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="1010" data-width="690" data-height="58"/>
+  <text x="79" y="1038" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Commit: oldest completed, non-squashed instruction</text>
+  <path d="M210 985 L210 1010" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="Commit"/>
+  <rect x="875" y="910" width="305" height="505" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="875" data-y="910" data-width="305" data-height="505"/>
+  <text x="895" y="942" text-anchor="start" class="sans subtitle" fill="#182230" font-weight="700">Shared LLC</text>
+  <rect x="900" y="970" width="255" height="140" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="900" data-y="970" data-width="255" data-height="140"/>
+  <text x="914" y="998" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Data and ordinary tags</text>
+  <text x="914" y="1027" text-anchor="start" class="sans body" fill="#182230">physical line P_B</text>
+  <text x="914" y="1052" text-anchor="start" class="sans body" fill="#182230">p[18] = 1/128 (unchanged)</text>
+  <text x="914" y="1077" text-anchor="start" class="sans body" fill="#182230">fills / dirty writebacks</text>
+  <rect x="900" y="1260" width="255" height="125" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="900" data-y="1260" data-width="255" data-height="125"/>
+  <text x="914" y="1288" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Replacement metadata</text>
+  <text x="914" y="1317" text-anchor="start" class="sans body" fill="#182230">observe: PENDING s19</text>
+  <text x="914" y="1342" text-anchor="start" class="sans body" fill="#182230">commit: FINITE, D26</text>
+  <text x="914" y="1367" text-anchor="start" class="sans body" fill="#182230">non-touching tag lookup</text>
+  <path d="M1010 795 L1010 970" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="miss" data-flow-cadence="64 bytes"/>
+  <path d="M1120 970 L1120 795" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="fill" data-flow-cadence="64 bytes"/>
+  <text x="972" y="859" text-anchor="end" class="sans body" fill="#2563EB">miss</text>
+  <text x="1140" y="859" text-anchor="start" class="sans body" fill="#2563EB">fill</text>
+  <text x="1065" y="887" text-anchor="middle" class="sans body" fill="#2563EB">64 bytes</text>
+  <path d="M1035 1110 L1035 1260" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="I1: observe s19"/>
+  <text x="902" y="1160" text-anchor="start" class="sans body" fill="#6558C5">I1: observe s19</text>
+  <text x="902" y="1187" text-anchor="start" class="sans body" fill="#6558C5">not D26</text>
+  <rect x="40" y="1137" width="745" height="195" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="1137" data-width="745" data-height="195"/>
+  <text x="60" y="1170" text-anchor="start" class="sans subtitle" fill="#6558C5" font-weight="700">Retirement metadata transport</text>
+  <text x="65" y="1201" text-anchor="start" class="mono body" fill="#182230">{P_B, s19, D26, ctx1}</text>
+  <text x="65" y="1226" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">16 physical message slots</text>
+  <rect x="65.0" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65.0" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="91.25" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="91.25" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="117.5" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="117.5" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="143.75" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="143.75" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="170.0" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="170.0" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="196.25" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="196.25" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="222.5" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="222.5" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="248.75" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="248.75" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="275.0" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="275.0" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="301.25" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="301.25" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="327.5" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="327.5" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="353.75" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="353.75" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="380.0" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="380.0" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="406.25" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="406.25" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="432.5" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="432.5" data-y="1240" data-width="26.25" data-height="42"/>
+  <rect x="458.75" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="458.75" data-y="1240" data-width="26.25" data-height="42"/>
+  <text x="65" y="1300" text-anchor="start" class="sans body" fill="#182230">head</text>
+  <text x="485" y="1300" text-anchor="end" class="sans body" fill="#182230">tail</text>
+  <text x="525" y="1202" text-anchor="start" class="sans body" fill="#182230">capture: commitWidth (8)</text>
+  <text x="525" y="1231" text-anchor="start" class="sans body" fill="#182230">minimum delay: 8 cycles</text>
+  <text x="525" y="1260" text-anchor="start" class="sans body" fill="#182230">output: 1 update / cycle</text>
+  <text x="525" y="1289" text-anchor="start" class="sans body" fill="#182230">oldest version protected</text>
+  <path d="M405 1068 L405 1137" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="successful retirement"/>
+  <rect x="513.24" y="1104.00" width="201.52" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="614" y="1121" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">successful retirement</text>
+  <path d="M785 1298 L900 1298" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="update"/>
+  <text x="843" y="1357" text-anchor="middle" class="sans body" fill="#6558C5">update</text>
+  <text x="65" y="1393" text-anchor="start" class="sans body" fill="#182230">Receiver position advances only when a timed update arrives.</text>
+  <text x="40" y="1461" text-anchor="start" class="sans body" fill="#182230">A private hit can bypass LLC data traffic, but still exports its own committed prediction. Squashed loads export none.</text>
+  <text x="40" y="1493" text-anchor="start" class="sans body" fill="#182230">Observations never install FINITE/DEAD. Metadata updates never allocate or alter a data line.</text>
+  <text x="40" y="1525" text-anchor="start" class="sans body" fill="#475467">The native model uses a dedicated metadata link and tag port; prefetch and physical-cost qualification remain separate.</text>
 </svg>

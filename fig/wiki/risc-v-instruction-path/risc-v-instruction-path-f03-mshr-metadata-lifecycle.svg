@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1140" viewBox="0 0 1200 1140" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Request lifetime is not metadata lifetime</title>
-  <desc id="desc">The top flow summarizes existing ReuseBind MSHR compatibility and conflict handling. The lower state machine specifies the native Scale6 retirement boundary: issued operations can complete or be squashed; only retirement can authorize commit refresh. Updates are coalesced separately and may be discarded when expired or when their line is no longer resident.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1430" viewBox="0 0 1200 1430" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">Completion is not permission to install a prediction</title>
+  <desc id="desc">For the same property line B, a request observation installs a pending sequence but no future prediction. A completed load can still be squashed. Retirement alone authorizes a delayed update. A newer pending observation at sequence twenty-three rejects an older committed update at nineteen; a coalesced update at twenty-five can install deadline twenty-six. The final table distinguishes CPU ready cycles from semantic request positions and protects the oldest of two physical same-line slots.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,98 +34,112 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1140" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Request lifetime is not metadata lifetime</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">MSHR merging and commit-update coalescing solve different problems.</text>
+  <rect x="0" y="0" width="1200" height="1430" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Completion is not permission to install a prediction</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Separate request observation, architectural retirement and timed metadata delivery.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">EXISTING REUSEBIND MERGE RULES</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">a reusable foundation, not a completed Scale6 extension</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="209" width="265" height="144" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="209" data-width="265" data-height="144"/>
-  <text x="54" y="237" text-anchor="start" class="sans label" fill="#182230" font-weight="700">MSHR targets</text>
-  <text x="54" y="266" text-anchor="start" class="sans body" fill="#182230">requestor + context</text>
-  <text x="54" y="291" text-anchor="start" class="sans body" fill="#182230">sequence + typed payload</text>
-  <text x="54" y="316" text-anchor="start" class="sans body" fill="#182230">ordinary targets can mix</text>
-  <rect x="450" y="209" width="305" height="144" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450" data-y="209" data-width="305" data-height="144"/>
-  <text x="464" y="237" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Compatibility</text>
-  <text x="464" y="266" text-anchor="start" class="sans body" fill="#182230">newest compatible sequence</text>
-  <text x="464" y="291" text-anchor="start" class="sans body" fill="#182230">equal seq requires same payload</text>
-  <text x="464" y="316" text-anchor="start" class="sans body" fill="#182230">mismatch -&gt; conflict marker</text>
-  <rect x="900" y="209" width="260" height="144" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="900" data-y="209" data-width="260" data-height="144"/>
-  <text x="914" y="237" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Response metadata</text>
-  <text x="914" y="266" text-anchor="start" class="sans body" fill="#182230">copy chosen extension</text>
-  <text x="914" y="291" text-anchor="start" class="sans body" fill="#182230">or propagate conflict</text>
-  <text x="914" y="316" text-anchor="start" class="sans body" fill="#182230">clear on MSHR release</text>
-  <path d="M305 285 L450 285" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="merge targets"/>
-  <rect x="312.72" y="172.00" width="128.56" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="377" y="189" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">merge targets</text>
-  <path d="M755 285 L900 285" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="one response"/>
-  <rect x="767.28" y="172.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="827" y="189" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">one response</text>
-  <text x="40" y="404" text-anchor="start" class="sans body" fill="#182230">allocOnFill combines with OR. A non-allocating target cannot suppress an ordinary allocating target.</text>
-  <text x="40" y="435" text-anchor="start" class="sans body" fill="#C56A13">Primary Scale6 comparisons use FlowThrough OFF; these legacy allocation rules remain separate.</text>
-  <circle cx="44" cy="495" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="501" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="502" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">NATIVE SCALE6 REFRESH LIFECYCLE</text>
-  <text x="1158" y="501" text-anchor="end" class="sans body" fill="#475467">native transport; predictions install only at delivery</text>
-  <line x1="24" y1="521" x2="1176" y2="521" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="521" x2="170" y2="521" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="557" width="240" height="94" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="557" data-width="240" data-height="94"/>
-  <text x="54" y="585" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Issued load</text>
-  <text x="54" y="614" text-anchor="start" class="sans body" fill="#182230">retain dynamic metadata</text>
-  <rect x="455" y="557" width="285" height="94" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="455" data-y="557" data-width="285" data-height="94"/>
-  <text x="469" y="585" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Completed load</text>
-  <text x="469" y="614" text-anchor="start" class="sans body" fill="#182230">may still be speculative</text>
-  <rect x="920" y="557" width="240" height="94" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="920" data-y="557" data-width="240" data-height="94"/>
-  <text x="934" y="585" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Retired load</text>
-  <text x="934" y="614" text-anchor="start" class="sans body" fill="#182230">commit authorizes refresh</text>
-  <path d="M280 603 L455 603" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="normal completion"/>
-  <rect x="285.48" y="528.00" width="165.04" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="368" y="545" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">normal completion</text>
-  <path d="M740 603 L920 603" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="oldest in ROB"/>
-  <rect x="765.72" y="528.00" width="128.56" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="830" y="545" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">oldest in ROB</text>
-  <rect x="455" y="757" width="285" height="100" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="455" data-y="757" data-width="285" data-height="100"/>
-  <text x="469" y="785" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Squashed / faulted</text>
-  <text x="469" y="814" text-anchor="start" class="sans body" fill="#182230">discard; do not enqueue</text>
-  <path d="M160 651 L160 807 L455 807" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="squash"/>
-  <rect x="272.64" y="768.00" width="64.72" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="305" y="785" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">squash</text>
-  <path d="M597 651 L597 757" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="squash"/>
-  <rect x="616.64" y="693.00" width="64.72" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="649" y="710" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">squash</text>
-  <text x="875" y="765" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Coalesce commit updates</text>
-  <rect x="875.0" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="875.0" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="892.8125" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="892.8125" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="910.625" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="910.625" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="928.4375" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="928.4375" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="946.25" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="946.25" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="964.0625" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="964.0625" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="981.875" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="981.875" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="999.6875" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="999.6875" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="1017.5" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1017.5" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="1035.3125" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1035.3125" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="1053.125" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1053.125" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="1070.9375" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1070.9375" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="1088.75" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1088.75" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="1106.5625" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1106.5625" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="1124.375" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1124.375" data-y="779" data-width="17.8125" data-height="42"/>
-  <rect x="1142.1875" y="779" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1142.1875" data-y="779" data-width="17.8125" data-height="42"/>
-  <text x="875" y="839" text-anchor="start" class="sans body" fill="#182230">head</text>
-  <text x="1160" y="839" text-anchor="end" class="sans body" fill="#182230">tail</text>
-  <path d="M1160 603 L1180 603 L1180 800 L1160 800" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="committed only"/>
-  <rect x="981.16" y="708.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="1050" y="725" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">committed only</text>
-  <circle cx="44" cy="931" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="937" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="938" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">LLC STATE HAS ITS OWN EXPIRY</text>
-  <text x="1158" y="937" text-anchor="end" class="sans body" fill="#475467">no update is permission to allocate a data line</text>
-  <line x1="24" y1="957" x2="1176" y2="957" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="957" x2="170" y2="957" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="40" y="990" text-anchor="start" class="sans body" fill="#182230">Apply only to the matching resident line. Expired update -&gt; discard; invalidated line -&gt; no allocation.</text>
-  <text x="40" y="1025" text-anchor="start" class="sans body" fill="#C63C4A">A stale finite prediction becomes UNKNOWN when resolved. It must never become falsely DEAD.</text>
-  <text x="40" y="1060" text-anchor="start" class="sans body" fill="#182230">Native squash, translation, retry, queue-full and drain behavior must be demonstrated before timing claims.</text>
+  <rect x="40" y="130" width="1120" height="52" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="130" data-width="1120" data-height="52"/>
+  <text x="58" y="162" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Same access: u=8 | CSR j=18 | request s=19 | property v=18 | line B</text>
+  <circle cx="44" cy="236" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="242" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="243" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">THREE EVENTS, THREE PERMISSIONS</text>
+  <text x="1158" y="242" text-anchor="end" class="sans body" fill="#475467">top row shows the private-miss case</text>
+  <line x1="24" y1="262" x2="1176" y2="262" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="262" x2="170" y2="262" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="301" width="300" height="151" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="301" data-width="300" data-height="151"/>
+  <text x="54" y="329" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Observed at the LLC</text>
+  <text x="54" y="358" text-anchor="start" class="sans body" fill="#182230">I1 request carries s19 / ctx1</text>
+  <text x="54" y="383" text-anchor="start" class="sans body" fill="#182230">set PENDING, value=19</text>
+  <text x="54" y="408" text-anchor="start" class="sans body" fill="#182230">do not install deadline 26</text>
+  <rect x="450" y="301" width="300" height="151" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450" data-y="301" data-width="300" data-height="151"/>
+  <text x="464" y="329" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Data completes</text>
+  <text x="464" y="358" text-anchor="start" class="sans body" fill="#182230">F9 receives 1/128</text>
+  <text x="464" y="383" text-anchor="start" class="sans body" fill="#182230">I1 may still be speculative</text>
+  <text x="464" y="408" text-anchor="start" class="sans body" fill="#182230">no commit update yet</text>
+  <rect x="860" y="301" width="300" height="151" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="301" data-width="300" data-height="151"/>
+  <text x="874" y="329" text-anchor="start" class="sans label" fill="#182230" font-weight="700">I1 retires</text>
+  <text x="874" y="358" text-anchor="start" class="sans body" fill="#182230">its own PA and captured hint</text>
+  <text x="874" y="383" text-anchor="start" class="sans body" fill="#182230">enqueue {P_B,s19,D26,ctx1}</text>
+  <text x="874" y="408" text-anchor="start" class="sans body" fill="#182230">start the transport latency</text>
+  <path d="M340 376 L450 376" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="completion"/>
+  <rect x="344.40" y="263.00" width="101.20" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="395" y="280" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">completion</text>
+  <path d="M750 376 L860 376" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="ROB permission"/>
+  <rect x="736.16" y="469.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="805" y="486" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">ROB permission</text>
+  <rect x="455" y="510" width="290" height="87" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="455" data-y="510" data-width="290" data-height="87"/>
+  <text x="469" y="538" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Squashed / faulted</text>
+  <text x="469" y="567" text-anchor="start" class="sans body" fill="#182230">discard; do not enqueue</text>
+  <path d="M600 452 L600 510" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="squash"/>
+  <rect x="673.64" y="475.00" width="64.72" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="706" y="492" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">squash</text>
+  <text x="40" y="638" text-anchor="start" class="sans body" fill="#182230">A private hit skips the LLC observation, not retirement. MSHRs merge observations; they do not commit predictions.</text>
+  <circle cx="44" cy="699" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="705" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="706" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">A NEWER OBSERVATION IS A GUARD</text>
+  <text x="1158" y="705" text-anchor="end" class="sans body" fill="#475467">same physical line P_B; other lines omitted</text>
+  <line x1="24" y1="725" x2="1176" y2="725" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="725" x2="170" y2="725" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="765" width="300" height="147" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="765" data-width="300" data-height="147"/>
+  <text x="54" y="793" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Pending observation s23</text>
+  <text x="54" y="822" text-anchor="start" class="sans body" fill="#182230">state=PENDING; value=23</text>
+  <text x="54" y="847" text-anchor="start" class="sans body" fill="#182230">replacement treats it as UNKNOWN</text>
+  <text x="54" y="872" text-anchor="start" class="sans body" fill="#182230">no free watermark advance</text>
+  <rect x="450" y="765" width="300" height="147" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450" data-y="765" data-width="300" data-height="147"/>
+  <text x="464" y="793" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Delivered update s19</text>
+  <text x="464" y="822" text-anchor="start" class="sans body" fill="#182230">19 is older than pending 23</text>
+  <text x="464" y="847" text-anchor="start" class="sans body" fill="#182230">count STALE; retain PENDING</text>
+  <text x="464" y="872" text-anchor="start" class="sans body" fill="#182230">received watermark can advance</text>
+  <rect x="860" y="765" width="300" height="147" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="765" data-width="300" data-height="147"/>
+  <text x="874" y="793" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Delivered update s25</text>
+  <text x="874" y="822" text-anchor="start" class="sans body" fill="#182230">25 is newer than pending 23</text>
+  <text x="874" y="847" text-anchor="start" class="sans body" fill="#182230">install FINITE, deadline=26</text>
+  <text x="874" y="872" text-anchor="start" class="sans body" fill="#182230">data / recency unchanged</text>
+  <path d="M340 833 L450 833" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="reject older"/>
+  <rect x="335.28" y="934.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="395" y="951" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">reject older</text>
+  <path d="M750 833 L860 833" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="accept newer"/>
+  <rect x="745.28" y="934.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="805" y="951" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">accept newer</text>
+  <circle cx="44" cy="1015" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="1021" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="1022" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">COALESCE WITHOUT STARVING THE OLDEST</text>
+  <text x="1158" y="1021" text-anchor="end" class="sans body" fill="#475467">queue-only timing illustration; not an O3 trace</text>
+  <line x1="24" y1="1041" x2="1176" y2="1041" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="1041" x2="170" y2="1041" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="1074" width="1120" height="264" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="1074" data-width="1120" data-height="264"/>
+  <line x1="40" y1="1118.0" x2="1160" y2="1118.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="1162.0" x2="1160" y2="1162.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="1206.0" x2="1160" y2="1206.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="1250.0" x2="1160" y2="1250.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="1294.0" x2="1160" y2="1294.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="52" y="1102" text-anchor="start" class="sans label" fill="#182230" font-weight="700">CPU cycle</text>
+  <text x="52" y="1146" text-anchor="start" class="sans body" fill="#182230">100</text>
+  <text x="52" y="1190" text-anchor="start" class="sans body" fill="#182230">102</text>
+  <text x="52" y="1234" text-anchor="start" class="sans body" fill="#182230">104</text>
+  <text x="52" y="1278" text-anchor="start" class="sans body" fill="#182230">108</text>
+  <text x="52" y="1322" text-anchor="start" class="sans body" fill="#182230">112</text>
+  <line x1="175" y1="1074" x2="175" y2="1338" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="187" y="1102" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Same-line event</text>
+  <text x="187" y="1146" text-anchor="start" class="sans body" fill="#182230">enqueue s19</text>
+  <text x="187" y="1190" text-anchor="start" class="sans body" fill="#182230">enqueue s23</text>
+  <text x="187" y="1234" text-anchor="start" class="sans body" fill="#182230">coalesce secondary with s25</text>
+  <text x="187" y="1278" text-anchor="start" class="sans body" fill="#182230">deliver oldest s19</text>
+  <text x="187" y="1322" text-anchor="start" class="sans body" fill="#182230">deliver s25</text>
+  <line x1="525" y1="1074" x2="525" y2="1338" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="537" y="1102" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Physical slot 0</text>
+  <text x="537" y="1146" text-anchor="start" class="sans body" fill="#182230">s19, ready 108</text>
+  <text x="537" y="1190" text-anchor="start" class="sans body" fill="#182230">s19, ready 108</text>
+  <text x="537" y="1234" text-anchor="start" class="sans body" fill="#182230">s19, ready 108</text>
+  <text x="537" y="1278" text-anchor="start" class="sans body" fill="#182230">empty</text>
+  <text x="537" y="1322" text-anchor="start" class="sans body" fill="#182230">empty</text>
+  <line x1="840" y1="1074" x2="840" y2="1338" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="852" y="1102" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Physical slot 1</text>
+  <text x="852" y="1146" text-anchor="start" class="sans body" fill="#182230">empty</text>
+  <text x="852" y="1190" text-anchor="start" class="sans body" fill="#182230">s23, ready 110</text>
+  <text x="852" y="1234" text-anchor="start" class="sans body" fill="#182230">s25, ready 112</text>
+  <text x="852" y="1278" text-anchor="start" class="sans body" fill="#182230">s25 is now protected</text>
+  <text x="852" y="1322" text-anchor="start" class="sans body" fill="#182230">empty</text>
+  <text x="40" y="1377" text-anchor="start" class="sans body" fill="#182230">Two same-line versions consume two of the 16 slots. A replacement secondary gets its own full latency.</text>
+  <text x="40" y="1409" text-anchor="start" class="sans body" fill="#475467">Output is at most one update per CPU cycle; absent lines never allocate data for a metadata message.</text>
 </svg>

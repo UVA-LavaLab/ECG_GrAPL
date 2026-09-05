@@ -38,6 +38,13 @@ make setup-sniper
 
 The build and experiment commands are in [Reproduction](Reproduction).
 
+The public `wiki/` files are the documentation source; generated SVGs and
+their editable mirrors are produced together. Keep the shared example tied
+to the actual encoders and victim helper. Downloaded architecture papers and
+temporary render previews are reference material, not assets to copy into
+the tracked figure set. The separate paper collection retains its own layout
+and implementation scope.
+
 ## Before updating the public repository
 
 ```bash

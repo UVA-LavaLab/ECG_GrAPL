@@ -63,6 +63,8 @@ def test_public_pages_use_direct_project_language():
             ROOT / "wiki/Reproduction.md",
             ROOT / "wiki/Repository-Hygiene.md"):
         text = path.read_text(errors="ignore").lower()
+        # A paper's citation URL is not operational prose.
+        text = re.sub(r"https?://[^\s)]+", "", text)
         for term in operational_forbidden:
             assert term not in text, f"{path} contains {term!r}"
 

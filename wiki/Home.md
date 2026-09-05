@@ -2,48 +2,63 @@
   <img src="assets/logo.png" alt="ECG graph logo" width="180">
 </p>
 
-# ECG Scale6
+# ECG: edge-carried reuse
 
-The current ECG candidate packs graph-derived future reuse into the existing
-four-byte edge stream. **Scale6** uses a 26-bit property vertex and six-bit
-future token, with line-local LLC state, bounded commit refresh, and selective
-LLC-only prefetching. Property values and graph results are unchanged.
+A fixed graph traversal exposes future property-line uses that a cache cannot
+infer from recency alone. ECG puts a compact description of that reuse into
+the spare bits of the edge word, carries it with the corresponding load, and
+uses it to rank cache lines or select prefetch candidates. The current
+**REF32** family keeps the structural record at four bytes and leaves the
+algorithm's property values unchanged.
 
-### Figure 1 — Scale6: future reuse in the existing edge word
+**Scale6 is one encoding, not the architecture's name.** Twitter needs 26
+vertex-ID bits and leaves six metadata bits. Smaller graphs can use the
+richer **Full14** encoding: default eight reference bits, two state bits and
+four action bits. The implementation supports explicit encoding choices,
+not automatic use of every spare bit; the native decoder currently implements
+only the fixed 26+6 ABI.
 
-![Scale6 dataflow showing the in-place record builder, four-byte destination and token, ordinary private-cache service, bounded commit refresh, LLC-only prefetching, and the boundary between modeled cache evidence and a pending native port](../fig/wiki/home/home-f01-system-overview.svg)
+### Figure 1 — ECG: graph knowledge in the edge stream
 
-**Figure 1.** Offline construction, demand data, commit refresh and prefetch
-are separate paths. The current cache_sim model supports full-graph cache and
-traffic evidence. It does not establish processor-cycle timing or physical area.
+![One ECG access traced from graph vertex 8 and CSR position 18 through alternative Full14 and Scale6 records, unchanged property data, retirement metadata delivery, and a different cache victim](../fig/wiki/home/home-f01-system-overview.svg)
 
-For PageRank pull, the outer vertex traverses in-neighbors `N_in(u)`, and the
-record names the property vertex whose contribution is read. Other graph
-traversals need metadata for their own actual request order; frontier-based
-kernels do not automatically inherit this fixed-sweep result.
+**Figure 1.** Outer vertex `u=8` reads property `v=18` from CSR position `j=18`.
+The next use of that property's cache line is at `j=22`. A richer mask and a
+compact token encode the same distance with different precision. Both recover
+the same address and value. The cache example then shows why retaining the
+most recently touched line is not always the right choice.
 
-## Current status
+The example is PageRank pull: the **outer vertex** traverses in-neighbors
+`N_in(u)`, and the **property vertex** contributes to destinations in
+`N_out(v)`. Its governed access count is `d_out(v)`. Other kernels need metadata
+for their actual request order; changing to out-neighbors `N_out(u)` changes
+that count to `d_in(v)`. A dynamic frontier is not the same stream as a fixed
+PageRank sweep.
 
-Full Twitter-2010 demonstrates that the four-byte format reaches 26-bit graph
-IDs. The 8 MiB LLC remains the primary target; 16 and 24 MiB are additional
-capacity points. P-OPT-SE is a separately labeled reconstruction, not an
-undercharged ordinary P-OPT row.
+## Read the design as a sequence of transformations
 
-The native Scale6 record/F32 pair, retirement-only transport and separate
-LLC replacement policy are implemented in RISC-V O3 and under qualification.
-This replacement-only integration does not establish the complete design:
-native prefetch, the production timing gate and physical-cost evidence remain
-closed. The earlier ReuseBind implementation is a separate mechanism.
+1. [Records and cache control](ReusePlan-FlowThrough) starts with the graph,
+   constructs CSR-aligned masks, compares bit budgets, and works through an
+   actual victim-ranking example.
+2. [One edge, end to end](Property-to-Cache-Walkthrough) derives the hex words,
+   address, returned F32 value, future bounds and storage ownership.
+3. [Native processor pipeline](RISC-V-Instruction-Path) follows both real loads
+   through rename, issue, translation, private caches, the ROB, and the
+   retirement-only metadata channel.
+4. [Evaluation methodology](Evaluation-Methodology) separates functional
+   cache results, total traffic, native execution and physical cost.
+5. [Reproduction](Reproduction) provides the corresponding build, experiment
+   and bounded native-probe commands.
 
-## Documentation
+## Implementation and evidence
 
-1. [Scale6 records and cache control](ReusePlan-FlowThrough) derives the token,
-   future bound, update path, prefetch window and capacity accounting.
-2. [RISC-V integration](RISC-V-Instruction-Path) distinguishes existing
-   ReuseBind support from native Scale6 replacement and the remaining work.
-3. [Checked edge-to-cache example](Property-to-Cache-Walkthrough) follows a
-   concrete word, property address, cache line and expiry.
-4. [Evaluation methodology](Evaluation-Methodology) separates demand misses,
-   all off-chip traffic, timing, and storage cost.
-5. [Reproduction](Reproduction) contains the supported build and experiment
-   commands.
+cache_sim implements Full14 and Scale6 replacement, commit refresh and
+LLC-only prefetching. Full Twitter-2010 results use Scale6; they are cache and
+traffic evidence, not processor-speedup measurements. The 8 MiB LLC remains
+the primary target, with larger capacity points reported separately.
+
+The native RV64 O3 path implements real Scale6 record/F32 loads and
+retirement-driven LLC replacement. Native prefetch, production timing
+admission and physical-area qualification remain unfinished. Earlier
+ReusePlan/ReuseBind and FlowThrough mechanisms are retained as separate
+controls, not silently included in the current result.

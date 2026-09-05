@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1170" viewBox="0 0 1200 1170" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Building Scale6 records in traversal order</title>
-  <desc id="desc">An undirected fixture is traversed as PageRank pull. Its source adjacency 4 to 7 maps to internal row 8 and property vertex 18. Flattening the rows locates edge positions 18 and 22 as successive accesses to the same property line. Their distance four becomes token four, packed with vertex 18 as 0x10000012. The production directed builder uses two line-indexed arrays.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1160" viewBox="0 0 1200 1160" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">From one graph edge to its reuse mask</title>
+  <desc id="desc">An undirected PageRank example has thirty-two vertices with nine non-isolated vertices shown. Outer vertex eight reads property eighteen from CSR position eighteen. Positions eighteen and twenty-two touch the same property line. Their distance four produces the Full14 metadata mask 0x00002200 and record 0x00002212 with five ID bits.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,158 +34,147 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1170" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Building Scale6 records in traversal order</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">One checked graph connects adjacency order, property-line reuse, and the packed record.</text>
+  <rect x="0" y="0" width="1200" height="1160" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">From one graph edge to its reuse mask</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Vertex identity, CSR position and cache-line identity are different quantities.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">TOPOLOGY, NOT AN EPOCH LABEL</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">fixture weights are omitted; PageRank reads topology</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">THE GRAPH DEFINES THE ACCESSES</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">32 vertices; 9 non-isolated vertices shown</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="95" y1="235" x2="90" y2="390" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="95" y1="235" x2="225" y2="310" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="95" y1="235" x2="755" y2="315" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="90" y1="390" x2="225" y2="310" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="90" y1="390" x2="365" y2="405" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="225" y1="310" x2="355" y2="220" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="225" y1="310" x2="365" y2="405" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="225" y1="310" x2="755" y2="315" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="355" y1="220" x2="365" y2="405" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="355" y1="220" x2="515" y2="325" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="365" y1="405" x2="515" y2="325" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="365" y1="405" x2="645" y2="410" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="515" y1="325" x2="630" y2="220" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="515" y1="325" x2="645" y2="410" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="630" y1="220" x2="645" y2="410" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="630" y1="220" x2="755" y2="315" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="645" y1="410" x2="755" y2="315" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <path d="M387.99633378494525 405.4106488175883 L620.0039850163639 409.5536425895779" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="model-edge" data-flow-underlay="false"/>
-  <circle cx="95" cy="235" r="23" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
-  <text x="95" y="241" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">0</text>
-  <rect x="59" y="266" width="72" height="24" rx="3" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0" data-shape="rect" data-x="59" data-y="266" data-width="72" data-height="24"/>
-  <text x="95" y="283" text-anchor="middle" class="sans body" fill="#475467">int 1</text>
-  <circle cx="90" cy="390" r="23" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
-  <text x="90" y="396" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">1</text>
-  <rect x="54" y="421" width="72" height="24" rx="3" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0" data-shape="rect" data-x="54" data-y="421" data-width="72" data-height="24"/>
-  <text x="90" y="438" text-anchor="middle" class="sans body" fill="#475467">int 3</text>
-  <circle cx="225" cy="310" r="23" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
-  <text x="225" y="316" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">2</text>
-  <rect x="189" y="341" width="72" height="24" rx="3" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0" data-shape="rect" data-x="189" data-y="341" data-width="72" data-height="24"/>
-  <text x="225" y="358" text-anchor="middle" class="sans body" fill="#475467">int 6</text>
-  <circle cx="355" cy="220" r="23" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
-  <text x="355" y="226" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">3</text>
-  <rect x="319" y="251" width="72" height="24" rx="3" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0" data-shape="rect" data-x="319" data-y="251" data-width="72" data-height="24"/>
-  <text x="355" y="268" text-anchor="middle" class="sans body" fill="#475467">int 7</text>
-  <circle cx="365" cy="405" r="23" fill="#FFF1F2" stroke="#C63C4A" stroke-width="1"/>
-  <text x="365" y="411" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">4</text>
-  <rect x="329" y="436" width="72" height="24" rx="3" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0" data-shape="rect" data-x="329" data-y="436" data-width="72" data-height="24"/>
-  <text x="365" y="453" text-anchor="middle" class="sans body" fill="#475467">int 8</text>
-  <circle cx="515" cy="325" r="23" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
-  <text x="515" y="331" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">5</text>
-  <rect x="479" y="356" width="72" height="24" rx="3" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0" data-shape="rect" data-x="479" data-y="356" data-width="72" data-height="24"/>
-  <text x="515" y="373" text-anchor="middle" class="sans body" fill="#475467">int 11</text>
-  <circle cx="630" cy="220" r="23" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
-  <text x="630" y="226" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">6</text>
-  <rect x="594" y="251" width="72" height="24" rx="3" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0" data-shape="rect" data-x="594" data-y="251" data-width="72" data-height="24"/>
-  <text x="630" y="268" text-anchor="middle" class="sans body" fill="#475467">int 15</text>
-  <circle cx="645" cy="410" r="23" fill="#FFF1F2" stroke="#C63C4A" stroke-width="1"/>
-  <text x="645" y="416" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">7</text>
-  <rect x="609" y="441" width="72" height="24" rx="3" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0" data-shape="rect" data-x="609" data-y="441" data-width="72" data-height="24"/>
-  <text x="645" y="458" text-anchor="middle" class="sans body" fill="#475467">int 18</text>
-  <circle cx="755" cy="315" r="23" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
-  <text x="755" y="321" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">8</text>
-  <rect x="719" y="346" width="72" height="24" rx="3" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0" data-shape="rect" data-x="719" data-y="346" data-width="72" data-height="24"/>
-  <text x="755" y="363" text-anchor="middle" class="sans body" fill="#475467">int 20</text>
-  <text x="850" y="217" text-anchor="start" class="sans body" fill="#182230" font-weight="700">PR pull example</text>
-  <text x="850" y="252" text-anchor="start" class="sans body" fill="#182230">fixture adjacency 4 -&gt; 7</text>
-  <text x="850" y="287" text-anchor="start" class="sans body" fill="#182230">internal row 8 -&gt; vertex 18</text>
-  <text x="850" y="322" text-anchor="start" class="sans body" fill="#182230">row offsets [14, 19)</text>
-  <text x="850" y="357" text-anchor="start" class="sans body" fill="#182230">edge position j = 18</text>
-  <text x="850" y="392" text-anchor="start" class="sans body" fill="#182230">property line: vertices 16..31</text>
-  <text x="40" y="492" text-anchor="start" class="sans body" fill="#182230">Sparse internal IDs preserve the existing checked fixture; Scale6 is forced to 26 ID bits.</text>
-  <circle cx="44" cy="553" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="559" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="560" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">FLATTEN THE ACTUAL REQUEST ORDER</text>
-  <text x="1158" y="559" text-anchor="end" class="sans body" fill="#475467">same property line, even when the vertex changes</text>
-  <line x1="24" y1="579" x2="1176" y2="579" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="579" x2="170" y2="579" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="609" width="93" height="106" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="609" data-width="93" data-height="106"/>
-  <text x="86" y="636" text-anchor="middle" class="mono body" fill="#182230">j=14</text>
-  <text x="86" y="669" text-anchor="middle" class="mono body" fill="#182230">v=3</text>
-  <text x="86" y="698" text-anchor="middle" class="sans body" fill="#182230">line 0</text>
-  <rect x="133" y="609" width="93" height="106" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="133" data-y="609" data-width="93" data-height="106"/>
-  <text x="179" y="636" text-anchor="middle" class="mono body" fill="#182230">j=15</text>
-  <text x="179" y="669" text-anchor="middle" class="mono body" fill="#182230">v=6</text>
-  <text x="179" y="698" text-anchor="middle" class="sans body" fill="#182230">line 0</text>
-  <rect x="226" y="609" width="93" height="106" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="226" data-y="609" data-width="93" data-height="106"/>
-  <text x="272" y="636" text-anchor="middle" class="mono body" fill="#182230">j=16</text>
-  <text x="272" y="669" text-anchor="middle" class="mono body" fill="#182230">v=7</text>
-  <text x="272" y="698" text-anchor="middle" class="sans body" fill="#182230">line 0</text>
-  <rect x="319" y="609" width="93" height="106" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="319" data-y="609" data-width="93" data-height="106"/>
-  <text x="365" y="636" text-anchor="middle" class="mono body" fill="#182230">j=17</text>
-  <text x="365" y="669" text-anchor="middle" class="mono body" fill="#182230">v=11</text>
-  <text x="365" y="698" text-anchor="middle" class="sans body" fill="#182230">line 0</text>
-  <rect x="412" y="609" width="93" height="106" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="412" data-y="609" data-width="93" data-height="106"/>
-  <text x="458" y="636" text-anchor="middle" class="mono body" fill="#182230">j=18</text>
-  <text x="458" y="669" text-anchor="middle" class="mono body" fill="#182230">v=18</text>
-  <text x="458" y="698" text-anchor="middle" class="sans body" fill="#182230">line 1</text>
-  <rect x="505" y="609" width="93" height="106" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="505" data-y="609" data-width="93" data-height="106"/>
-  <text x="551" y="636" text-anchor="middle" class="mono body" fill="#182230">j=19</text>
-  <text x="551" y="669" text-anchor="middle" class="mono body" fill="#182230">v=7</text>
-  <text x="551" y="698" text-anchor="middle" class="sans body" fill="#182230">line 0</text>
-  <rect x="598" y="609" width="93" height="106" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="598" data-y="609" data-width="93" data-height="106"/>
-  <text x="644" y="636" text-anchor="middle" class="mono body" fill="#182230">j=20</text>
-  <text x="644" y="669" text-anchor="middle" class="mono body" fill="#182230">v=8</text>
-  <text x="644" y="698" text-anchor="middle" class="sans body" fill="#182230">line 0</text>
-  <rect x="691" y="609" width="93" height="106" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="691" data-y="609" data-width="93" data-height="106"/>
-  <text x="737" y="636" text-anchor="middle" class="mono body" fill="#182230">j=21</text>
-  <text x="737" y="669" text-anchor="middle" class="mono body" fill="#182230">v=15</text>
-  <text x="737" y="698" text-anchor="middle" class="sans body" fill="#182230">line 0</text>
-  <rect x="784" y="609" width="93" height="106" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="784" data-y="609" data-width="93" data-height="106"/>
-  <text x="830" y="636" text-anchor="middle" class="mono body" fill="#182230">j=22</text>
-  <text x="830" y="669" text-anchor="middle" class="mono body" fill="#182230">v=18</text>
-  <text x="830" y="698" text-anchor="middle" class="sans body" fill="#182230">line 1</text>
-  <rect x="877" y="609" width="93" height="106" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="877" data-y="609" data-width="93" data-height="106"/>
-  <text x="923" y="636" text-anchor="middle" class="mono body" fill="#182230">j=23</text>
-  <text x="923" y="669" text-anchor="middle" class="mono body" fill="#182230">v=11</text>
-  <text x="923" y="698" text-anchor="middle" class="sans body" fill="#182230">line 0</text>
-  <rect x="970" y="609" width="93" height="106" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="970" data-y="609" data-width="93" data-height="106"/>
-  <text x="1016" y="636" text-anchor="middle" class="mono body" fill="#182230">j=24</text>
-  <text x="1016" y="669" text-anchor="middle" class="mono body" fill="#182230">v=18</text>
-  <text x="1016" y="698" text-anchor="middle" class="sans body" fill="#182230">line 1</text>
-  <rect x="1063" y="609" width="93" height="106" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1063" data-y="609" data-width="93" data-height="106"/>
-  <text x="1109" y="636" text-anchor="middle" class="mono body" fill="#182230">j=25</text>
-  <text x="1109" y="669" text-anchor="middle" class="mono body" fill="#182230">v=20</text>
-  <text x="1109" y="698" text-anchor="middle" class="sans body" fill="#182230">line 1</text>
-  <path d="M458 715 L458 757 L830 757 L830 715" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="next use: 22 - 18 = 4 requests"/>
-  <rect x="502.20" y="775.00" width="283.60" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="644" y="792" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">next use: 22 - 18 = 4 requests</text>
-  <circle cx="44" cy="853" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="859" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="860" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">PACK WITHOUT AN EDGE-SIZED SIDECAR</text>
-  <text x="1158" y="859" text-anchor="end" class="sans body" fill="#475467">production builder: directed graphs with distinct in/out CSR</text>
-  <line x1="24" y1="879" x2="1176" y2="879" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="879" x2="170" y2="879" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="907" width="310" height="130" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="907" data-width="310" data-height="130"/>
-  <text x="54" y="935" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Forward pass</text>
-  <text x="54" y="964" text-anchor="start" class="sans body" fill="#182230">first position for each line</text>
-  <text x="54" y="989" text-anchor="start" class="sans body" fill="#182230">two 64-bit position arrays</text>
-  <rect x="465" y="907" width="315" height="130" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="465" data-y="907" data-width="315" data-height="130"/>
-  <text x="479" y="935" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Reverse pass</text>
-  <text x="479" y="964" text-anchor="start" class="sans body" fill="#182230">next position -&gt; distance</text>
-  <text x="479" y="989" text-anchor="start" class="sans body" fill="#182230">distance -&gt; token -&gt; packed word</text>
-  <path d="M350 968 L465 968" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="positions"/>
-  <rect x="361.96" y="931.00" width="92.08" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="408" y="948" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">positions</text>
-  <rect x="895" y="907" width="265" height="130" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="895" data-y="907" data-width="265" data-height="130"/>
-  <text x="909" y="935" text-anchor="start" class="sans label" fill="#182230" font-weight="700">0x10000012</text>
-  <text x="909" y="964" text-anchor="start" class="sans body" fill="#182230">vertex 18 | token 4</text>
-  <text x="909" y="989" text-anchor="start" class="sans body" fill="#182230">32 bits = 4 bytes</text>
-  <path d="M780 968 L895 968" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="word" data-flow-cadence="per edge"/>
-  <rect x="764.60" y="1057.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="838" y="1074" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">word | per edge</text>
-  <text x="40" y="1106" text-anchor="start" class="sans body" fill="#182230">Twitter: 41,652,230 vertices, 1,468,364,884 directed edges; about 39.7 MiB auxiliary state.</text>
-  <text x="40" y="1139" text-anchor="start" class="sans body" fill="#475467">Construction finishes before the measured traversal. Preprocessing cost is reported separately.</text>
+  <line x1="89.0" y1="244.8" x2="89.0" y2="388.29999999999995" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="89.0" y1="244.8" x2="220.2" y2="314.5" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="89.0" y1="244.8" x2="745.0" y2="322.7" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="89.0" y1="388.29999999999995" x2="220.2" y2="314.5" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="89.0" y1="388.29999999999995" x2="355.5" y2="412.9" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="220.2" y1="314.5" x2="355.5" y2="228.4" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="220.2" y1="314.5" x2="355.5" y2="412.9" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="220.2" y1="314.5" x2="745.0" y2="322.7" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="355.5" y1="228.4" x2="355.5" y2="412.9" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="355.5" y1="228.4" x2="499.0" y2="265.3" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="355.5" y1="412.9" x2="499.0" y2="265.3" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="355.5" y1="412.9" x2="626.0999999999999" y2="417.0" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="499.0" y1="265.3" x2="626.0999999999999" y2="228.4" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="499.0" y1="265.3" x2="626.0999999999999" y2="417.0" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="626.0999999999999" y1="228.4" x2="626.0999999999999" y2="417.0" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="626.0999999999999" y1="228.4" x2="745.0" y2="322.7" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="626.0999999999999" y1="417.0" x2="745.0" y2="322.7" stroke="#98A2B3" stroke-width="1.5" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <path d="M379.49724565328756 413.2635946311104 L601.1028691111587 416.6212555925933" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="model-edge" data-flow-underlay="false"/>
+  <circle cx="89.0" cy="244.8" r="23" fill="#F8FAFC" stroke="#2563EB" stroke-width="1"/>
+  <text x="89.0" y="250.8" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">1</text>
+  <circle cx="89.0" cy="388.29999999999995" r="23" fill="#F8FAFC" stroke="#2563EB" stroke-width="1"/>
+  <text x="89.0" y="394.29999999999995" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">3</text>
+  <circle cx="220.2" cy="314.5" r="23" fill="#F8FAFC" stroke="#2563EB" stroke-width="1"/>
+  <text x="220.2" y="320.5" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">6</text>
+  <circle cx="355.5" cy="228.4" r="23" fill="#F8FAFC" stroke="#2563EB" stroke-width="1"/>
+  <text x="355.5" y="234.4" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">7</text>
+  <circle cx="355.5" cy="412.9" r="23" fill="#ECFDF5" stroke="#0F8A72" stroke-width="1"/>
+  <text x="355.5" y="418.9" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">8</text>
+  <circle cx="499.0" cy="265.3" r="23" fill="#F8FAFC" stroke="#2563EB" stroke-width="1"/>
+  <text x="499.0" y="271.3" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">11</text>
+  <circle cx="626.0999999999999" cy="228.4" r="23" fill="#F8FAFC" stroke="#2563EB" stroke-width="1"/>
+  <text x="626.0999999999999" y="234.4" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">15</text>
+  <circle cx="626.0999999999999" cy="417.0" r="23" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
+  <text x="626.0999999999999" y="423.0" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">18</text>
+  <circle cx="745.0" cy="322.7" r="23" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
+  <text x="745.0" y="328.7" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">20</text>
+  <text x="836" y="217" text-anchor="start" class="sans body" fill="#182230" font-weight="700">PageRank pull at u=8</text>
+  <text x="836" y="252" text-anchor="start" class="sans body" fill="#182230">Green: current outer vertex</text>
+  <text x="836" y="287" text-anchor="start" class="sans body" fill="#182230">Blue fill: line B properties</text>
+  <text x="836" y="322" text-anchor="start" class="sans body" fill="#182230">p[18] and p[20] share B</text>
+  <text x="836" y="357" text-anchor="start" class="sans body" fill="#182230">4-byte values; 64-byte lines</text>
+  <text x="836" y="392" text-anchor="start" class="sans body" fill="#182230">Weights are not used here</text>
+  <text x="40" y="488" text-anchor="start" class="sans body" fill="#182230">All labels are the internal vertex IDs used by the CSR. The other 23 vertices are isolated.</text>
+  <circle cx="44" cy="548" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="554" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="555" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">CSR MAKES THE ORDER EXPLICIT</text>
+  <text x="1158" y="554" text-anchor="end" class="sans body" fill="#475467">in-neighbor rows, visited in increasing outer ID</text>
+  <line x1="24" y1="574" x2="1176" y2="574" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="574" x2="170" y2="574" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="616" width="230" height="132" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="616" data-width="230" data-height="132"/>
+  <line x1="40" y1="660.0" x2="270" y2="660.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="704.0" x2="270" y2="704.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="55" y="645" text-anchor="start" class="sans label" fill="#182230" font-weight="700">row_ptr</text>
+  <text x="55" y="689" text-anchor="start" class="sans body" fill="#182230">row 8 starts at 14</text>
+  <text x="55" y="733" text-anchor="start" class="sans body" fill="#182230">row 9 starts at 19</text>
+  <text x="330" y="590" text-anchor="start" class="sans label" fill="#182230" font-weight="700">in_ids: row 8 plus the following accesses</text>
+  <text x="364.5833333333333" y="624" text-anchor="middle" class="mono body" fill="#475467">j=14</text>
+  <rect x="330.0" y="636" width="69.16666666666667" height="86" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="330.0" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="364.5833333333333" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">3</text>
+  <text x="364.5833333333333" y="700" text-anchor="middle" class="sans body" fill="#475467">A</text>
+  <text x="433.75" y="624" text-anchor="middle" class="mono body" fill="#475467">j=15</text>
+  <rect x="399.1666666666667" y="636" width="69.16666666666667" height="86" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="399.1666666666667" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="433.75" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">6</text>
+  <text x="433.75" y="700" text-anchor="middle" class="sans body" fill="#475467">A</text>
+  <text x="502.9166666666667" y="624" text-anchor="middle" class="mono body" fill="#475467">j=16</text>
+  <rect x="468.33333333333337" y="636" width="69.16666666666667" height="86" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="468.33333333333337" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="502.9166666666667" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">7</text>
+  <text x="502.9166666666667" y="700" text-anchor="middle" class="sans body" fill="#475467">A</text>
+  <text x="572.0833333333334" y="624" text-anchor="middle" class="mono body" fill="#475467">j=17</text>
+  <rect x="537.5" y="636" width="69.16666666666667" height="86" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="537.5" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="572.0833333333334" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">11</text>
+  <text x="572.0833333333334" y="700" text-anchor="middle" class="sans body" fill="#475467">A</text>
+  <text x="641.2500000000001" y="624" text-anchor="middle" class="mono body" fill="#2563EB">j=18</text>
+  <rect x="606.6666666666667" y="636" width="69.16666666666667" height="86" rx="0" fill="#EFF6FF" stroke="#2563EB" stroke-width="1.5" data-shape="rect" data-x="606.6666666666667" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="641.2500000000001" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">18</text>
+  <text x="641.2500000000001" y="700" text-anchor="middle" class="sans body" fill="#2563EB">B</text>
+  <text x="710.4166666666667" y="624" text-anchor="middle" class="mono body" fill="#475467">j=19</text>
+  <rect x="675.8333333333334" y="636" width="69.16666666666667" height="86" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="675.8333333333334" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="710.4166666666667" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">7</text>
+  <text x="710.4166666666667" y="700" text-anchor="middle" class="sans body" fill="#475467">A</text>
+  <text x="779.5833333333334" y="624" text-anchor="middle" class="mono body" fill="#475467">j=20</text>
+  <rect x="745.0" y="636" width="69.16666666666667" height="86" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="745.0" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="779.5833333333334" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">8</text>
+  <text x="779.5833333333334" y="700" text-anchor="middle" class="sans body" fill="#475467">A</text>
+  <text x="848.7500000000001" y="624" text-anchor="middle" class="mono body" fill="#475467">j=21</text>
+  <rect x="814.1666666666667" y="636" width="69.16666666666667" height="86" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="814.1666666666667" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="848.7500000000001" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">15</text>
+  <text x="848.7500000000001" y="700" text-anchor="middle" class="sans body" fill="#475467">A</text>
+  <text x="917.9166666666667" y="624" text-anchor="middle" class="mono body" fill="#2563EB">j=22</text>
+  <rect x="883.3333333333334" y="636" width="69.16666666666667" height="86" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="883.3333333333334" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="917.9166666666667" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">18</text>
+  <text x="917.9166666666667" y="700" text-anchor="middle" class="sans body" fill="#2563EB">B</text>
+  <text x="987.0833333333334" y="624" text-anchor="middle" class="mono body" fill="#475467">j=23</text>
+  <rect x="952.5" y="636" width="69.16666666666667" height="86" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="952.5" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="987.0833333333334" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">11</text>
+  <text x="987.0833333333334" y="700" text-anchor="middle" class="sans body" fill="#475467">A</text>
+  <text x="1056.25" y="624" text-anchor="middle" class="mono body" fill="#2563EB">j=24</text>
+  <rect x="1021.6666666666667" y="636" width="69.16666666666667" height="86" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1021.6666666666667" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="1056.25" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">18</text>
+  <text x="1056.25" y="700" text-anchor="middle" class="sans body" fill="#2563EB">B</text>
+  <text x="1125.4166666666667" y="624" text-anchor="middle" class="mono body" fill="#2563EB">j=25</text>
+  <rect x="1090.8333333333335" y="636" width="69.16666666666667" height="86" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1090.8333333333335" data-y="636" data-width="69.16666666666667" data-height="86"/>
+  <text x="1125.4166666666667" y="667" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">20</text>
+  <text x="1125.4166666666667" y="700" text-anchor="middle" class="sans body" fill="#2563EB">B</text>
+  <path d="M641.25 722 L641.25 772 L917.9166666666667 772 L917.9166666666667 722" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="next B use: 22 - 18 = 4"/>
+  <rect x="669.70" y="790.00" width="219.76" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="779.5833333333334" y="807" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">next B use: 22 - 18 = 4</text>
+  <circle cx="44" cy="862" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="868" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="869" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ENCODE REUSE, PRESERVE THE ID</text>
+  <text x="1158" y="868" text-anchor="end" class="sans body" fill="#475467">Full14 example: 5 ID bits + 14 metadata bits</text>
+  <line x1="24" y1="888" x2="1176" y2="888" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="888" x2="170" y2="888" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="921" width="300" height="127" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="921" data-width="300" data-height="127"/>
+  <text x="54" y="949" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Line-reference construction</text>
+  <text x="54" y="978" text-anchor="start" class="sans body" fill="#182230">current s=19; next use s=23</text>
+  <text x="54" y="1003" text-anchor="start" class="sans body" fill="#182230">distance 4 -&gt; reference 0x10</text>
+  <rect x="455" y="921" width="300" height="127" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="455" data-y="921" data-width="300" data-height="127"/>
+  <text x="469" y="949" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Mask M = 0x00002200</text>
+  <text x="469" y="978" text-anchor="start" class="sans body" fill="#182230">FINITE=1; reference=16</text>
+  <text x="469" y="1003" text-anchor="start" class="sans body" fill="#182230">action=0; ID width=5</text>
+  <rect x="895" y="921" width="265" height="127" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="895" data-y="921" data-width="265" data-height="127"/>
+  <text x="909" y="949" text-anchor="start" class="sans label" fill="#182230" font-weight="700">R = 0x00002212</text>
+  <text x="909" y="978" text-anchor="start" class="sans body" fill="#182230">R = vertex 18 | M</text>
+  <text x="909" y="1003" text-anchor="start" class="sans body" fill="#182230">still one 4-byte word</text>
+  <path d="M340 978 L455 978" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="encode"/>
+  <rect x="364.64" y="882.00" width="64.72" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="397" y="899" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">encode</text>
+  <path d="M755 978 L895 978" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="OR with ID"/>
+  <rect x="774.40" y="1067.00" width="101.20" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="825" y="1084" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">OR with ID</text>
+  <text x="40" y="1112" text-anchor="start" class="sans body" fill="#182230">Position j=18 happens to contain vertex 18; j=22 contains it again. A position is not a vertex ID.</text>
+  <text x="40" y="1144" text-anchor="start" class="sans body" fill="#182230">Preprocessing finishes before the measured traversal. The next plate compares the two supported formats.</text>
 </svg>

@@ -720,9 +720,13 @@ class Figure:
         fields: Sequence[tuple[str, int, str]],
         *,
         total_bits: int,
+        minimum_field_width: float = 90.0,
     ) -> None:
         cursor = x
-        minimums = [90.0 if bits <= 4 else 0.0 for _, bits, _ in fields]
+        minimums = [
+            minimum_field_width if bits <= 4 else 0.0
+            for _, bits, _ in fields
+        ]
         flexible_bits = sum(
             bits for (_, bits, _), minimum in zip(fields, minimums)
             if minimum == 0

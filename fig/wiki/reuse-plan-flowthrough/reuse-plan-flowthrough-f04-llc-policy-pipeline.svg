@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1320" viewBox="0 0 1200 1320" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Fresh LLC state and Scale6 victim selection</title>
-  <desc id="desc">A demand may hit privately while its committed reuse information still needs to reach an already-resident LLC line. The plate shows the 16-entry coalescing queue and expiry checks, the 35 added bits per LLC line, and the actual ranked victim policy. Unknown and finite properties share a scored category; this is not the old RRIP-first ReusePlan policy.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1310" viewBox="0 0 1200 1310" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">Why the encoded future changes an eviction</title>
+  <desc id="desc">A teaching cache with one set and two ways contains property lines A and B after semantic request nineteen. A was touched at eighteen and is needed at twenty; B was touched at nineteen and is needed at twenty-three. Scale6 deadlines twenty-one and twenty-six give remaining distances two and seven, hence victim scores zero and one. LRU evicts A for an incoming scores line C; ECG evicts B. This is a worked algorithm example, not measured benchmark performance.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,110 +34,121 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1320" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Fresh LLC state and Scale6 victim selection</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Private hits must not leave LLC predictions stale; the functional update channel is bounded.</text>
+  <rect x="0" y="0" width="1200" height="1310" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Why the encoded future changes an eviction</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">A recent line is not necessarily the line needed soonest. The same graph gives a concrete counterexample.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">PRIVATE HITS STILL PRODUCE UPDATES</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">LLC hit/fill stamps and commit refresh are distinct</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="164" x2="170" y2="164" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="200" width="275" height="115" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="200" data-width="275" data-height="115"/>
-  <text x="54" y="228" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Governed property load</text>
-  <text x="54" y="257" text-anchor="start" class="sans body" fill="#182230">read value normally</text>
-  <text x="54" y="282" text-anchor="start" class="sans body" fill="#182230">carry the per-edge prediction</text>
-  <rect x="445" y="200" width="270" height="115" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="445" data-y="200" data-width="270" data-height="115"/>
-  <text x="459" y="228" text-anchor="start" class="sans label" fill="#182230" font-weight="700">L1D / L2 hit</text>
-  <text x="459" y="257" text-anchor="start" class="sans body" fill="#182230">no demand reaches the LLC</text>
-  <text x="459" y="282" text-anchor="start" class="sans body" fill="#182230">prediction still advances</text>
-  <path d="M315 250 L445 250" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="data service" data-flow-cadence="per access"/>
-  <rect x="261.00" y="169.00" width="238.00" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="380" y="186" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">data service | per access</text>
-  <rect x="860" y="200" width="300" height="115" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="200" data-width="300" data-height="115"/>
-  <text x="874" y="228" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Resident LLC line</text>
-  <text x="874" y="257" text-anchor="start" class="sans body" fill="#182230">update metadata, not data bytes</text>
-  <text x="874" y="282" text-anchor="start" class="sans body" fill="#182230">never allocate for an update</text>
-  <text x="445" y="373" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">16-entry coalescing queue</text>
-  <rect x="445.0" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="445.0" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="461.875" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="461.875" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="478.75" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="478.75" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="495.625" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="495.625" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="512.5" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="512.5" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="529.375" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="529.375" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="546.25" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="546.25" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="563.125" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="563.125" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="580.0" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="580.0" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="596.875" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="596.875" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="613.75" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="613.75" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="630.625" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="630.625" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="647.5" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="647.5" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="664.375" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="664.375" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="681.25" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="681.25" data-y="387" data-width="16.875" data-height="42"/>
-  <rect x="698.125" y="387" width="16.875" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="698.125" data-y="387" data-width="16.875" data-height="42"/>
-  <text x="445" y="447" text-anchor="start" class="sans body" fill="#182230">head</text>
-  <text x="715" y="447" text-anchor="end" class="sans body" fill="#182230">tail</text>
-  <path d="M176 315 L176 408 L445 408" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="commit refresh"/>
-  <rect x="224.16" y="370.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="293" y="387" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">commit refresh</text>
-  <path d="M715 408 L1010 408 L1010 315" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="resident + unexpired"/>
-  <rect x="772.80" y="371.00" width="192.40" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="869" y="388" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">resident + unexpired</text>
-  <text x="40" y="479" text-anchor="start" class="sans body" fill="#182230">Model: 8 governed requests of delay, at most 1 update per request, coalesce by property line.</text>
-  <text x="40" y="509" text-anchor="start" class="sans body" fill="#C63C4A">Discard expired updates; an expired line prediction resolves to UNKNOWN, never DEAD.</text>
-  <circle cx="44" cy="567" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="573" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="574" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">LINE STATE IS CACHE-SIZED</text>
-  <text x="1158" y="573" text-anchor="end" class="sans body" fill="#475467">baseline tags, data, recency and RRPV remain separate</text>
-  <line x1="24" y1="593" x2="1176" y2="593" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="593" x2="170" y2="593" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="625" width="940.0" height="90" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="625" data-width="940.0" data-height="90"/>
-  <text x="510.0" y="668.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">deadline</text>
-  <text x="510.0" y="692.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
-  <rect x="980.0" y="625" width="90.0" height="90" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="980.0" data-y="625" data-width="90.0" data-height="90"/>
-  <text x="1025.0" y="668.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">state</text>
-  <text x="1025.0" y="692.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
-  <rect x="1070.0" y="625" width="90.0" height="90" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="1070.0" data-y="625" data-width="90.0" data-height="90"/>
-  <text x="1115.0" y="668.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">origin</text>
-  <text x="1115.0" y="692.0" text-anchor="middle" class="sans body" fill="#182230">1 bit</text>
-  <text x="40" y="757" text-anchor="start" class="sans body" fill="#182230">35 added bits per LLC line = 32-bit deadline + 2-bit future state + 1 prefetch-origin bit.</text>
-  <text x="40" y="788" text-anchor="start" class="sans body" fill="#182230">Local GRASP tier is derived at the cache. It is not another field in the six-bit edge token.</text>
-  <circle cx="44" cy="845" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="851" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="852" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">RANK THE ACTUAL CANDIDATE SET</text>
-  <text x="1158" y="851" text-anchor="end" class="sans body" fill="#475467">invalid ways fill first; known-dead governed misses bypass</text>
-  <line x1="24" y1="871" x2="1176" y2="871" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="871" x2="170" y2="871" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="902" width="1120" height="235" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="902" data-width="1120" data-height="235"/>
-  <line x1="40" y1="949.0" x2="1160" y2="949.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="996.0" x2="1160" y2="996.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="1043.0" x2="1160" y2="1043.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="40" y1="1090.0" x2="1160" y2="1090.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="52" y="930" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Rank</text>
-  <text x="52" y="977" text-anchor="start" class="sans body" fill="#182230">first</text>
-  <text x="52" y="1024" text-anchor="start" class="sans body" fill="#182230">next</text>
-  <text x="52" y="1071" text-anchor="start" class="sans body" fill="#182230">then</text>
-  <text x="52" y="1118" text-anchor="start" class="sans body" fill="#182230">then</text>
-  <line x1="140" y1="902" x2="140" y2="1137" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="152" y="930" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Candidate class</text>
-  <text x="152" y="977" text-anchor="start" class="sans body" fill="#182230">known-dead property</text>
-  <text x="152" y="1024" text-anchor="start" class="sans body" fill="#182230">non-property line</text>
-  <text x="152" y="1071" text-anchor="start" class="sans body" fill="#182230">finite property</text>
-  <text x="152" y="1118" text-anchor="start" class="sans body" fill="#182230">unknown property</text>
-  <line x1="370" y1="902" x2="370" y2="1137" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="382" y="930" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Score inside the class</text>
-  <text x="382" y="977" text-anchor="start" class="sans body" fill="#182230">explicit DEAD state</text>
-  <text x="382" y="1024" text-anchor="start" class="sans body" fill="#182230">recency</text>
-  <text x="382" y="1071" text-anchor="start" class="sans body" fill="#182230">distanceRRPV(remaining)</text>
-  <text x="382" y="1118" text-anchor="start" class="sans body" fill="#182230">max(RRPV, local GRASP)</text>
-  <line x1="740" y1="902" x2="740" y2="1137" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="752" y="930" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Selection</text>
-  <text x="752" y="977" text-anchor="start" class="sans body" fill="#182230">prefer reclaiming the dead line</text>
-  <text x="752" y="1024" text-anchor="start" class="sans body" fill="#182230">oldest non-property line</text>
-  <text x="752" y="1071" text-anchor="start" class="sans body" fill="#182230">shares the property category</text>
-  <text x="752" y="1118" text-anchor="start" class="sans body" fill="#182230">shares the property category</text>
-  <text x="40" y="1187" text-anchor="start" class="sans body" fill="#182230">Within the property category: score -&gt; unknown tie -&gt; remaining distance -&gt; colder tier -&gt; oldest.</text>
-  <text x="40" y="1220" text-anchor="start" class="sans body" fill="#6558C5">Unknown does not always precede finite: the score is compared first.</text>
-  <text x="40" y="1264" text-anchor="start" class="sans body" fill="#C56A13">This is the Scale6 model. Native gem5 update transport and cycle timing remain unimplemented.</text>
+  <rect x="40" y="130" width="1120" height="52" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="130" data-width="1120" data-height="52"/>
+  <text x="58" y="162" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Same access: u=8 | CSR j=18 | request s=19 | property v=18 | line B</text>
+  <circle cx="44" cy="233" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="239" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="240" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">THE CACHE SNAPSHOT AFTER s19</text>
+  <text x="1158" y="239" text-anchor="end" class="sans body" fill="#475467">teaching set 0: two resident property ways</text>
+  <line x1="24" y1="259" x2="1176" y2="259" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="259" x2="170" y2="259" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="295" width="1120" height="150" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="295" data-width="1120" data-height="150"/>
+  <line x1="40" y1="345.0" x2="1160" y2="345.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="395.0" x2="1160" y2="395.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="52" y="323" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Way / line</text>
+  <text x="52" y="373" text-anchor="start" class="sans body" fill="#182230">0 / A: p[0..15]</text>
+  <text x="52" y="423" text-anchor="start" class="sans body" fill="#182230">1 / B: p[16..31]</text>
+  <line x1="220" y1="295" x2="220" y2="445" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="232" y="323" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Last touch</text>
+  <text x="232" y="373" text-anchor="start" class="sans body" fill="#182230">s18: p[11]</text>
+  <text x="232" y="423" text-anchor="start" class="sans body" fill="#182230">s19: p[18]</text>
+  <line x1="400" y1="295" x2="400" y2="445" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="412" y="323" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Actual next use</text>
+  <text x="412" y="373" text-anchor="start" class="sans body" fill="#182230">s20: p[7]</text>
+  <text x="412" y="423" text-anchor="start" class="sans body" fill="#182230">s23: p[18]</text>
+  <line x1="610" y1="295" x2="610" y2="445" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="622" y="323" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Decoded deadline</text>
+  <text x="622" y="373" text-anchor="start" class="sans body" fill="#182230">18 + 3 = 21</text>
+  <text x="622" y="423" text-anchor="start" class="sans body" fill="#182230">19 + 7 = 26</text>
+  <line x1="840" y1="295" x2="840" y2="445" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="852" y="323" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Remaining</text>
+  <text x="852" y="373" text-anchor="start" class="sans body" fill="#182230">21 - 19 = 2</text>
+  <text x="852" y="423" text-anchor="start" class="sans body" fill="#182230">26 - 19 = 7</text>
+  <line x1="1020" y1="295" x2="1020" y2="445" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="1032" y="323" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Score</text>
+  <text x="1032" y="373" text-anchor="start" class="sans body" fill="#182230">0</text>
+  <text x="1032" y="423" text-anchor="start" class="sans body" fill="#182230">1</text>
+  <text x="40" y="488" text-anchor="start" class="sans body" fill="#182230">The score is distanceRRPV(remaining) = min(7, floor(log2(remaining)) / 2), rounded down.</text>
+  <text x="40" y="520" text-anchor="start" class="sans body" fill="#182230">Full14 yields tighter deadlines 20 and 23 for these two accesses, with the same score ordering.</text>
+  <circle cx="44" cy="579" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="585" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="586" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ONE MISS, DIFFERENT VICTIMS</text>
+  <text x="1158" y="585" text-anchor="end" class="sans body" fill="#475467">the same new scores-line C needs a way</text>
+  <line x1="24" y1="605" x2="1176" y2="605" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="605" x2="170" y2="605" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="642" width="520" height="240" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="642" data-width="520" data-height="240"/>
+  <text x="60" y="676" text-anchor="start" class="sans subtitle" fill="#182230" font-weight="700">Plain IDs + LRU</text>
+  <rect x="640" y="642" width="520" height="240" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="640" data-y="642" data-width="520" data-height="240"/>
+  <text x="660" y="676" text-anchor="start" class="sans subtitle" fill="#182230" font-weight="700">Encoded records + ECG</text>
+  <text x="60" y="714" text-anchor="start" class="sans body" fill="#C63C4A">Oldest touch: A at 18 -&gt; evict A</text>
+  <text x="660" y="714" text-anchor="start" class="sans body" fill="#0F8A72">Largest score: B at 1 -&gt; evict B</text>
+  <rect x="70" y="747" width="185" height="80" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="70" data-y="747" data-width="185" data-height="80"/>
+  <text x="162.5" y="777" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">way 0: C</text>
+  <text x="162.5" y="806" text-anchor="middle" class="sans body" fill="#182230">new scores line</text>
+  <rect x="330" y="747" width="185" height="80" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="330" data-y="747" data-width="185" data-height="80"/>
+  <text x="422.5" y="777" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">way 1: B</text>
+  <text x="422.5" y="806" text-anchor="middle" class="sans body" fill="#182230">next use at s23</text>
+  <rect x="670" y="747" width="185" height="80" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="670" data-y="747" data-width="185" data-height="80"/>
+  <text x="762.5" y="777" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">way 0: A</text>
+  <text x="762.5" y="806" text-anchor="middle" class="sans body" fill="#182230">next use at s20</text>
+  <rect x="930" y="747" width="185" height="80" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="930" data-y="747" data-width="185" data-height="80"/>
+  <text x="1022.5" y="777" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">way 1: C</text>
+  <text x="1022.5" y="806" text-anchor="middle" class="sans body" fill="#182230">new scores line</text>
+  <text x="60" y="854" text-anchor="start" class="sans body" fill="#C63C4A">Next request p[7] at s20: miss</text>
+  <text x="660" y="854" text-anchor="start" class="sans body" fill="#0F8A72">Next request p[7] at s20: hit</text>
+  <text x="40" y="925" text-anchor="start" class="sans body" fill="#182230">Only the replacement choice differs. The graph, p[18] = 1/128, and dirty-data handling remain unchanged.</text>
+  <circle cx="44" cy="979" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="985" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="986" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">GET FRESH KNOWLEDGE TO THE LLC</text>
+  <text x="1158" y="985" text-anchor="end" class="sans body" fill="#475467">private hits still need a metadata route</text>
+  <line x1="24" y1="1005" x2="1176" y2="1005" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="1005" x2="170" y2="1005" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="1040" width="270" height="109" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="1040" data-width="270" data-height="109"/>
+  <text x="54" y="1068" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Retired property load</text>
+  <text x="54" y="1097" text-anchor="start" class="sans body" fill="#182230">line P_B, s19, deadline 26</text>
+  <text x="54" y="1122" text-anchor="start" class="sans body" fill="#182230">retain context and identity</text>
+  <text x="450" y="1058" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">16-entry commit transport</text>
+  <rect x="450.0" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450.0" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="467.8125" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="467.8125" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="485.625" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="485.625" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="503.4375" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="503.4375" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="521.25" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="521.25" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="539.0625" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="539.0625" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="556.875" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="556.875" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="574.6875" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="574.6875" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="592.5" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="592.5" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="610.3125" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="610.3125" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="628.125" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="628.125" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="645.9375" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="645.9375" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="663.75" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="663.75" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="681.5625" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="681.5625" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="699.375" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="699.375" data-y="1072" data-width="17.8125" data-height="42"/>
+  <rect x="717.1875" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="717.1875" data-y="1072" data-width="17.8125" data-height="42"/>
+  <text x="450" y="1132" text-anchor="start" class="sans body" fill="#182230">head</text>
+  <text x="735" y="1132" text-anchor="end" class="sans body" fill="#182230">tail</text>
+  <rect x="895" y="1040" width="265" height="109" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="895" data-y="1040" data-width="265" data-height="109"/>
+  <text x="909" y="1068" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Resident metadata</text>
+  <text x="909" y="1097" text-anchor="start" class="sans body" fill="#182230">prediction / RRPV update</text>
+  <text x="909" y="1122" text-anchor="start" class="sans body" fill="#182230">no fill / recency touch</text>
+  <path d="M310 1093 L450 1093" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="capture"/>
+  <rect x="343.08" y="1007.00" width="73.84" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="380" y="1024" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">capture</text>
+  <path d="M735 1093 L895 1093" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="resident update"/>
+  <rect x="741.60" y="1155.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="815" y="1172" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">resident update</text>
+  <text x="40" y="1180" text-anchor="start" class="sans body" fill="#182230">Native line payload: D=32. Full14&#x27;s default model uses D=21.</text>
+  <rect x="40" y="1200" width="940.0" height="72" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="1200" data-width="940.0" data-height="72"/>
+  <text x="510.0" y="1234.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">deadline</text>
+  <text x="510.0" y="1258.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <rect x="980.0" y="1200" width="90.0" height="72" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="980.0" data-y="1200" data-width="90.0" data-height="72"/>
+  <text x="1025.0" y="1234.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">state</text>
+  <text x="1025.0" y="1258.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="1070.0" y="1200" width="90.0" height="72" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="1070.0" data-y="1200" data-width="90.0" data-height="72"/>
+  <text x="1115.0" y="1234.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">origin</text>
+  <text x="1115.0" y="1258.0" text-anchor="middle" class="sans body" fill="#182230">1 bit</text>
+  <text x="40" y="1298" text-anchor="start" class="sans body" fill="#182230">General victim order: DEAD, non-property, then scored properties. Unknown uses max(RRPV, local GRASP).</text>
 </svg>

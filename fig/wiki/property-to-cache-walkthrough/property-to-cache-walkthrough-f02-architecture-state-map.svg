@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Where Scale6 metadata lives</title>
-  <desc id="desc">An outer memory region contains the CSR offsets, packed Scale6 records and ordinary property arrays. Preprocessing scratch is temporary. The runtime model contains bounded commit and prefetch queues plus a 16-record lookahead, and each LLC line holds 35 added bits. The 8 MiB example totals 4,590,584 bits of added state, not a silicon-area measurement.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1430" viewBox="0 0 1200 1430" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">Where the mask and its decoded state live</title>
+  <desc id="desc">The encoded edge record and ordinary property data reside in graph memory. Full14&#x27;s functional path keeps a separate carrier; in-place Scale6 avoids another edge array. Native per-instruction state is bounded by the CPU&#x27;s in-flight window. Functional runtime accounting includes bounded commit and prefetch queues, a sixteen-word lookahead and D plus three prediction bits per cache line. D=21 and D=32 are shown separately rather than treating the Scale6 cost as universal.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,95 +34,128 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1200" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Where Scale6 metadata lives</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Storage ownership, lifetime, and accounting domain are explicit.</text>
+  <rect x="0" y="0" width="1200" height="1430" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Where the mask and its decoded state live</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Edge storage, per-instruction association and per-cache-line predictions have different lifetimes.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">GRAPH MEMORY AND BUILD-TIME SCRATCH</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">no runtime P-OPT matrix in the Scale6 candidate</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">no runtime P-OPT rereference matrix</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="194" width="720" height="232" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="194" data-width="720" data-height="232"/>
-  <text x="60" y="225" text-anchor="start" class="sans label" fill="#2563EB" font-weight="700">Persistent graph / property memory</text>
+  <text x="60" y="225" text-anchor="start" class="sans label" fill="#2563EB" font-weight="700">Graph memory: records are not property values</text>
   <rect x="60" y="254" width="680" height="138" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="60" data-y="254" data-width="680" data-height="138"/>
   <line x1="60" y1="300.0" x2="740" y2="300.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="60" y1="346.0" x2="740" y2="346.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="78" y="284" text-anchor="start" class="sans body" fill="#182230">CSR offsets: row boundaries</text>
-  <text x="78" y="330" text-anchor="start" class="sans body" fill="#182230">Packed in-edge CSR: 4 bytes per edge, including token</text>
-  <text x="78" y="376" text-anchor="start" class="sans body" fill="#182230">Property arrays: ordinary algorithm values</text>
+  <text x="78" y="284" text-anchor="start" class="sans body" fill="#182230">CSR offsets: row boundaries are unchanged</text>
+  <text x="78" y="330" text-anchor="start" class="sans body" fill="#182230">R[j]: 4-byte encoded edge record replaces the ID read</text>
+  <text x="78" y="376" text-anchor="start" class="sans body" fill="#182230">p[v]: ordinary F32 algorithm data, not an encoded mask</text>
   <rect x="830" y="224" width="330" height="168" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="830" data-y="224" data-width="330" data-height="168"/>
-  <text x="844" y="252" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Preprocessing only</text>
-  <text x="844" y="281" text-anchor="start" class="sans body" fill="#182230">first + next arrays</text>
-  <text x="844" y="306" text-anchor="start" class="sans body" fill="#182230">about 39.7 MiB for Twitter</text>
-  <text x="844" y="331" text-anchor="start" class="sans body" fill="#182230">release after construction</text>
-  <text x="40" y="467" text-anchor="start" class="sans body" fill="#182230">The graph-scaled scratch is not resident hardware. The four-byte record stream remains after construction.</text>
-  <circle cx="44" cy="525" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="531" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="532" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">BOUNDED RUNTIME MODEL STATE</text>
-  <text x="1158" y="531" text-anchor="end" class="sans body" fill="#475467">cache_sim state; native capture and ports cost extra</text>
-  <line x1="24" y1="551" x2="1176" y2="551" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="551" x2="170" y2="551" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="579" width="1120" height="465" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="579" data-width="1120" data-height="465"/>
-  <text x="64" y="639" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Commit: 16 entries</text>
-  <rect x="64.0" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="64.0" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="82.125" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="82.125" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="100.25" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="100.25" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="118.375" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="118.375" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="136.5" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="136.5" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="154.625" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="154.625" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="172.75" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="172.75" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="190.875" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="190.875" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="209.0" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="209.0" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="227.125" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="227.125" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="245.25" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="245.25" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="263.375" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="263.375" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="281.5" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="281.5" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="299.625" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="299.625" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="317.75" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="317.75" data-y="653" data-width="18.125" data-height="42"/>
-  <rect x="335.875" y="653" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="335.875" data-y="653" data-width="18.125" data-height="42"/>
-  <text x="64" y="713" text-anchor="start" class="sans body" fill="#182230">head</text>
-  <text x="354" y="713" text-anchor="end" class="sans body" fill="#182230">tail</text>
-  <text x="440" y="639" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Prefetch: 8 entries</text>
-  <rect x="440.0" y="653" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="440.0" data-y="653" data-width="38.75" data-height="42"/>
-  <rect x="478.75" y="653" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="478.75" data-y="653" data-width="38.75" data-height="42"/>
-  <rect x="517.5" y="653" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="517.5" data-y="653" data-width="38.75" data-height="42"/>
-  <rect x="556.25" y="653" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="556.25" data-y="653" data-width="38.75" data-height="42"/>
-  <rect x="595.0" y="653" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="595.0" data-y="653" data-width="38.75" data-height="42"/>
-  <rect x="633.75" y="653" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="633.75" data-y="653" data-width="38.75" data-height="42"/>
-  <rect x="672.5" y="653" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="672.5" data-y="653" data-width="38.75" data-height="42"/>
-  <rect x="711.25" y="653" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="711.25" data-y="653" data-width="38.75" data-height="42"/>
-  <text x="440" y="713" text-anchor="start" class="sans body" fill="#182230">head</text>
-  <text x="750" y="713" text-anchor="end" class="sans body" fill="#182230">tail</text>
-  <rect x="860" y="610" width="275" height="130" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="610" data-width="275" data-height="130"/>
-  <line x1="860" y1="653.3333333333334" x2="1135" y2="653.3333333333334" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="860" y1="696.6666666666666" x2="1135" y2="696.6666666666666" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="876" y="639" text-anchor="start" class="sans label" fill="#2563EB" font-weight="700">Lookahead</text>
-  <text x="876" y="683" text-anchor="start" class="sans body" fill="#182230">16 x 32-bit records</text>
-  <text x="876" y="726" text-anchor="start" class="sans body" fill="#182230">512 bits</text>
-  <text x="64" y="739" text-anchor="start" class="sans body" fill="#6558C5">1,840 bits</text>
-  <text x="440" y="739" text-anchor="start" class="sans body" fill="#C56A13">648 bits</text>
-  <text x="64" y="790" text-anchor="start" class="sans label" fill="#182230" font-weight="700">LLC: 8 MiB data capacity, 131,072 cache lines</text>
-  <rect x="64" y="822" width="890.0" height="86" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="64" data-y="822" data-width="890.0" data-height="86"/>
-  <text x="509.0" y="863.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">deadline</text>
-  <text x="509.0" y="887.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
-  <rect x="954.0" y="822" width="90.0" height="86" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="954.0" data-y="822" data-width="90.0" data-height="86"/>
-  <text x="999.0" y="863.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">state</text>
-  <text x="999.0" y="887.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
-  <rect x="1044.0" y="822" width="90.0" height="86" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="1044.0" data-y="822" data-width="90.0" data-height="86"/>
-  <text x="1089.0" y="863.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">origin</text>
-  <text x="1089.0" y="887.0" text-anchor="middle" class="sans body" fill="#182230">1 bit</text>
-  <text x="64" y="949" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">35 bits x 131,072 lines = 4,587,520 bits</text>
-  <text x="64" y="991" text-anchor="start" class="sans body" fill="#182230">Queues + lookahead + 64 control bits = 3,064 additional bits</text>
-  <path d="M750 675 L800 675 L800 822" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="LLC-only effect"/>
-  <rect x="880.60" y="764.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="954" y="781" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">LLC-only effect</text>
-  <circle cx="44" cy="1100" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="1106" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="1107" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">REPORT THE RIGHT COST DOMAIN</text>
-  <text x="1158" y="1106" text-anchor="end" class="sans body" fill="#475467">bit counts are not synthesized area</text>
-  <line x1="24" y1="1126" x2="1176" y2="1126" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="1126" x2="170" y2="1126" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="40" y="1154" text-anchor="start" class="sans body" fill="#C63C4A">Total added state: 4,590,584 bits, about 560 KiB. Charge this as well as the ordinary LLC data array.</text>
+  <text x="844" y="252" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Builder scratch</text>
+  <text x="844" y="281" text-anchor="start" class="sans body" fill="#182230">Full14: edge-sized arrays</text>
+  <text x="844" y="306" text-anchor="start" class="sans body" fill="#182230">Scale6 in-place: first / next</text>
+  <text x="844" y="331" text-anchor="start" class="sans body" fill="#182230">Twitter: about 39.7 MiB</text>
+  <text x="844" y="356" text-anchor="start" class="sans body" fill="#182230">temporary, not silicon state</text>
+  <text x="40" y="467" text-anchor="start" class="sans body" fill="#182230">Full14&#x27;s functional carrier is separate; the in-place Scale6 path avoids a second edge array.</text>
+  <rect x="40" y="499" width="1120" height="115" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="499" data-width="1120" data-height="115"/>
+  <text x="60" y="530" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Per-in-flight native access, not per graph edge</text>
+  <text x="60" y="574" text-anchor="start" class="sans body" fill="#182230">P17: 64-bit sequence | record operand</text>
+  <text x="660" y="574" text-anchor="start" class="sans body" fill="#182230">I1: captured hint + its translated address</text>
+  <circle cx="44" cy="672" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="678" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="679" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">BOUNDED CONTROL AND LINE STATE</text>
+  <text x="1158" y="678" text-anchor="end" class="sans body" fill="#475467">D is the stored semantic-deadline width</text>
+  <line x1="24" y1="698" x2="1176" y2="698" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="698" x2="170" y2="698" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="728" width="1120" height="504" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="728" data-width="1120" data-height="504"/>
+  <path d="M600 614 L600 728" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="committed information"/>
+  <rect x="667.24" y="699.00" width="201.52" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="768" y="716" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">committed information</text>
+  <text x="64" y="793" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Commit: 16 entries</text>
+  <rect x="64.0" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="64.0" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="82.125" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="82.125" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="100.25" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="100.25" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="118.375" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="118.375" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="136.5" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="136.5" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="154.625" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="154.625" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="172.75" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="172.75" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="190.875" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="190.875" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="209.0" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="209.0" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="227.125" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="227.125" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="245.25" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="245.25" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="263.375" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="263.375" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="281.5" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="281.5" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="299.625" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="299.625" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="317.75" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="317.75" data-y="807" data-width="18.125" data-height="42"/>
+  <rect x="335.875" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="335.875" data-y="807" data-width="18.125" data-height="42"/>
+  <text x="64" y="867" text-anchor="start" class="sans body" fill="#182230">head</text>
+  <text x="354" y="867" text-anchor="end" class="sans body" fill="#182230">tail</text>
+  <text x="440" y="793" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Prefetch: 8 entries</text>
+  <rect x="440.0" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="440.0" data-y="807" data-width="38.75" data-height="42"/>
+  <rect x="478.75" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="478.75" data-y="807" data-width="38.75" data-height="42"/>
+  <rect x="517.5" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="517.5" data-y="807" data-width="38.75" data-height="42"/>
+  <rect x="556.25" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="556.25" data-y="807" data-width="38.75" data-height="42"/>
+  <rect x="595.0" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="595.0" data-y="807" data-width="38.75" data-height="42"/>
+  <rect x="633.75" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="633.75" data-y="807" data-width="38.75" data-height="42"/>
+  <rect x="672.5" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="672.5" data-y="807" data-width="38.75" data-height="42"/>
+  <rect x="711.25" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="711.25" data-y="807" data-width="38.75" data-height="42"/>
+  <text x="440" y="867" text-anchor="start" class="sans body" fill="#182230">head</text>
+  <text x="750" y="867" text-anchor="end" class="sans body" fill="#182230">tail</text>
+  <rect x="860" y="759" width="275" height="130" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="759" data-width="275" data-height="130"/>
+  <line x1="860" y1="802.3333333333334" x2="1135" y2="802.3333333333334" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="860" y1="845.6666666666666" x2="1135" y2="845.6666666666666" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="876" y="789" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Functional lookahead</text>
+  <text x="876" y="832" text-anchor="start" class="sans body" fill="#182230">16 x 32-bit records</text>
+  <text x="876" y="875" text-anchor="start" class="sans body" fill="#182230">512 bits</text>
+  <text x="64" y="909" text-anchor="start" class="sans body" fill="#6558C5">entry = 51 + 2D bits</text>
+  <text x="440" y="909" text-anchor="start" class="sans body" fill="#C56A13">entry = 49 + D bits</text>
+  <text x="64" y="966" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Full14 default: D=21</text>
+  <text x="630" y="966" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Scale6 / native payload: D=32</text>
+  <rect x="64" y="988" width="300.0" height="76" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="64" data-y="988" data-width="300.0" data-height="76"/>
+  <text x="214.0" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">deadline</text>
+  <text x="214.0" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">21 bits</text>
+  <rect x="364.0" y="988" width="90.0" height="76" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="364.0" data-y="988" data-width="90.0" data-height="76"/>
+  <text x="409.0" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">state</text>
+  <text x="409.0" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="454.0" y="988" width="90.0" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="454.0" data-y="988" data-width="90.0" data-height="76"/>
+  <text x="499.0" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">origin</text>
+  <text x="499.0" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">1 bit</text>
+  <rect x="630" y="988" width="325.0" height="76" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="630" data-y="988" data-width="325.0" data-height="76"/>
+  <text x="792.5" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">deadline</text>
+  <text x="792.5" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <rect x="955.0" y="988" width="90.0" height="76" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="955.0" data-y="988" data-width="90.0" data-height="76"/>
+  <text x="1000.0" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">state</text>
+  <text x="1000.0" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
+  <rect x="1045.0" y="988" width="90.0" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="1045.0" data-y="988" data-width="90.0" data-height="76"/>
+  <text x="1090.0" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">origin</text>
+  <text x="1090.0" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">1 bit</text>
+  <rect x="64" y="1100" width="1070" height="114" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="64" data-y="1100" data-width="1070" data-height="114"/>
+  <line x1="64" y1="1138.0" x2="1134" y2="1138.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="64" y1="1176.0" x2="1134" y2="1176.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="76" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Format</text>
+  <text x="76" y="1166" text-anchor="start" class="sans body" fill="#182230">Full14, D=21</text>
+  <text x="76" y="1204" text-anchor="start" class="sans body" fill="#182230">Scale6, D=32</text>
+  <line x1="254" y1="1100" x2="254" y2="1214" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="266" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Per line</text>
+  <text x="266" y="1166" text-anchor="start" class="sans body" fill="#182230">24 bits</text>
+  <text x="266" y="1204" text-anchor="start" class="sans body" fill="#182230">35 bits</text>
+  <line x1="464" y1="1100" x2="464" y2="1214" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="476" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Line payload at 8 MiB</text>
+  <text x="476" y="1166" text-anchor="start" class="sans body" fill="#182230">3,145,728 bits</text>
+  <text x="476" y="1204" text-anchor="start" class="sans body" fill="#182230">4,587,520 bits</text>
+  <line x1="804" y1="1100" x2="804" y2="1214" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="816" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Buffers + control</text>
+  <text x="816" y="1166" text-anchor="start" class="sans body" fill="#182230">2,624 bits</text>
+  <text x="816" y="1204" text-anchor="start" class="sans body" fill="#182230">3,064 bits</text>
+  <circle cx="44" cy="1286" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="1292" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="1293" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">DO NOT TURN STATE INTO AN AREA CLAIM</text>
+  <text x="1158" y="1292" text-anchor="end" class="sans body" fill="#475467">both queues and lookahead enabled in these totals</text>
+  <line x1="24" y1="1312" x2="1176" y2="1312" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="1312" x2="170" y2="1312" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="40" y="1350" text-anchor="start" class="sans body" fill="#182230">8 MiB model totals: Full14 3,148,352 bits; Scale6 4,590,584 bits. Baseline cache data/tags remain separate.</text>
+  <text x="40" y="1382" text-anchor="start" class="sans body" fill="#475467">Native capture, validation, port logic and planned 128-byte lookahead require their own cost accounting.</text>
+  <text x="40" y="1414" text-anchor="start" class="sans body" fill="#475467">These bit counts are not synthesized area, and the 512-bit functional window is not a native buffer implementation.</text>
 </svg>

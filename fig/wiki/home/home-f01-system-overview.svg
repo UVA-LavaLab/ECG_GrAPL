@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1060" viewBox="0 0 1200 1060" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Scale6: future reuse in the existing edge word</title>
-  <desc id="desc">The current ECG candidate uses a four-byte destination-plus-token record. Offline line-indexed construction precedes PageRank. Demand accesses, private-hit commit updates and bounded LLC prefetching are modeled in cache_sim. The diagram explicitly distinguishes that evidence from the replacement-only gem5 qualification, missing native prefetch and physical-cost evidence.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1180" viewBox="0 0 1200 1180" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">ECG: graph knowledge in the edge stream</title>
+  <desc id="desc">The same graph access is followed from vertex eight and CSR position eighteen to a richer Full14 mask or a compact Scale6 token, normal property addressing, and a resident-line update. The property value is unchanged. A teaching cache contrasts recency with carried future reuse. Scale6 is the large-ID format, not the complete ECG design.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,98 +34,118 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1060" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Scale6: future reuse in the existing edge word</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Current result: functional cache behavior. Native cycle-timed integration remains a separate gate.</text>
+  <rect x="0" y="0" width="1200" height="1180" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">ECG: graph knowledge in the edge stream</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Reuse information travels with an ordinary-width edge record, then guides a cache decision.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">OFFLINE: KEEP THE EDGE WORD SMALL</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">directed PageRank pull; fixed traversal</text>
+  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">GRAPH -&gt; CSR -&gt; ENCODED MASK</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">one access; choose a format that fits</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="50" y="206.97" width="245" height="109.06" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
-  <ellipse cx="172.5" cy="206.97" rx="122.5" ry="11.969999999999999" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
-  <ellipse cx="172.5" cy="316.03" rx="122.5" ry="11.969999999999999" fill="#EFF6FF" stroke="#475467" stroke-width="1.5"/>
-  <text x="72" y="237" text-anchor="start" class="sans body" fill="#182230" font-weight="700">Directed CSR / CSC</text>
-  <text x="72" y="265" text-anchor="start" class="sans body" fill="#182230">row offsets + neighbors</text>
-  <text x="72" y="293" text-anchor="start" class="sans body" fill="#182230">property-line reuse</text>
-  <rect x="420" y="195" width="295" height="133" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="420" data-y="195" data-width="295" data-height="133"/>
-  <text x="434" y="223" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Two-pass construction</text>
-  <text x="434" y="252" text-anchor="start" class="sans body" fill="#182230">first + next position per line</text>
-  <text x="434" y="277" text-anchor="start" class="sans body" fill="#182230">pack the in-edge CSR in place</text>
-  <path d="M295 260 L420 260" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="scan" data-flow-cadence="offline"/>
-  <rect x="288.16" y="171.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="357" y="188" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">scan | offline</text>
-  <rect x="840" y="207" width="63.0" height="100" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="840" data-y="207" data-width="63.0" data-height="100"/>
-  <text x="871.5" y="255.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">token</text>
-  <text x="871.5" y="279.0" text-anchor="middle" class="sans body" fill="#182230">6 bits</text>
-  <rect x="903.0" y="207" width="273.0" height="100" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="903.0" data-y="207" data-width="273.0" data-height="100"/>
-  <text x="1039.5" y="255.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">vertex</text>
-  <text x="1039.5" y="279.0" text-anchor="middle" class="sans body" fill="#182230">26 bits</text>
-  <path d="M715 260 L840 260" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="pack" data-flow-cadence="per edge"/>
-  <rect x="704.60" y="171.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="778" y="188" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">pack | per edge</text>
-  <text x="40" y="376" text-anchor="start" class="sans body" fill="#182230">4 bytes per edge; no runtime rereference matrix and no extra edge sidecar.</text>
-  <text x="40" y="404" text-anchor="start" class="sans body" fill="#475467">Twitter preprocessing scratch: about 39.7 MiB, indexed by property line, not by edge.</text>
-  <circle cx="44" cy="465" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="471" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="472" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">RUNTIME: KEEP LLC STATE FRESH</text>
-  <text x="1158" y="471" text-anchor="end" class="sans body" fill="#475467">cache_sim model, not a completed gem5 port</text>
-  <line x1="24" y1="491" x2="1176" y2="491" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="491" x2="170" y2="491" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="50" y="535" width="240" height="100" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="50" data-y="535" data-width="240" data-height="100"/>
-  <text x="64" y="563" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Property access</text>
-  <text x="64" y="592" text-anchor="start" class="sans body" fill="#182230">vertex + future token</text>
-  <rect x="430" y="535" width="260" height="100" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="430" data-y="535" data-width="260" data-height="100"/>
-  <text x="444" y="563" text-anchor="start" class="sans label" fill="#182230" font-weight="700">L1D / L2</text>
-  <text x="444" y="592" text-anchor="start" class="sans body" fill="#182230">ordinary data service</text>
-  <rect x="860" y="535" width="290" height="100" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="535" data-width="290" data-height="100"/>
-  <text x="874" y="563" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Shared LLC</text>
-  <text x="874" y="592" text-anchor="start" class="sans body" fill="#182230">data + line-local future state</text>
-  <path d="M290 575 L430 575" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="demand" data-flow-cadence="per edge"/>
-  <rect x="277.48" y="501.00" width="165.04" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="360" y="518" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">demand | per edge</text>
-  <path d="M690 575 L860 575" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="miss stream" data-flow-cadence="private miss"/>
-  <rect x="651.44" y="501.00" width="247.12" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="775" y="518" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">miss stream | private miss</text>
-  <text x="430" y="687" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Commit update: 16 entries</text>
-  <rect x="430.0" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="430.0" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="446.25" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="446.25" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="462.5" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="462.5" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="478.75" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="478.75" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="495.0" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="495.0" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="511.25" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="511.25" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="527.5" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="527.5" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="543.75" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="543.75" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="560.0" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="560.0" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="576.25" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="576.25" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="592.5" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="592.5" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="608.75" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="608.75" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="625.0" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="625.0" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="641.25" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="641.25" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="657.5" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="657.5" data-y="701" data-width="16.25" data-height="42"/>
-  <rect x="673.75" y="701" width="16.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="673.75" data-y="701" data-width="16.25" data-height="42"/>
-  <text x="430" y="761" text-anchor="start" class="sans body" fill="#182230">head</text>
-  <text x="690" y="761" text-anchor="end" class="sans body" fill="#182230">tail</text>
-  <path d="M170 635 L170 722 L430 722" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="including private hits"/>
-  <rect x="194.68" y="682.00" width="210.64" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="300" y="699" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">including private hits</text>
-  <path d="M690 722 L1005 722 L1005 635" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="resident + live only"/>
-  <rect x="746.80" y="683.00" width="192.40" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="843" y="700" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">resident + live only</text>
-  <text x="40" y="783" text-anchor="start" class="sans body" fill="#C56A13">Selective prefetch: 16-record lookahead, 8 pending entries, LLC-only fills.</text>
-  <text x="40" y="813" text-anchor="start" class="sans body" fill="#475467">The update and prefetch delays are measured in governed requests here, not CPU cycles.</text>
-  <circle cx="44" cy="870" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="876" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="877" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">WHAT THIS ESTABLISHES</text>
-  <text x="1158" y="876" text-anchor="end" class="sans body" fill="#475467">keep the implementation and evidence boundaries visible</text>
-  <line x1="24" y1="896" x2="1176" y2="896" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="896" x2="170" y2="896" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="50" y="933" text-anchor="start" class="sans label" fill="#0F8A72" font-weight="700">ESTABLISHED</text>
-  <text x="50" y="963" text-anchor="start" class="sans body" fill="#182230">Full-graph PageRank results, LLC misses,</text>
-  <text x="50" y="987" text-anchor="start" class="sans body" fill="#182230">off-chip traffic, bounded model queues.</text>
-  <text x="650" y="933" text-anchor="start" class="sans label" fill="#C56A13" font-weight="700">STILL REQUIRED</text>
-  <text x="650" y="963" text-anchor="start" class="sans body" fill="#182230">Native prefetch and timing qualification,</text>
-  <text x="650" y="987" text-anchor="start" class="sans body" fill="#182230">physical area and contention evidence.</text>
+  <text x="40" y="205" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Graph: edge excerpt</text>
+  <circle cx="90" cy="273" r="28" fill="#ECFDF5" stroke="#2563EB" stroke-width="1"/>
+  <text x="90" y="279" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">8</text>
+  <circle cx="280" cy="273" r="28" fill="#EFF6FF" stroke="#2563EB" stroke-width="1"/>
+  <text x="280" y="279" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">18</text>
+  <path d="M118 273 L251 273" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="model-edge" data-flow-underlay="false"/>
+  <text x="185" y="246" text-anchor="middle" class="sans body" fill="#2563EB">read p[18]</text>
+  <text x="40" y="338" text-anchor="start" class="sans body" fill="#182230">outer u=8; property v=18</text>
+  <rect x="420" y="214" width="280" height="130" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="420" data-y="214" data-width="280" data-height="130"/>
+  <line x1="420" y1="257.3333333333333" x2="700" y2="257.3333333333333" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="420" y1="300.6666666666667" x2="700" y2="300.6666666666667" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="435" y="243" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Incoming CSR</text>
+  <text x="435" y="286" text-anchor="start" class="sans body" fill="#182230">row_ptr[8:10] = [14,19]</text>
+  <text x="435" y="329" text-anchor="start" class="mono body" fill="#2563EB">in_ids[18] = 18</text>
+  <rect x="860" y="214" width="300" height="130" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="214" data-width="300" data-height="130"/>
+  <text x="874" y="242" text-anchor="start" class="sans label" fill="#182230" font-weight="700">32-bit edge record</text>
+  <text x="874" y="271" text-anchor="start" class="sans body" fill="#182230">Full14  0x00002212</text>
+  <text x="874" y="296" text-anchor="start" class="sans body" fill="#182230">Scale6  0x10000012</text>
+  <path d="M308 273 L420 273" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="row order"/>
+  <rect x="323.96" y="355.00" width="92.08" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="370" y="372" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">row order</text>
+  <path d="M700 273 L860 273" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="encode reuse"/>
+  <rect x="720.28" y="181.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="780" y="198" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">encode reuse</text>
+  <path d="M1010 344 L1010 393 L15 393 L15 620 L40 620" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="read the encoded word" data-flow-cadence="4 bytes"/>
+  <rect x="415.64" y="363.00" width="292.72" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="562" y="380" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">read the encoded word | 4 bytes</text>
+  <text x="40" y="436" text-anchor="start" class="sans body" fill="#182230">Small IDs leave more metadata space: Full14 uses 14 bits; Twitter&#x27;s 26-bit IDs leave 6 for Scale6.</text>
+  <circle cx="44" cy="490" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="496" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="497" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">DECODE -&gt; ADDRESS -&gt; VALUE</text>
+  <text x="1158" y="496" text-anchor="end" class="sans body" fill="#475467">the graph and property values do not change</text>
+  <line x1="24" y1="516" x2="1176" y2="516" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="516" x2="170" y2="516" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="551" width="300" height="154" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="551" data-width="300" data-height="154"/>
+  <text x="54" y="579" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Selected-format decode</text>
+  <text x="54" y="608" text-anchor="start" class="sans body" fill="#182230">low ID field -&gt; vertex 18</text>
+  <text x="54" y="633" text-anchor="start" class="sans body" fill="#182230">state + distance -&gt; future</text>
+  <text x="54" y="658" text-anchor="start" class="sans body" fill="#182230">same 4-byte record access</text>
+  <rect x="455" y="551" width="280" height="154" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="455" data-y="551" data-width="280" data-height="154"/>
+  <text x="469" y="579" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Property load</text>
+  <text x="469" y="608" text-anchor="start" class="sans body" fill="#182230">base + 18 x 4</text>
+  <text x="469" y="633" text-anchor="start" class="sans body" fill="#182230">VA = 0x80000048</text>
+  <text x="469" y="658" text-anchor="start" class="sans body" fill="#182230">prediction stays with load</text>
+  <rect x="875" y="551" width="285" height="154" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="875" data-y="551" data-width="285" data-height="154"/>
+  <text x="889" y="579" text-anchor="start" class="sans label" fill="#182230" font-weight="700">L1D / L2 / memory</text>
+  <text x="889" y="608" text-anchor="start" class="sans body" fill="#182230">ordinary address translation</text>
+  <text x="889" y="633" text-anchor="start" class="sans body" fill="#182230">ordinary coherent data service</text>
+  <text x="889" y="658" text-anchor="start" class="sans body" fill="#182230">p[18] = 1/128</text>
+  <path d="M340 585 L455 585" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="vertex"/>
+  <rect x="364.64" y="517.00" width="64.72" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="397" y="534" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">vertex</text>
+  <path d="M340 665 L455 665" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="future"/>
+  <rect x="364.64" y="718.00" width="64.72" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="397" y="735" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">future</text>
+  <path d="M735 603 L875 603" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="load" data-flow-cadence="4 bytes"/>
+  <rect x="736.16" y="517.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="805" y="534" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">load | 4 bytes</text>
+  <path d="M875 674 L735 674" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="return value" data-flow-cadence="F32"/>
+  <rect x="717.92" y="718.00" width="174.16" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="805" y="735" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">return value | F32</text>
+  <circle cx="44" cy="806" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="812" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="813" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">CHANGE THE CACHE DECISION</text>
+  <text x="1158" y="812" text-anchor="end" class="sans body" fill="#475467">resident metadata, not a property-value rewrite</text>
+  <line x1="24" y1="832" x2="1176" y2="832" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="832" x2="170" y2="832" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="40" y="884" text-anchor="start" class="sans body" fill="#182230">Recency alone: evict A.</text>
+  <text x="40" y="916" text-anchor="start" class="sans body" fill="#182230">A was used at 18; B at 19.</text>
+  <text x="40" y="948" text-anchor="start" class="sans body" fill="#182230">But A is needed at 20,</text>
+  <text x="40" y="980" text-anchor="start" class="sans body" fill="#182230">before B is needed at 23.</text>
+  <text x="455" y="903" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">16-entry update transport</text>
+  <rect x="455.0" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="455.0" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="472.5" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="472.5" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="490.0" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="490.0" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="507.5" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="507.5" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="525.0" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="525.0" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="542.5" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="542.5" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="560.0" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="560.0" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="577.5" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="577.5" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="595.0" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="595.0" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="612.5" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="612.5" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="630.0" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="630.0" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="647.5" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="647.5" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="665.0" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="665.0" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="682.5" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="682.5" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="700.0" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="700.0" data-y="917" data-width="17.5" data-height="42"/>
+  <rect x="717.5" y="917" width="17.5" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="717.5" data-y="917" data-width="17.5" data-height="42"/>
+  <text x="455" y="977" text-anchor="start" class="sans body" fill="#182230">head</text>
+  <text x="735" y="977" text-anchor="end" class="sans body" fill="#182230">tail</text>
+  <path d="M595 705 L595 860 L425 860 L425 938 L455 938" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="retired prediction"/>
+  <rect x="656.92" y="768.00" width="174.16" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="744" y="785" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">retired prediction</text>
+  <rect x="875" y="880" width="285" height="132" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="875" data-y="880" data-width="285" data-height="132"/>
+  <text x="889" y="908" text-anchor="start" class="sans label" fill="#182230" font-weight="700">LLC future ranking</text>
+  <text x="889" y="937" text-anchor="start" class="sans body" fill="#182230">A: remaining 2 -&gt; score 0</text>
+  <text x="889" y="962" text-anchor="start" class="sans body" fill="#182230">B: remaining 7 -&gt; score 1</text>
+  <text x="889" y="987" text-anchor="start" class="sans body" fill="#182230">evict B; retain sooner-use A</text>
+  <path d="M735 938 L875 938" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="ordered update"/>
+  <rect x="736.16" y="1027.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="805" y="1044" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">ordered update</text>
+  <text x="40" y="1088" text-anchor="start" class="sans body" fill="#182230">The cache comparison is a worked two-way example, not a benchmark result. Data bytes stay unchanged.</text>
+  <text x="40" y="1120" text-anchor="start" class="sans body" fill="#182230">cache_sim implements both formats; the native RISC-V record/property pair currently uses Scale6.</text>
+  <text x="40" y="1152" text-anchor="start" class="sans body" fill="#475467">Prefetch is a separate path. Its native implementation and full timing/area qualification remain open.</text>
 </svg>

@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1180" viewBox="0 0 1200 1180" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">One edge word, one property line, one update</title>
-  <desc id="desc">The checked record 0x10000012 carries vertex 18 and finite token four. The property address is 0x80000048, within cache line 0x80000040. Sequence 19 plus decoded distance seven gives deadline 26, while the true next use occurs at sequence 23. The plate distinguishes demand hit/fill state from delayed commit refresh and correctly discards stale updates.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1330" viewBox="0 0 1200 1330" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
+  <title id="title">One edge, two encodings, unchanged data</title>
+  <desc id="desc">The running graph needs five vertex bits. Vertex eighteen is ORed with Full14 metadata mask 0x00002200 to form record 0x00002212. The same access has Scale6 record 0x10000012 in the fixed native ABI. Both recover vertex eighteen and address 0x80000048, returning the exact initial contribution 1/128 with F32 bits 0x3C000000. Only the decoded future bounds differ: four versus seven, giving deadlines twenty-three and twenty-six.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -34,103 +34,93 @@
       .label{font-size:17px;font-weight:700}
       .body{font-size:16px}
 </style></defs>
-  <rect x="0" y="0" width="1200" height="1180" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">One edge word, one property line, one update</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">A concrete Scale6 example; this is functional-model arithmetic, not a measured gem5 execution.</text>
+  <rect x="0" y="0" width="1200" height="1330" fill="#FFFFFF"/>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">One edge, two encodings, unchanged data</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">The mask occupies unused edge-ID bits. It is not applied to the floating-point property value.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
-  <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">DECODE THE WORD ACTUALLY CONSUMED</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">fixture row 8; edge position 18</text>
-  <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="210" width="295" height="126" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="210" data-width="295" data-height="126"/>
-  <text x="54" y="238" text-anchor="start" class="sans label" fill="#182230" font-weight="700">record = 0x10000012</text>
-  <text x="54" y="267" text-anchor="start" class="sans body" fill="#182230">32-bit substitute edge record</text>
-  <text x="54" y="292" text-anchor="start" class="sans body" fill="#182230">no separate destination stream</text>
-  <rect x="470" y="210" width="285" height="126" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="470" data-y="210" data-width="285" data-height="126"/>
-  <text x="484" y="238" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Decode</text>
-  <text x="484" y="267" text-anchor="start" class="sans body" fill="#182230">vertex = word &amp; ((1&lt;&lt;26)-1)</text>
-  <text x="484" y="292" text-anchor="start" class="sans body" fill="#182230">token = word &gt;&gt; 26</text>
-  <rect x="890" y="210" width="270" height="126" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="890" data-y="210" data-width="270" data-height="126"/>
-  <text x="904" y="238" text-anchor="start" class="sans label" fill="#182230" font-weight="700">vertex 18 / token 4</text>
-  <text x="904" y="267" text-anchor="start" class="sans body" fill="#182230">FINITE, bucket 2</text>
-  <text x="904" y="292" text-anchor="start" class="sans body" fill="#182230">upper-bound distance 7</text>
-  <path d="M335 272 L470 272" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="split fields"/>
-  <rect x="342.28" y="171.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="402" y="188" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">split fields</text>
-  <path d="M755 272 L890 272" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="decode token"/>
-  <rect x="762.28" y="171.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="822" y="188" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">decode token</text>
-  <circle cx="44" cy="410" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="416" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="417" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">FORM THE ORDINARY PROPERTY ADDRESS</text>
-  <text x="1158" y="416" text-anchor="end" class="sans body" fill="#475467">neighbors 18 and 20 share the same 64-byte line</text>
-  <line x1="24" y1="436" x2="1176" y2="436" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="436" x2="170" y2="436" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="40" y="477" text-anchor="start" class="sans body" fill="#182230">property address = 0x80000000 + 18 x 4 = 0x80000048</text>
-  <text x="40" y="510" text-anchor="start" class="sans body" fill="#2563EB">line address = 0x80000040; byte offset = 8; property vertices 16..31</text>
-  <rect x="40" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="548" data-width="70" data-height="68"/>
-  <text x="75" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">16</text>
-  <rect x="110" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="110" data-y="548" data-width="70" data-height="68"/>
-  <text x="145" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">17</text>
-  <rect x="180" y="548" width="70" height="68" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="180" data-y="548" data-width="70" data-height="68"/>
-  <text x="215" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">18</text>
-  <rect x="250" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="250" data-y="548" data-width="70" data-height="68"/>
-  <text x="285" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">19</text>
-  <rect x="320" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="320" data-y="548" data-width="70" data-height="68"/>
-  <text x="355" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">20</text>
-  <rect x="390" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="390" data-y="548" data-width="70" data-height="68"/>
-  <text x="425" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">21</text>
-  <rect x="460" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="460" data-y="548" data-width="70" data-height="68"/>
-  <text x="495" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">22</text>
-  <rect x="530" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="530" data-y="548" data-width="70" data-height="68"/>
-  <text x="565" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">23</text>
-  <rect x="600" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="600" data-y="548" data-width="70" data-height="68"/>
-  <text x="635" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">24</text>
-  <rect x="670" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="670" data-y="548" data-width="70" data-height="68"/>
-  <text x="705" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">25</text>
-  <rect x="740" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="740" data-y="548" data-width="70" data-height="68"/>
-  <text x="775" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">26</text>
-  <rect x="810" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="810" data-y="548" data-width="70" data-height="68"/>
-  <text x="845" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">27</text>
-  <rect x="880" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="880" data-y="548" data-width="70" data-height="68"/>
-  <text x="915" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">28</text>
-  <rect x="950" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="950" data-y="548" data-width="70" data-height="68"/>
-  <text x="985" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">29</text>
-  <rect x="1020" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1020" data-y="548" data-width="70" data-height="68"/>
-  <text x="1055" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">30</text>
-  <rect x="1090" y="548" width="70" height="68" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1090" data-y="548" data-width="70" data-height="68"/>
-  <text x="1125" y="590" text-anchor="middle" class="sans label" fill="#182230" font-weight="700">31</text>
-  <text x="40" y="656" text-anchor="start" class="sans body" fill="#182230">Load p[18] through normal L1D / L2 / LLC data service. The property value is unchanged.</text>
-  <circle cx="44" cy="717" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
-  <text x="44" y="723" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="724" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">STAMP, REFRESH, AND EXPIRE ARE DISTINCT</text>
-  <text x="1158" y="723" text-anchor="end" class="sans body" fill="#475467">current sequence 19; actual next use 23</text>
-  <line x1="24" y1="743" x2="1176" y2="743" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <line x1="24" y1="743" x2="170" y2="743" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="782" width="305" height="151" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="782" data-width="305" data-height="151"/>
-  <text x="54" y="810" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Demand LLC hit / fill</text>
-  <text x="54" y="839" text-anchor="start" class="sans body" fill="#182230">candidate deadline = 19 + 7</text>
-  <text x="54" y="864" text-anchor="start" class="sans body" fill="#182230">deadline = 26</text>
-  <text x="54" y="889" text-anchor="start" class="sans body" fill="#182230">metadata, not property values</text>
-  <rect x="450" y="782" width="305" height="151" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450" data-y="782" data-width="305" data-height="151"/>
-  <text x="464" y="810" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Private-hit commit refresh</text>
-  <text x="464" y="839" text-anchor="start" class="sans body" fill="#182230">same line, newer prediction</text>
-  <text x="464" y="864" text-anchor="start" class="sans body" fill="#182230">16-entry bounded channel</text>
-  <text x="464" y="889" text-anchor="start" class="sans body" fill="#182230">check age when it arrives</text>
-  <rect x="860" y="782" width="300" height="151" rx="0" fill="#FFF1F2" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="782" data-width="300" data-height="151"/>
-  <text x="874" y="810" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Resolve at sequence 27</text>
-  <text x="874" y="839" text-anchor="start" class="sans body" fill="#182230">unrefreshed bound has passed</text>
-  <text x="874" y="864" text-anchor="start" class="sans body" fill="#182230">effective state = UNKNOWN</text>
-  <text x="874" y="889" text-anchor="start" class="sans body" fill="#182230">never infer DEAD from expiry</text>
-  <path d="M345 872 L450 872" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="later accesses"/>
-  <rect x="330.16" y="950.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="399" y="967" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">later accesses</text>
-  <path d="M755 872 L860 872" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="expiry check"/>
-  <rect x="747.28" y="950.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="807" y="967" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">expiry check</text>
-  <text x="40" y="1023" text-anchor="start" class="sans body" fill="#182230">The model&#x27;s 8-request update latency may outlast this 7-request prediction; an expired update is discarded.</text>
-  <text x="40" y="1057" text-anchor="start" class="sans body" fill="#C63C4A">An expired update cannot install the stale deadline; a newer coalesced prediction has its own bound.</text>
-  <text x="40" y="1120" text-anchor="start" class="sans body" fill="#C56A13">Native request observations mark PENDING; only timed retirement delivery installs a finite/dead prediction.</text>
+  <rect x="40" y="130" width="1120" height="52" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="130" data-width="1120" data-height="52"/>
+  <text x="58" y="162" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Same access: u=8 | CSR j=18 | request s=19 | property v=18 | line B</text>
+  <circle cx="44" cy="236" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="242" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
+  <text x="74" y="243" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">BUILD THE METADATA MASK</text>
+  <text x="1158" y="242" text-anchor="end" class="sans body" fill="#475467">Full14 example; b_ID=5, not 26</text>
+  <line x1="24" y1="262" x2="1176" y2="262" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="262" x2="170" y2="262" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="309" width="390" height="138" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="309" data-width="390" data-height="138"/>
+  <text x="54" y="337" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Ordinary edge ID</text>
+  <text x="54" y="366" text-anchor="start" class="sans body" fill="#182230">v = 18 = 0x00000012</text>
+  <text x="54" y="391" text-anchor="start" class="sans body" fill="#182230">ID extraction mask = 0x0000001F</text>
+  <rect x="40" y="495" width="390" height="138" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="495" data-width="390" data-height="138"/>
+  <text x="54" y="523" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Metadata M = 0x00002200</text>
+  <text x="54" y="552" text-anchor="start" class="sans body" fill="#182230">(reference 0x10 &lt;&lt; 5) | (FINITE 1 &lt;&lt; 13)</text>
+  <text x="54" y="577" text-anchor="start" class="sans body" fill="#182230">prefetch action = 0</text>
+  <circle cx="610" cy="472" r="36" fill="#ECFDF5" stroke="#0F8A72" stroke-width="1"/>
+  <text x="610" y="479" text-anchor="middle" class="sans subtitle" fill="#182230" font-weight="700">OR</text>
+  <rect x="860" y="411" width="300" height="123" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="411" data-width="300" data-height="123"/>
+  <text x="874" y="439" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Packed record R</text>
+  <text x="874" y="468" text-anchor="start" class="sans body" fill="#182230">0x00002212</text>
+  <text x="874" y="493" text-anchor="start" class="sans body" fill="#182230">one 32-bit word, not a sidecar</text>
+  <path d="M430 378 L520 378 L520 454 L579 454" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="preserve vertex"/>
+  <rect x="522.60" y="327.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="596" y="344" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">preserve vertex</text>
+  <path d="M430 564 L520 564 L520 490 L579 490" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="dependency" data-flow-underlay="false" data-flow-label="insert metadata"/>
+  <rect x="523.60" y="594.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="597" y="611" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">insert metadata</text>
+  <path d="M646 472 L860 472" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="R = v | M"/>
+  <rect x="706.96" y="372.00" width="92.08" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="753" y="389" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">R = v | M</text>
+  <text x="40" y="679" text-anchor="start" class="sans body" fill="#182230">The full word changes from 0x00000012 to 0x00002212; masking off metadata still recovers exactly vertex 18.</text>
+  <circle cx="44" cy="736" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="742" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
+  <text x="74" y="743" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">DECODE THE SELECTED FORMAT</text>
+  <text x="1158" y="742" text-anchor="end" class="sans body" fill="#475467">same address; different precision</text>
+  <line x1="24" y1="762" x2="1176" y2="762" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="762" x2="170" y2="762" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="799" width="1120" height="144" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="799" data-width="1120" data-height="144"/>
+  <line x1="40" y1="847.0" x2="1160" y2="847.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="40" y1="895.0" x2="1160" y2="895.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="52" y="827" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Encoding</text>
+  <text x="52" y="875" text-anchor="start" class="sans body" fill="#182230">Full14, 5 ID bits</text>
+  <text x="52" y="923" text-anchor="start" class="sans body" fill="#182230">Scale6, native 26+6</text>
+  <line x1="300" y1="799" x2="300" y2="943" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="312" y="827" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Record</text>
+  <text x="312" y="875" text-anchor="start" class="sans body" fill="#182230">0x00002212</text>
+  <text x="312" y="923" text-anchor="start" class="sans body" fill="#182230">0x10000012</text>
+  <line x1="560" y1="799" x2="560" y2="943" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="572" y="827" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Recovered vertex</text>
+  <text x="572" y="875" text-anchor="start" class="sans body" fill="#182230">R &amp; 0x1F = 18</text>
+  <text x="572" y="923" text-anchor="start" class="sans body" fill="#182230">R &amp; 0x03FFFFFF = 18</text>
+  <line x1="840" y1="799" x2="840" y2="943" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <text x="852" y="827" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Candidate deadline</text>
+  <text x="852" y="875" text-anchor="start" class="sans body" fill="#182230">s19 + 4 = 23</text>
+  <text x="852" y="923" text-anchor="start" class="sans body" fill="#182230">s19 + 7 = 26</text>
+  <circle cx="44" cy="1004" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
+  <text x="44" y="1010" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
+  <text x="74" y="1011" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">THE PROPERTY LOAD IS UNCHANGED</text>
+  <text x="1158" y="1010" text-anchor="end" class="sans body" fill="#475467">line B contains p[16..31]; p[18] is byte offset 8</text>
+  <line x1="24" y1="1030" x2="1176" y2="1030" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <line x1="24" y1="1030" x2="170" y2="1030" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  <rect x="40" y="1066" width="320" height="137" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="1066" data-width="320" data-height="137"/>
+  <text x="54" y="1094" text-anchor="start" class="sans label" fill="#182230" font-weight="700">VA = 0x80000048</text>
+  <text x="54" y="1123" text-anchor="start" class="sans body" fill="#182230">0x80000000 + 18 x 4</text>
+  <text x="54" y="1148" text-anchor="start" class="sans body" fill="#182230">virtual line 0x80000040</text>
+  <text x="54" y="1173" text-anchor="start" class="sans body" fill="#182230">translate to physical line P_B</text>
+  <rect x="475" y="1066" width="300" height="137" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="475" data-y="1066" data-width="300" data-height="137"/>
+  <text x="489" y="1094" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Ordinary memory hierarchy</text>
+  <text x="489" y="1123" text-anchor="start" class="sans body" fill="#182230">read the addressed F32 value</text>
+  <text x="489" y="1148" text-anchor="start" class="sans body" fill="#182230">no property-value masking</text>
+  <text x="489" y="1173" text-anchor="start" class="sans body" fill="#182230">same coherent data semantics</text>
+  <rect x="910" y="1066" width="250" height="137" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="910" data-y="1066" data-width="250" data-height="137"/>
+  <text x="924" y="1094" text-anchor="start" class="sans label" fill="#182230" font-weight="700">F32 value</text>
+  <text x="924" y="1123" text-anchor="start" class="sans body" fill="#182230">p[18] = 1/128</text>
+  <text x="924" y="1148" text-anchor="start" class="sans body" fill="#182230">bits 0x3C000000</text>
+  <text x="924" y="1173" text-anchor="start" class="sans body" fill="#182230">not the encoded edge word</text>
+  <path d="M360 1135 L475 1135" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="load" data-flow-cadence="4 bytes"/>
+  <rect x="348.16" y="1031.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="417" y="1048" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">load | 4 bytes</text>
+  <path d="M775 1135 L910 1135" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="return" data-flow-cadence="4 bytes"/>
+  <rect x="765.04" y="1219.00" width="155.92" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="843" y="1236" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">return | 4 bytes</text>
+  <text x="40" y="1279" text-anchor="start" class="sans body" fill="#182230">The different future bounds feed cache ranking; the graph index, address and algorithm data remain the same.</text>
+  <text x="40" y="1311" text-anchor="start" class="sans body" fill="#475467">Native P17 adds s19: 0x0000001310000012. That is a register operand, not an eight-byte edge-memory load.</text>
 </svg>
