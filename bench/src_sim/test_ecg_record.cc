@@ -1,8 +1,12 @@
 #include <cstdint>
 #include <cstdio>
 #include <limits>
+#include <random>
+#include <vector>
 
 #include "ecg_record.h"
+#include "ecg_record_native.h"
+#include "ecg_record_stream.h"
 
 namespace {
 
@@ -327,6 +331,186 @@ void testDistanceBoundsAndMalformedRecords() {
           "v2 rejects reserved reference codes instead of reporting success");
 }
 
+void testAvailableRecordWindow() {
+    using namespace ecg_record;
+    auto req = requirements(128);
+    req.preset = Preset::ADAPTIVE_COMPACT_V2;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK,
+          "record-window fixture selects the compact policy explicitly");
+    RecordWindow window;
+    window.remaining_records = 16;
+    window.vertex_count = 128;
+    const uint64_t lines[16] = {0,0,1,1,2,2,0,2,3,3,4,3,4,5,5,5};
+    for (std::size_t index = 0; index < window.words.size(); ++index) {
+        check(encodeRecord(layout, lines[index] * 16, 0,
+                           State::UNKNOWN, 0, window.words[index]) == Status::OK,
+              "a window word is encoded as real bounded record data");
+    }
+    encodeRecord(layout, 48, 31, State::FINITE, 0, window.words[8]);
+    encodeRecord(layout, 64, 7, State::FINITE, 0, window.words[10]);
+    encodeRecord(layout, 80, 15, State::FINITE, 0, window.words[13]);
+    PrefetchTarget target;
+    window.valid_mask = 1;
+    check(selectWindowTarget(layout, window, 16, target) == Status::NOT_READY &&
+          !target.valid,
+          "missing record bytes are not an empty or successful prediction");
+    window.valid_mask = UINT16_MAX;
+    check(selectWindowTarget(layout, window, 16, target) == Status::OK &&
+          target.valid && target.lead == 10 && target.destination == 64,
+          "available compact words preserve the shared lead-ten selection");
+    req.preset = Preset::ADAPTIVE_RICH_V2;
+    check(selectLayout(req, layout) == Status::OK,
+          "action-bearing window fixture selects its distinct layout");
+    encodeRecord(layout, 0, 100, State::FINITE, 12, window.words[0]);
+    encodeRecord(layout, 96, 3, State::FINITE, 0, window.words[12]);
+    window.valid_mask = 1;
+    check(selectWindowTarget(layout, window, 16, target) == Status::NOT_READY,
+          "an encoded action must wait for its actual target word");
+    window.valid_mask |= uint16_t{1} << 12;
+    check(selectWindowTarget(layout, window, 16, target) == Status::OK &&
+          target.valid && target.lead == 12 && target.destination == 96,
+          "an action consumes its target word without fictitious intervening data");
+    window.remaining_records = 10;
+    check(selectWindowTarget(layout, window, 16, target) == Status::INVALID_RECORD,
+          "an encoded target beyond the traversal is rejected");
+}
+
+void testRecordConstructionAndAllocationLimits() {
+    using namespace ecg_record;
+    std::mt19937 random(0x52454332u);
+    bool legacy_equal = true;
+    uint64_t actions = 0;
+    for (unsigned sample = 0; sample < 80 && legacy_equal; ++sample) {
+        const uint32_t vertices = 16 * (2 + sample % 17);
+        std::vector<uint32_t> ids(32 + random() % 160);
+        for (auto& id : ids)
+            id = random() % vertices;
+        const std::vector<uint64_t> offsets = {0, ids.size()};
+        for (const Preset preset : {Preset::FULL14_V1, Preset::SCALE6_V1}) {
+            auto req = requirements(vertices);
+            req.preset = preset;
+            req.record_count = ids.size();
+            Layout layout;
+            RecordStream stream;
+            const Status selected = selectLayout(req, layout);
+            const Status built = selected == Status::OK
+                ? buildRecords(req, layout, 16,
+                    [&ids](std::size_t index) { return uint64_t(ids[index]); }, stream)
+                : selected;
+            ecg_ref32::FlatRecords reference;
+            const bool reference_ok = preset == Preset::FULL14_V1
+                ? ecg_ref32::buildFlatRecordsFromDestinations(
+                    vertices, 16, offsets, ids, reference)
+                : ecg_ref32::buildFlatScaleRecordsFromDestinations(
+                    vertices, 16, offsets, ids, reference, 26);
+            if (built != Status::OK || !reference_ok || stream.size() != ids.size()) {
+                std::fprintf(stderr, "construction failed: sample=%u status=%s\n",
+                             sample, statusName(built));
+                legacy_equal = false;
+                break;
+            }
+            for (std::size_t index = 0; index < ids.size(); ++index) {
+                if (stream.word(index) != reference.records[index]) {
+                    std::fprintf(stderr,
+                        "legacy mismatch sample=%u position=%zu new=%llx old=%x\n",
+                        sample, index,
+                        static_cast<unsigned long long>(stream.word(index)),
+                        reference.records[index]);
+                    legacy_equal = false;
+                    break;
+                }
+            }
+            actions += stream.stats.encoded_actions;
+        }
+    }
+    check(legacy_equal && actions > 0,
+          "generic construction preserves legacy future and action words across graphs");
+
+    auto req = requirements(uint64_t{1} << 32);
+    req.record_count = 3;
+    const std::vector<uint64_t> ids = {UINT32_MAX, 0, UINT32_MAX};
+    Layout layout;
+    RecordStream stream;
+    const auto getter = [&ids](std::size_t index) { return ids[index]; };
+    check(selectLayout(req, layout) == Status::OK &&
+          buildRecords(req, layout, 16, getter, stream) == Status::OK &&
+          stream.records32.empty() && stream.records64.size() == 3 &&
+          stream.stats.carrier_bytes == 24 &&
+          stream.stats.source_stream_bytes == 12 &&
+          stream.stats.property_lines == 2 &&
+          stream.stats.auxiliary_peak_bytes < 4096,
+          "wide sparse IDs do not require allocating a dense vertex-sized future table");
+    DecodedRecord decoded;
+    check(decodeRecord(layout, stream.word(0), decoded) == Status::OK &&
+          decoded.destination == UINT32_MAX && decoded.distance >= 2,
+          "constructed wide records retain the complete unsigned destination");
+    BuildLimits limits;
+    limits.maximum_carrier_bytes = 16;
+    check(buildRecords(req, layout, 16, getter, stream, limits) ==
+              Status::RESOURCE_LIMIT && stream.size() == 0,
+          "carrier allocation is bounded before constructing a large stream");
+    limits.maximum_carrier_bytes = 1024;
+    limits.maximum_auxiliary_bytes = 1;
+    check(buildRecords(req, layout, 16, getter, stream, limits) ==
+              Status::RESOURCE_LIMIT && stream.size() == 0,
+          "auxiliary allocator enforces its budget without a success-shaped carrier");
+    check(buildRecords(req, layout, 16,
+              [&req](std::size_t) { return req.vertex_count; }, stream) ==
+              Status::INVALID_ID && stream.size() == 0,
+          "invalid source IDs are rejected before any carrier is published");
+}
+
+void testNativeConfigurationAndBinding() {
+    using namespace ecg_record;
+    auto req = requirements(uint64_t{1} << 32);
+    req.record_count = 3;
+    Layout layout;
+    NativeConfiguration configuration;
+    configuration.record_base = 0x1000;
+    configuration.property_base = 0x80000000;
+    configuration.vertex_count = req.vertex_count;
+    configuration.record_count = req.record_count;
+    configuration.iteration_base = uint64_t{1} << 32;
+    configuration.context = 1;
+    configuration.generation = 0;
+    configuration.control = kNativeEnable | kNativeHasNext;
+    check(selectLayout(req, layout) == Status::OK &&
+          packLayout(layout, configuration.layout_descriptor) == Status::OK,
+          "native v2 configuration keeps layout separate from graph counts");
+    NativeRecordAccess access;
+    check(nativeRecordAccess(configuration, 0x1008, 8, access) == Status::OK &&
+          access.index == 1 && access.sequence == (uint64_t{1} << 32) + 2,
+          "native v2 derives a full sequence from the real record address");
+    check(nativeRecordAccess(configuration, 0x1008, 4, access) == Status::INVALID_WIDTH,
+          "a four-byte opcode cannot silently load half of a wide record");
+    uint64_t word = 0;
+    NativeLoadResult record, property;
+    check(encodeRecord(layout, UINT32_MAX, 2, State::WRAP, 0, word) == Status::OK &&
+          nativeRecordResult(configuration, 0x1008, word, record) == Status::OK &&
+          nativePropertyAccess(configuration, configuration.property_base,
+                               word, 0x1008, property) == Status::OK &&
+          record.raw_record == property.raw_record &&
+          record.record_address == property.record_address &&
+          record.destination == property.destination &&
+          record.sequence == property.sequence &&
+          record.generation == 0 && property.generation == 0 &&
+          property.state == State::FINITE &&
+          property.property_address == 0x80000000ULL + UINT32_MAX * uint64_t{4} &&
+          property.deadline == property.sequence + 2,
+          "raw wide record, address and context bind the two native operations");
+    check(nativePropertyAccess(configuration, configuration.property_base + 4,
+                               word, 0x1008, property) == Status::INVALID_ADDRESS,
+          "a property base outside the configured governed region is rejected");
+    configuration.control = 0;
+    check(validateNativeConfiguration(configuration, layout) == Status::INVALID_LAYOUT,
+          "an unactivated native descriptor is not a usable context");
+    configuration.control = kNativeEnable;
+    configuration.record_count = uint64_t{1} << 40;
+    check(validateNativeConfiguration(configuration, layout) != Status::OK,
+          "native counts cannot outgrow the declared reference horizon");
+}
+
 }  // namespace
 
 int main() {
@@ -337,6 +521,9 @@ int main() {
     testWideArithmeticAndPrediction();
     testDescriptorAndWindow();
     testDistanceBoundsAndMalformedRecords();
+    testAvailableRecordWindow();
+    testRecordConstructionAndAllocationLimits();
+    testNativeConfigurationAndBinding();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }

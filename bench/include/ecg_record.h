@@ -2,6 +2,7 @@
 #define GRAPHBREW_ECG_RECORD_H
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <limits>
@@ -42,6 +43,8 @@ enum class Status : uint8_t {
     FORMAT_OVERFLOW,
     HORIZON_OVERFLOW,
     ARITHMETIC_OVERFLOW,
+    RESOURCE_LIMIT,
+    NOT_READY,
 };
 
 inline const char* statusName(Status status) {
@@ -60,6 +63,8 @@ inline const char* statusName(Status status) {
       case Status::FORMAT_OVERFLOW: return "format-overflow";
       case Status::HORIZON_OVERFLOW: return "horizon-overflow";
       case Status::ARITHMETIC_OVERFLOW: return "arithmetic-overflow";
+      case Status::RESOURCE_LIMIT: return "resource-limit";
+      case Status::NOT_READY: return "not-ready";
     }
     return "invalid-status";
 }
@@ -536,6 +541,115 @@ inline Status decodeRecord(
         }
     }
     output = decoded;
+    return Status::OK;
+}
+
+inline Status setAction(
+        const Layout& layout, uint64_t word, uint32_t action_delta,
+        uint64_t& output) {
+    output = 0;
+    DecodedRecord decoded;
+    const Status status = decodeRecord(layout, word, decoded);
+    if (status != Status::OK)
+        return status;
+    uint64_t action = 0;
+    const Status action_status = detail::encodeAction(layout, action_delta, action);
+    if (action_status != Status::OK)
+        return action_status;
+    output = word;
+    if (layout.action_bits != 0) {
+        const unsigned shift = layout.id_bits + layout.distance_bits + layout.state_bits;
+        output = (word & ~(lowMask(layout.action_bits) << shift)) | (action << shift);
+    }
+    return Status::OK;
+}
+
+struct RecordWindow {
+    static constexpr std::size_t kRecords = 16;
+    std::array<uint64_t, kRecords> words{};
+    uint64_t remaining_records = 0;
+    uint64_t vertex_count = 0;
+    uint16_t valid_mask = 0;
+};
+
+struct PrefetchTarget {
+    uint64_t destination = 0;
+    uint64_t record = 0;
+    uint32_t lead = 0;
+    bool valid = false;
+};
+
+inline Status selectWindowTarget(
+        const Layout& layout, const RecordWindow& window,
+        uint64_t vertices_per_line, PrefetchTarget& output) {
+    output = PrefetchTarget{};
+    if (validateLayout(layout) != Status::OK)
+        return Status::INVALID_LAYOUT;
+    if (window.remaining_records == 0 || window.vertex_count == 0 ||
+        vertices_per_line == 0) {
+        return Status::INVALID_COUNTS;
+    }
+    if ((window.valid_mask & 1u) == 0)
+        return Status::NOT_READY;
+    DecodedRecord current;
+    Status status = decodeRecord(layout, window.words[0], current);
+    if (status != Status::OK)
+        return status;
+    if (current.destination >= window.vertex_count)
+        return Status::INVALID_ID;
+    if (layout.action_bits != 0) {
+        const uint32_t lead = current.action_delta;
+        if (lead == 0)
+            return Status::OK;
+        if (lead >= window.remaining_records || lead >= RecordWindow::kRecords)
+            return Status::INVALID_RECORD;
+        if ((window.valid_mask & (uint16_t{1} << lead)) == 0)
+            return Status::NOT_READY;
+        DecodedRecord target;
+        status = decodeRecord(layout, window.words[lead], target);
+        if (status != Status::OK)
+            return status;
+        if (target.destination >= window.vertex_count)
+            return Status::INVALID_ID;
+        output = {target.destination, window.words[lead], lead, true};
+        return Status::OK;
+    }
+    if (!compact(layout))
+        return Status::OK;
+    const uint32_t count = static_cast<uint32_t>(
+        std::min<uint64_t>(RecordWindow::kRecords, window.remaining_records));
+    const uint16_t required = static_cast<uint16_t>(lowMask(count));
+    if ((window.valid_mask & required) != required)
+        return Status::NOT_READY;
+    const uint64_t current_line = current.destination / vertices_per_line;
+    std::array<uint64_t, RecordWindow::kRecords> previous_lines{};
+    std::size_t previous_count = 0;
+    uint64_t best_distance = 0;
+    uint32_t best_error = 0;
+    for (uint32_t lead = 1; lead < count; ++lead) {
+        DecodedRecord target;
+        status = decodeRecord(layout, window.words[lead], target);
+        if (status != Status::OK)
+            return status;
+        if (target.destination >= window.vertex_count)
+            return Status::INVALID_ID;
+        const uint64_t line = target.destination / vertices_per_line;
+        const bool seen = std::find(
+            previous_lines.begin(), previous_lines.begin() + previous_count,
+            line) != previous_lines.begin() + previous_count;
+        previous_lines[previous_count++] = line;
+        if (lead < 8 || line == current_line || seen)
+            continue;
+        const uint64_t distance = target.distance_valid
+            ? target.distance : layout.max_finite_distance;
+        const uint32_t error = lead > 10 ? lead - 10 : 10 - lead;
+        if (!output.valid || distance < best_distance ||
+            (distance == best_distance && error < best_error)) {
+            output = {target.destination, window.words[lead], lead, true};
+            best_distance = distance;
+            best_error = error;
+        }
+    }
     return Status::OK;
 }
 
