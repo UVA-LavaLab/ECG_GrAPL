@@ -1,4 +1,4 @@
-"""Adaptive record operations use a distinct, explicitly bound v2 ISA space."""
+"""Adaptive record operations use explicit raw-word and real-address operands."""
 
 from pathlib import Path
 import re
@@ -11,18 +11,18 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_v2_instruction_encodings_and_three_source_operand(tmp_path):
+def test_record_instruction_encodings_and_three_source_operand(tmp_path):
     assembler = shutil.which("riscv64-linux-gnu-as")
     objdump = shutil.which("riscv64-linux-gnu-objdump")
     if not assembler or not objdump:
         pytest.skip("RISC-V binutils are unavailable")
-    source = tmp_path / "record_v2.S"
+    source = tmp_path / "record.S"
     source.write_text(
         ".text\n"
         ".insn r 0x2b, 0x0, 0x00, a0, a1, zero\n"
         ".insn r 0x2b, 0x0, 0x01, a0, a1, zero\n"
         ".insn r4 0x2b, 0x1, 0x0, fa0, a1, a2, a3\n")
-    obj = tmp_path / "record_v2.o"
+    obj = tmp_path / "record.o"
     assembled = subprocess.run(
         [assembler, "-march=rv64gc", "-o", str(obj), str(source)],
         capture_output=True, text=True, timeout=30, check=False)
@@ -40,11 +40,11 @@ def test_v2_instruction_encodings_and_three_source_operand(tmp_path):
     assert (instructions[-1] >> 27) & 0x1F == 13
 
 
-def test_v2_inline_assembly_accepts_real_address_third_source(tmp_path):
+def test_record_inline_assembly_accepts_real_address_third_source(tmp_path):
     compiler = shutil.which("riscv64-linux-gnu-g++")
     if compiler is None:
         pytest.skip("RISC-V C++ compiler is unavailable")
-    source = tmp_path / "record_v2.cc"
+    source = tmp_path / "record.cc"
     source.write_text(r'''
 #include <cstdint>
 float load_property(uint64_t base, uint64_t record, uint64_t record_address) {
@@ -58,6 +58,6 @@ float load_property(uint64_t base, uint64_t record, uint64_t record_address) {
 ''')
     compiled = subprocess.run(
         [compiler, "-std=c++17", "-O2", "-Wall", "-Wextra", "-Werror",
-         "-c", str(source), "-o", str(tmp_path / "record_v2.o")],
+         "-c", str(source), "-o", str(tmp_path / "record.o")],
         capture_output=True, text=True, timeout=30, check=False)
     assert compiled.returncode == 0, compiled.stderr

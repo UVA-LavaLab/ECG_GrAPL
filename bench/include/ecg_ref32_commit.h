@@ -32,8 +32,9 @@ enum class CommitApplyResult : uint8_t {
     UNSUPPORTED,
 };
 
-struct ReadyCommitUpdate {
-    CommitUpdate update;
+template<typename Update>
+struct ReadyCommitUpdateFor {
+    Update update;
     uint64_t generation_cycle = 0;
     uint64_t ready_cycle = 0;
     uint8_t capture_lane = 0;
@@ -58,20 +59,42 @@ enum class PopStatus : uint8_t {
     INVALID_TIME,
 };
 
-struct PopResult {
+template<typename Update>
+struct PopResultFor {
     PopStatus status = PopStatus::EMPTY;
-    ReadyCommitUpdate ready;
+    ReadyCommitUpdateFor<Update> ready;
 };
 
-class CommitUpdateQueue {
+struct CommitUpdateTraits {
+    static bool valid(const CommitUpdate& update) {
+        return update.context != 0 &&
+            (update.state == State::UNKNOWN ||
+             update.state == State::FINITE ||
+             update.state == State::DEAD);
+    }
+
+    static bool sameKey(const CommitUpdate& left, const CommitUpdate& right) {
+        return left.physical_line == right.physical_line &&
+            left.secure == right.secure && left.context == right.context;
+    }
+
+    static SequenceOrder compare(const CommitUpdate& left, const CommitUpdate& right) {
+        return compareSequence32(left.sequence, right.sequence);
+    }
+};
+
+template<typename Update, typename Traits>
+class BasicCommitUpdateQueue {
   public:
+    using Ready = ReadyCommitUpdateFor<Update>;
+    using Result = PopResultFor<Update>;
     static constexpr std::size_t kCapacity = 16;
     static constexpr uint64_t kDefaultLatency = 8;
     static constexpr uint64_t kMinimumLatency = 8;
     static constexpr std::size_t kDefaultCaptureWidth = 1;
     static constexpr std::size_t kMaximumCaptureWidth = kCapacity;
 
-    explicit CommitUpdateQueue(
+    explicit BasicCommitUpdateQueue(
             uint64_t latency_cycles = kDefaultLatency,
             std::size_t capture_width = kDefaultCaptureWidth)
         : latency_cycles_(latency_cycles),
@@ -132,10 +155,10 @@ class CommitUpdateQueue {
     }
 
     EnqueueStatus enqueue(
-            const CommitUpdate& update, uint64_t generation_cycle) {
+            const Update& update, uint64_t generation_cycle) {
         if (!validConfiguration())
             return EnqueueStatus::INVALID_CONFIGURATION;
-        if (!validUpdate(update))
+        if (!Traits::valid(update))
             return EnqueueStatus::INVALID_INPUT;
         if (generation_cycle >
             std::numeric_limits<uint64_t>::max() - latency_cycles_) {
@@ -148,7 +171,7 @@ class CommitUpdateQueue {
         std::size_t matching_count = 0;
         for (std::size_t index = 0; index < slots_.size(); ++index) {
             if (!slots_[index].valid ||
-                !sameKey(slots_[index].ready.update, update)) {
+                !Traits::sameKey(slots_[index].ready.update, update)) {
                 continue;
             }
             if (matching_count == matching.size())
@@ -160,9 +183,9 @@ class CommitUpdateQueue {
         if (matching_count == 1) {
             newest = matching[0];
         } else if (matching_count == 2) {
-            const SequenceOrder order = compareSequence32(
-                slots_[matching[0]].ready.update.sequence,
-                slots_[matching[1]].ready.update.sequence);
+            const SequenceOrder order = Traits::compare(
+                slots_[matching[0]].ready.update,
+                slots_[matching[1]].ready.update);
             if (order == SequenceOrder::NEWER) {
                 newest = matching[0];
             } else if (order == SequenceOrder::OLDER) {
@@ -173,8 +196,8 @@ class CommitUpdateQueue {
         }
 
         if (newest) {
-            const SequenceOrder order = compareSequence32(
-                update.sequence, slots_[*newest].ready.update.sequence);
+            const SequenceOrder order = Traits::compare(
+                update, slots_[*newest].ready.update);
             if (order != SequenceOrder::NEWER)
                 return EnqueueStatus::INVALID_ORDER;
         }
@@ -217,8 +240,8 @@ class CommitUpdateQueue {
         return EnqueueStatus::ENQUEUED;
     }
 
-    PopResult popReady(uint64_t current_cycle) {
-        PopResult result;
+    Result popReady(uint64_t current_cycle) {
+        Result result;
         if (time_seen_ && current_cycle < last_cycle_) {
             result.status = PopStatus::INVALID_TIME;
             return result;
@@ -253,22 +276,8 @@ class CommitUpdateQueue {
   private:
     struct Slot {
         bool valid = false;
-        ReadyCommitUpdate ready;
+        Ready ready;
     };
-
-    static bool validUpdate(const CommitUpdate& update) {
-        return update.context != 0 &&
-            (update.state == State::UNKNOWN ||
-             update.state == State::FINITE ||
-             update.state == State::DEAD);
-    }
-
-    static bool sameKey(
-            const CommitUpdate& left, const CommitUpdate& right) {
-        return left.physical_line == right.physical_line &&
-            left.secure == right.secure &&
-            left.context == right.context;
-    }
 
     void noteCycle(uint64_t cycle) {
         time_seen_ = true;
@@ -314,6 +323,10 @@ class CommitUpdateQueue {
     bool ingress_seen_ = false;
     bool output_seen_ = false;
 };
+
+using ReadyCommitUpdate = ReadyCommitUpdateFor<CommitUpdate>;
+using PopResult = PopResultFor<CommitUpdate>;
+using CommitUpdateQueue = BasicCommitUpdateQueue<CommitUpdate, CommitUpdateTraits>;
 
 }  // namespace ecg_ref32
 

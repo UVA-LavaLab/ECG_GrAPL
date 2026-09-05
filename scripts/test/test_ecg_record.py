@@ -1,4 +1,4 @@
-"""The adaptive record contract preserves legacy bytes and fails closed."""
+"""One adaptive record contract uses graph-derived widths and fails closed."""
 
 from pathlib import Path
 import shutil

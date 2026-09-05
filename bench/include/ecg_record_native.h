@@ -36,8 +36,23 @@ struct NativeLoadResult {
     uint64_t sequence = 0;
     uint64_t deadline = 0;
     uint64_t generation = 0;
+    uint64_t layout_descriptor = 0;
     uint16_t context = 0;
+    uint8_t sequence_bits = 0;
+    bool has_next_iteration = false;
     State state = State::UNKNOWN;
+};
+
+enum class InstructionKind : uint8_t {
+    NONE,
+    CONFIGURATION,
+    RECORD,
+    PROPERTY,
+};
+
+struct InstructionHint {
+    InstructionKind kind = InstructionKind::NONE;
+    NativeLoadResult load;
 };
 
 inline Status validateNativeConfiguration(
@@ -55,9 +70,7 @@ inline Status validateNativeConfiguration(
     if (configuration.vertex_count == 0 || configuration.record_count == 0)
         return Status::INVALID_COUNTS;
     Requirements requirements;
-    requirements.preset = decoded.preset;
-    requirements.action_encoding = decoded.action_encoding;
-    requirements.carrier_bytes = decoded.carrier_bytes;
+    requirements.requested_record_bytes = decoded.record_bytes;
     requirements.vertex_count = configuration.vertex_count;
     requirements.max_vertex_id_known = true;
     requirements.max_vertex_id = std::min(
@@ -80,11 +93,9 @@ inline Status validateNativeConfiguration(
                     iteration_end)) {
         return Status::ARITHMETIC_OVERFLOW;
     }
-    if (adaptive(decoded)) {
-        uint64_t last_deadline = 0;
-        if (!checkedAdd(iteration_end, decoded.max_finite_distance, last_deadline))
-            return Status::ARITHMETIC_OVERFLOW;
-    }
+    uint64_t last_deadline = 0;
+    if (!checkedAdd(iteration_end, decoded.max_finite_distance, last_deadline))
+        return Status::ARITHMETIC_OVERFLOW;
     layout = decoded;
     return Status::OK;
 }
@@ -97,7 +108,7 @@ inline Status nativeRecordAccess(
     Status status = validateNativeConfiguration(configuration, layout);
     if (status != Status::OK)
         return status;
-    if (instruction_bytes != layout.carrier_bytes)
+    if (instruction_bytes != layout.record_bytes)
         return Status::INVALID_WIDTH;
     NativeRecordAccess access;
     status = recordPosition(layout, address, configuration.record_base,
@@ -121,7 +132,7 @@ inline Status nativeRecordResult(
         return status;
     NativeRecordAccess access;
     status = nativeRecordAccess(
-        configuration, record_address, layout.carrier_bytes, access);
+        configuration, record_address, layout.record_bytes, access);
     if (status != Status::OK)
         return status;
     DecodedRecord decoded;
@@ -136,7 +147,11 @@ inline Status nativeRecordResult(
     result.destination = decoded.destination;
     result.sequence = access.sequence;
     result.generation = configuration.generation;
+    result.layout_descriptor = configuration.layout_descriptor;
     result.context = static_cast<uint16_t>(configuration.context);
+    result.sequence_bits = layout.sequence_bits;
+    result.has_next_iteration =
+        (configuration.control & kNativeHasNext) != 0;
     result.state = decoded.state;
     output = result;
     return Status::OK;

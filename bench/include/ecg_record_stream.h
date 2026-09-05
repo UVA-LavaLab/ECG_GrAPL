@@ -21,11 +21,10 @@ struct BuildLimits {
 
 struct BuildStats {
     uint64_t source_stream_bytes = 0;
-    uint64_t carrier_bytes = 0;
+    uint64_t carrier_payload_bytes = 0;
     uint64_t carrier_allocation_bytes = 0;
     uint64_t auxiliary_peak_bytes = 0;
     uint64_t property_lines = 0;
-    uint64_t encoded_actions = 0;
 };
 
 struct RecordStream {
@@ -35,17 +34,17 @@ struct RecordStream {
     std::vector<uint64_t> records64;
 
     std::size_t size() const {
-        return layout.carrier_bytes == 4 ? records32.size() : records64.size();
+        return layout.record_bytes == 4 ? records32.size() : records64.size();
     }
 
     const uint8_t* data() const {
-        return layout.carrier_bytes == 4
+        return layout.record_bytes == 4
             ? reinterpret_cast<const uint8_t*>(records32.data())
             : reinterpret_cast<const uint8_t*>(records64.data());
     }
 
     uint64_t word(std::size_t index) const {
-        return layout.carrier_bytes == 4 ? records32.at(index) : records64.at(index);
+        return layout.record_bytes == 4 ? records32.at(index) : records64.at(index);
     }
 };
 
@@ -101,12 +100,11 @@ class BudgetAllocator {
 struct LinePositions {
     static constexpr uint64_t kAbsent = std::numeric_limits<uint64_t>::max();
     uint64_t first = kAbsent;
-    uint64_t last = kAbsent;
     uint64_t next = kAbsent;
 };
 
 inline Status storeWord(RecordStream& stream, std::size_t index, uint64_t word) {
-    if (stream.layout.carrier_bytes == 4) {
+    if (stream.layout.record_bytes == 4) {
         if (word > UINT32_MAX)
             return Status::INVALID_RECORD;
         stream.records32.at(index) = static_cast<uint32_t>(word);
@@ -118,7 +116,7 @@ inline Status storeWord(RecordStream& stream, std::size_t index, uint64_t word) 
 
 }  // namespace detail
 
-// Construction is outside the ROI. No exact-future array survives in the carrier.
+// Source IDs must remain immutable. Only sparse line positions are temporary.
 template<typename DestinationAt>
 Status buildRecords(
         const Requirements& requirements, const Layout& layout,
@@ -133,7 +131,7 @@ Status buildRecords(
         return Status::INVALID_WIDTH;
     }
     uint64_t carrier_bytes = 0, source_bytes = 0;
-    if (!checkedMultiply(requirements.record_count, layout.carrier_bytes, carrier_bytes) ||
+    if (!checkedMultiply(requirements.record_count, layout.record_bytes, carrier_bytes) ||
         !checkedMultiply(requirements.record_count, limits.source_id_bytes, source_bytes)) {
         return Status::ARITHMETIC_OVERFLOW;
     }
@@ -145,8 +143,8 @@ Status buildRecords(
     RecordStream stream;
     stream.layout = layout;
     stream.stats.source_stream_bytes = source_bytes;
-    stream.stats.carrier_bytes = carrier_bytes;
-    if (layout.carrier_bytes == 4) {
+    stream.stats.carrier_payload_bytes = carrier_bytes;
+    if (layout.record_bytes == 4) {
         if (count > stream.records32.max_size())
             return Status::RESOURCE_LIMIT;
         stream.records32.resize(count);
@@ -167,37 +165,21 @@ Status buildRecords(
     using Node = std::pair<const uint64_t, Position>;
     using LineMap = std::unordered_map<uint64_t, Position,
         std::hash<uint64_t>, std::equal_to<uint64_t>, detail::BudgetAllocator<Node>>;
-    using Scratch = std::vector<uint64_t, detail::BudgetAllocator<uint64_t>>;
     try {
         LineMap lines(0, std::hash<uint64_t>{}, std::equal_to<uint64_t>{},
                       detail::BudgetAllocator<Node>{&budget});
-        Scratch backward_gap{detail::BudgetAllocator<uint64_t>{&budget}};
-        Scratch exact_future{detail::BudgetAllocator<uint64_t>{&budget}};
-        if (layout.action_bits != 0) {
-            backward_gap.resize(count);
-            exact_future.resize(count);
-        }
         const uint64_t maximum_id = requirements.max_vertex_id_known
             ? requirements.max_vertex_id : requirements.vertex_count - 1;
         for (std::size_t position = 0; position < count; ++position) {
             const uint64_t destination = destination_at(position);
             if (destination > maximum_id || destination >= requirements.vertex_count ||
-                destination > lowMask(layout.id_bits)) {
+                destination > lowMask(layout.id_bits) ||
+                destination > lowMask(unsigned(limits.source_id_bytes) * 8)) {
                 return Status::INVALID_ID;
             }
             Position& positions = lines[destination / vertices_per_line];
             if (positions.first == Position::kAbsent)
                 positions.first = position;
-            if (layout.action_bits != 0 && positions.last != Position::kAbsent)
-                backward_gap[position] = position - positions.last;
-            positions.last = position;
-        }
-        if (layout.action_bits != 0) {
-            for (const auto& entry : lines) {
-                const Position& positions = entry.second;
-                backward_gap[positions.first] =
-                    requirements.record_count - positions.last + positions.first;
-            }
         }
         for (std::size_t position = count; position-- > 0;) {
             const uint64_t destination = destination_at(position);
@@ -209,59 +191,13 @@ Status buildRecords(
             uint64_t word = 0;
             const Status encoded = encodeRecord(
                 layout, destination, distance,
-                in_iteration ? State::FINITE : State::WRAP, 0, word);
+                in_iteration ? State::FINITE : State::WRAP, word);
             if (encoded != Status::OK)
                 return encoded;
             const Status stored = detail::storeWord(stream, position, word);
             if (stored != Status::OK)
                 return stored;
-            if (layout.action_bits != 0)
-                exact_future[position] = distance;
             positions.next = position;
-        }
-        if (layout.action_bits != 0) {
-            for (std::size_t position = 0; position < count; ++position) {
-                const uint64_t current_line =
-                    destination_at(position) / vertices_per_line;
-                uint32_t best_lead = 0;
-                uint64_t best_gap = 0, best_future = 0;
-                uint32_t best_error = 0;
-                for (uint32_t lead = 8; lead <= 15; ++lead) {
-                    if (lead >= count - position)
-                        break;
-                    if (layout.action_encoding == ActionEncoding::ENUMERATED2 &&
-                        lead != 8 && lead != 12 && lead != 15) {
-                        continue;
-                    }
-                    const std::size_t candidate = position + lead;
-                    if (destination_at(candidate) / vertices_per_line == current_line ||
-                        backward_gap[candidate] <= lead) {
-                        continue;
-                    }
-                    const uint32_t error = lead > 10 ? lead - 10 : 10 - lead;
-                    if (best_lead == 0 || backward_gap[candidate] > best_gap ||
-                        (backward_gap[candidate] == best_gap &&
-                         exact_future[candidate] < best_future) ||
-                        (backward_gap[candidate] == best_gap &&
-                         exact_future[candidate] == best_future && error < best_error)) {
-                        best_lead = lead;
-                        best_gap = backward_gap[candidate];
-                        best_future = exact_future[candidate];
-                        best_error = error;
-                    }
-                }
-                if (best_lead != 0) {
-                    uint64_t word = 0;
-                    const Status changed = setAction(
-                        layout, stream.word(position), best_lead, word);
-                    if (changed != Status::OK)
-                        return changed;
-                    const Status stored = detail::storeWord(stream, position, word);
-                    if (stored != Status::OK)
-                        return stored;
-                    ++stream.stats.encoded_actions;
-                }
-            }
         }
         stream.stats.property_lines = lines.size();
         stream.stats.auxiliary_peak_bytes = budget.peak;
