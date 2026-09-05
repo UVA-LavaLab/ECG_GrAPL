@@ -49,6 +49,10 @@ VALID_BUILD_TYPES = ("opt", "debug", "fast")
 
 # Overlay mappings: source (relative to overlays/) -> destination (relative to gem5/src/)
 OVERLAY_FILE_MAP = {
+    "../../ecg_ref32.h":
+        "mem/cache/replacement_policies/ecg_ref32.h",
+    "../../ecg_victim_policy.h":
+        "mem/cache/replacement_policies/ecg_victim_policy.h",
     "../../hawkeye_policy.h":
         "mem/cache/replacement_policies/hawkeye_policy.h",
     # Replacement policies
@@ -109,6 +113,7 @@ UNIFIED_DIFF_PATCHES = [
     # per-hart RISC-V MiscReg storage. This state is automatically copied and
     # checkpointed by gem5's ISA machinery.
     ("arch/riscv/ecg_csr.patch", "."),
+    ("arch/riscv/ecg_ref32_csr.patch", "."),
     # Reserved VTYPE.vsew values are legal encodings that set vill. Guard the
     # O3 branch-target path so speculative decoding cannot abort gem5 before
     # the illegal vector configuration is squashed.
@@ -132,6 +137,7 @@ UNIFIED_DIFF_PATCHES = [
     ("cpu/exec_context_ecg_producer.patch", "."),
     ("cpu/o3/dyn_inst_ecg_producer.patch", "."),
     ("cpu/o3/lsq_ecg_producer.patch", "."),
+    ("cpu/ecg_ref32_producer.patch", "."),
     # Pass the allocating Request to replacement victim selection so ReusePlan uses
     # the request-carried current epoch/context rather than global magic state.
     ("mem/cache/ecg_victim_request.patch", "."),
@@ -450,6 +456,14 @@ def apply_unified_diff_patches():
                 f"{overlay_rel}. Run setup_gem5.py --clean and reinstall.")
 
         marker_targets = {
+            "arch/riscv/ecg_ref32_csr.patch": (
+                target / "src/arch/riscv/regs/misc.hh",
+                "CSR_ECG_REF32_CONFIG",
+            ),
+            "cpu/ecg_ref32_producer.patch": (
+                target / "src/cpu/o3/dyn_inst.hh",
+                "ecgRef32Hint()",
+            ),
             "arch/riscv/ecg_csr.patch": (
                 target / "src/arch/riscv/regs/misc.hh",
                 "CSR_ECG_RECORD_FORMAT",
@@ -855,6 +869,14 @@ def apply_riscv_ecg_extract_patch():
         '#include "sim/pseudo_inst.hh"\n',
         '#include "mem/cache/replacement_policies/graph_cache_context_gem5.hh"\n',
         "RISC-V exec include",
+    )
+    if changed:
+        includes_path.write_text(includes)
+    includes, changed = insert_once(
+        includes,
+        '#include "sim/pseudo_inst.hh"\n',
+        '#include "mem/cache/replacement_policies/ecg_ref32.h"\n',
+        "RISC-V Scale6 exec include",
     )
     if changed:
         includes_path.write_text(includes)

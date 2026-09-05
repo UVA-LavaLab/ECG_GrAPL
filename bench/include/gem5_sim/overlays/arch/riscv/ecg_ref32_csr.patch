@@ -1,0 +1,43 @@
+diff --git a/src/arch/riscv/regs/misc.hh b/src/arch/riscv/regs/misc.hh
+--- a/src/arch/riscv/regs/misc.hh
++++ b/src/arch/riscv/regs/misc.hh
+@@ -203,6 +203,8 @@ enum MiscRegIndex
+     MISCREG_ECG_CUR_EPOCH,
+     MISCREG_ECG_CONTEXT,
+     MISCREG_ECG_RECORD_FORMAT,
++    MISCREG_ECG_REF32_BASE,
++    MISCREG_ECG_REF32_CONFIG,
+ 
+     // These registers are not in the standard, hence does not exist in the
+     // CSRData map. These are mainly used to provide a minimal implementation
+@@ -288,5 +290,7 @@ enum CSRIndex
+     CSR_ECG_CONTEXT = 0x801,
+     CSR_ECG_RECORD_FORMAT = 0x802,
++    CSR_ECG_REF32_BASE = 0x803,
++    CSR_ECG_REF32_CONFIG = 0x804,
+ 
+     CSR_CYCLE = 0xC00,
+     CSR_TIME = 0xC01,
+@@ -578,5 +582,11 @@ const std::unordered_map<int, CSRMetadata> CSRData = {
+     {CSR_ECG_RECORD_FORMAT,
+         {"ecg.record_format", MISCREG_ECG_RECORD_FORMAT,
+          rvTypeFlags(RV64, RV32), isaExtsFlags()}},
++    {CSR_ECG_REF32_BASE,
++        {"ecg.ref32_base", MISCREG_ECG_REF32_BASE,
++         rvTypeFlags(RV64), isaExtsFlags()}},
++    {CSR_ECG_REF32_CONFIG,
++        {"ecg.ref32_config", MISCREG_ECG_REF32_CONFIG,
++         rvTypeFlags(RV64), isaExtsFlags()}},
+     {CSR_CYCLE,
+         {"cycle", MISCREG_CYCLE, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
+diff --git a/src/arch/riscv/isa.cc b/src/arch/riscv/isa.cc
+--- a/src/arch/riscv/isa.cc
++++ b/src/arch/riscv/isa.cc
+@@ -203,5 +203,7 @@ namespace RiscvISA
+     [MISCREG_ECG_CUR_EPOCH] = "ECG_CUR_EPOCH",
+     [MISCREG_ECG_CONTEXT]   = "ECG_CONTEXT",
+     [MISCREG_ECG_RECORD_FORMAT] = "ECG_RECORD_FORMAT",
++    [MISCREG_ECG_REF32_BASE] = "ECG_REF32_BASE",
++    [MISCREG_ECG_REF32_CONFIG] = "ECG_REF32_CONFIG",
+ 
+     [MISCREG_NMIVEC]        = "NMIVEC",

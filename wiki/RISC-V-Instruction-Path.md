@@ -1,10 +1,10 @@
 # RISC-V integration: existing support and Scale6 target
 
 The repository contains an experimental custom-0 RISC-V ReusePlan/ReuseBind
-implementation in gem5. **It is not the native Scale6 implementation.**
-Scale6 currently executes in cache_sim; its request format, retirement update
-channel and native prefetch delivery still need implementation and timing
-evidence.
+implementation in gem5. A separate Scale6 record/F32 operand pair now also
+executes in RISC-V O3, but **the complete native Scale6 cache path is not
+enabled**. Retirement transport, LLC integration and native prefetch delivery
+still need implementation and timing evidence.
 
 ## 1. Reuse the execution discipline, not the old bit layout
 
@@ -30,8 +30,9 @@ that implementation. Scale6 uses a request-sequence future bound, not two
 outer-vertex epochs. The research instruction family is neither a ratified
 RISC-V extension nor an upstream gem5 feature.
 
-The shared Scale6 codec now defines the following RV64 operand contract.
-This is not yet a wired custom-opcode or retirement-channel implementation:
+The shared Scale6 codec defines the following RV64 operand contract. The
+record and property raw custom-0 operations now implement it; the
+retirement/cache channel remains a separate milestone:
 
 | Value | Bit layout |
 |---|---|
@@ -51,6 +52,14 @@ counter wrap. Consumers must use the codec's explicit validity result, not
 a zero-word sentinel. Modular ordering treats an exact half-range difference
 as ambiguous. These helpers live in `bench/include/ecg_ref32.h`; they do not
 open the native gem5 experiment gate on their own.
+
+The experimental record operation uses raw funct7 `0x30`, the F32 property
+operation uses `0x34`, and both use custom-0 / funct3 `0x2`. Their reserved
+width subcodes and RV32 forms remain invalid. Record-base and configuration
+CSRs are `0x803` and `0x804`; the existing context CSR is `0x801`. The guest
+emits `.insn`, not a claimed standard assembler mnemonic. A dedicated native
+probe covers the maximum n26 vertex, final-WRAP normalization, signed zero,
+NaN payload preservation, zero canonical operands and invalid record bounds.
 
 ## 2. The native Scale6 target
 
@@ -97,6 +106,8 @@ updates without inventing a new data allocation.
 
 ## 4. What remains before timing claims
 
+`ref32_isa_smoke_riscv_m5ops` is operand/exception evidence only. It does not
+exercise a native replacement policy or produce an admissible speedup row.
 The model's 16-entry commit queue, eight-request latency and eight-entry
 prefetch queue are not cycle-accurate gem5 structures. The native path must
 model latency, bandwidth, translation, queue pressure, ordering and drain.

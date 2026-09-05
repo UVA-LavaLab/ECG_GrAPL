@@ -36,12 +36,12 @@
 </style></defs>
   <rect x="0" y="0" width="1200" height="1380" fill="#FFFFFF"/>
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Target Scale6 path through an out-of-order core</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Architecture target only: request binding exists for legacy ReuseBind; the Scale6 commit channel does not.</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Native record/property operands execute; the retirement-to-LLC path remains a target.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">A REAL WORD FROM THE EDGE STREAM</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">checked example; not an already-implemented opcode</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">checked native operand example; cache path pending</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="195" width="315" height="128" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="195" data-width="315" data-height="128"/>

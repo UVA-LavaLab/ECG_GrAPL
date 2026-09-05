@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1050" viewBox="0 0 1200 1050" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">RISC-V integration: existing path and next step</title>
-  <desc id="desc">The existing experimental RISC-V custom-0 instruction family supports record acquisition and a dependent property load with ReuseBind metadata. Scale6&#x27;s 26-plus-six-bit format, traversal position, retirement update channel and native prefetch delivery are a separate unimplemented target. This figure names requirements without inventing completed opcodes or timing results.</desc>
+  <desc id="desc">The existing experimental RISC-V custom-0 instruction family supports record acquisition and a dependent property load with ReuseBind metadata. Scale6&#x27;s separate raw record and property operations now implement the 26-plus-six-bit operand format and traversal position. Retirement transport, cache integration and native prefetch remain pending. No end-to-end native timing result is asserted.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -36,7 +36,7 @@
 </style></defs>
   <rect x="0" y="0" width="1200" height="1050" fill="#FFFFFF"/>
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">RISC-V integration: existing path and next step</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Existing ReuseBind support is not a completed Scale6 port.</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">The native operand pair exists; retirement and cache integration remain pending.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
@@ -66,11 +66,11 @@
   <rect x="769.16" y="171.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="838" y="188" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">rs2 dependency</text>
   <text x="40" y="401" text-anchor="start" class="sans body" fill="#475467">custom-0 is a research extension, not a ratified RISC-V ISA feature.</text>
-  <text x="40" y="432" text-anchor="start" class="sans body" fill="#C56A13">Legacy FlowThrough flags are not enabled by the primary Scale6 cache experiments.</text>
+  <text x="40" y="432" text-anchor="start" class="sans body" fill="#C56A13">Scale6 raw operations now execute in O3; the retirement/cache path is not enabled.</text>
   <circle cx="44" cy="495" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="501" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="502" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">SCALE6 TARGET CONTRACT</text>
-  <text x="1158" y="501" text-anchor="end" class="sans body" fill="#475467">requirements below remain unimplemented in gem5</text>
+  <text x="1158" y="501" text-anchor="end" class="sans body" fill="#475467">operand codec exists; retirement/cache transport pending</text>
   <line x1="24" y1="521" x2="1176" y2="521" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="521" x2="170" y2="521" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="556" width="210.0" height="90" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="556" data-width="210.0" data-height="90"/>
@@ -101,5 +101,5 @@
   <text x="747" y="822" text-anchor="start" class="sans body" fill="#182230">squash, replay and translation</text>
   <text x="747" y="867" text-anchor="start" class="sans body" fill="#182230">bounded delay and bandwidth</text>
   <text x="747" y="912" text-anchor="start" class="sans body" fill="#182230">traffic, admission and LLC-only fill</text>
-  <text x="40" y="977" text-anchor="start" class="sans body" fill="#C63C4A">No Scale6 mnemonic or cycle result is asserted here. The native delivery design is the next gate.</text>
+  <text x="40" y="977" text-anchor="start" class="sans body" fill="#C63C4A">Raw funct7 0x30 / 0x34 are experimental encodings; no Scale6 speedup claim is enabled.</text>
 </svg>

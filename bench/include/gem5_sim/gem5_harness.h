@@ -28,8 +28,10 @@
 #include <cstring>
 #include <atomic>
 #include <algorithm>
+#include <stdexcept>
 #include <vector>
 
+#include "ecg_ref32.h"
 #include "ecg_reuse_plan_builder.h"
 #include <string>
 
@@ -1179,6 +1181,83 @@ inline void gem5_ecg_write_record_format_csr(
     (void)tier_bits;
 #endif
 }
+
+class Gem5Ref32Context {
+  public:
+    Gem5Ref32Context(const uint32_t* record_base, uint64_t config,
+                     uint16_t context)
+        : record_base_(reinterpret_cast<uint64_t>(record_base)),
+          config_(config), context_(context) {
+        uint32_t sequence, vertices;
+        if (context == 0 || !ecg_ref32::nativeRecordPosition(
+                record_base_, record_base_, config_, 0, sequence, vertices))
+            throw std::invalid_argument("Invalid native Scale6 context");
+    }
+
+    static constexpr bool nativeAvailable() {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    void activate() const {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        // CSR instructions serialize following operations in gem5 O3.
+        asm volatile ("csrw 0x803, %0" :: "r"(record_base_) : "memory");
+        asm volatile ("csrw 0x804, %0" :: "r"(config_) : "memory");
+        gem5_ecg_write_context_csr(context_);
+#endif
+    }
+
+    void deactivate() const {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        asm volatile ("csrw 0x804, zero" ::: "memory");
+        gem5_ecg_write_context_csr(0);
+#endif
+    }
+
+    inline uint64_t record(const uint32_t* address, uint64_t iteration) const {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        uint64_t canonical;
+        asm volatile (".insn r 0x0b, 0x2, 0x30, %0, %1, %2"
+                      : "=r"(canonical) : "r"(address), "r"(iteration) : "memory");
+        return canonical;
+#else
+        uint32_t sequence, vertices;
+        const uint64_t va = reinterpret_cast<uint64_t>(address);
+        if (!ecg_ref32::nativeRecordPosition(
+                va, record_base_, config_, iteration, sequence, vertices))
+            throw std::invalid_argument("Invalid Scale6 record address");
+        uint64_t canonical;
+        if (!ecg_ref32::canonicalScaleRecord(
+                *address, va, record_base_, config_, iteration, canonical))
+            throw std::invalid_argument("Invalid Scale6 record");
+        return canonical;
+#endif
+    }
+
+    inline float property(const float* base, uint64_t canonical) const {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        float value;
+        asm volatile (".insn r 0x0b, 0x2, 0x34, %0, %1, %2"
+                      : "=f"(value) : "r"(base), "r"(canonical) : "memory");
+        return value;
+#else
+        ecg_ref32::NativeAccess access;
+        if (!ecg_ref32::nativePropertyAccess(
+                canonical, reinterpret_cast<uint64_t>(base), config_, access))
+            throw std::invalid_argument("Invalid Scale6 property operand");
+        return *reinterpret_cast<const float*>(access.address);
+#endif
+    }
+
+  private:
+    const uint64_t record_base_;
+    const uint64_t config_;
+    const uint16_t context_;
+};
 
 inline void gem5_ecg_publish_legacy_context(uint16_t context) {
 #ifndef NO_M5OPS

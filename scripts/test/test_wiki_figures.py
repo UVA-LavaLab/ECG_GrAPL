@@ -147,13 +147,13 @@ def test_current_policy_and_prefetch_are_not_legacy_shortcuts():
 def test_native_path_is_explicitly_not_complete():
     rendered = figures()
     family = rendered["risc-v-instruction-path-f01-instruction-family.svg"]
-    assert "not a completed Scale6 port" in family
-    assert "remain unimplemented in gem5" in family
+    assert "retirement and cache integration remain pending" in family
+    assert "retirement/cache transport pending" in family
     pipeline = rendered["risc-v-instruction-path-f02-o3-request-pipeline.svg"]
     for token in ("Fetch", "Decode", "Rename", "Issue / select", "Physical registers",
                   "I1 waits P17", "AGU", "LSQ", "ROB", "L1D / L2",
                   "commit-only update", "squashed load: no refresh",
-                  "Scale6 commit channel does not"):
+                  "retirement-to-LLC path remains a target"):
         assert token in pipeline
     lifetime = rendered["risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg"]
     for token in ("equal seq requires same payload", "allocOnFill combines with OR",

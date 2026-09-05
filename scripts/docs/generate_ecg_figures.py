@@ -536,12 +536,13 @@ def instruction_family(root, fx):
     f = plate(
         root, ISA, "01", "instruction-family",
         "RISC-V integration: existing path and next step",
-        "Existing ReuseBind support is not a completed Scale6 port.",
+        "The native operand pair exists; retirement and cache integration remain pending.",
         "The existing experimental RISC-V custom-0 instruction family supports "
         "record acquisition and a dependent property load with ReuseBind metadata. "
-        "Scale6's 26-plus-six-bit format, traversal position, retirement update "
-        "channel and native prefetch delivery are a separate unimplemented target. "
-        "This figure names requirements without inventing completed opcodes or timing results.",
+        "Scale6's separate raw record and property operations now implement the "
+        "26-plus-six-bit operand format and traversal position. Retirement "
+        "transport, cache integration and native prefetch remain pending. "
+        "No end-to-end native timing result is asserted.",
         1050,
     )
     f.section("1", "EXISTING EXPERIMENTAL GEM5 SUPPORT",
@@ -557,10 +558,10 @@ def instruction_family(root, fx):
     f.arrow(((780, 277), (895, 277)), kind="dependency", label="rs2 dependency",
             label_at=(838, 188), color=PURPLE)
     note(f, 401, "custom-0 is a research extension, not a ratified RISC-V ISA feature.", GRAY)
-    note(f, 432, "Legacy FlowThrough flags are not enabled by the primary Scale6 cache experiments.", AMBER)
+    note(f, 432, "Scale6 raw operations now execute in O3; the retirement/cache path is not enabled.", AMBER)
 
     f.section("2", "SCALE6 TARGET CONTRACT",
-              "requirements below remain unimplemented in gem5", 495, role="verify")
+              "operand codec exists; retirement/cache transport pending", 495, role="verify")
     f.bitfield(40, 556, 1120, 90,
                (("token", 6, "state"), ("vertex", 26, "data")), total_bits=32)
     tabular(f, 40, 704, (285, 410, 425),
@@ -571,7 +572,7 @@ def instruction_family(root, fx):
                 ("retirement -> LLC", "committed line prediction", "bounded delay and bandwidth"),
                 ("lookahead -> prefetch", "real record-stream candidates", "traffic, admission and LLC-only fill"),
             ), row_height=45)
-    note(f, 977, "No Scale6 mnemonic or cycle result is asserted here. The native delivery design is the next gate.", RED)
+    note(f, 977, "Raw funct7 0x30 / 0x34 are experimental encodings; no Scale6 speedup claim is enabled.", RED)
     return f
 
 
@@ -579,7 +580,7 @@ def o3_pipeline(root, fx):
     f = plate(
         root, ISA, "02", "o3-request-pipeline",
         "Target Scale6 path through an out-of-order core",
-        "Architecture target only: request binding exists for legacy ReuseBind; the Scale6 commit channel does not.",
+        "Native record/property operands execute; the retirement-to-LLC path remains a target.",
         "An explicit register dependency connects the Scale6 record load to the "
         "property access. Standard fetch, decode, rename, issue, AGU, LSQ, translation "
         "and cache structures retain ordinary execution semantics. A separate "
@@ -588,7 +589,7 @@ def o3_pipeline(root, fx):
         1380,
     )
     f.section("1", "A REAL WORD FROM THE EDGE STREAM",
-              "checked example; not an already-implemented opcode", 138, role="data")
+              "checked native operand example; cache path pending", 138, role="data")
     part(f, 40, 195, 315, 128, "Incoming CSR row u=8",
          ("row_ptr[8]=14; row_ptr[9]=19", "neighbors: 3, 6, 7, 11, 18"), "data")
     f.bitfield(475, 205, 685, 104,
@@ -821,7 +822,7 @@ def evidence_boundary(root, fx):
             ("Surface", "What it can establish", "Scale6 status"),
             (
                 ("cache_sim", "functional cache behavior and traffic", "implemented; full Twitter exercised"),
-                ("gem5 O3", "architectural timing with native requests", "Scale6 delivery / commit / prefetch pending"),
+                ("gem5 O3", "architectural timing with native requests", "operands run; commit / cache / prefetch pending"),
                 ("Sniper", "matched-work modeled corroboration", "Scale6 rows unsupported"),
                 ("physical cost", "synthesized storage and control cost", "Scale6 area / timing not established"),
             ), row_height=51)

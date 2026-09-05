@@ -1,0 +1,72 @@
+diff --git a/src/cpu/exec_context.hh b/src/cpu/exec_context.hh
+--- a/src/cpu/exec_context.hh
++++ b/src/cpu/exec_context.hh
+@@ -71,6 +71,14 @@
+ class ExecContext
+ {
+   public:
+ 
++    virtual void setEcgRef32RecordHint(
++        uint64_t /*canonical*/, uint64_t /*iteration*/,
++        uint16_t /*context*/) {}
++    virtual void setEcgRef32LoadHint(
++        uint32_t /*destination*/, uint32_t /*sequence*/,
++        uint32_t /*deadline*/, uint8_t /*state*/,
++        uint16_t /*context*/) {}
++
+     virtual RegVal getRegOperand(const StaticInst *si, int idx) = 0;
+     virtual void getRegOperand(const StaticInst *si, int idx, void *val) = 0;
+diff --git a/src/cpu/o3/dyn_inst.hh b/src/cpu/o3/dyn_inst.hh
+--- a/src/cpu/o3/dyn_inst.hh
++++ b/src/cpu/o3/dyn_inst.hh
+@@ -65,4 +65,5 @@
+ #include "debug/HtmCpu.hh"
++#include "mem/cache/replacement_policies/ecg_ref32.h"
+ 
+ namespace gem5
+ {
+@@ -75,6 +76,8 @@
+ class DynInst : public ExecContext, public RefCounted
+ {
+   private:
++    ecg_ref32::InstructionHint _ecgRef32Hint;
++
+     DynInst(const StaticInstPtr &staticInst, const StaticInstPtr &macroop,
+             InstSeqNum seq_num, CPU *cpu);
+ 
+@@ -81,6 +84,35 @@
+   public:
++    void setEcgRef32RecordHint(
++        uint64_t canonical, uint64_t iteration, uint16_t context) override
++    {
++        _ecgRef32Hint.kind = ecg_ref32::InstructionKind::RECORD;
++        _ecgRef32Hint.destination = ecg_ref32::extractDestination(
++            static_cast<uint32_t>(canonical), ecg_ref32::kScaleMaxIdBits);
++        _ecgRef32Hint.sequence = static_cast<uint32_t>(canonical >> 32);
++        _ecgRef32Hint.value = static_cast<uint32_t>(iteration);
++        _ecgRef32Hint.state = static_cast<uint8_t>((iteration >> 32) & 1u);
++        _ecgRef32Hint.context = context;
++    }
++
++    void setEcgRef32LoadHint(
++        uint32_t destination, uint32_t sequence, uint32_t deadline,
++        uint8_t state, uint16_t context) override
++    {
++        _ecgRef32Hint.kind = ecg_ref32::InstructionKind::PROPERTY;
++        _ecgRef32Hint.destination = destination;
++        _ecgRef32Hint.sequence = sequence;
++        _ecgRef32Hint.value = deadline;
++        _ecgRef32Hint.state = state;
++        _ecgRef32Hint.context = context;
++    }
++
++    const ecg_ref32::InstructionHint& ecgRef32Hint() const
++    {
++        return _ecgRef32Hint;
++    }
++
+     // The list of instructions iterator type.
+     typedef typename std::list<DynInstPtr>::iterator ListIt;
+ 
+     struct Arrays
+     {

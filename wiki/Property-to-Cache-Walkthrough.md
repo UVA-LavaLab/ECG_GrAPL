@@ -47,8 +47,8 @@ prediction may already be expired. It must be discarded, not drawn as a
 freshly installed deadline at arrival. A newer coalesced update has its own
 sequence and deadline.
 
-This is functional-model arithmetic, not an assertion that a completed gem5
-Scale6 instruction or retirement route exists.
+This is functional-model arithmetic, not a native cache-policy or retirement
+result. The new Scale6 operand pair alone does not implement that complete route.
 
 ## 3. Storage ownership and lifetime
 

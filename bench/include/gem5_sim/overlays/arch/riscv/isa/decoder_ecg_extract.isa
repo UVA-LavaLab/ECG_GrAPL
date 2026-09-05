@@ -705,6 +705,83 @@
                             Rs1 + static_cast<uint64_t>(dest_id) * 4);
                     }});
                     }
+                    // Atomic execution concatenates EA and access fragments;
+                    // keep their temporary state in independent scopes.
+                    0x0C: decode RVTYPE {
+                      0x1: decode ECG_WIDTH {
+                        0x0: ecg_ref32_record({{
+                            {
+                                uint64_t canonical = 0;
+                                const uint64_t context =
+                                    xc->readMiscReg(MISCREG_ECG_CONTEXT);
+                                if (context == 0 || context > UINT16_MAX ||
+                                    !ecg_ref32::canonicalScaleRecord(
+                                        static_cast<uint32_t>(Mem_uw), Rs1,
+                                        xc->readMiscReg(MISCREG_ECG_REF32_BASE),
+                                        xc->readMiscReg(MISCREG_ECG_REF32_CONFIG),
+                                        Rs2, canonical))
+                                    return std::make_shared<IllegalInstFault>(
+                                        "Invalid Scale6 record", machInst);
+                                Rd = canonical;
+                                xc->setEcgRef32RecordHint(
+                                    canonical, Rs2, static_cast<uint16_t>(context));
+                            }
+                        }}, ea_code={{
+                            {
+                                uint32_t sequence, vertices;
+                                const uint64_t context =
+                                    xc->readMiscReg(MISCREG_ECG_CONTEXT);
+                                if (context == 0 || context > UINT16_MAX ||
+                                    !ecg_ref32::nativeRecordPosition(
+                                        Rs1,
+                                        xc->readMiscReg(MISCREG_ECG_REF32_BASE),
+                                        xc->readMiscReg(MISCREG_ECG_REF32_CONFIG),
+                                        Rs2, sequence, vertices))
+                                    return std::make_shared<IllegalInstFault>(
+                                        "Invalid Scale6 record address", machInst);
+                                EA = rvZext(Rs1);
+                            }
+                        }});
+                      }
+                    }
+                    0x0D: decode RVTYPE {
+                      0x1: decode ECG_WIDTH {
+                        0x0: ecg_ref32_property_f32({{
+                            {
+                                STATUS status = xc->readMiscReg(MISCREG_STATUS);
+                                if (status.fs == FPUStatus::OFF)
+                                    return std::make_shared<IllegalInstFault>(
+                                        "FPU is off", machInst);
+                                status.fs = FPUStatus::DIRTY;
+                                xc->setMiscReg(MISCREG_STATUS, status);
+                                freg_t fd = freg(f32(Mem_uw));
+                                Fd_bits = fd.v;
+                            }
+                        }}, ea_code={{
+                            {
+                                STATUS status = xc->readMiscReg(MISCREG_STATUS);
+                                if (status.fs == FPUStatus::OFF)
+                                    return std::make_shared<IllegalInstFault>(
+                                        "FPU is off", machInst);
+                                ecg_ref32::NativeAccess access;
+                                const uint64_t context =
+                                    xc->readMiscReg(MISCREG_ECG_CONTEXT);
+                                if (context == 0 || context > UINT16_MAX ||
+                                    !ecg_ref32::nativePropertyAccess(
+                                        Rs2, Rs1,
+                                        xc->readMiscReg(MISCREG_ECG_REF32_CONFIG),
+                                        access))
+                                    return std::make_shared<IllegalInstFault>(
+                                        "Invalid Scale6 property operand", machInst);
+                                xc->setEcgRef32LoadHint(
+                                    access.destination, access.sequence,
+                                    access.deadline, static_cast<uint8_t>(access.state),
+                                    static_cast<uint16_t>(context));
+                                EA = rvZext(access.address);
+                            }
+                        }}, inst_flags=FloatMemReadOp);
+                      }
+                    }
                 }
             }
         }

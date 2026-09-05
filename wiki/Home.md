@@ -29,9 +29,10 @@ IDs. The 8 MiB LLC remains the primary target; 16 and 24 MiB are additional
 capacity points. P-OPT-SE is a separately labeled reconstruction, not an
 undercharged ordinary P-OPT row.
 
-The earlier ReuseBind RISC-V implementation is not a completed Scale6 port.
-Native request binding, retirement-only update transport, cycle-timed
-prefetching and physical-cost evidence remain required.
+The new Scale6 record/F32 operand pair executes in RISC-V O3. Neither that
+pair nor the earlier ReuseBind implementation is a completed Scale6 cache
+port: retirement-only updates, LLC integration, cycle-timed prefetching and
+physical-cost evidence remain required.
 
 ## Documentation
 

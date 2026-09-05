@@ -51,7 +51,7 @@ included in the replacement or prefetch claim.
 | Surface | Current role and limitation |
 |---|---|
 | **cache_sim** | Scale6 functional results, demand LLC misses, and off-chip reads plus writes |
-| **gem5 O3** | Native timing backend; existing legacy ReuseBind path, but Scale6 delivery/commit/prefetch is pending |
+| **gem5 O3** | Scale6 record/F32 operands execute; retirement, LLC policy and prefetch integration remain pending |
 | **Sniper** | Legacy matched-work modeled corroboration; Scale6 rows remain unsupported |
 | **RTL models** | Earlier metadata/cost components; not a completed Scale6 physical implementation |
 

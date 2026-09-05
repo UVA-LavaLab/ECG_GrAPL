@@ -335,6 +335,19 @@ struct NativeAccess {
     State state = State::UNKNOWN;
 };
 
+enum class InstructionKind : uint8_t { NONE, RECORD, PROPERTY };
+
+struct InstructionHint {
+    uint32_t destination = 0;
+    uint32_t sequence = 0;
+    // Record: iteration base; property: decoded deadline.
+    uint32_t value = 0;
+    uint16_t context = 0;
+    // Record: another-iteration flag; property: normalized State.
+    uint8_t state = 0;
+    InstructionKind kind = InstructionKind::NONE;
+};
+
 inline bool packNativeConfig(
         uint64_t vertices, uint64_t records, uint64_t& config) {
     config = 0;
@@ -370,12 +383,10 @@ inline bool packNativeIteration(
     return true;
 }
 
-// Canonical operand: semantic sequence[63:32], runtime-normalized record[31:0].
-// The bool return, not a zero-word sentinel, distinguishes invalid input.
-inline bool canonicalScaleRecord(
-        uint32_t record, uint64_t record_address, uint64_t record_base,
-        uint64_t config, uint64_t iteration, uint64_t& canonical) {
-    canonical = 0;
+inline bool nativeRecordPosition(
+        uint64_t record_address, uint64_t record_base, uint64_t config,
+        uint64_t iteration, uint32_t& sequence, uint32_t& vertices) {
+    sequence = vertices = 0;
     NativeConfig geometry;
     if (!decodeNativeConfig(config, geometry) ||
         (iteration & ~kNativeIterationMask) != 0 ||
@@ -386,16 +397,30 @@ inline bool canonicalScaleRecord(
     if (record_base > std::numeric_limits<uint64_t>::max() - (bytes - 1) ||
         record_address - record_base >= bytes)
         return false;
+    sequence = static_cast<uint32_t>(
+        static_cast<uint32_t>(iteration) + ((record_address - record_base) >> 2) + 1);
+    vertices = geometry.vertices;
+    return true;
+}
+
+// Canonical operand: semantic sequence[63:32], runtime-normalized record[31:0].
+// The bool return, not a zero-word sentinel, distinguishes invalid input.
+inline bool canonicalScaleRecord(
+        uint32_t record, uint64_t record_address, uint64_t record_base,
+        uint64_t config, uint64_t iteration, uint64_t& canonical) {
+    canonical = 0;
+    uint32_t sequence, vertices;
+    if (!nativeRecordPosition(
+            record_address, record_base, config, iteration, sequence, vertices))
+        return false;
     const uint32_t destination = extractDestination(record, kScaleMaxIdBits);
-    if (destination >= geometry.vertices)
+    if (destination >= vertices)
         return false;
     uint8_t token = static_cast<uint8_t>(record >> kScaleMaxIdBits);
     if (token >= 33) {
         token = iteration & kNativeHasNextIteration
             ? static_cast<uint8_t>(token - 31) : uint8_t{1};
     }
-    const uint32_t sequence = static_cast<uint32_t>(
-        static_cast<uint32_t>(iteration) + ((record_address - record_base) >> 2) + 1);
     canonical = (static_cast<uint64_t>(sequence) << 32) |
         packScaleRecord32(destination, token, kScaleMaxIdBits);
     return true;

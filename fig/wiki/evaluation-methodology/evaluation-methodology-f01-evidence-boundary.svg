@@ -63,7 +63,7 @@
   <line x1="690" y1="205" x2="690" y2="460" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="702" y="233" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Scale6 status</text>
   <text x="702" y="284" text-anchor="start" class="sans body" fill="#182230">implemented; full Twitter exercised</text>
-  <text x="702" y="335" text-anchor="start" class="sans body" fill="#182230">Scale6 delivery / commit / prefetch pending</text>
+  <text x="702" y="335" text-anchor="start" class="sans body" fill="#182230">operands run; commit / cache / prefetch pending</text>
   <text x="702" y="386" text-anchor="start" class="sans body" fill="#182230">Scale6 rows unsupported</text>
   <text x="702" y="437" text-anchor="start" class="sans body" fill="#182230">Scale6 area / timing not established</text>
   <text x="40" y="506" text-anchor="start" class="sans body" fill="#182230">The existing gem5 extension and RTL cost models are not evidence of a completed Scale6 port.</text>
