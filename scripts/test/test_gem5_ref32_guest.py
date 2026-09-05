@@ -72,6 +72,12 @@ int main() {
             auto repeated = PageRankPullGSRef32_Gem5(g, iterations, 0);
             if (std::memcmp(expected.data(), repeated.data(), 32 * sizeof(float)) ||
                 neighbors(g) != original) return 2;
+            for (const char* width : {"4", "8"}) {
+                setenv("ECG_RECORD_BYTES", width, 1);
+                auto adaptive = PageRankPullGSRecord_Gem5(g, iterations, 0);
+                if (std::memcmp(expected.data(), adaptive.data(), 32 * sizeof(float)) ||
+                    neighbors(g) != original) return 3;
+            }
         }
     }
     std::puts("native-carrier PR semantics and restoration PASS");
@@ -104,6 +110,9 @@ int main() {
     assert ran.returncode == 0, ran.stdout + ran.stderr
     assert "native-carrier PR semantics and restoration PASS" in ran.stdout
     assert "edge_sideband_bytes=0" in ran.stderr
+    assert "record_bytes=4 id_bits=5 metadata_bits=27" in ran.stderr
+    assert "record_bytes=8 id_bits=5 metadata_bits=59" in ran.stderr
+    assert "storage=separate source_immutable=1 matrix_bytes=0" in ran.stderr
     context = json.loads((tmp_path / "context.json").read_text())
     assert [region["name"] for region in context["property_regions"]] == [
         "scores", "contrib"]

@@ -1,0 +1,98 @@
+--- a/src/mem/cache/mshr.hh
++++ b/src/mem/cache/mshr.hh
+@@ -60,6 +60,7 @@
+ #include "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh"
+ #include "mem/cache/replacement_policies/ecg_ref32_observation.hh"
+ #include "mem/cache/replacement_policies/ecg_record_observation.hh"
++#include "mem/cache/prefetch/ecg_record_prefetch_request.hh"
+ #include "mem/packet.hh"
+ #include "mem/request.hh"
+ #include "sim/cur_tick.hh"
+@@ -441,6 +442,19 @@
+         recordState.apply(req);
+     }
+ 
++    bool ecgRecordPrefetchOnly() const
++    {
++        bool found = false;
++        for (const auto& target : targets) {
++            if (target.source == Target::FromSnoop)
++                continue;
++            if (!ecgRecordFillDecision(target.pkt->req))
++                return false;
++            found = true;
++        }
++        return found;
++    }
++
+     /**
+      * Add a request to the list of targets.
+      * @param target The target.
+--- a/src/mem/cache/tags/base.hh
++++ b/src/mem/cache/tags/base.hh
+@@ -59,6 +59,7 @@
+ #include "mem/cache/cache_blk.hh"
+ #include "mem/cache/replacement_policies/ecg_record_native.h"
+ #include "mem/cache/replacement_policies/ecg_record_runtime.h"
++#include "mem/cache/prefetch/ecg_record_prefetch_request.hh"
+ #include "mem/cache/replacement_policies/ecg_ref32_commit.h"
+ #include "mem/packet.hh"
+ #include "params/BaseTags.hh"
+--- a/src/mem/cache/tags/base_set_assoc.hh
++++ b/src/mem/cache/tags/base_set_assoc.hh
+@@ -137,6 +137,6 @@
+ 
+         // If a cache hit
+-        if (blk != nullptr) {
++        if (blk != nullptr && !ecgRecordFillDecision(pkt->req)) {
+             // Update number of references to accessed block
+             blk->increaseRefCount();
+ 
+--- a/src/mem/cache/base.hh
++++ b/src/mem/cache/base.hh
+@@ -1199,6 +1199,9 @@
+     bool canAdmitEcgRecordPrefetch(Addr address, uint64_t sequence) const
+     { return tags->canAdmitEcgRecordPrefetch(address, sequence); }
+ 
++    void resumeEcgRecordResponse(PacketPtr pkt)
++    { recvTimingResp(pkt); }
++
+     bool supportsEcgRef32() const
+     {
+         return tags->supportsEcgRef32();
+--- a/src/mem/cache/base.cc
++++ b/src/mem/cache/base.cc
+@@ -638,6 +638,12 @@
+ {
+     assert(pkt->isResponse());
+ 
++    const auto record_prefetch = ecgRecordFillDecision(pkt->req);
++    if (supportsEcgRecord() && record_prefetch && !record_prefetch->ready) {
++        record_prefetch->owner->deferFill(this, pkt, record_prefetch);
++        return;
++    }
++
+     // all header delay should be paid for by the crossbar, unless
+     // this is a prefetch response from above
+     panic_if(pkt->headerDelay != 0 && pkt->cmd != MemCmd::HardPFResp,
+@@ -703,8 +709,19 @@
+                 pkt->getAddr());
+ 
+-        const bool allocate = (writeAllocator && mshr->wasWholeLineWrite) ?
++        bool allocate = (writeAllocator && mshr->wasWholeLineWrite) ?
+             writeAllocator->allocate() : mshr->allocOnFill();
++        const bool record_prefetch_only = mshr->ecgRecordPrefetchOnly();
++        if (supportsEcgRecord() && record_prefetch && record_prefetch_only) {
++            fatal_if(!record_prefetch->ready,
++                     "%s ECG prefetch filled without its timed lookup", name());
++            allocate = allocate && record_prefetch->admitted;
++        }
+         blk = handleFill(pkt, blk, writebacks, allocate);
+         assert(blk != nullptr);
++        if (supportsEcgRecord() && record_prefetch) {
++            record_prefetch->cacheFill = true;
++            record_prefetch->allocated = blk != tempBlock;
++            record_prefetch->mergedDemand = !record_prefetch_only;
++        }
+         ppFill->notify(CacheAccessProbeArg(pkt, accessor));
+     }

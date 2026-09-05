@@ -103,6 +103,12 @@ def make_replacement_policy(name, **kwargs):
             popt_matrix_path=popt_matrix_path,
         )
     elif upper == "ECG":
+        if kwargs.get("native_record", False):
+            return GraphEcgRecordRP(
+                enable_replacement=kwargs.get("enable_replacement", True),
+                llc_size_bytes=kwargs.get("llc_size_bytes", 8388608),
+                sideband_path=sideband_path,
+            )
         if kwargs.get("ecg_mode") == "ECG_REF32":
             if not kwargs.get("native_ref32", False):
                 raise ValueError("ECG_REF32 requires a native commit transport")
@@ -181,16 +187,20 @@ def make_l2_cache(policy="LRU", size=DEFAULTS["l2_size"],
 def make_l3_cache(policy="LRU", size=DEFAULTS["l3_size"],
                   assoc=DEFAULTS["l3_assoc"], **policy_kwargs):
     """Create L3 shared cache matching ECG defaults (8MB, 16-way)."""
-    policy_kwargs.setdefault("llc_size_bytes", size_to_bytes(size))
+    size_bytes = size_to_bytes(size)
+    if int(assoc) <= 0 or size_bytes <= 0 or size_bytes % (int(assoc) * 64):
+        raise ValueError("LLC size must contain an exact positive number of cache sets")
+    num_sets = size_bytes // (int(assoc) * 64)
+    policy_kwargs.setdefault("llc_size_bytes", size_bytes)
     policy_kwargs.setdefault("num_ways", int(assoc))
     policy_kwargs.setdefault(
-        "num_sets", max(size_to_bytes(size) // (int(assoc) * 64), 1))
+        "num_sets", num_sets)
     policy_kwargs.setdefault("line_size", 64)
     # Diagnostic: gem5 L3 defaults to mostly_incl (inclusive -> back-invalidates
     # L1/L2 on L3 eviction). cache_sim has no back-invalidation, so this is a
     # candidate source of gem5-vs-cache_sim divergence for ECG. Allow override.
     l3_clusivity = os.environ.get("GEM5_L3_CLUSIVITY", "mostly_incl")
-    return Cache(
+    cache = Cache(
         size=size,
         assoc=assoc,
         tag_latency=20,
@@ -201,6 +211,10 @@ def make_l3_cache(policy="LRU", size=DEFAULTS["l3_size"],
         clusivity=l3_clusivity,
         replacement_policy=make_replacement_policy(policy, **policy_kwargs),
     )
+    if num_sets & (num_sets - 1):
+        cache.tags = BaseSetAssoc(indexing_policy=GraphModuloSetAssociative(
+            size=f"{size_bytes}B", assoc=int(assoc), entry_size=64))
+    return cache
 
 
 def make_droplet_prefetcher(**kwargs):

@@ -1,0 +1,31 @@
+--- a/src/mem/cache/tags/indexing_policies/base.hh
++++ b/src/mem/cache/tags/indexing_policies/base.hh
+@@ -110,7 +110,7 @@
+      * Construct and initialize this policy.
+      */
+-    BaseIndexingPolicy(const Params &p);
++    BaseIndexingPolicy(const Params &p, bool allow_non_power_of_two=false);
+ 
+     /**
+      * Destructor.
+      */
+--- a/src/mem/cache/tags/indexing_policies/base.cc
++++ b/src/mem/cache/tags/indexing_policies/base.cc
+@@ -57,12 +57,13 @@
+ {
+ 
+-BaseIndexingPolicy::BaseIndexingPolicy(const Params &p)
++BaseIndexingPolicy::BaseIndexingPolicy(const Params &p, bool allow_non_power_of_two)
+     : SimObject(p), assoc(p.assoc),
+-      numSets(p.size / (p.entry_size * assoc)),
++      numSets(p.size / (uint64_t(p.entry_size) * assoc)),
+       setShift(floorLog2(p.entry_size)), setMask(numSets - 1), sets(numSets),
+       tagShift(setShift + floorLog2(numSets))
+ {
+-    fatal_if(!isPowerOf2(numSets), "# of sets must be non-zero and a power " \
+-             "of 2");
++    fatal_if(numSets == 0 || (!allow_non_power_of_two && !isPowerOf2(numSets)),
++             "# of sets must be non-zero and a power of 2 unless the "
++             "indexing policy explicitly supports modulo indexing");
+     fatal_if(assoc <= 0, "associativity must be greater than zero");
+ 

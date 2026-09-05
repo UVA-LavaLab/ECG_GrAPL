@@ -49,10 +49,20 @@ VALID_BUILD_TYPES = ("opt", "debug", "fast")
 
 # Overlay mappings: source (relative to overlays/) -> destination (relative to gem5/src/)
 OVERLAY_FILE_MAP = {
+    "../../cache_indexing.h":
+        "mem/cache/tags/indexing_policies/cache_indexing.h",
     "../../ecg_ref32.h":
         "mem/cache/replacement_policies/ecg_ref32.h",
     "../../ecg_ref32_commit.h":
         "mem/cache/replacement_policies/ecg_ref32_commit.h",
+    "../../ecg_record.h":
+        "mem/cache/replacement_policies/ecg_record.h",
+    "../../ecg_record_native.h":
+        "mem/cache/replacement_policies/ecg_record_native.h",
+    "../../ecg_record_runtime.h":
+        "mem/cache/replacement_policies/ecg_record_runtime.h",
+    "../../ecg_record_window.h":
+        "mem/cache/replacement_policies/ecg_record_window.h",
     "../../ecg_victim_policy.h":
         "mem/cache/replacement_policies/ecg_victim_policy.h",
     "../../hawkeye_policy.h":
@@ -88,6 +98,20 @@ OVERLAY_FILE_MAP = {
         "mem/cache/replacement_policies/ecg_ref32_commit_transport.hh",
     "mem/cache/replacement_policies/ecg_ref32_commit_transport.cc":
         "mem/cache/replacement_policies/ecg_ref32_commit_transport.cc",
+    "mem/cache/replacement_policies/ecg_record_control.hh":
+        "mem/cache/replacement_policies/ecg_record_control.hh",
+    "mem/cache/replacement_policies/ecg_record_observation.hh":
+        "mem/cache/replacement_policies/ecg_record_observation.hh",
+    "mem/cache/replacement_policies/graph_ecg_record_rp.hh":
+        "mem/cache/replacement_policies/graph_ecg_record_rp.hh",
+    "mem/cache/replacement_policies/graph_ecg_record_rp.cc":
+        "mem/cache/replacement_policies/graph_ecg_record_rp.cc",
+    "mem/cache/replacement_policies/ecg_record_transport.hh":
+        "mem/cache/replacement_policies/ecg_record_transport.hh",
+    "mem/cache/replacement_policies/ecg_record_transport.cc":
+        "mem/cache/replacement_policies/ecg_record_transport.cc",
+    "mem/cache/replacement_policies/RecordTransport.py":
+        "mem/cache/replacement_policies/RecordTransport.py",
     "mem/cache/replacement_policies/ecg_victim_policy.hh":
         "mem/cache/replacement_policies/ecg_victim_policy.hh",
     "mem/cache/replacement_policies/ecg_mode.hh":
@@ -109,7 +133,23 @@ OVERLAY_FILE_MAP = {
         "mem/cache/prefetch/ecg_pfx.cc",
     "mem/cache/prefetch/GraphPrefetchers.py":
         "mem/cache/prefetch/GraphPrefetchers.py",
+    "mem/cache/prefetch/ecg_record_prefetch_request.hh":
+        "mem/cache/prefetch/ecg_record_prefetch_request.hh",
+    "mem/cache/prefetch/ecg_record_prefetch.hh":
+        "mem/cache/prefetch/ecg_record_prefetch.hh",
+    "mem/cache/prefetch/ecg_record_prefetch.cc":
+        "mem/cache/prefetch/ecg_record_prefetch.cc",
+    "mem/cache/prefetch/RecordPrefetch.py":
+        "mem/cache/prefetch/RecordPrefetch.py",
+    "mem/cache/tags/indexing_policies/GraphIndexingPolicies.py":
+        "mem/cache/tags/indexing_policies/GraphIndexingPolicies.py",
+    "mem/cache/tags/indexing_policies/graph_modulo.hh":
+        "mem/cache/tags/indexing_policies/graph_modulo.hh",
+    "mem/cache/tags/indexing_policies/graph_modulo.cc":
+        "mem/cache/tags/indexing_policies/graph_modulo.cc",
     # RISC-V ECG custom instruction scaffold
+    "arch/riscv/ecg_record.hh":
+        "arch/riscv/ecg_record.hh",
     "arch/riscv/isa/formats/ecg.isa":
         "arch/riscv/isa/formats/ecg.isa",
 }
@@ -118,6 +158,7 @@ OVERLAY_FILE_MAP = {
 PATCH_FILES = [
     "mem/cache/replacement_policies/SConscript.patch",
     "mem/cache/prefetch/SConscript.patch",
+    "mem/cache/tags/indexing_policies/SConscript.patch",
 ]
 
 # Unified-diff patches to apply via `patch -p1` (relative to overlays/).
@@ -130,6 +171,8 @@ UNIFIED_DIFF_PATCHES = [
     # checkpointed by gem5's ISA machinery.
     ("arch/riscv/ecg_csr.patch", "."),
     ("arch/riscv/ecg_ref32_csr.patch", "."),
+    ("arch/riscv/ecg_record_csr.patch", "."),
+    ("arch/riscv/ecg_record_operand.patch", "."),
     # Reserved VTYPE.vsew values are legal encodings that set vill. Guard the
     # O3 branch-target path so speculative decoding cannot abort gem5 before
     # the illegal vector configuration is squashed.
@@ -154,6 +197,8 @@ UNIFIED_DIFF_PATCHES = [
     ("cpu/o3/dyn_inst_ecg_producer.patch", "."),
     ("cpu/o3/lsq_ecg_producer.patch", "."),
     ("cpu/ecg_ref32_producer.patch", "."),
+    ("cpu/ecg_record_producer.patch", "."),
+    ("cpu/ecg_record_control.patch", "."),
     ("cpu/o3/ecg_ref32_observation.patch", "."),
     # Pass the allocating Request to replacement victim selection so ReusePlan uses
     # the request-carried current epoch/context rather than global magic state.
@@ -170,6 +215,10 @@ UNIFIED_DIFF_PATCHES = [
     ("mem/cache/base_flowthrough_request_flag.patch", "."),
     ("mem/cache/array_attribution.patch", "."),
     ("mem/cache/prefetch_flowthrough.patch", "."),
+    ("mem/cache/ecg_record_cache.patch", "."),
+    ("mem/cache/ecg_record_prefetch_cache.patch", "."),
+    ("mem/cache/ecg_record_capture_timing.patch", "."),
+    ("mem/cache/tags/indexing_policies/modulo_base.patch", "."),
 ]
 
 
@@ -183,6 +232,7 @@ def unified_patch_target_paths() -> list[Path]:
     targets.update({
         GEM5_DIR / "src/mem/cache/replacement_policies/SConscript",
         GEM5_DIR / "src/mem/cache/prefetch/SConscript",
+        GEM5_DIR / "src/mem/cache/tags/indexing_policies/SConscript",
         GEM5_DIR / "src/sim/pseudo_inst.cc",
         GEM5_DIR / "src/arch/riscv/isa/formats/formats.isa",
         GEM5_DIR / "src/arch/riscv/isa/includes.isa",
@@ -199,6 +249,21 @@ def installed_patch_target_hashes() -> dict[str, str]:
         relative = str(path.relative_to(GEM5_DIR))
         hashes[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
     return hashes
+
+
+def patch_receipt_matches(patch_file: Path, overlay_rel: str, state: dict) -> bool:
+    """Recognize installed layers even when later layers changed their diff context."""
+    if state.get("patches", {}).get(overlay_rel) != hashlib.sha256(
+            patch_file.read_bytes()).hexdigest():
+        return False
+    targets = [
+        line[len("+++ b/"):] for line in patch_file.read_text().splitlines()
+        if line.startswith("+++ b/")]
+    recorded = state.get("installed_targets", {})
+    return bool(targets) and all(
+        (GEM5_DIR / target).is_file() and recorded.get(target) == hashlib.sha256(
+            (GEM5_DIR / target).read_bytes()).hexdigest()
+        for target in targets)
 
 
 def verify_existing_patch_state() -> None:
@@ -416,11 +481,13 @@ def apply_patches():
                 "SimObject('GraphReplacementPolicies.py', sim_objects=[\n"
                 "    'GraphHawkeyeRP', 'GraphGraspRP', 'GraphPoptRP', "
                 "'GraphEcgRP'])")
-            new_simobject = (
+            ref32_simobject = (
                 "SimObject('GraphReplacementPolicies.py', sim_objects=[\n"
                 "    'GraphHawkeyeRP', 'GraphGraspRP', 'GraphPoptRP', "
                 "'GraphEcgRP', 'GraphRef32RP'])")
-            for installed in (old_simobject, previous_simobject):
+            new_simobject = ref32_simobject.replace(
+                "'GraphRef32RP'])", "'GraphRef32RP', 'GraphEcgRecordRP'])")
+            for installed in (old_simobject, previous_simobject, ref32_simobject):
                 if installed in current_content and new_simobject not in current_content:
                     current_content = current_content.replace(installed, new_simobject)
                     target_sconscript.write_text(current_content)
@@ -477,6 +544,9 @@ def apply_unified_diff_patches():
             raise SystemExit(
                 "Tracked gem5 patch changed after installation: "
                 f"{overlay_rel}. Run setup_gem5.py --clean and reinstall.")
+        if patch_receipt_matches(patch_file, overlay_rel, patch_state):
+            log.info(f"  Patch already applied (verified receipt): {overlay_rel}")
+            continue
 
         marker_targets = {
             "arch/riscv/ecg_ref32_csr.patch": (
@@ -773,6 +843,9 @@ def verify_installation_postconditions():
             "recordGraphArrayMshrMiss",
             "ecgArrayDemandReadBytes",
             "structuralFlowThroughMissTargets",
+            "record_prefetch->owner->deferFill",
+            "record_prefetch->admitted",
+            "++ecgRecordDeadMisses",
         ],
         GEM5_DIR / "src/mem/cache/base.hh": [
             "allow_alloc_on_fill",
@@ -799,12 +872,19 @@ def verify_installation_postconditions():
         ],
         GEM5_DIR / "src/cpu/exec_context.hh": [
             "setEcgLoadHint",
+            "setEcgRecordLoadHint",
         ],
         GEM5_DIR / "src/cpu/o3/dyn_inst.hh": [
             "setEcgLoadHint",
+            "ecgRecordConfiguration()",
         ],
         GEM5_DIR / "src/cpu/o3/lsq.cc": [
             "attachEcgEpoch",
+            "attachEcgRecordObservation",
+        ],
+        GEM5_DIR / "src/mem/cache/mshr.hh": [
+            "recordState.apply(req)",
+            "ecgRecordPrefetchOnly()",
         ],
         GEM5_DIR / "src/sim/pseudo_inst.cc": [
             "GRAPHBREW_SET_CONTEXT_WORK_ID",
@@ -816,9 +896,18 @@ def verify_installation_postconditions():
             "ecg_flow_load_compact",
             "ecg_plan_load",
             "ecg_bind_iload_compact",
+            "ecg_record_word",
+            "ecg_record_doubleword",
+            "ecg_record_property_f32",
+            "ecg_record_configure",
+            "ecg_record_pending",
         ],
         GEM5_DIR / "src/arch/riscv/regs/misc.hh": [
             "CSR_ECG_RECORD_FORMAT",
+            "CSR_ECG_RECORD_GENERATION",
+        ],
+        GEM5_DIR / "src/arch/riscv/isa/operands.isa": [
+            "'Rs3': IntReg('ud', 'RS3'",
         ],
         GEM5_DIR / "src/arch/riscv/isa/formats/vector_conf.isa": [
             "GRAPHBREW-RISCV-VTYPE-GUARD",
@@ -829,6 +918,8 @@ def verify_installation_postconditions():
             "grasp_rp.cc",
             "popt_rp.cc",
             "ecg_rp.cc",
+            "ecg_record_transport.cc",
+            "graph_ecg_record_rp.cc",
         ],
         GEM5_DIR / "src/mem/cache/replacement_policies/GraphReplacementPolicies.py": [
             "GraphHawkeyeRP",
@@ -836,6 +927,7 @@ def verify_installation_postconditions():
         GEM5_DIR / "src/mem/cache/prefetch/SConscript": [
             "droplet.cc",
             "ecg_pfx.cc",
+            "ecg_record_prefetch.cc",
         ],
     }
     for path, markers in marker_checks.items():
@@ -871,6 +963,7 @@ def apply_riscv_ecg_extract_patch():
     includes_path = isa_dir / "includes.isa"
     decoder_path = isa_dir / "decoder.isa"
     snippet_path = OVERLAYS_DIR / "arch" / "riscv" / "isa" / "decoder_ecg_extract.isa"
+    record_snippet_path = OVERLAYS_DIR / "arch" / "riscv" / "isa" / "decoder_ecg_record.isa"
 
     if not formats_path.exists() or not includes_path.exists() or not decoder_path.exists():
         log.warn("  RISC-V ISA files not found; skipping ECG extract patch")
@@ -903,11 +996,19 @@ def apply_riscv_ecg_extract_patch():
     )
     if changed:
         includes_path.write_text(includes)
+    includes, changed = insert_once(
+        includes,
+        '#include "sim/pseudo_inst.hh"\n',
+        '#include "arch/riscv/ecg_record.hh"\n',
+        "RISC-V adaptive record exec include",
+    )
+    if changed:
+        includes_path.write_text(includes)
 
-    if not snippet_path.exists():
-        log.warn(f"  RISC-V ECG decoder snippet not found: {snippet_path}")
-        return
-    snippet = snippet_path.read_text()
+    for path in (snippet_path, record_snippet_path):
+        if not path.is_file():
+            raise SystemExit(f"Required RISC-V ECG decoder snippet not found: {path}")
+    snippet = snippet_path.read_text() + record_snippet_path.read_text()
     decoder = decoder_path.read_text()
     marker = "        // GraphBrew ECG custom-0 instruction space.\n"
     load_anchor = "        0x00: decode FUNCT3 {\n"
@@ -919,11 +1020,11 @@ def apply_riscv_ecg_extract_patch():
         decoder,
         '    0x3: decode OPCODE5 {\n',
         snippet,
-        "RISC-V custom-0 decoder",
+        "RISC-V ECG custom-0/custom-1 decoder",
     )
     if changed:
         decoder_path.write_text(decoder)
-    log.success("  Patched RISC-V ecg.extract custom-0 scaffold.")
+    log.success("  Patched RISC-V ECG legacy and adaptive-record instructions.")
 
 
 def build_gem5(isas: list, build_type: str, jobs: int):

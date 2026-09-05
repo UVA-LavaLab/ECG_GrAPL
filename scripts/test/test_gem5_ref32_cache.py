@@ -53,12 +53,19 @@ def test_ref32_observation_cpp(tmp_path: Path):
 
 
 def test_ref32_layered_patches_apply_to_current_gem5():
+    import json
+    from scripts import setup_gem5
+    state_path = GEM5.parent / ".gem5_patch_state.json"
+    state = json.loads(state_path.read_text()) if state_path.is_file() else {}
     patches = [
         OVERLAYS / "mem/cache/ecg_ref32_cache_api.patch",
         OVERLAYS / "cpu/o3/ecg_ref32_observation.patch",
         OVERLAYS / "mem/cache/ecg_ref32_mshr_observation.patch",
     ]
     for patch in patches:
+        if setup_gem5.patch_receipt_matches(
+                patch, str(patch.relative_to(OVERLAYS)), state):
+            continue
         result = subprocess.run(
             ["git", "apply", "--check", str(patch)],
             cwd=GEM5, capture_output=True, text=True,

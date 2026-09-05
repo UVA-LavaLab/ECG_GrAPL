@@ -32,6 +32,8 @@
 #include <vector>
 
 #include "ecg_ref32.h"
+#include "ecg_record_native.h"
+#include <type_traits>
 #include "ecg_reuse_plan_builder.h"
 #include <string>
 
@@ -1181,6 +1183,114 @@ inline void gem5_ecg_write_record_format_csr(
     (void)tier_bits;
 #endif
 }
+
+class Gem5RecordContext {
+  public:
+    explicit Gem5RecordContext(const ecg_record::NativeConfiguration& configuration)
+        : configuration_(configuration) {
+        if (ecg_record::validateNativeConfiguration(configuration_, layout_) !=
+                ecg_record::Status::OK)
+            throw std::invalid_argument("Invalid native ECG record configuration");
+    }
+
+    static constexpr bool nativeAvailable() {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        return true;
+#else
+        return false;
+#endif
+    }
+
+    void activate(uint64_t iteration_base, bool has_next) {
+        configuration_.iteration_base = iteration_base;
+        configuration_.control = ecg_record::kNativeEnable |
+            (has_next ? ecg_record::kNativeHasNext : 0);
+        if (ecg_record::validateNativeConfiguration(configuration_, layout_) !=
+                ecg_record::Status::OK)
+            throw std::invalid_argument("Invalid native ECG traversal configuration");
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        asm volatile("csrw 0x803, %0" :: "r"(configuration_.record_base) : "memory");
+        asm volatile("csrw 0x805, %0" :: "r"(configuration_.layout_descriptor) : "memory");
+        asm volatile("csrw 0x806, %0" :: "r"(configuration_.record_count) : "memory");
+        asm volatile("csrw 0x807, %0" :: "r"(configuration_.vertex_count) : "memory");
+        asm volatile("csrw 0x808, %0" :: "r"(configuration_.property_base) : "memory");
+        asm volatile("csrw 0x809, %0" :: "r"(configuration_.iteration_base) : "memory");
+        asm volatile("csrw 0x80a, %0" :: "r"(configuration_.control) : "memory");
+        asm volatile("csrw 0x80b, %0" :: "r"(configuration_.generation) : "memory");
+        gem5_ecg_write_context_csr(configuration_.context);
+        asm volatile(".insn r 0x2b, 0x2, 0x0, zero, zero, zero" ::: "memory");
+#endif
+    }
+
+    template<typename Word>
+    inline uint64_t record(const Word* address) const {
+        static_assert(std::is_same<Word, uint32_t>::value ||
+                      std::is_same<Word, uint64_t>::value, "ECG records are 4 or 8 bytes");
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        uint64_t value;
+        if constexpr (sizeof(Word) == 4)
+            asm volatile(".insn r 0x2b, 0x0, 0x00, %0, %1, zero"
+                         : "=r"(value) : "r"(address) : "memory");
+        else
+            asm volatile(".insn r 0x2b, 0x0, 0x01, %0, %1, zero"
+                         : "=r"(value) : "r"(address) : "memory");
+        return value;
+#else
+        ecg_record::NativeRecordAccess access;
+        if (ecg_record::nativeRecordAccess(
+                configuration_, reinterpret_cast<uint64_t>(address), sizeof(Word),
+                access) != ecg_record::Status::OK)
+            throw std::invalid_argument("Invalid native ECG record address");
+        const uint64_t value = *address;
+        ecg_record::NativeLoadResult result;
+        if (ecg_record::nativeRecordResult(
+                configuration_, reinterpret_cast<uint64_t>(address), value, result) !=
+                    ecg_record::Status::OK)
+            throw std::invalid_argument("Invalid native ECG record word");
+        return value;
+#endif
+    }
+
+    inline float property(const float* base, uint64_t record, const void* address) const {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        float result;
+        asm volatile(".insn r4 0x2b, 0x1, 0x0, %0, %1, %2, %3"
+                     : "=f"(result) : "r"(base), "r"(record), "r"(address) : "memory");
+        return result;
+#else
+        ecg_record::NativeLoadResult result;
+        if (ecg_record::nativePropertyAccess(
+                configuration_, reinterpret_cast<uint64_t>(base), record,
+                reinterpret_cast<uint64_t>(address), result) != ecg_record::Status::OK)
+            throw std::invalid_argument("Invalid native ECG property operands");
+        return *reinterpret_cast<const float*>(result.property_address);
+#endif
+    }
+
+    void finish() const {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        for (uint64_t attempt = 0; attempt < 1000000; ++attempt) {
+            uint64_t pending;
+            asm volatile(".insn r 0x2b, 0x3, 0x0, %0, zero, zero"
+                         : "=r"(pending) :: "memory");
+            if (pending == 0)
+                return;
+        }
+        throw std::runtime_error("Native ECG transport did not finish within its poll bound");
+#endif
+    }
+
+    void deactivate() const {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        asm volatile("csrw 0x80a, zero" ::: "memory");
+        gem5_ecg_write_context_csr(0);
+#endif
+    }
+
+  private:
+    ecg_record::NativeConfiguration configuration_;
+    ecg_record::Layout layout_;
+};
 
 class Gem5Ref32Context {
   public:

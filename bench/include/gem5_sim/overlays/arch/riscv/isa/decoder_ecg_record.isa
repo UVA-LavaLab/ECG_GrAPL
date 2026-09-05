@@ -1,0 +1,120 @@
+        // ECG records use custom-1; every custom-0 FUNCT3 is already assigned.
+        0x0A: decode RVTYPE {
+          0x1: decode FUNCT3 {
+            format Load {
+              0x0: decode FUNCT7 {
+                0x00: ecg_record_word({{
+                    {
+                        const auto configuration =
+                            RiscvISA::readEcgRecordConfiguration(xc);
+                        ecg_record::NativeLoadResult result;
+                        const auto status = ecg_record::nativeRecordResult(
+                            configuration, Rs1, static_cast<uint32_t>(Mem_uw), result);
+                        if (status != ecg_record::Status::OK)
+                            return std::make_shared<IllegalInstFault>(
+                                "Invalid ECG record word", machInst);
+                        Rd = rvZext(static_cast<uint32_t>(Mem_uw));
+                        xc->setEcgRecordLoadHint(
+                            ecg_record::InstructionKind::RECORD, result);
+                    }
+                }}, ea_code={{
+                    {
+                        const auto configuration =
+                            RiscvISA::readEcgRecordConfiguration(xc);
+                        ecg_record::NativeRecordAccess access;
+                        if (((static_cast<uint32_t>(machInst) >> 20) & 0x1Fu) != 0 ||
+                            ecg_record::nativeRecordAccess(configuration, Rs1, 4, access) !=
+                                ecg_record::Status::OK)
+                            return std::make_shared<IllegalInstFault>(
+                                "Invalid ECG word record address", machInst);
+                        EA = rvZext(access.address);
+                    }
+                }});
+                0x01: ecg_record_doubleword({{
+                    {
+                        const auto configuration =
+                            RiscvISA::readEcgRecordConfiguration(xc);
+                        ecg_record::NativeLoadResult result;
+                        const auto status = ecg_record::nativeRecordResult(
+                            configuration, Rs1, static_cast<uint64_t>(Mem_ud), result);
+                        if (status != ecg_record::Status::OK)
+                            return std::make_shared<IllegalInstFault>(
+                                "Invalid ECG record doubleword", machInst);
+                        Rd = Mem_ud;
+                        xc->setEcgRecordLoadHint(
+                            ecg_record::InstructionKind::RECORD, result);
+                    }
+                }}, ea_code={{
+                    {
+                        const auto configuration =
+                            RiscvISA::readEcgRecordConfiguration(xc);
+                        ecg_record::NativeRecordAccess access;
+                        if (((static_cast<uint32_t>(machInst) >> 20) & 0x1Fu) != 0 ||
+                            ecg_record::nativeRecordAccess(configuration, Rs1, 8, access) !=
+                                ecg_record::Status::OK)
+                            return std::make_shared<IllegalInstFault>(
+                                "Invalid ECG doubleword record address", machInst);
+                        EA = rvZext(access.address);
+                    }
+                }});
+              }
+              0x1: decode FUNCT2 {
+                0x0: ecg_record_property_f32({{
+                    {
+                        STATUS status = xc->readMiscReg(MISCREG_STATUS);
+                        if (status.fs == FPUStatus::OFF)
+                            return std::make_shared<IllegalInstFault>(
+                                "FPU is off", machInst);
+                        status.fs = FPUStatus::DIRTY;
+                        xc->setMiscReg(MISCREG_STATUS, status);
+                        freg_t fd = freg(f32(Mem_uw));
+                        Fd_bits = fd.v;
+                    }
+                }}, ea_code={{
+                    {
+                        STATUS fpu_status = xc->readMiscReg(MISCREG_STATUS);
+                        if (fpu_status.fs == FPUStatus::OFF)
+                            return std::make_shared<IllegalInstFault>(
+                                "FPU is off", machInst);
+                        const auto configuration =
+                            RiscvISA::readEcgRecordConfiguration(xc);
+                        ecg_record::NativeLoadResult result;
+                        const auto status = ecg_record::nativePropertyAccess(
+                            configuration, Rs1, Rs2, Rs3, result);
+                        if (status != ecg_record::Status::OK)
+                            return std::make_shared<IllegalInstFault>(
+                                "Invalid ECG property operands", machInst);
+                        xc->setEcgRecordLoadHint(
+                            ecg_record::InstructionKind::PROPERTY, result);
+                        EA = rvZext(result.property_address);
+                    }
+                }}, inst_flags=FloatMemReadOp);
+              }
+            }
+            format EcgExtractOp {
+              0x2: decode FUNCT7 {
+                0x00: ecg_record_configure({{
+                    const auto configuration =
+                        RiscvISA::readEcgRecordConfiguration(xc);
+                    ecg_record::Layout layout;
+                    if ((static_cast<uint32_t>(machInst) & 0x01FF8F80u) != 0 ||
+                        ecg_record::validateNativeConfiguration(configuration, layout) !=
+                            ecg_record::Status::OK)
+                        return std::make_shared<IllegalInstFault>(
+                            "Invalid ECG configuration", machInst);
+                    xc->setEcgRecordConfigurationHint(configuration);
+                }}, IsNonSpeculative, IsSerializeAfter);
+              }
+              0x3: decode FUNCT7 {
+                0x00: ecg_record_pending({{
+                    uint64_t pending = 0;
+                    if ((static_cast<uint32_t>(machInst) & 0x01FF8000u) != 0 ||
+                        RiscvISA::readEcgRecordPending(xc, pending) != ecg_record::Status::OK)
+                        return std::make_shared<IllegalInstFault>(
+                            "ECG pending query requires its native controller", machInst);
+                    Rd = pending;
+                }}, IsNonSpeculative, IsSerializeAfter);
+              }
+            }
+          }
+        }

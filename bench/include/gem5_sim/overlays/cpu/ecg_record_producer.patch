@@ -1,0 +1,61 @@
+--- a/src/cpu/exec_context.hh
++++ b/src/cpu/exec_context.hh
+@@ -48,6 +48,7 @@
+ #include "cpu/static_inst_fwd.hh"
+ #include "cpu/translation.hh"
+ #include "mem/request.hh"
++#include "mem/cache/replacement_policies/ecg_record_native.h"
+ 
+ namespace gem5
+ {
+@@ -76,5 +77,10 @@
+         uint64_t /*canonical*/, uint64_t /*iteration*/,
+         uint16_t /*context*/) {}
++    virtual void setEcgRecordConfigurationHint(
++        const ecg_record::NativeConfiguration& /*configuration*/) {}
++    virtual void setEcgRecordLoadHint(
++        ecg_record::InstructionKind /*kind*/,
++        const ecg_record::NativeLoadResult& /*result*/) {}
+     virtual void setEcgRef32LoadHint(
+         uint32_t /*destination*/, uint32_t /*sequence*/,
+         uint32_t /*deadline*/, uint8_t /*state*/,
+--- a/src/cpu/o3/dyn_inst.hh
++++ b/src/cpu/o3/dyn_inst.hh
+@@ -78,5 +78,7 @@
+   private:
+     ecg_ref32::InstructionHint _ecgRef32Hint;
++    ecg_record::InstructionHint _ecgRecordHint;
++    std::unique_ptr<ecg_record::NativeConfiguration> _ecgRecordConfiguration;
+ 
+     DynInst(const StaticInstPtr &staticInst, const StaticInstPtr &macroop,
+             InstSeqNum seq_num, CPU *cpu);
+@@ -85,3 +87,29 @@
+   public:
++    void setEcgRecordConfigurationHint(
++        const ecg_record::NativeConfiguration& configuration) override
++    {
++        _ecgRecordHint.kind = ecg_record::InstructionKind::CONFIGURATION;
++        _ecgRecordConfiguration =
++            std::make_unique<ecg_record::NativeConfiguration>(configuration);
++    }
++
++    void setEcgRecordLoadHint(
++        ecg_record::InstructionKind kind,
++        const ecg_record::NativeLoadResult& result) override
++    {
++        _ecgRecordHint.kind = kind;
++        _ecgRecordHint.load = result;
++    }
++
++    const ecg_record::InstructionHint& ecgRecordHint() const
++    {
++        return _ecgRecordHint;
++    }
++
++    const ecg_record::NativeConfiguration* ecgRecordConfiguration() const
++    {
++        return _ecgRecordConfiguration.get();
++    }
++
+     void setEcgRef32RecordHint(
+         uint64_t canonical, uint64_t iteration, uint16_t context) override

@@ -1,0 +1,16 @@
+--- a/src/arch/riscv/isa/bitfields.isa
++++ b/src/arch/riscv/isa/bitfields.isa
+@@ -44,3 +44,4 @@
+ def bitfield RS1    <19:15>;
+ def bitfield RS2    <24:20>;
++def bitfield RS3    <31:27>;
+ def bitfield FUNCT7 <31:25>;
+--- a/src/arch/riscv/isa/operands.isa
++++ b/src/arch/riscv/isa/operands.isa
+@@ -63,5 +63,6 @@
+     'Rd': IntReg('ud', 'RD', 'IsInteger', 1),
+     'Rs1': IntReg('ud', 'RS1', 'IsInteger', 2),
+     'Rs2': IntReg('ud', 'RS2', 'IsInteger', 3),
++    'Rs3': IntReg('ud', 'RS3', 'IsInteger', 4),
+     'Rt': IntReg('ud', 'AMOTempReg', 'IsInteger', 4),
+     'Rc1': IntReg('ud', 'RC1', 'IsInteger', 2),

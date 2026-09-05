@@ -1,0 +1,18 @@
+--- a/src/mem/cache/base.hh
++++ b/src/mem/cache/base.hh
+@@ -1202,6 +1202,15 @@
+     void resumeEcgRecordResponse(PacketPtr pkt)
+     { recvTimingResp(pkt); }
+ 
++    Tick ecgRecordFillReady(const PacketPtr pkt) const
++    {
++        uint64_t ready = clockEdge(fillLatency);
++        fatal_if(!ecg_record::checkedAdd(ready, pkt->headerDelay, ready) ||
++            !ecg_record::checkedAdd(ready, pkt->payloadDelay, ready),
++            "%s ECG capture time overflows", name());
++        return ready;
++    }
++
+     bool supportsEcgRef32() const
+     {
+         return tags->supportsEcgRef32();

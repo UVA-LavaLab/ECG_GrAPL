@@ -17,6 +17,7 @@
 #include "graph.h"
 #include "pvector.h"
 #include "ecg_metadata.h"
+#include "ecg_record_stream.h"
 
 // P-OPT rereference matrix builder (same as standalone cache_sim)
 #include "graphbrew/partition/cagra/popt.h"
@@ -36,6 +37,29 @@ const float kDamp = 0.85;
 static bool nativeRef32Requested() {
     const char* value = std::getenv("ECG_REF32_RECORD");
     return value && std::strcmp(value, "1") == 0;
+}
+
+static bool nativeRecordRequested() {
+    const char* value = std::getenv("ECG_RECORD_NATIVE");
+    if (value && std::strcmp(value, "0") != 0 && std::strcmp(value, "1") != 0)
+        throw std::invalid_argument("ECG_RECORD_NATIVE must be zero or one");
+    return value && std::strcmp(value, "1") == 0;
+}
+
+static uint64_t recordUnsignedEnvironment(const char* name, uint64_t fallback) {
+    const char* value = std::getenv(name);
+    if (!value)
+        return fallback;
+    uint64_t result = 0;
+    if (!*value)
+        throw std::invalid_argument(std::string(name) + " must be an unsigned decimal integer");
+    for (const char* cursor = value; *cursor; ++cursor) {
+        if (*cursor < '0' || *cursor > '9' ||
+            !ecg_record::checkedMultiply(result, 10, result) ||
+            !ecg_record::checkedAdd(result, *cursor - '0', result))
+            throw std::invalid_argument(std::string(name) + " is invalid or overflows");
+    }
+    return result;
 }
 
 static void reportPageRankResult(
@@ -87,6 +111,148 @@ class Ref32BorrowedCarrier {
     NodeID* records_;
     uint64_t count_;
 };
+
+template<typename Word>
+static void PageRankRecordIteration(
+        const Graph& graph, pvector<ScoreT>& scores, pvector<ScoreT>& contribution,
+        const Word* records, const Gem5RecordContext& context, ScoreT base_score) {
+    for (NodeID outer = 0; outer < graph.num_nodes(); ++outer) {
+        const Word* record = records + graph.in_offset(outer);
+        const Word* end = records + graph.in_offset(outer + 1);
+        ScoreT incoming = 0;
+        for (; record != end; ++record) {
+            const uint64_t word = context.record(record);
+            incoming += context.property(contribution.data(), word, record);
+        }
+        const ScoreT new_score = base_score + kDamp * incoming;
+        scores[outer] = new_score;
+        contribution[outer] = new_score / graph.out_degree(outer);
+    }
+}
+
+static pvector<ScoreT> PageRankPullGSRecord_Gem5(
+        const Graph& graph, int iterations, double epsilon) {
+    static_assert(sizeof(NodeID) == 4, "This graph loader uses four-byte source IDs");
+    if (iterations <= 0 || epsilon != 0 || omp_get_max_threads() != 1 ||
+        graph.num_nodes() <= 0 || graph.num_edges_directed() == 0 ||
+        static_cast<uint64_t>(graph.num_nodes()) > INT32_MAX)
+        throw std::invalid_argument(
+            "Native ECG requires the serial signed-32 graph loader and fixed positive -i, -t 0");
+    if (nativeRef32Requested())
+        throw std::invalid_argument("Current ECG records cannot be mixed with archived carriers");
+    for (const char* name : {"ECG_FLOWTHROUGH", "STRUCTURAL_FLOWTHROUGH"}) {
+        if (recordUnsignedEnvironment(name, 0) != 0)
+            throw std::invalid_argument("Native ECG qualification requires symmetric FlowThrough off");
+    }
+    ecg_record::Requirements requirements;
+    requirements.vertex_count = graph.num_nodes();
+    requirements.record_count = graph.num_edges_directed();
+    requirements.traversal_count = iterations;
+    const uint64_t bytes = recordUnsignedEnvironment("ECG_RECORD_BYTES", 0);
+    const uint64_t precision = recordUnsignedEnvironment("ECG_RECORD_MIN_MANTISSA_BITS", 0);
+    if ((bytes != 0 && bytes != 4 && bytes != 8) || precision > 61)
+        throw std::invalid_argument("ECG record width or minimum mantissa precision is invalid");
+    requirements.requested_record_bytes = bytes;
+    requirements.minimum_mantissa_bits = precision;
+    const NodeID* source = graph.in_neigh(0).begin();
+    requirements.max_vertex_id_known = true;
+    for (uint64_t index = 0; index < requirements.record_count; ++index) {
+        if (source[index] < 0 || source[index] >= graph.num_nodes())
+            throw std::invalid_argument("Native ECG source has an out-of-domain VID");
+        requirements.max_vertex_id = std::max<uint64_t>(
+            requirements.max_vertex_id, static_cast<uint64_t>(source[index]));
+    }
+    ecg_record::Layout layout;
+    auto status = ecg_record::selectLayout(requirements, layout);
+    if (status != ecg_record::Status::OK)
+        throw std::invalid_argument(std::string("Cannot resolve ECG layout: ") +
+                                    ecg_record::statusName(status));
+    ecg_record::BuildLimits limits;
+    limits.maximum_carrier_bytes = recordUnsignedEnvironment(
+        "ECG_RECORD_MAX_CARRIER_BYTES", limits.maximum_carrier_bytes);
+    limits.maximum_auxiliary_bytes = recordUnsignedEnvironment(
+        "ECG_RECORD_MAX_AUXILIARY_BYTES", limits.maximum_auxiliary_bytes);
+    ecg_record::RecordStream stream;
+    status = ecg_record::buildRecords(requirements, layout, 16,
+        [source](std::size_t index) { return static_cast<uint64_t>(source[index]); },
+        stream, limits);
+    if (status != ecg_record::Status::OK)
+        throw std::invalid_argument(std::string("Cannot construct ECG records: ") +
+                                    ecg_record::statusName(status));
+
+    constexpr size_t alignment = 2 * 1024 * 1024;
+    const ScoreT initial = 1.0f / graph.num_nodes();
+    const ScoreT base_score = (1.0f - kDamp) / graph.num_nodes();
+    pvector<ScoreT> scores(graph.num_nodes(), initial, alignment);
+    pvector<ScoreT> contribution(graph.num_nodes(), ScoreT(0), alignment);
+    Gem5PropertyRegion regions[] = {
+        {"scores", reinterpret_cast<uint64_t>(scores.data()),
+         requirements.vertex_count * 4, static_cast<uint32_t>(requirements.vertex_count), 4, true},
+        {"contrib", reinterpret_cast<uint64_t>(contribution.data()),
+         requirements.vertex_count * 4, static_cast<uint32_t>(requirements.vertex_count), 4, true},
+    };
+    Gem5EdgeRegion edge_regions[] = {
+        {"in_edges", reinterpret_cast<uint64_t>(stream.data()),
+         stream.stats.carrier_payload_bytes, layout.record_bytes, nullptr},
+        {"out_edges", reinterpret_cast<uint64_t>(graph.out_neigh(0).begin()),
+         stream.stats.source_stream_bytes, 4, nullptr},
+    };
+    gem5_export_context(regions, 2, graph, GEM5_SIDEBAND_PATH, edge_regions, 2,
+        0, 0, 0, graph.in_index_storage(), graph.in_index_storage_bytes(),
+        nullptr, 0, graph.out_index_storage(), graph.out_index_storage_bytes());
+    ecg_record::NativeConfiguration configuration;
+    configuration.record_base = reinterpret_cast<uint64_t>(stream.data());
+    configuration.property_base = reinterpret_cast<uint64_t>(contribution.data());
+    configuration.record_count = requirements.record_count;
+    configuration.vertex_count = requirements.vertex_count;
+    configuration.context = 1;
+    configuration.generation = 1;
+    configuration.control = ecg_record::kNativeEnable;
+    if (ecg_record::packLayout(layout, configuration.layout_descriptor) != ecg_record::Status::OK)
+        throw std::invalid_argument("Cannot pack resolved ECG descriptor");
+    Gem5RecordContext context(configuration);
+    for (NodeID vertex = 0; vertex < graph.num_nodes(); ++vertex)
+        contribution[vertex] = initial / graph.out_degree(vertex);
+    volatile ScoreT* warm_scores = scores.data();
+    volatile ScoreT* warm_contribution = contribution.data();
+    for (NodeID vertex = 0; vertex < graph.num_nodes(); ++vertex) {
+        warm_scores[vertex] = warm_scores[vertex];
+        warm_contribution[vertex] = warm_contribution[vertex];
+    }
+    std::cerr << "[ECG-RECORD-GUEST native=" << Gem5RecordContext::nativeAvailable() << " ";
+    ecg_record::writeLayoutFields(std::cerr, layout);
+    std::cerr << " records=" << requirements.record_count
+              << " vertex_count=" << requirements.vertex_count
+              << " max_vertex_id=" << requirements.max_vertex_id
+              << " context=" << configuration.context
+              << " generation=" << configuration.generation
+              << " source_stream_bytes=" << stream.stats.source_stream_bytes
+              << " retained_source_bytes=" << stream.stats.source_stream_bytes
+              << " carrier_payload_bytes=" << stream.stats.carrier_payload_bytes
+              << " carrier_allocation_bytes=" << stream.stats.carrier_allocation_bytes
+              << " construction_auxiliary_peak_bytes=" << stream.stats.auxiliary_peak_bytes
+              << " storage=separate source_immutable=1 matrix_bytes=0 edge_sideband_bytes=0]\n";
+    context.activate(0, iterations > 1);
+    GEM5_RESET_STATS();
+    GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE);
+    for (int iteration = 0; iteration < iterations; ++iteration) {
+        if (iteration)
+            context.activate(uint64_t(iteration) * requirements.record_count,
+                             iteration + 1 < iterations);
+        if (layout.record_bytes == 4)
+            PageRankRecordIteration(graph, scores, contribution, stream.records32.data(),
+                                    context, base_score);
+        else
+            PageRankRecordIteration(graph, scores, contribution, stream.records64.data(),
+                                    context, base_score);
+    }
+    context.finish();
+    GEM5_WORK_END(GEM5_WORK_COMPUTE);
+    GEM5_DUMP_STATS();
+    context.deactivate();
+    reportPageRankResult(graph, scores, iterations);
+    return scores;
+}
 
 static pvector<ScoreT> PageRankPullGSRef32_Gem5(
         const Graph& graph, int iterations, double epsilon) {
@@ -308,6 +474,8 @@ PageRankPullGSNextUseIteration(
 
 pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                                      double epsilon = 0) {
+    if (nativeRecordRequested())
+        return PageRankPullGSRecord_Gem5(g, max_iters, epsilon);
     if (nativeRef32Requested())
         return PageRankPullGSRef32_Gem5(g, max_iters, epsilon);
     const ScoreT init_score = 1.0f / g.num_nodes();
@@ -1646,7 +1814,7 @@ bool PRVerifier(const Graph &g, const pvector<ScoreT> &scores, double target_err
 int main(int argc, char *argv[]) {
     CLPageRank cli(argc, argv, "pagerank-gem5", 1e-4, 20);
     if (!cli.ParseArgs()) return -1;
-    if (nativeRef32Requested() && cli.num_trials() != 1) {
+    if ((nativeRef32Requested() || nativeRecordRequested()) && cli.num_trials() != 1) {
         std::fprintf(stderr, "[FATAL] Native Scale6 currently requires exactly one trial (-n 1)\n");
         return 1;
     }

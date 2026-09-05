@@ -1,0 +1,193 @@
+--- a/src/mem/cache/replacement_policies/base.hh
++++ b/src/mem/cache/replacement_policies/base.hh
+@@ -35,6 +35,8 @@
+ #include "base/compiler.hh"
+ #include "mem/cache/replacement_policies/replaceable_entry.hh"
+ #include "mem/cache/replacement_policies/ecg_ref32_commit.h"
++#include "mem/cache/replacement_policies/ecg_record_native.h"
++#include "mem/cache/replacement_policies/ecg_record_runtime.h"
+ #include "mem/packet.hh"
+ #include "params/BaseReplacementPolicy.hh"
+ #include "sim/sim_object.hh"
+@@ -103,6 +105,18 @@
+     virtual void setVictimRequest(const PacketPtr pkt)
+     {}
+ 
++    virtual bool supportsEcgRecord() const { return false; }
++    virtual bool bypassEcgRecordDead() const { return false; }
++    virtual bool configureEcgRecord(const ecg_record::NativeConfiguration&)
++    { return false; }
++    virtual ecg_record::ApplyResult applyEcgRecordUpdate(
++        const std::shared_ptr<ReplacementData>&,
++        const ecg_record::CommitUpdate&)
++    { return ecg_record::ApplyResult::UNSUPPORTED; }
++    virtual bool canAdmitEcgRecordPrefetch(
++        const ReplacementCandidates&, uint64_t) const
++    { return false; }
++
+     virtual bool supportsEcgRef32() const
+     {
+         return false;
+--- a/src/mem/cache/tags/base.hh
++++ b/src/mem/cache/tags/base.hh
+@@ -56,6 +56,8 @@
+ #include "base/statistics.hh"
+ #include "base/types.hh"
+ #include "mem/cache/cache_blk.hh"
++#include "mem/cache/replacement_policies/ecg_record_native.h"
++#include "mem/cache/replacement_policies/ecg_record_runtime.h"
+ #include "mem/cache/replacement_policies/ecg_ref32_commit.h"
+ #include "mem/packet.hh"
+ #include "params/BaseTags.hh"
+@@ -273,6 +275,16 @@
+     virtual void setVictimRequest(const PacketPtr pkt)
+     {}
+ 
++    virtual bool supportsEcgRecord() const { return false; }
++    virtual bool bypassEcgRecordDead() const { return false; }
++    virtual bool configureEcgRecord(const ecg_record::NativeConfiguration&)
++    { return false; }
++    virtual ecg_record::ApplyResult applyEcgRecordUpdate(
++        const ecg_record::CommitUpdate&)
++    { return ecg_record::ApplyResult::UNSUPPORTED; }
++    virtual bool canAdmitEcgRecordPrefetch(Addr, uint64_t) const
++    { return false; }
++
+     virtual bool supportsEcgRef32() const
+     {
+         return false;
+--- a/src/mem/cache/tags/base_set_assoc.hh
++++ b/src/mem/cache/tags/base_set_assoc.hh
+@@ -161,6 +161,25 @@
+         replacementPolicy->setVictimRequest(pkt);
+     }
+ 
++    bool supportsEcgRecord() const override
++    { return replacementPolicy->supportsEcgRecord(); }
++    bool bypassEcgRecordDead() const override
++    { return replacementPolicy->bypassEcgRecordDead(); }
++    bool configureEcgRecord(const ecg_record::NativeConfiguration& value) override
++    { return replacementPolicy->configureEcgRecord(value); }
++    ecg_record::ApplyResult applyEcgRecordUpdate(
++        const ecg_record::CommitUpdate& update) override
++    {
++        CacheBlk* block = findBlock(update.physical_line, update.secure);
++        return replacementPolicy->applyEcgRecordUpdate(
++            block ? block->replacementData : nullptr, update);
++    }
++    bool canAdmitEcgRecordPrefetch(Addr address, uint64_t sequence) const override
++    {
++        return replacementPolicy->canAdmitEcgRecordPrefetch(
++            indexingPolicy->getPossibleEntries(address), sequence);
++    }
++
+     bool supportsEcgRef32() const override
+     {
+         return replacementPolicy->supportsEcgRef32();
+--- a/src/mem/cache/base.hh
++++ b/src/mem/cache/base.hh
+@@ -1186,6 +1186,16 @@
+         return blkSize;
+     }
+ 
++    uint64_t ecgRecordDeadMisses = 0;
++    bool supportsEcgRecord() const { return tags->supportsEcgRecord(); }
++    bool bypassEcgRecordDead() const { return tags->bypassEcgRecordDead(); }
++    bool configureEcgRecord(const ecg_record::NativeConfiguration& value)
++    { return tags->configureEcgRecord(value); }
++    ecg_record::ApplyResult applyEcgRecordUpdate(const ecg_record::CommitUpdate& update)
++    { return tags->applyEcgRecordUpdate(update); }
++    bool canAdmitEcgRecordPrefetch(Addr address, uint64_t sequence) const
++    { return tags->canAdmitEcgRecordPrefetch(address, sequence); }
++
+     bool supportsEcgRef32() const
+     {
+         return tags->supportsEcgRef32();
+--- a/src/mem/cache/base.cc
++++ b/src/mem/cache/base.cc
+@@ -443,6 +443,10 @@
+ {
+     bool structural_flowthrough = false;
++    const bool record_dead = bypassEcgRecordDead() &&
++        replacement_policy::graph::isEcgRecordDead(pkt->req);
++    if (record_dead)
++        ++ecgRecordDeadMisses;
+     const bool flowthrough =
+-        graphbrewFlowThrough(*this, pkt, structural_flowthrough);
++        graphbrewFlowThrough(*this, pkt, structural_flowthrough) || record_dead;
+     if (flowthrough && structural_flowthrough) {
+         stats.structuralFlowThroughMissTargets++;
+--- a/src/cpu/o3/lsq.cc
++++ b/src/cpu/o3/lsq.cc
+@@ -55,6 +55,7 @@
+ #include "debug/Drain.hh"
+ #include "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh"
+ #include "mem/cache/replacement_policies/ecg_ref32_observation.hh"
++#include "mem/cache/replacement_policies/ecg_record_observation.hh"
+ #include "debug/Fetch.hh"
+ #include "debug/HtmCpu.hh"
+ #include "debug/LSQ.hh"
+@@ -1156,6 +1157,14 @@
+             }
+         }
+ 
++        if (_inst && _inst->isLoad()) {
++            const auto& hint = _inst->ecgRecordHint();
++            if (hint.kind == ecg_record::InstructionKind::PROPERTY) {
++                replacement_policy::graph::attachEcgRecordObservation(
++                    req, hint.load);
++            }
++        }
++
+         /* If the request is marked as NO_ACCESS, setup a local access */
+         if (_flags.isSet(Request::NO_ACCESS)) {
+             req->setLocalAccessor(
+--- a/src/mem/cache/mshr.hh
++++ b/src/mem/cache/mshr.hh
+@@ -59,6 +59,7 @@
+ #include "mem/cache/queue_entry.hh"
+ #include "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh"
+ #include "mem/cache/replacement_policies/ecg_ref32_observation.hh"
++#include "mem/cache/replacement_policies/ecg_record_observation.hh"
+ #include "mem/packet.hh"
+ #include "mem/request.hh"
+ #include "sim/cur_tick.hh"
+@@ -399,6 +400,7 @@
+     TargetList deferredTargets;
+     replacement_policy::graph::EcgReuseBindMshrState ecgState;
+     replacement_policy::graph::EcgRef32ObservationMshrState ref32State;
++    replacement_policy::graph::EcgRecordObservationMshrState recordState;
+ 
+     void rebuildEcgState();
+ 
+@@ -439,6 +441,7 @@
+     {
+         ecgState.apply(req);
+         ref32State.apply(req);
++        recordState.apply(req);
+     }
+ 
+     /**
+--- a/src/mem/cache/mshr.cc
++++ b/src/mem/cache/mshr.cc
+@@ -305,10 +305,12 @@
+ {
+     ecgState.reset();
+     ref32State.reset();
++    recordState.reset();
+     for (const auto& target : targets) {
+         if (target.source != Target::FromSnoop) {
+             ecgState.merge(target.pkt->req);
+             ref32State.merge(target.pkt->req);
++            recordState.merge(target.pkt->req);
+         }
+     }
+ }
+@@ -385,6 +387,7 @@
+     inService = false;
+     ecgState.reset();
+     ref32State.reset();
++    recordState.reset();
+ }
+ 
+ /*

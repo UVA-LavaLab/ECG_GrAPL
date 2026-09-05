@@ -68,7 +68,7 @@ def clear_runtime_sideband_files():
 
 def needs_vertex_hints(args):
     """Keep the outer-vertex marker stream identical for every L3 policy."""
-    return not getattr(args, "ref32_native", False)
+    return not (getattr(args, "ref32_native", False) or getattr(args, "ecg_native", False))
 
 
 def benchmark_environment(args):
@@ -167,7 +167,22 @@ def benchmark_environment(args):
         "GEM5_REUSE_PLAN_SIDECAR",
         "GEM5_REUSE_PLAN_SIDECAR_REQUIRED",
     )):
+        if getattr(args, "ecg_native", False):
+            pass_name = {
+                "ECG_REF32_RECORD": "ECG_RECORD_NATIVE",
+                "ECG_REF32_FORMAT": "ECG_RECORD_BYTES",
+                "ECG_REF32_REFERENCE_BITS": "ECG_RECORD_MIN_MANTISSA_BITS",
+                "ECG_REF32_ACTION_BITS": "ECG_RECORD_MAX_CARRIER_BYTES",
+                "ECG_VIRTUAL_ID_BITS": "ECG_RECORD_MAX_AUXILIARY_BYTES",
+            }.get(pass_name, pass_name)
         outer = os.environ.get(pass_name)
+        if getattr(args, "ecg_native", False):
+            if pass_name == "ECG_RECORD_NATIVE":
+                outer = "1"
+            elif pass_name == "ECG_RECORD_BYTES":
+                outer = str(args.ecg_record_bytes)
+            elif pass_name == "ECG_RECORD_MIN_MANTISSA_BITS":
+                outer = str(args.ecg_minimum_mantissa_bits)
         if getattr(args, "ref32_native", False):
             if pass_name == "ECG_REF32_RECORD":
                 outer = "1"
@@ -266,6 +281,21 @@ def parse_args():
              "The metadata-link output remains one update per CPU cycle.")
     parser.add_argument("--ref32-allow-drops", action="store_true",
         help="Allow diagnostic degraded operation; never admissible timing evidence.")
+    parser.add_argument("--ecg-native", action="store_true",
+        help="Use the current graph-adaptive ECG record ISA and its bounded native controller.")
+    parser.add_argument("--ecg-mechanism", default="replacement",
+        choices=["transport", "replacement", "prefetch", "replacement-prefetch"])
+    parser.add_argument("--ecg-record-bytes", type=int, default=0, choices=[0, 4, 8],
+        help="Zero selects the smallest sufficient graph-derived record.")
+    parser.add_argument("--ecg-minimum-mantissa-bits", type=int, default=0)
+    parser.add_argument("--ecg-update-latency", type=int, default=8)
+    parser.add_argument("--ecg-capture-width", type=int, default=0,
+        help="Zero uses CPU commit width; metadata output remains one per cycle.")
+    parser.add_argument("--ecg-window-queue-size", type=int, default=16)
+    parser.add_argument("--ecg-prefetch-queue-size", type=int, default=16)
+    parser.add_argument("--ecg-lookup-latency", type=int, default=12)
+    parser.add_argument("--ecg-prefetch-latency", type=int, default=8)
+    parser.add_argument("--ecg-progress-limit", type=int, default=100000)
 
     return parser.parse_args()
 
@@ -273,7 +303,7 @@ def parse_args():
 def resolve_ref32_capture_width(commit_width, requested_width):
     width = commit_width if requested_width == 0 else requested_width
     if not 1 <= width <= 16:
-        raise RuntimeError("Native Scale6 capture width must be in [1,16]")
+        raise RuntimeError("Native ECG capture width must be in [1,16]")
     return width
 
 
@@ -281,6 +311,22 @@ def create_system(args):
     """Create the full gem5 system for graph benchmark simulation."""
 
     native = getattr(args, "ref32_native", False)
+    record_native = getattr(args, "ecg_native", False)
+    if record_native:
+        if (native or args.cpu_type != "O3" or args.prefetcher != "none" or
+                args.policy not in ("LRU", "ECG") or args.max_insts or
+                args.ecg_update_latency < 8 or
+                not 0 <= args.ecg_minimum_mantissa_bits <= 61 or
+                not 1 <= args.ecg_window_queue_size <= 16 or
+                not 1 <= args.ecg_prefetch_queue_size <= 16 or
+                args.ecg_lookup_latency <= 0 or args.ecg_prefetch_latency <= 0 or
+                args.ecg_progress_limit <= args.ecg_lookup_latency + args.ecg_prefetch_latency):
+            raise RuntimeError("Current native ECG requires uncapped O3 and valid bounded mechanisms.")
+        for variable in (
+                "ECG_FLOWTHROUGH", "STRUCTURAL_FLOWTHROUGH", "ECG_REUSE_PLAN_DEPTH",
+                "ECG_REF32_RECORD", "ECG_NEXT_USE_RECORD"):
+            if os.environ.get(variable, "0") not in ("0", ""):
+                raise RuntimeError(f"Current native ECG cannot be mixed with {variable}")
     if native:
         if (args.cpu_type != "O3" or args.prefetcher != "none" or
                 args.policy not in ("LRU", "ECG") or
@@ -335,6 +381,9 @@ def create_system(args):
     if args.policy == "ECG":
         l3_policy_kwargs["ecg_mode"] = args.ecg_mode
         l3_policy_kwargs["native_ref32"] = native
+        l3_policy_kwargs["native_record"] = record_native
+        l3_policy_kwargs["enable_replacement"] = record_native and args.ecg_mechanism in (
+            "replacement", "replacement-prefetch")
     if args.policy in ("GRASP", "POPT", "ECG"):
         l3_policy_kwargs["num_buckets"] = 11
 
@@ -480,6 +529,30 @@ def create_system(args):
             apply_updates=args.policy == "ECG",
             allow_drops=args.ref32_allow_drops,
             required_context=1)
+    if record_native:
+        prefetch = None
+        if args.policy == "ECG" and args.ecg_mechanism in ("prefetch", "replacement-prefetch"):
+            system.ecg_record_prefetch = EcgRecordPrefetch(
+                cpu=system.cpu, l1=system.cpu.dcache, l2=system.l2cache,
+                llc=system.l3cache, clk_domain=system.cpu.clk_domain,
+                window_queue_size=args.ecg_window_queue_size,
+                property_queue_size=args.ecg_prefetch_queue_size,
+                lookup_latency=args.ecg_lookup_latency,
+                prefetch_latency=args.ecg_prefetch_latency,
+                progress_limit=args.ecg_progress_limit)
+            system.ecg_record_prefetch.record_port = system.l2bus.cpu_side_ports
+            system.ecg_record_prefetch.property_port = system.l3bus.cpu_side_ports
+            prefetch = system.ecg_record_prefetch
+        system.ecg_record_transport = EcgRecordTransport(
+            cpu=system.cpu, llc=system.l3cache, clk_domain=system.cpu.clk_domain,
+            latency=args.ecg_update_latency,
+            capture_width=resolve_ref32_capture_width(
+                int(system.cpu.commitWidth), args.ecg_capture_width),
+            apply_updates=args.policy == "ECG" and args.ecg_mechanism in (
+                "replacement", "replacement-prefetch"),
+            required_context=1)
+        if prefetch is not None:
+            system.ecg_record_transport.prefetcher = prefetch
 
     return system
 
@@ -550,6 +623,12 @@ def main():
                 exit_event.getCode() != 0):
             raise RuntimeError(f"Native Scale6 did not finish its workload: {cause}")
         finish_ref32_transport(system.ref32_commit)
+    if getattr(args, "ecg_native", False):
+        if ("exiting with last active thread context" not in cause or exit_event.getCode() != 0):
+            raise RuntimeError(f"Native ECG did not finish its workload: {cause}")
+        if system.ecg_record_transport.pendingWork():
+            raise RuntimeError("Native ECG guest exited before draining its real work inside the ROI")
+        system.ecg_record_transport.report()
     if args.max_insts and args.max_insts > 0 and "ROI instruction cap" in cause:
         print(f"[max-insts] ROI instruction cap ({args.max_insts}) reached; "
               f"dumping ROI-window stats.")

@@ -4,3 +4,5 @@
 SimObject('GraphPrefetchers.py', sim_objects=['GraphDropletPrefetcher', 'GraphEcgPfxPrefetcher'])
 Source('droplet.cc')
 Source('ecg_pfx.cc')
+SimObject('RecordPrefetch.py', sim_objects=['EcgRecordPrefetch'])
+Source('ecg_record_prefetch.cc')

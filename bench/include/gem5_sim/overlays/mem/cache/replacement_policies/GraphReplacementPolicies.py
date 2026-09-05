@@ -109,6 +109,20 @@ class GraphEcgRP(BaseReplacementPolicy):
         "Path to P-OPT rereference matrix binary file.")
 
 
+class GraphEcgRecordRP(BaseReplacementPolicy):
+    """One graph-adaptive ECG policy with delayed retired reference updates."""
+    type = "GraphEcgRecordRP"
+    cxx_header = "mem/cache/replacement_policies/graph_ecg_record_rp.hh"
+    cxx_class = "gem5::replacement_policy::GraphEcgRecordRP"
+
+    enable_replacement = Param.Bool(True, "False retains LRU for a prefetch-only control")
+    hot_fraction = Param.Float(0.15, "Region-based GRASP fallback hot fraction")
+    llc_size_bytes = Param.Unsigned(8388608, "Actual LLC data capacity")
+    line_size = Param.Unsigned(64, "Cache-line size")
+    sideband_path = Param.String(
+        "/tmp/gem5_graphbrew_ctx.json", "Matrix-free property and structural address regions")
+
+
 class GraphRef32RP(BaseReplacementPolicy):
     """Native Scale6 R+commit replacement policy.
 
