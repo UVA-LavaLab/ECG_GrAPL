@@ -555,13 +555,17 @@ inline uint32_t addressToVertex(uint64_t addr,
 // ============================================================================
 using ECGMode = ecg_mode::Mode;
 
-inline ECGMode stringToECGMode(const std::string& s) {
+inline ECGMode stringToECGMode(
+        const std::string& s, bool allow_native_ref32 = false) {
     const ECGMode mode = ecg_mode::parse(s);
     const char* next_use = std::getenv("ECG_NEXT_USE_LRU");
     const bool next_use_stored =
         mode == ECGMode::ECG_EXACT_STORED &&
         next_use && next_use[0] && std::strcmp(next_use, "0") != 0;
+    const bool native_ref32 =
+        allow_native_ref32 && mode == ECGMode::ECG_REF32;
     if (!ecg_mode::supportedByAllBackends(mode) &&
+        !native_ref32 &&
         !next_use_stored) {
         std::fprintf(
             stderr, "[graphctx] FATAL: ECG mode '%s' is cache_sim-only\n",
@@ -951,6 +955,32 @@ struct GraphCacheContext {
         if (num_regions == 1) return regions[0].contains(addr);
         // PR registers scores first and governed contrib second.
         return num_regions > 1 && regions[1].contains(addr);
+    }
+
+    const PropertyRegion* ecgEpochRegionForAddress(uint64_t addr) const {
+        if (!isEcgEpochData(addr))
+            return nullptr;
+        for (uint32_t index = 0; index < num_regions; ++index) {
+            if (regions[index].contains(addr))
+                return &regions[index];
+        }
+        return nullptr;
+    }
+
+    bool ecgEpochDestinationMatches(
+            uint64_t addr, uint32_t destination,
+            uint32_t line_size = 64) const {
+        if (line_size == 0 || (addr & 0x3u) != 0)
+            return false;
+        const PropertyRegion* region = ecgEpochRegionForAddress(addr);
+        if (!region || region->elem_size != sizeof(uint32_t) ||
+            destination >= region->num_elements) {
+            return false;
+        }
+        const uint64_t expected =
+            region->base_address +
+            static_cast<uint64_t>(destination) * region->elem_size;
+        return addr / line_size == expected / line_size;
     }
 
     uint32_t classifyBucket(uint64_t addr) const {

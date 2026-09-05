@@ -107,3 +107,26 @@ class GraphEcgRP(BaseReplacementPolicy):
         "Path to sideband JSON written by benchmark with property regions.")
     popt_matrix_path = Param.String("/tmp/gem5_popt_matrix.bin",
         "Path to P-OPT rereference matrix binary file.")
+
+
+class GraphRef32RP(BaseReplacementPolicy):
+    """Native Scale6 R+commit replacement policy.
+
+    This policy is intentionally separate from GraphEcgRP. It consumes only
+    bounded request observations and delayed committed updates; it never loads
+    a rereference matrix or a per-vertex future table.
+    """
+    type = 'GraphRef32RP'
+    cxx_header = "mem/cache/replacement_policies/graph_ref32_rp.hh"
+    cxx_class = 'gem5::replacement_policy::GraphRef32RP'
+
+    rrpv_max = Param.Unsigned(7, "Maximum three-bit RRPV value.")
+    hot_fraction = Param.Float(
+        0.15, "Region-based local GRASP hot fraction.")
+    llc_size_bytes = Param.Unsigned(
+        8388608, "LLC size used by local GRASP classification.")
+    line_size = Param.Unsigned(64, "Native REF32 cache-line size.")
+    required_context = Param.Unsigned(1, "Sealed native REF32 context.")
+    sideband_path = Param.String(
+        "/tmp/gem5_graphbrew_ctx.json",
+        "Matrix-free PR sideband containing scores then contrib.")

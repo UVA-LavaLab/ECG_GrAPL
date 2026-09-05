@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1380" viewBox="0 0 1200 1380" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Target Scale6 path through an out-of-order core</title>
-  <desc id="desc">An explicit register dependency connects the Scale6 record load to the property access. Standard fetch, decode, rename, issue, AGU, LSQ, translation and cache structures retain ordinary execution semantics. A separate retirement-only update route must carry committed predictions to the LLC, including for private hits. Squashed operations cannot enqueue refreshes.</desc>
+  <title id="title">Native Scale6 path through an out-of-order core</title>
+  <desc id="desc">An explicit register dependency connects the Scale6 record load to the property access. Standard fetch, decode, rename, issue, AGU, LSQ, translation and cache structures retain ordinary execution semantics. A separate retirement-only update route carries committed predictions to the LLC, including for private hits. Squashed operations cannot enqueue refreshes.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -35,13 +35,13 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1380" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Target Scale6 path through an out-of-order core</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Native record/property operands execute; the retirement-to-LLC path remains a target.</text>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Native Scale6 path through an out-of-order core</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Real retirement supplies a bounded, separately timed metadata link; native prefetch is not implemented.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
   <text x="74" y="145" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">A REAL WORD FROM THE EDGE STREAM</text>
-  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">checked native operand example; cache path pending</text>
+  <text x="1158" y="144" text-anchor="end" class="sans body" fill="#475467">checked native operand example; replacement qualification</text>
   <line x1="24" y1="164" x2="1176" y2="164" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="164" x2="170" y2="164" stroke="#2563EB" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="195" width="315" height="128" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="195" data-width="315" data-height="128"/>
@@ -79,12 +79,12 @@
   <text x="66" y="616" text-anchor="start" class="sans body" fill="#0F8A72">instruction flow</text>
   <rect x="65" y="668" width="290" height="105" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="668" data-width="290" data-height="105"/>
   <text x="79" y="696" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Record load I0</text>
-  <text x="79" y="725" text-anchor="start" class="sans body" fill="#182230">ordinary load -&gt; physical P17</text>
+  <text x="79" y="725" text-anchor="start" class="sans body" fill="#182230">32-bit load -&gt; RV64 P17</text>
   <rect x="460" y="668" width="225" height="130" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="460" data-y="668" data-width="225" data-height="130"/>
   <line x1="460" y1="711.3333333333334" x2="685" y2="711.3333333333334" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="460" y1="754.6666666666666" x2="685" y2="754.6666666666666" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="476" y="695" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Physical registers</text>
-  <text x="476" y="739" text-anchor="start" class="sans body" fill="#182230">P17 = record word</text>
+  <text x="476" y="739" text-anchor="start" class="sans body" fill="#182230">P17: seq19 / word</text>
   <text x="476" y="782" text-anchor="start" class="sans body" fill="#182230">I1 reads P17</text>
   <rect x="790" y="668" width="335" height="130" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="790" data-y="668" data-width="335" data-height="130"/>
   <text x="804" y="696" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Property load I1</text>
@@ -117,8 +117,8 @@
   <text x="738" y="912" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">completion</text>
   <circle cx="44" cy="1110" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="1116" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
-  <text x="74" y="1117" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">THE MISSING RETIREMENT-TO-LLC ROUTE</text>
-  <text x="1158" y="1116" text-anchor="end" class="sans body" fill="#475467">Scale6 target: implement and measure, do not infer</text>
+  <text x="74" y="1117" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">A SEPARATE RETIREMENT-TO-LLC ROUTE</text>
+  <text x="1158" y="1116" text-anchor="end" class="sans body" fill="#475467">16 slots; &gt;=8 CPU cycles; 1 out/cycle; bounded capture</text>
   <line x1="24" y1="1136" x2="1176" y2="1136" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="1136" x2="170" y2="1136" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="1169" width="270" height="105" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="1169" data-width="270" data-height="105"/>
@@ -152,5 +152,5 @@
   <path d="M730 1221 L900 1221" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="timed delivery"/>
   <rect x="746.16" y="1290.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="815" y="1307" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">timed delivery</text>
-  <text x="40" y="1344" text-anchor="start" class="sans body" fill="#C63C4A">Native latency, bandwidth, backpressure and drain behavior are not supplied by the cache_sim request clock.</text>
+  <text x="40" y="1344" text-anchor="start" class="sans body" fill="#C63C4A">Dedicated link / tag port; native prefetch, shared-port contention and production timing remain unqualified.</text>
 </svg>

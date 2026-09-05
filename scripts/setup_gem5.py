@@ -51,6 +51,8 @@ VALID_BUILD_TYPES = ("opt", "debug", "fast")
 OVERLAY_FILE_MAP = {
     "../../ecg_ref32.h":
         "mem/cache/replacement_policies/ecg_ref32.h",
+    "../../ecg_ref32_commit.h":
+        "mem/cache/replacement_policies/ecg_ref32_commit.h",
     "../../ecg_victim_policy.h":
         "mem/cache/replacement_policies/ecg_victim_policy.h",
     "../../hawkeye_policy.h":
@@ -72,6 +74,20 @@ OVERLAY_FILE_MAP = {
         "mem/cache/replacement_policies/ecg_rp.hh",
     "mem/cache/replacement_policies/ecg_rp.cc":
         "mem/cache/replacement_policies/ecg_rp.cc",
+    "mem/cache/replacement_policies/graph_ref32_rp.hh":
+        "mem/cache/replacement_policies/graph_ref32_rp.hh",
+    "mem/cache/replacement_policies/graph_ref32_rp.cc":
+        "mem/cache/replacement_policies/graph_ref32_rp.cc",
+    "mem/cache/replacement_policies/ecg_ref32_native_state.hh":
+        "mem/cache/replacement_policies/ecg_ref32_native_state.hh",
+    "mem/cache/replacement_policies/ecg_ref32_observation.hh":
+        "mem/cache/replacement_policies/ecg_ref32_observation.hh",
+    "mem/cache/replacement_policies/Ref32CommitTransport.py":
+        "mem/cache/replacement_policies/Ref32CommitTransport.py",
+    "mem/cache/replacement_policies/ecg_ref32_commit_transport.hh":
+        "mem/cache/replacement_policies/ecg_ref32_commit_transport.hh",
+    "mem/cache/replacement_policies/ecg_ref32_commit_transport.cc":
+        "mem/cache/replacement_policies/ecg_ref32_commit_transport.cc",
     "mem/cache/replacement_policies/ecg_victim_policy.hh":
         "mem/cache/replacement_policies/ecg_victim_policy.hh",
     "mem/cache/replacement_policies/ecg_mode.hh":
@@ -138,12 +154,15 @@ UNIFIED_DIFF_PATCHES = [
     ("cpu/o3/dyn_inst_ecg_producer.patch", "."),
     ("cpu/o3/lsq_ecg_producer.patch", "."),
     ("cpu/ecg_ref32_producer.patch", "."),
+    ("cpu/o3/ecg_ref32_observation.patch", "."),
     # Pass the allocating Request to replacement victim selection so ReusePlan uses
     # the request-carried current epoch/context rather than global magic state.
     ("mem/cache/ecg_victim_request.patch", "."),
     # Coalesced ReusePlan requests retain the latest same-hart/context sequence and
     # fail closed on cross-hart/context or ordinary-request conflicts.
     ("mem/cache/mshr_ecg_merge.patch", "."),
+    ("mem/cache/ecg_ref32_mshr_observation.patch", "."),
+    ("mem/cache/ecg_ref32_cache_api.patch", "."),
     # FlowThrough: packed ECG record misses retain normal L1/L2 fills but
     # suppress shared-L3 allocation through the MSHR allocOnFill bit.
     ("mem/request_flowthrough.patch", "."),
@@ -393,14 +412,18 @@ def apply_patches():
             old_simobject = (
                 "SimObject('GraphReplacementPolicies.py', sim_objects=[\n"
                 "    'GraphGraspRP', 'GraphPoptRP', 'GraphEcgRP'])")
-            new_simobject = (
+            previous_simobject = (
                 "SimObject('GraphReplacementPolicies.py', sim_objects=[\n"
                 "    'GraphHawkeyeRP', 'GraphGraspRP', 'GraphPoptRP', "
                 "'GraphEcgRP'])")
-            if old_simobject in current_content and new_simobject not in current_content:
-                current_content = current_content.replace(
-                    old_simobject, new_simobject)
-                target_sconscript.write_text(current_content)
+            new_simobject = (
+                "SimObject('GraphReplacementPolicies.py', sim_objects=[\n"
+                "    'GraphHawkeyeRP', 'GraphGraspRP', 'GraphPoptRP', "
+                "'GraphEcgRP', 'GraphRef32RP'])")
+            for installed in (old_simobject, previous_simobject):
+                if installed in current_content and new_simobject not in current_content:
+                    current_content = current_content.replace(installed, new_simobject)
+                    target_sconscript.write_text(current_content)
 
         if patch_rel == "mem/cache/prefetch/SConscript.patch":
             old_simobject = "SimObject('GraphPrefetchers.py', sim_objects=['GraphDropletPrefetcher'])"

@@ -101,6 +101,12 @@ maximum of RRPV and the local GRASP fallback. Ties compare unknown status,
 remaining distance, tier and recency. Unknown does not unconditionally
 precede finite, and this is not the old RRIP-first ReusePlan ordering.
 
+These are cache_sim rules. The native replacement-only path instead marks
+request observations PENDING and installs predictions only on timed
+retirement delivery. Its queue uses CPU cycles, explicit burst-capture
+width and one-wide output; speculative known-dead miss bypass is not
+implemented. See [native integration](RISC-V-Instruction-Path).
+
 ## 5. Selective prefetch is a separate mechanism
 
 ### Figure 5 — Selective prefetch from the record stream

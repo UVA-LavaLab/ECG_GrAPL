@@ -68,7 +68,7 @@ def clear_runtime_sideband_files():
 
 def needs_vertex_hints(args):
     """Keep the outer-vertex marker stream identical for every L3 policy."""
-    return True
+    return not getattr(args, "ref32_native", False)
 
 
 def benchmark_environment(args):
@@ -168,6 +168,13 @@ def benchmark_environment(args):
         "GEM5_REUSE_PLAN_SIDECAR_REQUIRED",
     )):
         outer = os.environ.get(pass_name)
+        if getattr(args, "ref32_native", False):
+            if pass_name == "ECG_REF32_RECORD":
+                outer = "1"
+            elif pass_name == "ECG_REF32_FORMAT":
+                outer = "scale6"
+            elif pass_name == "ECG_VIRTUAL_ID_BITS":
+                outer = "26"
         if outer is not None and outer != "":
             env.append(f"{pass_name}={outer}")
         else:
@@ -195,7 +202,7 @@ def parse_args():
     parser.add_argument("--ecg-mode", default="DBG_PRIMARY",
         choices=["DBG_PRIMARY", "POPT_PRIMARY", "ECG_GRASP_POPT", "DBG_ONLY",
                  "ECG_EMBEDDED", "ECG_EPOCH_EMBEDDED", "ECG_COMBINED",
-                 "ECG_EXACT", "ECG_EXACT_STORED", "ECG_EXACT_MASK"],
+                 "ECG_EXACT", "ECG_EXACT_STORED", "ECG_EXACT_MASK", "ECG_REF32"],
         help="ECG eviction mode (only used with --policy ECG)")
     parser.add_argument("--l1-policy", default="LRU",
         help="L1 cache replacement policy (default: LRU)")
@@ -248,12 +255,47 @@ def parse_args():
         help="Cap committed instructions after the benchmark's ROI work-begin "
              "marker (0 = run to completion). This excludes graph loading and "
              "matches Sniper's detailed-ROI stop-by-icount behavior.")
+    parser.add_argument("--mem-size", default="4GB",
+        help="Simulated physical memory capacity.")
+    parser.add_argument("--ref32-native", action="store_true",
+        help="Run the Scale6 operand path and retirement observer (LRU is the ISA-matched control).")
+    parser.add_argument("--ref32-latency", type=int, default=8,
+        help="Dedicated metadata-link latency in CPU cycles, at least 8.")
+    parser.add_argument("--ref32-capture-width", type=int, default=0,
+        help="Retirement capture lanes (1-16; 0 uses the CPU commit width). "
+             "The metadata-link output remains one update per CPU cycle.")
+    parser.add_argument("--ref32-allow-drops", action="store_true",
+        help="Allow diagnostic degraded operation; never admissible timing evidence.")
 
     return parser.parse_args()
 
 
+def resolve_ref32_capture_width(commit_width, requested_width):
+    width = commit_width if requested_width == 0 else requested_width
+    if not 1 <= width <= 16:
+        raise RuntimeError("Native Scale6 capture width must be in [1,16]")
+    return width
+
+
 def create_system(args):
     """Create the full gem5 system for graph benchmark simulation."""
+
+    native = getattr(args, "ref32_native", False)
+    if native:
+        if (args.cpu_type != "O3" or args.prefetcher != "none" or
+                args.policy not in ("LRU", "ECG") or
+                (args.policy == "ECG" and args.ecg_mode != "ECG_REF32") or
+                args.ref32_latency < 8 or args.max_insts):
+            raise RuntimeError(
+                "Native Scale6 requires uncapped O3, no prefetcher, latency >=8, "
+                "and either LRU control or ECG_REF32.")
+        for variable in ("ECG_FLOWTHROUGH", "STRUCTURAL_FLOWTHROUGH"):
+            if os.environ.get(variable, "0") != "0":
+                raise RuntimeError("Native Scale6 currently requires FlowThrough off")
+        if os.environ.get("ECG_REUSE_PLAN_DEPTH", "0") not in ("0", ""):
+            raise RuntimeError("Native Scale6 cannot be mixed with a legacy ReusePlan carrier")
+    elif args.ecg_mode == "ECG_REF32" and args.policy == "ECG":
+        raise RuntimeError("ECG_REF32 requires the native retirement transport")
 
     if os.environ.get("ECG_REUSE_PLAN_DEPTH", "0") == "2":
         reuse_bind_active = (
@@ -273,7 +315,7 @@ def create_system(args):
     system.clk_domain.clock = "2GHz"
     system.clk_domain.voltage_domain = VoltageDomain()
     system.mem_mode = "timing"
-    system.mem_ranges = [AddrRange("4GB")]
+    system.mem_ranges = [AddrRange(getattr(args, "mem_size", "4GB"))]
 
     # ── CPU ──
     if args.cpu_type == "O3":
@@ -292,6 +334,7 @@ def create_system(args):
     l3_policy_kwargs = {}
     if args.policy == "ECG":
         l3_policy_kwargs["ecg_mode"] = args.ecg_mode
+        l3_policy_kwargs["native_ref32"] = native
     if args.policy in ("GRASP", "POPT", "ECG"):
         l3_policy_kwargs["num_buckets"] = 11
 
@@ -427,8 +470,30 @@ def create_system(args):
         pass
     system.cpu.workload = process
     system.cpu.createThreads()
+    if native:
+        system.ref32_commit = EcgRef32CommitTransport(
+            cpu=system.cpu, llc=system.l3cache,
+            clk_domain=system.cpu.clk_domain,
+            latency=args.ref32_latency,
+            capture_width=resolve_ref32_capture_width(
+                int(system.cpu.commitWidth), args.ref32_capture_width),
+            apply_updates=args.policy == "ECG",
+            allow_drops=args.ref32_allow_drops,
+            required_context=1)
 
     return system
+
+
+def finish_ref32_transport(transport):
+    """Finish only the metadata link after the SE workload has exited."""
+    if transport.pendingUpdates():
+        budget = transport.drainBudgetTicks()
+        if budget <= 0:
+            raise RuntimeError("Native Scale6 has an invalid drain budget")
+        m5.simulate(budget)
+        if transport.pendingUpdates():
+            raise RuntimeError("Native Scale6 transport failed to drain within its bound")
+    transport.report()
 
 
 def main():
@@ -480,6 +545,11 @@ def main():
         exit_event = m5.simulate()
         cause = exit_event.getCause()
     print(f"Exiting @ tick {m5.curTick()} because {cause}")
+    if getattr(args, "ref32_native", False):
+        if ("exiting with last active thread context" not in cause or
+                exit_event.getCode() != 0):
+            raise RuntimeError(f"Native Scale6 did not finish its workload: {cause}")
+        finish_ref32_transport(system.ref32_commit)
     if args.max_insts and args.max_insts > 0 and "ROI instruction cap" in cause:
         print(f"[max-insts] ROI instruction cap ({args.max_insts}) reached; "
               f"dumping ROI-window stats.")

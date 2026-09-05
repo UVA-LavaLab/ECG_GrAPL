@@ -1,0 +1,26 @@
+--- a/src/cpu/o3/lsq.cc
++++ b/src/cpu/o3/lsq.cc
+@@ -54,6 +54,7 @@
+ #include "cpu/o3/limits.hh"
+ #include "debug/Drain.hh"
+ #include "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh"
++#include "mem/cache/replacement_policies/ecg_ref32_observation.hh"
+ #include "debug/Fetch.hh"
+ #include "debug/HtmCpu.hh"
+ #include "debug/LSQ.hh"
+@@ -1147,6 +1148,15 @@
+             }
+         }
+ 
++        if (_inst && _inst->isLoad()) {
++            const auto& hint = _inst->ecgRef32Hint();
++            if (hint.kind == ecg_ref32::InstructionKind::PROPERTY) {
++                replacement_policy::graph::attachEcgRef32Observation(
++                    req, hint.context, hint.sequence,
++                    hint.destination);
++            }
++        }
++
+         /* If the request is marked as NO_ACCESS, setup a local access */
+         if (_flags.isSet(Request::NO_ACCESS)) {
+             req->setLocalAccessor(

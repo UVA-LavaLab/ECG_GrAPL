@@ -132,5 +132,5 @@
   <text x="807" y="967" text-anchor="middle" class="sans body" fill="#C63C4A" font-weight="700">expiry check</text>
   <text x="40" y="1023" text-anchor="start" class="sans body" fill="#182230">The model&#x27;s 8-request update latency may outlast this 7-request prediction; an expired update is discarded.</text>
   <text x="40" y="1057" text-anchor="start" class="sans body" fill="#C63C4A">An expired update cannot install the stale deadline; a newer coalesced prediction has its own bound.</text>
-  <text x="40" y="1120" text-anchor="start" class="sans body" fill="#C56A13">Native request binding, retirement messages and cycle timing for Scale6 are still a separate implementation task.</text>
+  <text x="40" y="1120" text-anchor="start" class="sans body" fill="#C56A13">Native request observations mark PENDING; only timed retirement delivery installs a finite/dead prediction.</text>
 </svg>

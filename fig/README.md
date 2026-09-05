@@ -1,8 +1,8 @@
 # ECG figures
 
 This directory contains ECG's public SVG figures and editable Draw.io mirrors.
-The wiki collection describes the current Scale6 model and its pending native
-integration. The separate paper collection preserves the earlier ReusePlan
+The wiki collection describes the current Scale6 model, native replacement
+qualification and remaining prefetch work. The separate paper collection preserves the earlier ReusePlan
 layouts; it is not a completed Scale6 paper figure set.
 
 Two independent collections are generated from the same primitives:
@@ -84,8 +84,11 @@ Architecture vocabulary and values trace to:
 - `bench/include/cache_sim/graph_cache_context.h` and `bench/src_sim/pr.cc`
   for record consumption, traversal position and context;
 - `bench/include/gem5_sim/overlays/arch/riscv/` and
-  `bench/include/gem5_sim/gem5_harness.h` for existing legacy instruction
-  roles, not a completed native Scale6 port;
+  `bench/include/gem5_sim/gem5_harness.h` for legacy and native Scale6
+  instruction roles;
+- `bench/include/ecg_ref32_commit.h` and the native
+  `ecg_ref32_commit_transport.cc` / `graph_ref32_rp.cc` overlays for the
+  bounded retirement path and separate replacement receiver;
 - `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh`
   and `bench/include/gem5_sim/overlays/mem/cache/mshr_ecg_merge.patch` for
   Request and MSHR state;
@@ -110,9 +113,10 @@ The construction, instruction, and cache figures use one common fixture:
 | deadline / expiry | deadline `26`; UNKNOWN at `27` if not refreshed |
 
 The figures do not report speedup measurements. cache_sim implements Scale6
-and supplies cache/traffic evidence. The native gem5 Scale6 request,
-retirement and prefetch path remains pending; existing ReuseBind support does
-not establish it. Sniper Scale6 rows remain unsupported. State-bit accounting
+and supplies cache/traffic evidence. Native gem5 Scale6 operands and
+replacement-only retirement delivery are under qualification; native prefetch
+and production timing admission remain closed. Sniper Scale6 rows remain
+unsupported. State-bit accounting
 is not silicon area, and analytic P-OPT matrix traffic does not establish
 target-time stream latency.
 
@@ -133,7 +137,7 @@ show eight.
 | [`reuse-plan-flowthrough/reuse-plan-flowthrough-f05-lookahead-prefetch.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f05-lookahead-prefetch.svg) | Selective prefetch from the record stream | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 5 |
 | [`reuse-plan-flowthrough/reuse-plan-flowthrough-f06-capacity-accounting.svg`](wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-capacity-accounting.svg) | P-OPT columns and the LLC capacity budget | [`ReusePlan-FlowThrough.md`](../wiki/ReusePlan-FlowThrough.md) Figure 6 |
 | [`risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg) | RISC-V integration: existing path and next step | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 1 |
-| [`risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg) | Target Scale6 path through an out-of-order core | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 2 |
+| [`risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg) | Native Scale6 path through an out-of-order core | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 2 |
 | [`risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg`](wiki/risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg) | Request lifetime is not metadata lifetime | [`RISC-V-Instruction-Path.md`](../wiki/RISC-V-Instruction-Path.md) Figure 3 |
 | [`property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg`](wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f01-checked-request.svg) | One edge word, one property line, one update | [`Property-to-Cache-Walkthrough.md`](../wiki/Property-to-Cache-Walkthrough.md) Figure 1 |
 | [`property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg`](wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg) | Where Scale6 metadata lives | [`Property-to-Cache-Walkthrough.md`](../wiki/Property-to-Cache-Walkthrough.md) Figure 2 |

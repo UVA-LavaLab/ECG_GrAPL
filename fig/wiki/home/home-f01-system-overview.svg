@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1060" viewBox="0 0 1200 1060" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">Scale6: future reuse in the existing edge word</title>
-  <desc id="desc">The current ECG candidate uses a four-byte destination-plus-token record. Offline line-indexed construction precedes PageRank. Demand accesses, private-hit commit updates and bounded LLC prefetching are modeled in cache_sim. The diagram explicitly distinguishes that evidence from the still-unimplemented Scale6 gem5 path and physical-cost qualification.</desc>
+  <desc id="desc">The current ECG candidate uses a four-byte destination-plus-token record. Offline line-indexed construction precedes PageRank. Demand accesses, private-hit commit updates and bounded LLC prefetching are modeled in cache_sim. The diagram explicitly distinguishes that evidence from the replacement-only gem5 qualification, missing native prefetch and physical-cost evidence.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -126,6 +126,6 @@
   <text x="50" y="963" text-anchor="start" class="sans body" fill="#182230">Full-graph PageRank results, LLC misses,</text>
   <text x="50" y="987" text-anchor="start" class="sans body" fill="#182230">off-chip traffic, bounded model queues.</text>
   <text x="650" y="933" text-anchor="start" class="sans label" fill="#C56A13" font-weight="700">STILL REQUIRED</text>
-  <text x="650" y="963" text-anchor="start" class="sans body" fill="#182230">Scale6 gem5 request/retirement path,</text>
-  <text x="650" y="987" text-anchor="start" class="sans body" fill="#182230">cycle timing and physical area evidence.</text>
+  <text x="650" y="963" text-anchor="start" class="sans body" fill="#182230">Native prefetch and timing qualification,</text>
+  <text x="650" y="987" text-anchor="start" class="sans body" fill="#182230">physical area and contention evidence.</text>
 </svg>

@@ -1,7 +1,7 @@
 # Evaluation Methodology
 
-This page defines what each ECG experiment can establish. It contains no
-performance results.
+This page defines what each ECG experiment can establish and records the
+qualified cache/traffic results separately from native timing and area work.
 
 ### Figure 1 — Cache evidence is not a timing or area result
 

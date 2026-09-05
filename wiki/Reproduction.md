@@ -311,6 +311,77 @@ For Slurm arrays, export the same receipt as
 profile remains available only for `--list --dry-run` manifest enumeration and
 must not be executed.
 
+### Native Scale6 replacement qualification
+
+Build and exercise the native operand/retirement/replacement path
+sequentially, with one compiler job and bounded execution:
+
+```bash
+ulimit -c 0
+timeout 7200 python3 scripts/setup_gem5.py --isa RISCV --jobs 1
+timeout 1800 make -j1 gem5-riscv-m5ops-pr
+timeout 420 python3 -m pytest -q \
+  scripts/test/test_gem5_ref32_cache.py::test_native_ref32_retirement_path_matches_isa_lru
+```
+
+This diagnostic pairs `--ref32-native --policy LRU` with
+`--ref32-native --policy ECG --ecg-mode ECG_REF32`. Both execute the
+same Scale6 instructions and fixed-iteration PageRank loop; only ECG
+applies retirement metadata. The fixture is deliberately small, with
+no generic or native prefetcher and FlowThrough off. It is not a
+production timing-matrix row.
+
+Capture defaults to the CPU's configured commit width, not one update:
+`--ref32-capture-width 0` selects that default, while 1 through 16
+select an explicit width. The link still delivers at most one update
+per CPU cycle after at least eight cycles. Final receipts must expose
+capture/output widths, exact work, accounting identities, zero drops
+and an empty queue. Diagnostic `--ref32-allow-drops` is not admissible.
+See [native integration](RISC-V-Instruction-Path) for the dedicated-port
+assumptions and remaining prefetch/timing limits.
+
+The one-edge, four-iteration regression deliberately uses a long but bounded
+4096-cycle link delay. It forces two secondary updates to coalesce across
+traversals, without increasing the 16-slot queue:
+
+```bash
+timeout 420 python3 -m pytest -q \
+  scripts/test/test_gem5_ref32_cache.py::test_native_ref32_coalesces_across_traversals
+```
+
+Two optional file-backed cases cover directed Patents at 8 MiB for one
+iteration and undirected Orkut at 64 KiB for three iterations. Starting
+from the prepared final-n18 edge lists, create the small inputs:
+
+```bash
+for graph in cit-Patents com-Orkut; do
+  sample="${graph}-native-n12"
+  directory="results/graphs/${sample}"
+  python3 scripts/experiments/ecg/flows/sample_realgraph.py \
+    --input "results/graphs/${graph}-final-n18/${graph}-final-n18.el" \
+    --output "${directory}/${sample}.el" \
+    --vertices "${directory}/${sample}.vertices.tsv" \
+    --metadata "${directory}/${sample}.sample.json" \
+    --target-vertices 4096 --target-edges 16384
+done
+OMP_NUM_THREADS=1 bench/bin/converter \
+  -f results/graphs/cit-Patents-native-n12/cit-Patents-native-n12.el \
+  -m -o 5 -b results/graphs/cit-Patents-native-n12/cit-Patents-native-n12-dbg
+OMP_NUM_THREADS=1 bench/bin/converter \
+  -f results/graphs/com-Orkut-native-n12/com-Orkut-native-n12.el \
+  -s -m -o 5 -b results/graphs/com-Orkut-native-n12/com-Orkut-native-n12-dbg
+timeout 780 python3 -m pytest -q \
+  scripts/test/test_gem5_ref32_cache.py::test_native_ref32_real_graph_pair
+```
+
+Every native pair retains `simulator.log`, guest receipts and `stats.txt`
+in its pytest output directory. The comparison uses the first ROI stats
+block and `system.cpu.commitStats0.numInsts`, not the unreset cumulative
+`simInsts` value. A unique `--basetemp` under `results/` keeps these artifacts
+outside pytest's rotating temporary directories. These are small mechanism
+probes, not full-graph timing results or evidence that the LLC is capacity
+stressed.
+
 ### REF32 cache-quality probe
 
 REF32 requires a certified preordered `*-dbg.sg` graph, `-o 0`, a fixed

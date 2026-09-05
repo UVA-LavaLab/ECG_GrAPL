@@ -33,6 +33,143 @@ using namespace std;
 typedef float ScoreT;
 const float kDamp = 0.85;
 
+static bool nativeRef32Requested() {
+    const char* value = std::getenv("ECG_REF32_RECORD");
+    return value && std::strcmp(value, "1") == 0;
+}
+
+static void reportPageRankResult(
+        const Graph& graph, const pvector<ScoreT>& scores, int iterations) {
+    uint64_t checksum = 1469598103934665603ULL;
+    for (ScoreT score : scores) {
+        uint32_t bits = 0;
+        std::memcpy(&bits, &score, sizeof(bits));
+        checksum ^= bits;
+        checksum *= 1099511628211ULL;
+    }
+    const uint64_t edges =
+        static_cast<uint64_t>(iterations) * graph.num_edges_directed();
+    std::fprintf(stderr,
+        "[ECG-PR-RESULT iterations=%d semantic_edges=%llu score_checksum=%016llx]\n",
+        iterations, static_cast<unsigned long long>(edges),
+        static_cast<unsigned long long>(checksum));
+}
+
+class Ref32BorrowedCarrier {
+  public:
+    explicit Ref32BorrowedCarrier(const Graph& graph)
+        : records_(graph.in_neigh(0).begin()),
+          count_(graph.num_edges_directed()) {
+        static_assert(sizeof(NodeID) == sizeof(uint32_t), "REF32 needs 32-bit IDs");
+        if (!ecg_ref32::buildScaleRecordsInPlace(
+                records_, count_, graph.num_nodes(), 16, 26))
+            throw std::invalid_argument("Cannot build native Scale6 carrier");
+    }
+
+    Ref32BorrowedCarrier(const Ref32BorrowedCarrier&) = delete;
+    Ref32BorrowedCarrier& operator=(const Ref32BorrowedCarrier&) = delete;
+
+    ~Ref32BorrowedCarrier() {
+        // Restore IDs for callers/verifiers, including an aliased undirected CSR.
+        for (uint64_t index = 0; index < count_; ++index)
+            records_[index] = static_cast<NodeID>(
+                static_cast<uint32_t>(records_[index]) & 0x03ffffffu);
+        std::fprintf(stderr,
+            "[ECG-REF32-CARRIER restored=1 records=%llu cleanup_outside_roi=1]\n",
+            static_cast<unsigned long long>(count_));
+    }
+
+    const uint32_t* data() const {
+        return reinterpret_cast<const uint32_t*>(records_);
+    }
+
+  private:
+    NodeID* records_;
+    uint64_t count_;
+};
+
+static pvector<ScoreT> PageRankPullGSRef32_Gem5(
+        const Graph& graph, int iterations, double epsilon) {
+    if (iterations <= 0 || epsilon != 0 || omp_get_max_threads() != 1)
+        throw std::invalid_argument(
+            "Native Scale6 requires serial PageRank with fixed positive -i and -t 0");
+    uint64_t config = 0;
+    if (!ecg_ref32::packNativeConfig(
+            graph.num_nodes(), graph.num_edges_directed(), config))
+        throw std::invalid_argument("Native Scale6 graph exceeds its supported geometry");
+    const char* flow = std::getenv("STRUCTURAL_FLOWTHROUGH");
+    const char* ecg_flow = std::getenv("ECG_FLOWTHROUGH");
+    if ((flow && std::strcmp(flow, "0") != 0) ||
+        (ecg_flow && std::strcmp(ecg_flow, "0") != 0))
+        throw std::invalid_argument("Native Scale6 initially requires FlowThrough off");
+
+    constexpr size_t alignment = 2 * 1024 * 1024;
+    const ScoreT initial = 1.0f / graph.num_nodes();
+    const ScoreT base_score = (1.0f - kDamp) / graph.num_nodes();
+    pvector<ScoreT> scores(graph.num_nodes(), initial, alignment);
+    pvector<ScoreT> contribution(graph.num_nodes(), ScoreT(0), alignment);
+    Gem5PropertyRegion regions[] = {
+        {"scores", reinterpret_cast<uint64_t>(scores.data()),
+         static_cast<uint64_t>(graph.num_nodes()) * 4,
+         static_cast<uint32_t>(graph.num_nodes()), 4, true},
+        {"contrib", reinterpret_cast<uint64_t>(contribution.data()),
+         static_cast<uint64_t>(graph.num_nodes()) * 4,
+         static_cast<uint32_t>(graph.num_nodes()), 4, true},
+    };
+    Gem5EdgeRegion edge_regions[2];
+    const int region_count = gem5_make_edge_regions(graph, edge_regions, 2, true);
+    for (int index = 0; index < region_count; ++index)
+        edge_regions[index].data = nullptr;
+    gem5_export_context(
+        regions, 2, graph, GEM5_SIDEBAND_PATH,
+        edge_regions, region_count, 0, 0, 0,
+        graph.in_index_storage(), graph.in_index_storage_bytes(),
+        nullptr, 0, graph.out_index_storage(), graph.out_index_storage_bytes());
+    Ref32BorrowedCarrier carrier(graph);
+    Gem5Ref32Context context(carrier.data(), config, 1);
+    for (NodeID vertex = 0; vertex < graph.num_nodes(); ++vertex)
+        contribution[vertex] = initial / graph.out_degree(vertex);
+    volatile ScoreT* warm_scores = scores.data();
+    volatile ScoreT* warm_contribution = contribution.data();
+    for (NodeID vertex = 0; vertex < graph.num_nodes(); ++vertex) {
+        warm_scores[vertex] = warm_scores[vertex];
+        warm_contribution[vertex] = warm_contribution[vertex];
+    }
+    std::fprintf(stderr,
+        "[ECG-REF32-GUEST native=%u format=scale6 id_bits=26 token_bits=6 "
+        "record_bytes=4 records=%llu storage=inplace matrix_free=1 "
+        "edge_sideband_bytes=0 context=1 cleanup_outside_roi=1]\n",
+        Gem5Ref32Context::nativeAvailable() ? 1u : 0u,
+        static_cast<unsigned long long>(graph.num_edges_directed()));
+
+    GEM5_RESET_STATS();
+    GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE);
+    context.activate();
+    for (int iteration = 0; iteration < iterations; ++iteration) {
+        uint64_t descriptor;
+        if (!ecg_ref32::packNativeIteration(
+                iteration, graph.num_edges_directed(), iterations, descriptor))
+            std::abort();
+        for (NodeID outer = 0; outer < graph.num_nodes(); ++outer) {
+            const uint32_t* record = carrier.data() + graph.in_offset(outer);
+            const uint32_t* end = carrier.data() + graph.in_offset(outer + 1);
+            ScoreT incoming = 0;
+            for (; record != end; ++record) {
+                const uint64_t canonical = context.record(record, descriptor);
+                incoming += context.property(contribution.data(), canonical);
+            }
+            const ScoreT new_score = base_score + kDamp * incoming;
+            scores[outer] = new_score;
+            contribution[outer] = new_score / graph.out_degree(outer);
+        }
+    }
+    GEM5_WORK_END(GEM5_WORK_COMPUTE);
+    GEM5_DUMP_STATS();
+    context.deactivate();
+    reportPageRankResult(graph, scores, iterations);
+    return scores;
+}
+
 static __attribute__((noinline)) double
 PageRankPullGSCompactReuseBindFlowthroughIteration(
         const Graph& g,
@@ -171,6 +308,8 @@ PageRankPullGSNextUseIteration(
 
 pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
                                      double epsilon = 0) {
+    if (nativeRef32Requested())
+        return PageRankPullGSRef32_Gem5(g, max_iters, epsilon);
     const ScoreT init_score = 1.0f / g.num_nodes();
     const ScoreT base_score = (1.0f - kDamp) / g.num_nodes();
     // Page-align the property arrays so their cache set/line mapping is pinned
@@ -1474,21 +1613,7 @@ pvector<ScoreT> PageRankPullGS_Gem5(const Graph &g, int max_iters,
     // sweep, not convergence, so verify that every mechanism produced the same
     // state rather than invoking the convergence verifier. FNV over float bits
     // is deterministic and reads no graph data inside the measured region.
-    uint64_t checksum = 1469598103934665603ULL;
-    for (ScoreT score : scores) {
-        uint32_t bits = 0;
-        std::memcpy(&bits, &score, sizeof(bits));
-        checksum ^= bits;
-        checksum *= 1099511628211ULL;
-    }
-    const uint64_t semantic_edges =
-        static_cast<uint64_t>(executed_iters) *
-        static_cast<uint64_t>(g.num_edges_directed());
-    fprintf(stderr,
-            "[ECG-PR-RESULT iterations=%d semantic_edges=%llu "
-            "score_checksum=%016llx]\n",
-            executed_iters, (unsigned long long)semantic_edges,
-            (unsigned long long)checksum);
+    reportPageRankResult(g, scores, executed_iters);
     return scores;
 }
 
@@ -1521,6 +1646,10 @@ bool PRVerifier(const Graph &g, const pvector<ScoreT> &scores, double target_err
 int main(int argc, char *argv[]) {
     CLPageRank cli(argc, argv, "pagerank-gem5", 1e-4, 20);
     if (!cli.ParseArgs()) return -1;
+    if (nativeRef32Requested() && cli.num_trials() != 1) {
+        std::fprintf(stderr, "[FATAL] Native Scale6 currently requires exactly one trial (-n 1)\n");
+        return 1;
+    }
     Builder b(cli);
     Graph g = b.MakeGraph();
 

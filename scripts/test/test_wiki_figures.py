@@ -144,21 +144,22 @@ def test_current_policy_and_prefetch_are_not_legacy_shortcuts():
     assert not list((ROOT / "wiki/assets").glob("*.svg"))
 
 
-def test_native_path_is_explicitly_not_complete():
+def test_native_path_keeps_qualification_and_prefetch_limits_explicit():
     rendered = figures()
     family = rendered["risc-v-instruction-path-f01-instruction-family.svg"]
-    assert "retirement and cache integration remain pending" in family
-    assert "retirement/cache transport pending" in family
+    assert "under qualification; prefetch remains pending" in family
+    assert "native replacement under qualification; prefetch pending" in family
     pipeline = rendered["risc-v-instruction-path-f02-o3-request-pipeline.svg"]
     for token in ("Fetch", "Decode", "Rename", "Issue / select", "Physical registers",
                   "I1 waits P17", "AGU", "LSQ", "ROB", "L1D / L2",
                   "commit-only update", "squashed load: no refresh",
-                  "retirement-to-LLC path remains a target"):
+                  "16 slots; &gt;=8 CPU cycles; 1 out/cycle; bounded capture",
+                  "native prefetch is not implemented"):
         assert token in pipeline
     lifetime = rendered["risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg"]
     for token in ("equal seq requires same payload", "allocOnFill combines with OR",
                   "Completed load", "Retired load", "discard; do not enqueue",
-                  "native gem5 transport is pending"):
+                  "predictions install only at delivery"):
         assert token in lifetime
 
 

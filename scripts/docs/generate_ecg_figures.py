@@ -148,7 +148,8 @@ def system_overview(root, fx):
         "Offline line-indexed construction precedes PageRank. Demand accesses, "
         "private-hit commit updates and bounded LLC prefetching are modeled in "
         "cache_sim. The diagram explicitly distinguishes that evidence from the "
-        "still-unimplemented Scale6 gem5 path and physical-cost qualification.",
+        "replacement-only gem5 qualification, missing native prefetch and "
+        "physical-cost evidence.",
         1060,
     )
     f.section("1", "OFFLINE: KEEP THE EDGE WORD SMALL",
@@ -193,8 +194,8 @@ def system_overview(root, fx):
     f.lines(50, 963, ("Full-graph PageRank results, LLC misses,",
                       "off-chip traffic, bounded model queues."), max_width=495)
     f.text(650, 933, "STILL REQUIRED", size=17, bold=True, color=AMBER)
-    f.lines(650, 963, ("Scale6 gem5 request/retirement path,",
-                       "cycle timing and physical area evidence."), max_width=500)
+    f.lines(650, 963, ("Native prefetch and timing qualification,",
+                       "physical area and contention evidence."), max_width=500)
     return f
 
 
@@ -536,12 +537,12 @@ def instruction_family(root, fx):
     f = plate(
         root, ISA, "01", "instruction-family",
         "RISC-V integration: existing path and next step",
-        "The native operand pair exists; retirement and cache integration remain pending.",
+        "Native operands and replacement transport are under qualification; prefetch remains pending.",
         "The existing experimental RISC-V custom-0 instruction family supports "
         "record acquisition and a dependent property load with ReuseBind metadata. "
         "Scale6's separate raw record and property operations now implement the "
         "26-plus-six-bit operand format and traversal position. Retirement "
-        "transport, cache integration and native prefetch remain pending. "
+        "transport and replacement are under qualification; native prefetch is pending. "
         "No end-to-end native timing result is asserted.",
         1050,
     )
@@ -558,10 +559,10 @@ def instruction_family(root, fx):
     f.arrow(((780, 277), (895, 277)), kind="dependency", label="rs2 dependency",
             label_at=(838, 188), color=PURPLE)
     note(f, 401, "custom-0 is a research extension, not a ratified RISC-V ISA feature.", GRAY)
-    note(f, 432, "Scale6 raw operations now execute in O3; the retirement/cache path is not enabled.", AMBER)
+    note(f, 432, "Scale6 has a separate native operand / retirement / replacement path; no native prefetch yet.", AMBER)
 
     f.section("2", "SCALE6 TARGET CONTRACT",
-              "operand codec exists; retirement/cache transport pending", 495, role="verify")
+              "native replacement under qualification; prefetch pending", 495, role="verify")
     f.bitfield(40, 556, 1120, 90,
                (("token", 6, "state"), ("vertex", 26, "data")), total_bits=32)
     tabular(f, 40, 704, (285, 410, 425),
@@ -579,17 +580,17 @@ def instruction_family(root, fx):
 def o3_pipeline(root, fx):
     f = plate(
         root, ISA, "02", "o3-request-pipeline",
-        "Target Scale6 path through an out-of-order core",
-        "Native record/property operands execute; the retirement-to-LLC path remains a target.",
+        "Native Scale6 path through an out-of-order core",
+        "Real retirement supplies a bounded, separately timed metadata link; native prefetch is not implemented.",
         "An explicit register dependency connects the Scale6 record load to the "
         "property access. Standard fetch, decode, rename, issue, AGU, LSQ, translation "
         "and cache structures retain ordinary execution semantics. A separate "
-        "retirement-only update route must carry committed predictions to the LLC, "
+        "retirement-only update route carries committed predictions to the LLC, "
         "including for private hits. Squashed operations cannot enqueue refreshes.",
         1380,
     )
     f.section("1", "A REAL WORD FROM THE EDGE STREAM",
-              "checked native operand example; cache path pending", 138, role="data")
+              "checked native operand example; replacement qualification", 138, role="data")
     part(f, 40, 195, 315, 128, "Incoming CSR row u=8",
          ("row_ptr[8]=14; row_ptr[9]=19", "neighbors: 3, 6, 7, 11, 18"), "data")
     f.bitfield(475, 205, 685, 104,
@@ -607,10 +608,10 @@ def o3_pipeline(root, fx):
         f.arrow(((start, 545), (end, 545)), kind="control", label="instruction flow", color=GREEN)
     f.text(66, 616, "instruction flow", size=16, color=GREEN)
     part(f, 65, 668, 290, 105, "Record load I0",
-         ("ordinary load -> physical P17",), "data")
+         ("32-bit load -> RV64 P17",), "data")
     f.table(460, 668, 225, 130, 3, role="state")
     f.text(476, 695, "Physical registers", size=17, bold=True, color=PURPLE)
-    f.text(476, 739, "P17 = record word", size=16)
+    f.text(476, 739, "P17: seq19 / word", size=16)
     f.text(476, 782, "I1 reads P17", size=16)
     part(f, 790, 668, 335, 130, "Property load I1",
          ("AGU: base + vertex x 4", "LSQ: dynamic Request + metadata"), "compute")
@@ -631,8 +632,8 @@ def o3_pipeline(root, fx):
     f.arrow(((790, 934), (685, 934)), kind="control", label="completion",
             label_at=(738, 912), color=GREEN)
 
-    f.section("3", "THE MISSING RETIREMENT-TO-LLC ROUTE",
-              "Scale6 target: implement and measure, do not infer", 1110, role="verify")
+    f.section("3", "A SEPARATE RETIREMENT-TO-LLC ROUTE",
+              "16 slots; >=8 CPU cycles; 1 out/cycle; bounded capture", 1110, role="verify")
     part(f, 40, 1169, 270, 105, "Retired property load",
          ("squashed load: no refresh",), "compute")
     fifo(f, 470, 1190, 260, 16, "Bounded commit transport")
@@ -642,7 +643,7 @@ def o3_pipeline(root, fx):
             label_at=(390, 1307), color=PURPLE)
     f.arrow(((730, 1221), (900, 1221)), kind="control", label="timed delivery",
             label_at=(815, 1307), color=AMBER)
-    note(f, 1344, "Native latency, bandwidth, backpressure and drain behavior are not supplied by the cache_sim request clock.", RED)
+    note(f, 1344, "Dedicated link / tag port; native prefetch, shared-port contention and production timing remain unqualified.", RED)
     return f
 
 
@@ -652,7 +653,7 @@ def mshr_lifecycle(root, fx):
         "Request lifetime is not metadata lifetime",
         "MSHR merging and commit-update coalescing solve different problems.",
         "The top flow summarizes existing ReuseBind MSHR compatibility and conflict "
-        "handling. The lower state machine specifies the missing Scale6 retirement "
+        "handling. The lower state machine specifies the native Scale6 retirement "
         "boundary: issued operations can complete or be squashed; only retirement "
         "can authorize commit refresh. Updates are coalesced separately and may be "
         "discarded when expired or when their line is no longer resident.",
@@ -673,8 +674,8 @@ def mshr_lifecycle(root, fx):
     note(f, 404, "allocOnFill combines with OR. A non-allocating target cannot suppress an ordinary allocating target.")
     note(f, 435, "Primary Scale6 comparisons use FlowThrough OFF; these legacy allocation rules remain separate.", AMBER)
 
-    f.section("2", "TARGET SCALE6 REFRESH LIFECYCLE",
-              "required behavior; native gem5 transport is pending", 495, role="verify")
+    f.section("2", "NATIVE SCALE6 REFRESH LIFECYCLE",
+              "native transport; predictions install only at delivery", 495, role="verify")
     part(f, 40, 557, 240, 94, "Issued load", ("retain dynamic metadata",), "data")
     part(f, 455, 557, 285, 94, "Completed load", ("may still be speculative",), "neutral")
     part(f, 920, 557, 240, 94, "Retired load", ("commit authorizes refresh",), "compute")
@@ -749,7 +750,7 @@ def checked_walkthrough(root, fx):
             label_at=(807, 967), color=RED)
     note(f, 1023, "The model's 8-request update latency may outlast this 7-request prediction; an expired update is discarded.")
     note(f, 1057, "An expired update cannot install the stale deadline; a newer coalesced prediction has its own bound.", RED)
-    note(f, 1120, "Native request binding, retirement messages and cycle timing for Scale6 are still a separate implementation task.", AMBER)
+    note(f, 1120, "Native request observations mark PENDING; only timed retirement delivery installs a finite/dead prediction.", AMBER)
     return f
 
 
@@ -779,7 +780,7 @@ def architecture_state_map(root, fx):
     note(f, 467, "The graph-scaled scratch is not resident hardware. The four-byte record stream remains after construction.")
 
     f.section("2", "BOUNDED RUNTIME MODEL STATE",
-              "native placement and timing still require gem5 work", 525, role="state")
+              "cache_sim state; native capture and ports cost extra", 525, role="state")
     f.rect(40, 579, 1120, 465, role="neutral", radius=0)
     fifo(f, 64, 653, 290, 16, "Commit: 16 entries")
     fifo(f, 440, 653, 310, 8, "Prefetch: 8 entries", "transfer")
@@ -809,8 +810,8 @@ def evidence_boundary(root, fx):
         root, "evaluation-methodology", "01", "evidence-boundary",
         "Cache evidence is not a timing or area result",
         "Scale6 promotion needs matching work, active mechanisms, and a native implementation of the timed path.",
-        "The plate separates current cache_sim results from the pending Scale6 "
-        "gem5 implementation and physical-cost evidence. Demand misses, prefetch "
+        "The plate separates current cache_sim results from native replacement "
+        "qualification, pending prefetch and physical-cost evidence. Demand misses, prefetch "
         "traffic, writebacks and P-OPT matrix traffic are distinct accounting "
         "terms. Acceptance requires matching PageRank results and bounded active "
         "mechanisms. The single-epoch baseline is labeled as a reconstruction.",
@@ -822,7 +823,7 @@ def evidence_boundary(root, fx):
             ("Surface", "What it can establish", "Scale6 status"),
             (
                 ("cache_sim", "functional cache behavior and traffic", "implemented; full Twitter exercised"),
-                ("gem5 O3", "architectural timing with native requests", "operands run; commit / cache / prefetch pending"),
+                ("gem5 O3", "architectural timing with native requests", "operands + replacement under qualification"),
                 ("Sniper", "matched-work modeled corroboration", "Scale6 rows unsupported"),
                 ("physical cost", "synthesized storage and control cost", "Scale6 area / timing not established"),
             ), row_height=51)

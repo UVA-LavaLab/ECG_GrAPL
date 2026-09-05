@@ -1,0 +1,116 @@
+--- a/src/mem/cache/replacement_policies/base.hh
++++ b/src/mem/cache/replacement_policies/base.hh
+@@ -33,6 +33,7 @@
+ 
+ #include "base/compiler.hh"
+ #include "mem/cache/replacement_policies/replaceable_entry.hh"
++#include "mem/cache/replacement_policies/ecg_ref32_commit.h"
+ #include "mem/packet.hh"
+ #include "params/BaseReplacementPolicy.hh"
+ #include "sim/sim_object.hh"
+@@ -101,6 +102,21 @@
+     virtual void setVictimRequest(const PacketPtr pkt)
+     {}
+ 
++    virtual bool supportsEcgRef32() const
++    {
++        return false;
++    }
++
++    virtual ecg_ref32::CommitApplyResult applyEcgRef32Update(
++        const std::shared_ptr<ReplacementData>&,
++        const ecg_ref32::CommitUpdate&)
++    {
++        return ecg_ref32::CommitApplyResult::UNSUPPORTED;
++    }
++
++    virtual void disableEcgRef32()
++    {}
++
+     /**
+      * Find replacement victim among candidates.
+      *
+--- a/src/mem/cache/tags/base.hh
++++ b/src/mem/cache/tags/base.hh
+@@ -56,6 +56,7 @@
+ #include "base/statistics.hh"
+ #include "base/types.hh"
+ #include "mem/cache/cache_blk.hh"
++#include "mem/cache/replacement_policies/ecg_ref32_commit.h"
+ #include "mem/packet.hh"
+ #include "params/BaseTags.hh"
+ #include "sim/clocked_object.hh"
+@@ -272,6 +273,20 @@
+     virtual void setVictimRequest(const PacketPtr pkt)
+     {}
+ 
++    virtual bool supportsEcgRef32() const
++    {
++        return false;
++    }
++
++    virtual ecg_ref32::CommitApplyResult applyEcgRef32Update(
++        const ecg_ref32::CommitUpdate&)
++    {
++        return ecg_ref32::CommitApplyResult::UNSUPPORTED;
++    }
++
++    virtual void disableEcgRef32()
++    {}
++
+     /**
+      * Find replacement victim based on address. If the address requires
+      * blocks to be evicted, their locations are listed for eviction. If a
+--- a/src/mem/cache/tags/base_set_assoc.hh
++++ b/src/mem/cache/tags/base_set_assoc.hh
+@@ -161,6 +161,25 @@
+         replacementPolicy->setVictimRequest(pkt);
+     }
+ 
++    bool supportsEcgRef32() const override
++    {
++        return replacementPolicy->supportsEcgRef32();
++    }
++
++    ecg_ref32::CommitApplyResult applyEcgRef32Update(
++        const ecg_ref32::CommitUpdate& update) override
++    {
++        CacheBlk* block = findBlock(
++            update.physical_line, update.secure);
++        return replacementPolicy->applyEcgRef32Update(
++            block ? block->replacementData : nullptr, update);
++    }
++
++    void disableEcgRef32() override
++    {
++        replacementPolicy->disableEcgRef32();
++    }
++
+     /**
+      * Find replacement victim based on address. The list of evicted blocks
+      * only contains the victim.
+--- a/src/mem/cache/base.hh
++++ b/src/mem/cache/base.hh
+@@ -1186,6 +1186,22 @@
+         return blkSize;
+     }
+ 
++    bool supportsEcgRef32() const
++    {
++        return tags->supportsEcgRef32();
++    }
++
++    ecg_ref32::CommitApplyResult applyEcgRef32Update(
++        const ecg_ref32::CommitUpdate& update)
++    {
++        return tags->applyEcgRef32Update(update);
++    }
++
++    void disableEcgRef32()
++    {
++        tags->disableEcgRef32();
++    }
++
+     const AddrRangeList &getAddrRanges() const { return addrRanges; }
+ 
+     MSHR *allocateMissBuffer(PacketPtr pkt, Tick time,

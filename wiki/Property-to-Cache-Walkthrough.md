@@ -47,8 +47,9 @@ prediction may already be expired. It must be discarded, not drawn as a
 freshly installed deadline at arrival. A newer coalesced update has its own
 sequence and deadline.
 
-This is functional-model arithmetic, not a native cache-policy or retirement
-result. The new Scale6 operand pair alone does not implement that complete route.
+This is functional-model arithmetic, not a native cycle-timing result.
+Native LLC observations conservatively mark PENDING; only a delivered
+retirement update can install FINITE/DEAD.
 
 ## 3. Storage ownership and lifetime
 
@@ -57,8 +58,8 @@ result. The new Scale6 operand pair alone does not implement that complete route
 ![Containment map separating persistent CSR and property memory, temporary line-indexed preprocessing scratch, bounded commit and prefetch queues, sixteen-record lookahead, and 35 added bits per LLC line with the 8 MiB state total](../fig/wiki/property-to-cache-walkthrough/property-to-cache-walkthrough-f02-architecture-state-map.svg)
 
 **Figure 2.** Persistent graph records, temporary construction arrays, and
-runtime metadata have different lifetimes and cost domains. At an 8 MiB,
-64-byte-line LLC there are 131,072 lines. The accounted 35 added bits per line
+runtime metadata have different lifetimes and cost domains. In cache_sim,
+an 8 MiB, 64-byte-line LLC has 131,072 lines. The accounted 35 added bits per line
 contribute 4,587,520 bits; the queues, lookahead and control add 3,064 bits,
 for 4,590,584 bits total, about 560 KiB.
 
@@ -73,10 +74,11 @@ complete matrix is not an area measurement.
 
 ## 4. Supported evidence
 
-cache_sim implements this record and cache policy. Native Scale6 request
-binding, retirement delivery, cycle-timed prefetching and physical-cost
-qualification remain distinct work. The existing RISC-V ReuseBind path and
-older RTL components cannot stand in for that missing implementation.
+cache_sim implements this record and cache policy. The native Scale6
+operand, retirement and replacement path is under separate qualification;
+native prefetch and physical-cost evidence remain pending. Native capture
+width, lane-order state, dedicated ports and future lookahead storage are
+separate costs, not covered by this functional-model state total.
 
 See [RISC-V integration](RISC-V-Instruction-Path),
 [Scale6 cache control](ReusePlan-FlowThrough), and

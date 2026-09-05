@@ -61,7 +61,7 @@
   <circle cx="44" cy="525" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="531" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="532" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">BOUNDED RUNTIME MODEL STATE</text>
-  <text x="1158" y="531" text-anchor="end" class="sans body" fill="#475467">native placement and timing still require gem5 work</text>
+  <text x="1158" y="531" text-anchor="end" class="sans body" fill="#475467">cache_sim state; native capture and ports cost extra</text>
   <line x1="24" y1="551" x2="1176" y2="551" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="551" x2="170" y2="551" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="579" width="1120" height="465" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="579" data-width="1120" data-height="465"/>

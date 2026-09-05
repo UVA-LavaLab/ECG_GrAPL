@@ -1,0 +1,50 @@
+--- a/src/mem/cache/mshr.hh
++++ b/src/mem/cache/mshr.hh
+@@ -58,6 +58,7 @@
+ #include "debug/MSHR.hh"
+ #include "mem/cache/queue_entry.hh"
+ #include "mem/cache/replacement_policies/ecg_reuse_bind_request_ext.hh"
++#include "mem/cache/replacement_policies/ecg_ref32_observation.hh"
+ #include "mem/packet.hh"
+ #include "mem/request.hh"
+ #include "sim/cur_tick.hh"
+@@ -396,6 +397,7 @@
+ 
+     TargetList deferredTargets;
+     replacement_policy::graph::EcgReuseBindMshrState ecgState;
++    replacement_policy::graph::EcgRef32ObservationMshrState ref32State;
+ 
+     void rebuildEcgState();
+ 
+@@ -435,6 +437,7 @@
+     void applyEcgMetadata(const RequestPtr& req) const
+     {
+         ecgState.apply(req);
++        ref32State.apply(req);
+     }
+ 
+     /**
+--- a/src/mem/cache/mshr.cc
++++ b/src/mem/cache/mshr.cc
+@@ -304,9 +304,12 @@
+ MSHR::rebuildEcgState()
+ {
+     ecgState.reset();
++    ref32State.reset();
+     for (const auto& target : targets) {
+-        if (target.source != Target::FromSnoop)
++        if (target.source != Target::FromSnoop) {
+             ecgState.merge(target.pkt->req);
++            ref32State.merge(target.pkt->req);
++        }
+     }
+ }
+ 
+@@ -381,6 +384,7 @@
+     assert(deferredTargets.isReset());
+     inService = false;
+     ecgState.reset();
++    ref32State.reset();
+ }
+ 
+ /*

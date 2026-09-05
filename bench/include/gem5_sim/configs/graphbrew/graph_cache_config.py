@@ -103,6 +103,14 @@ def make_replacement_policy(name, **kwargs):
             popt_matrix_path=popt_matrix_path,
         )
     elif upper == "ECG":
+        if kwargs.get("ecg_mode") == "ECG_REF32":
+            if not kwargs.get("native_ref32", False):
+                raise ValueError("ECG_REF32 requires a native commit transport")
+            return GraphRef32RP(
+                llc_size_bytes=kwargs.get("llc_size_bytes", 8388608),
+                sideband_path=sideband_path,
+                required_context=1,
+            )
         return GraphEcgRP(
             rrpv_max=kwargs.get("rrpv_max", 7),
             num_buckets=kwargs.get("num_buckets", 11),

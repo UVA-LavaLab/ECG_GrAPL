@@ -632,6 +632,17 @@ def test_actual_benchmark_environment_is_policy_invariant(
     }
     assert totals == {layout.TARGET_ENV_BYTES}
 
+    for key in relevant:
+        monkeypatch.delenv(key, raising=False)
+    for policy, mode in (("LRU", None), ("ECG", "ECG_REF32")):
+        native = benchmark_environment(SimpleNamespace(
+            policy=policy, ecg_mode=mode, ref32_native=True, **common))
+        assert len(native) == layout.TARGET_ENV_ENTRIES
+        assert sum(len(item.encode()) + 1 for item in native) == layout.TARGET_ENV_BYTES
+        assert "ECG_REF32_RECORD=1" in native
+        assert "ECG_REF32_FORMAT=scale6" in native
+        assert "ECG_VIRTUAL_ID_BITS=26" in native
+
 
 def test_current_riscv_pr_receipt_when_binary_is_present():
     binary = PROJECT_ROOT / "bench/bin_gem5/pr_riscv_m5ops"

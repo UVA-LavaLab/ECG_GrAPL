@@ -29,17 +29,18 @@ IDs. The 8 MiB LLC remains the primary target; 16 and 24 MiB are additional
 capacity points. P-OPT-SE is a separately labeled reconstruction, not an
 undercharged ordinary P-OPT row.
 
-The new Scale6 record/F32 operand pair executes in RISC-V O3. Neither that
-pair nor the earlier ReuseBind implementation is a completed Scale6 cache
-port: retirement-only updates, LLC integration, cycle-timed prefetching and
-physical-cost evidence remain required.
+The native Scale6 record/F32 pair, retirement-only transport and separate
+LLC replacement policy are implemented in RISC-V O3 and under qualification.
+This replacement-only integration does not establish the complete design:
+native prefetch, the production timing gate and physical-cost evidence remain
+closed. The earlier ReuseBind implementation is a separate mechanism.
 
 ## Documentation
 
 1. [Scale6 records and cache control](ReusePlan-FlowThrough) derives the token,
    future bound, update path, prefetch window and capacity accounting.
 2. [RISC-V integration](RISC-V-Instruction-Path) distinguishes existing
-   ReuseBind support from the pending Scale6 implementation.
+   ReuseBind support from native Scale6 replacement and the remaining work.
 3. [Checked edge-to-cache example](Property-to-Cache-Walkthrough) follows a
    concrete word, property address, cache line and expiry.
 4. [Evaluation methodology](Evaluation-Methodology) separates demand misses,

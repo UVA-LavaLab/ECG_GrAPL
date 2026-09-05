@@ -2,8 +2,11 @@
 # Registers GraphBrew graph-aware replacement policy SimObjects
 
 SimObject('GraphReplacementPolicies.py', sim_objects=[
-    'GraphHawkeyeRP', 'GraphGraspRP', 'GraphPoptRP', 'GraphEcgRP'])
+    'GraphHawkeyeRP', 'GraphGraspRP', 'GraphPoptRP', 'GraphEcgRP', 'GraphRef32RP'])
 Source('hawkeye_rp.cc')
 Source('grasp_rp.cc')
 Source('popt_rp.cc')
 Source('ecg_rp.cc')
+SimObject('Ref32CommitTransport.py', sim_objects=['EcgRef32CommitTransport'])
+Source('graph_ref32_rp.cc')
+Source('ecg_ref32_commit_transport.cc')
