@@ -9,6 +9,7 @@
 #include "ecg_record_native.h"
 #include "ecg_record_runtime.h"
 #include "ecg_record_stream.h"
+#include "ecg_record_window.h"
 
 namespace {
 
@@ -388,6 +389,56 @@ void testRecordConstructionAndAllocationLimits() {
           "temporary storage scales with referenced lines, not edge count");
 }
 
+void testWindowCaptureReadinessAndPinning() {
+    using namespace ecg_record;
+    for (const uint8_t bytes : {uint8_t{4}, uint8_t{8}}) {
+        auto req = requirements(32);
+        req.record_count = 16;
+        req.requested_record_bytes = bytes;
+        Layout layout;
+        WindowBuffer buffer;
+        const uint64_t base = 0x1040 - bytes;
+        check(selectLayout(req, layout) == Status::OK &&
+              buffer.configure(layout, base, 16) == Status::OK &&
+              buffer.bankCount() == (bytes == 4 ? 2u : 3u) &&
+              buffer.pin(base) == Status::OK,
+              "the buffer pins every line of an unaligned 4/8-byte window");
+        std::array<std::array<uint8_t, 64>, 3> lines{};
+        for (unsigned index = 0; index < 16; ++index) {
+            uint64_t word = 0;
+            encodeRecord(layout, index, 4, State::FINITE, word);
+            const uint64_t offset = base + index * bytes - 0x1000;
+            std::memcpy(lines[offset / 64].data() + offset % 64, &word, bytes);
+        }
+        for (unsigned index = 0; index < buffer.bankCount(); ++index)
+            check(buffer.storeLine(0x1000 + index * 64, 0x8000 + index * 64,
+                                   lines[index].data(), 100) == Status::OK,
+                  "real line capture retains an explicit availability time");
+        RecordWindow window;
+        check(buffer.readWindow(base, 32, 99, window) == Status::NOT_READY,
+              "host-visible fill bytes cannot be consumed before modeled data arrival");
+        check(buffer.readWindow(base, 32, 100, window) == Status::OK &&
+              window.valid_mask == UINT16_MAX,
+              "all actual words become available at the paid capture boundary");
+        check(buffer.updatePhysical(0x8000, lines[0].data(), 110) == Status::OK &&
+              buffer.readWindow(base, 32, 109, window) == Status::NOT_READY &&
+              buffer.readWindow(base, 32, 110, window) == Status::OK,
+              "real cache data updates preserve their own capture latency");
+        check(buffer.storeLine(0x2000, 0x9000, lines[0].data(), 101) == Status::NOT_READY,
+              "unrelated fills cannot evict pinned live window lines");
+        check(buffer.storeLine(0x1000, 0xA000, lines[0].data(), 101) == Status::INVALID_ADDRESS,
+              "a buffered record line cannot silently change physical identity");
+        buffer.unpin();
+        check(buffer.storeLine(0x2000, 0x9000, lines[0].data(), 101) == Status::OK,
+              "completed windows release their finite bank capacity");
+        const uint64_t high_base = UINT64_MAX - 16 * bytes + 1;
+        check(buffer.configure(layout, high_base, 16) == Status::OK &&
+              buffer.pin(high_base) == Status::OK &&
+              buffer.lastLine() == UINT64_MAX - 63,
+              "last-line calculation never wraps a valid top-of-address-space window");
+    }
+}
+
 void testNativeConfigurationAndBinding() {
     using namespace ecg_record;
     auto req = requirements(uint64_t{1} << 32);
@@ -545,6 +596,7 @@ int main() {
     testDistanceBoundsAndMalformedRecords();
     testAvailableRecordWindow();
     testRecordConstructionAndAllocationLimits();
+    testWindowCaptureReadinessAndPinning();
     testNativeConfigurationAndBinding();
     testSharedRuntimeStateAndQueue();
     std::printf("[SUMMARY] failures=%d\n", failures);
