@@ -471,6 +471,16 @@ complete matrix still streams once per iteration. Compare
 `total_offchip_traffic_with_overhead` for reads plus writes plus analytic
 matrix traffic, not `l3_misses` against a matrix-inclusive traffic total.
 
+The completed 18-row run from implementation commit `d9ae0a6c` is archived at
+`results/ecg_experiments/runs/twitter_popt_se_d9ae0a6c/roi_matrix.json`.
+Its SHA-256 is
+`6ee0e0c21bf582f55b0ef6a4c1d8c7544348558eaccc7b4cb9454c6352b2e124`,
+also recorded in `roi_matrix.complete.json`. This identifies the archived
+file; a fresh run has different path and timing fields. Its semantic work,
+policy configuration and cache counters are the reproducible comparison.
+All rows report one iteration, 1,468,364,884 semantic edges and checksum
+`df4fdaf1e3957ce9`. Both Scale6 queues finish drained with zero capacity drops.
+
 ### Separate transport campaign
 
 The `reuse_plan_transport_campaign` profile holds replacement at pure LRU in

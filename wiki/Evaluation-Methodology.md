@@ -451,6 +451,57 @@ bytes. Cache-simulator LLC misses, governed-property misses, and off-chip
 traffic are admissible. Timing is not: detailed-simulator request, commit, and
 prefetch implementations must be validated before any speedup claim.
 
+### 7.4 Completed single-epoch baseline qualification
+
+The fresh nine-policy Twitter matrix covers both the primary 8 MiB LLC and
+the 24 MiB sensitivity. All 18 rows execute one traversal of 1,468,364,884
+directed edges and produce checksum `df4fdaf1e3957ce9`. The seven pre-existing
+policies reproduce their earlier demand, governed-property and off-chip
+counts exactly. Both SE interpretations retain one-column lookup and the
+full 256-column stream charge.
+
+| Policy | 8 MiB demand LLC misses | 24 MiB demand LLC misses |
+|---|---:|---:|
+| LRU | 452,625,102 | 348,781,423 |
+| SRRIP | 430,424,534 | 324,925,497 |
+| `GRASP_PAPER` | 380,297,603 | 276,638,624 |
+| Full-capacity uncharged P-OPT | 371,203,581 | 252,862,518 |
+| Size-correct two-column P-OPT | 483,462,525 | 286,310,073 |
+| `POPT_SE` (later-use rank 2) | 417,444,706 | 272,165,897 |
+| `POPT_SE_DISTANT` (later-use rank 63) | 417,443,375 | 272,062,815 |
+| Scale6 replacement-only | 326,257,584 | 230,428,305 |
+| Scale6 replacement + prefetch | 292,056,469 | 208,422,358 |
+
+At 24 MiB, the one-column SE reconstruction legitimately fits in two reserved
+ways and has 1.65% fewer demand misses than GRASP under the distant
+interpretation. That small demand advantage is not a total-traffic advantage:
+including matrix reads and dirty writebacks, it produces 2.13% more off-chip
+transfers than GRASP. At 8 MiB it reserves five ways and reduces demand misses
+by 7.77% versus LRU, but remains above GRASP.
+
+The table below counts 64-byte off-chip transfers in both directions, with
+the analytic matrix stream included exactly once:
+
+| LLC | GRASP | Two-column P-OPT | `POPT_SE` | `POPT_SE_DISTANT` | Scale6 combined |
+|---|---:|---:|---:|---:|---:|
+| 8 MiB | 381,391,613 | 494,991,582 | 428,973,438 | 428,972,096 | 327,430,796 |
+| 24 MiB | 277,675,539 | 297,835,461 | 283,689,831 | 283,586,671 | 231,580,310 |
+
+Against the better of the two SE interpretations, Scale6 combined has
+30.0% fewer demand misses and 23.7% less off-chip traffic at 8 MiB; at 24 MiB
+the reductions are 23.4% and 18.3%. Replacement-only Scale6 reduces demand
+misses by 21.8% and 15.3% respectively. Both interpretations are retained
+rather than selecting a favorable reconstruction: their demand-miss spread
+is only 0.000319% at 8 MiB and 0.037889% at 24 MiB.
+
+The SE comparison therefore does not overturn the Scale6 cache-quality
+result. It does not establish native speedup or silicon-area savings.
+Both Scale6 channels drain with zero capacity drops. The authoritative
+18-row matrix is
+`results/ecg_experiments/runs/twitter_popt_se_d9ae0a6c/roi_matrix.json`
+(SHA-256 `6ee0e0c21bf582f55b0ef6a4c1d8c7544348558eaccc7b4cb9454c6352b2e124`).
+The associated completion receipt records all 18 rows as successful.
+
 ## 8. Publication policy
 
 Preliminary numbers and intermediate choices remain local. Tables and measured
