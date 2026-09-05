@@ -21,10 +21,22 @@ struct CommitUpdate {
     bool secure = false;
 };
 
+enum class CommitApplyResult : uint8_t {
+    APPLIED,
+    STALE,
+    EXPIRED,
+    NOT_RESIDENT,
+    INVALID_CONTEXT,
+    INVALID_ADDRESS,
+    INVALID_ORDER,
+    UNSUPPORTED,
+};
+
 struct ReadyCommitUpdate {
     CommitUpdate update;
     uint64_t generation_cycle = 0;
     uint64_t ready_cycle = 0;
+    uint8_t capture_lane = 0;
 };
 
 enum class EnqueueStatus : uint8_t {
@@ -56,17 +68,35 @@ class CommitUpdateQueue {
     static constexpr std::size_t kCapacity = 16;
     static constexpr uint64_t kDefaultLatency = 8;
     static constexpr uint64_t kMinimumLatency = 8;
+    static constexpr std::size_t kDefaultCaptureWidth = 1;
+    static constexpr std::size_t kMaximumCaptureWidth = kCapacity;
 
     explicit CommitUpdateQueue(
-            uint64_t latency_cycles = kDefaultLatency)
-        : latency_cycles_(latency_cycles) {}
+            uint64_t latency_cycles = kDefaultLatency,
+            std::size_t capture_width = kDefaultCaptureWidth)
+        : latency_cycles_(latency_cycles),
+          capture_width_(capture_width) {}
 
     bool validConfiguration() const {
-        return latency_cycles_ >= kMinimumLatency;
+        return latency_cycles_ >= kMinimumLatency &&
+            capture_width_ >= 1 && capture_width_ <= kMaximumCaptureWidth;
     }
 
     uint64_t latencyCycles() const {
         return latency_cycles_;
+    }
+
+    std::size_t captureWidth() const {
+        return capture_width_;
+    }
+
+    unsigned captureLaneBits() const {
+        unsigned bits = 0;
+        for (std::size_t lanes = capture_width_ ? capture_width_ - 1 : 0;
+             lanes != 0; lanes >>= 1) {
+            ++bits;
+        }
+        return bits;
     }
 
     std::size_t pendingSize() const {
@@ -149,12 +179,18 @@ class CommitUpdateQueue {
                 return EnqueueStatus::INVALID_ORDER;
         }
 
-        if (ingress_seen_ && generation_cycle == last_ingress_cycle_)
+        if (ingress_seen_ && generation_cycle == last_ingress_cycle_ &&
+            ingress_count_ == capture_width_) {
             return EnqueueStatus::BUSY;
+        }
 
         noteCycle(generation_cycle);
+        if (!ingress_seen_ || generation_cycle != last_ingress_cycle_)
+            ingress_count_ = 0;
         ingress_seen_ = true;
         last_ingress_cycle_ = generation_cycle;
+        const uint8_t capture_lane =
+            static_cast<uint8_t>(ingress_count_++);
         const uint64_t ready_cycle =
             generation_cycle + latency_cycles_;
 
@@ -163,6 +199,7 @@ class CommitUpdateQueue {
             secondary.ready.update = update;
             secondary.ready.generation_cycle = generation_cycle;
             secondary.ready.ready_cycle = ready_cycle;
+            secondary.ready.capture_lane = capture_lane;
             return EnqueueStatus::COALESCED;
         }
 
@@ -175,6 +212,7 @@ class CommitUpdateQueue {
         slot.ready.update = update;
         slot.ready.generation_cycle = generation_cycle;
         slot.ready.ready_cycle = ready_cycle;
+        slot.ready.capture_lane = capture_lane;
         ++size_;
         return EnqueueStatus::ENQUEUED;
     }
@@ -255,7 +293,8 @@ class CommitUpdateQueue {
                     slots_[*earliest].ready.ready_cycle ||
                 (slots_[index].ready.ready_cycle ==
                      slots_[*earliest].ready.ready_cycle &&
-                 index < *earliest)) {
+                 slots_[index].ready.capture_lane <
+                     slots_[*earliest].ready.capture_lane)) {
                 earliest = index;
             }
         }
@@ -264,7 +303,9 @@ class CommitUpdateQueue {
 
     std::array<Slot, kCapacity> slots_{};
     const uint64_t latency_cycles_;
+    const std::size_t capture_width_;
     std::size_t size_ = 0;
+    std::size_t ingress_count_ = 0;
     uint64_t cancelled_count_ = 0;
     uint64_t last_cycle_ = 0;
     uint64_t last_ingress_cycle_ = 0;

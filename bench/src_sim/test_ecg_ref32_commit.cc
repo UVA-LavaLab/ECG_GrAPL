@@ -95,6 +95,75 @@ void testTwoVersionCoalescing() {
           "the latest secondary uses its own generation and ready cycles");
 }
 
+void testRetirementBurstCapture() {
+    ecg_ref32::CommitUpdateQueue queue(8, 2);
+    check(queue.validConfiguration() && queue.captureWidth() == 2 &&
+          queue.captureLaneBits() == 1,
+          "capture width and per-slot ordering state are explicit");
+    check(queue.enqueue(update(0x1000, 1), 0) ==
+              ecg_ref32::EnqueueStatus::ENQUEUED &&
+          queue.enqueue(update(0x2000, 2), 0) ==
+              ecg_ref32::EnqueueStatus::ENQUEUED &&
+          queue.enqueue(update(0x3000, 3), 0) ==
+              ecg_ref32::EnqueueStatus::BUSY,
+          "two-wide capture absorbs a retirement pair, not unlimited input");
+    check(poppedWith(queue.popReady(8), 1, 0, 8) &&
+          queue.popReady(8).status == ecg_ref32::PopStatus::BUSY &&
+          poppedWith(queue.popReady(9), 2, 0, 8),
+          "retirement burst retains one-per-cycle link output");
+
+    ecg_ref32::CommitUpdateQueue reused(8, 2);
+    check(reused.enqueue(update(0x3000, 1), 0) ==
+              ecg_ref32::EnqueueStatus::ENQUEUED &&
+          reused.enqueue(update(0x1000, 2), 0) ==
+              ecg_ref32::EnqueueStatus::ENQUEUED &&
+          reused.enqueue(update(0x1000, 3), 1) ==
+              ecg_ref32::EnqueueStatus::ENQUEUED &&
+          poppedWith(reused.popReady(8), 1, 0, 8),
+          "burst-order fixture releases the lowest physical slot");
+    check(reused.enqueue(update(0x1000, 4), 8) ==
+              ecg_ref32::EnqueueStatus::COALESCED &&
+          reused.enqueue(update(0x2000, 5), 8) ==
+              ecg_ref32::EnqueueStatus::ENQUEUED &&
+          poppedWith(reused.popReady(9), 2, 0, 8) &&
+          poppedWith(reused.popReady(16), 4, 8, 16) &&
+          poppedWith(reused.popReady(17), 5, 8, 16),
+          "same-cycle ordering follows capture order after slot reuse");
+
+    ecg_ref32::CommitUpdateQueue wide(8, 8);
+    check(wide.captureLaneBits() == 3,
+          "eight-wide capture uses three ordering bits per physical slot");
+    for (uint32_t lane = 0; lane < 8; ++lane) {
+        check(wide.enqueue(update(0x10000 + 64 * lane, lane + 1), 0) ==
+                  ecg_ref32::EnqueueStatus::ENQUEUED,
+              "each configured capture lane accepts one real-cycle input");
+    }
+    check(wide.enqueue(update(0x20000, 9), 0) ==
+              ecg_ref32::EnqueueStatus::BUSY,
+          "eight-wide capture rejects a ninth same-cycle input");
+    for (uint32_t lane = 0; lane < 8; ++lane) {
+        const auto result = wide.popReady(8 + lane);
+        check(poppedWith(result, lane + 1, 0, 8) &&
+              result.ready.capture_lane == lane,
+              "a captured burst drains in lane order at one update/cycle");
+    }
+
+    ecg_ref32::CommitUpdateQueue full(8, 2);
+    for (uint32_t index = 0; index < 16; ++index) {
+        check(full.enqueue(update(0x30000 + 64 * index, index + 1),
+                           index / 2) ==
+                  ecg_ref32::EnqueueStatus::ENQUEUED,
+              "capture width does not increase the sixteen physical slots");
+    }
+    check(full.enqueue(update(0x40000, 17), 8) ==
+              ecg_ref32::EnqueueStatus::FULL &&
+          full.enqueue(update(0x40040, 18), 8) ==
+              ecg_ref32::EnqueueStatus::FULL &&
+          full.enqueue(update(0x40080, 19), 8) ==
+              ecg_ref32::EnqueueStatus::BUSY,
+          "each full-queue attempt consumes one bounded capture lane");
+}
+
 void testContinuouslyHotLine() {
     ecg_ref32::CommitUpdateQueue queue;
     check(queue.enqueue(update(0x5000, 10), 0) ==
@@ -289,6 +358,16 @@ void testInvalidInputsAndTime() {
               ecg_ref32::EnqueueStatus::INVALID_CONFIGURATION &&
           bad_config.pendingSize() == 0,
           "latency below eight cycles is rejected explicitly");
+    for (const std::size_t width : {
+             std::size_t{0},
+             ecg_ref32::CommitUpdateQueue::kMaximumCaptureWidth + 1}) {
+        ecg_ref32::CommitUpdateQueue bad_width(8, width);
+        check(!bad_width.validConfiguration() &&
+              bad_width.enqueue(update(0x80000, 1), 0) ==
+                  ecg_ref32::EnqueueStatus::INVALID_CONFIGURATION &&
+              bad_width.empty(),
+              "capture width outside one through sixteen is rejected");
+    }
 }
 
 void testDrainAndCancel() {
@@ -322,6 +401,7 @@ void testDrainAndCancel() {
 int main() {
     testLatencyAndBandwidth();
     testTwoVersionCoalescing();
+    testRetirementBurstCapture();
     testContinuouslyHotLine();
     testHotColdFairness();
     testCapacityAndKeys();
