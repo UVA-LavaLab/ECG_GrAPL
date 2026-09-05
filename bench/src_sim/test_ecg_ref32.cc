@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,11 @@ void testLayout() {
           !ecg_ref32::canPackScaleRecord32(
               (uint64_t{1} << 26) + 1, 27),
           "scale6 fits Twitter-class n26 and rejects n27");
+    check(!ecg_ref32::canPackScaleRecord32(
+              (uint64_t{1} << 26) + 1, 26),
+          "forced n26 layout cannot hide an oversized graph");
+    check(!ecg_ref32::canPackScaleRecord32(32, 4),
+          "explicit ID width must contain every vertex");
     const uint32_t scale_record = ecg_ref32::packScaleRecord32(
         (uint32_t{1} << 26) - 1,
         ecg_ref32::encodeScaleToken(
@@ -107,6 +113,151 @@ void testQuantizer() {
           ecg_ref32::canPackRecord32(1u << 18, 12, 0) &&
           !ecg_ref32::canPackRecord32(1u << 18, 10, 4),
           "only exact 14-bit metadata allocations are accepted");
+}
+
+void testNativeConfig() {
+    uint64_t config = 0;
+    ecg_ref32::NativeConfig decoded;
+    check(ecg_ref32::packNativeConfig(32, 34, config) &&
+          ecg_ref32::decodeNativeConfig(config, decoded) &&
+          decoded.vertices == 32 && decoded.records == 34,
+          "native configuration round-trips graph and record counts");
+    const uint64_t valid = config;
+    check(ecg_ref32::packNativeConfig(
+              uint64_t{1} << 26, (uint64_t{1} << 31) - 1, config) &&
+          ecg_ref32::decodeNativeConfig(config, decoded) &&
+          decoded.vertices == (uint32_t{1} << 26) &&
+          decoded.records == (uint32_t{1} << 31) - 1,
+          "vertex-count-minus-one preserves the n26 boundary");
+    check(!ecg_ref32::packNativeConfig(0, 1, config) &&
+          !ecg_ref32::packNativeConfig((uint64_t{1} << 26) + 1, 1, config) &&
+          !ecg_ref32::packNativeConfig(1, 0, config) &&
+          !ecg_ref32::packNativeConfig(1, uint64_t{1} << 31, config),
+          "native geometry rejects empty and out-of-horizon streams");
+    check(!ecg_ref32::decodeNativeConfig(0, decoded) &&
+          !ecg_ref32::decodeNativeConfig(valid ^ (uint64_t{1} << 57), decoded) &&
+          !ecg_ref32::decodeNativeConfig(valid | (uint64_t{1} << 59), decoded) &&
+          !ecg_ref32::decodeNativeConfig(valid | (uint64_t{1} << 63), decoded) &&
+          !ecg_ref32::decodeNativeConfig(valid & ~uint64_t{0x7fffffff}, decoded),
+          "disabled, unknown-version and reserved-bit configurations fail");
+    uint64_t descriptor = 0;
+    check(ecg_ref32::packNativeIteration(0, 34, 2, descriptor) &&
+          descriptor == (uint64_t{1} << 32),
+          "first-iteration descriptor retains a next-iteration flag");
+    check(ecg_ref32::packNativeIteration(1, 34, 2, descriptor) &&
+          descriptor == 34,
+          "final-iteration descriptor has no next-iteration promise");
+    check(ecg_ref32::packNativeIteration(
+              4, (uint32_t{1} << 30) + 3, 5, descriptor) &&
+          descriptor == 12,
+          "iteration base wraps modulo 2^32, not record count");
+    check(!ecg_ref32::packNativeIteration(0, 1, 0, descriptor) &&
+          !ecg_ref32::packNativeIteration(2, 34, 2, descriptor) &&
+          !ecg_ref32::packNativeIteration(0, uint32_t{1} << 31, 1, descriptor),
+          "invalid iteration descriptors are rejected");
+}
+
+void testNativeRecordAndAccess() {
+    constexpr uint64_t record_base = 0x100000;
+    constexpr uint64_t property_base = 0x80000000;
+    uint64_t config = 0;
+    check(ecg_ref32::packNativeConfig(32, 34, config),
+          "configure the native checked-graph fixture");
+    const uint64_t address = record_base + 18 * 4;
+    uint64_t canonical = 0;
+    ecg_ref32::NativeAccess access;
+    check(ecg_ref32::canonicalScaleRecord(
+              0x10000012, address, record_base, config, uint64_t{1} << 32,
+              canonical) &&
+          canonical == ((uint64_t{19} << 32) | 0x10000012) &&
+          ecg_ref32::nativePropertyAccess(canonical, property_base, config, access) &&
+          access.address == 0x80000048 && access.destination == 18 &&
+          access.sequence == 19 && access.deadline == 26 &&
+          access.state == ecg_ref32::State::FINITE,
+          "native operand carries real edge position and Scale6 prediction");
+    bool tokens_match = true;
+    for (uint32_t token = 0; token < 64; ++token) {
+        for (bool next : {false, true}) {
+            const uint32_t raw = (token << 26) | 18;
+            const uint32_t expected = token < 33 ? token : next ? token - 31 : 1;
+            if (!ecg_ref32::canonicalScaleRecord(
+                    raw, address, record_base, config,
+                    next ? uint64_t{1} << 32 : 0, canonical) ||
+                static_cast<uint32_t>(canonical) != ((expected << 26) | 18) ||
+                !ecg_ref32::nativePropertyAccess(
+                    canonical, property_base, config, access)) {
+                tokens_match = false;
+                continue;
+            }
+            const auto state = expected == 0 ? ecg_ref32::State::UNKNOWN
+                : expected == 1 ? ecg_ref32::State::DEAD : ecg_ref32::State::FINITE;
+            const uint32_t deadline = expected < 2
+                ? 0 : 19u + static_cast<uint32_t>((uint64_t{1} << (expected - 1)) - 1);
+            tokens_match = tokens_match && access.state == state &&
+                access.deadline == deadline && access.sequence == 19;
+        }
+    }
+    check(tokens_match, "all 64 tokens normalize correctly for both iteration roles");
+    check(!ecg_ref32::canonicalScaleRecord(
+              18, record_base - 4, record_base, config, 0, canonical) &&
+          !ecg_ref32::canonicalScaleRecord(
+              18, record_base + 34 * 4, record_base, config, 0, canonical) &&
+          !ecg_ref32::canonicalScaleRecord(
+              18, address + 1, record_base, config, 0, canonical) &&
+          !ecg_ref32::canonicalScaleRecord(
+              18, address, record_base + 1, config, 0, canonical),
+          "record bounds and four-byte alignment are checked");
+    check(!ecg_ref32::canonicalScaleRecord(
+              32, address, record_base, config, 0, canonical) &&
+          !ecg_ref32::canonicalScaleRecord(
+              18, address, record_base, config, uint64_t{1} << 33, canonical),
+          "destination bounds and descriptor reserved bits are checked");
+    check(!ecg_ref32::canonicalScaleRecord(
+              18, UINT64_MAX - 3, UINT64_MAX - 3, config, 0, canonical) &&
+          !ecg_ref32::nativePropertyAccess(
+              (uint64_t{19} << 32) | 0x10000012, UINT64_MAX - 3, config, access),
+          "configured address ranges cannot wrap past UINT64_MAX");
+    check(!ecg_ref32::nativePropertyAccess(
+              (uint64_t{19} << 32) | 0x8c000012, property_base, config, access) &&
+          !ecg_ref32::nativePropertyAccess(
+              (uint64_t{19} << 32) | 32, property_base, config, access) &&
+          !ecg_ref32::nativePropertyAccess(
+              (uint64_t{19} << 32) | 18, property_base + 1, config, access),
+          "property operand rejects unnormalized WRAP and invalid addresses");
+    check(ecg_ref32::canonicalScaleRecord(
+              0x10000012, address, record_base, config, UINT32_MAX - 18u, canonical) &&
+          ecg_ref32::nativePropertyAccess(canonical, property_base, config, access) &&
+          access.sequence == 0 && access.deadline == 7,
+          "semantic sequence zero is valid after counter wrap");
+    check(ecg_ref32::canonicalScaleRecord(
+              0, record_base, record_base, config, UINT32_MAX, canonical) &&
+          canonical == 0 &&
+          ecg_ref32::nativePropertyAccess(canonical, property_base, config, access) &&
+          access.sequence == 0 && access.destination == 0 &&
+          access.state == ecg_ref32::State::UNKNOWN,
+          "zero canonical word is not a missing-metadata sentinel");
+    uint64_t boundary_config = 0;
+    check(ecg_ref32::packNativeConfig(uint64_t{1} << 26, 1, boundary_config) &&
+          ecg_ref32::canonicalScaleRecord(
+              (1u << 26) - 1, record_base, record_base, boundary_config, 0, canonical) &&
+          ecg_ref32::nativePropertyAccess(
+              canonical, property_base, boundary_config, access) &&
+          access.destination == (1u << 26) - 1 &&
+          access.address == property_base + ((uint64_t{1} << 26) - 1) * 4,
+          "native address generation includes the largest n26 vertex");
+}
+
+void testNativeSequenceOrder() {
+    using Order = ecg_ref32::SequenceOrder;
+    check(ecg_ref32::compareSequence32(7, 7) == Order::EQUAL &&
+          ecg_ref32::compareSequence32(0, UINT32_MAX) == Order::NEWER &&
+          ecg_ref32::compareSequence32(UINT32_MAX, 0) == Order::OLDER &&
+          ecg_ref32::compareSequence32(0x7fffffff, 0) == Order::NEWER &&
+          ecg_ref32::compareSequence32(0x80000001, 0) == Order::OLDER,
+          "native ordering uses unsigned modular sequence differences");
+    check(ecg_ref32::compareSequence32(0x80000000, 0) == Order::AMBIGUOUS &&
+          ecg_ref32::compareSequence32(0, 0x80000000) == Order::AMBIGUOUS,
+          "exact half-range difference is rejected as ambiguous");
 }
 
 void testBuilder() {
@@ -367,6 +518,9 @@ void testDelayedLlcOnlyPrefetch() {
 int main() {
     testLayout();
     testQuantizer();
+    testNativeConfig();
+    testNativeRecordAndAccess();
+    testNativeSequenceOrder();
     testBuilder();
     testFreshnessAndVictims();
     testCacheIntegration();

@@ -246,9 +246,9 @@ inline DecodedRecord decodeRecord32(
 
 inline bool canPackScaleRecord32(
         uint64_t num_vertices, uint32_t id_bits = 0) {
-    const uint32_t required =
-        id_bits ? id_bits : bitsForVertices(num_vertices);
-    return num_vertices > 0 && required <= kScaleMaxIdBits;
+    const uint32_t required = bitsForVertices(num_vertices);
+    const uint32_t width = id_bits ? id_bits : required;
+    return num_vertices > 0 && required <= width && width <= kScaleMaxIdBits;
 }
 
 inline uint8_t scaleDistanceBucket(uint64_t distance) {
@@ -311,6 +311,131 @@ inline DecodedRecord decodeScaleRecord32(
     decoded.distance_valid =
         decoded.state == State::FINITE || decoded.state == State::WRAP;
     return decoded;
+}
+
+// RV64 configuration: records[30:0], (vertices-1)[56:31], enabled[57],
+// version[59:58]. Keeping N-1 makes the exact 2^26-vertex boundary representable.
+static constexpr uint64_t kNativeRecordMask = (uint64_t{1} << 31) - 1;
+static constexpr uint64_t kNativeVertexMask = (uint64_t{1} << 26) - 1;
+static constexpr uint64_t kNativeEnabled = uint64_t{1} << 57;
+static constexpr uint64_t kNativeVersion = uint64_t{1} << 58;
+static constexpr uint64_t kNativeHasNextIteration = uint64_t{1} << 32;
+static constexpr uint64_t kNativeIterationMask = (uint64_t{1} << 33) - 1;
+
+struct NativeConfig {
+    uint32_t vertices = 0;
+    uint32_t records = 0;
+};
+
+struct NativeAccess {
+    uint64_t address = 0;
+    uint32_t destination = 0;
+    uint32_t sequence = 0;
+    uint32_t deadline = 0;
+    State state = State::UNKNOWN;
+};
+
+inline bool packNativeConfig(
+        uint64_t vertices, uint64_t records, uint64_t& config) {
+    config = 0;
+    if (!canPackScaleRecord32(vertices, kScaleMaxIdBits) ||
+        records == 0 || records > kNativeRecordMask)
+        return false;
+    config = records | ((vertices - 1) << 31) | kNativeEnabled | kNativeVersion;
+    return true;
+}
+
+inline bool decodeNativeConfig(uint64_t config, NativeConfig& decoded) {
+    decoded = NativeConfig{};
+    if ((config >> 60) != 0 || (config & kNativeEnabled) == 0 ||
+        (config & (uint64_t{3} << 58)) != kNativeVersion ||
+        (config & kNativeRecordMask) == 0)
+        return false;
+    decoded.records = static_cast<uint32_t>(config & kNativeRecordMask);
+    decoded.vertices =
+        static_cast<uint32_t>((config >> 31) & kNativeVertexMask) + 1u;
+    return true;
+}
+
+inline bool packNativeIteration(
+        uint32_t iteration, uint32_t records, uint32_t iteration_count,
+        uint64_t& descriptor) {
+    descriptor = 0;
+    if (records == 0 || records > kNativeRecordMask ||
+        iteration_count == 0 || iteration >= iteration_count)
+        return false;
+    descriptor = static_cast<uint32_t>(static_cast<uint64_t>(iteration) * records);
+    if (iteration < iteration_count - 1)
+        descriptor |= kNativeHasNextIteration;
+    return true;
+}
+
+// Canonical operand: semantic sequence[63:32], runtime-normalized record[31:0].
+// The bool return, not a zero-word sentinel, distinguishes invalid input.
+inline bool canonicalScaleRecord(
+        uint32_t record, uint64_t record_address, uint64_t record_base,
+        uint64_t config, uint64_t iteration, uint64_t& canonical) {
+    canonical = 0;
+    NativeConfig geometry;
+    if (!decodeNativeConfig(config, geometry) ||
+        (iteration & ~kNativeIterationMask) != 0 ||
+        (record_base & 3u) != 0 || (record_address & 3u) != 0 ||
+        record_address < record_base)
+        return false;
+    const uint64_t bytes = static_cast<uint64_t>(geometry.records) * 4;
+    if (record_base > std::numeric_limits<uint64_t>::max() - (bytes - 1) ||
+        record_address - record_base >= bytes)
+        return false;
+    const uint32_t destination = extractDestination(record, kScaleMaxIdBits);
+    if (destination >= geometry.vertices)
+        return false;
+    uint8_t token = static_cast<uint8_t>(record >> kScaleMaxIdBits);
+    if (token >= 33) {
+        token = iteration & kNativeHasNextIteration
+            ? static_cast<uint8_t>(token - 31) : uint8_t{1};
+    }
+    const uint32_t sequence = static_cast<uint32_t>(
+        static_cast<uint32_t>(iteration) + ((record_address - record_base) >> 2) + 1);
+    canonical = (static_cast<uint64_t>(sequence) << 32) |
+        packScaleRecord32(destination, token, kScaleMaxIdBits);
+    return true;
+}
+
+inline bool nativePropertyAccess(
+        uint64_t canonical, uint64_t property_base,
+        uint64_t config, NativeAccess& access) {
+    access = NativeAccess{};
+    NativeConfig geometry;
+    if (!decodeNativeConfig(config, geometry) || (property_base & 3u) != 0)
+        return false;
+    const uint64_t bytes = static_cast<uint64_t>(geometry.vertices) * 4;
+    if (property_base > std::numeric_limits<uint64_t>::max() - (bytes - 1))
+        return false;
+    const auto decoded = decodeScaleRecord32(
+        static_cast<uint32_t>(canonical), kScaleMaxIdBits);
+    if (decoded.destination >= geometry.vertices || decoded.state == State::WRAP)
+        return false;
+    access.address = property_base + static_cast<uint64_t>(decoded.destination) * 4;
+    access.destination = decoded.destination;
+    access.sequence = static_cast<uint32_t>(canonical >> 32);
+    access.state = decoded.state;
+    if (decoded.state == State::FINITE)
+        access.deadline = access.sequence + decoded.distance;
+    return true;
+}
+
+enum class SequenceOrder : uint8_t {
+    OLDER,
+    EQUAL,
+    NEWER,
+    AMBIGUOUS,
+};
+
+inline SequenceOrder compareSequence32(uint32_t candidate, uint32_t current) {
+    const uint32_t delta = candidate - current;
+    if (delta == 0) return SequenceOrder::EQUAL;
+    if (delta == 0x80000000u) return SequenceOrder::AMBIGUOUS;
+    return delta < 0x80000000u ? SequenceOrder::NEWER : SequenceOrder::OLDER;
 }
 
 struct FlatRecords {

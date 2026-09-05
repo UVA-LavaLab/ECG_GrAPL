@@ -27,9 +27,30 @@ The lower panel is a target contract, not a list of completed opcodes.
 
 The old current-epoch/context/format CSRs and tier/two-epoch payload belong to
 that implementation. Scale6 uses a request-sequence future bound, not two
-outer-vertex epochs. Its final ISA representation is not asserted here.
-The research instruction family is neither a ratified RISC-V extension nor
-an upstream gem5 feature.
+outer-vertex epochs. The research instruction family is neither a ratified
+RISC-V extension nor an upstream gem5 feature.
+
+The shared Scale6 codec now defines the following RV64 operand contract.
+This is not yet a wired custom-opcode or retirement-channel implementation:
+
+| Value | Bit layout |
+|---|---|
+| configuration | record count `[30:0]`, vertex count minus one `[56:31]`, enable `[57]`, version `[59:58]`, reserved `[63:60]` |
+| iteration descriptor | sequence base `[31:0]`, another-iteration flag `[32]`, remaining bits zero |
+| canonical record operand | semantic sequence `[63:32]`, runtime-normalized Scale6 record `[31:0]` |
+
+Version 1 requires positive record count below `2^31`, at most `2^26`
+vertices, aligned addresses and non-overflowing configured ranges. Encoding
+the vertex count minus one preserves the exact `2^26`-vertex boundary.
+The record address determines the one-based edge position; the iteration
+descriptor adds the sequence base modulo `2^32`. WRAP becomes FINITE when
+another traversal remains, otherwise DEAD.
+
+Sequence zero and even an all-zero canonical operand can be valid after
+counter wrap. Consumers must use the codec's explicit validity result, not
+a zero-word sentinel. Modular ordering treats an exact half-range difference
+as ambiguous. These helpers live in `bench/include/ecg_ref32.h`; they do not
+open the native gem5 experiment gate on their own.
 
 ## 2. The native Scale6 target
 
