@@ -33,6 +33,15 @@ static constexpr uint64_t GRAPHBREW_ECG_EXTRACT2_WORK_ID = 0x47464C45ULL;
 static constexpr uint64_t GRAPHBREW_REUSE_PLAN_BIND_WORK_ID = 0x4B32424EULL;
 static constexpr uint64_t GRAPHBREW_REUSE_PLAN_CLEAR_WORK_ID = 0x4B324243ULL;
 static constexpr uint64_t GRAPHBREW_REUSE_PLAN_CERTIFIED_WORK_ID = 0x4B324244ULL;
+static constexpr uint64_t GRAPHBREW_FOUNDATION_ECHO_WORK_ID = 0x4543484FULL;
+static constexpr uint64_t GRAPHBREW_FOUNDATION_READ_ADDRESS_WORK_ID = 0x46524144ULL;
+static constexpr uint64_t GRAPHBREW_FOUNDATION_READ4_WORK_ID = 0x46523442ULL;
+static constexpr uint64_t GRAPHBREW_FOUNDATION_READ8_WORK_ID = 0x46523842ULL;
+static constexpr uint64_t GRAPHBREW_FOUNDATION_STATUS_WORK_ID = 0x46525354ULL;
+static constexpr uint64_t GRAPHBREW_FOUNDATION_VALUE_ADDRESS_WORK_ID = 0x46564144ULL;
+static constexpr uint64_t GRAPHBREW_FOUNDATION_VALUE_LOW_WORK_ID = 0x46564c4fULL;
+static constexpr uint64_t GRAPHBREW_FOUNDATION_VALUE_HIGH_WORK_ID = 0x46564849ULL;
+static constexpr uint64_t GRAPHBREW_FOUNDATION_VALUE_COMMIT_WORK_ID = 0x4656434dULL;
 
 inline uint16_t quantizeEcgEpoch(
         uint64_t vertex, uint64_t num_vertices, uint32_t num_epochs) {
@@ -74,6 +83,18 @@ void clearBoundReusePlanLoad(uint32_t core_id);
 void finishBoundReusePlanCertification(uint32_t core_id);
 bool boundReusePlanCertificationFinished(uint32_t core_id);
 void recordCertifiedReusePlanFallback();
+uint64_t foundationEcho64(uint32_t core_id, uint64_t value);
+void foundationSetReadAddress(uint32_t core_id, uint64_t address);
+void foundationArmRead(
+    uint32_t core_id, uint64_t expected, uint32_t bytes);
+void foundationObserveRead(
+    uint32_t core_id, uint64_t virtual_address, uint64_t physical_address,
+    uint32_t offset, const uint8_t* data, uint32_t bytes);
+uint64_t foundationReadStatus(uint32_t core_id);
+void foundationSetLoadedAddress(uint32_t core_id, uint64_t address);
+void foundationSetLoadedChunk(
+    uint32_t core_id, uint32_t value, bool high);
+void foundationCommitLoadedValue(uint32_t core_id, uint32_t bytes);
 bool consumeBoundReusePlanLoad(
     uint32_t core_id, uint64_t line_addr, uint64_t line_size,
     uint16_t* current_epoch = nullptr, uint16_t* context_id = nullptr,

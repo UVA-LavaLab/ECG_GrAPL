@@ -3,6 +3,7 @@
 
 #include "cache_set.h"
 #include "cache_set_lru.h"
+#include "ecg_record_sniper.h"
 #include "graph_cache_context_sniper.h"
 
 #include <string>
@@ -20,8 +21,14 @@ class CacheSetECG : public CacheSet
       UInt32 getReplacementIndex(CacheCntlr *cntlr) override;
       void updateReplacementIndex(UInt32 accessed_index) override;
       UInt8 getRecencyBits(UInt32 way) const override { return m_rrip_bits[way]; }
+      ecg_record::LineMetadata* recordMetadata(IntPtr line_addr);
+      ecg_record::ApplyResult applyRecordUpdate(
+          IntPtr line_addr, const ecg_record::CommitUpdate& update);
+      bool canAdmitRecordPrefetch(UInt64 sequence) const;
 
    private:
+      void bindRecordClass(UInt32 way);
+      void setRecordClass(UInt32 way, UInt64 virtual_address);
       void tryLoadContext();
       void applyPendingInsertion(UInt32 way);
       UInt32 findSRRIPVictim(CacheCntlr *cntlr);
@@ -58,6 +65,9 @@ class CacheSetECG : public CacheSet
       bool* m_ecg_epoch_valid;    // epoch delivered for this line (0 is valid)
       UInt16* m_ecg_context_id;   // graph-generation context for the stamp
       UInt64* m_last_touch;        // true recency, smaller == older (cache_sim/gem5 parity)
+      ecg_record::LineMetadata* m_record_metadata;
+      bool* m_record_property;
+      UInt8* m_record_tier;
       UInt64 m_access_tick;
       UInt8 m_replacement_pointer;
       CacheSetInfoLRU* m_set_info;

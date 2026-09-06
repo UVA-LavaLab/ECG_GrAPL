@@ -239,11 +239,12 @@ all-gem5: $(addprefix $(BIN_GEM5_DIR)/,$(KERNELS_GEM5))
 
 SNIPER_DIR := $(INC_DIR)/sniper_sim/snipersim
 SNIPER_INCLUDE := $(SNIPER_DIR)/include
+DEP_SNIPER_GUEST := $(wildcard $(BENCH_DIR)/src_sniper/*.h)
 CXXFLAGS_SNIPER := -std=c++17 -O2 -Wall -g -DNDEBUG -fopenmp \
 	-I$(INC_DIR) -I$(SNIPER_INCLUDE)
 
 $(BIN_SNIPER_DIR)/%: $(BENCH_DIR)/src_sniper/%.cc $(DEP_GAPBS) \
-	$(DEP_GRAPH) $(DEP_EXTERNAL) $(DEP_ECG) | $(BIN_SNIPER_DIR)
+	$(DEP_GRAPH) $(DEP_EXTERNAL) $(DEP_ECG) $(DEP_SNIPER_GUEST) | $(BIN_SNIPER_DIR)
 	$(CXX) $(CXXFLAGS_SNIPER) $(INCLUDES) $< $(LDLIBS) -o $@
 
 sniper-%: $(BIN_SNIPER_DIR)/%

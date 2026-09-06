@@ -1227,6 +1227,205 @@ std::atomic<uint64_t>& certifiedReusePlanFallbacks()
     static std::atomic<uint64_t> uses{0};
     return uses;
 }
+
+struct FoundationReadProbe {
+    std::array<std::atomic<uint64_t>, MAX_TRACKED_CORES> address{};
+    std::array<std::atomic<uint64_t>, MAX_TRACKED_CORES> expected{};
+    std::array<std::atomic<uint32_t>, MAX_TRACKED_CORES> bytes{};
+    std::array<std::atomic<uint64_t>, MAX_TRACKED_CORES> status{};
+    std::array<std::atomic<uint32_t>, MAX_TRACKED_CORES> seen{};
+    std::array<std::atomic<uint64_t>, MAX_TRACKED_CORES> loadedAddress{};
+    std::array<std::atomic<uint32_t>, MAX_TRACKED_CORES> loadedLow{};
+    std::array<std::atomic<uint32_t>, MAX_TRACKED_CORES> loadedHigh{};
+    std::array<std::atomic<uint8_t>, MAX_TRACKED_CORES> loadedChunks{};
+};
+
+FoundationReadProbe& foundationReadProbe()
+{
+    static FoundationReadProbe probe;
+    return probe;
+}
+}
+
+uint64_t foundationEcho64(uint32_t core_id, uint64_t value)
+{
+    std::fprintf(
+        stderr,
+        "[SNIPER-FOUNDATION-SIMUSER64 core=%u value=0x%016llx "
+        "high16=0x%04llx]\n",
+        core_id, static_cast<unsigned long long>(value),
+        static_cast<unsigned long long>(value >> 48));
+    return value;
+}
+
+void foundationSetReadAddress(uint32_t core_id, uint64_t address)
+{
+    if (core_id >= MAX_TRACKED_CORES)
+        return;
+    foundationReadProbe().address[core_id].store(
+        address, std::memory_order_release);
+    std::fprintf(
+        stderr,
+        "[SNIPER-FOUNDATION-READ-ADDRESS core=%u address=0x%llx]\n",
+        core_id, static_cast<unsigned long long>(address));
+}
+
+void foundationArmRead(
+    uint32_t core_id, uint64_t expected, uint32_t bytes)
+{
+    if (core_id >= MAX_TRACKED_CORES || (bytes != 4 && bytes != 8))
+        return;
+    auto& probe = foundationReadProbe();
+    probe.expected[core_id].store(expected, std::memory_order_relaxed);
+    probe.seen[core_id].store(0, std::memory_order_relaxed);
+    probe.bytes[core_id].store(bytes, std::memory_order_release);
+    std::fprintf(
+        stderr,
+        "[SNIPER-FOUNDATION-READ-ARM core=%u bytes=%u expected=0x%016llx]\n",
+        core_id, bytes, static_cast<unsigned long long>(expected));
+}
+
+void foundationObserveRead(
+    uint32_t core_id, uint64_t virtual_address, uint64_t physical_address,
+    uint32_t offset, const uint8_t* data, uint32_t bytes)
+{
+    if (core_id >= MAX_TRACKED_CORES)
+        return;
+    auto& probe = foundationReadProbe();
+    const uint32_t armed_bytes =
+        probe.bytes[core_id].load(std::memory_order_acquire);
+    if (armed_bytes == 0)
+        return;
+    const uint64_t armed_address =
+        probe.address[core_id].load(std::memory_order_acquire);
+    if (virtual_address + offset != armed_address ||
+        bytes != armed_bytes) {
+        const uint32_t seen =
+            probe.seen[core_id].fetch_add(1, std::memory_order_relaxed);
+        if (seen < 8) {
+            std::fprintf(
+                stderr,
+                "[SNIPER-FOUNDATION-READ-SEEN core=%u armed=0x%llx "
+                "armed_bytes=%u va=0x%llx pa=0x%llx offset=%u bytes=%u]\n",
+                core_id, static_cast<unsigned long long>(armed_address),
+                armed_bytes,
+                static_cast<unsigned long long>(virtual_address),
+                static_cast<unsigned long long>(physical_address),
+                offset, bytes);
+        }
+        return;
+    }
+    if (!data) {
+        const uint64_t fail_bit =
+            bytes == 4 ? uint64_t{1} << 32 : uint64_t{1} << 33;
+        probe.status[core_id].fetch_or(
+            fail_bit, std::memory_order_release);
+        probe.bytes[core_id].store(0, std::memory_order_release);
+        std::fprintf(
+            stderr,
+            "[SNIPER-FOUNDATION-READ-BYTES core=%u bytes=%u "
+            "va=0x%llx pa=0x%llx offset=%u data_present=0 matched=0]\n",
+            core_id, bytes,
+            static_cast<unsigned long long>(virtual_address),
+            static_cast<unsigned long long>(physical_address), offset);
+        return;
+    }
+    uint64_t actual = 0;
+    std::memcpy(&actual, data, bytes);
+    const uint64_t expected =
+        probe.expected[core_id].load(std::memory_order_relaxed);
+    const bool matched =
+        actual == (bytes == 4 ? expected & UINT32_MAX : expected);
+    uint64_t status =
+        probe.status[core_id].load(std::memory_order_relaxed);
+    const uint64_t pass_bit = bytes == 4 ? uint64_t{1} : uint64_t{2};
+    const uint64_t fail_bit = bytes == 4 ? uint64_t{1} << 32
+                                         : uint64_t{1} << 33;
+    status |= matched ? pass_bit : fail_bit;
+    probe.status[core_id].store(status, std::memory_order_release);
+    probe.bytes[core_id].store(0, std::memory_order_release);
+    std::fprintf(
+        stderr,
+        "[SNIPER-FOUNDATION-READ-BYTES core=%u bytes=%u "
+        "va=0x%llx pa=0x%llx offset=%u expected=0x%016llx "
+        "actual=0x%016llx data_present=1 matched=%u]\n",
+        core_id, bytes,
+        static_cast<unsigned long long>(virtual_address),
+        static_cast<unsigned long long>(physical_address), offset,
+        static_cast<unsigned long long>(expected),
+        static_cast<unsigned long long>(actual), matched ? 1u : 0u);
+}
+
+uint64_t foundationReadStatus(uint32_t core_id)
+{
+    if (core_id >= MAX_TRACKED_CORES)
+        return 0;
+    return foundationReadProbe().status[core_id].load(
+        std::memory_order_acquire);
+}
+
+void foundationSetLoadedAddress(uint32_t core_id, uint64_t address)
+{
+    if (core_id >= MAX_TRACKED_CORES)
+        return;
+    auto& probe = foundationReadProbe();
+    probe.loadedAddress[core_id].store(address, std::memory_order_relaxed);
+    probe.loadedChunks[core_id].store(0, std::memory_order_release);
+}
+
+void foundationSetLoadedChunk(
+    uint32_t core_id, uint32_t value, bool high)
+{
+    if (core_id >= MAX_TRACKED_CORES)
+        return;
+    auto& probe = foundationReadProbe();
+    if (high)
+        probe.loadedHigh[core_id].store(value, std::memory_order_relaxed);
+    else
+        probe.loadedLow[core_id].store(value, std::memory_order_relaxed);
+    probe.loadedChunks[core_id].fetch_or(
+        high ? uint8_t{2} : uint8_t{1}, std::memory_order_release);
+}
+
+void foundationCommitLoadedValue(uint32_t core_id, uint32_t bytes)
+{
+    if (core_id >= MAX_TRACKED_CORES || (bytes != 4 && bytes != 8))
+        return;
+    auto& probe = foundationReadProbe();
+    const uint8_t required = bytes == 4 ? uint8_t{1} : uint8_t{3};
+    const uint8_t chunks =
+        probe.loadedChunks[core_id].load(std::memory_order_acquire);
+    if ((chunks & required) != required)
+        return;
+    const uint64_t value =
+        static_cast<uint64_t>(
+            probe.loadedLow[core_id].load(std::memory_order_relaxed)) |
+        (static_cast<uint64_t>(
+            probe.loadedHigh[core_id].load(std::memory_order_relaxed)) << 32);
+    const uint64_t expected =
+        probe.expected[core_id].load(std::memory_order_relaxed);
+    const uint64_t address =
+        probe.loadedAddress[core_id].load(std::memory_order_relaxed);
+    const bool matched =
+        address ==
+            probe.address[core_id].load(std::memory_order_relaxed) &&
+        value == (bytes == 4 ? expected & UINT32_MAX : expected);
+    probe.status[core_id].fetch_or(
+        matched
+            ? (bytes == 4 ? uint64_t{4} : uint64_t{8})
+            : (bytes == 4 ? uint64_t{1} << 34 : uint64_t{1} << 35),
+        std::memory_order_release);
+    probe.loadedChunks[core_id].store(0, std::memory_order_release);
+    std::fprintf(
+        stderr,
+        "[SNIPER-FOUNDATION-LOADED-VALUE core=%u bytes=%u "
+        "address=0x%llx expected=0x%016llx value=0x%016llx "
+        "chunks=%u matched=%u]\n",
+        core_id, bytes,
+        static_cast<unsigned long long>(address),
+        static_cast<unsigned long long>(expected),
+        static_cast<unsigned long long>(value),
+        static_cast<unsigned>(required), matched ? 1u : 0u);
 }
 
 void beginEcgContext()
@@ -1243,6 +1442,7 @@ void beginEcgContext()
         static_cast<uint16_t>(context), std::memory_order_release);
     certifiedReusePlanFallbacks().store(0, std::memory_order_relaxed);
     auto& state = boundReusePlanLoadState();
+    auto& foundation = foundationReadProbe();
     for (uint32_t core_id = 0; core_id < MAX_TRACKED_CORES; ++core_id) {
         vertexValidStorage()[core_id].store(
             false, std::memory_order_relaxed);
@@ -1253,6 +1453,11 @@ void beginEcgContext()
         state.valid[core_id].store(false, std::memory_order_relaxed);
         state.certification_finished[core_id].store(
             false, std::memory_order_relaxed);
+        foundation.bytes[core_id].store(0, std::memory_order_relaxed);
+        foundation.status[core_id].store(0, std::memory_order_relaxed);
+        foundation.seen[core_id].store(0, std::memory_order_relaxed);
+        foundation.loadedChunks[core_id].store(
+            0, std::memory_order_relaxed);
     }
 }
 

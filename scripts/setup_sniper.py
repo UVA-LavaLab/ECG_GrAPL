@@ -40,6 +40,13 @@ VERSION_FILE = SNIPER_SIM_DIR / ".sniper_version"
 OVERLAY_STATUS_FILE = SNIPER_SIM_DIR / ".sniper_overlays.json"
 SNIPER_REPO_URL = "https://github.com/snipersim/snipersim.git"
 SNIPER_DEFAULT_REF = "56505e42fd98bca863fac181e769bd3c98d2bb33"
+SHARED_RECORD_HEADERS = (
+    "ecg_record.h",
+    "ecg_record_native.h",
+    "ecg_record_runtime.h",
+    "ecg_ref32.h",
+    "ecg_ref32_commit.h",
+)
 
 
 class Logger:
@@ -203,6 +210,63 @@ def migrate_if_present(path: Path, old: str, new: str, dry_run: bool) -> None:
     _write_overlay_text(path, text.replace(old, new, 1), dry_run)
 
 
+def normalize_cpp_function(
+    path: Path, signature: str, replacement: str, dry_run: bool
+) -> bool:
+    """Replace one complete C++ function body using brace matching."""
+    text = _overlay_text(path, dry_run)
+    start = text.find(signature)
+    if start < 0:
+        return False
+    brace = text.find("{", start + len(signature))
+    if brace < 0:
+        raise SystemExit(f"Malformed C++ function {signature!r} in {path}")
+    depth = 0
+    end = brace
+    while end < len(text):
+        if text[end] == "{":
+            depth += 1
+        elif text[end] == "}":
+            depth -= 1
+            if depth == 0:
+                end += 1
+                if end < len(text) and text[end] == "\n":
+                    end += 1
+                break
+        end += 1
+    if depth != 0:
+        raise SystemExit(f"Unbalanced C++ function {signature!r} in {path}")
+    current = text[start:end]
+    normalized = replacement.rstrip() + "\n"
+    if current == normalized:
+        return True
+    log.info(f"Normalize {signature} in {path.relative_to(SNIPER_DIR)}")
+    _write_overlay_text(path, text[:start] + normalized + text[end:], dry_run)
+    return True
+
+
+def normalize_between(
+    path: Path, start_marker: str, end_marker: str,
+    replacement: str, dry_run: bool
+) -> None:
+    text = _overlay_text(path, dry_run)
+    start = text.find(start_marker)
+    if start < 0:
+        raise SystemExit(
+            f"Could not find region start {start_marker!r} in {path}")
+    end = text.find(end_marker, start)
+    if end < 0:
+        raise SystemExit(
+            f"Could not find region end {end_marker!r} in {path}")
+    normalized = replacement.rstrip() + "\n\n"
+    if text[start:end] == normalized:
+        return
+    log.info(
+        f"Normalize region in {path.relative_to(SNIPER_DIR)}")
+    _write_overlay_text(
+        path, text[:start] + normalized + text[end:], dry_run)
+
+
 def normalize_context_ready_handler(path: Path, dry_run: bool) -> None:
     """Install exactly one canonical context-ready handler."""
     text = _overlay_text(path, dry_run)
@@ -363,6 +427,15 @@ def copy_overlay_sources(args: argparse.Namespace) -> list[str]:
         copied.append(str(relative))
     if not copied:
         log.warn(f"No overlay source files found under {SNIPER_OVERLAY_DIR}")
+    record_header_target = (
+        SNIPER_DIR / "common/core/memory_subsystem/cache")
+    for name in SHARED_RECORD_HEADERS:
+        source = PROJECT_ROOT / "bench/include" / name
+        target = record_header_target / name
+        log.info(f"Shared header copy {name}")
+        if not args.dry_run:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
     return copied
 
 
@@ -397,8 +470,13 @@ def write_overlay_status(copied_files: list[str]) -> None:
             f"Sniper build completed without expected binary: {binary}")
     patched_files = [
         "common/core/memory_subsystem/cache/cache_base.h",
+        "common/core/memory_subsystem/cache/cache.h",
         "common/core/memory_subsystem/cache/cache_set.cc",
         "common/core/memory_subsystem/cache/cache.cc",
+        "common/core/memory_subsystem/parametric_dram_directory_msi/cache_cntlr.h",
+        "common/core/memory_subsystem/parametric_dram_directory_msi/cache_cntlr.cc",
+        "common/core/memory_subsystem/parametric_dram_directory_msi/memory_manager.h",
+        "common/core/memory_subsystem/parametric_dram_directory_msi/memory_manager.cc",
         "common/core/memory_subsystem/parametric_dram_directory_msi/nuca_cache.h",
         "common/core/memory_subsystem/parametric_dram_directory_msi/nuca_cache.cc",
         "common/core/memory_subsystem/parametric_dram_directory_msi/prefetcher.cc",
@@ -407,6 +485,10 @@ def write_overlay_status(copied_files: list[str]) -> None:
         "common/performance_model/shmem_perf_model.cc",
         "common/system/magic_server.cc",
         "include/sim_api.h",
+        *[
+            "common/core/memory_subsystem/cache/" + name
+            for name in SHARED_RECORD_HEADERS
+        ],
     ]
     file_hashes = {}
     for relative in [*copied_files, *patched_files]:
@@ -838,6 +920,7 @@ def patch_ecg_overlay(args: argparse.Namespace) -> None:
 #include "log.h"
 """,
         args.dry_run,
+        ['#include "cache_set_ecg.h"'],
     )
     replace_once(
         nuca_header,
@@ -1345,6 +1428,21 @@ def patch_graphbrew_simuser_overlay(args: argparse.Namespace) -> None:
     )
     migrate_if_present(
         magic_server,
+        """            const UInt64 record_cycle = SubsecondTime::divideRounded(
+               record_core->getPerformanceModel()->getElapsedTime(),
+               record_core->getDvfsDomain()->getPeriod());
+""",
+        """            const UInt64 record_cycle =
+               graphbrew::sniper::record::normalizeCycle(
+                  static_cast<uint32_t>(core_id),
+                  SubsecondTime::divideRounded(
+                     record_core->getPerformanceModel()->getElapsedTime(),
+                     record_core->getDvfsDomain()->getPeriod()));
+""",
+        args.dry_run,
+    )
+    migrate_if_present(
+        magic_server,
         """std::fprintf(stderr,
                "[ECG-CONTEXT-READY sim=sniper loaded=%d regions=%u]\\n",
                ctx.loaded ? 1 : 0, ctx.num_regions);
@@ -1693,6 +1791,1453 @@ def patch_cache_only_shmem_timing(args: argparse.Namespace) -> None:
     )
 
 
+def patch_sniper_foundation(args: argparse.Namespace) -> None:
+    magic_server = SNIPER_DIR / "common/system/magic_server.cc"
+    cache_header = (
+        SNIPER_DIR / "common/core/memory_subsystem/cache/cache.h")
+    cache_source = (
+        SNIPER_DIR / "common/core/memory_subsystem/cache/cache.cc")
+    nuca_source = (
+        SNIPER_DIR / "common/core/memory_subsystem/"
+        "parametric_dram_directory_msi/nuca_cache.cc")
+    nuca_header = (
+        SNIPER_DIR / "common/core/memory_subsystem/"
+        "parametric_dram_directory_msi/nuca_cache.h")
+    memory_header = (
+        SNIPER_DIR / "common/core/memory_subsystem/"
+        "parametric_dram_directory_msi/memory_manager.h")
+    cache_cntlr_header = (
+        SNIPER_DIR / "common/core/memory_subsystem/"
+        "parametric_dram_directory_msi/cache_cntlr.h")
+    cache_cntlr_source = (
+        SNIPER_DIR / "common/core/memory_subsystem/"
+        "parametric_dram_directory_msi/cache_cntlr.cc")
+    memory_manager = (
+        SNIPER_DIR / "common/core/memory_subsystem/"
+        "parametric_dram_directory_msi/memory_manager.cc")
+    directory_source = (
+        SNIPER_DIR / "common/core/memory_subsystem/"
+        "pr_l1_pr_l2_dram_directory_msi/dram_directory_cntlr.cc")
+
+    fallback = (
+        "         MagicMarkerType args = { thread_id: thread_id, "
+        "core_id: core_id, arg0: arg0, arg1: arg1, str: NULL };\n"
+        "         return Sim()->getHooksManager()->callHooks("
+        "HookType::HOOK_MAGIC_USER, (UInt64)&args, "
+        "true /* expect return value */);\n")
+    foundation_handlers = """         if (arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_ECHO_WORK_ID)
+         {
+            return graphbrew::sniper::foundationEcho64(
+               static_cast<uint32_t>(core_id), arg1);
+         }
+         if (arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_READ_ADDRESS_WORK_ID)
+         {
+            graphbrew::sniper::foundationSetReadAddress(
+               static_cast<uint32_t>(core_id), arg1);
+            return 0;
+         }
+         if (arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_READ4_WORK_ID ||
+             arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_READ8_WORK_ID)
+         {
+            graphbrew::sniper::foundationArmRead(
+               static_cast<uint32_t>(core_id), arg1,
+               arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_READ4_WORK_ID
+                  ? 4 : 8);
+            return 0;
+         }
+         if (arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_STATUS_WORK_ID)
+         {
+            return graphbrew::sniper::foundationReadStatus(
+               static_cast<uint32_t>(core_id));
+         }
+"""
+    legacy_foundation_handlers = foundation_handlers
+    foundation_handlers += """         if (arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_VALUE_ADDRESS_WORK_ID)
+         {
+            graphbrew::sniper::foundationSetLoadedAddress(
+               static_cast<uint32_t>(core_id), arg1);
+            return 0;
+         }
+         if (arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_VALUE_LOW_WORK_ID ||
+             arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_VALUE_HIGH_WORK_ID)
+         {
+            graphbrew::sniper::foundationSetLoadedChunk(
+               static_cast<uint32_t>(core_id), static_cast<uint32_t>(arg1),
+               arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_VALUE_HIGH_WORK_ID);
+            return 0;
+         }
+         if (arg0 == graphbrew::sniper::GRAPHBREW_FOUNDATION_VALUE_COMMIT_WORK_ID)
+         {
+            graphbrew::sniper::foundationCommitLoadedValue(
+               static_cast<uint32_t>(core_id), static_cast<uint32_t>(arg1));
+            return 0;
+         }
+"""
+    foundation_chunk_handlers = foundation_handlers
+    foundation_handlers += """         if (arg0 == graphbrew::sniper::record::kWorkDrain)
+         {
+            Core* record_core =
+               Sim()->getCoreManager()->getCoreFromID(core_id);
+            auto* record_memory = dynamic_cast<
+               ParametricDramDirectoryMSI::MemoryManager*>(
+                  record_core ? record_core->getMemoryManager() : nullptr);
+            LOG_ASSERT_ERROR(
+               record_memory != nullptr,
+               "SNIPER ECG record drain requires parametric memory manager");
+            record_memory->serviceEcgRecord(true);
+            return 0;
+         }
+         if (graphbrew::sniper::record::isMagicCommand(arg0))
+         {
+            Core* record_core =
+               Sim()->getCoreManager()->getCoreFromID(core_id);
+            LOG_ASSERT_ERROR(
+               record_core != nullptr,
+               "SNIPER ECG record magic requires a core");
+            const UInt64 record_cycle =
+               graphbrew::sniper::record::normalizeCycle(
+                  static_cast<uint32_t>(core_id),
+                  SubsecondTime::divideRounded(
+                     record_core->getPerformanceModel()->getElapsedTime(),
+                     record_core->getDvfsDomain()->getPeriod()));
+            return graphbrew::sniper::record::handleMagic(
+               static_cast<uint32_t>(core_id), arg0, arg1,
+               record_cycle);
+         }
+"""
+    replace_once(
+        magic_server,
+        fallback,
+        foundation_handlers + fallback,
+        args.dry_run,
+        ["GRAPHBREW_FOUNDATION_ECHO_WORK_ID"],
+    )
+    migrate_if_present(
+        magic_server,
+        legacy_foundation_handlers + fallback,
+        foundation_handlers + fallback,
+        args.dry_run,
+    )
+    migrate_if_present(
+        magic_server,
+        foundation_chunk_handlers + fallback,
+        foundation_handlers + fallback,
+        args.dry_run,
+    )
+    migrate_if_present(
+        magic_server,
+        """            return graphbrew::sniper::record::handleMagic(
+               static_cast<uint32_t>(core_id), arg0, arg1);
+""",
+        """            Core* record_core =
+               Sim()->getCoreManager()->getCoreFromID(core_id);
+            LOG_ASSERT_ERROR(
+               record_core != nullptr,
+               "SNIPER ECG record magic requires a core");
+            const UInt64 record_cycle = SubsecondTime::divideRounded(
+               record_core->getPerformanceModel()->getElapsedTime(),
+               record_core->getDvfsDomain()->getPeriod());
+            return graphbrew::sniper::record::handleMagic(
+               static_cast<uint32_t>(core_id), arg0, arg1,
+               record_cycle);
+""",
+        args.dry_run,
+    )
+
+    replace_once(
+        memory_manager,
+        '#include "metadata_info.h"\n',
+        '#include "metadata_info.h"\n'
+        '#include "core/memory_subsystem/cache/'
+        'graph_cache_context_sniper.h"\n'
+        '#include "core/memory_subsystem/cache/ecg_record_sniper.h"\n',
+        args.dry_run,
+        ['#include "core/memory_subsystem/cache/ecg_record_sniper.h"'],
+    )
+    replace_once(
+        nuca_source,
+        '#include "core/memory_subsystem/cache/graph_cache_context_sniper.h"\n',
+        '#include "core/memory_subsystem/cache/graph_cache_context_sniper.h"\n'
+        '#include "core/memory_subsystem/cache/ecg_record_sniper.h"\n'
+        '#include "memory_manager.h"\n',
+        args.dry_run,
+        ['#include "memory_manager.h"'],
+    )
+    replace_once(
+        magic_server,
+        '#include "core/memory_subsystem/cache/graph_cache_context_sniper.h"\n',
+        '#include "core/memory_subsystem/cache/graph_cache_context_sniper.h"\n'
+        '#include "core/memory_subsystem/cache/ecg_record_sniper.h"\n'
+        '#include "core/memory_subsystem/parametric_dram_directory_msi/'
+        'memory_manager.h"\n',
+        args.dry_run,
+        ['#include "core/memory_subsystem/cache/ecg_record_sniper.h"'],
+    )
+    observe_anchor = """		// Clear the MetadataContext after the data access
+		MetadataContext::clear(getCore()->getId());
+"""
+    observe_call = """		graphbrew::sniper::foundationObserveRead(
+			static_cast<uint32_t>(getCore()->getId()),
+			static_cast<uint64_t>(address),
+			static_cast<uint64_t>(physical_address),
+			offset, reinterpret_cast<const uint8_t*>(data_buf), data_length);
+
+		// Clear the MetadataContext after the data access
+		MetadataContext::clear(getCore()->getId());
+"""
+    replace_once(
+        memory_manager,
+        observe_anchor,
+        observe_call,
+        args.dry_run,
+        ["foundationObserveRead("],
+    )
+
+    replace_once(
+        memory_header,
+        """\t\tvoid measureNucaStats();
+""",
+        """\t\tvoid measureNucaStats();
+\t\tvoid serviceEcgRecord(
+\t\t\tbool drain, UInt64 start_cycle = UINT64_MAX);
+""",
+        args.dry_run,
+        ["serviceEcgRecord("],
+    )
+    migrate_if_present(
+        memory_header,
+        "\t\tvoid serviceEcgRecord(bool drain);\n",
+        "\t\tvoid serviceEcgRecord(\n"
+        "\t\t\tbool drain, UInt64 start_cycle = UINT64_MAX);\n",
+        args.dry_run,
+    )
+    replace_once(
+        memory_header,
+        """\t\tvoid serviceEcgRecord(bool drain);
+""",
+        """\t\tvoid serviceEcgRecord(
+\t\t\tbool drain, UInt64 start_cycle = UINT64_MAX);
+\t\tbool hasEcgRecordPrivateCopy(IntPtr address)
+\t\t{
+\t\t\treturn getL1DCache()->peekSingleLine(address) != nullptr ||
+\t\t\t\tgetCache(MemComponent::L2_CACHE)->peekSingleLine(address) != nullptr;
+\t\t}
+""",
+        args.dry_run,
+        ["hasEcgRecordPrivateCopy"],
+    )
+    replace_once(
+        cache_cntlr_header,
+        """         Cache* getCache() { return m_master->m_cache; }
+         Lock& getLock() { return m_master->m_cache_lock; }
+""",
+        """         Cache* getCache() { return m_master->m_cache; }
+         Lock& getLock() { return m_master->m_cache_lock; }
+         bool hasPendingRequest(IntPtr address) const
+         {
+            return m_master->mshr.count(address) != 0;
+         }
+""",
+        args.dry_run,
+        ["hasPendingRequest(IntPtr address)"],
+    )
+    replace_once(
+        cache_cntlr_header,
+        '#include "mmu_cache_interface.h"\n',
+        '#include "mmu_cache_interface.h"\n#include <unordered_set>\n',
+        args.dry_run,
+        ["#include <unordered_set>"],
+    )
+    replace_once(
+        cache_cntlr_header,
+        """         std::deque<IntPtr> m_prefetch_list;
+         SubsecondTime m_prefetch_next;
+""",
+        """         std::deque<IntPtr> m_prefetch_list;
+         SubsecondTime m_prefetch_next;
+         std::unordered_set<IntPtr> m_ecg_record_bypass;
+""",
+        args.dry_run,
+        ["m_ecg_record_bypass"],
+    )
+    replace_once(
+        cache_cntlr_header,
+        """         void doPrefetch(IntPtr eip, IntPtr prefetch_address, SubsecondTime t_start, CacheBlockInfo::block_type_t block_type = CacheBlockInfo::block_type_t::DATA);
+""",
+        """         void doPrefetch(IntPtr eip, IntPtr prefetch_address, SubsecondTime t_start, CacheBlockInfo::block_type_t block_type = CacheBlockInfo::block_type_t::DATA);
+         void doEcgRecordPrefetch(
+            IntPtr eip, IntPtr prefetch_address, SubsecondTime t_start,
+            CacheBlockInfo::block_type_t block_type =
+               CacheBlockInfo::block_type_t::DATA);
+""",
+        args.dry_run,
+        ["doEcgRecordPrefetch("],
+    )
+    replace_once(
+        cache_cntlr_source,
+        '#include "cache_cntlr.h"\n',
+        '#include "cache_cntlr.h"\n'
+        '#include "core/memory_subsystem/cache/ecg_record_sniper.h"\n',
+        args.dry_run,
+        ['#include "core/memory_subsystem/cache/ecg_record_sniper.h"'],
+    )
+    replace_once(
+        cache_cntlr_source,
+        """		LOG_PRINT("processMemOpFromCore(), lock_signal(%u), mem_op_type(%u), ca_address(0x%x)",
+				  lock_signal, mem_op_type, ca_address);
+
+""",
+        """		LOG_PRINT("processMemOpFromCore(), lock_signal(%u), mem_op_type(%u), ca_address(0x%x)",
+				  lock_signal, mem_op_type, ca_address);
+		if (m_mem_component == MemComponent::L2_CACHE &&
+			m_master->m_ecg_record_bypass.erase(ca_address) != 0) {
+			graphbrew::sniper::record::notePrefetchDemandMerge(
+				static_cast<uint32_t>(m_core_id));
+			graphbrew::sniper::record::clearPrefetchInFlight(
+				static_cast<uint32_t>(m_core_id));
+		}
+
+""",
+        args.dry_run,
+        ["record::notePrefetchDemandMerge("],
+    )
+    replace_once(
+        cache_cntlr_source,
+        """		if (hit_where == HitWhere::MISS)
+		{
+			/* last level miss, a message has been sent. */
+""",
+        """		if (hit_where == HitWhere::MISS)
+		{
+			graphbrew::sniper::record::notePrefetchRetry(
+				static_cast<uint32_t>(m_core_id),
+				static_cast<uint64_t>(prefetch_address));
+			/* last level miss, a message has been sent. */
+""",
+        args.dry_run,
+        ["record::notePrefetchRetry("],
+    )
+    ecg_record_prefetch_method = r'''
+	void
+	CacheCntlr::doEcgRecordPrefetch(
+		IntPtr eip, IntPtr prefetch_address, SubsecondTime t_start,
+		CacheBlockInfo::block_type_t block_type)
+	{
+		LOG_ASSERT_ERROR(
+			m_mem_component == MemComponent::L2_CACHE,
+			"ECG record prefetch must originate at the private L2 boundary");
+		LOG_ASSERT_ERROR(
+			m_master->m_ecg_record_bypass.insert(prefetch_address).second,
+			"Overlapping ECG record prefetch for %lx", prefetch_address);
+		++stats.prefetches;
+		acquireStackLock(prefetch_address);
+		HitWhere::where_t hit_where = processShmemReqFromPrevCache(
+			eip, this, Core::READ, prefetch_address, 0,
+			getCacheBlockSize(), true, true, block_type,
+			Prefetch::OWN, t_start, false, Core::mem_origin_t::NORMAL);
+		if (hit_where == HitWhere::MISS)
+		{
+			graphbrew::sniper::record::notePrefetchRetry(
+				static_cast<uint32_t>(m_core_id),
+				static_cast<uint64_t>(prefetch_address));
+			releaseStackLock(prefetch_address);
+			waitForNetworkThread();
+			wakeUpNetworkThread();
+		}
+		m_last_prefetch_completion =
+			getShmemPerfModel()->getElapsedTime(
+				ShmemPerfModel::_USER_THREAD);
+		m_master->m_ecg_record_bypass.erase(prefetch_address);
+		// A directory response hands the stack lock from the network thread
+		// back to this user thread. Release it for both hit and miss paths.
+		releaseStackLock(prefetch_address);
+	}
+
+'''
+    replace_once(
+        cache_cntlr_source,
+        "\n\n\t/*****"
+        "************************************************************************\n"
+        "\t * operations called by cache on next-level cache\n",
+        "\n" + ecg_record_prefetch_method +
+        "\n\t/*****"
+        "************************************************************************\n"
+        "\t * operations called by cache on next-level cache\n",
+        args.dry_run,
+        ["CacheCntlr::doEcgRecordPrefetch("],
+    )
+    if not normalize_cpp_function(
+            cache_cntlr_source,
+            "void\n\tCacheCntlr::doEcgRecordPrefetch(",
+            ecg_record_prefetch_method.strip(),
+            args.dry_run):
+        raise SystemExit(
+            "Could not install canonical CacheCntlr::doEcgRecordPrefetch")
+    replace_once(
+        cache_cntlr_source,
+        """		// @RBERA: this is CacheBlockInfo::block_type_t leak
+		insertCacheBlock(address, CacheState::EXCLUSIVE, data_buf, requester, ShmemPerfModel::_SIM_THREAD, shmem_msg->getBlockType());
+""",
+        """		// ECG record requests populate only the shared NUCA. Their
+		// response must not allocate in this private cache.
+		if (!m_master->m_ecg_record_bypass.count(address))
+			insertCacheBlock(address, CacheState::EXCLUSIVE, data_buf, requester, ShmemPerfModel::_SIM_THREAD, shmem_msg->getBlockType());
+""",
+        args.dry_run,
+        ["ECG record requests populate only the shared NUCA"],
+    )
+    replace_once(
+        cache_cntlr_source,
+        """		// Insert Cache Block in L2 Cache
+		// @RBERA: this is CacheBlockInfo::block_type_t leak
+		insertCacheBlock(address, CacheState::SHARED, data_buf, requester, ShmemPerfModel::_SIM_THREAD, shmem_msg->getBlockType());
+""",
+        """		// Insert ordinary responses in L2; ECG record prefetches are
+		// request-scoped private-allocation bypasses.
+		if (!m_master->m_ecg_record_bypass.count(address))
+			insertCacheBlock(address, CacheState::SHARED, data_buf, requester, ShmemPerfModel::_SIM_THREAD, shmem_msg->getBlockType());
+""",
+        args.dry_run,
+        ["request-scoped private-allocation bypasses"],
+    )
+    replace_once(
+        cache_cntlr_source,
+        """					SubsecondTime t_now = getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_USER_THREAD);
+					copyDataFromNextLevel(mem_op_type, address, modeled, t_now, block_type);
+					if (isPrefetch != Prefetch::NONE)
+						getCacheBlockInfo(address)->setOption(CacheBlockInfo::PREFETCH);
+""",
+        """					SubsecondTime t_now = getShmemPerfModel()->getElapsedTime(ShmemPerfModel::_USER_THREAD);
+					// An LLC-resident ECG target remains LLC-only.
+					if (!m_master->m_ecg_record_bypass.count(address)) {
+						copyDataFromNextLevel(mem_op_type, address, modeled, t_now, block_type);
+						if (isPrefetch != Prefetch::NONE)
+							getCacheBlockInfo(address)->setOption(CacheBlockInfo::PREFETCH);
+					}
+""",
+        args.dry_run,
+        ["An LLC-resident ECG target remains LLC-only"],
+    )
+    replace_once(
+        cache_cntlr_source,
+        """						insertCacheBlock(address, mem_op_type == Core::READ ? CacheState::SHARED : CacheState::MODIFIED, data_buf, m_core_id, ShmemPerfModel::_USER_THREAD, block_type);
+						if (isPrefetch != Prefetch::NONE)
+							getCacheBlockInfo(address)->setOption(CacheBlockInfo::PREFETCH);
+""",
+        """						// A synchronous NUCA response must not populate private L2.
+						if (!m_master->m_ecg_record_bypass.count(address)) {
+							insertCacheBlock(address, mem_op_type == Core::READ ? CacheState::SHARED : CacheState::MODIFIED, data_buf, m_core_id, ShmemPerfModel::_USER_THREAD, block_type);
+							if (isPrefetch != Prefetch::NONE)
+								getCacheBlockInfo(address)->setOption(CacheBlockInfo::PREFETCH);
+						}
+""",
+        args.dry_run,
+        ["A synchronous NUCA response must not populate private L2"],
+    )
+    replace_once(
+        cache_cntlr_source,
+        """			Byte data_buf[getCacheBlockSize()];
+			retrieveCacheBlock(address, data_buf, ShmemPerfModel::_USER_THREAD, first_hit && count);
+""",
+        """			Byte data_buf[getCacheBlockSize()];
+			// LLC-only ECG prefetches have no private data array to read.
+			if (!m_master->m_ecg_record_bypass.count(address))
+				retrieveCacheBlock(address, data_buf, ShmemPerfModel::_USER_THREAD, first_hit && count);
+""",
+        args.dry_run,
+        ["LLC-only ECG prefetches have no private data array to read"],
+    )
+    replace_once(
+        cache_cntlr_source,
+        """				if (request->isPrefetch)
+					getCacheBlockInfo(address)->setOption(CacheBlockInfo::PREFETCH);
+""",
+        """				if (request->isPrefetch) {
+					SharedCacheBlockInfo* prefetched =
+						getCacheBlockInfo(address);
+					if (prefetched) {
+						prefetched->setOption(CacheBlockInfo::PREFETCH);
+					} else {
+						LOG_ASSERT_ERROR(
+							m_master->m_ecg_record_bypass.count(address),
+							"Ordinary prefetch response did not allocate");
+					}
+				}
+""",
+        args.dry_run,
+        ["Ordinary prefetch response did not allocate"],
+    )
+    replace_once(
+        directory_source,
+        """#include "config.hpp"
+""",
+        """#include "config.hpp"
+#include "ecg_record_sniper.h"
+""",
+        args.dry_run,
+        ['#include "ecg_record_sniper.h"'],
+    )
+    replace_once(
+        directory_source,
+        """void
+DramDirectoryCntlr::processShReqFromL2Cache(ShmemReq* shmem_req, Byte* cached_data_buf)
+{
+   IntPtr address = shmem_req->getShmemMsg()->getAddress();
+   core_id_t requester = shmem_req->getShmemMsg()->getRequester();
+
+   MYLOG("Start @ %lx", address);
+   updateShmemPerf(shmem_req);
+
+   DirectoryEntry* directory_entry = m_dram_directory_cache->getDirectoryEntry(address);
+   if (directory_entry == NULL)
+   {
+      directory_entry = processDirectoryEntryAllocationReq(shmem_req);
+   }
+
+   DirectoryBlockInfo* directory_block_info = directory_entry->getDirectoryBlockInfo();
+   DirectoryState::dstate_t curr_dstate = directory_block_info->getDState();
+
+   updateShmemPerf(shmem_req, ShmemPerf::TD_ACCESS);
+
+   switch (curr_dstate)
+""",
+        """void
+DramDirectoryCntlr::processShReqFromL2Cache(ShmemReq* shmem_req, Byte* cached_data_buf)
+{
+   IntPtr address = shmem_req->getShmemMsg()->getAddress();
+   core_id_t requester = shmem_req->getShmemMsg()->getRequester();
+
+   MYLOG("Start @ %lx", address);
+   updateShmemPerf(shmem_req);
+
+   DirectoryEntry* directory_entry = m_dram_directory_cache->getDirectoryEntry(address);
+   if (directory_entry == NULL)
+   {
+      directory_entry = processDirectoryEntryAllocationReq(shmem_req);
+   }
+
+   DirectoryBlockInfo* directory_block_info = directory_entry->getDirectoryBlockInfo();
+   DirectoryState::dstate_t curr_dstate = directory_block_info->getDState();
+
+   updateShmemPerf(shmem_req, ShmemPerf::TD_ACCESS);
+
+   UInt64 ecg_record_sequence = 0;
+   UInt64 ecg_record_issue_cycle = 0;
+   const bool ecg_record_prefetch =
+      graphbrew::sniper::record::prefetchInFlight(
+         static_cast<uint32_t>(requester),
+         static_cast<uint64_t>(address),
+         ecg_record_sequence, ecg_record_issue_cycle);
+   if (ecg_record_prefetch)
+   {
+      // This transaction fetches into NUCA only. It must never create a
+      // private sharer or owner in the coherence directory.
+      LOG_ASSERT_ERROR(
+         curr_dstate == DirectoryState::UNCACHED &&
+            directory_entry->getNumSharers() == 0,
+         "ECG LLC-only prefetch encountered a private coherence owner");
+      retrieveDataAndSendToL2Cache(
+         ShmemMsg::SH_REP, requester, address, cached_data_buf,
+         shmem_req->getShmemMsg());
+      return;
+   }
+
+   switch (curr_dstate)
+""",
+        args.dry_run,
+        ["This transaction fetches into NUCA only"],
+    )
+    replace_once(
+        directory_source,
+        """      case ShmemMsg::SH_REQ:
+         assert(curr_dstate == DirectoryState::SHARED || curr_dstate == DirectoryState::EXCLUSIVE);
+         if (curr_dstate == DirectoryState::EXCLUSIVE)
+""",
+        """      case ShmemMsg::SH_REQ:
+      {
+         UInt64 ecg_record_sequence = 0;
+         UInt64 ecg_record_issue_cycle = 0;
+         const bool ecg_record_prefetch =
+            graphbrew::sniper::record::prefetchInFlight(
+               static_cast<uint32_t>(
+                  shmem_req->getShmemMsg()->getRequester()),
+               static_cast<uint64_t>(address),
+               ecg_record_sequence, ecg_record_issue_cycle);
+         if (ecg_record_prefetch)
+         {
+            LOG_ASSERT_ERROR(
+               curr_dstate == DirectoryState::UNCACHED,
+               "ECG LLC-only DRAM reply acquired private coherence state");
+            reply_msg_type = ShmemMsg::SH_REP;
+         }
+         else
+         {
+            assert(curr_dstate == DirectoryState::SHARED ||
+                   curr_dstate == DirectoryState::EXCLUSIVE);
+            if (curr_dstate == DirectoryState::EXCLUSIVE)
+""",
+        args.dry_run,
+        ["ECG LLC-only DRAM reply acquired private coherence state"],
+    )
+    replace_once(
+        directory_source,
+        """         else
+         {
+            reply_msg_type = ShmemMsg::SH_REP;
+         }
+         break;
+      case ShmemMsg::EX_REQ:
+""",
+        """            else
+            {
+               reply_msg_type = ShmemMsg::SH_REP;
+            }
+         }
+         // End request-scoped ECG reply selection.
+         break;
+      }
+      case ShmemMsg::EX_REQ:
+""",
+        args.dry_run,
+        ["End request-scoped ECG reply selection"],
+    )
+    replace_once(
+        nuca_header,
+        """      void markTranslationMetadata(IntPtr address, CacheBlockInfo::block_type_t blocktype);
+""",
+        """      void markTranslationMetadata(IntPtr address, CacheBlockInfo::block_type_t blocktype);
+      bool contains(IntPtr address)
+      {
+         return m_cache->peekSingleLine(address) != nullptr;
+      }
+      bool canAdmitEcgRecordPrefetch(IntPtr address, UInt64 sequence)
+      {
+         return m_cache->canAdmitEcgRecordPrefetch(address, sequence);
+      }
+""",
+        args.dry_run,
+        ["canAdmitEcgRecordPrefetch"],
+    )
+
+    before_access = """		// Perform the memory access -> send the request to the cache hierarchy
+		HitWhere::where_t result = m_cache_cntlrs[mem_component]->processMemOpFromCore(
+"""
+    before_access_new = """		const UInt64 ecg_record_issue_cycle =
+			graphbrew::sniper::record::normalizeCycle(
+				static_cast<uint32_t>(getCore()->getId()),
+				SubsecondTime::divideRounded(
+					core->getPerformanceModel()->getElapsedTime(),
+					getCore()->getDvfsDomain()->getPeriod()));
+		graphbrew::sniper::record::serviceUpdates(
+			static_cast<uint32_t>(getCore()->getId()),
+			ecg_record_issue_cycle);
+		const bool ecg_record_property =
+			graphbrew::sniper::record::beginMemoryAccess(
+				static_cast<uint32_t>(getCore()->getId()),
+				static_cast<uint64_t>(address + offset),
+				static_cast<uint64_t>(physical_address),
+				data_length, mem_op_type == Core::READ,
+				ecg_record_issue_cycle);
+
+		// Perform the memory access -> send the request to the cache hierarchy
+		HitWhere::where_t result = m_cache_cntlrs[mem_component]->processMemOpFromCore(
+"""
+    replace_once(
+        memory_manager,
+        before_access,
+        before_access_new,
+        args.dry_run,
+        ["const UInt64 ecg_record_issue_cycle"],
+    )
+    migrate_if_present(
+        memory_manager,
+        """		const UInt64 ecg_record_cycle =
+			graphbrew::sniper::record::advanceCycle(
+				static_cast<uint32_t>(getCore()->getId()),
+				SubsecondTime::divideRounded(
+					getShmemPerfModel()->getElapsedTime(
+						ShmemPerfModel::_USER_THREAD),
+					getCore()->getDvfsDomain()->getPeriod()));
+""",
+        before_access_new.split(
+            "\t\t// Perform the memory access", 1)[0],
+        args.dry_run,
+    )
+    normalize_between(
+        memory_manager,
+        "\t\tconst UInt64 ecg_record",
+        "\t\t// Perform the memory access -> send the request to the cache hierarchy",
+        before_access_new.split(
+            "\t\t// Perform the memory access", 1)[0],
+        args.dry_run,
+    )
+    migrate_if_present(
+        memory_manager,
+        """			} else {
+				graphbrew::sniper::record::notePrefetchTranslation(
+					core_id, false);
+			}
+""",
+        """			} else {
+				graphbrew::sniper::record::notePrefetchTranslationBypass(
+					core_id);
+			}
+""",
+        args.dry_run,
+    )
+    migrate_if_present(
+        memory_manager,
+        """			CacheCntlr* l1 = m_cache_cntlrs[MemComponent::L1_DCACHE];
+			CacheCntlr* l2 = m_cache_cntlrs[MemComponent::L2_CACHE];
+			if (l1->getCache()->peekSingleLine(physical) ||
+""",
+        """			CacheCntlr* l1 = m_cache_cntlrs[MemComponent::L1_DCACHE];
+			CacheCntlr* l2 = m_cache_cntlrs[MemComponent::L2_CACHE];
+			graphbrew::sniper::record::notePrefetchPrivateLookup(core_id);
+			if (l1->getCache()->peekSingleLine(physical) ||
+""",
+        args.dry_run,
+    )
+    migrate_if_present(
+        memory_manager,
+        """			} else if (m_nuca_cache && m_nuca_cache->contains(physical)) {
+				graphbrew::sniper::record::notePrefetchLlcDuplicate(
+					core_id);
+			} else if (m_nuca_cache &&
+				!m_nuca_cache->canAdmitEcgRecordPrefetch(
+					physical, request.sequence)) {
+""",
+        """			} else {
+				graphbrew::sniper::record::notePrefetchLlcLookup(core_id);
+			if (m_nuca_cache && m_nuca_cache->contains(physical)) {
+				graphbrew::sniper::record::notePrefetchLlcDuplicate(
+					core_id);
+			} else {
+				graphbrew::sniper::record::notePrefetchIssueAdmissionCheck(
+					core_id);
+			if (m_nuca_cache &&
+				!m_nuca_cache->canAdmitEcgRecordPrefetch(
+					physical, graphbrew::sniper::record::completedSequence(core_id))) {
+""",
+        args.dry_run,
+    )
+    migrate_if_present(
+        memory_manager,
+        """			}
+		}
+		if (!drain)
+""",
+        """			}
+			}
+			}
+		}
+		if (!drain)
+""",
+        args.dry_run,
+    )
+    observe_call_old = """		graphbrew::sniper::foundationObserveRead(
+			static_cast<uint32_t>(getCore()->getId()),
+			static_cast<uint64_t>(address),
+			static_cast<uint64_t>(physical_address),
+			offset, reinterpret_cast<const uint8_t*>(data_buf), data_length);
+
+		// Clear the MetadataContext after the data access
+"""
+    observe_call_new = """		const SubsecondTime ecg_record_post_access_time =
+			getShmemPerfModel()->getElapsedTime(
+				ShmemPerfModel::_USER_THREAD);
+		LOG_ASSERT_ERROR(
+			ecg_record_post_access_time >= t_cache_issue,
+			"SNIPER ECG record memory completion precedes issue");
+		const UInt64 ecg_record_latency_cycles =
+			SubsecondTime::divideRounded(
+				ecg_record_post_access_time - t_cache_issue,
+				getCore()->getDvfsDomain()->getPeriod());
+		UInt64 ecg_record_completion_cycle = 0;
+		LOG_ASSERT_ERROR(
+			ecg_record::checkedAdd(
+				ecg_record_issue_cycle, ecg_record_latency_cycles,
+				ecg_record_completion_cycle),
+			"SNIPER ECG record completion cycle overflow");
+		ecg_record_completion_cycle =
+			graphbrew::sniper::record::normalizeCycle(
+				static_cast<uint32_t>(getCore()->getId()),
+				ecg_record_completion_cycle);
+		graphbrew::sniper::foundationObserveRead(
+			static_cast<uint32_t>(getCore()->getId()),
+			static_cast<uint64_t>(address),
+			static_cast<uint64_t>(physical_address),
+			offset, reinterpret_cast<const uint8_t*>(data_buf), data_length);
+		if (mem_op_type == Core::READ) {
+			graphbrew::sniper::record::observeRecordRead(
+				static_cast<uint32_t>(getCore()->getId()),
+				static_cast<uint64_t>(address + offset),
+				data_length, ecg_record_completion_cycle);
+		}
+		graphbrew::sniper::record::completeMemoryAccess(
+			static_cast<uint32_t>(getCore()->getId()),
+			ecg_record_property, ecg_record_completion_cycle);
+		serviceEcgRecord(false, ecg_record_completion_cycle);
+
+		// Clear the MetadataContext after the data access
+"""
+    replace_once(
+        memory_manager,
+        observe_call_old,
+        observe_call_new,
+        args.dry_run,
+        [
+            "serviceEcgRecord(false);",
+            "serviceEcgRecord(false, ecg_record_completion_cycle);",
+            "ecg_record_post_access_cycle",
+            "ecg_record_post_access_time",
+        ],
+    )
+    migrate_if_present(
+        memory_manager,
+        """		graphbrew::sniper::foundationObserveRead(
+			static_cast<uint32_t>(getCore()->getId()),
+			static_cast<uint64_t>(address),
+			static_cast<uint64_t>(physical_address),
+			offset, reinterpret_cast<const uint8_t*>(data_buf), data_length);
+		if (mem_op_type == Core::READ) {
+			graphbrew::sniper::record::observeRecordRead(
+				static_cast<uint32_t>(getCore()->getId()),
+				static_cast<uint64_t>(address + offset),
+				data_length, ecg_record_cycle);
+		}
+		graphbrew::sniper::record::completeMemoryAccess(
+			static_cast<uint32_t>(getCore()->getId()),
+			ecg_record_property, ecg_record_cycle);
+		serviceEcgRecord(false);
+
+		// Clear the MetadataContext after the data access
+""",
+        observe_call_new,
+        args.dry_run,
+    )
+    migrate_if_present(
+        memory_manager,
+        """		const UInt64 ecg_record_completion_cycle =
+			SubsecondTime::divideRounded(
+				getShmemPerfModel()->getElapsedTime(
+					ShmemPerfModel::_USER_THREAD),
+				getCore()->getDvfsDomain()->getPeriod());
+		graphbrew::sniper::foundationObserveRead(
+""",
+        """		const UInt64 ecg_record_post_access_cycle =
+			SubsecondTime::divideRounded(
+				getShmemPerfModel()->getElapsedTime(
+					ShmemPerfModel::_USER_THREAD),
+				getCore()->getDvfsDomain()->getPeriod());
+		const UInt64 ecg_record_completion_cycle =
+			std::max(ecg_record_issue_cycle, ecg_record_post_access_cycle);
+		graphbrew::sniper::foundationObserveRead(
+""",
+        args.dry_run,
+    )
+    completion_text = _overlay_text(memory_manager, args.dry_run)
+    completion_start = next(
+        (marker for marker in (
+            "\t\tconst SubsecondTime ecg_record_post_access_time",
+            "\t\tconst UInt64 ecg_record_post_access_cycle",
+            "\t\tconst UInt64 ecg_record_completion_cycle",
+        ) if marker in completion_text),
+        None,
+    )
+    if completion_start is None:
+        raise SystemExit(
+            "Could not find Sniper ECG record completion hook")
+    normalize_between(
+        memory_manager,
+        completion_start,
+        "\t\t// Clear the MetadataContext after the data access",
+        observe_call_new.split(
+            "\t\t// Clear the MetadataContext", 1)[0],
+        args.dry_run,
+    )
+
+    memory_service = r'''
+void
+MemoryManager::serviceEcgRecord(bool drain, UInt64 start_cycle)
+{
+	const uint32_t core_id = static_cast<uint32_t>(getCore()->getId());
+	const SubsecondTime period = getCore()->getDvfsDomain()->getPeriod();
+	const UInt64 drain_limit =
+		graphbrew::sniper::record::drainLimitCycles();
+	UInt64 drain_waited = 0;
+	do {
+		UInt64 cycle = start_cycle == UINT64_MAX
+			? SubsecondTime::divideRounded(
+				getShmemPerfModel()->getElapsedTime(
+					ShmemPerfModel::_USER_THREAD), period)
+			: start_cycle;
+		cycle = graphbrew::sniper::record::normalizeCycle(
+			core_id, cycle);
+		start_cycle = UINT64_MAX;
+		graphbrew::sniper::record::serviceUpdates(core_id, cycle);
+		graphbrew::sniper::record::PrefetchRequest request;
+		if (graphbrew::sniper::record::takeReadyPrefetch(
+				core_id, cycle, request)) {
+			IntPtr physical = static_cast<IntPtr>(request.property_vaddr);
+			const bool translation_enabled =
+				Sim()->getCfg()->getBool("general/translation_enabled");
+			if (translation_enabled) {
+				const IntPtr translated = m_mmu->performAddressTranslation(
+					0, physical, false, Core::NONE, true, true);
+				const bool fault = translated == static_cast<IntPtr>(-1);
+				graphbrew::sniper::record::notePrefetchTranslation(
+					core_id, fault);
+				if (fault) {
+					if (!drain)
+						return;
+					continue;
+				}
+				physical = translated;
+			} else {
+				graphbrew::sniper::record::notePrefetchTranslationBypass(
+					core_id);
+			}
+			physical &= ~(IntPtr(m_cache_block_size) - 1);
+			CacheCntlr* l1 = m_cache_cntlrs[MemComponent::L1_DCACHE];
+			CacheCntlr* l2 = m_cache_cntlrs[MemComponent::L2_CACHE];
+			const UInt64 lookup_cycles =
+				graphbrew::sniper::record::lookupLatencyCycles();
+			incrElapsedTime(
+				(2 * lookup_cycles) * period,
+				ShmemPerfModel::_USER_THREAD);
+			graphbrew::sniper::record::noteLookupCycles(
+				core_id, 2 * lookup_cycles);
+			graphbrew::sniper::record::notePrefetchPrivateLookup(core_id);
+			if (l1->getCache()->peekSingleLine(physical) ||
+				l2->getCache()->peekSingleLine(physical) ||
+				l1->hasPendingRequest(physical) ||
+				l2->hasPendingRequest(physical)) {
+				graphbrew::sniper::record::notePrefetchPrivateDuplicate(
+					core_id);
+			} else {
+				incrElapsedTime(
+					lookup_cycles * period,
+					ShmemPerfModel::_USER_THREAD);
+				graphbrew::sniper::record::noteLookupCycles(
+					core_id, lookup_cycles);
+				graphbrew::sniper::record::notePrefetchLlcLookup(core_id);
+			if (m_nuca_cache && m_nuca_cache->contains(physical)) {
+				graphbrew::sniper::record::notePrefetchLlcDuplicate(
+					core_id);
+			} else {
+				incrElapsedTime(
+					lookup_cycles * period,
+					ShmemPerfModel::_USER_THREAD);
+				graphbrew::sniper::record::noteLookupCycles(
+					core_id, lookup_cycles);
+				graphbrew::sniper::record::notePrefetchIssueAdmissionCheck(
+					core_id);
+			if (m_nuca_cache &&
+				!m_nuca_cache->canAdmitEcgRecordPrefetch(
+					physical, graphbrew::sniper::record::completedSequence(core_id))) {
+				graphbrew::sniper::record::notePrefetchIssueAdmissionDrop(
+					core_id);
+			} else {
+				graphbrew::sniper::record::notePrefetchIssued(core_id);
+				const SubsecondTime before =
+					getShmemPerfModel()->getElapsedTime(
+						ShmemPerfModel::_USER_THREAD);
+				const UInt64 request_issue_cycle =
+					SubsecondTime::divideRounded(
+						before, getCore()->getDvfsDomain()->getPeriod());
+				graphbrew::sniper::record::beginPrefetchIssue(
+					core_id, static_cast<uint64_t>(physical),
+					request.sequence, request_issue_cycle,
+					request.property_vaddr);
+				l2->doEcgRecordPrefetch(
+					0, physical, before,
+					CacheBlockInfo::block_type_t::DATA);
+				const SubsecondTime after = l2->getLastPrefetchCompletion();
+				const UInt64 completed_cycle = SubsecondTime::divideRounded(
+					after, getCore()->getDvfsDomain()->getPeriod());
+				UInt64 ignored_sequence = 0, issue_cycle = cycle;
+				if (graphbrew::sniper::record::prefetchInFlight(
+						core_id, static_cast<uint64_t>(physical),
+						ignored_sequence, issue_cycle)) {
+					LOG_ASSERT_ERROR(
+						completed_cycle >= issue_cycle,
+						"ECG prefetch completion precedes its real issue");
+					graphbrew::sniper::record::notePrefetchFill(
+						core_id, completed_cycle - issue_cycle);
+					graphbrew::sniper::record::clearPrefetchInFlight(core_id);
+				}
+			}
+			}
+			}
+		}
+		if (!drain)
+			break;
+		if (graphbrew::sniper::record::queuesEmpty(core_id))
+			break;
+		const auto next =
+			graphbrew::sniper::record::nextReadyCycle(core_id);
+		LOG_ASSERT_ERROR(
+			next.has_value(),
+			"SNIPER ECG record drain has no readiness event");
+		const UInt64 now = SubsecondTime::divideRounded(
+			getShmemPerfModel()->getElapsedTime(
+				ShmemPerfModel::_USER_THREAD), period);
+		UInt64 target = *next;
+		if (target <= now) {
+			LOG_ASSERT_ERROR(
+				now != UINT64_MAX,
+				"SNIPER ECG record drain cycle overflow");
+			target = now + 1;
+		}
+		const UInt64 delta = target - now;
+		LOG_ASSERT_ERROR(
+			delta <= drain_limit - drain_waited,
+			"SNIPER ECG record drain exceeded %llu cycles",
+			(unsigned long long)drain_limit);
+		drain_waited += delta;
+		incrElapsedTime(
+			delta * period, ShmemPerfModel::_USER_THREAD);
+		graphbrew::sniper::record::noteDrainCycles(core_id, delta);
+	} while (true);
+}
+
+'''
+    replace_once(
+        memory_manager,
+        "\tMemoryManager::~MemoryManager()\n",
+        memory_service + "\tMemoryManager::~MemoryManager()\n",
+        args.dry_run,
+        ["MemoryManager::serviceEcgRecord("],
+    )
+    normalized_service = normalize_cpp_function(
+        memory_manager,
+        "void\nMemoryManager::serviceEcgRecord("
+        "bool drain, UInt64 start_cycle)\n",
+        memory_service.strip(),
+        args.dry_run)
+    if not normalized_service:
+        normalized_service = normalize_cpp_function(
+            memory_manager,
+            "void\nMemoryManager::serviceEcgRecord(bool drain)\n",
+            memory_service.strip(),
+            args.dry_run)
+    if not normalized_service:
+        raise SystemExit(
+            "Could not install canonical MemoryManager::serviceEcgRecord")
+
+    replace_once(
+        cache_header,
+        '#include "stats.h"\n',
+        '#include "stats.h"\n#include "ecg_record_sniper_compat.h"\n',
+        args.dry_run,
+        ['#include "ecg_record_sniper_compat.h"'],
+    )
+    migrate_if_present(
+        cache_header,
+        '#include "ecg_record_runtime.h"\n',
+        '#include "ecg_record_sniper_compat.h"\n',
+        args.dry_run,
+    )
+    replace_once(
+        cache_header,
+        """\tCacheBlockInfo *peekSingleLine(IntPtr addr);
+""",
+        """\tCacheBlockInfo *peekSingleLine(IntPtr addr);
+\tecg_record::LineMetadata *ecgRecordMetadata(IntPtr addr);
+\tecg_record::ApplyResult applyEcgRecordUpdate(
+\t\tconst ecg_record::CommitUpdate& update);
+\tbool canAdmitEcgRecordPrefetch(IntPtr addr, UInt64 sequence);
+""",
+        args.dry_run,
+        ["applyEcgRecordUpdate("],
+    )
+    replace_once(
+        cache_source,
+        '#include "cache_set_ecg.h"\n',
+        '#include "cache_set_ecg.h"\n'
+        '#include "ecg_record_sniper.h"\n',
+        args.dry_run,
+        ['#include "ecg_record_sniper.h"'],
+    )
+    cache_methods = r'''
+ecg_record::LineMetadata *
+Cache::ecgRecordMetadata(IntPtr addr)
+{
+	IntPtr tag;
+	UInt32 set_index;
+	splitAddress(addr, tag, set_index);
+	auto *set = dynamic_cast<CacheSetECG*>(m_sets[set_index]);
+	return set ? set->recordMetadata(addr) : nullptr;
+}
+
+ecg_record::ApplyResult
+Cache::applyEcgRecordUpdate(const ecg_record::CommitUpdate& update)
+{
+	IntPtr tag;
+	UInt32 set_index;
+	splitAddress(static_cast<IntPtr>(update.physical_line), tag, set_index);
+	auto *set = dynamic_cast<CacheSetECG*>(m_sets[set_index]);
+	if (!set)
+		return ecg_record::ApplyResult::UNSUPPORTED;
+	return set->applyRecordUpdate(
+		static_cast<IntPtr>(update.physical_line), update);
+}
+
+bool
+Cache::canAdmitEcgRecordPrefetch(IntPtr addr, UInt64 sequence)
+{
+	IntPtr tag;
+	UInt32 set_index;
+	splitAddress(addr, tag, set_index);
+	auto *set = dynamic_cast<CacheSetECG*>(m_sets[set_index]);
+	return !set || set->canAdmitRecordPrefetch(sequence);
+}
+
+'''
+    replace_once(
+        cache_source,
+        "CacheBlockInfo *\nCache::accessSingleLine(",
+        cache_methods + "CacheBlockInfo *\nCache::accessSingleLine(",
+        args.dry_run,
+        ["Cache::applyEcgRecordUpdate"],
+    )
+    replace_once(
+        nuca_source,
+        """   registerStatsMetric("nuca-cache", m_core_id, "structural-flowthrough-writes", &m_structural_flowthrough_writes);
+}
+""",
+        """   registerStatsMetric("nuca-cache", m_core_id, "structural-flowthrough-writes", &m_structural_flowthrough_writes);
+   graphbrew::sniper::record::registerLlc(
+      static_cast<uint32_t>(m_core_id), m_cache);
+}
+""",
+        args.dry_run,
+        ["record::registerLlc("],
+    )
+    replace_once(
+        nuca_source,
+        """NucaCache::write(IntPtr address, core_id_t requester, Byte* data_buf, bool& eviction, IntPtr& evict_address, Byte* evict_buf, SubsecondTime now, bool count, bool is_metadata)
+{
+   graphbrew::sniper::setCurrentNucaRequesterCore(
+      static_cast<uint32_t>(requester));
+   HitWhere::where_t hit_where = HitWhere::MISS;
+   const bool structural_flowthrough =
+      graphbrew::sniper::isStructuralFlowThroughAddress(
+         static_cast<uint64_t>(address));
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
+         static_cast<uint64_t>(address));
+
+   PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
+   SubsecondTime latency = m_tags_access_time.getLatency();
+
+   if (block_info)
+""",
+        """NucaCache::write(IntPtr address, core_id_t requester, Byte* data_buf, bool& eviction, IntPtr& evict_address, Byte* evict_buf, SubsecondTime now, bool count, bool is_metadata)
+{
+   graphbrew::sniper::setCurrentNucaRequesterCore(
+      static_cast<uint32_t>(requester));
+   HitWhere::where_t hit_where = HitWhere::MISS;
+   const bool structural_flowthrough =
+      graphbrew::sniper::isStructuralFlowThroughAddress(
+         static_cast<uint64_t>(address));
+   const bool flowthrough =
+      graphbrew::sniper::isEcgFlowThroughAddress(
+         static_cast<uint64_t>(address));
+
+   PrL1CacheBlockInfo* block_info = (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
+   SubsecondTime latency = m_tags_access_time.getLatency();
+   UInt64 record_prefetch_sequence = 0;
+   UInt64 record_prefetch_issue_cycle = 0;
+   const bool record_prefetch =
+      graphbrew::sniper::record::prefetchInFlight(
+         static_cast<uint32_t>(requester),
+         static_cast<uint64_t>(address),
+         record_prefetch_sequence, record_prefetch_issue_cycle);
+   (void)record_prefetch_issue_cycle;
+   if (record_prefetch) {
+      const UInt64 lookup_cycles =
+         graphbrew::sniper::record::lookupLatencyCycles();
+      latency += (4 * lookup_cycles) *
+         m_memory_manager->getCore()->getDvfsDomain()->getPeriod();
+      graphbrew::sniper::record::noteLookupCycles(
+         static_cast<uint32_t>(requester), 4 * lookup_cycles);
+      auto* record_memory = dynamic_cast<
+         ParametricDramDirectoryMSI::MemoryManager*>(m_memory_manager);
+      LOG_ASSERT_ERROR(
+         record_memory != nullptr,
+         "ECG record completion requires parametric memory manager");
+      graphbrew::sniper::record::notePrefetchPrivateLookup(
+         static_cast<uint32_t>(requester));
+      if (record_memory->hasEcgRecordPrivateCopy(address)) {
+         graphbrew::sniper::record::notePrefetchCompletionPrivateDuplicate(
+            static_cast<uint32_t>(requester));
+         graphbrew::sniper::record::clearPrefetchInFlight(
+            static_cast<uint32_t>(requester));
+         eviction = false;
+         return boost::tuple<SubsecondTime, HitWhere::where_t>(
+            latency, HitWhere::MISS);
+      }
+      graphbrew::sniper::record::notePrefetchLlcLookup(
+         static_cast<uint32_t>(requester));
+   }
+   if (!record_prefetch &&
+       graphbrew::sniper::record::activeDeadDemand(
+          static_cast<uint32_t>(requester),
+          static_cast<uint64_t>(address))) {
+      graphbrew::sniper::record::noteDeadDemandBypass(
+         static_cast<uint32_t>(requester));
+      eviction = false;
+      if (count) {
+         ++m_write_misses;
+         ++m_writes;
+      }
+      return boost::tuple<SubsecondTime, HitWhere::where_t>(
+         latency, HitWhere::MISS);
+   }
+
+   if (block_info)
+""",
+        args.dry_run,
+        ["const bool record_prefetch ="],
+    )
+    migrate_if_present(
+        nuca_source,
+        """   const bool record_prefetch =
+      graphbrew::sniper::record::prefetchInFlight(
+         static_cast<uint32_t>(requester),
+         static_cast<uint64_t>(address),
+         record_prefetch_sequence, record_prefetch_issue_cycle);
+
+   if (block_info)
+""",
+        """   const bool record_prefetch =
+      graphbrew::sniper::record::prefetchInFlight(
+         static_cast<uint32_t>(requester),
+         static_cast<uint64_t>(address),
+         record_prefetch_sequence, record_prefetch_issue_cycle);
+   (void)record_prefetch_issue_cycle;
+   if (record_prefetch) {
+      const UInt64 lookup_cycles =
+         graphbrew::sniper::record::lookupLatencyCycles();
+      latency += (4 * lookup_cycles) *
+         m_memory_manager->getCore()->getDvfsDomain()->getPeriod();
+      graphbrew::sniper::record::noteLookupCycles(
+         static_cast<uint32_t>(requester), 4 * lookup_cycles);
+      auto* record_memory = dynamic_cast<
+         ParametricDramDirectoryMSI::MemoryManager*>(m_memory_manager);
+      LOG_ASSERT_ERROR(
+         record_memory != nullptr,
+         "ECG record completion requires parametric memory manager");
+      graphbrew::sniper::record::notePrefetchPrivateLookup(
+         static_cast<uint32_t>(requester));
+      if (record_memory->hasEcgRecordPrivateCopy(address)) {
+         graphbrew::sniper::record::notePrefetchCompletionPrivateDuplicate(
+            static_cast<uint32_t>(requester));
+         graphbrew::sniper::record::clearPrefetchInFlight(
+            static_cast<uint32_t>(requester));
+         eviction = false;
+         return boost::tuple<SubsecondTime, HitWhere::where_t>(
+            latency, HitWhere::MISS);
+      }
+      graphbrew::sniper::record::notePrefetchLlcLookup(
+         static_cast<uint32_t>(requester));
+   }
+
+   if (block_info)
+""",
+        args.dry_run,
+    )
+    migrate_if_present(
+        nuca_source,
+        """      graphbrew::sniper::record::notePrefetchLlcLookup(
+         static_cast<uint32_t>(requester));
+   }
+
+   if (block_info)
+""",
+        """      graphbrew::sniper::record::notePrefetchLlcLookup(
+         static_cast<uint32_t>(requester));
+   }
+   if (!record_prefetch &&
+       graphbrew::sniper::record::activeDeadDemand(
+          static_cast<uint32_t>(requester),
+          static_cast<uint64_t>(address))) {
+      graphbrew::sniper::record::noteDeadDemandBypass(
+         static_cast<uint32_t>(requester));
+      eviction = false;
+      if (count) {
+         ++m_write_misses;
+         ++m_writes;
+      }
+      return boost::tuple<SubsecondTime, HitWhere::where_t>(
+         latency, HitWhere::MISS);
+   }
+
+   if (block_info)
+""",
+        args.dry_run,
+    )
+    migrate_if_present(
+        nuca_source,
+        """   if (block_info)
+   {
+      block_info->setCState(CacheState::MODIFIED);
+""",
+        """   if (block_info)
+   {
+      if (record_prefetch) {
+         graphbrew::sniper::record::notePrefetchCompletionResident(
+            static_cast<uint32_t>(requester));
+         graphbrew::sniper::record::clearPrefetchInFlight(
+            static_cast<uint32_t>(requester));
+         eviction = false;
+         return boost::tuple<SubsecondTime, HitWhere::where_t>(
+            latency, HitWhere::NUCA_CACHE);
+      }
+      block_info->setCState(CacheState::MODIFIED);
+""",
+        args.dry_run,
+    )
+    migrate_if_present(
+        nuca_source,
+        """   if (block_info)
+   {
+      if (record_prefetch) {
+         graphbrew::sniper::record::notePrefetchLlcDuplicate(
+            static_cast<uint32_t>(requester));
+         graphbrew::sniper::record::clearPrefetchInFlight(
+            static_cast<uint32_t>(requester));
+      }
+      block_info->setCState(CacheState::MODIFIED);
+""",
+        """   if (block_info)
+   {
+      if (record_prefetch) {
+         graphbrew::sniper::record::notePrefetchCompletionResident(
+            static_cast<uint32_t>(requester));
+         graphbrew::sniper::record::clearPrefetchInFlight(
+            static_cast<uint32_t>(requester));
+         eviction = false;
+         return boost::tuple<SubsecondTime, HitWhere::where_t>(
+            latency, HitWhere::NUCA_CACHE);
+      }
+      block_info->setCState(CacheState::MODIFIED);
+""",
+        args.dry_run,
+    )
+    replace_once(
+        nuca_source,
+        """      hit_where = HitWhere::NUCA_CACHE;
+   }
+   else
+   {
+      if (flowthrough)
+""",
+        """      hit_where = HitWhere::NUCA_CACHE;
+   }
+   else
+   {
+      if (record_prefetch &&
+          (graphbrew::sniper::record::notePrefetchCompletionAdmissionCheck(
+              static_cast<uint32_t>(requester)),
+           !m_cache->canAdmitEcgRecordPrefetch(
+             address, record_prefetch_sequence))) {
+         graphbrew::sniper::record::notePrefetchCompletionAdmissionDrop(
+            static_cast<uint32_t>(requester));
+         graphbrew::sniper::record::clearPrefetchInFlight(
+            static_cast<uint32_t>(requester));
+         eviction = false;
+         if (count) {
+            ++m_write_misses;
+            ++m_writes;
+         }
+         return boost::tuple<SubsecondTime, HitWhere::where_t>(
+            latency, HitWhere::MISS);
+      }
+      if (flowthrough)
+""",
+        args.dry_run,
+        ["notePrefetchCompletionAdmissionDrop("],
+    )
+    migrate_if_present(
+        nuca_source,
+        """      if (record_prefetch) {
+         const UInt64 completion_cycle = SubsecondTime::divideRounded(
+            now + latency,
+            m_memory_manager->getCore()->getDvfsDomain()->getPeriod());
+         graphbrew::sniper::record::notePrefetchFill(
+            static_cast<uint32_t>(requester),
+            completion_cycle >= record_prefetch_issue_cycle
+               ? completion_cycle - record_prefetch_issue_cycle : 0);
+         graphbrew::sniper::record::clearPrefetchInFlight(
+            static_cast<uint32_t>(requester));
+      }
+
+""",
+        """      // ECG record prefetch completion latency is accounted from
+      // CacheCntlr::getLastPrefetchCompletion() by MemoryManager.
+
+""",
+        args.dry_run,
+    )
+    migrate_if_present(
+        nuca_source,
+        """      if (record_prefetch &&
+          !m_cache->canAdmitEcgRecordPrefetch(
+             address, record_prefetch_sequence)) {
+""",
+        """      if (record_prefetch &&
+          (graphbrew::sniper::record::notePrefetchCompletionAdmissionCheck(
+              static_cast<uint32_t>(requester)),
+           !m_cache->canAdmitEcgRecordPrefetch(
+             address, record_prefetch_sequence))) {
+""",
+        args.dry_run,
+    )
+    replace_once(
+        nuca_source,
+        """      graphbrew::sniper::recordEcgPlacementMiss(
+         static_cast<uint64_t>(address));
+      m_cache->insertSingleLine(address, data_buf,
+         &eviction, &evict_address, &evict_block_info, evict_buf,
+         now + latency);
+""",
+        """      graphbrew::sniper::recordEcgPlacementMiss(
+         static_cast<uint64_t>(address));
+      m_cache->insertSingleLine(address, data_buf,
+         &eviction, &evict_address, &evict_block_info, evict_buf,
+         now + latency);
+      if (record_prefetch) {
+         PrL1CacheBlockInfo* inserted =
+            (PrL1CacheBlockInfo*)m_cache->peekSingleLine(address);
+         LOG_ASSERT_ERROR(
+            inserted != nullptr,
+            "ECG record prefetch fill was not inserted in NUCA");
+         inserted->setCState(CacheState::SHARED);
+      }
+""",
+        args.dry_run,
+        ["ECG record prefetch fill was not inserted in NUCA"],
+    )
+    migrate_if_present(
+        nuca_source,
+        "address, record_prefetch_sequence)))",
+        "address, graphbrew::sniper::record::completedSequence("
+        "static_cast<uint32_t>(requester)))))",
+        args.dry_run,
+    )
+    migrate_if_present(
+        nuca_source,
+        "if (!record_prefetch &&\n"
+        "       graphbrew::sniper::record::activeDeadDemand(",
+        "if (!block_info && !record_prefetch &&\n"
+        "       graphbrew::sniper::record::activeDeadDemand(",
+        args.dry_run,
+    )
+
+
 def apply_overlays(args: argparse.Namespace) -> list[str]:
     if not args.apply_overlays:
         return []
@@ -1708,6 +3253,7 @@ def apply_overlays(args: argparse.Namespace) -> list[str]:
     patch_ecg_pfx_prefetcher_overlay(args)
     patch_cache_only_history_queue(args)
     patch_cache_only_shmem_timing(args)
+    patch_sniper_foundation(args)
     if args.dry_run:
         log.info("Overlay application dry-run completed.")
     else:

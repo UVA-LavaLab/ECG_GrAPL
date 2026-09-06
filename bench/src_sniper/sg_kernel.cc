@@ -28,6 +28,7 @@
 // cache_sim/gem5).
 #include "ecg_reuse_plan_builder.h"
 #include "ecg_metadata.h"
+#include "ecg_record_guest.h"
 
 // File-backed kernel diagnostic target. Native execution is intentionally kept
 // lightweight for checking .sg parameters and sideband export. Do not use this
@@ -414,6 +415,96 @@ int run_pr(const Graph& graph, int max_iters) {
     };
     SniperEdgeRegion edge_regions[2];
     int num_edge_regions = sniper_make_edge_regions(graph, edge_regions, 2, true);
+
+    graphbrew_sniper::EcgRecordPrStream<Graph> record_stream(
+        graph, contrib.data(), static_cast<uint64_t>(max_iters));
+    if (record_stream.active()) {
+        const char* semantic_limit =
+            std::getenv("SNIPER_SEMANTIC_EDGE_LIMIT");
+        if (semantic_limit && semantic_limit[0] &&
+            std::strcmp(semantic_limit, "0") != 0) {
+            throw std::invalid_argument(
+                "Sniper ECG record requires a complete fixed-iteration ROI");
+        }
+        if (!sniper_export_context(
+                regions, 2, graph, nullptr,
+                edge_regions, num_edge_regions)) {
+            std::fprintf(
+                stderr,
+                "sniper-sg PR: ECG record context export failed\n");
+            return 2;
+        }
+        const char* warm_value =
+            std::getenv("SNIPER_ECG_RECORD_WARM_PROPERTIES");
+        const bool warm_properties =
+            warm_value && warm_value[0] &&
+            std::strcmp(warm_value, "0") != 0;
+        volatile ScoreT* warm_scores = scores.data();
+        volatile ScoreT* warm_contribution = contrib.data();
+        if (warm_properties) {
+            for (NodeID node = 0; node < graph.num_nodes(); ++node) {
+                warm_scores[node] = warm_scores[node];
+                warm_contribution[node] = warm_contribution[node];
+            }
+        }
+        std::fprintf(stderr,
+            "[SNIPER-ECG-RECORD-WARM property_arrays=%u]\n",
+            warm_properties ? 1u : 0u);
+
+        record_stream.activate();
+        uint64_t semantic_edges = 0;
+        SNIPER_ROI_BEGIN();
+        for (int iteration = 0; iteration < max_iters; ++iteration) {
+            record_stream.beginIteration(
+                static_cast<uint64_t>(iteration),
+                static_cast<uint64_t>(max_iters));
+            for (NodeID node = 0; node < graph.num_nodes(); ++node) {
+                ScoreT incoming_total = 0.0f;
+                const uint64_t begin =
+                    static_cast<uint64_t>(graph.in_offset(node));
+                const uint64_t end =
+                    static_cast<uint64_t>(graph.in_offset(node + 1));
+                for (uint64_t position = begin;
+                     position < end; ++position) {
+                    const uint64_t word =
+                        record_stream.consume(position);
+                    ecg_record::DecodedRecord decoded;
+                    const ecg_record::Status status =
+                        ecg_record::decodeRecord(
+                            record_stream.layout(), word, decoded);
+                    if (status != ecg_record::Status::OK ||
+                        decoded.destination >=
+                            static_cast<uint64_t>(graph.num_nodes())) {
+                        std::abort();
+                    }
+                    incoming_total +=
+                        warm_contribution[decoded.destination];
+                    ++semantic_edges;
+                }
+                scores[node] = base_score + kDamp * incoming_total;
+                const int64_t degree = graph.out_degree(node);
+                contrib[node] =
+                    degree > 0 ? scores[node] / degree : 0.0f;
+            }
+        }
+        record_stream.finish();
+        SNIPER_ROI_END();
+
+        uint64_t checksum = 1469598103934665603ULL;
+        for (ScoreT score : scores) {
+            uint32_t bits = 0;
+            std::memcpy(&bits, &score, sizeof(bits));
+            checksum ^= bits;
+            checksum *= 1099511628211ULL;
+        }
+        std::fprintf(stderr,
+            "[ECG-PR-RESULT iterations=%d semantic_edges=%llu "
+            "score_checksum=%016llx]\n",
+            max_iters,
+            static_cast<unsigned long long>(semantic_edges),
+            static_cast<unsigned long long>(checksum));
+        return 0;
+    }
 
     const int ecg_reuse_plan_depth =
         graphbrew_sniper::env_int_clamped("ECG_REUSE_PLAN_DEPTH", 0, 0, 4);
@@ -1017,7 +1108,22 @@ int run_pr(const Graph& graph, int max_iters) {
     }
 
     ScoreT checksum = 0.0f;
+    uint64_t checksum_bits = 1469598103934665603ULL;
     for (ScoreT score : scores) checksum += score;
+    for (ScoreT score : scores) {
+        uint32_t bits = 0;
+        std::memcpy(&bits, &score, sizeof(bits));
+        checksum_bits ^= bits;
+        checksum_bits *= 1099511628211ULL;
+    }
+    std::fprintf(stderr,
+        "[ECG-PR-RESULT iterations=%d semantic_edges=%llu "
+        "score_checksum=%016llx]\n",
+        max_iters,
+        static_cast<unsigned long long>(
+            static_cast<uint64_t>(max_iters) *
+            graph.num_edges_directed()),
+        static_cast<unsigned long long>(checksum_bits));
     std::cout << "GraphBrew Sniper SG PR checksum: " << checksum << std::endl;
     return std::fabs(checksum) > 0.0f ? 0 : 1;
 }

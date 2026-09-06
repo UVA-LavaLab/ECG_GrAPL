@@ -374,6 +374,10 @@ CacheSetECG::CacheSetECG(
    m_ecg_epoch_valid = new bool[m_associativity];
    m_ecg_context_id = new UInt16[m_associativity];
    m_last_touch = new UInt64[m_associativity];
+   m_record_metadata =
+      new ecg_record::LineMetadata[m_associativity];
+   m_record_property = new bool[m_associativity];
+   m_record_tier = new UInt8[m_associativity];
    for (UInt32 way = 0; way < m_associativity; way++) {
       m_rrip_bits[way] = m_rrip_insert;
       m_dbg_tiers[way] = 0;
@@ -386,6 +390,9 @@ CacheSetECG::CacheSetECG(
       m_ecg_epoch_valid[way] = false;
       m_ecg_context_id[way] = 0;
       m_last_touch[way] = 0;
+      m_record_metadata[way].clear();
+      m_record_property[way] = false;
+      m_record_tier[way] = 3;
    }
    if (Sim()->getCfg()->hasKey(cfgname + "/cache_size", core_id)) {
       m_llc_size_bytes = UInt64(Sim()->getCfg()->getIntArray(cfgname + "/cache_size", core_id)) * k_KILO;
@@ -428,6 +435,9 @@ CacheSetECG::~CacheSetECG()
    delete [] m_ecg_epoch_valid;
    delete [] m_ecg_context_id;
    delete [] m_last_touch;
+   delete [] m_record_metadata;
+   delete [] m_record_property;
+   delete [] m_record_tier;
 }
 
 void
@@ -636,6 +646,32 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
 {
    if (m_has_pending_insert) {
       m_line_addrs[way] = m_pending_insert_addr;
+      m_record_property[way] = false;
+      m_record_tier[way] = 3;
+      const uint32_t record_core = requesterCoreOr(m_core_id);
+      if (graphbrew::sniper::record::replacementActive(record_core)) {
+         m_record_metadata[way].clear();
+         bindRecordClass(way);
+         graphbrew::sniper::record::Observation observation;
+         if (graphbrew::sniper::record::activeObservation(
+                record_core, m_pending_insert_addr, observation)) {
+            setRecordClass(way, observation.property_vaddr);
+            const auto result = graphbrew::sniper::record::observeLine(
+                record_core, m_record_metadata[way]);
+            LOG_ASSERT_ERROR(
+               result != ecg_record::ObservationResult::INVALID_CONTEXT &&
+               result != ecg_record::ObservationResult::INVALID_ORDER,
+               "Invalid current ECG insertion observation");
+         }
+         m_rrip_bits[way] = m_record_tier[way] == 1 ? 1 :
+            m_record_tier[way] == 2 ? 6 : 7;
+         m_last_touch[way] = ++m_access_tick;
+         m_has_pending_insert = false;
+         m_pending_exact_reuse_plan_valid = false;
+         m_pending_request_current_epoch = 0;
+         m_pending_request_context_id = 0;
+         return;
+      }
       m_property_lines[way] = graphbrew::sniper::globalContext().isPropertyData(
             static_cast<uint64_t>(m_pending_insert_addr));
       m_dbg_tiers[way] =
@@ -656,8 +692,23 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
       m_ecg_epoch_count[way] = 0;
       m_ecg_epoch_valid[way] = false;
       m_ecg_context_id[way] = 0;
+      m_record_metadata[way].clear();
       UInt16 delivered_current_epoch = 0;
       const uint32_t requester_core = requesterCoreOr(m_core_id);
+      graphbrew::sniper::record::Observation record_observation;
+      if (graphbrew::sniper::record::activeObservation(
+             requester_core,
+             static_cast<uint64_t>(m_pending_insert_addr),
+             record_observation)) {
+         m_property_lines[way] = true;
+         const ecg_record::ObservationResult result =
+            graphbrew::sniper::record::observeLine(
+               requester_core, m_record_metadata[way]);
+         LOG_ASSERT_ERROR(
+            result != ecg_record::ObservationResult::INVALID_CONTEXT &&
+            result != ecg_record::ObservationResult::INVALID_ORDER,
+            "Sniper ECG record insertion observation failed");
+      }
       if (m_property_lines[way] &&
           graphbrew::sniper::hasCurrentVertexHint(requester_core)) {
          UInt8 tier = 0;
@@ -745,6 +796,9 @@ CacheSetECG::applyPendingInsertion(UInt32 way)
    m_ecg_epoch_valid[way] = false;
    m_ecg_context_id[way] = 0;
    m_last_touch[way] = ++m_access_tick;
+   m_record_metadata[way].clear();
+   m_record_property[way] = false;
+   m_record_tier[way] = 3;
 }
 
 UInt32
@@ -1157,6 +1211,46 @@ CacheSetECG::getReplacementIndex(CacheCntlr *cntlr)
          return way;
       }
    }
+   const uint32_t requester_core = requesterCoreOr(m_core_id);
+   if (graphbrew::sniper::record::replacementActive(requester_core)) {
+      uint64_t sequence = 0;
+      ecg_record::Layout layout;
+      const bool have_watermark = graphbrew::sniper::record::receiverWatermark(
+             requester_core, sequence, layout);
+      {
+         std::array<ecg_record::WayState, 64> ways{};
+         std::array<UInt32, 64> eligible{};
+         std::size_t eligible_count = 0;
+         LOG_ASSERT_ERROR(
+            m_associativity <= ways.size(),
+            "Sniper ECG record supports at most 64 ways");
+         for (UInt32 way = 0; way < m_associativity; ++way) {
+            if (!isValidReplacement(way))
+               continue;
+            const std::size_t slot = eligible_count++;
+            eligible[slot] = way;
+            ways[slot].property = m_record_property[way];
+            ways[slot].rrpv = m_rrip_bits[way];
+            ways[slot].recency = m_last_touch[way];
+            ways[slot].grasp_tier = m_record_tier[way];
+            ways[slot].state = ecg_record::victimState(
+                m_record_metadata[way], have_watermark);
+            ways[slot].deadline = m_record_metadata[way].value;
+         }
+         LOG_ASSERT_ERROR(
+            eligible_count > 0,
+            "Sniper ECG record found no eligible replacement way");
+         std::size_t victim = 0;
+         LOG_ASSERT_ERROR(
+            ecg_record::selectVictim(
+               layout, ways.data(), eligible_count,
+               sequence, victim) == ecg_record::Status::OK,
+            "Sniper ECG record victim selection failed");
+         const UInt32 selected = eligible[victim];
+         applyPendingInsertion(selected);
+         return selected;
+      }
+   }
    tryLoadContext();
    if (m_mode == graphbrew::sniper::ECGMode::POPT_PRIMARY) return findPOPTVictim(cntlr);
    if (m_mode == graphbrew::sniper::ECGMode::ECG_GRASP_POPT) return findECGGraspPoptVictim(cntlr);
@@ -1174,10 +1268,45 @@ CacheSetECG::updateReplacementIndex(UInt32 accessed_index)
    EcgHostProfileScope profile(EcgHostProfileScope::Kind::Update);
    m_set_info->increment(accessed_index);
    m_last_touch[accessed_index] = ++m_access_tick;
+   const uint32_t requester_core = requesterCoreOr(m_core_id);
+   if (graphbrew::sniper::record::replacementActive(requester_core)) {
+      bindRecordClass(accessed_index);
+      graphbrew::sniper::record::Observation observation;
+      if (graphbrew::sniper::record::activeObservation(
+             requester_core, m_line_addrs[accessed_index], observation)) {
+         setRecordClass(accessed_index, observation.property_vaddr);
+         const auto result = graphbrew::sniper::record::observeLine(
+             requester_core, m_record_metadata[accessed_index]);
+         LOG_ASSERT_ERROR(
+            result != ecg_record::ObservationResult::INVALID_CONTEXT &&
+            result != ecg_record::ObservationResult::INVALID_ORDER,
+            "Invalid current ECG hit observation");
+      }
+      if (m_record_property[accessed_index] && m_record_tier[accessed_index] == 1)
+         m_rrip_bits[accessed_index] = 0;
+      else if (m_rrip_bits[accessed_index] > 0)
+         --m_rrip_bits[accessed_index];
+      return;
+   }
+   graphbrew::sniper::record::Observation record_observation;
+   if (graphbrew::sniper::record::activeObservation(
+          requester_core,
+          static_cast<uint64_t>(m_line_addrs[accessed_index]),
+          record_observation)) {
+      m_property_lines[accessed_index] = true;
+      const ecg_record::ObservationResult result =
+         graphbrew::sniper::record::observeLine(
+            requester_core, m_record_metadata[accessed_index]);
+      LOG_ASSERT_ERROR(
+         result != ecg_record::ObservationResult::INVALID_CONTEXT &&
+         result != ecg_record::ObservationResult::INVALID_ORDER,
+         "Sniper ECG record hit observation failed");
+   }
    if (m_cache_block_info_array[accessed_index]->isPageTableBlock() && m_srrip_tlb_enabled) {
       m_rrip_bits[accessed_index] = 0;
       return;
    }
+
    tryLoadContext();
    auto& context = graphbrew::sniper::globalContext();
    if (context.loaded && m_line_addrs[accessed_index] != 0) {
@@ -1254,4 +1383,92 @@ CacheSetECG::updateReplacementIndex(UInt32 accessed_index)
       }
    }
    if (m_rrip_bits[accessed_index] > 0) m_rrip_bits[accessed_index]--;
+}
+
+ecg_record::LineMetadata*
+CacheSetECG::recordMetadata(IntPtr line_addr)
+{
+   for (UInt32 way = 0; way < m_associativity; ++way) {
+      if (m_cache_block_info_array[way]->isValid() &&
+          m_line_addrs[way] == line_addr)
+         return &m_record_metadata[way];
+   }
+   return nullptr;
+}
+
+void
+CacheSetECG::setRecordClass(UInt32 way, UInt64 virtual_address)
+{
+   const uint32_t core = requesterCoreOr(m_core_id);
+   m_record_property[way] = graphbrew::sniper::record::propertyLine(core, virtual_address);
+   m_record_tier[way] = m_record_property[way]
+      ? static_cast<UInt8>(graphbrew::sniper::globalContext().classifyGRASP(
+           virtual_address, m_llc_size_bytes))
+      : 3;
+}
+
+void
+CacheSetECG::bindRecordClass(UInt32 way)
+{
+   UInt64 virtual_line = 0;
+   bool property = false;
+   if (graphbrew::sniper::record::lineClassification(
+          requesterCoreOr(m_core_id), m_line_addrs[way], virtual_line, property))
+      setRecordClass(way, virtual_line);
+}
+
+ecg_record::ApplyResult
+CacheSetECG::applyRecordUpdate(
+   IntPtr line_addr, const ecg_record::CommitUpdate& update)
+{
+   const uint32_t requester_core = requesterCoreOr(m_core_id);
+   ecg_record::LineMetadata* metadata = recordMetadata(line_addr);
+   const ecg_record::ApplyResult result =
+      graphbrew::sniper::record::applyLineUpdate(
+         requester_core,
+         metadata, update);
+   if (metadata && (result == ecg_record::ApplyResult::APPLIED ||
+                    result == ecg_record::ApplyResult::STALE ||
+                    result == ecg_record::ApplyResult::EXPIRED)) {
+      for (UInt32 way = 0; way < m_associativity; ++way) {
+         if (&m_record_metadata[way] == metadata) {
+            setRecordClass(way, update.property_vaddr);
+            break;
+         }
+      }
+   }
+   return result;
+}
+
+bool
+CacheSetECG::canAdmitRecordPrefetch(UInt64 sequence) const
+{
+   const uint32_t requester_core = requesterCoreOr(m_core_id);
+   ecg_record::Layout layout;
+   uint64_t watermark = 0;
+   if (!graphbrew::sniper::record::receiverWatermark(
+          requester_core, watermark, layout))
+      watermark = sequence;
+   std::array<ecg_record::WayState, 64> ways{};
+   std::array<bool, 64> valid{};
+   LOG_ASSERT_ERROR(
+      m_associativity <= ways.size(),
+      "Sniper ECG record admission supports at most 64 ways");
+   for (UInt32 way = 0; way < m_associativity; ++way) {
+      valid[way] = m_cache_block_info_array[way]->isValid();
+      ways[way].property = m_record_property[way];
+      ways[way].rrpv = m_rrip_bits[way];
+      ways[way].recency = m_last_touch[way];
+      ways[way].grasp_tier = m_record_tier[way];
+      ways[way].state = ecg_record::victimState(
+         m_record_metadata[way], true);
+      ways[way].deadline = m_record_metadata[way].value;
+   }
+   bool admit = false;
+   LOG_ASSERT_ERROR(
+      ecg_record::canAdmitPrefetch(
+         layout, ways.data(), valid.data(), m_associativity,
+         sequence, admit) == ecg_record::Status::OK,
+      "Sniper ECG record admission failed");
+   return admit;
 }

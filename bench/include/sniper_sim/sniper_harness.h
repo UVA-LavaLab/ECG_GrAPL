@@ -16,6 +16,7 @@
 #include <string>
 
 #include "ecg_reuse_plan_builder.h"
+#include "ecg_record_native.h"
 #include <graph.h>
 #include <pvector.h>
 
@@ -71,6 +72,36 @@ constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_EXTRACT2 = 0x47464C45ULL; // dest +
 constexpr uint64_t GRAPHBREW_SNIPER_USER_REUSE_PLAN_BIND = 0x4B32424EULL;  // "ReusePlanBN"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_REUSE_PLAN_CLEAR = 0x4B324243ULL; // "ReusePlanBC"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_REUSE_PLAN_CERTIFIED = 0x4B324244ULL;
+constexpr uint64_t GRAPHBREW_SNIPER_USER_FOUNDATION_ECHO = 0x4543484FULL;  // "ECHO"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_FOUNDATION_READ_ADDRESS = 0x46524144ULL; // "FRAD"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_FOUNDATION_READ4 = 0x46523442ULL; // "FR4B"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_FOUNDATION_READ8 = 0x46523842ULL; // "FR8B"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_FOUNDATION_STATUS = 0x46525354ULL; // "FRST"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_FOUNDATION_VALUE_ADDRESS = 0x46564144ULL; // "FVAD"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_FOUNDATION_VALUE_LOW = 0x46564c4fULL; // "FVLO"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_FOUNDATION_VALUE_HIGH = 0x46564849ULL; // "FVHI"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_FOUNDATION_VALUE_COMMIT = 0x4656434dULL; // "FVCM"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_LAYOUT = 0x45524c59ULL; // "ERLY"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_BASE = 0x45524241ULL; // "ERBA"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_PROPERTY = 0x45525041ULL; // "ERPA"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_COUNT = 0x4552434eULL; // "ERCN"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_VERTICES = 0x4552564eULL; // "ERVN"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_GENERATION = 0x4552474eULL; // "ERGN"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_CONTEXT = 0x45524354ULL; // "ERCT"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_CONTROL = 0x4552434fULL; // "ERCO"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_CONFIG_COMMIT = 0x4552434dULL; // "ERCM"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_ITERATION_BASE = 0x45524942ULL; // "ERIB"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_ITERATION_COMMIT = 0x45524943ULL; // "ERIC"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_READ_ARM = 0x45525241ULL; // "ERRA"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_READ_WIDTH = 0x45525257ULL; // "ERRW"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_VALUE_ADDRESS = 0x45525641ULL; // "ERVA"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_VALUE_LOW = 0x45524c4fULL; // "ERLO"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_VALUE_HIGH = 0x45524849ULL; // "ERHI"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_VALUE_COMMIT = 0x45525643ULL; // "ERVC"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_CONSUME = 0x45524353ULL; // "ERCS"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_DRAIN = 0x45524452ULL; // "ERDR"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_REPORT = 0x45525250ULL; // "ERRP"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_DEACTIVATE = 0x45524458ULL; // "ERDX"
 
 inline const char* env_or_default(const char* name, const char* fallback) {
     const char* value = std::getenv(name);
@@ -138,6 +169,142 @@ inline void notify_user(uint64_t command, uint64_t argument) {
     (void)command;
     (void)argument;
 #endif
+}
+
+inline uint64_t request_user(uint64_t command, uint64_t argument) {
+#if GRAPHBREW_SNIPER_HAS_SIM_API
+    return SimUser(command, argument);
+#else
+    (void)command;
+    return argument;
+#endif
+}
+
+inline uint64_t foundation_echo(uint64_t value) {
+    asm volatile("" ::: "memory");
+    const uint64_t echoed = request_user(
+        GRAPHBREW_SNIPER_USER_FOUNDATION_ECHO, value);
+    asm volatile("" ::: "memory");
+    return echoed;
+}
+
+inline void foundation_arm_read(
+        const volatile void* address, uint64_t expected, uint32_t bytes) {
+    asm volatile("" ::: "memory");
+    notify_user(
+        GRAPHBREW_SNIPER_USER_FOUNDATION_READ_ADDRESS,
+        reinterpret_cast<uint64_t>(const_cast<const void*>(
+            reinterpret_cast<const volatile void*>(address))));
+    notify_user(
+        bytes == 4 ? GRAPHBREW_SNIPER_USER_FOUNDATION_READ4
+                   : GRAPHBREW_SNIPER_USER_FOUNDATION_READ8,
+        expected);
+    asm volatile("" ::: "memory");
+}
+
+inline uint64_t foundation_read_status() {
+    asm volatile("" ::: "memory");
+    const uint64_t status = request_user(
+        GRAPHBREW_SNIPER_USER_FOUNDATION_STATUS, 0);
+    asm volatile("" ::: "memory");
+    return status;
+}
+
+inline void foundation_report_loaded(
+        const volatile void* address, uint64_t value, uint32_t bytes) {
+    asm volatile("" ::: "memory");
+    notify_user(
+        GRAPHBREW_SNIPER_USER_FOUNDATION_VALUE_ADDRESS,
+        reinterpret_cast<uint64_t>(address));
+    notify_user(
+        GRAPHBREW_SNIPER_USER_FOUNDATION_VALUE_LOW,
+        static_cast<uint32_t>(value));
+    notify_user(
+        GRAPHBREW_SNIPER_USER_FOUNDATION_VALUE_HIGH,
+        static_cast<uint32_t>(value >> 32));
+    notify_user(GRAPHBREW_SNIPER_USER_FOUNDATION_VALUE_COMMIT, bytes);
+    asm volatile("" ::: "memory");
+}
+
+inline void ecg_record_configure(
+        const ecg_record::NativeConfiguration& configuration) {
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_LAYOUT,
+        configuration.layout_descriptor);
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_BASE,
+        configuration.record_base);
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_PROPERTY,
+        configuration.property_base);
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_COUNT,
+        configuration.record_count);
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_VERTICES,
+        configuration.vertex_count);
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_GENERATION,
+        configuration.generation);
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_CONTEXT,
+        configuration.context);
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_CONTROL,
+        configuration.control);
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_CONFIG_COMMIT, 0);
+}
+
+inline void ecg_record_iteration(
+        uint64_t iteration_base, bool has_next) {
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_ITERATION_BASE,
+        iteration_base);
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_ITERATION_COMMIT,
+        ecg_record::kNativeEnable |
+            (has_next ? ecg_record::kNativeHasNext : 0));
+}
+
+inline void ecg_record_arm_read(
+        const volatile void* address, uint32_t bytes) {
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_READ_ARM,
+        reinterpret_cast<uint64_t>(const_cast<const void*>(
+            reinterpret_cast<const volatile void*>(address))));
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_READ_WIDTH,
+        bytes);
+}
+
+inline void ecg_record_report_loaded(
+        const volatile void* address, uint64_t value, uint32_t bytes) {
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_VALUE_ADDRESS,
+        reinterpret_cast<uint64_t>(const_cast<const void*>(
+            reinterpret_cast<const volatile void*>(address))));
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_VALUE_LOW,
+        static_cast<uint32_t>(value));
+    if (bytes == 8) {
+        notify_user(
+            GRAPHBREW_SNIPER_USER_ECG_RECORD_VALUE_HIGH,
+            static_cast<uint32_t>(value >> 32));
+    }
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_VALUE_COMMIT, bytes);
+}
+
+inline void ecg_record_consume(const volatile void* address) {
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_CONSUME,
+        reinterpret_cast<uint64_t>(const_cast<const void*>(
+            reinterpret_cast<const volatile void*>(address))));
+}
+
+inline void ecg_record_drain_report() {
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_DRAIN, 0);
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_REPORT, 0);
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_DEACTIVATE, 0);
 }
 
 inline bool reuse_plan_exact_bind_enabled() {
