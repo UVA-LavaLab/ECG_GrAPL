@@ -1,245 +1,194 @@
-# Edge-carried records and cache control
+# Adaptive edge records and cache control
 
-ECG's current REF32 mechanism connects three decisions: **what information the
-graph provides**, **how much of it fits beside an edge ID**, and **how the cache
-uses the recovered prediction**. Full14 is the richer small-ID encoding;
-Scale6 is the compact encoding used for Twitter-scale IDs. They are choices
-within the design, not interchangeable names for the whole architecture.
+ECG connects three decisions: what the graph traversal knows, how that
+information fits beside the actual vertex ID, and how a cache consumes the
+result. The current implementation has one graph-adaptive record grammar and
+four mechanisms: transport, replacement, prefetch, and
+replacement-prefetch.
 
-## 1. Derive reuse from the actual traversal
+## 1. Derive reuse from the executed traversal
 
 PageRank pull visits the **in-neighbors** `N_in(u)` of an **outer vertex** `u`.
-The record names the **property vertex** `v` whose contribution is loaded.
-That value is read for destinations in `N_out(v)`, so its access count is
-`d_out(v)`. Traversing **out-neighbors** `N_out(u)` instead gives property access
-count `d_in(v)`, one access from each source in `N_in(v)`. The metadata must
-follow the order the chosen kernel executes.
+The record names the **property vertex** `v`; property `p[v]` is read for
+destinations in `N_out(v)`, so its request count is `d_out(v)`. A traversal
+over out-neighbors `N_out(u)` instead reads `p[v]` once for each source in
+`N_in(v)`, giving `d_in(v)`. Metadata must match the actual traversal order.
 
 ### Figure 1 — From one graph edge to its reuse mask
 
-![The same internal vertex IDs carried from the graph through CSR offsets and neighbor entries, with positions 18 and 22 establishing a four-request line reuse distance and a Full14 mask](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg)
+![The same internal vertex IDs carried from the graph through CSR offsets and neighbor entries, with positions 18 and 22 establishing a four-request line reuse distance and the current adaptive mask](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg)
 
-**Figure 1.** The shared 32-vertex fixture has nine non-isolated vertices.
-At `u=8`, the in-neighbor row is `[3, 6, 7, 11, 18]`, occupying positions
-`[14,19)`. Entry `j=18` names `v=18`. Position and vertex ID happen to agree
-here; `j=22` also names vertex 18, demonstrating that they are different
-quantities. The fixture is undirected, so incoming and outgoing rows agree;
-the construction rule is still defined for the chosen traversal.
+**Figure 1.** The fixture contains 32 vertices and 34 adjacency records.
+At `u=8`, row `[14,19)` is `[3,6,7,11,18]`. Record `j=18` names `v=18`;
+the next access to its 64-byte property line is `j=22`, so distance is four.
+Semantic position is `s=iteration_base+j+1`, not a CPU cycle or O3 sequence.
 
-With four-byte properties and 64-byte lines, vertices `0..15` occupy line A
-and `16..31` occupy line B. The next B access after `j=18` is `j=22`, hence
-distance `4`. A reference is to the **next property-line use**, not necessarily
-the next use of the same vertex. The later request to vertex 20 also uses B.
+## 2. Derive the bit-granular layout
 
-The semantic coordinate is `s = iteration_base + j + 1`. Record fetches,
-score accesses, CPU cycles and the O3 instruction sequence number are not
-substitutes for this governed-request coordinate.
+### Figure 2 — Choose one adaptive layout for the graph
 
-## 2. Select a mask that fits the graph
+![Graph-derived ID and metadata budgets, current joint token fields, numeric precision examples, and the explicit eight-byte escape](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f02-record-formats.svg)
 
-### Figure 2 — Choose the mask to fit the graph
-
-![Graph-dependent ID and spare-bit budgets, the actual five-bit-ID Full14 example with thirteen unused bits, configurable reference and action splits, and the separate twenty-six-plus-six-bit Scale6 layout](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f02-record-formats.svg)
-
-**Figure 2.** The available budget is `32 - b`, where
-`b = max(1, ceil(log2 |V|))`. Twitter's 41,652,230 vertices need 26 ID bits,
-leaving six metadata bits. A 262,144-vertex graph needs 18, leaving fourteen.
-Our 32-vertex example needs five and has 27 spare bits.
-
-The current implementation offers two explicit format families:
-
-| Format | Implemented fields | Capacity and selection |
-|---|---|---|
-| **Full14** | `reference + 2 state + action = 14` bits; default `8 + 2 + 4` | Uses the actual ID width; fits graphs requiring at most 18 ID bits |
-| **Scale6** | one 6-bit state/distance token | Fits selected ID widths through 26; the Twitter campaign and current native ABI use 26 |
-
-Full14's reference field supports 6 through 12 bits while the remaining
-metadata bits become the action field. Useful implemented examples are
-`8/2/4`, `10/2/2`, and `12/2/0`. The reference always has five exponent bits;
-additional bits provide mantissa precision. These choices are supported by
-the codec and functional builder. The named experiment profiles pin their
-own field settings rather than silently tuning them.
-
-Full14 still uses **exactly fourteen metadata bits** on the small fixture:
-the upper thirteen bits remain unused. Neither format automatically spends
-all available padding. Intermediate graph sizes likewise do not imply an
-unimplemented intermediate format.
-
-For the running edge, Full14's reference code is `0x10`, FINITE is `1`,
-and the action is `0`. With five ID bits:
+`Requirements` contains `vertex_count`, `max_vertex_id_known`,
+`max_vertex_id`, `record_count`, `traversal_count`,
+`requested_record_bytes`, and `minimum_mantissa_bits`. Let `W` be 32 or 64
+record bits:
 
 ```text
-M = (0x10 << 5) | (1 << 13) = 0x00002200
-R = 18 | M                  = 0x00002212
-v = R & 0x1F               = 18
+id_bits       = max(1, bit_width(maximum encoded vertex ID))
+metadata_bits = W - id_bits
+H             = bit_width(record_count)
+K             = H * 2^m
 ```
 
-The same edge in the fixed 26+6 ABI is `0x10000012`. Scale6 combines state
-and distance class rather than reserving independent state/action fields:
+The layout chooses the largest `m` such that
+`2 + 2*H*2^m <= 2^metadata_bits`. Selection tries four bytes and then eight
+unless width is forced; `minimum_mantissa_bits` can require the wider carrier.
+Using the maximum ID actually present preserves headroom when isolated
+vertices make `vertex_count` larger.
+
+The packed descriptor has a fixed signature and validates every field; it is
+not a public research-version selector.
+
+The joint token grammar is uniform:
 
 | Token | Meaning |
 |---|---|
 | `0` | UNKNOWN |
-| `1` | DEAD: no remaining governed use in the requested horizon |
-| `2..32` | FINITE; logarithmic bucket is `token - 2` |
-| `33..63` | WRAP; next-traversal bucket is `token - 33` |
+| `1` | DEAD |
+| `2 + q` | FINITE |
+| `2 + K + q` | WRAP |
 
-Full14 decoding is implemented in cache_sim. The native RISC-V instruction
-pair currently decodes **only the fixed 26+6 ABI**, even for small bring-up
-graphs. Available ID padding alone does not implement a richer native decoder.
+Here `q=(exponent<<m)|mantissa`. Decoding rounds upward, so distance is a
+conservative bound. Invalid tokens, graph horizons, addresses, and checked
+64-bit sequence/deadline arithmetic fail closed.
 
-## 3. Turn a relative reference into a bounded prediction
+At `H=31`, 18-, 19-, and 20-bit IDs leave `M=14`, `13`, and `12`, selecting
+`m=8`, `7`, and `6`. There is no cliff from 14 directly to 6 metadata bits
+and no rounding of a 19-bit ID to 24 bits. The 26-ID/M6/H31/m0 case happens
+to reproduce an older compact byte layout, but is only one numeric
+configuration of this method. A full 32-bit ID requires an eight-byte record
+with `M=32`; that does not by itself demonstrate an exascale graph loader.
 
-### Figure 3 — More metadata bits sharpen the future bound
+For the fixture, `id_bits=5`, `M=27`, `H=6`, `exponent_bits=3`, and `m=23`.
+Distance four gives `q=2<<23`, FINITE token `16777218`, mask `0x20000040`,
+and record `0x20000052`. No bits are reserved for an action field.
 
-![Interleaved line A and B accesses from the same CSR trace, Full14 versus Scale6 decoded distance precision, and separate expiry points for the same held prediction](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg)
+## 3. Decode a conservative future bound
 
-**Figure 3.** Full14's default five-bit exponent plus three-bit mantissa
-represents this distance `4` exactly. Scale6 uses
-`bucket = floor(log2(distance))` and decodes the upper bound
-`2^(bucket+1) - 1`: distance four becomes seven. The future deadline is
-therefore `19+4=23` or `19+7=26`, respectively.
+### Figure 3 — Graph-derived metadata sharpens the future bound
 
-More bits matter most when they distinguish nearby distances. For the
-separate distance-100 probe, reference widths 8, 10 and 12 decode to
-103, 101 and 100; Scale6 decodes to 127. This illustrates precision, not an
-extra access in the small graph. Encoding occurs in preprocessing; decoding
-uses integer field extraction, shifts and addition, not a runtime logarithm.
+![Interleaved line A and B accesses, adaptive mantissa precision, and expiry to UNKNOWN](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f03-future-distance.svg)
 
-The cache stores a deadline in semantic-request units. Full14's model defaults
-to 21 deadline bits; the Scale6 campaign and native path use 32. This is a
-separate choice from the reference field's precision. The configured traversal
-must fit the deadline counter's safe half-range; ID width alone does not bound
-edge count.
+The fixture distances two and four decode exactly. At `s=19`, A's deadline is
+20 and remaining bound is one; B's deadline is 23 and remaining bound is four.
+At the same `H=31`, progressively smaller numeric budgets M14, M13, M12 and M6
+select mantissas 8, 7, 6 and 0. These are precision points, not named methods.
 
-A held prediction becomes **UNKNOWN**, not DEAD, after its bound passes.
-Later accesses can refresh it, so the expiry drawing deliberately freezes one
-prediction. WRAP describes another traversal: it normalizes to FINITE when
-another requested iteration remains, otherwise to DEAD.
+A passed FINITE bound becomes UNKNOWN, never inferred DEAD. WRAP represents a
+next-traversal reuse and normalizes to FINITE only when another requested
+traversal remains; otherwise it becomes DEAD.
 
-## 4. Use the prediction to choose a victim
+## 4. Update prediction state without touching recency
 
 ### Figure 4 — Why the encoded future changes an eviction
 
-![A worked two-way cache snapshot comparing LRU's older-line victim with ECG's decoded future ranking, then connecting the decision to resident-only retirement metadata and per-line state](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f04-llc-policy-pipeline.svg)
+![A worked two-way cache snapshot comparing LRU's older-line victim with ECG's future ranking and resident-only retirement metadata](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f04-llc-policy-pipeline.svg)
 
-**Figure 4.** Consider a teaching snapshot containing A and B after `s19`.
-A was last touched at `s18` and is needed at `s20`; B was touched at `s19`
-and is needed at `s23`. A new scores-line C needs a way. Recency alone evicts A.
-ECG's Scale6 deadlines are 21 and 26, so the remaining bounds at `s19` are 2
-and 7. The actual shared score function maps them to 0 and 1 and selects B.
-A remains for the immediately upcoming request. Full14's tighter deadlines
-produce the same ordering in this case.
+At watermark 19, A has remaining bound 1 and score 0; B has remaining bound 4
+and score 1. LRU evicts older A, while ECG evicts B and retains the line needed
+at `s=20`. This is a teaching snapshot, not a benchmark result.
 
-This is a one-set, two-way **policy illustration** with the shown requests;
-other traffic and private-cache effects are omitted. It is not the production
-LLC geometry or a measured performance result.
+The current victim order is invalid way, explicit DEAD property, non-property,
+then scored property. FINITE uses the decoded remaining bound; UNKNOWN uses
+the maximum of ordinary RRPV and local GRASP fallback. Eligibility/locked-way
+constraints are honored.
 
-The implemented victim rule is more specific than “evict farthest future”:
-invalid ways are available first; among valid candidates, explicit DEAD
-properties precede non-property lines, followed by a shared property category.
-FINITE candidates use `distanceRRPV(remaining)`, while UNKNOWN candidates use
-`max(RRPV, local GRASP fallback)`. Higher scores are selected first; ties
-compare unknown status, remaining bound, colder tier and recency. UNKNOWN does
-not unconditionally outrank every FINITE line. A zero remaining bound scores
-zero rather than requiring a logarithm of zero.
+A request observation may mark a resident line PENDING, but never FINITE or
+DEAD and never advances the receiver watermark for free. A paid delivered
+update advances the watermark even when stale or nonresident. Updates never
+allocate, dirty, or change ordinary recency/RRPV.
 
-Freshness is as important as encoding. A private-cache hit advances the
-program without a new LLC demand. The native path retains that load's own
-prediction until retirement, then sends a bounded resident-only update.
-The update changes prediction/RRPV fields, not data, dirty state, normal hit
-statistics or recency.
+Native retirement uses a 16-slot queue, at least eight CPU cycles of latency,
+configurable capture width (default CPU commit width), one output per cycle,
+and two versions per key with the oldest protected.
 
-An update does not itself evict a line. It changes the state consulted when a
-later allocation needs a victim:
+## 5. Use one real-record prefetch rule
 
-| Native event | Prediction effect | Data/allocation effect |
-|---|---|---|
-| governed request observed at the LLC | record PENDING and its semantic sequence, not a future deadline | ordinary demand service continues |
-| live committed update reaches a matching resident line | install its normalized prediction; update RRPV for FINITE/DEAD | no data change, hit-stat increment or recency touch |
-| delivered update is older than a pending observation | retain the newer pending state and count STALE | no data change |
-| target line is absent | account for nonresidency and advance the received watermark | no allocation |
-| a stored finite bound has passed | resolve its effective state as UNKNOWN | no inference that the data is globally dead |
+### Figure 5 — One real-record window selects a prefetch
 
-cache_sim can stamp predictions on LLC demand service and model delayed
-refreshes. Native demand observations instead mark PENDING and install
-FINITE/DEAD only on timed retirement delivery. The functional known-dead
-governed-miss bypass is **not** implemented speculatively in the native path.
+![The fixture's real sixteen-record A/B window selecting no candidate, followed by the uniform selector and charged LLC-only request path](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f05-lookahead-prefetch.svg)
 
-## 5. Keep prefetch targeting distinct from reuse distance
+Every layout uses the same 16-record rule. For leads 8–15, retain only the
+first occurrence of each distinct property line. Rank the smallest decoded
+cyclic reuse bound first, then proximity to lead 10, then lower lead.
+UNKNOWN and DEAD rank as infinity. The chosen future record supplies the
+target vertex; reuse distance is not an address.
 
-### Figure 5 — Prefetch actions name a future record
+The fixture window contains only A and B. B is current and A first occurs at
+lead one, so no eligible new line exists. If required record bytes are not
+available, selection returns `NOT_READY` rather than fabricating no candidate.
 
-![The running record's real sixteen-word A/B window correctly selecting no prefetch, followed by the distinct Full14 and Scale6 lead-selection paths and the shared LLC-only admission and fill path](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f05-lookahead-prefetch.svg)
+Native acquisition reserves two 64-byte banks for a potentially unaligned
+4-byte-record window, or three for an 8-byte-record window. Real L1D fills or acknowledged timing
+reads supply bytes. MMU translation, retry-capable ports, bounded trigger and
+property queues, one lookup-pipeline input per cycle, dedicated L1/L2/LLC
+presence ports, the default 12-cycle lookup, the 8-cycle prefetch pipeline,
+and final drain are charged.
 
-**Figure 5.** The running window contains only A and B. B is current; A first
-appears at lead `+1`, before the eligible `8..15` range. Later appearances
-are duplicates. Full14 therefore carries action zero and Scale6 selects lead
-zero: this record does **not** launch a prefetch.
+Property reads enter at the LLC boundary using `Request::PREFETCH` and an
+acknowledged `ReadReq`; cache-owned `HardPFReq` is not used. Issue and
+completion both suppress private/LLC duplicates and apply the shared
+invalid/DEAD/nongoverned/score-at-least-seven admission rule. A known-DEAD
+demand miss has a request-scoped allocation bypass. MSHRs merge allocation
+requirements with logical OR so a live demand still obtains its needed fill.
 
-For other records, the implementations select a target differently.
-Full14's offline builder prioritizes the largest backward gap, then next-use
-distance and proximity to lead ten, and encodes the selected forward-record
-lead. Its two-bit action variant uses codes for `{none, 8, 12, 15}`.
-Scale6 carries no action field: its selector examines the bounded record
-window, chooses the first eligible distinct line with the smallest decoded
-future bound, and breaks ties toward lead ten.
-
-The selected lead identifies `R[j+lead]`; **that record's vertex** identifies
-the property to fetch. The reuse-distance field is not a target vertex.
-Resident, pending and admission checks precede the eight-entry LLC-only queue.
-The primary functional model has eight governed requests of latency and at
-most one issue per eight governed requests. Prefetch reads and dirty
-writebacks remain part of total traffic.
-
-Native prefetch is not implemented. It must consume real record bytes and
-account for acquisition, translation and memory traffic rather than query a
-host-side future table.
-
-## 6. Separate graph storage, cache capacity and implementation cost
+## 6. Separate graph storage, cache payload, and physical cost
 
 ### Figure 6 — Graph-sized matrices and cache-sized state
 
-![P-OPT backing-matrix and active-column storage, graph-sized whole-way reservations at several LLC capacities, and the distinct Full14 and Scale6 per-line state budgets](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-capacity-accounting.svg)
+![Historical P-OPT backing and active-column storage beside the current ECG per-line prediction payload](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-capacity-accounting.svg)
 
-**Figure 6.** Twitter's current/next P-OPT columns occupy about 4.97 MiB.
-They require 10, 5 and 4 whole ways at 8, 16 and 24 MiB; the one-column SE
-reconstruction requires 5, 3 and 2. Both retain the 256-column backing matrix
-and full traversal stream charge. Two columns do not mean two cache ways.
+Current builders retain the original graph and construct a separate
+`vector<uint32_t>` or `vector<uint64_t>` carrier. Their sparse line first/next
+map is bounded by property lines; there are no edge-sized action or future
+arrays. Report source stream, retained source, carrier payload, carrier
+allocation, and auxiliary peak separately.
 
-ECG retains the data ways but adds prediction/control state. A deadline width
-`D` contributes `D+3` logical bits per line, including state and prefetch
-origin: 24 for the Full14 default and 35 for Scale6's 32-bit deadline. The
-[state-ownership figure](Property-to-Cache-Walkthrough) gives the bounded
-buffer totals. These are functional-model accounting figures, not a complete
-native hardware-area estimate.
+Current resident prediction payload is 64 value bits, two state bits, and one
+origin bit: 67 bits per LLC line. This is separate from tags, data,
+property/tier classification, ordinary recency/RRPV, validation, queues, and
+port logic.
 
-The edge mask has no separate per-edge metadata sidecar. Storage realization
-still matters: the functional Full14 path uses a separate encoded carrier,
-while in-place Scale6 construction avoids a second edge array. Full14's
-construction uses edge-sized scratch; the bounded in-place Scale6 builder
-uses first/next position arrays indexed by property line. Preprocessing
-memory/time and runtime hardware state must be reported separately.
+| LLC | Lines | Prediction payload |
+|---|---:|---:|
+| 8 MiB, 64-byte lines | 131,072 | 8,781,824 bits = 1,097,728 bytes |
+| 24 MiB, 64-byte lines | 393,216 | 26,345,472 bits = 3,293,184 bytes |
 
-## Earlier mechanisms and controls
+These values are logical payload counts, not total silicon-area results.
+The exact 24 MiB/16-way geometry has 24,576 sets and uses true modulo
+indexing rather than rounded capacity or changed associativity.
 
-The stable page URL predates REF32. Earlier `ecg.plan.load`, `ecg.flow.load`,
-`ecg.bind.load` and `ecg.bind.iload` family labels refer to the ReusePlan/
-ReuseBind paths. They carry
-two epoch hints and optional tiers; they are not the current request-distance
-encoding. FlowThrough is a distinct structural no-allocation control and is
-**off** in the primary REF32 comparisons. If used as a fairness control, it
-must be applied symmetrically. Its MSHR `allocOnFill` rule combines with OR;
-one non-allocating target cannot suppress another target's required fill.
+## Historical mechanisms and results
+
+The stable page slug predates the current codec. Historical
+`ecg.plan.load`, `ecg.flow.load`, `ecg.bind.load`, and `ecg.bind.iload`
+names refer to ReusePlan/ReuseBind and FlowThrough work. Historical fixed
+14-bit and 6-bit results retain their original names and revisions; they are
+not current public formats and are not relabeled as adaptive results.
+
+P-OPT active-column reservations and the complete backing matrix remain
+separate quantities. The one-column P-OPT-SE variants remain disclosed
+reconstructions where the public artifact did not specify behavior.
 
 ## Implementation sources
 
 | Surface | Source |
 |---|---|
-| field budgets, quantizers, record builders, victim score | `bench/include/ecg_ref32.h` |
-| functional format selection and carrier storage | `bench/include/cache_sim/graph_cache_context.h` |
-| functional queues and resource accounting | `bench/include/cache_sim/cache_sim.h` |
-| PageRank traversal and action consumption | `bench/src_sim/pr.cc` |
-| native in-place carrier and property loop | `bench/src_gem5/pr.cc` |
-| native retirement and resident-line policy | `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/` |
-| named experiment profiles and evidence gates | `scripts/experiments/ecg/roi_matrix.py` |
+| current layout, codec and window selector | `bench/include/ecg_record.h` |
+| stream construction/accounting | `bench/include/ecg_record_stream.h` |
+| configuration and native contract | `bench/include/ecg_record_native.h` |
+| receiver, victim and admission logic | `bench/include/ecg_record_runtime.h` |
+| functional integration | `bench/include/cache_sim/cache_sim.h` |
+| native guest and cache overlays | `bench/src_gem5/pr.cc`, `bench/include/gem5_sim/overlays/` |
+| modeled Sniper integration | `bench/src_sniper/`, `bench/include/sniper_sim/overlays/` |

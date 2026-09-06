@@ -2,113 +2,141 @@
 
 # ECG
 
-**Edge-carried reuse: from graph structure to cache decisions**
+**Edge-carried graph reuse for cache replacement and prefetching**
 
-For a fixed graph traversal, the edge stream describes both **which property
-to read** and **when its cache line will be needed again**. Ordinary replacement
-policies see accesses but not this graph-derived future. ECG carries a compact
-reuse description with the edge, avoiding a runtime P-OPT rereference-matrix
-lookup on the current REF32 path.
+For a fixed graph traversal, an edge identifies both the property to read and
+the next use of that property's cache line. ECG encodes a conservative
+graph-derived reuse bound in the edge record, carries it through the real load,
+and uses it for replacement and bounded lookahead prefetching. Property values
+and graph semantics remain unchanged.
 
-The record remains an ordinary **32-bit edge word**. Its low bits identify the
-property vertex; available high bits carry a metadata mask. The mask changes
-how the cache treats a line, not the graph or the property's value.
+## One graph-adaptive record layout
 
-## Choose the encoding for the graph
+ECG has one current record grammar rather than public versioned or fixed-width
+format families. `Requirements` supplies `vertex_count`,
+`max_vertex_id_known`, `max_vertex_id`, `record_count`, `traversal_count`,
+`requested_record_bytes`, and `minimum_mantissa_bits`. Layout selection uses:
 
-**Scale6 is the compact large-ID format, not the whole ECG design.** If
-`b = max(1, ceil(log2 |V|))` bits identify a vertex, the word has `32 - b`
-spare bits. Smaller graphs can therefore use richer metadata.
+- the maximum vertex ID actually encoded (not `vertex_count - 1` when isolated
+  vertices enlarge the property domain);
+- `record_count` and `traversal_count`;
+- requested record width `0`, `4`, or `8` bytes; and
+- a minimum mantissa precision.
 
-| Current format | ID-width limit | Metadata | Implementation |
-|---|---|---|---|
-| **Full14** | up to 18 bits | 14 bits total; default 8 reference + 2 state + 4 prefetch-action bits | cache_sim; configurable reference/action splits |
-| **Scale6** | up to 26 bits | 6-bit state/distance token; no separate action field | cache_sim, plus the current fixed 26+6 native RISC-V ABI |
+For a word of `W` bits:
 
-Twitter-2010 needs 26 ID bits, leaving six for Scale6. The small example below
-needs only five ID bits: Full14 uses 14 metadata bits and leaves 13 unused.
-The implemented codecs are explicit choices, **not an automatic allocator of
-every spare bit**. Native rich-format decoding is not implemented merely
-because a smaller graph would fit it.
+```text
+id_bits       = max(1, bit_width(max_encoded_vertex_id))
+metadata_bits = W - id_bits
+H             = bit_width(record_count)
+K             = H * 2^mantissa_bits
+```
 
-## Follow one edge through the design
+The codec selects the largest `mantissa_bits` satisfying
+`2 + 2*K <= 2^metadata_bits`. Width `0` tries four bytes and then the explicit
+eight-byte escape. Tokens are `UNKNOWN=0`, `DEAD=1`,
+`FINITE=2+q`, and `WRAP=2+K+q`, where
+`q=(exponent<<mantissa_bits)|mantissa`. Decoding returns a conservative upper
+bound. Invalid layouts, tokens, horizons, addresses, and 64-bit
+sequence/deadline arithmetic fail closed.
 
-![ECG example connecting graph vertex 8 and property vertex 18 to CSR position 18, Full14 or Scale6 encoding, ordinary property loading, retirement metadata, and a changed cache victim](fig/wiki/home/home-f01-system-overview.svg)
+This is bit-granular: with `H=31`, ID widths 18, 19, and 20 leave 14, 13, and
+12 metadata bits and select mantissas 8, 7, and 6. The 26-ID/6-metadata/m0
+case reproduces an older compact byte layout only as one numeric
+configuration. A full 32-bit ID requires an eight-byte record with 32 metadata
+bits; that width alone does **not** establish exascale graph-loader support.
 
-1. **Graph to CSR.** PageRank pull at outer vertex `u=8` reads its in-neighbors.
-   CSR entry `j=18` names property vertex `v=18`; the next use of that property
-   cache line is at `j=22`, four governed requests later.
-2. **CSR to mask.** Full14 encodes the distance and state above the five ID bits:
-   metadata `M=0x00002200` turns ordinary ID `0x00000012` into record
-   `R=0x00002212`. Both the ID and the reuse fields remain recoverable.
-3. **Mask to property load.** Decoding still selects `p[18]`, at example address
-   `0x80000048`. Its first-iteration value is still `1/128`, not the mask.
-   The native figures use the same edge encoded as Scale6, `0x10000012`,
-   because that is the implemented native ABI.
-4. **Load to cache metadata.** The native path retains the prediction on the
-   dynamic instruction and exports it only after retirement. A bounded channel
-   includes private-cache hits, which otherwise leave no new demand at the LLC.
-5. **Metadata to eviction.** In the worked two-way cache, LRU would evict line
-   A because it is older than B. The graph says A is needed at request 20,
-   before B at 23; ECG's decoded bounds instead select B. This is an
-   explanation of the decision, not a benchmark speedup claim.
+## Follow one checked edge
 
-The [walkthrough](wiki/Property-to-Cache-Walkthrough.md) derives the numbers.
-The [native pipeline](wiki/RISC-V-Instruction-Path.md) distinguishes record
-bytes, renamed operands, returned data, request observations and committed
-predictions. Prefetch is a separate mechanism: Full14 carries a selected
-forward-record lead, while Scale6 selects from a bounded record window.
+![ECG example connecting graph vertex 8 and property vertex 18 to CSR position 18, the adaptive record, ordinary property loading, retirement metadata, and a changed cache victim](fig/wiki/home/home-f01-system-overview.svg)
 
-## What is implemented, and what the results mean
+The shared fixture has 32 vertices and 34 records. PageRank pull at outer
+vertex `u=8` reads property vertex `v=18` from CSR position `j=18`; the next
+use of that 64-byte property line is at `j=22`.
 
-| Surface | Current role and limitation |
-|---|---|
-| **cache_sim** | Full14 and Scale6 replacement/commit/prefetch mechanisms; functional cache and traffic results, including full Twitter with Scale6 |
-| **gem5 RV64 O3** | Real Scale6 record/F32 loads, retirement transport and LLC replacement; native prefetch and production timing admission remain closed |
-| **Sniper** | Earlier matched-work modeled controls; REF32 rows remain unsupported |
-| **RTL / physical cost** | Earlier components, not a complete REF32 physical implementation |
+Its current layout is:
 
-The native path is an experimental RISC-V custom-0 implementation,
-not a ratified RISC-V extension.
+```text
+record_bytes=4 id_bits=5 metadata_bits=27
+horizon_bits=6 exponent_bits=3 mantissa_bits=23
+distance=4 q=(2 << 23) token=2+q
+metadata mask=0x20000040 record=0x20000052
+sequence=19 deadline=23
+```
 
-The [evaluation page](wiki/Evaluation-Methodology.md) reports demand misses
-alongside total off-chip reads and writebacks, including P-OPT's matrix
-charge. These are not interchangeable with processor time or silicon area.
-Keeping the LLC data ways does not make ECG's metadata and ports free.
+Masking with `0x1f` recovers vertex 18. The property address is
+`0x80000048`, its line is `0x80000040`, and the unchanged F32 contribution is
+`1/128` (`0x3c000000`). In the teaching two-way set, line A has remaining
+bound 1 and score 0 while B has remaining bound 4 and score 1. LRU evicts A;
+ECG evicts B. This is a mechanism example, not a performance result.
 
-The primary REF32 comparisons keep **FlowThrough off**. Earlier two-epoch
-ReusePlan/ReuseBind and FlowThrough paths remain separate controls. Metadata
-must describe the actual traversal. Pull visits in-neighbors `N_in(u)`, and
-property `p[v]` is read for destinations in `N_out(v)`.
-The property-request count is therefore `d_out(v)`.
-For a traversal over out-neighbors `N_out(u)`,
-property `p[v]` is read once for each source in `N_in(v)`, giving `d_in(v)`
-accesses. Dynamic frontier traversals do not automatically inherit a fixed
-PageRank sweep's future-use description.
+The same sixteen-record window rule is used for every layout: among leads
+8–15, consider the first occurrence of each distinct property line, rank the
+smallest decoded cyclic reuse bound first, then proximity to lead 10 and lower
+lead. `UNKNOWN` and `DEAD` rank as infinity. The fixture's A/B window has no
+eligible new line. Missing required record bytes return `NOT_READY`; they do
+not fabricate a no-candidate result.
+
+## Implemented surfaces and evidence
+
+| Surface | Current role | Evidence boundary |
+|---|---|---|
+| **cache_sim** | Shared codec, victim rule, real-record window and explicit access-step timing | strict admission passed for all four mechanisms, both widths, and exact 24 MiB; no CPU-cycle speedup |
+| **gem5 RV64 O3** | Raw 4/8-byte record loads, dependent F32 property loads, retirement transport, replacement and acknowledged LLC-only prefetch | native architectural/timing evidence for serial fixed-iteration PageRank |
+| **Sniper** | Actual 4/8-byte record loads and modeled transport/replacement/prefetch | all four mechanisms admitted, including 4-byte live and 8-byte SIFT translation cases; not native RISC-V timing |
+| **RTL / physical cost** | Earlier component studies | not a complete current-method silicon-area result |
+
+The native path is an experimental RISC-V custom-1 implementation using opcode
+`0x2b`: record32 is
+funct3 `0`/funct7 `0`, record64 uses funct7 `1`, and PropertyF32 is funct3
+`1`/FUNCT2 `0`. The property instruction consumes property base, raw record
+word, and the real record address. P17 in the fixture contains raw
+`0x0000000020000052`; semantic sequence 19 is computed and checked separately.
+This is not a ratified RISC-V extension.
+
+Native updates pass from per-DynInst state through a 16-slot retirement queue
+with at least eight CPU cycles of latency, configurable capture width, one
+output per cycle, and two versions per key with the oldest protected.
+Resident metadata updates never allocate, dirty, or alter ordinary recency or
+RRPV. Native prefetch uses real record-line acquisition, MMU translation,
+retry-capable ports, issue/completion duplicate and admission checks, and
+acknowledged `ReadReq` traffic at the LLC input. Guests drain bounded pending
+work before ROI end and before releasing the carrier.
+
+Current builders retain the source graph and construct a separate
+`vector<uint32_t>` or `vector<uint64_t>` carrier using sparse line first/next
+scratch. Receipts distinguish `source_stream_bytes`, `retained_source_bytes`,
+carrier payload/allocation, and auxiliary peak bytes.
+
+Current Sniper rows require `--sniper-workload sg_kernel`, one core, an
+uncapped fixed PageRank traversal, true modulo LLC indexing, and the mandatory
+`--sniper-record-rss-mib` process-tree watchdog (default 2048 MiB). Its guest
+window is always `16 * uint64_t`: 1,024 data bits plus 1,024 index bits and
+16 valid bits, even for 4-byte records. The separate runtime word bank is
+`16 * 257` bits. Its update link is bounded completion corroboration, not
+architectural retirement.
+
+For traversal direction, pull visits in-neighbors `N_in(u)` and property
+`p[v]` is read for destinations in `N_out(v)`. The property-request count is therefore `d_out(v)`.
+For traversal over out-neighbors `N_out(u)`, the
+property `p[v]` is read once for each source in `N_in(v)`, giving `d_in(v)`. Metadata
+must describe the exact order executed.
+
+Historical Twitter, P-OPT, P-OPT-SE, ReusePlan, and FlowThrough results remain
+available with their original names, revisions, encodings, receipts, and
+limitations. They are not relabeled as results for the current adaptive
+method.
 
 ## Documentation
 
-- [Edge-carried records and cache control](wiki/ReusePlan-FlowThrough.md)
+- [Adaptive records and cache control](wiki/ReusePlan-FlowThrough.md)
 - [Native record-to-cache pipeline](wiki/RISC-V-Instruction-Path.md)
-- [A checked edge-to-cache example](wiki/Property-to-Cache-Walkthrough.md)
-- [Evaluation methodology and results](wiki/Evaluation-Methodology.md)
+- [Checked edge-to-cache example](wiki/Property-to-Cache-Walkthrough.md)
+- [Evaluation methodology and historical results](wiki/Evaluation-Methodology.md)
 - [Related work](wiki/Related-Work.md)
 - [Build and reproduction](wiki/Reproduction.md)
 - [Repository hygiene](wiki/Repository-Hygiene.md)
 
-## Repository layout
-
-| Path | Purpose |
-|---|---|
-| `bench/include/` | shared record, policy, ISA and simulator integration |
-| `bench/src_sim/` | functional cache-simulator graph kernels |
-| `bench/src_gem5/` | native record/property execution and earlier gem5 graph kernels |
-| `bench/src_sniper/` | Sniper graph workload |
-| `bench/src_rtl/` | existing ReusePlan cost models |
-| `scripts/experiments/ecg/` | experiment runners and fail-closed gates |
-| `scripts/docs/` and `fig/` | deterministic SVG figures and editable Draw.io mirrors |
-| `wiki/` | architecture, evidence, and reproduction guides |
-
-Experiment output remains under `results/` and is not tracked. Wiki and
-conference-paper figures have separate generators and layouts; changing a
-wiki plate never compresses or overwrites its paper counterpart.
+Generated wiki figures and editable Draw.io mirrors are under `fig/wiki/` and
+`fig/wiki_src/`. The separate paper figure collection is not rewritten by the
+wiki generator.

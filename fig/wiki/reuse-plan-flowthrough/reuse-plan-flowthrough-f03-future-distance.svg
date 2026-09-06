@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1150" viewBox="0 0 1200 1150" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">More metadata bits sharpen the future bound</title>
-  <desc id="desc">CSR position seventeen accesses line A and position eighteen accesses line B. Their next uses are at positions nineteen and twenty-two. Full14 represents the tracked distance four exactly, while Scale6 decodes it to seven. A separate distance-one-hundred quantizer probe shows the effect of additional mantissa bits. Passed predictions become UNKNOWN, not DEAD; the timeline deliberately holds one prediction fixed.</desc>
+  <title id="title">Graph-derived metadata sharpens the future bound</title>
+  <desc id="desc">CSR position seventeen accesses line A and position eighteen accesses line B. Their next uses are at positions nineteen and twenty-two. The fixture&#x27;s M27/H6/m23 layout represents both distances exactly. A separate H31 distance-one-hundred probe compares numeric metadata budgets M14, M13, M12 and M6. Passed predictions become UNKNOWN, not DEAD; the timeline deliberately holds one prediction fixed.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -35,8 +35,8 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1150" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">More metadata bits sharpen the future bound</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Reference precision is an encoding choice; the underlying graph access order is unchanged.</text>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Graph-derived metadata sharpens the future bound</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">The same joint grammar adapts its mantissa precision to the available bit budget.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
@@ -76,47 +76,47 @@
   <text x="694" y="449" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">B: s19 -&gt; s23, true distance = 4</text>
   <circle cx="44" cy="500" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="506" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="507" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">QUANTIZE WITHOUT CHANGING THE ID</text>
-  <text x="1158" y="506" text-anchor="end" class="sans body" fill="#475467">table entries are decoded upper bounds</text>
+  <text x="74" y="507" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">QUANTIZE WITHOUT CHANGING THE METHOD</text>
+  <text x="1158" y="506" text-anchor="end" class="sans body" fill="#475467">table entries are decoded upper bounds at H=31</text>
   <line x1="24" y1="526" x2="1176" y2="526" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="526" x2="170" y2="526" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="568" width="1120" height="144" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="568" data-width="1120" data-height="144"/>
   <line x1="40" y1="616.0" x2="1160" y2="616.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="40" y1="664.0" x2="1160" y2="664.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="52" y="596" text-anchor="start" class="sans label" fill="#182230" font-weight="700">True distance</text>
-  <text x="52" y="644" text-anchor="start" class="sans body" fill="#182230">4 (running edge)</text>
+  <text x="52" y="644" text-anchor="start" class="sans body" fill="#182230">4 (running distance)</text>
   <text x="52" y="692" text-anchor="start" class="sans body" fill="#182230">100 (probe)</text>
   <line x1="260" y1="568" x2="260" y2="712" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="272" y="596" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Full14: 8/2/4</text>
+  <text x="272" y="596" text-anchor="start" class="sans label" fill="#182230" font-weight="700">M14 / m8</text>
   <text x="272" y="644" text-anchor="start" class="sans body" fill="#182230">4</text>
-  <text x="272" y="692" text-anchor="start" class="sans body" fill="#182230">103</text>
+  <text x="272" y="692" text-anchor="start" class="sans body" fill="#182230">100</text>
   <line x1="485" y1="568" x2="485" y2="712" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="497" y="596" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Full14: 10/2/2</text>
+  <text x="497" y="596" text-anchor="start" class="sans label" fill="#182230" font-weight="700">M13 / m7</text>
   <text x="497" y="644" text-anchor="start" class="sans body" fill="#182230">4</text>
-  <text x="497" y="692" text-anchor="start" class="sans body" fill="#182230">101</text>
+  <text x="497" y="692" text-anchor="start" class="sans body" fill="#182230">100</text>
   <line x1="710" y1="568" x2="710" y2="712" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="722" y="596" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Full14: 12/2/0</text>
+  <text x="722" y="596" text-anchor="start" class="sans label" fill="#182230" font-weight="700">M12 / m6</text>
   <text x="722" y="644" text-anchor="start" class="sans body" fill="#182230">4</text>
   <text x="722" y="692" text-anchor="start" class="sans body" fill="#182230">100</text>
   <line x1="935" y1="568" x2="935" y2="712" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="947" y="596" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Scale6</text>
+  <text x="947" y="596" text-anchor="start" class="sans label" fill="#182230" font-weight="700">M6 / m0</text>
   <text x="947" y="644" text-anchor="start" class="sans body" fill="#182230">7</text>
   <text x="947" y="692" text-anchor="start" class="sans body" fill="#182230">127</text>
-  <text x="40" y="753" text-anchor="start" class="sans body" fill="#182230">Full14 keeps mantissa precision. Scale6 uses a compact state/distance token; its distance-four upper bound is 7.</text>
-  <text x="40" y="785" text-anchor="start" class="sans body" fill="#475467">Distance 100 is a separate precision probe, not a request in the running 32-vertex graph.</text>
+  <text x="40" y="753" text-anchor="start" class="sans body" fill="#182230">M14, M13 and M12 retain bit-granular precision; M6/H31/m0 is the old compact numeric instance.</text>
+  <text x="40" y="785" text-anchor="start" class="sans body" fill="#475467">Distance 100 is a precision probe, not another access in the 32-vertex fixture.</text>
   <circle cx="44" cy="840" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="846" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="847" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">EXPIRY IS NOT DEATH</text>
   <text x="1158" y="846" text-anchor="end" class="sans body" fill="#475467">hold the s19 prediction fixed for this comparison</text>
   <line x1="24" y1="866" x2="1176" y2="866" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="866" x2="170" y2="866" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="40" y="910" text-anchor="start" class="sans label" fill="#0F8A72" font-weight="700">Full14</text>
+  <text x="40" y="910" text-anchor="start" class="sans label" fill="#0F8A72" font-weight="700">Fixture</text>
   <rect x="180" y="880" width="400" height="42" rx="0" fill="#ECFDF5" stroke="#0F8A72" stroke-width="1.5" data-shape="rect" data-x="180" data-y="880" data-width="400" data-height="42"/>
   <text x="380" y="908" text-anchor="middle" class="sans body" fill="#0F8A72">FINITE through deadline 23</text>
   <text x="680" y="908" text-anchor="start" class="sans body" fill="#C63C4A">UNKNOWN from 24</text>
-  <text x="40" y="981" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Scale6</text>
+  <text x="40" y="981" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Coarse M6</text>
   <rect x="180" y="951" width="700" height="42" rx="0" fill="#F5F3FF" stroke="#6558C5" stroke-width="1.5" data-shape="rect" data-x="180" data-y="951" data-width="700" data-height="42"/>
-  <text x="530" y="979" text-anchor="middle" class="sans body" fill="#6558C5">FINITE through deadline 26</text>
+  <text x="530" y="979" text-anchor="middle" class="sans body" fill="#6558C5">FINITE through upper-bound deadline 26</text>
   <text x="980" y="979" text-anchor="start" class="sans body" fill="#C63C4A">UNKNOWN at 27</text>
   <line x1="180" y1="1022" x2="1080" y2="1022" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="180" y1="1012" x2="180" y2="1031" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>

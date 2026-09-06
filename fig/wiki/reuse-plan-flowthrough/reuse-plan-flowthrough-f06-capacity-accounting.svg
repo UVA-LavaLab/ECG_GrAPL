@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1140" viewBox="0 0 1200 1140" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">Graph-sized matrices and cache-sized state</title>
-  <desc id="desc">For full Twitter, one one-byte-per-property-line column is 2,603,265 bytes. Full P-OPT keeps two columns and SE keeps one, while both retain 256 backing columns. Sixteen-way bars show the full and single-epoch reservations at 8, 16 and 24 MiB. Full14&#x27;s default twenty-one-bit deadline and Scale6&#x27;s thirty-two-bit deadline produce different cache-sized metadata budgets. Neither model count is a silicon-area ratio.</desc>
+  <desc id="desc">For full Twitter, one one-byte-per-property-line column is 2,603,265 bytes. Full P-OPT keeps two columns and SE keeps one, while both retain 256 backing columns. Sixteen-way bars show the full and single-epoch reservations at 8, 16 and 24 MiB. Current ECG stores a 64-bit prediction value, two state bits and one origin bit per resident line. Neither logical model count is a silicon-area ratio.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -272,14 +272,14 @@
   <rect x="1125" y="806" width="25" height="45" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="1125" data-y="806" data-width="25" data-height="45"/>
   <text x="1137.5" y="835" text-anchor="middle" class="sans body" fill="#182230">D</text>
   <text x="750" y="883" text-anchor="start" class="sans label" fill="#182230" font-weight="700">2 reserved / 14 data ways</text>
-  <text x="40" y="933" text-anchor="start" class="sans body" fill="#C63C4A">SE uses a different six-bit-value encoding. A two-way undercharge of full P-OPT is not SE.</text>
+  <text x="40" y="933" text-anchor="start" class="sans body" fill="#C63C4A">SE uses a distinct historical baseline encoding. A two-way undercharge of full P-OPT is not SE.</text>
   <circle cx="44" cy="976" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="982" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="983" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ECG KEEPS THE DATA WAYS</text>
   <text x="1158" y="982" text-anchor="end" class="sans body" fill="#475467">prediction state is additional storage</text>
   <line x1="24" y1="1002" x2="1176" y2="1002" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="1002" x2="170" y2="1002" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="40" y="1032" text-anchor="start" class="sans body" fill="#182230">Full14 with D=21 adds 24 bits/line; Scale6 with D=32 adds 35. Both retain the ordinary data ways.</text>
-  <text x="40" y="1064" text-anchor="start" class="sans body" fill="#182230">At 8 MiB: about 384 KiB (Full14 model) or 560 KiB (Scale6 model), including both queues and lookahead.</text>
-  <text x="40" y="1097" text-anchor="start" class="sans body" fill="#475467">This is not yet an equal-area comparison. Backing matrices, active payloads, cache state and ports are distinct.</text>
+  <text x="40" y="1032" text-anchor="start" class="sans body" fill="#182230">Current prediction payload: 67 bits/line, separate from tags, data, classification, recency, queues and ports.</text>
+  <text x="40" y="1064" text-anchor="start" class="sans body" fill="#182230">8 MiB: 8,781,824 bits = 1,097,728 bytes. 24 MiB: 26,345,472 bits = 3,293,184 bytes.</text>
+  <text x="40" y="1097" text-anchor="start" class="sans body" fill="#475467">These are payload totals, not silicon area. P-OPT backing matrices, active columns and reserved ways remain distinct.</text>
 </svg>

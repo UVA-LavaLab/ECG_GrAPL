@@ -38,6 +38,11 @@ class CheckedFixture:
     position: int
     next_position: int
     distance: int
+    metadata_bits: int
+    horizon_bits: int
+    exponent_bits: int
+    mantissa_bits: int
+    quantized_code: int
     token: int
     upper: int
     record: int
@@ -45,16 +50,12 @@ class CheckedFixture:
     property_address: int
     property_line: int
     id_bits: int
-    full_code: int
-    full_upper: int
-    full_record: int
     property_value: float
     property_value_bits: int
     previous_position: int
     previous_vertex: int
     previous_next_position: int
-    previous_full_upper: int
-    previous_scale_upper: int
+    previous_upper: int
 
     @property
     def sequence(self) -> int:
@@ -65,20 +66,16 @@ class CheckedFixture:
         return self.sequence + self.upper
 
     @property
-    def full_deadline(self) -> int:
-        return self.sequence + self.full_upper
-
-    @property
     def id_mask(self) -> int:
         return (1 << self.id_bits) - 1
 
     @property
-    def full_mask(self) -> int:
-        return self.full_record & ~self.id_mask
+    def metadata_mask(self) -> int:
+        return self.record & ~self.id_mask
 
     @property
     def native_operand(self) -> int:
-        return (self.sequence << 32) | self.record
+        return self.record
 
     @property
     def previous_sequence(self) -> int:
@@ -86,16 +83,33 @@ class CheckedFixture:
 
     @property
     def previous_deadline(self) -> int:
-        return self.previous_sequence + self.previous_scale_upper
+        return self.previous_sequence + self.previous_upper
 
 
-def full_distance_bounds(distance: int, reference_bits: int = 8) -> tuple[int, int]:
+def precision_for(metadata_bits: int, horizon_bits: int) -> tuple[int, int]:
+    levels = ((1 << metadata_bits) - 2) // (2 * horizon_bits)
+    if levels <= 0:
+        raise ValueError("metadata cannot encode the required horizon")
+    mantissa_bits = levels.bit_length() - 1
+    return mantissa_bits, horizon_bits << mantissa_bits
+
+
+def distance_bounds(distance: int, mantissa_bits: int) -> tuple[int, int]:
     exponent = distance.bit_length() - 1
     base = 1 << exponent
-    levels = 1 << (reference_bits - 5)
-    mantissa = (distance - base) * levels // base
-    upper = base + max(1, ((mantissa + 1) * base + levels - 1) // levels) - 1
-    return exponent * levels + mantissa, min(upper, 0x7FFFFFFF)
+    fraction = distance - base
+    mantissa = (
+        fraction >> (exponent - mantissa_bits)
+        if exponent >= mantissa_bits
+        else fraction << (mantissa_bits - exponent)
+    )
+    code = (exponent << mantissa_bits) | mantissa
+    if exponent >= mantissa_bits:
+        upper = (mantissa + 1) << (exponent - mantissa_bits)
+    else:
+        shift = mantissa_bits - exponent
+        upper = (mantissa + 1 + (1 << shift) - 1) >> shift
+    return code, base + max(1, upper) - 1
 
 
 def load_fixture() -> CheckedFixture:
@@ -125,14 +139,17 @@ def load_fixture() -> CheckedFixture:
         if stream[index] // vertices_per_line == dest // vertices_per_line
     )
     distance = next_position - position
-    bucket = min(distance.bit_length() - 1, 30)
-    token = 2 + bucket
-    upper = (1 << (bucket + 1)) - 1
     base = int(raw["property_base"])
     address = base + dest * element
     id_bits = max(1, (n - 1).bit_length())
-    full_code, full_upper = full_distance_bounds(distance)
-    full_record = dest | (full_code << id_bits) | (1 << (id_bits + 8))
+    metadata_bits = 32 - id_bits
+    horizon_bits = len(stream).bit_length()
+    exponent_bits = max(0, (horizon_bits - 1).bit_length())
+    mantissa_bits, _codes_per_state = precision_for(
+        metadata_bits, horizon_bits)
+    quantized_code, upper = distance_bounds(distance, mantissa_bits)
+    token = 2 + quantized_code
+    record = dest | (token << id_bits)
     if dest <= outer:
         raise ValueError("the illustrated property must not have been updated yet")
     property_value = 1.0 / (n * len(rows[dest]))
@@ -144,22 +161,21 @@ def load_fixture() -> CheckedFixture:
         if stream[index] // vertices_per_line == previous_vertex // vertices_per_line
     )
     previous_distance = previous_next - previous_position
-    _, previous_full_upper = full_distance_bounds(previous_distance)
-    previous_scale_upper = (1 << previous_distance.bit_length()) - 1
+    _, previous_upper = distance_bounds(previous_distance, mantissa_bits)
     return CheckedFixture(
         num_vertices=n, mapping=mapping, edges=edges,
         rows=tuple(tuple(row) for row in rows), offsets=tuple(offsets),
         stream=stream, tracked_reader=outer, tracked_dest=dest,
         position=position, next_position=next_position, distance=distance,
-        token=token, upper=upper, record=(token << 26) | dest,
+        metadata_bits=metadata_bits, horizon_bits=horizon_bits,
+        exponent_bits=exponent_bits, mantissa_bits=mantissa_bits,
+        quantized_code=quantized_code, token=token, upper=upper, record=record,
         property_base=base, property_address=address,
         property_line=address & ~(line_bytes - 1), id_bits=id_bits,
-        full_code=full_code, full_upper=full_upper, full_record=full_record,
         property_value=property_value, property_value_bits=property_value_bits,
         previous_position=previous_position, previous_vertex=previous_vertex,
         previous_next_position=previous_next,
-        previous_full_upper=previous_full_upper,
-        previous_scale_upper=previous_scale_upper,
+        previous_upper=previous_upper,
     )
 
 
@@ -262,12 +278,12 @@ def system_overview(root, fx):
     f = plate(
         root, "home", "01", "system-overview",
         "ECG: graph knowledge in the edge stream",
-        "Reuse information travels with an ordinary-width edge record, then guides a cache decision.",
+        "Graph-derived joint distance state travels with a 4- or 8-byte edge record.",
         "The same graph access is followed from vertex eight and CSR position "
-        "eighteen to a richer Full14 mask or a compact Scale6 token, normal "
-        "property addressing, and a resident-line update. The property value "
+        "eighteen through one adaptive layout, normal property addressing, "
+        "retirement transport, and a resident-line update. The property value "
         "is unchanged. A teaching cache contrasts recency with carried future "
-        "reuse. Scale6 is the large-ID format, not the complete ECG design.",
+        "reuse; wider graph IDs reduce precision and can require eight-byte records.",
         1180,
     )
     f.section("1", "GRAPH -> CSR -> ENCODED MASK",
@@ -283,9 +299,9 @@ def system_overview(root, fx):
     f.text(435, 243, "Incoming CSR", size=17, bold=True)
     f.text(435, 286, "row_ptr[8:10] = [14,19]", size=16)
     f.text(435, 329, "in_ids[18] = 18", mono=True, color=BLUE)
-    part(f, 860, 214, 300, 130, "32-bit edge record",
-         (f"Full14  0x{fx.full_record:08x}",
-          f"Scale6  0x{fx.record:08x}"), "state")
+    part(f, 860, 214, 300, 130, "Adaptive edge record",
+         (f"b_ID={fx.id_bits}; M={fx.metadata_bits}; H={fx.horizon_bits}; m={fx.mantissa_bits}",
+          f"R = 0x{fx.record:08x}"), "state")
     f.arrow(((308, 273), (420, 273)), kind="control", label="row order",
             label_at=(370, 372), color=GREEN)
     f.arrow(((700, 273), (860, 273)), kind="control", label="encode reuse",
@@ -293,11 +309,11 @@ def system_overview(root, fx):
     f.arrow(((1010, 344), (1010, 393), (15, 393), (15, 620), (40, 620)),
             kind="transfer", label="read the encoded word", cadence="4 bytes",
             label_at=(562, 380), color=BLUE)
-    note(f, 436, "Small IDs leave more metadata space: Full14 uses 14 bits; Twitter's 26-bit IDs leave 6 for Scale6.")
+    note(f, 436, "Bit-granular layout: 18/19/20 ID bits leave M=14/13/12 and, at H=31, m=8/7/6.")
 
     f.section("2", "DECODE -> ADDRESS -> VALUE",
               "the graph and property values do not change", 490, role="compute")
-    part(f, 40, 551, 300, 154, "Selected-format decode",
+    part(f, 40, 551, 300, 154, "Current-layout decode",
          ("low ID field -> vertex 18", "state + distance -> future",
           "same 4-byte record access"), "compute")
     part(f, 455, 551, 280, 154, "Property load",
@@ -330,8 +346,8 @@ def system_overview(root, fx):
     f.arrow(((735, 938), (875, 938)), kind="control", label="ordered update",
             label_at=(805, 1044), color=PURPLE)
     note(f, 1088, "The cache comparison is a worked two-way example, not a benchmark result. Data bytes stay unchanged.")
-    note(f, 1120, "cache_sim implements both formats; the native RISC-V record/property pair currently uses Scale6.")
-    note(f, 1152, "Prefetch is a separate path. Its native implementation and full timing/area qualification remain open.", BORDER)
+    note(f, 1120, "Functional, gem5 and Sniper paths use the same codec and record-window selector.")
+    note(f, 1152, "Native evidence is serial fixed-iteration PR; modeled Sniper evidence and physical cost remain separate.", BORDER)
     return f
 
 
@@ -343,8 +359,8 @@ def offline_construction(root, fx):
         "An undirected PageRank example has thirty-two vertices with nine "
         "non-isolated vertices shown. Outer vertex eight reads property eighteen "
         "from CSR position eighteen. Positions eighteen and twenty-two touch "
-        "the same property line. Their distance four produces the Full14 "
-        "metadata mask 0x00002200 and record 0x00002212 with five ID bits.",
+        "the same property line. Their distance four produces joint FINITE "
+        "token 16777218, metadata mask 0x20000040 and record 0x20000052.",
         1160,
     )
     f.section("1", "THE GRAPH DEFINES THE ACCESSES",
@@ -377,85 +393,86 @@ def offline_construction(root, fx):
             label_at=((first + following) / 2, 807), color=PURPLE)
 
     f.section("3", "ENCODE REUSE, PRESERVE THE ID",
-              "Full14 example: 5 ID bits + 14 metadata bits", 862, role="state")
+              "current layout: b_ID=5, M=27, H=6, m=23", 862, role="state")
     part(f, 40, 921, 300, 127, "Line-reference construction",
-         ("current s=19; next use s=23", "distance 4 -> reference 0x10"), "compute")
-    part(f, 455, 921, 300, 127, f"Mask M = 0x{fx.full_mask:08x}",
-         ("FINITE=1; reference=16", "action=0; ID width=5"), "state")
-    part(f, 895, 921, 265, 127, f"R = 0x{fx.full_record:08x}",
+         ("current s=19; next use s=23", "distance 4 -> q = 2 << 23"), "compute")
+    part(f, 455, 921, 300, 127, f"Mask = 0x{fx.metadata_mask:08x}",
+         ("FINITE token = 2 + q", "ID width=5; no action field"), "state")
+    part(f, 895, 921, 265, 127, f"R = 0x{fx.record:08x}",
          ("R = vertex 18 | M", "still one 4-byte word"), "data")
     f.arrow(((340, 978), (455, 978)), kind="control", label="encode",
             label_at=(397, 899), color=PURPLE)
     f.arrow(((755, 978), (895, 978)), kind="control", label="OR with ID",
             label_at=(825, 1084), color=BLUE)
     note(f, 1112, "Position j=18 happens to contain vertex 18; j=22 contains it again. A position is not a vertex ID.")
-    note(f, 1144, "Preprocessing finishes before the measured traversal. The next plate compares the two supported formats.")
+    note(f, 1144, "Preprocessing finishes before the measured traversal. The next plate shows adaptive width selection.")
     return f
 
 
 def record_formats(root, fx):
     f = plate(
         root, MECHANISM, "02", "record-formats",
-        "Choose the mask to fit the graph",
-        "Scale6 is the compact large-ID mode. Smaller graphs can use richer reference and action fields.",
-        "A thirty-two-bit edge word has 32 minus the required ID width spare "
-        "bits. The running thirty-two-vertex graph needs five ID bits and its "
-        "Full14 example uses fourteen metadata bits, leaving thirteen unused. "
-        "Full14 supports configurable reference/state/action splits totaling "
-        "fourteen bits. Twitter requires twenty-six ID bits and uses Scale6. "
-        "The current native ABI is explicitly fixed to twenty-six plus six.",
+        "Choose one adaptive layout for the graph",
+        "ID width, record count and requested precision determine every record field.",
+        "A record uses the actual maximum encoded vertex ID, not a rounded "
+        "format family. Metadata consumes every remaining bit. H is the bit "
+        "width of record_count; the largest mantissa m satisfying "
+        "2 + 2*H*2^m <= 2^M is selected. Four bytes are tried before the "
+        "explicit eight-byte escape unless width is forced.",
         1320,
     )
     f.section("1", "GRAPH SIZE SETS THE BIT BUDGET",
               "b_ID = max(1, ceil(log2 |V|))", 138, role="data")
-    tabular(f, 40, 199, (340, 180, 210, 390),
-            ("Graph", "ID bits", "Spare bits", "Implemented encoding"),
-            (("Running example: 32 vertices", "5", "27", "Full14 uses 14; 13 remain unused"),
-             ("262,144 vertices (n18)", "18", "14", "Full14 fills the available budget"),
-             ("Twitter: 41,652,230 vertices", "26", "6", "Scale6 fills the available budget")),
-            row_height=49)
-    note(f, 433, "The budget is 32 - b_ID, not always six bits. Format selection is explicit, not an automatic bit allocator.")
+    tabular(f, 40, 199, (330, 170, 190, 430),
+            ("Numeric case", "ID bits", "Metadata M", "Precision at H=31"),
+            (("Running fixture (actual max ID 31)", "5", "M=27", "H=6 here; m=23"),
+             ("18-bit IDs", "18", "M=14", "m=8"),
+             ("19-bit IDs", "19", "M=13", "m=7"),
+             ("20-bit IDs", "20", "M=12", "m=6"),
+             ("26-bit IDs", "26", "M=6", "m=0")),
+            row_height=44)
+    note(f, 490, "These are numeric layouts of one method, not public fixed-format families.")
 
-    f.section("2", "FULL14: A RICHER SMALL-GRAPH MASK",
-              "actual five-bit IDs in the running example", 492, role="state")
-    for x, label in ((267.5, "[31:19]"), (565, "[18:15]"), (670, "[14:13]"),
-                     (845, "[12:5]"), (1072.5, "[4:0]")):
+    f.section("2", "THE RUNNING 32-BIT LAYOUT",
+              "actual five-bit IDs; all 27 metadata bits are used", 530, role="state")
+    for x, label in ((512.5, "[31:5]"), (1065, "[4:0]")):
         f.text(x, 554, label, mono=True, anchor="middle")
     f.bitfield(40, 577, 1120, 88,
-               (("unused", 13, "neutral"), ("action", 4, "transfer"),
-                ("state", 2, "state"), ("reference", 8, "state"),
+               (("joint state/distance token (M=27; H=6, e=3, m=23)", 27, "state"),
                 ("vertex", 5, "data")), total_bits=32, minimum_field_width=0)
-    note(f, 706, f"0x{fx.full_record:08x}: vertex 18, reference 0x10, FINITE state 1, action 0. The ID is still recoverable.")
-    tabular(f, 40, 747, (260, 260, 320, 280),
-            ("Ref / state / action", "Reference precision", "Action interpretation", "Metadata total"),
-            (("8 / 2 / 4 (default)", "5 exponent + 3 mantissa", "direct forward record lead", "14 bits"),
-             ("10 / 2 / 2", "5 exponent + 5 mantissa", "codes for {none, 8, 12, 15}", "14 bits"),
-             ("12 / 2 / 0", "5 exponent + 7 mantissa", "no encoded prefetch action", "14 bits")),
+    note(f, 706, f"q = 2 << 23; FINITE token = 2 + q; mask 0x{fx.metadata_mask:08x}; R = 0x{fx.record:08x}.")
+    tabular(f, 40, 747, (245, 245, 300, 330),
+            ("Token range", "State", "Payload", "Meaning"),
+            (("0", "UNKNOWN", "--", "no finite bound"),
+             ("1", "DEAD", "--", "no use in requested horizon"),
+             ("2 .. 1+K", "FINITE", "q=(e<<m)|mantissa", "same-traversal upper bound"),
+             ("2+K .. 1+2K", "WRAP", "q=(e<<m)|mantissa", "next-traversal upper bound")),
             row_height=44)
-    note(f, 958, "More reference precision trades against action bits within Full14; it does not automatically consume all spare bits.")
+    note(f, 990, "K = H x 2^m. Invalid tokens, horizons, addresses and sequences fail closed.")
 
-    f.section("3", "SCALE6: THE TWITTER-SCALE CHOICE",
-              "also the current fixed-width native ABI", 1012, role="state")
-    f.bitfield(40, 1070, 1120, 80,
-               (("token [31:26]", 6, "state"), ("vertex ID [25:0]", 26, "data")),
-               total_bits=32, minimum_field_width=0)
-    note(f, 1190, "Token: 0 UNKNOWN | 1 DEAD | 2..32 FINITE | 33..63 WRAP. No separate action field.")
-    note(f, 1222, f"The same edge is 0x{fx.record:08x} in the 26+6 ABI; its distance-four hint decodes to seven.")
-    note(f, 1254, "Full14 supports ID widths through 18; Scale6 through 26. Unused headroom is not silently reassigned.")
-    note(f, 1286, "Native rich-format decode is not implemented. The functional model supports both encodings.", BORDER)
+    f.section("3", "THE EXPLICIT EIGHT-BYTE ESCAPE",
+              "width changes; method semantics do not", 1040, role="state")
+    f.bitfield(40, 1095, 1120, 80,
+               (("joint metadata [63:32]", 32, "state"),
+                ("vertex ID [31:0]", 32, "data")),
+               total_bits=64, minimum_field_width=0)
+    note(f, 1190, "A full 32-bit vertex ID leaves no metadata in a 32-bit word, so the record becomes 8 bytes with M=32.")
+    note(f, 1222, "The loader may force 4 or 8 bytes, or try 4 then 8 while enforcing minimum mantissa precision.")
+    note(f, 1254, "The 26-ID/M6/H31/m0 case reproduces the old compact bytes only as a numeric configuration.")
+    note(f, 1286, "An eight-byte record alone is not evidence of exascale graph-loader support.", BORDER)
     return f
 
 
 def future_distance(root, fx):
     f = plate(
         root, MECHANISM, "03", "future-distance",
-        "More metadata bits sharpen the future bound",
-        "Reference precision is an encoding choice; the underlying graph access order is unchanged.",
+        "Graph-derived metadata sharpens the future bound",
+        "The same joint grammar adapts its mantissa precision to the available bit budget.",
         "CSR position seventeen accesses line A and position eighteen accesses "
         "line B. Their next uses are at positions nineteen and twenty-two. "
-        "Full14 represents the tracked distance four exactly, while Scale6 "
-        "decodes it to seven. A separate distance-one-hundred quantizer probe "
-        "shows the effect of additional mantissa bits. Passed predictions become "
+        "The fixture's M27/H6/m23 layout represents both distances exactly. "
+        "A separate H31 distance-one-hundred probe compares numeric metadata "
+        "budgets M14, M13, M12 and M6. Passed predictions become "
         "UNKNOWN, not DEAD; the timeline deliberately holds one prediction fixed.",
         1150,
     )
@@ -469,28 +486,30 @@ def future_distance(root, fx):
             kind="dependency", label="B: s19 -> s23, true distance = 4",
             label_at=(694, 449), color=PURPLE)
 
-    f.section("2", "QUANTIZE WITHOUT CHANGING THE ID",
-              "table entries are decoded upper bounds", 500, role="state")
+    f.section("2", "QUANTIZE WITHOUT CHANGING THE METHOD",
+              "table entries are decoded upper bounds at H=31", 500, role="state")
     rows = []
-    for distance, label in ((4, "4 (running edge)"), (100, "100 (probe)")):
-        rich = tuple(str(full_distance_bounds(distance, bits)[1])
-                     for bits in (8, 10, 12))
-        rows.append((label, *rich, str((1 << distance.bit_length()) - 1)))
+    for distance, label in ((4, "4 (running distance)"), (100, "100 (probe)")):
+        bounds = []
+        for metadata in (14, 13, 12, 6):
+            mantissa, _ = precision_for(metadata, 31)
+            bounds.append(str(distance_bounds(distance, mantissa)[1]))
+        rows.append((label, *bounds))
     tabular(f, 40, 568, (220, 225, 225, 225, 225),
-            ("True distance", "Full14: 8/2/4", "Full14: 10/2/2",
-             "Full14: 12/2/0", "Scale6"), rows, row_height=48)
-    note(f, 753, "Full14 keeps mantissa precision. Scale6 uses a compact state/distance token; its distance-four upper bound is 7.")
-    note(f, 785, "Distance 100 is a separate precision probe, not a request in the running 32-vertex graph.", BORDER)
+            ("True distance", "M14 / m8", "M13 / m7",
+             "M12 / m6", "M6 / m0"), rows, row_height=48)
+    note(f, 753, "M14, M13 and M12 retain bit-granular precision; M6/H31/m0 is the old compact numeric instance.")
+    note(f, 785, "Distance 100 is a precision probe, not another access in the 32-vertex fixture.", BORDER)
 
     f.section("3", "EXPIRY IS NOT DEATH",
               "hold the s19 prediction fixed for this comparison", 840, role="verify")
-    f.text(40, 910, "Full14", size=17, bold=True, color=GREEN)
+    f.text(40, 910, "Fixture", size=17, bold=True, color=GREEN)
     f.rect(180, 880, 400, 42, role="compute", stroke=GREEN, radius=0)
     f.text(380, 908, "FINITE through deadline 23", anchor="middle", color=GREEN)
     f.text(680, 908, "UNKNOWN from 24", color=RED)
-    f.text(40, 981, "Scale6", size=17, bold=True, color=PURPLE)
+    f.text(40, 981, "Coarse M6", size=17, bold=True, color=PURPLE)
     f.rect(180, 951, 700, 42, role="state", stroke=PURPLE, radius=0)
-    f.text(530, 979, "FINITE through deadline 26", anchor="middle", color=PURPLE)
+    f.text(530, 979, "FINITE through upper-bound deadline 26", anchor="middle", color=PURPLE)
     f.text(980, 979, "UNKNOWN at 27", color=RED)
     f.line((180, 1022), (1080, 1022), width=2)
     for sequence in (19, 23, 24, 26, 27):
@@ -511,8 +530,8 @@ def llc_policy(root, fx):
         "A teaching cache with one set and two ways contains property lines A "
         "and B after semantic request nineteen. A was touched at eighteen and "
         "is needed at twenty; B was touched at nineteen and is needed at "
-        "twenty-three. Scale6 deadlines twenty-one and twenty-six give remaining "
-        "distances two and seven, hence victim scores zero and one. LRU evicts A "
+        "twenty-three. Current-layout deadlines twenty and twenty-three give "
+        "remaining distances one and four, hence victim scores zero and one. LRU evicts A "
         "for an incoming scores line C; ECG evicts B. This is a worked algorithm "
         "example, not measured benchmark performance.",
         1310,
@@ -522,11 +541,11 @@ def llc_policy(root, fx):
               "teaching set 0: two resident property ways", 233, role="data")
     tabular(f, 40, 295, (180, 180, 210, 230, 180, 140),
             ("Way / line", "Last touch", "Actual next use", "Decoded deadline", "Remaining", "Score"),
-            (("0 / A: p[0..15]", "s18: p[11]", "s20: p[7]", "18 + 3 = 21", "21 - 19 = 2", "0"),
-             ("1 / B: p[16..31]", "s19: p[18]", "s23: p[18]", "19 + 7 = 26", "26 - 19 = 7", "1")),
+            (("0 / A: p[0..15]", "s18: p[11]", "s20: p[7]", "18 + 2 = 20", "remaining 1", "0"),
+             ("1 / B: p[16..31]", "s19: p[18]", "s23: p[18]", "19 + 4 = 23", "remaining 4", "1")),
             row_height=50)
     note(f, 488, "The score is distanceRRPV(remaining) = min(7, floor(log2(remaining)) / 2), rounded down.")
-    note(f, 520, "Full14 yields tighter deadlines 20 and 23 for these two accesses, with the same score ordering.")
+    note(f, 520, "The fixture's M27/H6/m23 layout decodes both reuse distances exactly.")
 
     f.section("2", "ONE MISS, DIFFERENT VICTIMS",
               "the same new scores-line C needs a way", 579, role="compute")
@@ -552,18 +571,19 @@ def llc_policy(root, fx):
     f.section("3", "GET FRESH KNOWLEDGE TO THE LLC",
               "private hits still need a metadata route", 979, role="state")
     part(f, 40, 1040, 270, 109, "Retired property load",
-         ("line P_B, s19, deadline 26", "retain context and identity"), "compute")
+         ("line P_B, s19, deadline 23", "retain context and identity"), "compute")
     fifo(f, 450, 1072, 285, 16, "16-entry commit transport")
     part(f, 895, 1040, 265, 109, "Resident metadata",
-         ("prediction / RRPV update", "no fill / recency touch"), "state")
+         ("prediction update only", "no fill or dirtying",
+          "RRPV / recency unchanged"), "state")
     f.arrow(((310, 1093), (450, 1093)), kind="control", label="capture",
             label_at=(380, 1024), color=PURPLE)
     f.arrow(((735, 1093), (895, 1093)), kind="control", label="resident update",
             label_at=(815, 1172), color=PURPLE)
-    f.text(40, 1180, "Native line payload: D=32. Full14's default model uses D=21.", size=16)
+    f.text(40, 1180, "Current line payload: 64-bit prediction value + 2-bit state + 1-bit origin.", size=16)
     f.bitfield(40, 1200, 1120, 72,
-               (("deadline", 32, "state"), ("state", 2, "state"),
-                ("origin", 1, "transfer")), total_bits=35)
+               (("prediction value", 64, "state"), ("state", 2, "state"),
+                ("origin", 1, "transfer")), total_bits=67)
     note(f, 1298, "General victim order: DEAD, non-property, then scored properties. Unknown uses max(RRPV, local GRASP).")
     return f
 
@@ -571,14 +591,14 @@ def llc_policy(root, fx):
 def lookahead_prefetch(root, fx):
     f = plate(
         root, MECHANISM, "05", "lookahead-prefetch",
-        "Prefetch actions name a future record",
-        "Reference distance predicts this line's reuse; a prefetch lead selects another record's property.",
+        "One real-record window selects a prefetch",
+        "Reuse distance ranks candidates; the selected future record supplies the property ID.",
         "The running record's sixteen-word window contains only property lines "
-        "A and B. B is current and A first appears at lead one, so neither "
-        "Full14 nor Scale6 issues a prefetch for this record. A second flow "
-        "contrasts Full14's offline encoded lead with Scale6's runtime selection "
-        "from record bytes. Both decode the target vertex from the selected "
-        "future record and apply resident, pending and admission filters.",
+        "A and B. B is current and A first appears at lead one, so the current "
+        "uniform selector issues no prefetch. For every graph layout it examines "
+        "real records at leads eight through fifteen, keeps the first occurrence "
+        "of each distinct line, and ranks finite cyclic bounds before lead-ten "
+        "proximity and lower lead. UNKNOWN and DEAD rank as infinity.",
         1340,
     )
     f.section("1", "THE EXAMPLE NEEDS NO PREFETCH",
@@ -598,31 +618,31 @@ def lookahead_prefetch(root, fx):
            anchor="middle", color=AMBER)
     note(f, 426, "B is the current line. A first appears at +1, before the eligible window. Later A/B entries are not new candidates.")
     f.rect(40, 458, 1120, 51, role="compute", radius=0)
-    f.text(600, 490, "Full14 action = 0; Scale6 selected lead = 0. No extra read for this record.",
+    f.text(600, 490, "Current selector: no eligible new line, so no prefetch request.",
            size=17, bold=True, anchor="middle", color=GREEN)
 
-    f.section("2", "TWO WAYS TO SELECT A LEAD",
-              "choose a format, not an additional edge stream", 566, role="state")
-    part(f, 40, 632, 500, 165, "Full14: encode the choice offline",
-         ("prioritize the largest backward gap",
-          "then next-use distance, then proximity to lead 10",
-          "4-bit action: lead; 2-bit action: {0,8,12,15}"), "state")
-    part(f, 660, 632, 500, 165, "Scale6: inspect the record window",
+    f.section("2", "ONE SELECTOR FOR EVERY LAYOUT",
+              "no action field and no host future oracle", 566, role="state")
+    part(f, 40, 632, 500, 165, "Acquire real record bytes",
+         ("16 actual records, not decoded IDs alone",
+          "4-byte records span up to 2 lines",
+          "unaligned 8-byte records span up to 3 lines"), "data")
+    part(f, 660, 632, 500, 165, "Rank eligible distinct lines",
          ("first distinct line at a lead in 8..15",
           "smallest decoded future bound wins",
-          "tie: closest to lead 10; no action field"), "compute")
+          "tie: closest to lead 10, then lower lead"), "compute")
     part(f, 415, 871, 370, 130, "Read target ID, then admit",
          ("target = R[j + lead].vertex",
           "reject resident / pending / denied",
           "reuse distance is not the target ID"), "compute")
-    f.arrow(((290, 797), (290, 933), (415, 933)), kind="control", label="decoded action",
-            label_at=(199, 841), color=PURPLE)
+    f.arrow(((290, 797), (290, 933), (415, 933)), kind="control", label="ready records",
+            label_at=(199, 841), color=BLUE)
     f.arrow(((910, 797), (910, 933), (785, 933)), kind="control", label="selected lead",
             label_at=(1009, 841), color=GREEN)
 
     f.section("3", "PREFETCH FILLS ONLY THE LLC",
-              "functional model; native delivery is not implemented", 1057, role="transfer")
-    fifo(f, 40, 1139, 270, 8, "8-entry prefetch queue", "transfer")
+              "native path uses acknowledged ReadReq traffic", 1057, role="transfer")
+    fifo(f, 40, 1139, 270, 8, "bounded prefetch queues", "transfer")
     f.cylinder(480, 1102, 210, 118, role="data")
     f.lines(503, 1144, ("Memory", "64-byte data line"), bold_first=True, step=30)
     part(f, 890, 1107, 270, 111, "LLC fill",
@@ -633,8 +653,8 @@ def lookahead_prefetch(root, fx):
             label_at=(395, 1237), color=AMBER)
     f.arrow(((690, 1160), (890, 1160)), kind="transfer", label="prefetch fill",
             cadence="one line", label_at=(790, 1258), color=AMBER)
-    note(f, 1294, "Primary model: 8-request latency, at most 1 issue per 8 governed requests. FlowThrough is OFF.")
-    note(f, 1326, "Useful prefetches can reduce demand misses; only total reads plus writebacks establish the traffic cost.", BORDER)
+    note(f, 1294, "Default native model: 12-cycle lookup + 8-cycle prefetch pipeline; one lookup input/cycle. FlowThrough is OFF.")
+    note(f, 1326, "Issue and completion check L1/L2/LLC duplicates and shared admission; all traffic and drain time are charged.", BORDER)
     return f
 
 
@@ -646,9 +666,9 @@ def capacity_accounting(root, fx):
         "For full Twitter, one one-byte-per-property-line column is 2,603,265 "
         "bytes. Full P-OPT keeps two columns and SE keeps one, while both retain "
         "256 backing columns. Sixteen-way bars show the full and single-epoch "
-        "reservations at 8, 16 and 24 MiB. Full14's default twenty-one-bit "
-        "deadline and Scale6's thirty-two-bit deadline produce different "
-        "cache-sized metadata budgets. Neither model count is a silicon-area ratio.",
+        "reservations at 8, 16 and 24 MiB. Current ECG stores a 64-bit "
+        "prediction value, two state bits and one origin bit per resident line. "
+        "Neither logical model count is a silicon-area ratio.",
         1140,
     )
     f.section("1", "BACKING MATRIX IS NOT ALL IN THE LLC",
@@ -680,13 +700,13 @@ def capacity_accounting(root, fx):
                        "M" if way < reserved else "D",
                        size=16, anchor="middle")
             f.text(x, y + 77, f"{reserved} reserved / {16 - reserved} data ways", size=17, bold=True)
-    note(f, 933, "SE uses a different six-bit-value encoding. A two-way undercharge of full P-OPT is not SE.", RED)
+    note(f, 933, "SE uses a distinct historical baseline encoding. A two-way undercharge of full P-OPT is not SE.", RED)
 
     f.section("3", "ECG KEEPS THE DATA WAYS",
               "prediction state is additional storage", 976, role="verify")
-    note(f, 1032, "Full14 with D=21 adds 24 bits/line; Scale6 with D=32 adds 35. Both retain the ordinary data ways.")
-    note(f, 1064, "At 8 MiB: about 384 KiB (Full14 model) or 560 KiB (Scale6 model), including both queues and lookahead.")
-    note(f, 1097, "This is not yet an equal-area comparison. Backing matrices, active payloads, cache state and ports are distinct.", BORDER)
+    note(f, 1032, "Current prediction payload: 67 bits/line, separate from tags, data, classification, recency, queues and ports.")
+    note(f, 1064, "8 MiB: 8,781,824 bits = 1,097,728 bytes. 24 MiB: 26,345,472 bits = 3,293,184 bytes.")
+    note(f, 1097, "These are payload totals, not silicon area. P-OPT backing matrices, active columns and reserved ways remain distinct.", BORDER)
     return f
 
 
@@ -695,49 +715,48 @@ def instruction_family(root, fx):
         root, ISA, "01", "instruction-family",
         "Two native loads, two different results",
         "The record produces a renamed integer operand; the dependent property load produces the unchanged F32 value.",
-        "The native example uses the fixed Scale6 ABI. Record load I0 reads "
-        "four real bytes, derives semantic position nineteen from the record "
-        "address and iteration descriptor, and writes canonical operand "
-        "0x0000001310000012 to an illustrative renamed register P17. "
-        "Property load I1 extracts vertex eighteen, forms the ordinary property "
-        "address and returns 1/128. Its prediction stays on the dynamic "
-        "instruction for retirement; it is not the floating-point result.",
+        "The native example uses the graph-derived 5-ID/27-metadata layout. "
+        "Record load I0 reads four real bytes and writes raw word "
+        "0x0000000020000052 to illustrative register P17. Property load I1 "
+        "takes property base, raw word and the real record address as separate "
+        "sources, derives semantic sequence nineteen, and returns 1/128. Its "
+        "prediction stays on the dynamic instruction for retirement.",
         1270,
     )
     example_ribbon(f, fx)
     f.section("1", "CONFIGURE THE RECORD CONTEXT",
-              "implemented RV64 ABI: 26 ID bits + 6 token bits", 238, role="compute")
+              "custom-1 opcode 0x2b; graph-derived layout descriptor", 238, role="compute")
     tabular(f, 40, 300, (360, 400, 360),
             ("Configuration", "Running example", "Role"),
-            (("CSRs 0x803 / 0x804 / 0x801", "record base R; 34 words; V=32; ctx=1", "bounds and context, set before ROI"),
-             ("Iteration descriptor operand", "sequence base 0; no following pass", "same semantic coordinate across loads")),
+            (("CSRs 0x803 / 0x801", "record base R; context 1", "address and identity"),
+             ("CSRs 0x805..0x80B", "layout/count/V/Pbase/base/control/gen", "checked configuration + pending query")),
             row_height=47)
-    note(f, 480, "A small graph does not switch the native decoder to Full14. The wider small-graph encoding is currently in cache_sim.")
+    note(f, 480, "Configure funct3=2 and pending-query funct3=3 are non-speculative; generation is an identity, not a method version.")
 
     f.section("2", "I0: READ AND ASSEMBLE THE OPERAND",
-              "custom-0 / funct3 2 / raw funct7 0x30", 535, role="data")
+              "custom-1 / funct3 0 / funct7 0 for 4 B, 1 for 8 B", 535, role="data")
     f.table(40, 598, 310, 160, 3, role="data")
     f.text(55, 628, "Record array in memory", size=17, bold=True)
-    f.text(55, 680, "RA = R + 4 x 18", mono=True)
+    f.text(55, 680, "RA = 0x60000000 + 4 x 18", mono=True)
     f.text(55, 734, f"Mem[RA] = 0x{fx.record:08x}", mono=True)
     part(f, 480, 598, 320, 160, "Record result assembly",
-         ("s = 0 + (RA-R)/4 + 1 = 19",
-          "range checks; normalize WRAP",
-          "join sequence with 32-bit word"), "compute")
+         ("validate RA, count and layout",
+          "load raw32 or raw64",
+          "sequence is tracked separately"), "compute")
     f.rect(930, 598, 230, 160, role="state", radius=0)
     f.text(945, 627, "P17: 64-bit operand", size=17, bold=True)
     f.text(945, 683, f"0x{fx.native_operand:016x}", mono=True)
-    f.text(945, 728, "sequence | record", size=16)
+    f.text(945, 728, "zero-extended raw record", size=16)
     f.arrow(((350, 674), (480, 674)), kind="transfer", label="raw word",
             cadence="4 bytes", label_at=(415, 579), color=BLUE)
     f.arrow(((800, 674), (930, 674)), kind="dependency", label="rename result",
             label_at=(865, 792), color=PURPLE)
 
     f.section("3", "I1: KEEP VALUE AND HINT SEPARATE",
-              "custom-0 / funct3 2 / raw funct7 0x34", 849, role="compute")
+              "custom-1 / funct3 1 / FUNCT2 0; three explicit sources", 849, role="compute")
     part(f, 40, 912, 325, 182, "Consume renamed P17",
-         ("low 26 bits -> v=18", "token 4 -> distance bound 7",
-          "EA = property base + 18 x 4", "deadline = s19 + 7 = 26"), "compute")
+         ("low 5 bits -> v=18", "FINITE token -> distance 4",
+          "propertyBase + rawWord + realRA", "deadline = s19 + 4 = 23"), "compute")
     part(f, 475, 912, 330, 182, "Ordinary data service",
          ("VA 0x80000048 -> translated PA",
           "L1D / L2 / LLC as required",
@@ -746,7 +765,7 @@ def instruction_family(root, fx):
     part(f, 915, 912, 245, 80, "F9: unchanged value",
          (f"F32 bits 0x{fx.property_value_bits:08X}",), "data")
     part(f, 915, 1030, 245, 122, "DynInst hint for I1",
-         ("v18, s19, deadline 26",
+         ("v18, s19, deadline 23",
           "ctx1; own translated PA",
           "export only at retirement"), "state")
     f.arrow(((1160, 674), (1183, 674), (1183, 819), (15, 819), (15, 1001), (40, 1001)),
@@ -758,7 +777,7 @@ def instruction_family(root, fx):
     f.arrow(((202, 1094), (202, 1190), (1037, 1190), (1037, 1152)),
             kind="dependency", label="prediction and dynamic association",
             label_at=(620, 1226), color=PURPLE)
-    note(f, 1256, "P17/F9 are illustrative rename tags. This is an experimental custom-0 extension, not a ratified RISC-V ISA.")
+    note(f, 1256, "P17/F9 are illustrative rename tags. This is an experimental custom-1 extension, not a ratified RISC-V ISA.")
     return f
 
 
@@ -778,7 +797,7 @@ def o3_pipeline(root, fx):
         1540,
     )
     example_ribbon(f, fx)
-    f.text(40, 212, f"Native I0 reads 0x{fx.record:08x}; I1 returns p[18] = 1/128. P_B denotes its translated physical line.",
+    f.text(40, 212, f"Native I0 reads raw 0x{fx.record:08x}; I1 returns p[18] = 1/128. P_B denotes its translated physical line.",
            size=16, max_width=1120)
     f.rect(40, 235, 745, 855, role="neutral", radius=0)
     f.text(60, 268, "RISC-V O3 core: two dependent loads", size=18, bold=True)
@@ -802,8 +821,8 @@ def o3_pipeline(root, fx):
     f.text(480, 575, "F9 = 1/128 (F32 0x3C000000)", size=16)
 
     part(f, 65, 661, 280, 134, "AGU / payload decode",
-         ("I0: RA=R+4j; s=j+1", "I1: VA=Pbase+18x4",
-          "I1 hint: s19, deadline 26"), "compute")
+         ("I0: RA=R+4j; raw word", "I1: Pbase + raw + real RA",
+          "I1 hint: s19, deadline 23"), "compute")
     part(f, 455, 661, 300, 134, "LSQ + translation",
          ("ordering, replay and faults",
           "VA 0x80000048 -> P_B+8",
@@ -837,7 +856,7 @@ def o3_pipeline(root, fx):
     tabular(f, 65, 853, (120, 130, 440),
             ("ROB", "Complete?", "Retained dynamic state"),
             (("I0", "P17 ready", "RECORD: own position s19"),
-             ("I1", "F9 ready", "PROPERTY: s19, D26, ctx1, own PA")),
+             ("I1", "F9 ready", "PROPERTY: s19, D23, ctx1, own PA")),
             row_height=44)
     f.arrow(((600, 795), (600, 853)), kind="control", label="load completed",
             label_at=(671, 831), color=GREEN)
@@ -852,7 +871,7 @@ def o3_pipeline(root, fx):
          ("physical line P_B", "p[18] = 1/128 (unchanged)",
           "fills / dirty writebacks"), "data")
     part(f, 900, 1260, 255, 125, "Replacement metadata",
-         ("observe: PENDING s19", "commit: FINITE, D26",
+         ("observe: PENDING s19", "commit: FINITE, D23",
           "non-touching tag lookup"), "state")
     f.arrow(((1010, 795), (1010, 970)), kind="transfer",
             label="miss", cadence="64 bytes", color=BLUE)
@@ -864,11 +883,11 @@ def o3_pipeline(root, fx):
     f.arrow(((1035, 1110), (1035, 1260)), kind="control",
             label="I1: observe s19", color=PURPLE)
     f.text(902, 1160, "I1: observe s19", color=PURPLE)
-    f.text(902, 1187, "not D26", color=PURPLE)
+    f.text(902, 1187, "not D23", color=PURPLE)
 
     f.rect(40, 1137, 745, 195, role="state", radius=0)
     f.text(60, 1170, "Retirement metadata transport", size=18, bold=True, color=PURPLE)
-    f.text(65, 1201, "{P_B, s19, D26, ctx1}", mono=True)
+    f.text(65, 1201, "{P_B, s19, D23, ctx1}", mono=True)
     fifo(f, 65, 1240, 420, 16, "16 physical message slots")
     f.lines(525, 1202, ("capture: commitWidth (8)",
                        "minimum delay: 8 cycles",
@@ -883,7 +902,7 @@ def o3_pipeline(root, fx):
     f.text(65, 1393, "Receiver position advances only when a timed update arrives.", size=16)
     note(f, 1461, "A private hit can bypass LLC data traffic, but still exports its own committed prediction. Squashed loads export none.")
     note(f, 1493, "Observations never install FINITE/DEAD. Metadata updates never allocate or alter a data line.")
-    note(f, 1525, "The native model uses a dedicated metadata link and tag port; prefetch and physical-cost qualification remain separate.", BORDER)
+    note(f, 1525, "Native prefetch uses separate acknowledged traffic and paid presence ports; physical-area qualification remains separate.", BORDER)
     return f
 
 
@@ -896,8 +915,8 @@ def mshr_lifecycle(root, fx):
         "sequence but no future prediction. A completed load can still be "
         "squashed. Retirement alone authorizes a delayed update. A newer pending "
         "observation at sequence twenty-three rejects an older committed update "
-        "at nineteen; a coalesced update at twenty-five can install deadline "
-        "twenty-six. The final table distinguishes CPU ready cycles from semantic "
+        "at nineteen; a coalesced update at twenty-five can install its newer "
+        "prediction. The final table distinguishes CPU ready cycles from semantic "
         "request positions and protects the oldest of two physical same-line slots.",
         1430,
     )
@@ -907,14 +926,14 @@ def mshr_lifecycle(root, fx):
     part(f, 40, 301, 300, 151, "Observed at the LLC",
          ("I1 request carries s19 / ctx1",
           "set PENDING, value=19",
-          "do not install deadline 26"), "state")
+          "do not install deadline 23"), "state")
     part(f, 450, 301, 300, 151, "Data completes",
          ("F9 receives 1/128",
           "I1 may still be speculative",
           "no commit update yet"), "data")
     part(f, 860, 301, 300, 151, "I1 retires",
          ("its own PA and captured hint",
-          "enqueue {P_B,s19,D26,ctx1}",
+          "enqueue {P_B,s19,D23,ctx1}",
           "start the transport latency"), "compute")
     f.arrow(((340, 376), (450, 376)), kind="control", label="completion",
             label_at=(395, 280), color=BLUE)
@@ -938,7 +957,7 @@ def mshr_lifecycle(root, fx):
           "received watermark can advance"), "verify")
     part(f, 860, 765, 300, 147, "Delivered update s25",
          ("25 is newer than pending 23",
-          "install FINITE, deadline=26",
+          "install FINITE prediction",
           "data / recency unchanged"), "state")
     f.arrow(((340, 833), (450, 833)), kind="control", label="reject older",
             label_at=(395, 951), color=RED)
@@ -963,43 +982,42 @@ def mshr_lifecycle(root, fx):
 def checked_walkthrough(root, fx):
     f = plate(
         root, WALK, "01", "checked-request",
-        "One edge, two encodings, unchanged data",
+        "One edge, one adaptive record, unchanged data",
         "The mask occupies unused edge-ID bits. It is not applied to the floating-point property value.",
         "The running graph needs five vertex bits. Vertex eighteen is ORed with "
-        "Full14 metadata mask 0x00002200 to form record 0x00002212. The same "
-        "access has Scale6 record 0x10000012 in the fixed native ABI. Both "
-        "recover vertex eighteen and address 0x80000048, returning the exact "
-        "initial contribution 1/128 with F32 bits 0x3C000000. Only the decoded "
-        "future bounds differ: four versus seven, giving deadlines twenty-three "
-        "and twenty-six.",
+        "joint metadata mask 0x20000040 to form record 0x20000052. The "
+        "layout uses M=27, H=6 and m=23, recovers vertex eighteen and address "
+        "0x80000048, and returns the exact initial contribution 1/128 with F32 "
+        "bits 0x3C000000. The decoded distance is the upper bound four, giving "
+        "deadline twenty-three.",
         1330,
     )
     example_ribbon(f, fx)
     f.section("1", "BUILD THE METADATA MASK",
-              "Full14 example; b_ID=5, not 26", 236, role="state")
+              "current layout: b_ID=5, M=27, H=6, m=23", 236, role="state")
     part(f, 40, 309, 390, 138, "Ordinary edge ID",
          ("v = 18 = 0x00000012", "ID extraction mask = 0x0000001F"), "data")
-    part(f, 40, 495, 390, 138, f"Metadata M = 0x{fx.full_mask:08x}",
-         ("(reference 0x10 << 5) | (FINITE 1 << 13)",
-          "prefetch action = 0"), "state")
+    part(f, 40, 495, 390, 138, f"Metadata mask = 0x{fx.metadata_mask:08x}",
+         ("q = 2 << 23 = 16777216",
+          "FINITE token = 2 + q"), "state")
     f.circle(610, 472, 36, fill=GREEN_MATTE, stroke=GREEN)
     f.text(610, 479, "OR", size=18, bold=True, anchor="middle")
     part(f, 860, 411, 300, 123, "Packed record R",
-         (f"0x{fx.full_record:08x}", "one 32-bit word, not a sidecar"), "data")
+         (f"0x{fx.record:08x}", "one 32-bit word, not a sidecar"), "data")
     f.arrow(((430, 378), (520, 378), (520, 454), (579, 454)),
             kind="dependency", label="preserve vertex", label_at=(596, 344), color=BLUE)
     f.arrow(((430, 564), (520, 564), (520, 490), (579, 490)),
             kind="dependency", label="insert metadata", label_at=(597, 611), color=PURPLE)
     f.arrow(((646, 472), (860, 472)), kind="control", label="R = v | M",
             label_at=(753, 389), color=GREEN)
-    note(f, 679, "The full word changes from 0x00000012 to 0x00002212; masking off metadata still recovers exactly vertex 18.")
+    note(f, 679, "The word changes from 0x00000012 to 0x20000052; masking with 0x1F still recovers vertex 18.")
 
-    f.section("2", "DECODE THE SELECTED FORMAT",
-              "same address; different precision", 736, role="compute")
+    f.section("2", "DECODE THE SELECTED LAYOUT",
+              "one grammar; graph-derived precision", 736, role="compute")
     tabular(f, 40, 799, (260, 260, 280, 320),
-            ("Encoding", "Record", "Recovered vertex", "Candidate deadline"),
-            (("Full14, 5 ID bits", f"0x{fx.full_record:08x}", "R & 0x1F = 18", "s19 + 4 = 23"),
-             ("Scale6, native 26+6", f"0x{fx.record:08x}", "R & 0x03FFFFFF = 18", "s19 + 7 = 26")),
+            ("Field", "Value", "Check", "Result"),
+            (("destination", "18", "R & 0x1F", "property vertex 18"),
+             ("joint token", "16777218", "2 + q; q=2<<23", "FINITE, distance <=4")),
             row_height=48)
 
     f.section("3", "THE PROPERTY LOAD IS UNCHANGED",
@@ -1021,7 +1039,7 @@ def checked_walkthrough(root, fx):
     f.arrow(((775, 1135), (910, 1135)), kind="transfer", label="return",
             cadence="4 bytes", label_at=(843, 1236), color=BLUE)
     note(f, 1279, "The different future bounds feed cache ranking; the graph index, address and algorithm data remain the same.")
-    note(f, 1311, "Native P17 adds s19: 0x0000001310000012. That is a register operand, not an eight-byte edge-memory load.", BORDER)
+    note(f, 1311, "Native P17 is raw 0x0000000020000052. Sequence s19 is checked separately from the real record address.", BORDER)
     return f
 
 
@@ -1030,13 +1048,12 @@ def architecture_state_map(root, fx):
         root, WALK, "02", "architecture-state-map",
         "Where the mask and its decoded state live",
         "Edge storage, per-instruction association and per-cache-line predictions have different lifetimes.",
-        "The encoded edge record and ordinary property data reside in graph "
-        "memory. Full14's functional path keeps a separate carrier; in-place "
-        "Scale6 avoids another edge array. Native per-instruction state is "
-        "bounded by the CPU's in-flight window. Functional runtime accounting "
-        "includes bounded commit and prefetch queues, a sixteen-word lookahead "
-        "and D plus three prediction bits per cache line. D=21 and D=32 are "
-        "shown separately rather than treating the Scale6 cost as universal.",
+        "The encoded edge record and ordinary property data reside in separate "
+        "graph-memory arrays. Current builders retain the source graph, allocate "
+        "a vector<uint32_t> or vector<uint64_t> carrier, and use a sparse "
+        "line-indexed first/next map rather than edge-sized action arrays. "
+        "Native per-instruction state is bounded by the CPU window. Resident "
+        "prediction payload is 67 logical bits per cache line.",
         1430,
     )
     f.section("1", "GRAPH MEMORY AND BUILD-TIME SCRATCH",
@@ -1049,14 +1066,14 @@ def architecture_state_map(root, fx):
                                 "p[v]: ordinary F32 algorithm data, not an encoded mask")):
         f.text(78, 284 + row * 46, text, size=16)
     part(f, 830, 224, 330, 168, "Builder scratch",
-         ("Full14: edge-sized arrays",
-          "Scale6 in-place: first / next",
-          "Twitter: about 39.7 MiB",
+         ("sparse line first / next map",
+          "no E-sized action/future arrays",
+          "source graph remains allocated",
           "temporary, not silicon state"), "neutral")
-    note(f, 467, "Full14's functional carrier is separate; the in-place Scale6 path avoids a second edge array.")
+    note(f, 467, "Receipts separate source_stream_bytes, retained_source_bytes, carrier payload/allocation and auxiliary peak.")
     f.rect(40, 499, 1120, 115, role="compute", radius=0)
     f.text(60, 530, "Per-in-flight native access, not per graph edge", size=17, bold=True)
-    f.text(60, 574, "P17: 64-bit sequence | record operand", size=16)
+    f.text(60, 574, "P17: raw 32/64-bit record operand", size=16)
     f.text(660, 574, "I1: captured hint + its translated address", size=16)
 
     f.section("2", "BOUNDED CONTROL AND LINE STATE",
@@ -1065,30 +1082,29 @@ def architecture_state_map(root, fx):
     f.arrow(((600, 614), (600, 728)), kind="control", label="committed information",
             label_at=(768, 716), color=PURPLE)
     fifo(f, 64, 807, 290, 16, "Commit: 16 entries")
-    fifo(f, 440, 807, 310, 8, "Prefetch: 8 entries", "transfer")
+    fifo(f, 440, 807, 310, 8, "Bounded trigger/property queues", "transfer")
     f.table(860, 759, 275, 130, 3, role="data")
-    f.text(876, 789, "Functional lookahead", size=17, bold=True)
-    f.text(876, 832, "16 x 32-bit records", size=16)
-    f.text(876, 875, "512 bits", size=16)
-    f.text(64, 909, "entry = 51 + 2D bits", size=16, color=PURPLE)
-    f.text(440, 909, "entry = 49 + D bits", size=16, color=AMBER)
-    f.text(64, 966, "Full14 default: D=21", size=17, bold=True)
-    f.text(630, 966, "Scale6 / native payload: D=32", size=17, bold=True)
-    for x, width, bits in ((64, 480, 21), (630, 505, 32)):
-        f.bitfield(x, 988, width, 76,
-                   (("deadline", bits, "state"), ("state", 2, "state"),
-                    ("origin", 1, "transfer")), total_bits=bits + 3)
+    f.text(876, 789, "Sniper guest window", size=17, bold=True)
+    f.text(876, 832, "16 x uint64 = 1024 data bits", size=16)
+    f.text(876, 875, "+ 1024 index + 16 valid bits", size=16)
+    f.text(64, 909, "semantic sequence/deadline: checked 64-bit", size=16, color=PURPLE)
+    f.text(440, 909, "bounded queues and paid ports", size=16, color=AMBER)
+    f.text(64, 966, "Current payload: 67 bits/line; 64-bit prediction value", size=17, bold=True)
+    f.text(630, 966, "Separate from baseline cache structures", size=17, bold=True)
+    f.bitfield(64, 988, 1071, 76,
+               (("prediction value", 64, "state"), ("state", 2, "state"),
+                ("origin", 1, "transfer")), total_bits=67)
     tabular(f, 64, 1100, (190, 210, 340, 330),
-            ("Format", "Per line", "Line payload at 8 MiB", "Buffers + control"),
-            (("Full14, D=21", "24 bits", "3,145,728 bits", "2,624 bits"),
-             ("Scale6, D=32", "35 bits", "4,587,520 bits", "3,064 bits")),
+            ("LLC", "Lines", "Prediction payload", "Bytes"),
+            (("8 MiB", "131,072", "8,781,824 bits", "1,097,728"),
+             ("24 MiB", "393,216", "26,345,472 bits", "3,293,184")),
             row_height=38)
 
     f.section("3", "DO NOT TURN STATE INTO AN AREA CLAIM",
-              "both queues and lookahead enabled in these totals", 1286, role="verify")
-    note(f, 1350, "8 MiB model totals: Full14 3,148,352 bits; Scale6 4,590,584 bits. Baseline cache data/tags remain separate.")
-    note(f, 1382, "Native capture, validation, port logic and planned 128-byte lookahead require their own cost accounting.", BORDER)
-    note(f, 1414, "These bit counts are not synthesized area, and the 512-bit functional window is not a native buffer implementation.", BORDER)
+              "payload count only; queues and ports are additional", 1286, role="verify")
+    note(f, 1350, "Baseline tags, data, property/tier classification, recency and RRPV remain separate.")
+    note(f, 1382, "Runtime word bank is 16 x 257 bits; native 4/8-byte acquisition pins 2/3 real line banks.", BORDER)
+    note(f, 1414, "These logical bits are not a synthesized area, energy or timing result.", BORDER)
     return f
 
 
@@ -1097,25 +1113,24 @@ def evidence_boundary(root, fx):
         root, "evaluation-methodology", "01", "evidence-boundary",
         "What each implementation can establish",
         "Separate encoding, cache behavior, native execution and physical cost before making a claim.",
-        "A support matrix distinguishes the richer Full14 functional format, "
-        "the Scale6 large-graph format, and the current fixed-ABI native "
-        "replacement path. Native prefetch and physical qualification are not "
-        "implied by functional cache results. Demand misses, total traffic and "
-        "runtime are kept distinct, and every comparison must match graph work "
-        "and active mechanisms. P-OPT-SE remains a disclosed reconstruction.",
+        "A support matrix distinguishes one graph-adaptive codec from backend "
+        "evidence. Functional and native replacement/prefetch paths are working. "
+        "Sniper's four mechanisms pass strict admission but remain modeled corroboration. "
+        "Demand misses, total traffic and runtime remain distinct, and physical "
+        "qualification is not implied. Historical P-OPT-SE stays a disclosed reconstruction.",
         1270,
     )
     f.section("1", "FORMAT SUPPORT IS NOT BACKEND SUPPORT",
               "current implementation, not an aspirational diagram", 138, role="verify")
     tabular(f, 40, 201, (240, 235, 335, 310),
-            ("Surface", "Encoding", "Implemented mechanism", "Evidence limit"),
-            (("cache_sim / small graphs", "Full14; ID width <=18", "replacement + commit + prefetch", "functional cache / traffic"),
-             ("cache_sim / Twitter", "Scale6; 26+6", "bounded in-place large-graph path", "full Twitter cache / traffic"),
-             ("gem5 / RV64 O3", "fixed native 26+6", "real loads + retirement + R-only", "production timing gate closed"),
-             ("Sniper", "legacy paths", "earlier modeled controls", "REF32 rows unsupported"),
-             ("RTL / physical cost", "earlier components", "not a complete REF32 realization", "no complete area / timing result")),
+            ("Surface", "Current record", "Implemented mechanism", "Evidence limit"),
+            (("cache_sim", "graph-derived 4/8 B", "admitted T / R / P / R+P", "both widths + exact 24 MiB"),
+             ("gem5 / RV64 O3", "raw32 / raw64", "real loads, retirement, R / P", "serial fixed-iteration PR"),
+             ("Sniper", "actual 4/8 B loads", "admitted T / R / P / R+P", "modeled corroboration only"),
+             ("RTL / physical cost", "67-bit line payload", "earlier components only", "no complete silicon result"),
+             ("Historical results", "old fixed encodings", "preserved provenance", "not relabeled as current")),
             row_height=49)
-    note(f, 538, "A small graph can use Full14 in cache_sim; it does not automatically change the current native instruction ABI.")
+    note(f, 538, "Sniper: one-core sg_kernel, bounded RSS, modulo LLC; completion link is not native retirement.")
 
     f.section("2", "COUNT TRAFFIC, THEN INTERPRET IT",
               "a demand-miss count is not a speedup result", 601, role="data")

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1430" viewBox="0 0 1200 1430" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">Completion is not permission to install a prediction</title>
-  <desc id="desc">For the same property line B, a request observation installs a pending sequence but no future prediction. A completed load can still be squashed. Retirement alone authorizes a delayed update. A newer pending observation at sequence twenty-three rejects an older committed update at nineteen; a coalesced update at twenty-five can install deadline twenty-six. The final table distinguishes CPU ready cycles from semantic request positions and protects the oldest of two physical same-line slots.</desc>
+  <desc id="desc">For the same property line B, a request observation installs a pending sequence but no future prediction. A completed load can still be squashed. Retirement alone authorizes a delayed update. A newer pending observation at sequence twenty-three rejects an older committed update at nineteen; a coalesced update at twenty-five can install its newer prediction. The final table distinguishes CPU ready cycles from semantic request positions and protects the oldest of two physical same-line slots.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -50,7 +50,7 @@
   <text x="54" y="329" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Observed at the LLC</text>
   <text x="54" y="358" text-anchor="start" class="sans body" fill="#182230">I1 request carries s19 / ctx1</text>
   <text x="54" y="383" text-anchor="start" class="sans body" fill="#182230">set PENDING, value=19</text>
-  <text x="54" y="408" text-anchor="start" class="sans body" fill="#182230">do not install deadline 26</text>
+  <text x="54" y="408" text-anchor="start" class="sans body" fill="#182230">do not install deadline 23</text>
   <rect x="450" y="301" width="300" height="151" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450" data-y="301" data-width="300" data-height="151"/>
   <text x="464" y="329" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Data completes</text>
   <text x="464" y="358" text-anchor="start" class="sans body" fill="#182230">F9 receives 1/128</text>
@@ -59,7 +59,7 @@
   <rect x="860" y="301" width="300" height="151" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="301" data-width="300" data-height="151"/>
   <text x="874" y="329" text-anchor="start" class="sans label" fill="#182230" font-weight="700">I1 retires</text>
   <text x="874" y="358" text-anchor="start" class="sans body" fill="#182230">its own PA and captured hint</text>
-  <text x="874" y="383" text-anchor="start" class="sans body" fill="#182230">enqueue {P_B,s19,D26,ctx1}</text>
+  <text x="874" y="383" text-anchor="start" class="sans body" fill="#182230">enqueue {P_B,s19,D23,ctx1}</text>
   <text x="874" y="408" text-anchor="start" class="sans body" fill="#182230">start the transport latency</text>
   <path d="M340 376 L450 376" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="completion"/>
   <rect x="344.40" y="263.00" width="101.20" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
@@ -93,7 +93,7 @@
   <rect x="860" y="765" width="300" height="147" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="765" data-width="300" data-height="147"/>
   <text x="874" y="793" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Delivered update s25</text>
   <text x="874" y="822" text-anchor="start" class="sans body" fill="#182230">25 is newer than pending 23</text>
-  <text x="874" y="847" text-anchor="start" class="sans body" fill="#182230">install FINITE, deadline=26</text>
+  <text x="874" y="847" text-anchor="start" class="sans body" fill="#182230">install FINITE prediction</text>
   <text x="874" y="872" text-anchor="start" class="sans body" fill="#182230">data / recency unchanged</text>
   <path d="M340 833 L450 833" fill="none" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-red)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="reject older"/>
   <rect x="335.28" y="934.00" width="119.44" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>

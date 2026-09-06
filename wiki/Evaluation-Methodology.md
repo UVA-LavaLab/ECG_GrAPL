@@ -6,44 +6,58 @@ must establish whether that mechanism improves complete workloads at an
 accounted cost. This page keeps format, backend, traffic, timing and physical
 claims separate.
 
-For current results, start with the
-[completed Twitter comparison](#74-completed-single-epoch-baseline-qualification).
-The [format/scalability record](#73-ref32-formats-and-scalability) gives its
-scope and earlier capacity points. Older ReusePlan campaigns are retained
-below as provenance, not presented as the current REF32 result.
+Current functional and native implementations use one graph-adaptive 4/8-byte
+record method. The final paper campaign and complete silicon-area accounting
+are not yet claimed. Sections 7.1–7.4 preserve earlier ReusePlan, fixed-format
+Twitter, and P-OPT-SE results under their original names and provenance; they
+are historical evidence and are not relabeled as current adaptive results.
 
 ### Figure 1 — What each implementation can establish
 
-![Support matrix separating Full14 and Scale6 functional paths from the fixed native ABI, with explicit traffic accounting and matched-work requirements before scoped conclusions](../fig/wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg)
+![Support matrix separating the one adaptive codec from functional, native, modeled, historical, and physical evidence](../fig/wiki/evaluation-methodology/evaluation-methodology-f01-evidence-boundary.svg)
 
-**Figure 1.** An available encoding is not an implemented backend. Full14 and
-Scale6 both have functional cache paths. Native RV64 currently implements
-the fixed Scale6 operand and retirement/replacement path, not rich-format
-decode or prefetch. The complete Twitter results are cache/traffic evidence;
-they do not establish native speedup or physical-area savings.
+**Figure 1.** A valid layout is not by itself backend evidence. cache_sim and
+gem5 use the shared graph-adaptive codec and record-window rule. Native gem5
+implements raw32/raw64 loads, retirement, replacement, and acknowledged
+LLC-only prefetch; Sniper has strict current-path admission but remains modeled
+corroboration. Historical Twitter results are cache/traffic evidence,
+not native speedup or physical-area evidence.
 
 ## 1. Simulator roles
 
-| Simulator | Current REF32 use | Explicit limit |
+| Simulator | Current ECG use | Explicit limit |
 |---|---|---|
-| **cache_sim** | Full14 and Scale6 victim logic, bounded update/prefetch models, full-graph cache and traffic sweeps | no CPU cycle/instruction model; lookahead acquisition is not a completed native timing path |
-| **gem5 RV64 O3** | real Scale6 operands, per-DynInst association, retirement transport and resident LLC replacement | native prefetch/rich-format decode and production timing admission remain closed |
-| **Sniper** | earlier matched-work modeled controls | REF32 rows remain unsupported; modeled time is not architectural speedup |
+| **cache_sim** | shared adaptive codec, victim rule, real-record window; all four mechanisms admitted at both widths and exact 24 MiB | explicit access-step timing, not CPU cycles or native speedup |
+| **gem5 RV64 O3** | raw 4/8-byte loads, per-DynInst association, retirement transport, replacement and acknowledged LLC-only prefetch | serial fixed-iteration PageRank; no final-campaign or physical-area claim |
+| **Sniper** | all four mechanisms admitted; 4-byte live virtual and 8-byte SIFT actual-translation paths checked under 4 KiB and exact 24 MiB/16-way geometries | modeled corroboration, not RISC-V architectural timing |
 
 Only gem5 O3 execution time is used for architectural speedup. cache_sim does
 not model cycles or instructions. Sniper time is not used as a ReuseBind
 speedup metric. Every simulator is compared with its own same-build, same-cell
 baseline; absolute miss rates and timing are not compared across simulators.
 
-The default indexed Sniper ReusePlan path uses per-edge delivery markers.
-The computed fused sideband remains diagnostic and rejects source/line cases
-whose per-edge hints cannot be represented consistently.
+Current Sniper admission requires `sg_kernel`, one core, uncapped fixed
+PageRank, a mandatory process-tree RSS watchdog (default 2,048 MiB), true
+modulo LLC indexing, matching work/checksum, and closed update/prefetch/traffic
+accounting. It uses actual VA/PA association for only the configured
+contribution region. Its update link is bounded completion corroboration—not
+retirement—and no current policy remains active after deactivation.
+Before the first received watermark it uses the same shared UNKNOWN-state
+victim ranking as the other current backends. Prefetch admission uses the
+actual current semantic position, and promised record-window bytes are
+required rather than silently treated as no candidate.
 
-Format selection must also be explicit. Smaller IDs permit a richer Full14
-mask, while Twitter's 26-bit IDs leave six bits for Scale6. Full14 supports
-multiple reference/action splits but currently keeps a fourteen-bit metadata
-budget. The named experiment profiles pin their own encoding. A different
-format or prefetch selector is not silently treated as the same experiment.
+Current comparisons use the transport-matched loop and require bitwise-equal
+checksums. The legacy PageRank loop may differ by one ULP because of FMA
+contraction; disabling FP contraction makes the outputs exact, but archived
+results are not retroactively relabeled.
+
+Layout selection is explicit and bit-granular. It uses the maximum encoded ID,
+record count, requested 4/8-byte width, and minimum mantissa precision. A
+32-bit VID requires the eight-byte escape. The 26-ID/M6/H31/m0 layout is an
+older numeric configuration, not a separate current method. Required bytes
+that are not available return `NOT_READY`; no backend may substitute a host
+future oracle or certified-prefix fallback.
 
 ## 2. Fail-closed row acceptance
 
@@ -62,7 +76,7 @@ architectural correctness.
 
 ## 3. Structural FlowThrough fairness
 
-The primary REF32 comparisons use **FlowThrough off**. The following control
+The current ECG comparisons use **FlowThrough off**. The following control
 belongs to separately identified placement/transport comparisons.
 
 The `--flowthrough all` control gives LRU, GRASP, P-OPT, and ReusePlan the same
@@ -112,11 +126,12 @@ and replacement, so time, traffic, and retired instructions are interpreted
 together. Replacement-only attribution compares transport-matched ReusePlan
 policies and requires exact per-cell instruction equality.
 
-For the native REF32 mechanism, the LRU control runs the same record/property
-instruction pair and fixed-iteration loop with metadata application disabled.
+For the native ECG mechanism, the transport control runs the same
+record/property instruction pair and fixed-iteration loop with replacement and
+prefetch application disabled.
 ROI instruction counts come from `system.cpu.commitStats0.numInsts` in the
-first ROI stats block, not the unreset cumulative `simInsts` field. Matching
-that work is necessary but does not by itself open production timing admission.
+first ROI stats block, not the unreset cumulative `simInsts` field. Matching that work is necessary but does not by itself complete the final
+paper campaign.
 
 IPC is derived from instructions and time; it is not independent evidence.
 Counterfactual instruction normalization is a sensitivity, not a measurement.
@@ -214,19 +229,20 @@ retained full two-column encoding and lookup without paying its capacity.
 
 Cost domains remain separate: `popt_backing_matrix_bytes` is the complete
 matrix in memory, `popt_matrix_bytes` is active-column payload, and
-`popt_reserved_bytes` is the whole-way LLC reservation. REF32's added
-per-line/controller state is on-chip storage. Ratios against the complete
-P-OPT matrix are total metadata-footprint ratios, not silicon-area savings.
-Area comparisons must also charge REF32's added state and controller logic.
+`popt_reserved_bytes` is the whole-way LLC reservation. ECG's current 67-bit
+per-line prediction payload is on-chip logical state, separate from queues,
+ports, validation, tags, data and recency. Ratios against the complete P-OPT
+matrix are total metadata-footprint ratios, not silicon-area savings.
+Area comparisons must charge every current ECG state and control structure.
 `total_offchip_traffic_with_overhead` includes reads, writebacks, and any
 analytic matrix stream; demand LLC misses are reported separately.
 
 ## 6. Earlier workload and campaign roles
 
-These assignments describe the retained ReusePlan studies. They do not imply
-that current REF32 supports every listed kernel or that its native timing gate
-is open. The current REF32 construction is for certified, fixed-order
-PageRank sweeps.
+These assignments describe retained historical studies. They do not imply
+that the current native path supports every listed kernel. Current native
+execution is serial fixed-iteration PageRank; functional and modeled backends
+have different evidence scopes.
 
 The literature-scale PageRank screen uses fixed 262,144-vertex samples of
 web-Google, Pokec, Patents, roadNet-CA, LiveJournal, and Orkut at iteration
@@ -248,12 +264,12 @@ Selector generations 1 and 2 did not satisfy the retained representativeness
 and regret checks. They are retained as negative diagnostics and must not be
 presented as detailed-simulator performance policies.
 
-## 7. Campaign provenance and current REF32 evidence
+## 7. Historical campaign provenance
 
-Sections 7.1 and 7.2 retain the earlier replacement and transport campaigns,
-which were preregistered, run and gated separately. Current REF32 evidence
-starts in Section 7.3; its completed nine-policy Twitter comparison is in
-Section 7.4. Receipts and claims do not transfer between these mechanisms.
+Sections 7.1–7.4 retain earlier replacement, transport, fixed-format Twitter,
+and P-OPT-SE campaigns. Their policy labels, values, hashes and conclusions
+are preserved exactly as provenance. They are not current adaptive-method
+results, and their receipts do not transfer to the current implementation.
 
 ### 7.1 Replacement campaign
 
@@ -334,7 +350,12 @@ the campaign's victim choice. All version-2 screen and full-role evidence is
 invalidated; thresholds, policies, stage roster, and admissible claims remain
 unchanged.
 
-### 7.3 REF32 formats and scalability
+### 7.3 Historical fixed-format scalability
+
+> **Historical result boundary.** This section preserves the original
+> `ECG_REF32_*`, Full14 and Scale6 terminology, measurements, hashes and
+> accounting from the recorded revision. These names are not public formats
+> of the current adaptive method.
 
 `ECG_REF32_RP_COMMIT` is a separate candidate that returns to the original ECG
 goal: improve cache behavior relative to GRASP and P-OPT without retaining
@@ -480,15 +501,15 @@ The two-way diagnostic is
 `results/ecg_experiments/runs/twitter_popt_24mb_fixed2_sensitivity/roi_matrix.json`
 (SHA-256 `7dfbc7c7ff2c9104a6bc095694842a88023a86c78e804f13896eb364b0a77a53`).
 
-REF32 rows are accepted only when the graph filename certifies DBG order, the
+These historical REF32 rows were accepted only when the graph filename
+certified DBG order, the
 record/commit/prefetch/resource receipts validate, no runtime P-OPT matrix is
 present, semantic output matches, both queues drain, and the record remains four
 bytes. Cache-simulator LLC misses, governed-property misses, and off-chip
-traffic are admissible. Timing is not yet admitted: native record/retirement/
-replacement mechanisms now exist, but the full timed path, native prefetch and
-runner qualification cannot be inferred from these functional results.
+traffic are the admissible evidence from that campaign. They do not become
+native timing evidence after later implementation work.
 
-### 7.4 Completed single-epoch baseline qualification
+### 7.4 Historical completed single-epoch baseline qualification
 
 The fresh nine-policy Twitter matrix covers both the primary 8 MiB LLC and
 the 24 MiB sensitivity. All 18 rows execute one traversal of 1,468,364,884
@@ -543,8 +564,8 @@ The associated completion receipt records all 18 rows as successful.
 
 Preliminary numbers and intermediate choices remain local. Publish complete,
 provenance-backed results only for the claim their campaign establishes.
-The completed matrices above support scoped functional cache/traffic claims.
-They do not require pretending that unfinished native prefetch or physical
-cost work is complete. Architectural speedup, energy and silicon-area claims
-need their own completed implementation and qualification; failed or
-infeasible diagnostics are never promoted into those results.
+The completed historical matrices above support their scoped functional
+cache/traffic claims. The current native mechanisms have separate qualification
+receipts, but the final paper campaign is not complete. Energy and silicon-area
+claims require separate physical implementation and qualification; failed or
+infeasible diagnostics are never promoted into results.

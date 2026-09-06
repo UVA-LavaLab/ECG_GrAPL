@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1340" viewBox="0 0 1200 1340" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
-  <title id="title">Prefetch actions name a future record</title>
-  <desc id="desc">The running record&#x27;s sixteen-word window contains only property lines A and B. B is current and A first appears at lead one, so neither Full14 nor Scale6 issues a prefetch for this record. A second flow contrasts Full14&#x27;s offline encoded lead with Scale6&#x27;s runtime selection from record bytes. Both decode the target vertex from the selected future record and apply resident, pending and admission filters.</desc>
+  <title id="title">One real-record window selects a prefetch</title>
+  <desc id="desc">The running record&#x27;s sixteen-word window contains only property lines A and B. B is current and A first appears at lead one, so the current uniform selector issues no prefetch. For every graph layout it examines real records at leads eight through fifteen, keeps the first occurrence of each distinct line, and ranks finite cyclic bounds before lead-ten proximity and lower lead. UNKNOWN and DEAD rank as infinity.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -35,8 +35,8 @@
       .body{font-size:16px}
 </style></defs>
   <rect x="0" y="0" width="1200" height="1340" fill="#FFFFFF"/>
-  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">Prefetch actions name a future record</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Reference distance predicts this line&#x27;s reuse; a prefetch lead selects another record&#x27;s property.</text>
+  <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">One real-record window selects a prefetch</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Reuse distance ranks candidates; the selected future record supplies the property ID.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
@@ -112,41 +112,41 @@
   <text x="880" y="385" text-anchor="middle" class="sans label" fill="#C56A13" font-weight="700">candidate leads 8..15</text>
   <text x="40" y="426" text-anchor="start" class="sans body" fill="#182230">B is the current line. A first appears at +1, before the eligible window. Later A/B entries are not new candidates.</text>
   <rect x="40" y="458" width="1120" height="51" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="458" data-width="1120" data-height="51"/>
-  <text x="600" y="490" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">Full14 action = 0; Scale6 selected lead = 0. No extra read for this record.</text>
+  <text x="600" y="490" text-anchor="middle" class="sans label" fill="#0F8A72" font-weight="700">Current selector: no eligible new line, so no prefetch request.</text>
   <circle cx="44" cy="566" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="572" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
-  <text x="74" y="573" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">TWO WAYS TO SELECT A LEAD</text>
-  <text x="1158" y="572" text-anchor="end" class="sans body" fill="#475467">choose a format, not an additional edge stream</text>
+  <text x="74" y="573" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ONE SELECTOR FOR EVERY LAYOUT</text>
+  <text x="1158" y="572" text-anchor="end" class="sans body" fill="#475467">no action field and no host future oracle</text>
   <line x1="24" y1="592" x2="1176" y2="592" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="592" x2="170" y2="592" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <rect x="40" y="632" width="500" height="165" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="632" data-width="500" data-height="165"/>
-  <text x="54" y="660" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Full14: encode the choice offline</text>
-  <text x="54" y="689" text-anchor="start" class="sans body" fill="#182230">prioritize the largest backward gap</text>
-  <text x="54" y="714" text-anchor="start" class="sans body" fill="#182230">then next-use distance, then proximity to lead 10</text>
-  <text x="54" y="739" text-anchor="start" class="sans body" fill="#182230">4-bit action: lead; 2-bit action: {0,8,12,15}</text>
+  <rect x="40" y="632" width="500" height="165" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="632" data-width="500" data-height="165"/>
+  <text x="54" y="660" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Acquire real record bytes</text>
+  <text x="54" y="689" text-anchor="start" class="sans body" fill="#182230">16 actual records, not decoded IDs alone</text>
+  <text x="54" y="714" text-anchor="start" class="sans body" fill="#182230">4-byte records span up to 2 lines</text>
+  <text x="54" y="739" text-anchor="start" class="sans body" fill="#182230">unaligned 8-byte records span up to 3 lines</text>
   <rect x="660" y="632" width="500" height="165" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="660" data-y="632" data-width="500" data-height="165"/>
-  <text x="674" y="660" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Scale6: inspect the record window</text>
+  <text x="674" y="660" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Rank eligible distinct lines</text>
   <text x="674" y="689" text-anchor="start" class="sans body" fill="#182230">first distinct line at a lead in 8..15</text>
   <text x="674" y="714" text-anchor="start" class="sans body" fill="#182230">smallest decoded future bound wins</text>
-  <text x="674" y="739" text-anchor="start" class="sans body" fill="#182230">tie: closest to lead 10; no action field</text>
+  <text x="674" y="739" text-anchor="start" class="sans body" fill="#182230">tie: closest to lead 10, then lower lead</text>
   <rect x="415" y="871" width="370" height="130" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="415" data-y="871" data-width="370" data-height="130"/>
   <text x="429" y="899" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Read target ID, then admit</text>
   <text x="429" y="928" text-anchor="start" class="sans body" fill="#182230">target = R[j + lead].vertex</text>
   <text x="429" y="953" text-anchor="start" class="sans body" fill="#182230">reject resident / pending / denied</text>
   <text x="429" y="978" text-anchor="start" class="sans body" fill="#182230">reuse distance is not the target ID</text>
-  <path d="M290 797 L290 933 L415 933" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="decoded action"/>
-  <rect x="130.16" y="824.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
-  <text x="199" y="841" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">decoded action</text>
+  <path d="M290 797 L290 933 L415 933" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="ready records"/>
+  <rect x="134.72" y="824.00" width="128.56" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
+  <text x="199" y="841" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">ready records</text>
   <path d="M910 797 L910 933 L785 933" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="selected lead"/>
   <rect x="944.72" y="824.00" width="128.56" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="1009" y="841" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">selected lead</text>
   <circle cx="44" cy="1057" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="1063" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="1064" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">PREFETCH FILLS ONLY THE LLC</text>
-  <text x="1158" y="1063" text-anchor="end" class="sans body" fill="#475467">functional model; native delivery is not implemented</text>
+  <text x="1158" y="1063" text-anchor="end" class="sans body" fill="#475467">native path uses acknowledged ReadReq traffic</text>
   <line x1="24" y1="1083" x2="1176" y2="1083" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="1083" x2="170" y2="1083" stroke="#C56A13" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="40" y="1125" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">8-entry prefetch queue</text>
+  <text x="40" y="1125" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">bounded prefetch queues</text>
   <rect x="40.0" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40.0" data-y="1139" data-width="33.75" data-height="42"/>
   <rect x="73.75" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="73.75" data-y="1139" data-width="33.75" data-height="42"/>
   <rect x="107.5" y="1139" width="33.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="107.5" data-y="1139" data-width="33.75" data-height="42"/>
@@ -175,6 +175,6 @@
   <path d="M690 1160 L890 1160" fill="none" stroke="#C56A13" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-amber)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="prefetch fill" data-flow-cadence="one line"/>
   <rect x="675.56" y="1241.00" width="228.88" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="790" y="1258" text-anchor="middle" class="sans body" fill="#C56A13" font-weight="700">prefetch fill | one line</text>
-  <text x="40" y="1294" text-anchor="start" class="sans body" fill="#182230">Primary model: 8-request latency, at most 1 issue per 8 governed requests. FlowThrough is OFF.</text>
-  <text x="40" y="1326" text-anchor="start" class="sans body" fill="#475467">Useful prefetches can reduce demand misses; only total reads plus writebacks establish the traffic cost.</text>
+  <text x="40" y="1294" text-anchor="start" class="sans body" fill="#182230">Default native model: 12-cycle lookup + 8-cycle prefetch pipeline; one lookup input/cycle. FlowThrough is OFF.</text>
+  <text x="40" y="1326" text-anchor="start" class="sans body" fill="#475467">Issue and completion check L1/L2/LLC duplicates and shared admission; all traffic and drain time are charged.</text>
 </svg>

@@ -2,63 +2,72 @@
   <img src="assets/logo.png" alt="ECG graph logo" width="180">
 </p>
 
-# ECG: edge-carried reuse
+# ECG: edge-carried graph reuse
 
-A fixed graph traversal exposes future property-line uses that a cache cannot
-infer from recency alone. ECG puts a compact description of that reuse into
-the spare bits of the edge word, carries it with the corresponding load, and
-uses it to rank cache lines or select prefetch candidates. The current
-**REF32** family keeps the structural record at four bytes and leaves the
-algorithm's property values unchanged.
+ECG derives cache-line reuse from a known graph traversal, stores a conservative
+bound beside each encoded vertex ID, and carries that information with the real
+record load. The same current codec drives functional cache decisions, native
+gem5 execution, and modeled Sniper corroboration.
 
-**Scale6 is one encoding, not the architecture's name.** Twitter needs 26
-vertex-ID bits and leaves six metadata bits. Smaller graphs can use the
-richer **Full14** encoding: default eight reference bits, two state bits and
-four action bits. The implementation supports explicit encoding choices,
-not automatic use of every spare bit; the native decoder currently implements
-only the fixed 26+6 ABI.
+There is one graph-adaptive method, not public versioned or fixed-width format
+families. The layout uses the maximum encoded
+vertex ID, record count, requested 4/8-byte width, and minimum mantissa
+precision. Four bytes are tried first; an explicit eight-byte record is used
+when the ID and required metadata do not fit.
 
 ### Figure 1 — ECG: graph knowledge in the edge stream
 
-![One ECG access traced from graph vertex 8 and CSR position 18 through alternative Full14 and Scale6 records, unchanged property data, retirement metadata delivery, and a different cache victim](../fig/wiki/home/home-f01-system-overview.svg)
+![One ECG access traced from graph vertex 8 and CSR position 18 through the adaptive record, unchanged property data, retirement metadata delivery, and a different cache victim](../fig/wiki/home/home-f01-system-overview.svg)
 
-**Figure 1.** Outer vertex `u=8` reads property `v=18` from CSR position `j=18`.
-The next use of that property's cache line is at `j=22`. A richer mask and a
-compact token encode the same distance with different precision. Both recover
-the same address and value. The cache example then shows why retaining the
-most recently touched line is not always the right choice.
+**Figure 1.** Outer vertex `u=8` reads property `v=18` from CSR position
+`j=18`. The next use of the same property line occurs at `j=22`. With
+`record_count=34`, the layout is 4 bytes, 5 ID bits, 27 metadata bits,
+6 horizon bits, 3 exponent bits, and 23 mantissa bits. Distance four becomes
+FINITE token `16777218`, producing mask `0x20000040` and record
+`0x20000052`.
 
-The example is PageRank pull: the **outer vertex** traverses in-neighbors
-`N_in(u)`, and the **property vertex** contributes to destinations in
-`N_out(v)`. Its governed access count is `d_out(v)`. Other kernels need metadata
-for their actual request order; changing to out-neighbors `N_out(u)` changes
-that count to `d_in(v)`. A dynamic frontier is not the same stream as a fixed
-PageRank sweep.
+Masking with `0x1f` recovers vertex 18. The property load still reads address
+`0x80000048` and returns F32 `1/128` (`0x3c000000`). The cache receives
+prediction metadata through a separate bounded path; metadata never replaces
+the algorithm's value.
 
-## Read the design as a sequence of transformations
+The example is PageRank pull. The **outer vertex** visits in-neighbors
+`N_in(u)`, while the **property vertex** contributes to destinations in
+`N_out(v)`, so its property-request count is `d_out(v)`. Traversing
+out-neighbors `N_out(u)` instead reads property `p[v]` once for each source in
+`N_in(v)`, giving `d_in(v)`. A dynamic frontier is not interchangeable with a
+fixed sweep.
 
-1. [Records and cache control](ReusePlan-FlowThrough) starts with the graph,
-   constructs CSR-aligned masks, compares bit budgets, and works through an
-   actual victim-ranking example.
-2. [One edge, end to end](Property-to-Cache-Walkthrough) derives the hex words,
-   address, returned F32 value, future bounds and storage ownership.
-3. [Native processor pipeline](RISC-V-Instruction-Path) follows both real loads
-   through rename, issue, translation, private caches, the ROB, and the
-   retirement-only metadata channel.
-4. [Evaluation methodology](Evaluation-Methodology) separates functional
-   cache results, total traffic, native execution and physical cost.
-5. [Reproduction](Reproduction) provides the corresponding build, experiment
-   and bounded native-probe commands.
+## Reading order
 
-## Implementation and evidence
+1. [Adaptive records and cache control](ReusePlan-FlowThrough) derives the
+   layout, joint token, victim decision, record window, and storage costs.
+2. [One edge, end to end](Property-to-Cache-Walkthrough) verifies the exact
+   word, address, F32 value, deadline, and ownership boundaries.
+3. [Native processor pipeline](RISC-V-Instruction-Path) follows raw32/raw64
+   record loads and the dependent property load through gem5 O3.
+4. [Evaluation methodology](Evaluation-Methodology) separates functional,
+   native, modeled, historical, and physical evidence.
+5. [Reproduction](Reproduction) gives current checks and preserves historical
+   recipes with explicit provenance.
 
-cache_sim implements Full14 and Scale6 replacement, commit refresh and
-LLC-only prefetching. Full Twitter-2010 results use Scale6; they are cache and
-traffic evidence, not processor-speedup measurements. The 8 MiB LLC remains
-the primary target, with larger capacity points reported separately.
+## Current implementation status
 
-The native RV64 O3 path implements real Scale6 record/F32 loads and
-retirement-driven LLC replacement. Native prefetch, production timing
-admission and physical-area qualification remain unfinished. Earlier
-ReusePlan/ReuseBind and FlowThrough mechanisms are retained as separate
-controls, not silently included in the current result.
+| Surface | Implemented | Scope |
+|---|---|---|
+| cache_sim | adaptive 4/8-byte records, replacement, prefetch, matched transport | all four mechanisms admitted at both widths and exact 24 MiB; no native timing |
+| gem5 RV64 O3 | raw record loads, dependent F32 loads, retirement updates, replacement and acknowledged LLC-only prefetch | serial fixed-iteration PageRank; native timing evidence |
+| Sniper | actual 4/8-byte loads and modeled transport/replacement/prefetch | all four mechanisms admitted; corroboration only, not RISC-V timing |
+| physical design | 67-bit per-line payload can be counted | complete area, energy and timing are not established |
+
+The native encoding is experimental custom-1 opcode `0x2b`, not a ratified
+RISC-V extension. The guest polls bounded pending work before ROI end and
+before releasing its separately allocated carrier.
+
+Sniper's admitted current path is one-core, uncapped fixed PageRank through
+`sg_kernel`, with mandatory process-tree RSS protection and true modulo LLC
+indexing. Its update link is bounded completion corroboration, not retirement.
+
+Historical Twitter, P-OPT/P-OPT-SE, ReusePlan, and FlowThrough results retain
+their original policy names, revisions, encodings, and limitations. They are
+not renamed as current adaptive-record results.

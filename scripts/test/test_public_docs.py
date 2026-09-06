@@ -148,9 +148,25 @@ def test_design_guide_uses_aligned_instruction_family():
 def test_readme_documents_experimental_riscv_support():
     readme = (ROOT / "README.md").read_text()
     flat = " ".join(readme.split())
-    assert "experimental RISC-V custom-0 implementation" in flat
+    assert "experimental RISC-V custom-1 implementation" in flat
     assert "wiki/RISC-V-Instruction-Path.md" in readme
     assert "not a ratified RISC-V extension" in flat
+
+
+def test_current_adaptive_and_sniper_contract_is_documented():
+    readme = (ROOT / "README.md").read_text()
+    evaluation = (ROOT / "wiki/Evaluation-Methodology.md").read_text()
+    reproduction = (ROOT / "wiki/Reproduction.md").read_text()
+    combined = "\n".join((readme, evaluation, reproduction))
+    for token in (
+            "requested_record_bytes", "minimum_mantissa_bits",
+            "max_vertex_id_known", "0x20000052",
+            "--sniper-workload sg_kernel", "--sniper-record-rss-mib 2048",
+            "bounded-completion-corroboration", "retained_source_bytes"):
+        assert token in combined
+    flat = " ".join(combined.lower().split())
+    assert "guest software window is always 16 `uint64_t`" in flat
+    assert "production admission remains under review" not in combined
 
 
 def test_svg_figures_are_valid_and_use_straight_connectors():

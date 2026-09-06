@@ -1,212 +1,161 @@
 # Native record-to-cache pipeline
 
-The native port implements **one current REF32 encoding: the fixed 26+6
-Scale6 ABI**. This page follows its real record/property loads and
-retirement-driven replacement path in RV64 gem5 O3. Full14's richer
-small-graph encoding is implemented in cache_sim, not automatically selected
-by the native decoder. Native prefetch and production timing admission remain
-unfinished.
+The current native path implements the same graph-adaptive 4/8-byte record
+layout as the functional model. It performs real record and property loads in
+RV64 gem5 O3, preserves their dependency through renamed state, transports
+predictions at retirement, and supports replacement and acknowledged LLC-only
+prefetching. Its current workload scope is serial fixed-iteration PageRank.
 
-## 1. Two instructions consume different data
+## 1. Two loads, two distinct results
 
 ### Figure 1 — Two native loads, two different results
 
-![The current native configuration and record load producing a canonical renamed integer operand, followed by the dependent property load with distinct F32 data and per-instruction prediction outputs](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg)
+![The current native configuration and raw record load producing an integer operand, followed by the dependent property load with distinct F32 data and per-instruction prediction state](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f01-instruction-family.svg)
 
-**Figure 1.** The running edge is still `u=8`, `j=18`, `v=18`. In this ABI,
-its memory word is `0x10000012`. I0 loads that real four-byte record and
-assembles the canonical integer operand; I1 uses it to load the ordinary
-property value. Their results are not interchangeable.
+**Figure 1.** The record load returns only the raw record. The dependent
+property load combines it with the real record address and configured bases.
 
-| Operation | Memory access | Architectural result | Retained association |
-|---|---|---|---|
-| **I0: record load**, raw funct7 `0x30` | 32-bit word at `record_base + 4*j` | RV64 operand containing semantic sequence and normalized record | record identity used to validate the pair |
-| **I1: F32 property load**, raw funct7 `0x34` | ordinary F32 at `property_base + 4*v` | unchanged property value, with normal FPU boxing | this instruction's sequence, prediction, context and translated address |
+The experimental instructions use custom-1 opcode `0x2b` because the
+custom-0 funct3 space is occupied by older controls:
 
-Both operations use custom-0 opcode `0x0b`, funct3 `0x2`; only RV64 and the
-defined width subcode are accepted. Guest wrappers emit `.insn`. These are
-experimental encodings, not ratified RISC-V instructions or claimed standard
-assembler mnemonics.
+| Operation | Encoding | Memory/result |
+|---|---|---|
+| Record32 | funct3 `0`, funct7 `0` | real 4-byte load; zero-extended raw word |
+| Record64 | funct3 `0`, funct7 `1` | real 8-byte load; raw word |
+| PropertyF32 R4 | funct3 `1`, FUNCT2 `0` | sources are property base, raw record word, and real record address; result is normal F32 data |
+| Configure | funct3 `2` | non-speculative configuration operation |
+| Pending query | funct3 `3` | non-speculative bounded completion query |
 
-The record-base CSR is `0x803`, configuration is `0x804`, and context is
-`0x801`. Configuration is established with the existing serialized,
-non-speculative CSR discipline. The individual record and property loads
-still use the ordinary speculative memory pipeline.
+The GPR contains the raw record, not a packed `sequence32|word32`. For the
+fixture, optional record base `0x60000000` gives record address `0x60000048`;
+P17 contains `0x0000000020000052`. Sequence 19 is derived and checked
+separately from the real record address, record count, and iteration base.
+Property address is `0x80000048`; F9 receives F32 `1/128`
+(`0x3c000000`).
 
-| Configured/derived value | Implemented layout |
+Configuration uses CSR `0x803` for record base and `0x801` for context, plus:
+
+| CSR | Field |
 |---|---|
-| configuration | record count `[30:0]`, vertex count minus one `[56:31]`, enable `[57]`, version `[59:58]`, reserved `[63:60]` |
-| iteration descriptor operand | sequence base `[31:0]`, another-iteration flag `[32]`, remaining bits zero |
-| canonical record operand | semantic sequence `[63:32]`, normalized Scale6 record `[31:0]` |
+| `0x805` | packed layout descriptor |
+| `0x806` | record count |
+| `0x807` | vertex count |
+| `0x808` | property base |
+| `0x809` | iteration base |
+| `0x80A` | enable / has-next control |
+| `0x80B` | generation identity |
 
-For the example, record address determines `j=18`; first-iteration base zero
-gives `s=19`. I0 writes `0x0000001310000012` to illustrative rename tag P17.
-I1 extracts vertex 18 and bound seven, forms virtual address `0x80000048`,
-and returns `1/128` with F32 bits `0x3C000000` to illustrative tag F9.
-The 64-bit register operand does not imply an eight-byte edge-memory load.
+Generation is a correctness identity, not a method-version API. Invalid width,
+layout, address, horizon, generation, sequence, or deadline arithmetic fails
+closed.
 
-## 2. Preserve the dependency through the real processor
+## 2. Preserve the real dependency
 
 ### Figure 2 — The mask follows the load through the core
 
-![Actual O3 stage containment and dataflow for both loads through rename, issue, physical registers, AGU, LSQ, translation and private caches, with a separate ROB-to-LLC retirement channel and distinct data and replacement fields](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
+![Actual O3 stage containment and dataflow for the raw record and property loads through rename, issue, physical registers, AGU, LSQ, translation and private caches, with separate retirement metadata and LLC traffic](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f02-o3-request-pipeline.svg)
 
-**Figure 2.** The frontend decodes an opcode, not a future memory word.
-Rename gives I0's integer result its own physical destination, and I1 waits
-for that exact operand. Both loads use the AGU, LSQ, translation and normal
-cache hierarchy. Returned record bytes are assembled into `sequence|record`;
-returned property bytes remain F32 data.
+**Figure 2.** Blue paths carry addresses/data, purple paths carry dependency
+and prediction state, and retirement authorizes the separate update channel.
 
-Dispatch, issue and execute are expanded functional roles within gem5's IEW
-machinery, not additional independently timed stages introduced by the drawing.
-The distinction between writeback and ROB-head retirement also follows the
-standard O3 terminology illustrated in the
-[BOOM pipeline](https://docs.boom-core.org/en/latest/sections/intro-overview/boom-pipeline.html)
-and [ROB](https://docs.boom-core.org/en/latest/sections/reorder-buffer.html)
-documentation; those references do not establish this gem5 port's timing.
+Decode sees an instruction, not future record contents. Rename assigns I0's
+integer result a physical destination, and I1 waits for that exact raw word.
+Both operations use the AGU, LSQ, translation and ordinary cache hierarchy.
+I1 additionally consumes the real record address so it can derive and validate
+the semantic position without a shared mailbox or host future table.
 
-I1's prediction is captured on the **dynamic instruction**. It is not
-reconstructed from a shared “last request” mailbox, a per-vertex future table,
-or the O3 instruction sequence number. At retirement, the transport uses
-I1's own translated physical address; it does not depend on a Request object
-whose lifetime may already have ended.
+I1's decoded prediction stays on its own `DynInst`. Its property result remains
+ordinary floating-point data. At retirement, the instruction exports its own
+translated physical line, semantic sequence, deadline, state, context, and
+generation. A squashed or faulted instruction exports nothing.
 
-There are two routes to the LLC with different permissions:
+An LLC demand observation and a retirement update have different authority:
 
-1. **Ordinary demand route.** A private miss carries a request observation
-   containing sequence/context/destination. An LLC touch or fill can mark the
-   line PENDING. It does not install the future deadline.
-2. **Retirement metadata route.** Successful O3 `Commit` authorizes a delayed
-   update for the matching physical line and context. This route also covers
-   private hits, for which no new demand reaches the LLC.
+1. A private miss may mark the resident line PENDING with its newest observed
+   sequence. It never installs FINITE/DEAD and never advances the watermark.
+2. Successful retirement enqueues a delayed update. This also covers private
+   hits that produced no LLC demand.
+3. Delivery performs a non-touching resident lookup. It advances the received
+   watermark even for absent or stale outcomes, but never allocates, dirties,
+   or changes ordinary recency/RRPV.
 
-The receiver's semantic position advances only when a timed update arrives.
-There is no free issue-time or CPU-retirement watermark callback. The native
-model explicitly assumes a dedicated metadata link and tag-lookup port;
-ordinary tag/data-port and interconnect contention are not established by
-this implementation.
-
-## 3. Give observations and committed predictions different lifetimes
+## 3. Bound speculative and committed lifetimes
 
 ### Figure 3 — Completion is not permission to install a prediction
 
-![Native request observation, data completion and retirement permissions, a pending-sequence guard rejecting an older update, and a bounded two-version coalescing example with its own ready cycles](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg)
+![Request observation, data completion and retirement permissions, a newer-pending guard, and bounded two-version coalescing](../fig/wiki/risc-v-instruction-path/risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg)
 
-**Figure 3.** I1 can complete and later be squashed. Only successful retirement
-can enqueue its prediction. The top row shows the private-miss case; a
-private hit skips the LLC observation while retaining retirement delivery.
-The final table is a queue-only timing illustration, not the measured
-schedule of the PageRank example.
+**Figure 3.** A demand access or fill may create a PENDING observation.
+Completion alone does not authorize a prediction; successful retirement does.
 
-Native MSHR state keeps the newest compatible observation, propagates
-conflicts and removes obsolete extensions when targets are rebuilt or
-released. PENDING reuses the per-line value field for the newest observed
-semantic position and ranks as UNKNOWN. It is not a speculative FINITE/DEAD
-prediction.
+MSHR/request state carries observations only. Older commits cannot overwrite a
+newer pending observation. Two same-line versions may occupy separate physical
+queue slots; the oldest is protected, while further updates may replace only
+the secondary and receive their own full delay.
 
-If the line has observed `s23`, a delivered `s19` update cannot overwrite that
-newer knowledge. It is counted STALE while the received watermark can advance.
-A later coalesced `s25` update can install the prediction. In this particular
-trace both updates can carry deadline 26; equal deadlines do not make their
-semantic versions equivalent.
+The retirement queue has 16 physical slots, minimum eight CPU-cycle latency,
+configurable capture width from 1 through 16 (default CPU commit width), and
+one output per cycle. Same-ready entries preserve capture-lane order.
+Semantic sequence and deadline are checked 64-bit values; coalescing may span
+multiple traversals.
 
-Address identity and classification also have separate validity. A
-physical-only writeback can acquire a validated governed VA later; a line
-installed before context registration can be classified without discarding
-its established VA/PA identity. Known conflicting aliases remain rejected.
-Classification is line-granular, including partially occupied final property
-lines.
+## 4. Native record-window prefetch
 
-## 4. Capture bursts without inventing link bandwidth
+Native prefetch uses the same 16-record rule as the functional path. Real
+record bytes become available through L1D fills or acknowledged timing reads:
+two 64-byte banks cover a 4-byte window and up to three cover an unaligned
+8-byte window. Missing bytes yield `NOT_READY`.
 
-The queue has **16 physical slots**, minimum **eight CPU-cycle latency**, and
-**one output update per CPU cycle**. The oldest snapshot for a
-`{physical_line, secure, context}` key is protected. A second same-line version
-uses another real slot; further coalescing replaces only that secondary and
-starts the replacement's own full latency. After the oldest leaves, the
-remaining version becomes protected.
+The implementation models:
 
-O3 retirement can produce more than one governed load in a cycle.
-`--ref32-capture-width 0` selects the configured CPU commit width, currently
-eight; explicit widths 1 through 16 are supported. Capture and delivery
-bandwidth are reported separately. Same-ready updates preserve capture-lane
-order even when physical slots are reused. Eight-wide capture adds 48 logical
-slot-order bits, plus control and multi-lane selection/write logic.
+- actual MMU translation;
+- bounded trigger and property queues, default 16;
+- one lookup-pipeline input per cycle;
+- dedicated L1/L2/LLC presence ports;
+- default 12-cycle lookup and 8-cycle prefetch pipeline;
+- retry-capable request ports and charged in-ROI drain;
+- issue and completion duplicate/admission checks; and
+- safe request-scoped known-DEAD miss bypass with MSHR allocation requirements
+  merged by logical OR.
 
-Coalescing can skip several short traversals. Delivered updates must remain
-newer in modular sequence order, but their gap is not restricted to one
-traversal. The one-traversal horizon guard applies to speculative observations,
-not to the validated retirement stream.
+Property traffic enters at the LLC input as `Request::PREFETCH` with an
+acknowledged `ReadReq`. It does not use cache-owned `HardPFReq`, which may be
+squashed without an upstream response. The guest polls pending work within a
+finite bound before ROI end and before freeing the carrier.
 
-Metadata delivery performs a non-touching resident tag lookup. It cannot
-allocate a data line or modify data, dirty state, ordinary hit statistics or
-recency. Prediction and RRPV updates are intentional. Nonresident, stale and
-expired outcomes remain separate in the receipt:
+## 5. State and evidence boundaries
 
-```text
-generated = accepted + fullDrops + ingressDrops + degradedDrops
-accepted  = enqueued + coalesced
-enqueued  = delivered + cancelled + pending
-delivered = applied + stale + expired + notResident + invalidDelivery
-```
+The current per-line prediction payload is 67 logical bits:
+64-bit value, two state bits, and one origin bit. It is additional to baseline
+tags, data, property/tier classification, recency/RRPV, queues, validation, and
+port logic. At 8 MiB it is 8,781,824 bits (1,097,728 bytes); at 24 MiB it is
+26,345,472 bits (3,293,184 bytes). These are payload counts, not complete
+silicon-area results.
 
-The default is fail-fast on errors or drops. Diagnostic
-`--ref32-allow-drops` disables prediction use after degradation and cannot
-make a result admissible. After guest exit, only the metadata transport is
-finished within a finite budget; the configuration does not globally drain
-an exited SE CPU.
+The native path has passed focused raw4/raw8 checks for transport, replacement,
+prefetch, and replacement-prefetch, plus Patents at exact 24 MiB/16 ways and
+an Orkut wide-record pressure case with matching work/checksums and closed
+accounting. Sealed-input production pairs also completed at 24 MiB with
+4-byte records and on the real Orkut input with 8-byte records. Both used
+successful matching transport controls and closed layout/work/traffic receipts.
+These are implementation qualifications, not a completed final paper campaign.
+Sniper remains modeled corroboration rather than native RISC-V timing.
 
-## 5. Keep the native port distinct from the functional model
+## Historical instruction families
 
-| Boundary | cache_sim REF32 | Current native RV64 path |
-|---|---|---|
-| encoding | Full14 and Scale6 | fixed 26+6 Scale6 ABI |
-| property-load association | modeled request hints | real renamed operand and per-DynInst state |
-| demand observation | can stamp request-bound predictions | PENDING only; prediction installs on timed retirement delivery |
-| update latency unit | governed requests | CPU cycles |
-| known-dead governed-miss bypass | implemented | no speculative native bypass |
-| LLC-only prefetch | functional mechanism | not implemented |
-
-The native PageRank guest borrows the in-edge CSR, encodes it in place and
-restores ordinary IDs after the ROI, including an aliased undirected CSR.
-Only static region descriptions are exported; no edge-data files or runtime
-future table supply the instruction operands. The LRU control executes the
-same native instructions and fixed-iteration loop, but validates retirement
-without applying metadata. The older software-address-generation loop is
-not an ISA-matched replacement control.
-
-Version 1 accepts positive record counts below `2^31`, at most `2^26`
-vertices, aligned addresses and non-overflowing ranges. The vertex-count-minus-
-one field preserves the exact `2^26` boundary. Sequence zero and an all-zero
-canonical operand can be valid after wrap; explicit validity, not a zero
-sentinel, decides acceptance. Exact half-range sequence differences are
-ambiguous and rejected.
-
-The supported native workload is serial fixed-iteration PageRank, one trial,
-FlowThrough off, and O3 with one hardware thread. Native rich-format decoding,
-real-byte lookahead/prefetch, production timing admission and physical-area
-qualification remain separate work. The proposed native lookahead holds two
-real cache lines, 128 bytes plus tags/control, not an assumed free 512-bit
-functional window.
-
-## Earlier instruction families
-
-The repository also retains the earlier ReusePlan/ReuseBind `plan.load`,
-`flow.load`, weighted helpers, and `bind.load` / `bind.iload` families. Their
-tier/two-epoch payloads, format CSRs and request-specific FlowThrough behavior
-must not be mistaken for the REF32 instruction pair described above.
+The repository retains earlier ReusePlan/ReuseBind `ecg.plan.load`,
+`ecg.flow.load`, `ecg.bind.load`, and `ecg.bind.iload` controls. Their
+two-epoch/tier payloads and FlowThrough behavior are historical mechanisms,
+not aliases for the current adaptive record ISA.
 
 ## Implementation sources
 
 | Surface | Source |
 |---|---|
-| operand/configuration codecs | `bench/include/ecg_ref32.h` |
-| native instruction bodies | `bench/include/gem5_sim/overlays/arch/riscv/isa/decoder_ecg_extract.isa` |
-| guest emitters and native PageRank | `bench/include/gem5_sim/gem5_harness.h`, `bench/src_gem5/pr.cc` |
-| dynamic instruction capture | `bench/include/gem5_sim/overlays/cpu/ecg_ref32_producer.patch` |
-| request observation attachment | `bench/include/gem5_sim/overlays/cpu/o3/ecg_ref32_observation.patch` |
-| observation/MSHR state | `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_ref32_observation.hh` |
-| timed retirement channel | `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_ref32_commit_transport.cc` |
-| bounded queue and native receiver | `bench/include/ecg_ref32_commit.h`, `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_ref32_native_state.hh` |
-| resident-line replacement policy | `bench/include/gem5_sim/overlays/mem/cache/replacement_policies/graph_ref32_rp.cc` |
-| reproducible commands and evidence boundaries | [Reproduction](Reproduction), [Evaluation methodology](Evaluation-Methodology) |
+| layout and codec | `bench/include/ecg_record.h` |
+| stream construction | `bench/include/ecg_record_stream.h` |
+| native descriptor and instruction contract | `bench/include/ecg_record_native.h` |
+| receiver, victim and admission logic | `bench/include/ecg_record_runtime.h` |
+| native guest | `bench/src_gem5/pr.cc` |
+| ISA, O3, cache and prefetch overlays | `bench/include/gem5_sim/overlays/` |
+| reproduction and evidence boundaries | [Reproduction](Reproduction), [Evaluation methodology](Evaluation-Methodology) |

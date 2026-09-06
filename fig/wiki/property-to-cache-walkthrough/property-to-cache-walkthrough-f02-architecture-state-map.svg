@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1430" viewBox="0 0 1200 1430" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">Where the mask and its decoded state live</title>
-  <desc id="desc">The encoded edge record and ordinary property data reside in graph memory. Full14&#x27;s functional path keeps a separate carrier; in-place Scale6 avoids another edge array. Native per-instruction state is bounded by the CPU&#x27;s in-flight window. Functional runtime accounting includes bounded commit and prefetch queues, a sixteen-word lookahead and D plus three prediction bits per cache line. D=21 and D=32 are shown separately rather than treating the Scale6 cost as universal.</desc>
+  <desc id="desc">The encoded edge record and ordinary property data reside in separate graph-memory arrays. Current builders retain the source graph, allocate a vector&lt;uint32_t&gt; or vector&lt;uint64_t&gt; carrier, and use a sparse line-indexed first/next map rather than edge-sized action arrays. Native per-instruction state is bounded by the CPU window. Resident prediction payload is 67 logical bits per cache line.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -54,14 +54,14 @@
   <text x="78" y="376" text-anchor="start" class="sans body" fill="#182230">p[v]: ordinary F32 algorithm data, not an encoded mask</text>
   <rect x="830" y="224" width="330" height="168" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="830" data-y="224" data-width="330" data-height="168"/>
   <text x="844" y="252" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Builder scratch</text>
-  <text x="844" y="281" text-anchor="start" class="sans body" fill="#182230">Full14: edge-sized arrays</text>
-  <text x="844" y="306" text-anchor="start" class="sans body" fill="#182230">Scale6 in-place: first / next</text>
-  <text x="844" y="331" text-anchor="start" class="sans body" fill="#182230">Twitter: about 39.7 MiB</text>
+  <text x="844" y="281" text-anchor="start" class="sans body" fill="#182230">sparse line first / next map</text>
+  <text x="844" y="306" text-anchor="start" class="sans body" fill="#182230">no E-sized action/future arrays</text>
+  <text x="844" y="331" text-anchor="start" class="sans body" fill="#182230">source graph remains allocated</text>
   <text x="844" y="356" text-anchor="start" class="sans body" fill="#182230">temporary, not silicon state</text>
-  <text x="40" y="467" text-anchor="start" class="sans body" fill="#182230">Full14&#x27;s functional carrier is separate; the in-place Scale6 path avoids a second edge array.</text>
+  <text x="40" y="467" text-anchor="start" class="sans body" fill="#182230">Receipts separate source_stream_bytes, retained_source_bytes, carrier payload/allocation and auxiliary peak.</text>
   <rect x="40" y="499" width="1120" height="115" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="499" data-width="1120" data-height="115"/>
   <text x="60" y="530" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Per-in-flight native access, not per graph edge</text>
-  <text x="60" y="574" text-anchor="start" class="sans body" fill="#182230">P17: 64-bit sequence | record operand</text>
+  <text x="60" y="574" text-anchor="start" class="sans body" fill="#182230">P17: raw 32/64-bit record operand</text>
   <text x="660" y="574" text-anchor="start" class="sans body" fill="#182230">I1: captured hint + its translated address</text>
   <circle cx="44" cy="672" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="678" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
@@ -92,7 +92,7 @@
   <rect x="335.875" y="807" width="18.125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="335.875" data-y="807" data-width="18.125" data-height="42"/>
   <text x="64" y="867" text-anchor="start" class="sans body" fill="#182230">head</text>
   <text x="354" y="867" text-anchor="end" class="sans body" fill="#182230">tail</text>
-  <text x="440" y="793" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Prefetch: 8 entries</text>
+  <text x="440" y="793" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">Bounded trigger/property queues</text>
   <rect x="440.0" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="440.0" data-y="807" data-width="38.75" data-height="42"/>
   <rect x="478.75" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="478.75" data-y="807" data-width="38.75" data-height="42"/>
   <rect x="517.5" y="807" width="38.75" height="42" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="517.5" data-y="807" data-width="38.75" data-height="42"/>
@@ -106,25 +106,16 @@
   <rect x="860" y="759" width="275" height="130" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="759" data-width="275" data-height="130"/>
   <line x1="860" y1="802.3333333333334" x2="1135" y2="802.3333333333334" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="860" y1="845.6666666666666" x2="1135" y2="845.6666666666666" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="876" y="789" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Functional lookahead</text>
-  <text x="876" y="832" text-anchor="start" class="sans body" fill="#182230">16 x 32-bit records</text>
-  <text x="876" y="875" text-anchor="start" class="sans body" fill="#182230">512 bits</text>
-  <text x="64" y="909" text-anchor="start" class="sans body" fill="#6558C5">entry = 51 + 2D bits</text>
-  <text x="440" y="909" text-anchor="start" class="sans body" fill="#C56A13">entry = 49 + D bits</text>
-  <text x="64" y="966" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Full14 default: D=21</text>
-  <text x="630" y="966" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Scale6 / native payload: D=32</text>
-  <rect x="64" y="988" width="300.0" height="76" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="64" data-y="988" data-width="300.0" data-height="76"/>
-  <text x="214.0" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">deadline</text>
-  <text x="214.0" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">21 bits</text>
-  <rect x="364.0" y="988" width="90.0" height="76" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="364.0" data-y="988" data-width="90.0" data-height="76"/>
-  <text x="409.0" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">state</text>
-  <text x="409.0" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
-  <rect x="454.0" y="988" width="90.0" height="76" rx="0" fill="#FFF7ED" stroke="#475467" stroke-width="2" data-shape="rect" data-x="454.0" data-y="988" data-width="90.0" data-height="76"/>
-  <text x="499.0" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">origin</text>
-  <text x="499.0" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">1 bit</text>
-  <rect x="630" y="988" width="325.0" height="76" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="630" data-y="988" data-width="325.0" data-height="76"/>
-  <text x="792.5" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">deadline</text>
-  <text x="792.5" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <text x="876" y="789" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Sniper guest window</text>
+  <text x="876" y="832" text-anchor="start" class="sans body" fill="#182230">16 x uint64 = 1024 data bits</text>
+  <text x="876" y="875" text-anchor="start" class="sans body" fill="#182230">+ 1024 index + 16 valid bits</text>
+  <text x="64" y="909" text-anchor="start" class="sans body" fill="#6558C5">semantic sequence/deadline: checked 64-bit</text>
+  <text x="440" y="909" text-anchor="start" class="sans body" fill="#C56A13">bounded queues and paid ports</text>
+  <text x="64" y="966" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Current payload: 67 bits/line; 64-bit prediction value</text>
+  <text x="630" y="966" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Separate from baseline cache structures</text>
+  <rect x="64" y="988" width="891.0" height="76" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="64" data-y="988" data-width="891.0" data-height="76"/>
+  <text x="509.5" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">prediction value</text>
+  <text x="509.5" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">64 bits</text>
   <rect x="955.0" y="988" width="90.0" height="76" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="955.0" data-y="988" data-width="90.0" data-height="76"/>
   <text x="1000.0" y="1024.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">state</text>
   <text x="1000.0" y="1048.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>
@@ -134,28 +125,28 @@
   <rect x="64" y="1100" width="1070" height="114" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="64" data-y="1100" data-width="1070" data-height="114"/>
   <line x1="64" y1="1138.0" x2="1134" y2="1138.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="64" y1="1176.0" x2="1134" y2="1176.0" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="76" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Format</text>
-  <text x="76" y="1166" text-anchor="start" class="sans body" fill="#182230">Full14, D=21</text>
-  <text x="76" y="1204" text-anchor="start" class="sans body" fill="#182230">Scale6, D=32</text>
+  <text x="76" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">LLC</text>
+  <text x="76" y="1166" text-anchor="start" class="sans body" fill="#182230">8 MiB</text>
+  <text x="76" y="1204" text-anchor="start" class="sans body" fill="#182230">24 MiB</text>
   <line x1="254" y1="1100" x2="254" y2="1214" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="266" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Per line</text>
-  <text x="266" y="1166" text-anchor="start" class="sans body" fill="#182230">24 bits</text>
-  <text x="266" y="1204" text-anchor="start" class="sans body" fill="#182230">35 bits</text>
+  <text x="266" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Lines</text>
+  <text x="266" y="1166" text-anchor="start" class="sans body" fill="#182230">131,072</text>
+  <text x="266" y="1204" text-anchor="start" class="sans body" fill="#182230">393,216</text>
   <line x1="464" y1="1100" x2="464" y2="1214" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="476" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Line payload at 8 MiB</text>
-  <text x="476" y="1166" text-anchor="start" class="sans body" fill="#182230">3,145,728 bits</text>
-  <text x="476" y="1204" text-anchor="start" class="sans body" fill="#182230">4,587,520 bits</text>
+  <text x="476" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Prediction payload</text>
+  <text x="476" y="1166" text-anchor="start" class="sans body" fill="#182230">8,781,824 bits</text>
+  <text x="476" y="1204" text-anchor="start" class="sans body" fill="#182230">26,345,472 bits</text>
   <line x1="804" y1="1100" x2="804" y2="1214" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="816" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Buffers + control</text>
-  <text x="816" y="1166" text-anchor="start" class="sans body" fill="#182230">2,624 bits</text>
-  <text x="816" y="1204" text-anchor="start" class="sans body" fill="#182230">3,064 bits</text>
+  <text x="816" y="1128" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Bytes</text>
+  <text x="816" y="1166" text-anchor="start" class="sans body" fill="#182230">1,097,728</text>
+  <text x="816" y="1204" text-anchor="start" class="sans body" fill="#182230">3,293,184</text>
   <circle cx="44" cy="1286" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="1292" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">3</text>
   <text x="74" y="1293" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">DO NOT TURN STATE INTO AN AREA CLAIM</text>
-  <text x="1158" y="1292" text-anchor="end" class="sans body" fill="#475467">both queues and lookahead enabled in these totals</text>
+  <text x="1158" y="1292" text-anchor="end" class="sans body" fill="#475467">payload count only; queues and ports are additional</text>
   <line x1="24" y1="1312" x2="1176" y2="1312" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="1312" x2="170" y2="1312" stroke="#C63C4A" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-  <text x="40" y="1350" text-anchor="start" class="sans body" fill="#182230">8 MiB model totals: Full14 3,148,352 bits; Scale6 4,590,584 bits. Baseline cache data/tags remain separate.</text>
-  <text x="40" y="1382" text-anchor="start" class="sans body" fill="#475467">Native capture, validation, port logic and planned 128-byte lookahead require their own cost accounting.</text>
-  <text x="40" y="1414" text-anchor="start" class="sans body" fill="#475467">These bit counts are not synthesized area, and the 512-bit functional window is not a native buffer implementation.</text>
+  <text x="40" y="1350" text-anchor="start" class="sans body" fill="#182230">Baseline tags, data, property/tier classification, recency and RRPV remain separate.</text>
+  <text x="40" y="1382" text-anchor="start" class="sans body" fill="#475467">Runtime word bank is 16 x 257 bits; native 4/8-byte acquisition pins 2/3 real line banks.</text>
+  <text x="40" y="1414" text-anchor="start" class="sans body" fill="#475467">These logical bits are not a synthesized area, energy or timing result.</text>
 </svg>

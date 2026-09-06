@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1310" viewBox="0 0 1200 1310" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">Why the encoded future changes an eviction</title>
-  <desc id="desc">A teaching cache with one set and two ways contains property lines A and B after semantic request nineteen. A was touched at eighteen and is needed at twenty; B was touched at nineteen and is needed at twenty-three. Scale6 deadlines twenty-one and twenty-six give remaining distances two and seven, hence victim scores zero and one. LRU evicts A for an incoming scores line C; ECG evicts B. This is a worked algorithm example, not measured benchmark performance.</desc>
+  <desc id="desc">A teaching cache with one set and two ways contains property lines A and B after semantic request nineteen. A was touched at eighteen and is needed at twenty; B was touched at nineteen and is needed at twenty-three. Current-layout deadlines twenty and twenty-three give remaining distances one and four, hence victim scores zero and one. LRU evicts A for an incoming scores line C; ECG evicts B. This is a worked algorithm example, not measured benchmark performance.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -62,18 +62,18 @@
   <text x="412" y="423" text-anchor="start" class="sans body" fill="#182230">s23: p[18]</text>
   <line x1="610" y1="295" x2="610" y2="445" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="622" y="323" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Decoded deadline</text>
-  <text x="622" y="373" text-anchor="start" class="sans body" fill="#182230">18 + 3 = 21</text>
-  <text x="622" y="423" text-anchor="start" class="sans body" fill="#182230">19 + 7 = 26</text>
+  <text x="622" y="373" text-anchor="start" class="sans body" fill="#182230">18 + 2 = 20</text>
+  <text x="622" y="423" text-anchor="start" class="sans body" fill="#182230">19 + 4 = 23</text>
   <line x1="840" y1="295" x2="840" y2="445" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="852" y="323" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Remaining</text>
-  <text x="852" y="373" text-anchor="start" class="sans body" fill="#182230">21 - 19 = 2</text>
-  <text x="852" y="423" text-anchor="start" class="sans body" fill="#182230">26 - 19 = 7</text>
+  <text x="852" y="373" text-anchor="start" class="sans body" fill="#182230">remaining 1</text>
+  <text x="852" y="423" text-anchor="start" class="sans body" fill="#182230">remaining 4</text>
   <line x1="1020" y1="295" x2="1020" y2="445" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="1032" y="323" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Score</text>
   <text x="1032" y="373" text-anchor="start" class="sans body" fill="#182230">0</text>
   <text x="1032" y="423" text-anchor="start" class="sans body" fill="#182230">1</text>
   <text x="40" y="488" text-anchor="start" class="sans body" fill="#182230">The score is distanceRRPV(remaining) = min(7, floor(log2(remaining)) / 2), rounded down.</text>
-  <text x="40" y="520" text-anchor="start" class="sans body" fill="#182230">Full14 yields tighter deadlines 20 and 23 for these two accesses, with the same score ordering.</text>
+  <text x="40" y="520" text-anchor="start" class="sans body" fill="#182230">The fixture&#x27;s M27/H6/m23 layout decodes both reuse distances exactly.</text>
   <circle cx="44" cy="579" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="585" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="586" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">ONE MISS, DIFFERENT VICTIMS</text>
@@ -109,7 +109,7 @@
   <line x1="24" y1="1005" x2="170" y2="1005" stroke="#6558C5" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="1040" width="270" height="109" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="1040" data-width="270" data-height="109"/>
   <text x="54" y="1068" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Retired property load</text>
-  <text x="54" y="1097" text-anchor="start" class="sans body" fill="#182230">line P_B, s19, deadline 26</text>
+  <text x="54" y="1097" text-anchor="start" class="sans body" fill="#182230">line P_B, s19, deadline 23</text>
   <text x="54" y="1122" text-anchor="start" class="sans body" fill="#182230">retain context and identity</text>
   <text x="450" y="1058" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">16-entry commit transport</text>
   <rect x="450.0" y="1072" width="17.8125" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="450.0" data-y="1072" data-width="17.8125" data-height="42"/>
@@ -132,18 +132,19 @@
   <text x="735" y="1132" text-anchor="end" class="sans body" fill="#182230">tail</text>
   <rect x="895" y="1040" width="265" height="109" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="895" data-y="1040" data-width="265" data-height="109"/>
   <text x="909" y="1068" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Resident metadata</text>
-  <text x="909" y="1097" text-anchor="start" class="sans body" fill="#182230">prediction / RRPV update</text>
-  <text x="909" y="1122" text-anchor="start" class="sans body" fill="#182230">no fill / recency touch</text>
+  <text x="909" y="1097" text-anchor="start" class="sans body" fill="#182230">prediction update only</text>
+  <text x="909" y="1122" text-anchor="start" class="sans body" fill="#182230">no fill or dirtying</text>
+  <text x="909" y="1147" text-anchor="start" class="sans body" fill="#182230">RRPV / recency unchanged</text>
   <path d="M310 1093 L450 1093" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="capture"/>
   <rect x="343.08" y="1007.00" width="73.84" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="380" y="1024" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">capture</text>
   <path d="M735 1093 L895 1093" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="resident update"/>
   <rect x="741.60" y="1155.00" width="146.80" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="815" y="1172" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">resident update</text>
-  <text x="40" y="1180" text-anchor="start" class="sans body" fill="#182230">Native line payload: D=32. Full14&#x27;s default model uses D=21.</text>
+  <text x="40" y="1180" text-anchor="start" class="sans body" fill="#182230">Current line payload: 64-bit prediction value + 2-bit state + 1-bit origin.</text>
   <rect x="40" y="1200" width="940.0" height="72" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="40" data-y="1200" data-width="940.0" data-height="72"/>
-  <text x="510.0" y="1234.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">deadline</text>
-  <text x="510.0" y="1258.0" text-anchor="middle" class="sans body" fill="#182230">32 bits</text>
+  <text x="510.0" y="1234.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">prediction value</text>
+  <text x="510.0" y="1258.0" text-anchor="middle" class="sans body" fill="#182230">64 bits</text>
   <rect x="980.0" y="1200" width="90.0" height="72" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="2" data-shape="rect" data-x="980.0" data-y="1200" data-width="90.0" data-height="72"/>
   <text x="1025.0" y="1234.0" text-anchor="middle" class="sans body" fill="#182230" font-weight="700">state</text>
   <text x="1025.0" y="1258.0" text-anchor="middle" class="sans body" fill="#182230">2 bits</text>

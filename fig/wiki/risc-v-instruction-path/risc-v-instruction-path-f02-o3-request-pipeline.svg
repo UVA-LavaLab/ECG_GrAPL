@@ -40,7 +40,7 @@
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="130" width="1120" height="52" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="130" data-width="1120" data-height="52"/>
   <text x="58" y="162" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Same access: u=8 | CSR j=18 | request s=19 | property v=18 | line B</text>
-  <text x="40" y="212" text-anchor="start" class="sans body" fill="#182230">Native I0 reads 0x10000012; I1 returns p[18] = 1/128. P_B denotes its translated physical line.</text>
+  <text x="40" y="212" text-anchor="start" class="sans body" fill="#182230">Native I0 reads raw 0x20000052; I1 returns p[18] = 1/128. P_B denotes its translated physical line.</text>
   <rect x="40" y="235" width="745" height="855" rx="0" fill="#F8FAFC" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="235" data-width="745" data-height="855"/>
   <text x="60" y="268" text-anchor="start" class="sans subtitle" fill="#182230" font-weight="700">RISC-V O3 core: two dependent loads</text>
   <text x="65" y="291" text-anchor="start" class="sans body" fill="#0F8A72">instruction flow</text>
@@ -68,13 +68,13 @@
   <line x1="465" y1="493.3333333333333" x2="755" y2="493.3333333333333" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="465" y1="546.6666666666666" x2="755" y2="546.6666666666666" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="480" y="470" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Physical registers</text>
-  <text x="480" y="521" text-anchor="start" class="sans body" fill="#182230">P17 = 0x0000001310000012</text>
+  <text x="480" y="521" text-anchor="start" class="sans body" fill="#182230">P17 = 0x0000000020000052</text>
   <text x="480" y="575" text-anchor="start" class="sans body" fill="#182230">F9 = 1/128 (F32 0x3C000000)</text>
   <rect x="65" y="661" width="280" height="134" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65" data-y="661" data-width="280" data-height="134"/>
   <text x="79" y="689" text-anchor="start" class="sans label" fill="#182230" font-weight="700">AGU / payload decode</text>
-  <text x="79" y="718" text-anchor="start" class="sans body" fill="#182230">I0: RA=R+4j; s=j+1</text>
-  <text x="79" y="743" text-anchor="start" class="sans body" fill="#182230">I1: VA=Pbase+18x4</text>
-  <text x="79" y="768" text-anchor="start" class="sans body" fill="#182230">I1 hint: s19, deadline 26</text>
+  <text x="79" y="718" text-anchor="start" class="sans body" fill="#182230">I0: RA=R+4j; raw word</text>
+  <text x="79" y="743" text-anchor="start" class="sans body" fill="#182230">I1: Pbase + raw + real RA</text>
+  <text x="79" y="768" text-anchor="start" class="sans body" fill="#182230">I1 hint: s19, deadline 23</text>
   <rect x="455" y="661" width="300" height="134" rx="0" fill="#EFF6FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="455" data-y="661" data-width="300" data-height="134"/>
   <text x="469" y="689" text-anchor="start" class="sans label" fill="#182230" font-weight="700">LSQ + translation</text>
   <text x="469" y="718" text-anchor="start" class="sans body" fill="#182230">ordering, replay and faults</text>
@@ -120,7 +120,7 @@
   <line x1="315" y1="853" x2="315" y2="985" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <text x="327" y="881" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Retained dynamic state</text>
   <text x="327" y="925" text-anchor="start" class="sans body" fill="#182230">RECORD: own position s19</text>
-  <text x="327" y="969" text-anchor="start" class="sans body" fill="#182230">PROPERTY: s19, D26, ctx1, own PA</text>
+  <text x="327" y="969" text-anchor="start" class="sans body" fill="#182230">PROPERTY: s19, D23, ctx1, own PA</text>
   <path d="M600 795 L600 853" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="load completed"/>
   <rect x="602.16" y="814.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="671" y="831" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">load completed</text>
@@ -137,7 +137,7 @@
   <rect x="900" y="1260" width="255" height="125" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="900" data-y="1260" data-width="255" data-height="125"/>
   <text x="914" y="1288" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Replacement metadata</text>
   <text x="914" y="1317" text-anchor="start" class="sans body" fill="#182230">observe: PENDING s19</text>
-  <text x="914" y="1342" text-anchor="start" class="sans body" fill="#182230">commit: FINITE, D26</text>
+  <text x="914" y="1342" text-anchor="start" class="sans body" fill="#182230">commit: FINITE, D23</text>
   <text x="914" y="1367" text-anchor="start" class="sans body" fill="#182230">non-touching tag lookup</text>
   <path d="M1010 795 L1010 970" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="miss" data-flow-cadence="64 bytes"/>
   <path d="M1120 970 L1120 795" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="fill" data-flow-cadence="64 bytes"/>
@@ -146,10 +146,10 @@
   <text x="1065" y="887" text-anchor="middle" class="sans body" fill="#2563EB">64 bytes</text>
   <path d="M1035 1110 L1035 1260" fill="none" stroke="#6558C5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-purple)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="I1: observe s19"/>
   <text x="902" y="1160" text-anchor="start" class="sans body" fill="#6558C5">I1: observe s19</text>
-  <text x="902" y="1187" text-anchor="start" class="sans body" fill="#6558C5">not D26</text>
+  <text x="902" y="1187" text-anchor="start" class="sans body" fill="#6558C5">not D23</text>
   <rect x="40" y="1137" width="745" height="195" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="1137" data-width="745" data-height="195"/>
   <text x="60" y="1170" text-anchor="start" class="sans subtitle" fill="#6558C5" font-weight="700">Retirement metadata transport</text>
-  <text x="65" y="1201" text-anchor="start" class="mono body" fill="#182230">{P_B, s19, D26, ctx1}</text>
+  <text x="65" y="1201" text-anchor="start" class="mono body" fill="#182230">{P_B, s19, D23, ctx1}</text>
   <text x="65" y="1226" text-anchor="start" class="sans label" fill="#6558C5" font-weight="700">16 physical message slots</text>
   <rect x="65.0" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="65.0" data-y="1240" data-width="26.25" data-height="42"/>
   <rect x="91.25" y="1240" width="26.25" height="42" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="91.25" data-y="1240" data-width="26.25" data-height="42"/>
@@ -181,5 +181,5 @@
   <text x="65" y="1393" text-anchor="start" class="sans body" fill="#182230">Receiver position advances only when a timed update arrives.</text>
   <text x="40" y="1461" text-anchor="start" class="sans body" fill="#182230">A private hit can bypass LLC data traffic, but still exports its own committed prediction. Squashed loads export none.</text>
   <text x="40" y="1493" text-anchor="start" class="sans body" fill="#182230">Observations never install FINITE/DEAD. Metadata updates never allocate or alter a data line.</text>
-  <text x="40" y="1525" text-anchor="start" class="sans body" fill="#475467">The native model uses a dedicated metadata link and tag port; prefetch and physical-cost qualification remain separate.</text>
+  <text x="40" y="1525" text-anchor="start" class="sans body" fill="#475467">Native prefetch uses separate acknowledged traffic and paid presence ports; physical-area qualification remains separate.</text>
 </svg>

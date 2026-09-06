@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1180" viewBox="0 0 1200 1180" role="img" aria-labelledby="title desc" fill="#182230" data-figure-schema="ecg-public/v1">
   <title id="title">ECG: graph knowledge in the edge stream</title>
-  <desc id="desc">The same graph access is followed from vertex eight and CSR position eighteen to a richer Full14 mask or a compact Scale6 token, normal property addressing, and a resident-line update. The property value is unchanged. A teaching cache contrasts recency with carried future reuse. Scale6 is the large-ID format, not the complete ECG design.</desc>
+  <desc id="desc">The same graph access is followed from vertex eight and CSR position eighteen through one adaptive layout, normal property addressing, retirement transport, and a resident-line update. The property value is unchanged. A teaching cache contrasts recency with carried future reuse; wider graph IDs reduce precision and can require eight-byte records.</desc>
   <defs><marker id="arrow-blue" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#2563EB"/></marker>
 <marker id="arrow-green" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#0F8A72"/></marker>
 <marker id="arrow-amber" viewBox="0 0 10 8" markerWidth="11" markerHeight="8" refX="10" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L10 4 L0 8 Z" fill="#C56A13"/></marker>
@@ -36,7 +36,7 @@
 </style></defs>
   <rect x="0" y="0" width="1200" height="1180" fill="#FFFFFF"/>
   <text x="42" y="47" text-anchor="start" class="sans title" fill="#182230" font-weight="700">ECG: graph knowledge in the edge stream</text>
-  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Reuse information travels with an ordinary-width edge record, then guides a cache decision.</text>
+  <text x="42" y="75" text-anchor="start" class="sans subtitle" fill="#182230">Graph-derived joint distance state travels with a 4- or 8-byte edge record.</text>
   <line x1="42" y1="99" x2="1158" y2="99" stroke="#182230" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <circle cx="44" cy="138" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="144" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">1</text>
@@ -59,9 +59,9 @@
   <text x="435" y="286" text-anchor="start" class="sans body" fill="#182230">row_ptr[8:10] = [14,19]</text>
   <text x="435" y="329" text-anchor="start" class="mono body" fill="#2563EB">in_ids[18] = 18</text>
   <rect x="860" y="214" width="300" height="130" rx="0" fill="#F5F3FF" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="860" data-y="214" data-width="300" data-height="130"/>
-  <text x="874" y="242" text-anchor="start" class="sans label" fill="#182230" font-weight="700">32-bit edge record</text>
-  <text x="874" y="271" text-anchor="start" class="sans body" fill="#182230">Full14  0x00002212</text>
-  <text x="874" y="296" text-anchor="start" class="sans body" fill="#182230">Scale6  0x10000012</text>
+  <text x="874" y="242" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Adaptive edge record</text>
+  <text x="874" y="271" text-anchor="start" class="sans body" fill="#182230">b_ID=5; M=27; H=6; m=23</text>
+  <text x="874" y="296" text-anchor="start" class="sans body" fill="#182230">R = 0x20000052</text>
   <path d="M308 273 L420 273" fill="none" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-green)" data-flow-kind="control" data-flow-underlay="false" data-flow-label="row order"/>
   <rect x="323.96" y="355.00" width="92.08" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="370" y="372" text-anchor="middle" class="sans body" fill="#0F8A72" font-weight="700">row order</text>
@@ -71,7 +71,7 @@
   <path d="M1010 344 L1010 393 L15 393 L15 620 L40 620" fill="none" stroke="#2563EB" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" marker-end="url(#arrow-blue)" data-flow-kind="transfer" data-flow-underlay="false" data-flow-label="read the encoded word" data-flow-cadence="4 bytes"/>
   <rect x="415.64" y="363.00" width="292.72" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="562" y="380" text-anchor="middle" class="sans body" fill="#2563EB" font-weight="700">read the encoded word | 4 bytes</text>
-  <text x="40" y="436" text-anchor="start" class="sans body" fill="#182230">Small IDs leave more metadata space: Full14 uses 14 bits; Twitter&#x27;s 26-bit IDs leave 6 for Scale6.</text>
+  <text x="40" y="436" text-anchor="start" class="sans body" fill="#182230">Bit-granular layout: 18/19/20 ID bits leave M=14/13/12 and, at H=31, m=8/7/6.</text>
   <circle cx="44" cy="490" r="19" fill="#182230" stroke="#182230" stroke-width="1"/>
   <text x="44" y="496" text-anchor="middle" class="sans label" fill="#FFFFFF" font-weight="700">2</text>
   <text x="74" y="497" text-anchor="start" class="sans heading" fill="#182230" font-weight="700">DECODE -&gt; ADDRESS -&gt; VALUE</text>
@@ -79,7 +79,7 @@
   <line x1="24" y1="516" x2="1176" y2="516" stroke="#475467" stroke-width="1" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <line x1="24" y1="516" x2="170" y2="516" stroke="#0F8A72" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
   <rect x="40" y="551" width="300" height="154" rx="0" fill="#ECFDF5" stroke="#475467" stroke-width="1.5" data-shape="rect" data-x="40" data-y="551" data-width="300" data-height="154"/>
-  <text x="54" y="579" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Selected-format decode</text>
+  <text x="54" y="579" text-anchor="start" class="sans label" fill="#182230" font-weight="700">Current-layout decode</text>
   <text x="54" y="608" text-anchor="start" class="sans body" fill="#182230">low ID field -&gt; vertex 18</text>
   <text x="54" y="633" text-anchor="start" class="sans body" fill="#182230">state + distance -&gt; future</text>
   <text x="54" y="658" text-anchor="start" class="sans body" fill="#182230">same 4-byte record access</text>
@@ -146,6 +146,6 @@
   <rect x="736.16" y="1027.00" width="137.68" height="22" rx="3" fill="#FFFFFF" fill-opacity="0.96" data-label-background="true"/>
   <text x="805" y="1044" text-anchor="middle" class="sans body" fill="#6558C5" font-weight="700">ordered update</text>
   <text x="40" y="1088" text-anchor="start" class="sans body" fill="#182230">The cache comparison is a worked two-way example, not a benchmark result. Data bytes stay unchanged.</text>
-  <text x="40" y="1120" text-anchor="start" class="sans body" fill="#182230">cache_sim implements both formats; the native RISC-V record/property pair currently uses Scale6.</text>
-  <text x="40" y="1152" text-anchor="start" class="sans body" fill="#475467">Prefetch is a separate path. Its native implementation and full timing/area qualification remain open.</text>
+  <text x="40" y="1120" text-anchor="start" class="sans body" fill="#182230">Functional, gem5 and Sniper paths use the same codec and record-window selector.</text>
+  <text x="40" y="1152" text-anchor="start" class="sans body" fill="#475467">Native evidence is serial fixed-iteration PR; modeled Sniper evidence and physical cost remain separate.</text>
 </svg>

@@ -31,7 +31,7 @@ def checked_stream():
     return fixture, rows, [vertex for row in rows for vertex in row]
 
 
-def test_fixture_derives_both_words_and_unchanged_property_data():
+def test_fixture_derives_adaptive_word_and_unchanged_property_data():
     fixture, rows, stream = checked_stream()
     assert rows[8] == [3, 6, 7, 11, 18]
     position = sum(len(row) for row in rows[:8]) + rows[8].index(18)
@@ -42,18 +42,20 @@ def test_fixture_derives_both_words_and_unchanged_property_data():
     assert next_position == 22
     distance = next_position - position
     assert distance == 4
-    bits = (fixture["num_vertices"] - 1).bit_length()
-    assert bits == 5 and 32 - bits - 14 == 13
-    reference = (distance.bit_length() - 1) << 3
-    mask = (reference << bits) | (1 << (bits + 8))
-    assert reference == 16 and mask == 0x2200
-    assert (mask | 18) == 0x2212 and (0x2212 & ((1 << bits) - 1)) == 18
-    token = 2 + distance.bit_length() - 1
-    upper = (1 << distance.bit_length()) - 1
-    assert token == 4 and upper == 7
-    assert (token << 26) | 18 == 0x10000012
+    id_bits = (max(stream)).bit_length()
+    metadata_bits = 32 - id_bits
+    horizon_bits = len(stream).bit_length()
+    levels = ((1 << metadata_bits) - 2) // (2 * horizon_bits)
+    mantissa_bits = levels.bit_length() - 1
+    assert (id_bits, metadata_bits, horizon_bits, mantissa_bits) == (5, 27, 6, 23)
+    q = (distance.bit_length() - 1) << mantissa_bits
+    token = 2 + q
+    mask = token << id_bits
+    record = mask | 18
+    assert q == 16777216 and token == 16777218
+    assert mask == 0x20000040 and record == 0x20000052
+    assert record & ((1 << id_bits) - 1) == 18
     assert position + 1 + distance == 23
-    assert position + 1 + upper == 26
     address = fixture["property_base"] + 18 * fixture["property_element_bytes"]
     assert address == 0x80000048
     assert address & ~(fixture["cache_line_bytes"] - 1) == 0x80000040
@@ -66,7 +68,7 @@ def test_fixture_derives_both_words_and_unchanged_property_data():
     assert stream[25] == 20 and stream[25] // 16 == stream[position] // 16
 
 
-def test_examples_match_actual_builders_codecs_and_victim_helper(tmp_path):
+def test_examples_match_current_codec_window_and_victim_helper(tmp_path):
     compiler = shutil.which("g++")
     if compiler is None:
         pytest.skip("g++ is unavailable")
@@ -77,7 +79,8 @@ def test_examples_match_actual_builders_codecs_and_victim_helper(tmp_path):
     source = tmp_path / "figure_fixture.cc"
     binary = tmp_path / "figure_fixture"
     code = r'''
-#include "ecg_ref32.h"
+#include "ecg_record.h"
+#include "ecg_record_runtime.h"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -85,71 +88,60 @@ def test_examples_match_actual_builders_codecs_and_victim_helper(tmp_path):
 #include <utility>
 #include <vector>
 int main() {
-    using namespace ecg_ref32;
+    using namespace ecg_record;
     int failures = 0;
     const auto check = [&failures](bool condition, const char* label) {
         if (!condition) { std::fprintf(stderr, "FAIL: %s\n", label); ++failures; }
     };
-    const std::vector<uint64_t> offsets = {@OFFSETS@};
     const std::vector<uint32_t> destinations = {@DESTINATIONS@};
-    FlatRecords rich, scale;
-    if (!buildFlatRecordsFromDestinations(32, 16, offsets, destinations, rich) ||
-        !buildFlatScaleRecordsFromDestinations(32, 16, offsets, destinations, scale, 26) ||
-        rich.records.size() != 34 || scale.records.size() != 34) {
-        std::fprintf(stderr, "fixture build failed\n");
-        return 1;
+    Requirements requirements;
+    requirements.vertex_count = 32;
+    requirements.max_vertex_id_known = true;
+    requirements.max_vertex_id = *std::max_element(
+        destinations.begin(), destinations.end());
+    requirements.record_count = destinations.size();
+    Layout layout;
+    check(selectLayout(requirements, layout) == Status::OK,
+          "select current fixture layout");
+    check(layout.record_bytes == 4 && layout.id_bits == 5 &&
+          layout.metadata_bits == 27 && layout.horizon_bits == 6 &&
+          layout.exponent_bits == 3 && layout.mantissa_bits == 23,
+          "graph-derived fixture fields");
+    uint64_t record = 0;
+    check(encodeRecord(layout, 18, 4, State::FINITE, record) == Status::OK &&
+          record == 0x20000052ULL, "current fixture word");
+    DecodedRecord decoded;
+    check(decodeRecord(layout, record, decoded) == Status::OK &&
+          decoded.destination == 18 && decoded.distance == 4 &&
+          decoded.state == State::FINITE, "current fixture decode");
+    for (const auto& item : std::array<std::pair<unsigned, unsigned>, 4>{
+             {{18, 8}, {19, 7}, {20, 6}, {26, 0}}}) {
+        Requirements numeric;
+        numeric.vertex_count = uint64_t{1} << item.first;
+        numeric.max_vertex_id_known = true;
+        numeric.max_vertex_id = (uint64_t{1} << item.first) - 1;
+        numeric.record_count = (uint64_t{1} << 30);
+        Layout selected;
+        check(selectLayout(numeric, selected) == Status::OK &&
+              selected.id_bits == item.first &&
+              selected.metadata_bits == 32 - item.first &&
+              selected.horizon_bits == 31 &&
+              selected.mantissa_bits == item.second,
+              "numeric precision configuration");
     }
-    check(bitsForVertices(32) == 5 && kMetadataBits == 14, "small-graph bit budget");
-    check(canPackRecord32(1u << 18) && !canPackRecord32((1u << 18) + 1),
-          "Full14 ID boundary");
-    check(canPackScaleRecord32(1u << 26, 26) &&
-          !canPackScaleRecord32((1u << 26) + 1, 26), "Scale6 ID boundary");
-    check(rich.records[18] == 0x2212 && (rich.records[18] >> 19) == 0,
-          "actual five-bit-ID Full14 word with thirteen unused bits");
-    check(rich.exact_distances[18] == 4, "graph-derived next B distance");
-    const auto full = decodeRecord32(rich.records[18], 5);
-    const auto compact = decodeScaleRecord32(scale.records[18], 26);
-    check(full.destination == 18 && full.distance == 4 &&
-          full.state == State::FINITE && full.action == 0, "Full14 decode");
-    check(scale.records[18] == 0x10000012 && compact.destination == 18 &&
-          compact.distance == 7 && compact.state == State::FINITE, "Scale6 decode");
-    for (const auto& fields : std::array<std::pair<unsigned, unsigned>, 3>{
-             {{8, 4}, {10, 2}, {12, 0}}}) {
-        FlatRecords variant;
-        const bool built = buildFlatRecordsFromDestinations(
-            32, 16, offsets, destinations, variant, fields.first, fields.second);
-        check(built && variant.records.size() == 34, "implemented Full14 field split");
-        if (!built || variant.records.size() != 34)
-            continue;
-        const auto decoded = decodeRecord32(
-            variant.records[18], 5, fields.first, fields.second);
-        check(decoded.destination == 18 && decoded.distance == 4 &&
-              decoded.state == State::FINITE && decoded.action == 0,
-              "field split preserves the running edge");
-    }
-    check(!validFieldWidths(8, 5), "metadata does not silently grow beyond fourteen");
-    check(decodeDistanceUpper(encodeDistance(100, 8), 8) == 103 &&
-          decodeDistanceUpper(encodeDistance(100, 10), 10) == 101 &&
-          decodeDistanceUpper(encodeDistance(100, 12), 12) == 100 &&
-          decodeScaleDistance(encodeScaleToken(100, State::FINITE)) == 127,
-          "precision table");
-    check(resolveQuantizedFuture(State::FINITE, 23, 23, 21).state == State::FINITE &&
-          resolveQuantizedFuture(State::FINITE, 23, 24, 21).state == State::UNKNOWN &&
-          resolveQuantizedFuture(State::FINITE, 26, 26, 32).state == State::FINITE &&
-          resolveQuantizedFuture(State::FINITE, 26, 27, 32).state == State::UNKNOWN,
-          "expiry is UNKNOWN, not DEAD");
-    uint64_t config = 0, iteration = 0, canonical = 0;
-    NativeAccess access;
-    check(packNativeConfig(32, 34, config) &&
-          packNativeIteration(0, 34, 1, iteration) &&
-          canonicalScaleRecord(scale.records[18], 0x40000048, 0x40000000,
-                               config, iteration, canonical) &&
-          nativePropertyAccess(canonical, 0x80000000, config, access),
-          "actual native operand helpers");
-    check(canonical == 0x0000001310000012ULL && access.destination == 18 &&
-          access.sequence == 19 && access.deadline == 26 &&
-          access.address == 0x80000048 && access.state == State::FINITE,
-          "native register, address and prediction values");
+    Requirements wide;
+    wide.vertex_count = uint64_t{1} << 32;
+    wide.max_vertex_id_known = true;
+    wide.max_vertex_id = UINT32_MAX;
+    wide.record_count = 34;
+    Layout wide_layout;
+    check(selectLayout(wide, wide_layout) == Status::OK &&
+          wide_layout.record_bytes == 8 && wide_layout.id_bits == 32 &&
+          wide_layout.metadata_bits == 32, "32-bit ID eight-byte escape");
+    Prediction prediction;
+    check(makePrediction(layout, record, 19, false, prediction) == Status::OK &&
+          prediction.sequence == 19 && prediction.deadline == 23,
+          "checked sequence and deadline");
     const float contribution = (1.0f / 32.0f) / 4.0f;
     uint32_t data = 0;
     std::memcpy(&data, &contribution, sizeof(data));
@@ -160,48 +152,53 @@ int main() {
     ways[0].grasp_tier = ways[1].grasp_tier = 1;
     ways[0].recency = 18;
     ways[1].recency = 19;
-    ways[0].quantized_deadline =
-        18 + decodeScaleRecord32(scale.records[17], 26).distance;
-    ways[1].quantized_deadline = 19 + compact.distance;
-    check(ways[0].quantized_deadline == 21 && ways[1].quantized_deadline == 26 &&
-          distanceRRPV(2) == 0 && distanceRRPV(7) == 1, "cache snapshot scores");
+    ways[0].deadline = 20;
+    ways[1].deadline = 23;
+    check(ecg_ref32::distanceRRPV(1) == 0 &&
+          ecg_ref32::distanceRRPV(4) == 1, "cache snapshot scores");
+    std::size_t victim = 99;
     check(ways[0].recency < ways[1].recency &&
-          selectVictim(ways, 2, 19, false, nullptr, 32) == 1,
+          selectVictim(layout, ways, 2, 19, victim) == Status::OK &&
+          victim == 1,
           "LRU chooses A, actual ECG helper chooses B");
-    ways[0].quantized_deadline = 18 + decodeRecord32(rich.records[17], 5).distance;
-    ways[1].quantized_deadline = 19 + full.distance;
-    check(ways[0].quantized_deadline == 20 && ways[1].quantized_deadline == 23 &&
-          selectVictim(ways, 2, 19, false, nullptr, 21) == 1,
-          "richer encoding gives the same worked victim ordering");
     const std::array<int, 2> after_lru = {2, 1};
     const std::array<int, 2> after_ecg = {0, 2};
     const int next_line = destinations[19] / 16;
     check(std::find(after_lru.begin(), after_lru.end(), next_line) == after_lru.end() &&
           std::find(after_ecg.begin(), after_ecg.end(), next_line) != after_ecg.end(),
           "the next A access is a miss versus a hit in the teaching snapshot");
-    ways[0].quantized_deadline = 19 + 64;
+    ways[0].deadline = 19 + 64;
     ways[1].state = State::UNKNOWN;
     ways[1].rrpv = 0;
-    check(selectVictim(ways, 2, 19, false, nullptr, 32) == 0,
+    check(selectVictim(layout, ways, 2, 19, victim) == Status::OK &&
+          victim == 0,
           "unknown does not unconditionally precede finite");
     ways[1].property = false;
-    check(selectVictim(ways, 2, 19, false, nullptr, 32) == 1,
+    check(selectVictim(layout, ways, 2, 19, victim) == Status::OK &&
+          victim == 1,
           "non-property precedes ordinary property candidates");
     ways[0].state = State::DEAD;
-    check(selectVictim(ways, 2, 19, false, nullptr, 32) == 0,
+    check(selectVictim(layout, ways, 2, 19, victim) == Status::OK &&
+          victim == 0,
           "explicit DEAD precedes non-property");
-    check(extractAction(rich.records[18], 5) == 0 &&
-          selectScalePrefetchDelta(scale.records, 18, 26) == 0,
-          "the actual running graph supplies no prefetch candidate here");
-    const unsigned lines[16] = {0,0,1,1,2,2,0,2,3,3,4,3,4,5,5,5};
-    uint32_t records[16];
-    for (unsigned i = 0; i < 16; ++i)
-        records[i] = packScaleRecord32(lines[i] * 16, 0, 26);
-    records[8] = packScaleRecord32(48, encodeScaleToken(31, State::FINITE), 26);
-    records[10] = packScaleRecord32(64, encodeScaleToken(7, State::FINITE), 26);
-    records[13] = packScaleRecord32(80, encodeScaleToken(15, State::FINITE), 26);
-    check(selectScalePrefetchDelta(records, 16, 0, 26) == 10,
-          "separate positive selector case retains lead-ten tie preference");
+    RecordWindow window;
+    window.remaining_records = 16;
+    window.vertex_count = 32;
+    for (unsigned i = 0; i < 16; ++i) {
+        uint64_t word = 0;
+        check(encodeRecord(layout, destinations[18 + i], 1,
+                           State::FINITE, word) == Status::OK,
+              "encode actual window");
+        window.words[i] = word;
+        window.valid_mask |= uint16_t{1} << i;
+    }
+    PrefetchTarget target;
+    check(selectWindowTarget(layout, window, 16, target) == Status::OK &&
+          !target.valid, "actual window has no eligible new line");
+    RecordWindow missing = window;
+    missing.valid_mask &= ~(uint16_t{1} << 10);
+    check(selectWindowTarget(layout, missing, 16, target) ==
+          Status::NOT_READY, "missing real bytes are not ready");
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }
@@ -294,22 +291,24 @@ def figures():
     }
 
 
-def test_graph_budget_and_both_encodings_are_visible():
+def test_graph_budget_and_adaptive_encoding_are_visible():
     rendered = figures()
     word = rendered["reuse-plan-flowthrough-f02-record-formats.svg"]
-    for token in ("Full14", "Scale6", "13 remain unused", "[31:19]", "[4:0]",
-                  "0x00002212", "0x10000012", "8 / 2 / 4", "10 / 2 / 2",
-                  "12 / 2 / 0", "2..32 FINITE", "33..63 WRAP",
-                  "Native rich-format decode is not implemented"):
+    for token in ("18-bit IDs", "19-bit IDs", "20-bit IDs", "26-bit IDs",
+                  "M=14", "M=13", "M=12", "M=6", "m=8", "m=7", "m=6",
+                  "m=0", "[31:5]", "[4:0]", "0x20000040", "0x20000052",
+                  "UNKNOWN", "DEAD", "FINITE", "WRAP",
+                  "32-bit vertex ID", "8 bytes", "not evidence of exascale"):
         assert token in word
     timeline = rendered["reuse-plan-flowthrough-f03-future-distance.svg"]
-    for token in ("true distance = 4", "100 (probe)", "103", "101", "127",
-                  "deadline 23", "deadline 26", "UNKNOWN from 24",
+    for token in ("true distance = 4", "100 (probe)", "M14 / m8",
+                  "M13 / m7", "M12 / m6", "M6 / m0",
+                  "deadline 23", "upper-bound deadline 26", "UNKNOWN from 24",
                   "UNKNOWN at 27", "EXPIRY IS NOT DEATH"):
         assert token in timeline
     walkthrough = rendered["property-to-cache-walkthrough-f01-checked-request.svg"]
-    for token in ("0x00002200", "0x00002212", "0x10000012", "0x80000048",
-                  "0x80000040", "0x3C000000", "1/128", "0x0000001310000012"):
+    for token in ("0x20000040", "0x20000052", "16777218", "0x80000048",
+                  "0x80000040", "0x3C000000", "1/128", "0x0000000020000052"):
         assert token in walkthrough
 
 
@@ -319,15 +318,17 @@ def test_cache_decision_and_prefetch_follow_the_same_graph():
     for token in ("Oldest touch: A at 18 -> evict A",
                   "Largest score: B at 1 -> evict B",
                   "Next request p[7] at s20: miss", "Next request p[7] at s20: hit",
-                  "D=21", "D=32", "Unknown uses max(RRPV, local GRASP)"):
+                  "remaining 1", "remaining 4",
+                  "Unknown uses max(RRPV, local GRASP)"):
         assert token in policy
     assert "retain until" not in policy, "a future-use prediction does not pin a line until that use"
     prefetch = rendered["reuse-plan-flowthrough-f05-lookahead-prefetch.svg"]
-    for token in ("candidate leads 8..15", "Full14 action = 0",
-                  "Scale6 selected lead = 0", "largest backward gap",
+    for token in ("candidate leads 8..15", "no eligible new line",
+                  "16 actual records", "4-byte records span up to 2 lines",
+                  "unaligned 8-byte records span up to 3 lines",
                   "smallest decoded future bound", "target = R[j + lead].vertex",
-                  "8-entry prefetch queue", "no L1D / L2 allocation",
-                  "at most 1 issue per 8", "FlowThrough is OFF"):
+                  "no L1D / L2 allocation", "12-cycle lookup",
+                  "FlowThrough is OFF"):
         assert token in prefetch
     assert "the example chooses E" not in prefetch
 
@@ -335,8 +336,9 @@ def test_cache_decision_and_prefetch_follow_the_same_graph():
 def test_native_views_separate_data_observations_and_retirement():
     rendered = figures()
     family = rendered["risc-v-instruction-path-f01-instruction-family.svg"]
-    for token in ("26 ID bits + 6 token bits", "raw funct7 0x30", "raw funct7 0x34",
-                  "0x0000001310000012", "F32 bits 0x3C000000",
+    for token in ("custom-1 opcode 0x2b", "funct7 0 for 4 B, 1 for 8 B",
+                  "funct3 1 / FUNCT2 0", "0x0000000020000052",
+                  "F32 bits 0x3C000000",
                   "I1 waits for its own P17"):
         assert token in family
     pipeline = rendered["risc-v-instruction-path-f02-o3-request-pipeline.svg"]
@@ -344,11 +346,11 @@ def test_native_views_separate_data_observations_and_retirement():
                   "Physical registers", "AGU / payload decode", "LSQ + translation",
                   "ROB", "P17 dependency", "per load", "16 physical message slots",
                   "minimum delay: 8 cycles", "output: 1 update / cycle",
-                  "I1: observe s19", "not D26", "non-touching tag lookup"):
+                  "I1: observe s19", "not D23", "non-touching tag lookup"):
         assert token in pipeline
     lifetime = rendered["risc-v-instruction-path-f03-mshr-metadata-lifecycle.svg"]
     for token in ("PENDING", "discard; do not enqueue", "count STALE",
-                  "install FINITE, deadline=26", "s19, ready 108",
+                  "install FINITE prediction", "s19, ready 108",
                   "s25, ready 112", "not an O3 trace"):
         assert token in lifetime
 
@@ -359,16 +361,19 @@ def test_storage_domains_and_backend_limits_are_explicit():
     for token in ("2,603,265", "635.6 MiB", "4.97 MiB", "2.48 MiB",
                   "10 reserved / 6 data", "5 reserved / 11 data",
                   "4 reserved / 12 data", "2 reserved / 14 data",
-                  "Full14", "384 KiB", "560 KiB", "not yet an equal-area comparison"):
+                  "67 bits/line", "1,097,728", "3,293,184",
+                  "not silicon area"):
         assert token in budget
     state = rendered["property-to-cache-walkthrough-f02-architecture-state-map.svg"]
-    for token in ("Full14 default: D=21", "D=32", "24 bits", "35 bits",
-                  "3,145,728", "2,624", "3,148,352", "4,587,520",
-                  "3,064", "4,590,584", "not synthesized area"):
+    for token in ("64-bit prediction value", "67 bits/line", "8,781,824",
+                  "1,097,728", "26,345,472", "3,293,184",
+                  "1024 data bits", "1024 index", "16 x 257 bits",
+                  "not a synthesized area"):
         assert token in state
     evidence = rendered["evaluation-methodology-f01-evidence-boundary.svg"]
-    for token in ("Full14; ID width <=18", "fixed native 26+6",
-                  "REF32 rows unsupported", "production timing gate closed",
+    for token in ("graph-derived 4/8 B", "raw32 / raw64",
+                  "admitted T / R / P / R+P", "modeled corroboration only",
+                  "completion link is not native retirement",
                   "popt_target_time_charged = 0", "dirty writebacks",
                   "POPT_SE_DISTANT", "reconstructions", "fail closed"):
         assert token in evidence
@@ -391,7 +396,7 @@ def test_public_graph_terminology_and_scope_are_explicit():
         "wiki/Property-to-Cache-Walkthrough.md"))
     for token in ("out-neighbors", "in-neighbors", "`N_out(u)`", "`N_in(u)`",
                   "`d_in(v)`", "`d_out(v)`", "outer vertex", "property vertex",
-                  "Full14", "Scale6", "not an automatic"):
+                  "metadata_bits", "mantissa_bits", "one current record grammar"):
         assert token in text
     for imprecise in ("reader graph", "current reader", "future readers",
                       "honest traffic", "reading spine"):
