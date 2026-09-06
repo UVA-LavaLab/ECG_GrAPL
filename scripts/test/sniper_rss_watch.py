@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run one Sniper probe with wall-clock and process-tree RSS bounds."""
+"""Run a command with wall-clock and process-tree RSS bounds."""
 
 import argparse
 import ctypes
@@ -87,6 +87,16 @@ def identity_alive(identity: ProcessIdentity) -> bool:
     return stats is not None and stats[3] == identity.start_time
 
 
+def reap_adopted_children(root_pid: int) -> None:
+    for pid in direct_children(os.getpid()):
+        if pid == root_pid:
+            continue
+        try:
+            os.waitpid(pid, os.WNOHANG)
+        except ChildProcessError:
+            pass
+
+
 def terminate_captured(
         captured: dict[int, ProcessIdentity],
         root: ProcessIdentity) -> None:
@@ -101,13 +111,7 @@ def terminate_captured(
             os.kill(identity.pid, signal.SIGTERM)
         except ProcessLookupError:
             pass
-    while True:
-        try:
-            waited, _status = os.waitpid(-1, os.WNOHANG)
-        except ChildProcessError:
-            break
-        if waited == 0:
-            break
+    reap_adopted_children(root.pid)
     if identity_alive(root):
         try:
             os.kill(root.pid, signal.SIGTERM)
@@ -162,6 +166,7 @@ def main() -> int:
         while process.poll() is None:
             captured.update(discover_process_tree(root))
             capture_reparented(captured, os.getpid())
+            reap_adopted_children(root.pid)
             rss = 0
             vms = 0
             for identity in captured.values():
@@ -186,6 +191,7 @@ def main() -> int:
             grace_end = time.monotonic() + args.orphan_grace_ms / 1000
             while time.monotonic() < grace_end:
                 capture_reparented(captured, os.getpid())
+                reap_adopted_children(root.pid)
                 alive_children = [
                     identity for pid, identity in captured.items()
                     if pid != root.pid and identity_alive(identity)
@@ -194,6 +200,7 @@ def main() -> int:
                     break
                 time.sleep(args.sample_ms / 1000)
             capture_reparented(captured, os.getpid())
+            reap_adopted_children(root.pid)
             if any(
                     identity_alive(identity)
                     for pid, identity in captured.items()
@@ -206,6 +213,13 @@ def main() -> int:
         except subprocess.TimeoutExpired:
             terminate_captured(captured, root)
             process.wait(timeout=3)
+        # Nested watchdogs must not inherit zombies from a finished inner guard.
+        reap_deadline = time.monotonic() + 3
+        while direct_children(os.getpid()) and time.monotonic() < reap_deadline:
+            reap_adopted_children(root.pid)
+            time.sleep(0.01)
+        if direct_children(os.getpid()):
+            reason = "cleanup-incomplete"
     elapsed = time.monotonic() - start
     with args.log.open("a") as output:
         output.write(

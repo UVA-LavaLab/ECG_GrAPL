@@ -991,10 +991,21 @@ def sanitize_subprocess_environment(
         if key.startswith((
                 "LD_", "PROOT_", "PYTHON", "FUSE_")):
             clean.pop(key, None)
+    temporary_directory = "/tmp"
+    if "GRAPHBREW_JOB_SCRATCH" in clean:
+        declared = Path(clean["GRAPHBREW_JOB_SCRATCH"])
+        scratch = declared.resolve()
+        if (not declared.is_absolute() or not scratch.is_dir() or
+                not scratch.is_relative_to((PROJECT_ROOT / "results").resolve())):
+            raise ValueError("declared job scratch must be an existing repository results directory")
+        if "TMPDIR" in clean and Path(clean["TMPDIR"]).resolve() != scratch:
+            raise ValueError("TMPDIR disagrees with the declared job scratch")
+        temporary_directory = str(scratch)
+        clean["GRAPHBREW_JOB_SCRATCH"] = temporary_directory
     clean.update({
         "PATH": "/usr/bin:/bin",
         "HOME": os.environ.get("HOME", "/tmp"),
-        "TMPDIR": "/tmp",
+        "TMPDIR": temporary_directory,
         "LC_ALL": "C",
         "LANG": "C",
     })

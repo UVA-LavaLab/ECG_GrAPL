@@ -63,6 +63,15 @@ Reference-window selection is not the timing-dependent issued-prefetch stream.
 Observer-enabled rows always have `timing_valid_for_speedup=0`, including when
 they contain a matching transport control.
 
+`ecg_current_equivalence` makes these semantic checks a bounded first tier:
+36 required rows cover the worked fixture and a deterministic pressure graph
+at both widths on all three backends. The full-roster receipt is independently
+recomputed from raw logs, graph recipes, resolved commands, source files,
+binaries, and output hashes. Large accurate cache_sim exploration is separate
+and cannot authorize final execution. Detailed final profiles require that
+current receipt plus explicit `--final-stage`; small equivalence does not
+establish large-graph resource fit or performance.
+
 Layout selection is explicit and bit-granular. It uses the maximum encoded ID,
 record count, requested 4/8-byte width, and minimum mantissa precision. A
 32-bit VID requires the eight-byte escape. The 26-ID/M6/H31/m0 layout is an

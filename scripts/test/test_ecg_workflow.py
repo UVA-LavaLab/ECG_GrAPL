@@ -674,23 +674,24 @@ def test_public_documents_use_the_expected_reading_flow():
     assert "popt_target_time_charged=0" in methodology
     assert "optimistic P-OPT bound" in methodology
 
-    # README is concise; the wiki owns the illustrated explanation.
-    assert len(root_readme.splitlines()) < 90
-    assert "ReusePlan and FlowThrough" in root_readme
+    # README stays an overview; the wiki owns detailed implementation history.
+    assert len(root_readme.splitlines()) < 180
+    assert "one current record grammar" in root_readme
     assert "wiki/ReusePlan-FlowThrough.md" in root_readme
     assert "wiki/Evaluation-Methodology.md" in root_readme
     assert "wiki/Reproduction.md" in root_readme
-    assert "--profile" not in root_readme
+    assert "--profile ecg_current_equivalence" in root_readme
+    assert "--profile reuse_plan_" not in root_readme
     for figure in (
             "reuse-plan-flowthrough-f01-offline-construction.svg",
             "reuse-plan-flowthrough-f02-record-formats.svg",
             "reuse-plan-flowthrough-f03-future-distance.svg",
             "reuse-plan-flowthrough-f04-llc-policy-pipeline.svg",
-            "reuse-plan-flowthrough-f05-flowthrough-outcomes.svg",
-            "reuse-plan-flowthrough-f06-structural-fairness.svg"):
+            "reuse-plan-flowthrough-f05-lookahead-prefetch.svg",
+            "reuse-plan-flowthrough-f06-capacity-accounting.svg"):
         assert figure in wiki
         assert list((ROOT / "fig/wiki").rglob(figure))
-    assert "checked adjacency entry at outer vertex/current epoch 8" in wiki
+    assert "Record `j=18` names `v=18`" in wiki
     assert "```mermaid" not in wiki
 
     # Public documents use direct technical language rather than internal
@@ -934,30 +935,29 @@ def test_final_design_docs_and_run_flow_are_consistent():
     assert "wiki/ReusePlan-FlowThrough.md" in readme
     assert "wiki/Evaluation-Methodology.md" in readme
     assert "wiki/Reproduction.md" in readme
-    assert "--profile" not in readme
+    assert "--profile ecg_current_equivalence" in readme
+    assert "--profile reuse_plan_" not in readme
 
     # The wiki is the detailed explanatory layer and contains no measured
     # performance tables.
-    assert "(Evaluation-Methodology)" in wiki
-    assert "(Reproduction)" in wiki
-    assert "`epoch_first`" in wiki
-    assert "explicit ablations" in wiki
-    assert "no experimental results" in wiki
-    assert "## 3. Future distance" in wiki
-    assert "## 5. FlowThrough cache behavior" in wiki
+    assert "wiki/Evaluation-Methodology.md" in readme
+    assert "wiki/Reproduction.md" in readme
+    assert "one graph-adaptive record grammar" in wiki
+    assert "## 3. Decode a conservative future bound" in wiki
+    assert "## 5. Use one real-record prefetch rule" in wiki
 
     assert "# Evaluation Methodology" in methodology
-    assert "contains no" in methodology
-    assert "performance results" in methodology
+    assert "Historical campaign provenance" in methodology
+    assert "not relabeled as current adaptive results" in methodology
 
-    assert "## 4. Inspect the PageRank study" in reproduction
+    assert "## 4. Inspect the earlier PageRank study" in reproduction
     assert "reuse_plan_pagerank_study" in reproduction
     assert "cit-Patents/cit-Patents.el" in reproduction
     assert "cit-Patents/cit-Patents.mtx" not in reproduction
     assert "python3 -I" in reproduction
     assert "--require-reference-python" in reproduction
     assert "--no-build --no-resume" in reproduction
-    assert "## 6. Final role-separated campaign" in reproduction
+    assert "## 6. Current qualification and historical campaign recipes" in reproduction
     assert "reuse_plan_final_campaign" in reproduction
     assert "## 7. Cross-simulator consistency" in reproduction
     assert "--input-run-dirs" in reproduction

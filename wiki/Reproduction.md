@@ -7,6 +7,9 @@ Choose the implementation path before launching a campaign:
 
 | Goal | Current recipe |
 |---|---|
+| bounded cross-backend semantics | `ecg_current_equivalence`, the default profile; prepare its small corpus first |
+| large functional exploration | `ecg_large_cache`; accurate current mechanisms, no final authorization |
+| detailed final evaluation | `ecg_detailed_final`, explicit `--final-stage` and current `--equivalence-receipt` |
 | functional cache behavior | `ECG`, `ECG:replacement`, `ECG:prefetch`, or `ECG:transport` with graph-derived layout |
 | record-width control | `--ecg-record-bytes 0`, `4`, or `8`; optional `--ecg-record-minimum-mantissa-bits` |
 | native record/retirement/LLC path | `--ecg-native --ecg-mechanism ... --ecg-record-bytes ...`; serial fixed-iteration PageRank only |
@@ -21,7 +24,24 @@ mechanisms, queue/traffic accounting, and matching semantic work.
 
 ## 1. Prepare graph data
 
-Prepare the literature-scale graph corpus:
+Start with the small current corpus, without downloading or converting a large
+graph:
+
+```bash
+python3 scripts/experiments/ecg/flows/prepare_record_equivalence_graphs.py
+python3 scripts/experiments/ecg/flows/prepare_record_equivalence_graphs.py --check
+```
+
+The checked figure fixture retains all 32 vertices, including isolated vertices,
+and its 34 adjacency records. The deterministic directed spread graph has
+512 vertices and 2,048 records. Their serialized `.sg` bytes, recipe inputs,
+and corpus receipt live under `results/graphs/ecg-current-equivalence/`.
+Preparation refuses to overwrite changed artifacts; `--force` is an explicit
+regeneration request, not an automatic recovery path.
+
+### Larger retained datasets
+
+Prepare the literature-scale corpus only for a separately selected larger run:
 
 ```bash
 make converter
@@ -144,10 +164,16 @@ second conversion manually.
 
 ## 2. Build
 
-Build only the backend needed by the selected recipe. The following commands
-keep the cache simulator and native PageRank path explicit and use one
-compiler job; do not run simulator builds or large simulations concurrently.
-Install Python dependencies only if they are not already available.
+Build only the backend needed by the selected recipe. The bounded equivalence
+profile needs all three current PageRank guests. On an already configured host:
+
+```bash
+make -j1 sim-pr sniper-sg_kernel gem5-riscv-m5ops-pr
+```
+
+Do not run simulator builds or simulations concurrently. For an unconfigured
+host, use the repository setup flows for the missing backends; install Python
+dependencies only if they are not already available.
 
 ```bash
 python3 -m pip install -r scripts/requirements.txt
@@ -158,15 +184,15 @@ timeout 7200 python3 scripts/setup_gem5.py --isa RISCV --jobs 1
 timeout 1800 make -j1 gem5-riscv-m5ops-pr
 ```
 
-The other kernels and Sniper recipes are for separately identified earlier
-controls, not additional current native ECG implementations:
+Sniper setup and its current PageRank guest use:
 
 ```bash
-make -j1 gem5-riscv-m5ops-bfs \
-  gem5-riscv-m5ops-sssp gem5-riscv-m5ops-bc gem5-riscv-m5ops-cc
-make setup-sniper
+make setup-sniper PARALLEL=1
 make -j1 sniper-sg_kernel
 ```
+
+Other kernels remain separately identified earlier controls, not additional
+current native ECG implementations.
 
 `make all-sim` also builds `bench/bin_sim/reuse_plan_sidecar`. The earlier
 ReusePlan gem5 flow caches generated sidecars under
@@ -258,6 +284,80 @@ python3 scripts/experiments/ecg/analysis/pagerank_gate.py \
 
 ## 6. Current qualification and historical campaign recipes
 
+### Default bounded cross-backend workflow
+
+After corpus preparation and guest builds:
+
+```bash
+ulimit -c 0
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_current_equivalence \
+  --run-dir results/ecg_experiments/runs/ecg_current_equivalence \
+  --no-build
+
+python3 scripts/experiments/ecg/record_equivalence_gate.py \
+  --validate-receipt \
+  results/ecg_experiments/runs/ecg_current_equivalence/current_ecg_equivalence.complete.json
+```
+
+The profile is the runner's default. It executes 12 sequential matrix jobs,
+36 rows in total: fixture32 uses transport, replacement, prefetch, and combined
+mechanisms; spread512 uses transport and combined. Both use four- and
+eight-byte records on cache_sim, RV64 O3 gem5, and translated SIFT Sniper.
+Every backend consumes the same prepared graph at `-o 0 -n 1 -i 2 -t 0`.
+The small 1 KiB cache geometry is intentional mechanism pressure, not a paper
+performance configuration. The spread rows must produce real positive
+prefetch candidates, requests, and completions in each backend and width.
+
+Per-cell wall limits are 30-120 seconds. Each complete matrix process tree also
+has a wall bound and a 2,048 MiB sampled RSS ceiling, covering graph inspection,
+native input sealing, simulator descendants, and their child watchdogs. Jobs
+use repository-local locks and `<matrix-output>/scratch`, not shared temporary
+trace directories. Run from a clean worktree; successful unchanged jobs can
+resume, but a filtered invocation cannot issue full equivalence authorization.
+
+The dedicated receipt re-expands the canonical roster, replays current receipt
+validators against raw backend logs, and binds graph recipes, layouts, semantic
+digests, source/configuration files, binaries, and outputs. A changed method or
+runtime requires a fresh small run. A generic `run.complete.json`, historical
+screen receipt, or manually copied `valid` flag is insufficient.
+
+### Large exploration and explicit final runs
+
+The prepared large graph set is declared separately in the manifest. The
+functional tier retains accurate current record/window/traffic behavior; it
+does not switch to a reduced-behavior fast path:
+
+```bash
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_large_cache \
+  --run-dir results/ecg_experiments/runs/ecg_large_cache --no-build
+```
+
+This tier is independent and non-authorizing. The final detailed tier is never
+selected automatically; it requires both an explicit request and the freshly
+revalidated small-run receipt:
+
+```bash
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_detailed_final --final-stage \
+  --equivalence-receipt \
+  results/ecg_experiments/runs/ecg_current_equivalence/current_ecg_equivalence.complete.json \
+  --run-dir results/ecg_experiments/runs/ecg_detailed_final --no-build
+```
+
+Inspect a larger profile with `--list` before executing it. Its declared host,
+carrier, auxiliary, and native target-memory budgets are distinct; adjust them
+deliberately rather than disabling guards. Small equivalence establishes
+semantic confidence, not a guarantee of large-graph runtime, memory fit,
+performance benefit, or complete final-paper baseline coverage.
+
+The separate `ecg_current_equivalence_extended` profile optionally repeats
+transport/combined, eight-byte real-Orkut-4096 rows on all three backends.
+It is not part of the quick roster and cannot replace its authorization.
+
+### Current mechanism controls
+
 Current public policy names are `ECG` (replacement-prefetch),
 `ECG:replacement`, `ECG:prefetch`, and `ECG:transport`, producing
 `ECG`, `ECG_REPLACEMENT`, `ECG_PREFETCH`, and `ECG_TRANSPORT`.
@@ -298,10 +398,10 @@ Preflight scans the serialized graph in bounded chunks, validates CSR domains,
 and resolves the width from actual pull-source IDs. Its conservative memory
 reservation includes the retained graph, carrier, configured auxiliary cap,
 and process margin; gem5 also reserves a sealed graph copy. This is not a
-measured peak or a whole-host memory guarantee. The child RSS watchdog samples
-the launched process tree; preparation and input sealing also need an outer
-workflow budget. Larger graphs require prepared inputs and appropriately sized
-explicit limits, not an unbounded synthetic generator.
+measured peak or a whole-host memory guarantee. Direct `roi_matrix.py` calls
+bound the launched child tree; the tiered orchestrator additionally bounds the
+whole matrix job, including native input sealing. Larger graphs require prepared
+inputs and appropriately sized explicit limits, not an unbounded generator.
 
 Direct gem5 graph runs use:
 

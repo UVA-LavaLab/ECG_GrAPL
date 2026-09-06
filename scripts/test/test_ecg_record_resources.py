@@ -128,3 +128,40 @@ def test_current_record_helpers_are_material_configuration_inputs(monkeypatch, h
     before = roi_matrix.standalone_matrix_config_hash(args, policies)
     changed = True
     assert roi_matrix.standalone_matrix_config_hash(args, policies) != before
+
+
+def test_runner_preserves_declared_repository_scratch(monkeypatch, tmp_path):
+    from scripts.experiments.ecg import roi_matrix
+
+    monkeypatch.setattr(roi_matrix, "PROJECT_ROOT", tmp_path)
+    scratch = tmp_path / "results/run/matrix/scratch"
+    scratch.mkdir(parents=True)
+    environment = roi_matrix.sanitize_subprocess_environment({
+        "GRAPHBREW_JOB_SCRATCH": str(scratch),
+        "TMPDIR": str(scratch),
+        "LD_PRELOAD": "unexpected.so",
+    })
+    assert environment["TMPDIR"] == str(scratch)
+    assert environment["GRAPHBREW_JOB_SCRATCH"] == str(scratch)
+    assert "LD_PRELOAD" not in environment
+    assert roi_matrix.sanitize_subprocess_environment(environment) == environment
+
+
+@pytest.mark.parametrize("invalid", ["external", "relative", "missing", "conflicting"])
+def test_runner_rejects_invalid_declared_scratch(monkeypatch, tmp_path, invalid):
+    from scripts.experiments.ecg import roi_matrix
+
+    monkeypatch.setattr(roi_matrix, "PROJECT_ROOT", tmp_path)
+    scratch = tmp_path / "results/scratch"
+    scratch.mkdir(parents=True)
+    environment = {"GRAPHBREW_JOB_SCRATCH": str(scratch), "TMPDIR": str(scratch)}
+    if invalid == "external":
+        environment["GRAPHBREW_JOB_SCRATCH"] = str(tmp_path)
+    elif invalid == "relative":
+        environment["GRAPHBREW_JOB_SCRATCH"] = "results/scratch"
+    elif invalid == "missing":
+        environment["GRAPHBREW_JOB_SCRATCH"] = str(tmp_path / "results/missing")
+    else:
+        environment["TMPDIR"] = str(tmp_path)
+    with pytest.raises(ValueError, match="scratch"):
+        roi_matrix.sanitize_subprocess_environment(environment)

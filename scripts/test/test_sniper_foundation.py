@@ -128,6 +128,35 @@ def test_rss_watchdog_kills_captured_orphan(tmp_path: Path):
         pytest.fail(f"captured orphan PID {child_pid} survived watchdog teardown")
 
 
+def test_rss_watchdog_reaps_orphans_before_returning_to_outer_guard(tmp_path: Path):
+    watchdog = ROOT / "scripts/test/sniper_rss_watch.py"
+    inner_log = tmp_path / "inner.log"
+    outer_log = tmp_path / "outer.log"
+    pid_file = tmp_path / "orphan.pid"
+    orphan = (
+        "import pathlib,subprocess,sys;"
+        "p=subprocess.Popen([sys.executable,'-c','import time;time.sleep(30)']);"
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(p.pid))")
+    inner = [
+        sys.executable, str(watchdog), "--rss-mib", "128", "--seconds", "5",
+        "--orphan-grace-ms", "100", "--log", str(inner_log), "--",
+        sys.executable, "-c", orphan,
+    ]
+    parent = (
+        "import pathlib,subprocess;"
+        f"result=subprocess.run({inner!r});"
+        "assert result.returncode != 0;"
+        f"pid=pathlib.Path({str(pid_file)!r}).read_text();"
+        "assert not pathlib.Path('/proc',pid).exists(), 'inner watchdog left an unreaped orphan'")
+    result = subprocess.run([
+        sys.executable, str(watchdog), "--rss-mib", "256", "--seconds", "10",
+        "--log", str(outer_log), "--", sys.executable, "-c", parent,
+    ], capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr + outer_log.read_text()
+    assert "[watchdog_reason] orphan" in inner_log.read_text()
+    assert "[watchdog_reason] exit" in outer_log.read_text()
+
+
 def test_foundation_probe_compiles(tmp_path: Path):
     compiler = shutil.which("g++")
     if compiler is None:

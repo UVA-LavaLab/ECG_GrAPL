@@ -1,0 +1,157 @@
+{
+  "schema": "ecg-current-equivalence",
+  "schema_version": 1,
+  "profile": "ecg_current_equivalence",
+  "benchmark": "pr",
+  "options_suffix": "-o 0 -n 1 -i 2 -t 0",
+  "backends": [
+    "cache_sim",
+    "gem5",
+    "sniper"
+  ],
+  "widths": [
+    4,
+    8
+  ],
+  "resource_limits": {
+    "record_max_carrier_bytes": 268435456,
+    "record_max_auxiliary_bytes": 268435456,
+    "cache_record_rss_mib": 2048,
+    "gem5_mem_size": "4GB",
+    "gem5_record_rss_mib": 2048,
+    "sniper_record_rss_mib": 2048,
+    "maximum_cell_seconds": 120
+  },
+  "required_stages": [
+    "110_current_fixture_cache_4b",
+    "111_current_fixture_cache_8b",
+    "112_current_fixture_gem5_4b",
+    "113_current_fixture_gem5_8b",
+    "114_current_fixture_sniper_4b",
+    "115_current_fixture_sniper_8b",
+    "116_current_spread_cache_4b",
+    "117_current_spread_cache_8b",
+    "118_current_spread_gem5_4b",
+    "119_current_spread_gem5_8b",
+    "120_current_spread_sniper_4b",
+    "121_current_spread_sniper_8b"
+  ],
+  "tiers": {
+    "micro": {
+      "graph": "ecg-fixture32",
+      "path": "results/graphs/ecg-current-equivalence/fixture32.sg",
+      "sha256": "d3367321de8541ffbe7390e02d132308c407dd06e48e765e069d82b5f136aa9a",
+      "semantic_sha256": "6703d974d28ec70cc0c7369c0c85c3b223ca932d95b2015a48b0e5dfa037da0b",
+      "vertices": 32,
+      "records": 34,
+      "max_vertex_id": 20,
+      "geometry": {
+        "l1d_size": "1kB",
+        "l2_size": "1kB",
+        "l3_size": "1kB",
+        "l3_ways": "16",
+        "line_size": "64"
+      },
+      "policies": [
+        "ECG_TRANSPORT",
+        "ECG_REPLACEMENT",
+        "ECG_PREFETCH",
+        "ECG"
+      ],
+      "prefetch_activity": "not-required"
+    },
+    "small": {
+      "graph": "ecg-spread512-d4",
+      "path": "results/graphs/ecg-current-equivalence/spread512-d4.sg",
+      "sha256": "717b795ae24513d0710a1a1b93da2f4d8f28954f9b0c4a0e4c77365bacf51306",
+      "semantic_sha256": "ba315029c90f59c90a2afac63426b6ea82c4f39dbb4a358abc41e8d27b35889c",
+      "vertices": 512,
+      "records": 2048,
+      "max_vertex_id": 511,
+      "geometry": {
+        "l1d_size": "1kB",
+        "l2_size": "1kB",
+        "l3_size": "1kB",
+        "l3_ways": "16",
+        "line_size": "64"
+      },
+      "policies": [
+        "ECG_TRANSPORT",
+        "ECG"
+      ],
+      "prefetch_activity": "required"
+    }
+  },
+  "optional_real": {
+    "profile": "ecg_current_equivalence_extended",
+    "graph": "com-Orkut-native-n12",
+    "path": "results/graphs/com-Orkut-native-n12/com-Orkut-native-n12-dbg.sg",
+    "sha256": "94ee8773a60d345005d54d5773fb4006ae71f0afd7d8d74a01ce4b68748d478d",
+    "vertices": 4096,
+    "records": 20956,
+    "iterations": 2,
+    "score_checksum": "0b81a45f0ea94bbe",
+    "width": 8,
+    "policies": [
+      "ECG_TRANSPORT",
+      "ECG"
+    ]
+  },
+  "source_paths": [
+    "Makefile",
+    "bench/include/ecg_record.h",
+    "bench/include/ecg_record_evidence.h",
+    "bench/include/ecg_record_stream.h",
+    "bench/include/ecg_record_window.h",
+    "bench/include/ecg_record_native.h",
+    "bench/include/ecg_record_runtime.h",
+    "bench/include/cache_sim/cache_sim.h",
+    "bench/include/cache_sim/graph_cache_context.h",
+    "bench/src_sim/pr.cc",
+    "bench/include/gem5_sim/gem5_harness.h",
+    "bench/include/gem5_sim/configs/graphbrew/graph_se.py",
+    "bench/src_gem5/pr.cc",
+    "bench/include/gem5_sim/overlays/arch/riscv/ecg_record.hh",
+    "bench/include/gem5_sim/overlays/arch/riscv/ecg_record_csr.patch",
+    "bench/include/gem5_sim/overlays/arch/riscv/ecg_record_operand.patch",
+    "bench/include/gem5_sim/overlays/arch/riscv/isa/decoder_ecg_record.isa",
+    "bench/include/gem5_sim/overlays/cpu/ecg_record_control.patch",
+    "bench/include/gem5_sim/overlays/cpu/ecg_record_producer.patch",
+    "bench/include/gem5_sim/overlays/mem/cache/ecg_record_cache.patch",
+    "bench/include/gem5_sim/overlays/mem/cache/ecg_record_capture_timing.patch",
+    "bench/include/gem5_sim/overlays/mem/cache/ecg_record_prefetch_cache.patch",
+    "bench/include/gem5_sim/overlays/mem/cache/prefetch/ecg_record_prefetch.cc",
+    "bench/include/gem5_sim/overlays/mem/cache/prefetch/ecg_record_prefetch.hh",
+    "bench/include/gem5_sim/overlays/mem/cache/prefetch/ecg_record_prefetch_request.hh",
+    "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_record_control.hh",
+    "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_record_observation.hh",
+    "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_record_transport.cc",
+    "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/ecg_record_transport.hh",
+    "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/graph_ecg_record_rp.cc",
+    "bench/include/gem5_sim/overlays/mem/cache/replacement_policies/graph_ecg_record_rp.hh",
+    "bench/include/sniper_sim/sniper_harness.h",
+    "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/cache_set_ecg.cc",
+    "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/cache_set_ecg.h",
+    "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/ecg_record_sniper.cc",
+    "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/ecg_record_sniper.h",
+    "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/ecg_record_sniper_compat.h",
+    "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/ecg_record_sniper_runtime.cc",
+    "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/ecg_record_sniper_runtime.h",
+    "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/graph_cache_context_sniper.cc",
+    "bench/include/sniper_sim/overlays/common/core/memory_subsystem/cache/graph_cache_context_sniper.h",
+    "bench/src_sniper/ecg_record_guest.h",
+    "bench/src_sniper/sg_kernel.cc",
+    "scripts/setup_gem5.py",
+    "scripts/setup_sniper.py",
+    "scripts/experiments/ecg/policy_specs.py",
+    "scripts/experiments/ecg/record_receipts.py",
+    "scripts/experiments/ecg/record_resources.py",
+    "scripts/experiments/ecg/path_fingerprints.py",
+    "scripts/experiments/ecg/gem5_guest_receipt.py",
+    "scripts/test/sniper_rss_watch.py",
+    "scripts/experiments/ecg/record_equivalence_gate.py",
+    "scripts/experiments/ecg/roi_matrix.py",
+    "scripts/experiments/ecg/flows/experiment_run.py",
+    "scripts/experiments/ecg/flows/prepare_record_equivalence_graphs.py"
+  ]
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manifest-driven ReusePlan experiment orchestrator.
+"""Manifest-driven ECG experiment orchestrator.
 
 This script does not replace ``roi_matrix.py`` or ``proof_matrix.py``. It wraps
 them with the pieces needed for long-running experiments:
@@ -42,6 +42,12 @@ from gem5_guest_receipt import (  # noqa: E402
     stable_receipt_fingerprint,
 )
 from path_fingerprints import hash_path  # noqa: E402
+from record_equivalence_gate import (  # noqa: E402
+    RECEIPT_NAME as EQUIVALENCE_RECEIPT_NAME,
+    EquivalenceGateError,
+    validate_authorization as validate_equivalence_receipt,
+    write_receipt as write_equivalence_receipt,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -50,7 +56,14 @@ ROI_MATRIX = ECG_DIR / "roi_matrix.py"
 PROOF_MATRIX = ECG_DIR / "flows" / "proof_matrix.py"
 DEFAULT_MANIFEST = ECG_DIR / "experiment_manifest.json"
 RESULTS_ROOT = PROJECT_ROOT / "results" / "ecg_experiments" / "runs"
-DEFAULT_LOCK = Path(os.environ.get("GRAPHBREW_EXPERIMENT_RUNNER_LOCK", "/tmp/graphbrew_experiment_run.lock"))
+DEFAULT_LOCK = Path(os.environ.get(
+    "GRAPHBREW_EXPERIMENT_RUNNER_LOCK",
+    RESULTS_ROOT / ".locks/experiment-run.lock"))
+RECORD_EQUIVALENCE_CONFIG = (
+    ECG_DIR / "configs" / "record_equivalence.json")
+PROCESS_TREE_WATCHDOG = (
+    PROJECT_ROOT / "scripts" / "test" / "sniper_rss_watch.py")
+JOB_SCRATCH_ENV = "GRAPHBREW_JOB_SCRATCH"
 REFERENCE_PYTHON = Path("/usr/bin/python3.12")
 ROI_RUNTIME_METADATA_ENV = frozenset({
     "GRAPHBREW_MATRIX_CONFIG_HASH",
@@ -63,10 +76,22 @@ ROI_RUNTIME_METADATA_ENV = frozenset({
 
 
 def execution_python(args: argparse.Namespace) -> Path:
+    if getattr(args, "_execution_python", None) is not None:
+        return Path(args._execution_python)
     return (
         REFERENCE_PYTHON
         if getattr(args, "require_pinned_python", False)
         else Path(sys.executable))
+
+
+def execution_settings(args: argparse.Namespace, run_dir: Path) -> dict[str, str]:
+    return {
+        "python": str(execution_python(args)),
+        "shard_group": getattr(
+            args, "_shard_group", os.environ.get("GRAPHBREW_SHARD_GROUP", run_dir.name)),
+    }
+
+
 PLANNING_MISSING_GEM5_GUEST_SHA256 = (
     "planning-missing-gem5-guest-sha256")
 PLANNING_MISSING_GEM5_OPT_SHA256 = (
@@ -207,6 +232,40 @@ def roi_input_paths(
         "roi_matrix": ROI_MATRIX,
         "policy_specs": ECG_DIR / "policy_specs.py",
     }
+    current_record = any(
+        policy_output_label(str(policy)) in {
+            "ECG", "ECG_TRANSPORT", "ECG_REPLACEMENT", "ECG_PREFETCH"}
+        for policy in settings.get("policies", []))
+    if current_record:
+        paths["record_process_watchdog"] = PROCESS_TREE_WATCHDOG
+        paths["execution_python"] = execution_python(args)
+        contract = load_manifest(RECORD_EQUIVALENCE_CONFIG)
+        paths["record_equivalence_config"] = RECORD_EQUIVALENCE_CONFIG
+        for relative in contract["source_paths"]:
+            paths["current_source:" + relative] = PROJECT_ROOT / relative
+    if settings.get("ecg_equivalence"):
+        paths.update({
+            "record_equivalence_config": RECORD_EQUIVALENCE_CONFIG,
+            "record_equivalence_gate":
+                ECG_DIR / "record_equivalence_gate.py",
+            "record_equivalence_preparer":
+                Path(__file__).with_name(
+                    "prepare_record_equivalence_graphs.py"),
+            "record_equivalence_corpus_receipt":
+                PROJECT_ROOT / "results/graphs/ecg-current-equivalence/"
+                "corpus.receipt.json",
+            "record_receipts": ECG_DIR / "record_receipts.py",
+            "record_resources": ECG_DIR / "record_resources.py",
+            "ecg_record": PROJECT_ROOT / "bench/include/ecg_record.h",
+            "ecg_record_evidence":
+                PROJECT_ROOT / "bench/include/ecg_record_evidence.h",
+            "ecg_record_stream":
+                PROJECT_ROOT / "bench/include/ecg_record_stream.h",
+            "ecg_record_native":
+                PROJECT_ROOT / "bench/include/ecg_record_native.h",
+            "ecg_record_runtime":
+                PROJECT_ROOT / "bench/include/ecg_record_runtime.h",
+        })
     if graph_path is not None:
         paths["graph"] = graph_path
 
@@ -232,6 +291,18 @@ def roi_input_paths(
             "sniper_sift_recorder": root / "sift" / "recorder" /
             "obj-intel64" / "sde_sift_recorder.so",
             "benchmark_binary": PROJECT_ROOT / "bench" / "bin_sniper" / binary_name,
+            "sniper_record_guest":
+                PROJECT_ROOT / "bench/src_sniper/ecg_record_guest.h",
+            "sniper_sg_kernel_source":
+                PROJECT_ROOT / "bench/src_sniper/sg_kernel.cc",
+            "sniper_harness":
+                PROJECT_ROOT / "bench/include/sniper_sim/sniper_harness.h",
+            "sniper_record_overlay":
+                PROJECT_ROOT / "bench/include/sniper_sim/overlays/common/"
+                "core/memory_subsystem/cache/ecg_record_sniper.cc",
+            "sniper_record_runtime_overlay":
+                PROJECT_ROOT / "bench/include/sniper_sim/overlays/common/"
+                "core/memory_subsystem/cache/ecg_record_sniper_runtime.cc",
         })
         setarch = shutil.which("setarch")
         paths["setarch"] = (
@@ -249,6 +320,21 @@ def roi_input_paths(
             "gem5_config": PROJECT_ROOT / "bench" / "include" /
             "gem5_sim" / "configs" / "graphbrew",
             "gem5_benchmark_binary": guest_binary,
+            "gem5_pr_source": PROJECT_ROOT / "bench/src_gem5/pr.cc",
+            "gem5_harness":
+                PROJECT_ROOT / "bench/include/gem5_sim/gem5_harness.h",
+            "gem5_record_isa":
+                PROJECT_ROOT / "bench/include/gem5_sim/overlays/arch/"
+                "riscv/isa/decoder_ecg_record.isa",
+            "gem5_record_transport":
+                PROJECT_ROOT / "bench/include/gem5_sim/overlays/mem/cache/"
+                "replacement_policies/ecg_record_transport.cc",
+            "gem5_record_policy":
+                PROJECT_ROOT / "bench/include/gem5_sim/overlays/mem/cache/"
+                "replacement_policies/graph_ecg_record_rp.cc",
+            "gem5_record_prefetch":
+                PROJECT_ROOT / "bench/include/gem5_sim/overlays/mem/cache/"
+                "prefetch/ecg_record_prefetch.cc",
         })
         if (
                 benchmark == "pr" and
@@ -264,6 +350,11 @@ def roi_input_paths(
     if suite in ("cache-sim", "both"):
         paths["cache_sim_benchmark_binary"] = (
             PROJECT_ROOT / "bench" / "bin_sim" / benchmark)
+        if settings.get("ecg_equivalence"):
+            paths["cache_sim_pr_source"] = (
+                PROJECT_ROOT / "bench/src_sim/pr.cc")
+            paths["cache_sim_cache_header"] = (
+                PROJECT_ROOT / "bench/include/cache_sim/cache_sim.h")
     return {name: path.resolve() for name, path in paths.items()}
 
 
@@ -700,6 +791,41 @@ def make_roi_job(
         "--cache-sim-omp-threads",
         str(settings.get("cache_sim_omp_threads", 1)),
     ]
+    current_record_labels = {
+        "ECG", "ECG_TRANSPORT", "ECG_REPLACEMENT", "ECG_PREFETCH"}
+    current_record = any(
+        policy_output_label(policy) in current_record_labels
+        for policy in all_policies)
+    if current_record:
+        command.extend([
+            "--ecg-record-bytes",
+            str(settings.get("ecg_record_bytes", 0)),
+            "--ecg-record-minimum-mantissa-bits",
+            str(settings.get("ecg_record_minimum_mantissa_bits", 0)),
+            "--ecg-record-max-carrier-bytes",
+            str(settings.get("ecg_record_max_carrier_bytes", 256 << 20)),
+            "--ecg-record-max-auxiliary-bytes",
+            str(settings.get("ecg_record_max_auxiliary_bytes", 256 << 20)),
+        ])
+        if settings.get("ecg_equivalence"):
+            command.append("--ecg-equivalence")
+        if str(settings.get("suite")) in ("cache-sim", "both"):
+            command.extend([
+                "--cache-record-rss-mib",
+                str(settings.get("cache_record_rss_mib", 2048)),
+            ])
+        if str(settings.get("suite")) in ("gem5", "both"):
+            command.extend([
+                "--gem5-mem-size",
+                str(settings.get("gem5_mem_size", "4GB")),
+                "--gem5-record-rss-mib",
+                str(settings.get("gem5_record_rss_mib", 2048)),
+            ])
+        if str(settings.get("suite")) == "sniper":
+            command.extend([
+                "--sniper-record-rss-mib",
+                str(settings.get("sniper_record_rss_mib", 2048)),
+            ])
     if int(settings.get("reuse_plan_l3_ways", 0)) > 0:
         command.extend([
             "--reuse-plan-l3-ways", str(settings["reuse_plan_l3_ways"]),
@@ -823,6 +949,15 @@ def make_roi_job(
         args, settings, graph_path, benchmark, material_env)
     inputs = roi_input_fingerprints(
         args, settings, graph_path, benchmark, material_env)
+    declared_graph_sha256 = str(graph.get("expected_sha256", ""))
+    actual_graph_sha256 = str(inputs.get("graph", ""))
+    if (
+            declared_graph_sha256 and
+            actual_graph_sha256 not in ("", "missing") and
+            actual_graph_sha256 != declared_graph_sha256):
+        raise SystemExit(
+            f"graph hash mismatch for {graph_name}: "
+            f"{actual_graph_sha256} != {declared_graph_sha256}")
     expected_gem5_guest_sha256 = ""
     expected_gem5_opt_sha256 = ""
     expected_gem5_config_sha256 = ""
@@ -832,7 +967,7 @@ def make_roi_job(
             inputs.get("gem5_benchmark_binary", ""))
         expected_gem5_opt_sha256 = str(inputs.get("gem5_binary", ""))
         expected_gem5_config_sha256 = str(inputs.get("gem5_config", ""))
-        expected_graph_sha256 = str(inputs.get("graph", ""))
+        expected_graph_sha256 = declared_graph_sha256 or str(inputs.get("graph", ""))
         planning_with_missing = (
             args.dry_run or args.list or args.check_graphs)
         if any(value in ("", "missing") for value in (
@@ -889,8 +1024,30 @@ def make_roi_job(
         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     comparison_config_hash = roi_comparison_config_hash(
         command, material_env, inputs, all_policies)
-    shard_group = os.environ.get(
-        "GRAPHBREW_SHARD_GROUP", run_dir.name)
+    process_tree_rss_mib = 0
+    process_tree_timeout_s = 0
+    if current_record:
+        suite = str(settings.get("suite"))
+        rss_key = {
+            "cache-sim": "cache_record_rss_mib",
+            "gem5": "gem5_record_rss_mib",
+            "sniper": "sniper_record_rss_mib",
+        }.get(suite)
+        if rss_key is None:
+            raise SystemExit(
+                f"current ECG requires one concrete backend, got {suite!r}")
+        process_tree_rss_mib = int(settings.get(
+            "process_tree_rss_mib", settings.get(rss_key, 2048)))
+        timeout_key = {
+            "cache-sim": "timeout_cache",
+            "gem5": "timeout_gem5",
+            "sniper": "timeout_sniper",
+        }[suite]
+        cell_count = len(policies) * len(settings.get("l3_sizes", ["4kB"]))
+        process_tree_timeout_s = int(settings.get(
+            "process_tree_timeout_seconds",
+            int(settings[timeout_key]) * cell_count + 30))
+    shard_group = execution_settings(args, run_dir)["shard_group"]
     env.update({
         "GRAPHBREW_MATRIX_CONFIG_HASH": config_hash,
         "GRAPHBREW_MATRIX_GROUP_HASH": matrix_config_hash,
@@ -942,6 +1099,13 @@ def make_roi_job(
             "expected_gem5_opt_sha256": expected_gem5_opt_sha256,
             "expected_gem5_config_sha256": expected_gem5_config_sha256,
             "expected_graph_sha256": expected_graph_sha256,
+            "declared_graph_sha256": declared_graph_sha256,
+            "requires_current_equivalence": bool(
+                settings.get("requires_current_equivalence", False)),
+            "requires_explicit_final": bool(
+                settings.get("requires_explicit_final", False)),
+            "process_tree_rss_mib": process_tree_rss_mib,
+            "process_tree_timeout_s": process_tree_timeout_s,
             "prefetcher": settings.get("prefetcher", "none"),
             # Record mode-6 environment knobs for reproducibility.
             # Stage env vars (e.g. ECG_EDGE_MASK_CHARGED, _AMPLIFY, _LOOKAHEAD)
@@ -1058,8 +1222,19 @@ def validate_job_graphs(run_dir: Path, jobs: list[Job], strict: bool) -> bool:
                 "path": key,
                 "exists": path.exists(),
                 "size_bytes": path.stat().st_size if path.exists() else 0,
+                "sha256": (
+                    compute_path_fingerprint(path)
+                    if path.exists() else "missing"),
+                "expected_sha256": str(
+                    job.metadata.get("declared_graph_sha256", "")),
                 "jobs": [],
             }
+        elif (
+                str(job.metadata.get("declared_graph_sha256", "")) and
+                records_by_path[key]["expected_sha256"] !=
+                str(job.metadata.get("declared_graph_sha256", ""))):
+            raise SystemExit(
+                f"conflicting pinned hashes for graph {path}")
         records_by_path[key]["jobs"].append(job.job_id)
 
     records = sorted(records_by_path.values(), key=lambda row: row["path"])
@@ -1068,16 +1243,27 @@ def validate_job_graphs(run_dir: Path, jobs: list[Job], strict: bool) -> bool:
     (graph_dir / "graph_check.json").write_text(json.dumps(records, indent=2, sort_keys=True) + "\n")
 
     missing = [record for record in records if not record["exists"]]
+    mismatched = [
+        record for record in records
+        if record["expected_sha256"] and
+        record["sha256"] != record["expected_sha256"]
+    ]
     if not records:
         print("[graphs] no file-backed graph paths in selected jobs")
         return True
-    if not missing:
+    if not missing and not mismatched:
         print(f"[graphs] all {len(records)} selected graph file(s) are present")
         return True
 
-    print(f"[graphs] {len(missing)} selected graph file(s) are missing:")
+    print(
+        f"[graphs] {len(missing)} selected graph file(s) are missing; "
+        f"{len(mismatched)} have a mismatched pinned hash:")
     for record in missing:
         print(f"  - {record['path']} ({len(record['jobs'])} job(s))")
+    for record in mismatched:
+        print(
+            f"  - {record['path']} hash={record['sha256']} "
+            f"expected={record['expected_sha256']}")
     if not strict:
         print("[graphs] continuing because graph check is non-strict for this mode")
     return False
@@ -1169,8 +1355,8 @@ def clean_job_environment(extra: dict[str, str]) -> dict[str, str]:
     }
     return {
         "PATH": "/usr/bin:/bin",
-        "HOME": os.environ.get("HOME", "/tmp"),
-        "TMPDIR": "/tmp",
+        "HOME": os.environ.get("HOME", str(PROJECT_ROOT)),
+        "TMPDIR": str(RESULTS_ROOT / ".scratch"),
         "LC_ALL": "C",
         "LANG": "C",
         **safe_extra,
@@ -1249,6 +1435,13 @@ def run_config_hash(
         "profiles": args.profile,
         "screen_authorization": getattr(
             args, "_screen_authorization", None),
+        "equivalence_authorization": getattr(
+            args, "_equivalence_authorization", None),
+        "scratch_contract": {
+            "environment": JOB_SCRATCH_ENV,
+            "path": "<job.out_dir>/scratch",
+            "tmpdir_matches": True,
+        },
         "filters": {
             "graph": args.graph,
             "benchmark": args.benchmark,
@@ -1256,6 +1449,8 @@ def run_config_hash(
             "job": args.job,
             "only": args.only,
             "skip": args.skip,
+            "from_job": getattr(args, "from_job", ""),
+            "limit": getattr(args, "limit", 0),
         },
         "jobs": [
             {
@@ -1297,15 +1492,31 @@ def guard_run_manifest_scope(run_dir: Path, jobs: list[Job]) -> None:
             "aggregate the run directories afterward")
 
 
+def job_snapshot(job: Job) -> dict[str, Any]:
+    return {
+        "job_id": job.job_id,
+        "stage": job.stage,
+        "kind": job.kind,
+        "command": job.command,
+        "out_dir": str(job.out_dir),
+        "log_path": str(job.log_path),
+        "metadata": job.metadata,
+    }
+
+
 def write_run_manifest(run_dir: Path, args: argparse.Namespace, manifest: dict[str, Any], jobs: list[Job]) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "logs").mkdir(parents=True, exist_ok=True)
     snapshot = {
         "created_utc": utc_now(),
+        "git_head": current_git_head(),
+        "execution": execution_settings(args, run_dir),
         "run_config_hash": run_config_hash(args, jobs),
         "profiles": args.profile,
         "screen_authorization": getattr(
             args, "_screen_authorization", None),
+        "equivalence_authorization": getattr(
+            args, "_equivalence_authorization", None),
         "filters": {
             "graph": args.graph,
             "benchmark": args.benchmark,
@@ -1313,20 +1524,11 @@ def write_run_manifest(run_dir: Path, args: argparse.Namespace, manifest: dict[s
             "job": args.job,
             "only": args.only,
             "skip": args.skip,
+            "from_job": getattr(args, "from_job", ""),
+            "limit": getattr(args, "limit", 0),
         },
         "manifest": manifest,
-        "jobs": [
-            {
-                "job_id": job.job_id,
-                "stage": job.stage,
-                "kind": job.kind,
-                "command": job.command,
-                "out_dir": str(job.out_dir),
-                "log_path": str(job.log_path),
-                "metadata": job.metadata,
-            }
-            for job in jobs
-        ],
+        "jobs": [job_snapshot(job) for job in jobs],
     }
     (run_dir / "resolved_manifest.json").write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
     with (run_dir / "jobs.csv").open("w", newline="") as fh:
@@ -1550,6 +1752,11 @@ def write_preflight(run_dir: Path, args: argparse.Namespace) -> None:
         "python": sys.executable,
         "graph_dir": args.graph_dir,
         "lock_path": str(args.lock_path),
+        "scratch_contract": {
+            "environment": JOB_SCRATCH_ENV,
+            "path": "<job.out_dir>/scratch",
+            "tmpdir_matches": True,
+        },
         "filters": {
             "graph": args.graph,
             "benchmark": args.benchmark,
@@ -1586,6 +1793,25 @@ def append_status(run_dir: Path, record: dict[str, Any]) -> None:
     record = {"utc": utc_now(), **record}
     with (run_dir / "run_status.jsonl").open("a") as fh:
         fh.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def bounded_job_command(
+        job: Job, args: argparse.Namespace
+) -> tuple[list[str], Path]:
+    rss_mib = int(job.metadata.get("process_tree_rss_mib", 0))
+    wall_seconds = int(job.metadata.get("process_tree_timeout_s", 0))
+    if not rss_mib and not wall_seconds:
+        return list(job.command), job.log_path
+    if rss_mib <= 0 or wall_seconds <= 0:
+        raise RuntimeError(
+            f"{job.job_id} has an incomplete process-tree bound")
+    return ([
+        str(execution_python(args)), str(PROCESS_TREE_WATCHDOG),
+        "--rss-mib", str(rss_mib),
+        "--seconds", str(wall_seconds),
+        "--log", str(job.log_path),
+        "--", *job.command,
+    ], job.log_path.with_suffix(job.log_path.suffix + ".runner"))
 
 
 def terminate_process_group(process: subprocess.Popen[str], log: Any, timeout_s: float = 10.0) -> int:
@@ -1643,14 +1869,20 @@ def run_job(job: Job, run_dir: Path, args: argparse.Namespace) -> int:
         else "roi_matrix.complete.json")
     (job.out_dir / marker_name).unlink(missing_ok=True)
     job.log_path.parent.mkdir(parents=True, exist_ok=True)
+    scratch = job.out_dir / "scratch"
+    scratch.mkdir(parents=True, exist_ok=True)
+    runtime_env = dict(job.env)
+    runtime_env["TMPDIR"] = str(scratch)
+    runtime_env[JOB_SCRATCH_ENV] = str(scratch.resolve())
+    process_command, process_log = bounded_job_command(job, args)
     start = time.time()
-    with job.log_path.open("w") as log:
+    with process_log.open("w") as log:
         log.write(f"$ {command_text(job.command)}\n")
         log.flush()
         process = subprocess.Popen(
-            job.command,
+            process_command,
             cwd=str(PROJECT_ROOT),
-            env=clean_job_environment(job.env),
+            env=clean_job_environment(runtime_env),
             stdout=log,
             stderr=subprocess.STDOUT,
             text=True,
@@ -1712,6 +1944,12 @@ def print_job_list(jobs: list[Job]) -> None:
         status, detail = job_csv_status(job)
         print(f"{index:03d} {job.job_id} [{status}] {detail}")
         print(f"    out: {job.out_dir}")
+        if int(job.metadata.get("process_tree_rss_mib", 0)):
+            print(
+                "    guard: "
+                f"rss={job.metadata['process_tree_rss_mib']}MiB "
+                f"wall={job.metadata['process_tree_timeout_s']}s "
+                f"scratch={job.out_dir / 'scratch'}")
         print(f"    cmd: {command_text(job.command)}")
 
 
@@ -1741,6 +1979,67 @@ def validate_profile_controls(
         reason = str(control.get("reason", ""))
         if str(control.get("status", "")) == "blocked" and reason:
             raise SystemExit(f"profile {profile} is blocked: {reason}")
+
+
+def has_selection_filters(args: argparse.Namespace) -> bool:
+    return bool(
+        getattr(args, "graph", []) or getattr(args, "benchmark", []) or
+        getattr(args, "policy", []) or getattr(args, "job", []) or
+        getattr(args, "only", []) or getattr(args, "skip", []) or
+        getattr(args, "from_job", "") or getattr(args, "limit", 0))
+
+
+def can_write_current_equivalence_receipt(
+        args: argparse.Namespace, complete: bool) -> bool:
+    return (
+        complete and
+        getattr(args, "profile", []) == ["ecg_current_equivalence"] and
+        not has_selection_filters(args))
+
+
+def validate_current_final_authorization(
+        args: argparse.Namespace, jobs: list[Job],
+        manifest_path: Path) -> dict[str, Any] | None:
+    requires = "ecg_detailed_final" in args.profile or any(
+        job.metadata.get("requires_current_equivalence") or
+        job.metadata.get("requires_explicit_final") for job in jobs)
+    if not requires or args.list or args.dry_run or args.check_graphs:
+        return None
+    if args.profile != ["ecg_detailed_final"]:
+        raise SystemExit(
+            "current detailed-final stages must be selected as the sole profile")
+    if not args.final_stage:
+        raise SystemExit(
+            "current detailed-final stages require explicit --final-stage")
+    if has_selection_filters(args):
+        raise SystemExit(
+            "current detailed-final stages reject partial selection filters")
+    if not args.equivalence_receipt:
+        raise SystemExit(
+            "current detailed-final stages require --equivalence-receipt")
+    path = resolve_path(args.equivalence_receipt)
+    try:
+        authorization = validate_equivalence_receipt(
+            path, PROJECT_ROOT, manifest_path,
+            RECORD_EQUIVALENCE_CONFIG)
+        prior_inputs = authorization["input_fingerprints"]
+        for job in jobs:
+            metadata = job.metadata
+            for name, path_text in metadata.get("input_paths", {}).items():
+                if name in {"graph", "manifest"}:
+                    continue
+                resolved_path = str(Path(str(path_text)).resolve())
+                if resolved_path not in prior_inputs:
+                    raise EquivalenceGateError(
+                        f"final input was not qualified by equivalence: {name}")
+                if (str(metadata.get("input_fingerprints", {}).get(
+                        name, "")) != prior_inputs[resolved_path]):
+                    raise EquivalenceGateError(
+                        f"final input differs from equivalence: {name}")
+        return authorization
+    except EquivalenceGateError as error:
+        raise SystemExit(
+            f"current ECG equivalence authorization failed: {error}") from error
 
 
 def validate_clean_worktree(
@@ -2001,7 +2300,7 @@ def validate_transport_authorization(
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run manifest-defined ReusePlan experiment profiles.")
+        description="Run manifest-defined current ECG and historical profiles.")
     parser.add_argument(
         "--manifest", default=str(DEFAULT_MANIFEST),
         help="JSON experiment manifest.")
@@ -2014,7 +2313,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--allow-blocked", action="store_true",
         help="Allow explicitly selected diagnostic stages with blocked_reason.")
-    parser.add_argument("--profile", nargs="+", default=["ecg_smoke"], help="Manifest profile(s) to run.")
+    parser.add_argument(
+        "--profile", nargs="+", default=["ecg_current_equivalence"],
+        help="Manifest profile(s) to run.")
     parser.add_argument("--run-dir", default="", help="Run directory. Defaults to results/ecg_experiments/runs/<profile>_<timestamp>.")
     parser.add_argument(
         "--screen-gate", default="",
@@ -2022,6 +2323,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "Validated screen GO receipt required before the "
             "literature-scale stages 92-95 or the transport stages "
             "97-100 execute."))
+    parser.add_argument(
+        "--equivalence-receipt", default="",
+        help=(
+            "Fresh current ECG equivalence receipt required by "
+            "ecg_detailed_final."))
+    parser.add_argument(
+        "--final-stage", action="store_true",
+        help=(
+            "Explicitly request the current detailed-final profile. This does "
+            "not bypass equivalence, roster, input, or output validation."))
     parser.add_argument("--graph-dir", default=str(PROJECT_ROOT / "results" / "graphs"), help="Graph root for manifest graph names without explicit paths.")
     parser.add_argument("--only", nargs="+", default=[], help="Only stages whose name contains one of these tokens.")
     parser.add_argument("--skip", nargs="+", default=[], help="Skip stages whose name contains one of these tokens.")
@@ -2073,13 +2384,22 @@ def main(argv: list[str]) -> int:
         raise SystemExit(
             "no jobs selected; check --profile/--only/--skip/--graph/--benchmark/--policy/--job filters"
         )
+    if (
+            args.allow_missing_graphs and
+            not (args.list or args.dry_run or args.check_graphs)):
+        raise SystemExit(
+            "--allow-missing-graphs is valid only with "
+            "--list, --dry-run, or --check-graphs")
     args._screen_authorization = validate_screen_authorization(
+        args, jobs, manifest_path)
+    args._equivalence_authorization = validate_current_final_authorization(
         args, jobs, manifest_path)
     guard_run_manifest_scope(run_dir, jobs)
     write_run_manifest(run_dir, args, manifest, jobs)
     write_preflight(run_dir, args)
 
-    graph_strict = not (args.allow_missing_graphs or args.dry_run or args.list or args.check_graphs)
+    graph_strict = not (
+        args.dry_run or args.list or args.check_graphs)
     graph_ok = validate_job_graphs(run_dir, jobs, strict=graph_strict)
     if args.check_graphs:
         return 0 if graph_ok else 4
@@ -2105,6 +2425,7 @@ def main(argv: list[str]) -> int:
             "combined_roi_matrix.csv",
             "combined_proof_matrix.csv",
             "run.complete.json",
+            EQUIVALENCE_RECEIPT_NAME,
         ):
             (run_dir / name).unlink(missing_ok=True)
     failures = 0
@@ -2125,6 +2446,19 @@ def main(argv: list[str]) -> int:
     write_combined_outputs(run_dir, jobs)
     complete = write_run_completion(
         run_dir, jobs, successful=failures == 0)
+    if (
+            not args.dry_run and
+            can_write_current_equivalence_receipt(args, complete)):
+        try:
+            receipt_path = write_equivalence_receipt(
+                PROJECT_ROOT, run_dir, manifest_path,
+                RECORD_EQUIVALENCE_CONFIG)
+            print(f"[write] {receipt_path}")
+        except EquivalenceGateError as error:
+            print(
+                f"[error] current ECG equivalence failed: {error}",
+                file=sys.stderr)
+            complete = False
     if not args.dry_run and failures == 0 and not complete:
         failures = 1
     if failures:

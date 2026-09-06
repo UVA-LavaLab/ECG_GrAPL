@@ -127,14 +127,27 @@ available with their original names, revisions, encodings, receipts, and
 limitations. They are not relabeled as results for the current adaptive
 method.
 
-For bounded cross-backend diagnostics, `roi_matrix.py --ecg-equivalence`
-observes actual consumed record words and fingerprints their decoded semantics.
-All backends must use the same prepared `.sg`, explicit `-o 0`, and fixed
-iteration count. These instrumented runs are never speedup evidence; equal
-semantics do not require equal cache misses, cycles, or issued prefetches.
-Construction limits, target memory, and process-tree RSS budgets are explicit.
-See [reproduction](wiki/Reproduction.md#shared-input-diagnostics-and-resource-budgets)
-for their scope and controls.
+## Run small before large
+
+With all three backends built, start with the bounded current workflow:
+
+```bash
+python3 scripts/experiments/ecg/flows/prepare_record_equivalence_graphs.py
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_current_equivalence \
+  --run-dir results/ecg_experiments/runs/ecg_current_equivalence --no-build
+```
+
+This default profile runs 36 cells serially: the 32-vertex worked example and a
+512-vertex pressure graph, both record widths, and all three backends. Actual
+record-load semantics and PageRank results must agree; misses, cycles, and
+issued prefetch totals need not. These instrumented rows are not speedup evidence.
+
+Use `ecg_large_cache` for accurate, non-authorizing large-graph cache/traffic
+exploration. `ecg_detailed_final` requires both `--final-stage` and a current
+`--equivalence-receipt`; old or partial completions cannot authorize it.
+Construction, target-memory, wall-time, and process-tree RSS limits stay explicit.
+See [reproduction](wiki/Reproduction.md#6-current-qualification-and-historical-campaign-recipes).
 
 ## Documentation
 
