@@ -156,6 +156,74 @@ paper campaign.
 IPC is derived from instructions and time; it is not independent evidence.
 Counterfactual instruction normalization is a sensitivity, not a measurement.
 
+### 4.1 Current sampled preliminary results
+
+The current-method run at `81e7e08f` uses the retained **4,096-vertex samples**,
+not the full Patents or Orkut graphs. Every cell executes two complete PageRank
+iterations on one core, with automatic record width, FlowThrough off, no extra
+prefetcher, and the equivalence observer disabled. The declared pressure
+hierarchy is 4 KiB L1D / 8 KiB L2, both eight-way, and 16 KiB / 16-way LLC.
+This scaled hierarchy exposes mechanisms on small graphs; it is not a
+final-paper hardware configuration.
+
+The layouts themselves show why VID width must follow actual encoded IDs:
+
+| Sample | Records | Maximum encoded VID | VID / metadata bits | Horizon / mantissa bits | Record bytes |
+|---|---:|---:|---:|---:|---:|
+| Patents-4096 | 3,449 | 659 | 10 / 22 | 12 / 17 | 4 |
+| Orkut-4096 | 20,956 | 4,095 | 12 / 20 | 15 / 15 | 4 |
+
+Both graphs declare 4,096 vertices, but the Patents pull stream never encodes
+IDs above 659. Its high-ID sinks and isolated vertices do not force unused VID
+bits into the records. Across all three backends, the source stream is retained:
+Patents uses 13,796 carrier bytes and 1,816 peak auxiliary bytes; Orkut uses
+83,824 carrier bytes and 10,248 peak auxiliary bytes. These carrier allocations
+are additional to the retained graph, not an in-place memory saving.
+
+The native comparison uses `ECG_TRANSPORT` as the denominator: the same
+record/property instruction loop with replacement and prefetch application
+disabled. The combined `ECG` results are:
+
+| Sample | Transport ROI cycles | ECG ROI cycles | Native speedup | Transport off-chip bytes | ECG off-chip bytes |
+|---|---:|---:|---:|---:|---:|
+| Patents-4096 | 331,681 | 277,889 | 1.194x | 288,448 | 273,088 |
+| Orkut-4096 | 853,144 | 672,983 | 1.268x | 479,872 | 357,248 |
+
+Native off-chip bytes fall by 5.3% and 25.6%, respectively, including the
+modeled read/write traffic. These are ROI comparisons, excluding graph loading
+and record construction. They do not establish an end-to-end gain over an
+ordinary CSR implementation or a full literature-baseline comparison.
+
+Reported LLC miss counters (`l3_misses`) remain backend-local:
+
+| Backend | Sample | Transport misses | ECG misses | Miss reduction |
+|---|---|---:|---:|---:|
+| cache_sim | Patents-4096 | 3,682 | 3,353 | 8.9% |
+| cache_sim | Orkut-4096 | 6,482 | 4,417 | 31.9% |
+| gem5 RV64 O3 | Patents-4096 | 3,507 | 3,029 | 13.6% |
+| gem5 RV64 O3 | Orkut-4096 | 6,467 | 2,125 | 67.1% |
+| Sniper | Patents-4096 | 3,670 | 3,798 | -3.5% |
+| Sniper | Orkut-4096 | 6,593 | 5,293 | 19.7% |
+
+The Sniper Patents regression is retained, not filtered out. It issues no
+prefetch requests in this cell; Orkut issues 12,352 prefetch-request bytes.
+The current Sniper row export does not provide aggregate off-chip bytes, so
+these rows support no aggregate-traffic or native-speedup claim. Functional
+cache_sim read/write-plus-prefetch transfers fall by 12.1% on Patents and
+29.0% on Orkut; they are cache/traffic results, not CPU speedups.
+
+All policies/backends execute 6,898 property reads for Patents and 41,912 for
+Orkut, with respective score checksums `f157f41979260953` and
+`0b81a45f0ea94bbe`. The 12 uninstrumented rows, per-cell commands, raw receipts,
+and completed output digests are under
+`results/ecg_experiments/runs/current_preliminary/`; the generated
+`preliminary_summary.json` is explicitly non-authorizing.
+The refreshed 36-row semantic receipt is separately retained under
+`results/ecg_experiments/runs/ecg_current_equivalence_preliminary/`.
+The preliminary run took 585.786 host seconds and peaked at 964.137 MiB sampled
+process-tree RSS under a 2,048 MiB guard. These small-sample results motivate
+larger evaluation; they do not replace it.
+
 ## 5. P-OPT accounting
 
 Analytic P-OPT charges reserved LLC capacity and cumulative matrix traffic. It

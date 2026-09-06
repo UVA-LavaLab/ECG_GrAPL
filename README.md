@@ -149,6 +149,11 @@ exploration. `ecg_detailed_final` requires both `--final-stage` and a current
 Construction, target-memory, wall-time, and process-tree RSS limits stay explicit.
 See [reproduction](wiki/Reproduction.md#6-current-qualification-and-historical-campaign-recipes).
 
+[Current sampled results](wiki/Evaluation-Methodology.md#41-current-sampled-preliminary-results)
+include native transport-matched speedups, traffic, and all three backends'
+miss counters, including the Sniper Patents regression. They are preliminary
+4,096-vertex pressure cases, not full-graph paper results.
+
 ## Documentation
 
 - [Adaptive records and cache control](wiki/ReusePlan-FlowThrough.md)

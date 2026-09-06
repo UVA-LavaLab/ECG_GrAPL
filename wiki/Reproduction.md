@@ -321,6 +321,11 @@ An additional whole-workflow watchdog measured a peak sampled RSS of
 910.945 MiB, below its 2,048 MiB limit, and exited with no surviving descendants.
 These are host execution/resource observations for the instrumented semantic
 workflow, not target speedup measurements or guarantees for other machines.
+After the native associativity-forwarding correction, the fresh `81e7e08f`
+run is retained separately as `ecg_current_equivalence_preliminary`; it
+completed in 630.590 seconds with 910.742 MiB peak sampled RSS. Its receipt
+matches the current code; the earlier `106c1227` run is preserved as prior
+evidence rather than relabeled.
 
 The dedicated receipt re-expands the canonical roster, replays current receipt
 validators against raw backend logs, and binds graph recipes, layouts, semantic
@@ -361,6 +366,15 @@ performance benefit, or complete final-paper baseline coverage.
 The separate `ecg_current_equivalence_extended` profile optionally repeats
 transport/combined, eight-byte real-Orkut-4096 rows on all three backends.
 It is not part of the quick roster and cannot replace its authorization.
+
+The uninstrumented current sample pairs are archived in
+`results/ecg_experiments/runs/current_preliminary/`, grouped by backend and
+sample. Their common controls are `--policies ECG:transport ECG`,
+`--ecg-record-bytes 0`, `-o 0 -n 1 -i 2 -t 0`, L1D 4 KiB / eight ways,
+L2 8 KiB / eight ways, and LLC 16 KiB / 16 ways. Native cells use RV64 O3;
+Sniper cells use translated SIFT. Do not add `--ecg-equivalence` when
+reproducing their timing numbers. See the
+[results and limitations](Evaluation-Methodology#41-current-sampled-preliminary-results).
 
 ### Current mechanism controls
 
