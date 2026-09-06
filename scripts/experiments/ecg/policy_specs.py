@@ -55,6 +55,7 @@ class PolicySpec:
     ecg_combined_admission: bool = False
     ecg_online_admission: bool = False
     popt_se_postfinal: str | None = None
+    record_mechanism: str | None = None
 
     @property
     def safe_label(self) -> str:
@@ -79,6 +80,27 @@ def parse_policy_spec(text: str) -> PolicySpec:
     elif upper.endswith(":UNCHARGED"):
         upper = upper[: -len(":UNCHARGED")]
         explicit_charge = True
+
+    current_records = {
+        "ECG": ("ECG", "replacement-prefetch"),
+        "ECG:REPLACEMENT_PREFETCH": ("ECG", "replacement-prefetch"),
+        "ECG_REPLACEMENT_PREFETCH": ("ECG", "replacement-prefetch"),
+        "ECG:TRANSPORT": ("ECG_TRANSPORT", "transport"),
+        "ECG_TRANSPORT": ("ECG_TRANSPORT", "transport"),
+        "ECG:REPLACEMENT": ("ECG_REPLACEMENT", "replacement"),
+        "ECG_REPLACEMENT": ("ECG_REPLACEMENT", "replacement"),
+        "ECG:PREFETCH": ("ECG_PREFETCH", "prefetch"),
+        "ECG_PREFETCH": ("ECG_PREFETCH", "prefetch"),
+    }
+    if upper in current_records:
+        if explicit_charge:
+            raise ValueError("Current ECG always accounts for its actual record and transport costs")
+        label, mechanism = current_records[upper]
+        return PolicySpec(
+            label=label,
+            policy="ECG" if mechanism in ("replacement", "replacement-prefetch") else "LRU",
+            record_mechanism=mechanism,
+        )
 
     if upper in ("ECG:REUSE_PLAN", "ECG_REUSE_PLAN"):
         return PolicySpec(

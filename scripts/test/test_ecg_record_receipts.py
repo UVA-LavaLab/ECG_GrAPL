@@ -1,9 +1,11 @@
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 
 from scripts.experiments.ecg.record_receipts import (
     RecordReceiptError, receipt, unsigned, validate_gem5_record, validate_layout,
+    validate_sniper_record,
 )
 
 
@@ -143,3 +145,157 @@ def test_prefetch_receipt_requires_real_bytes_latency_and_finite_queues():
         altered[key] = value
         with pytest.raises(RecordReceiptError):
             validate_gem5_record(combined(altered), mechanism="replacement-prefetch")
+
+
+def test_current_policy_names_select_mechanisms_not_bit_presets():
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    for text, mechanism, policy in (
+        ("ECG", "replacement-prefetch", "ECG"),
+        ("ECG:replacement-prefetch", "replacement-prefetch", "ECG"),
+        ("ECG:replacement", "replacement", "ECG"),
+        ("ECG:prefetch", "prefetch", "LRU"),
+        ("ECG:transport", "transport", "LRU"),
+    ):
+        spec = parse_policy_spec(text)
+        assert spec.record_mechanism == mechanism and spec.policy == policy
+        assert spec.ecg_mode is None
+    with pytest.raises(ValueError):
+        parse_policy_spec("ECG:UNCHARGED")
+    assert parse_policy_spec("ECG:REF32_SCALE_R_COMMIT").record_mechanism is None
+
+
+def test_current_admission_rejects_unimplemented_shapes(monkeypatch):
+    from scripts.experiments.ecg import roi_matrix
+    spec = roi_matrix.parse_policy_spec("ECG")
+    args = SimpleNamespace(
+        benchmark="pr", prefetcher="none", flowthrough="off", ecg_charged=1,
+        cache_stream_prefetch_degree=0, line_size="64",
+        options="-g 8 -k 4 -o 5 -n 1 -i 2 -t 0",
+        cache_sim_omp_threads=1, gem5_cpu_type="O3", gem5_max_insts="0")
+    monkeypatch.setattr(roi_matrix, "selected_gem5_isa", lambda: "riscv")
+    assert not roi_matrix.current_record_error(args, spec, "gem5")
+    assert not roi_matrix.current_record_error(args, spec, "cache_sim")
+    args.gem5_max_insts = 100
+    assert "uncapped" in roi_matrix.current_record_error(args, spec, "gem5")
+    args.options = "-g 8"
+    assert "explicit fixed" in roi_matrix.current_record_error(args, spec, "cache_sim")
+
+
+def test_valid_record_receipt_never_reopens_an_earlier_error():
+    from scripts.experiments.ecg import roi_matrix
+    guest, runtime = native_fixture()
+    args = SimpleNamespace(
+        ecg_record_bytes=0, ecg_record_minimum_mantissa_bits=0, has_record_baseline=True)
+    row = {"status": "error", "error": "geometry mismatch", "timing_valid_for_speedup": "0"}
+    roi_matrix.apply_current_record_receipt(
+        row, text_for(guest, runtime), args, roi_matrix.parse_policy_spec("ECG:replacement"), "gem5")
+    assert row["status"] == "error" and row["timing_valid_for_speedup"] == "0"
+
+
+def test_native_timing_requires_a_successful_matching_record_control():
+    from scripts.experiments.ecg import roi_matrix
+    guest, runtime = native_fixture()
+    args = SimpleNamespace(
+        ecg_record_bytes=0, ecg_record_minimum_mantissa_bits=0, has_record_baseline=True)
+    row = {
+        "status": "ok", "simulator": "gem5", "benchmark": "pr",
+        "ecg_record_mechanism": "replacement",
+    }
+    roi_matrix.apply_current_record_receipt(
+        row, text_for(guest, runtime), args, roi_matrix.parse_policy_spec("ECG:replacement"), "gem5")
+    assert row["timing_valid_for_speedup"] == "0"
+    roi_matrix.certify_current_record_results([row])
+    assert row["timing_valid_for_speedup"] == "0"
+    control = deepcopy(row)
+    control["ecg_record_mechanism"] = "transport"
+    control["policy_label"] = "ECG_TRANSPORT"
+    roi_matrix.certify_current_record_results([control, row])
+    assert row["timing_valid_for_speedup"] == "1"
+    control["status"] = "error"
+    roi_matrix.certify_current_record_results([control, row])
+    assert row["status"] == "error" and row["timing_valid_for_speedup"] == "0"
+
+
+def test_current_runner_accepts_exact_24_mib_modulo_geometry(tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run([
+        sys.executable, str(root / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "sniper", "--benchmark", "pr", "--sniper-workload", "sg_kernel",
+        "--policies", "ECG:transport", "ECG",
+        "--options", "-g 8 -k 2 -o 0 -n 1 -i 2 -t 0",
+        "--l3-sizes", "24MB", "--l3-ways", "16", "--out-dir", str(tmp_path),
+        "--no-build", "--dry-run",
+    ], cwd=root, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "ECG_TRANSPORT" in result.stdout
+
+
+def test_sniper_receipt_rejects_free_timing_and_missing_work():
+    fields = layout_fields(4, 31, 34)
+    stream = {
+        **fields, "mechanism": "replacement-prefetch", "records": "34",
+        "vertex_count": "32", "max_vertex_id": "31", "source_stream_bytes": "136",
+        "retained_source_bytes": "136", "carrier_payload_bytes": "136",
+        "carrier_allocation_bytes": "136", "auxiliary_peak_bytes": "256",
+        "storage": "separate", "construction": "outside-roi",
+        "guest_window_records": "16", "guest_window_data_bits": "1024",
+        "guest_window_index_bits": "1024", "guest_window_valid_bits": "16",
+    }
+    configuration = {
+        **fields, "mechanism": "replacement-prefetch", "record_count": "34",
+        "vertex_count": "32", "context": "1", "line_bytes": "64",
+        "core_scope": "single-core", "prefetch_request_model": "llc-only-read",
+        "update_link_model": "bounded-completion-corroboration",
+        "dead_miss_bypass": "llc-request-scoped", "window_entries": "16",
+        "window_entry_bits": "257", "update_latency": "8",
+        "update_output_width": "1", "capture_width": "1", "prefetch_queue": "8",
+        "lookup_latency": "1", "drain_max_cycles": "1024", "nuca_sets": "32",
+        "nuca_indexing": "mod",
+    }
+    runtime = {
+        "mechanism": "replacement-prefetch", "record_reads": "34",
+        "loaded_values": "34", "consumed_records": "34", "property_accesses": "34",
+        "record_read_bytes": "136", "timing_scope": "modeled-corroboration",
+        "clean": "1", "accounting": "1", "errors": "0", "pending_updates": "0",
+        "pending_prefetches": "0", "prefetch_translation_faults": "0",
+        "prefetch_queue_full": "0", "generated_updates": "34", "enqueued_updates": "34",
+        "coalesced_updates": "0", "delivered_updates": "34", "applied_updates": "30",
+        "stale_updates": "0", "expired_updates": "0", "not_resident_updates": "4",
+        "max_update_occupancy": "2", "minimum_update_latency": "8",
+        "prefetch_candidates": "20", "prefetch_enqueued": "18",
+        "prefetch_pending_duplicates": "2", "prefetch_issued": "10",
+        "prefetch_private_duplicates": "5", "prefetch_llc_duplicates": "2",
+        "prefetch_issue_admission_drops": "1", "prefetch_fills": "7",
+        "prefetch_completion_private_duplicates": "1", "prefetch_completion_resident": "1",
+        "prefetch_completion_admission_drops": "1", "prefetch_demand_merges": "0",
+        "prefetch_translation_requests": "18", "prefetch_translation_bypasses": "0",
+        "prefetch_request_bytes": "640", "prefetch_fill_bytes": "448",
+        "prefetch_private_lookups": "28", "prefetch_llc_lookups": "22",
+        "prefetch_issue_admission_checks": "11", "prefetch_completion_admission_checks": "8",
+        "lookup_cycles_charged": "100", "drain_cycles_charged": "8",
+        "max_prefetch_occupancy": "1", "prefetch_latency_cycles": "700",
+    }
+
+    def text(values):
+        sections = [
+            ("SNIPER-ECG-RECORD-STREAM", stream),
+            ("SNIPER-ECG-RECORD-CONFIG", configuration),
+            ("SNIPER-ECG-RECORD", values),
+            ("ECG-CONTEXT-READY", {"sim": "sniper", "loaded": "1", "reref": "0"}),
+            ("ECG-PR-RESULT", {"iterations": "1", "semantic_edges": "34",
+                              "score_checksum": "1234567890abcdef"}),
+        ]
+        return "\n".join("[" + name + " " + " ".join(
+            f"{key}={value}" for key, value in data.items()) + "]" for name, data in sections)
+
+    assert validate_sniper_record(text(runtime), mechanism="replacement-prefetch")["record_contract_valid"] == 1
+    for key, value in (
+        ("minimum_update_latency", "7"), ("lookup_cycles_charged", "0"),
+        ("prefetch_fills", "10"), ("record_reads", "33"), ("pending_updates", "1"),
+    ):
+        altered = {**runtime, key: value}
+        with pytest.raises(RecordReceiptError):
+            validate_sniper_record(text(altered), mechanism="replacement-prefetch")

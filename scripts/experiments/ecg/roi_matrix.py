@@ -73,6 +73,10 @@ from policy_specs import (  # noqa: E402
     PolicySpec,
     parse_policy_spec,
 )
+from record_receipts import (  # noqa: E402
+    LAYOUT_FIELDS, RecordReceiptError, validate_functional_record, validate_gem5_record,
+    validate_sniper_record,
+)
 
 _GEM5_OPT = Path(os.environ.get(
     "GEM5_OPT",
@@ -1550,6 +1554,12 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             "GRASP_BOUNDARY_MODE": "capacity",
             "GRASP_HOT_FRACTION": "0.50",
         })
+    if spec.record_mechanism is not None:
+        env.update({
+            "ECG_RECORD_MECHANISM": spec.record_mechanism,
+            "ECG_RECORD_BYTES": str(args.ecg_record_bytes),
+            "ECG_RECORD_MIN_MANTISSA_BITS": str(args.ecg_record_minimum_mantissa_bits),
+        })
     if spec.ecg_mode:
         env["ECG_MODE"] = spec.ecg_mode
         env["ECG_VARIANT"] = effective_ecg_variant(
@@ -1863,6 +1873,8 @@ def apply_explicit_cell_mechanism_env(
     for key, value in explicit.items():
         key = str(key)
         allowed = (
+            (getattr(spec, "record_mechanism", None) is not None and
+             key.startswith(("ECG_RECORD_", "SNIPER_ECG_RECORD_"))) or
             key in {
                 "GEM5_GRAPH_ARRAY_STATS",
                 "GEM5_REUSE_PLAN_COVERAGE_REQUIRED",
@@ -3590,7 +3602,76 @@ def apply_popt_se_receipt(
     return True
 
 
+def current_record_error(args: argparse.Namespace, spec: PolicySpec, backend: str) -> str:
+    if spec.record_mechanism is None:
+        return ""
+    if (args.benchmark != "pr" or args.prefetcher != "none" or args.flowthrough != "off" or
+            int(args.ecg_charged) != 1 or int(args.cache_stream_prefetch_degree) != 0 or
+            parse_size_bytes(str(args.line_size)) != 64):
+        return "Current ECG requires PR, charged real records, 64B lines, and no extra prefetch/FlowThrough"
+    tokens = shlex.split(args.options)
+    try:
+        iterations = int(tokens[tokens.index("-i") + 1])
+        tolerance = float(tokens[tokens.index("-t") + 1])
+        trials = int(tokens[tokens.index("-n") + 1])
+    except (ValueError, IndexError):
+        return "Current ECG requires explicit fixed positive -i, -t 0, and -n 1"
+    if iterations <= 0 or tolerance != 0 or trials != 1:
+        return "Current ECG requires explicit fixed positive -i, -t 0, and -n 1"
+    if backend == "cache_sim" and int(args.cache_sim_omp_threads) != 1:
+        return "Current functional ECG requires one thread"
+    if backend == "gem5" and (
+            selected_gem5_isa() != "riscv" or args.gem5_cpu_type != "O3" or
+            int(args.gem5_max_insts) != 0):
+        return "Current native ECG requires uncapped RISC-V O3"
+    if backend == "sniper" and (
+            args.sniper_workload != "sg_kernel" or int(args.sniper_cores) != 1 or
+            int(args.sniper_roi_icount) != 0 or int(args.sniper_semantic_edge_limit) != 0 or
+            args.ecg_isa_variant == "computed" or args.sniper_record_rss_mib <= 0):
+        return "Current Sniper ECG requires uncapped one-core sg_kernel, the record protocol, and an RSS watchdog"
+    return ""
+
+
+def apply_current_record_receipt(
+        row: dict[str, Any], text: str, args: argparse.Namespace, spec: PolicySpec,
+        backend: str) -> None:
+    if spec.record_mechanism is None:
+        return
+    row["ecg_record_contract_valid"] = 0
+    validator = {
+        "gem5": validate_gem5_record,
+        "cache_sim": validate_functional_record,
+        "sniper": validate_sniper_record,
+    }[backend]
+    try:
+        fields = validator(
+            text, mechanism=spec.record_mechanism,
+            requested_bytes=args.ecg_record_bytes,
+            minimum_mantissa_bits=args.ecg_record_minimum_mantissa_bits)
+    except RecordReceiptError as error:
+        mark_row_error(row, f"current ECG receipt failed: {error}")
+        return
+    for key, value in fields.items():
+        row[key if key.startswith("pr_") or key == "method" else "ecg_" + key] = value
+    row["edge_stream_bytes_per_edge"] = fields["record_bytes"]
+    row["ecg_record_replaces_edge"] = 1
+    row["ecg_isa_variant"] = {
+        "gem5": "raw-record-r4", "cache_sim": "functional-record",
+        "sniper": "post-load-record-protocol",
+    }[backend]
+    row["ecg_current_matched_control"] = int(getattr(args, "has_record_baseline", False))
+    if backend == "gem5":
+        row["timing_model"] = "native_ecg_record_pending_group"
+        row["timing_valid_for_speedup"] = "0"
+        row["timing_caveat"] = "Native timing awaits a validated matching ECG_TRANSPORT row."
+
+
 def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size: str) -> list[dict[str, Any]]:
+    record_error = current_record_error(args, spec, "cache_sim")
+    if record_error:
+        row = base_row("cache_sim", args, spec, l3_size)
+        row.update(status="unsupported", error=record_error, timing_valid_for_speedup="0")
+        return [row]
     if spec.policy == "HAWKEYE" and spec.label != "HAWKEYE_PROXY":
         raise RuntimeError(
             "cache_sim has no instruction PC; use HAWKEYE:PROXY or run "
@@ -3647,6 +3728,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         row["pr_iterations"] = int(pr_result.group(1))
         row["pr_semantic_edges"] = int(pr_result.group(2))
         row["pr_score_checksum"] = pr_result.group(3).lower()
+    apply_current_record_receipt(row, log_text, args, spec, "cache_sim")
     apply_popt_se_receipt(row, log_text, spec)
     apply_next_use_record_receipt(
         row, log_text, required=spec.label == "ECG_NEXT_USE_LRU")
@@ -3741,8 +3823,9 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
     row["cache_ecg_mode_effective"] = str(
         data.get("ecg_mode_effective") or "")
     if (
-            spec.policy == "ECG" and
-            row["cache_ecg_mode_effective"] != (spec.ecg_mode or "DBG_PRIMARY")):
+            (spec.policy == "ECG" or spec.record_mechanism is not None) and
+            row["cache_ecg_mode_effective"] != (
+                "RECORD" if spec.record_mechanism is not None else spec.ecg_mode or "DBG_PRIMARY")):
         mark_row_error(
             row,
             "cache_sim effective ECG mode differs from requested mode")
@@ -3923,6 +4006,11 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     log_path = out_dir / "logs" / f"{label}.log"
     sidebands = gem5_sideband_paths(gem5_out)
     charge = policy_cache_geometry(args, spec, l3_size)
+    record_error = current_record_error(args, spec, "gem5")
+    if record_error:
+        row = base_row("gem5", args, spec, l3_size, charge)
+        row.update(status="unsupported", error=record_error, timing_valid_for_speedup="0")
+        return [row]
     if spec.label in REF32_POLICY_LABELS or spec.popt_se_postfinal is not None:
         row = base_row("gem5", args, spec, l3_size, charge)
         row.update({
@@ -3961,19 +4049,20 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     effective_l3_size = str(charge["popt_effective_l3_size"])
     effective_l3_ways = str(charge["popt_effective_l3_ways"])
 
+    native_record_sizes = spec.record_mechanism is not None
     cmd = [
         str(GEM5_OPT),
         f"--outdir={gem5_out}",
         str(GEM5_CONFIG),
         "--binary", str(binary),
         "--options", args.options,
-        "--policy", spec.policy,
+        "--policy", ("ECG" if spec.record_mechanism == "prefetch" else spec.policy),
         "--prefetcher", args.prefetcher,
         "--prefetcher-level", args.prefetcher_level,
         "--structure-prefetch-degree", str(args.structure_prefetch_degree),
-        "--l1d-size", args.l1d_size,
-        "--l2-size", args.l2_size,
-        "--l3-size", effective_l3_size,
+        "--l1d-size", (f"{parse_size_bytes(str(args.l1d_size))}B" if native_record_sizes else args.l1d_size),
+        "--l2-size", (f"{parse_size_bytes(str(args.l2_size))}B" if native_record_sizes else args.l2_size),
+        "--l3-size", (f"{parse_size_bytes(effective_l3_size)}B" if native_record_sizes else effective_l3_size),
         "--l3-ways", effective_l3_ways,
         "--cpu-type", args.gem5_cpu_type,
     ]
@@ -3993,6 +4082,12 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
         ])
     if spec.ecg_mode:
         cmd.extend(["--ecg-mode", spec.ecg_mode])
+    if spec.record_mechanism is not None:
+        cmd.extend([
+            "--ecg-native", "--ecg-mechanism", spec.record_mechanism,
+            "--ecg-record-bytes", str(args.ecg_record_bytes),
+            "--ecg-minimum-mantissa-bits", str(args.ecg_record_minimum_mantissa_bits),
+        ])
 
     if not args.dry_run:
         if gem5_out.exists():
@@ -4566,7 +4661,7 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             base, log_text, ecg_variant,
             required=is_reuse_plan_ecg or is_next_use_ecg,
             expected_dueling=int(transport.set_dueling))
-        if spec.policy == "ECG":
+        if spec.policy == "ECG" and spec.record_mechanism is None:
             mode_receipt = re.search(
                 r"\[ECG-MODE-RECEIPT sim=gem5 requested=([^ ]+) "
                 r"effective=([^\]]+)\]",
@@ -4584,6 +4679,7 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
                     base,
                     "gem5 ECG mode receipt missing or mismatched: "
                     f"expected {expected_mode}")
+        apply_current_record_receipt(base, log_text, args, spec, "gem5")
         # ecg_record_bytes above is a NOMINAL value derived from the schedule,
         # so it read 8 for every two-epoch ReusePlan row even when the guest streamed a
         # compact 4-byte record. Anyone re-parsing the combined CSV would have
@@ -4837,6 +4933,11 @@ def sniper_binary_and_options(args: argparse.Namespace) -> tuple[Path, list[str]
 
 
 def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size: str) -> list[dict[str, Any]]:
+    record_error = current_record_error(args, spec, "sniper")
+    if record_error:
+        row = base_row("sniper", args, spec, l3_size)
+        row.update(status="unsupported", error=record_error, timing_valid_for_speedup="0")
+        return [row]
     if (
             args.flowthrough == "all" and
             args.sniper_address_domain != "virtual"):
@@ -4866,7 +4967,8 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         return [row]
     sniper_root = sniper_root_path(args)
     sniper_runner = sniper_runner_path(args)
-    unsafe_sniper_workload = args.sniper_workload in ("benchmark", "sg_kernel")
+    current_record = spec.record_mechanism is not None
+    unsafe_sniper_workload = args.sniper_workload in ("benchmark", "sg_kernel") and not current_record
     binary, binary_options = sniper_binary_and_options(args)
     sniper_binary = sniper_root / "lib" / "sniper"
     row.update({
@@ -4917,7 +5019,8 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             })
             return [row]
 
-    if args.sniper_workload == "sg_kernel" and not args.allow_sniper_sg_kernel_workload:
+    if (args.sniper_workload == "sg_kernel" and not current_record and
+            not args.allow_sniper_sg_kernel_workload):
         row.update({
             "status": "unsupported",
             "error": "bench/bin_sniper/sg_kernel is native-clean for .sg load+ROI diagnostics, but under Sniper/SDE it repeated the ~50 GiB runaway child-process behavior; pass --allow-sniper-sg-kernel-workload only for tightly bounded run-mode debugging.",
@@ -4940,6 +5043,11 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             "status": "unsupported",
             "error": f"Sniper runner currently supports {supported}; POPT/ECG overlays are still Phase 3 work.",
         })
+        return [row]
+    record_overlay_args = argparse.Namespace(**vars(args))
+    record_overlay_args.sniper_enable_graph_policies = False
+    if current_record and not sniper_graph_policies_enabled(record_overlay_args):
+        row.update(status="unsupported", error="Current Sniper ECG requires verified installed record overlays")
         return [row]
 
     if not args.dry_run:
@@ -5010,6 +5118,8 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         "perf_model/reserve_thp/kernel_size": args.sniper_mimicos_kernel_mb,
     }
     sniper_config_values["general/translation_enabled"] = "false" if args.sniper_address_domain == "virtual" else "true"
+    if current_record:
+        sniper_config_values["perf_model/nuca/address_hash"] = "mod"
     if args.prefetcher == "DROPLET":
         prefetch_config = "l1_dcache" if args.prefetcher_level == "l1d" else "l2_cache"
         sniper_config_values[f"perf_model/{prefetch_config}/prefetcher"] = "droplet"
@@ -5276,9 +5386,34 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
                 "use cache metrics, not speedup.")
     elif args.ecg_isa_variant != "computed":
         env.pop("SNIPER_ENABLE_ECG_EXTRACT", None)
+    if current_record:
+        env.update({
+            "SNIPER_ECG_RECORD_MECHANISM": spec.record_mechanism,
+            "SNIPER_ECG_RECORD_BYTES": str(args.ecg_record_bytes),
+            "SNIPER_ECG_RECORD_MINIMUM_MANTISSA_BITS": str(args.ecg_record_minimum_mantissa_bits),
+            "SNIPER_ENABLE_VERTEX_HINTS": "0",
+            "SNIPER_ECG_RECORD_WARM_PROPERTIES": "1",
+        })
+        row["sniper_vertex_clock"] = "record-sequence"
+        row["sniper_ecg_delivery"] = "post-load-record-protocol"
+        row["sniper_record_rss_mib"] = args.sniper_record_rss_mib
+        row["sniper_record_indexing"] = "mod"
+        row["timing_model"] = "sniper_record_completion_model"
+        row["timing_valid_for_speedup"] = "0"
+        row["timing_caveat"] = "Modeled software-window transport and completion timing; not architectural RISC-V speedup."
     apply_instruction_cap_provenance(row, "sniper", args)
     apply_semantic_cap_provenance(row, "sniper", args)
-    result = run_command(cmd, PROJECT_ROOT, env, args.timeout_sniper, log_path, args.dry_run)
+    watchdog_log = log_path.with_suffix(".watchdog.log")
+    if current_record:
+        cmd = [
+            sys.executable, str(PROJECT_ROOT / "scripts/test/sniper_rss_watch.py"),
+            "--rss-mib", str(args.sniper_record_rss_mib),
+            "--seconds", str(args.timeout_sniper), "--log", str(watchdog_log),
+            "--", *cmd,
+        ]
+    result = run_command(
+        cmd, PROJECT_ROOT, env, args.timeout_sniper + (10 if current_record else 0),
+        log_path, args.dry_run)
     if args.dry_run:
         return []
 
@@ -5287,6 +5422,15 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         row.update({"status": "error", "error": f"exit_code={result.returncode if result else 'unknown'}"})
         return [row]
     log_text = log_path.read_text(errors="ignore")
+    if current_record:
+        if not watchdog_log.is_file():
+            row.update(status="error", error="Current Sniper ECG omitted its process-tree watchdog receipt")
+            return [row]
+        log_text += "\n" + watchdog_log.read_text(errors="replace")
+        row["sniper_record_watchdog_log"] = str(watchdog_log)
+        if "[watchdog_reason] exit" not in log_text:
+            row.update(status="error", error="Current Sniper ECG exceeded a watchdog bound")
+            return [row]
     semantic_patterns = {
         "pr": r"GraphBrew Sniper SG PR checksum:\s*(.+)",
         "bfs": r"GraphBrew Sniper SG BFS reached:\s*(.+)",
@@ -5382,7 +5526,8 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             })
     apply_sniper_csr_substitution_receipt(
         row, log_text, args.benchmark, required=(
-            int(row.get("ecg_record_replaces_edge") or 0) == 1))
+            not current_record and int(row.get("ecg_record_replaces_edge") or 0) == 1))
+    apply_current_record_receipt(row, log_text, args, spec, "sniper")
     if policy_name in ("grasp", "popt", "ecg"):
         context_marker = re.search(
             r"\[ECG-CONTEXT-READY sim=sniper loaded=1 "
@@ -5412,7 +5557,7 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
                 "error": matrix_error,
             })
             return [row]
-        if (args.ecg_isa_variant == "computed" and not requires_popt_matrix
+        if ((args.ecg_isa_variant == "computed" or current_record) and not requires_popt_matrix
                 and reref_loaded != 0):
             clear_sniper_reuse_plan_sidebands(sidebands)
             row.update({
@@ -5422,7 +5567,7 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
                     "rereference matrix"),
             })
             return [row]
-        if policy_name == "ecg":
+        if policy_name == "ecg" and not current_record:
             mode_receipt = re.search(
                 r"\[ECG-MODE-RECEIPT sim=sniper requested=([^ ]+) "
                 r"effective=([^\]]+)\]",
@@ -5444,6 +5589,9 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
                         f"expected {expected_mode}"),
                 })
                 return [row]
+        if current_record:
+            row["sniper_ecg_mode_requested_receipt"] = "RECORD"
+            row["sniper_ecg_mode_effective_receipt"] = "RECORD"
         if is_reuse_plan_ecg:
             apply_sniper_variant_receipt(
                 row, log_text, ecg_variant, required=True,
@@ -5602,7 +5750,8 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         validate_reuse_admission_activity(
             row, spec.ecg_reuse_admission,
             field="sniper_reuse_plan_admission_updates")
-    log_text = log_path.read_text(errors="ignore")
+    if not current_record:
+        log_text = log_path.read_text(errors="ignore")
     semantic_patterns = {
         "pr": r"GraphBrew Sniper SG PR checksum: ([^\s]+)",
         "bfs": r"GraphBrew Sniper SG BFS reached: ([^\n]+)",
@@ -5613,7 +5762,10 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     semantic_match = re.search(
         semantic_patterns.get(args.benchmark, r"$^"), log_text)
     row["sniper_kernel_semantic_receipt"] = (
-        semantic_match.group(1).strip() if semantic_match else "")
+        str(row.get("pr_score_checksum") or "") if current_record
+        else semantic_match.group(1).strip() if semantic_match else "")
+    if current_record:
+        row["sniper_semantic_result"] = row["sniper_kernel_semantic_receipt"]
     if (
             args.sniper_workload == "sg_kernel" and
             not row["sniper_kernel_semantic_receipt"]):
@@ -6179,6 +6331,19 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
             "hawkeye_optgen_quanta": 128,
             "hawkeye_sampled_sets": 64,
         })
+    if spec.record_mechanism is not None:
+        row.update({
+            "method": "ECG",
+            "ecg_record_mechanism": spec.record_mechanism,
+            "ecg_record_requested_bytes": getattr(args, "ecg_record_bytes", 0),
+            "ecg_record_minimum_mantissa_bits": getattr(args, "ecg_record_minimum_mantissa_bits", 0),
+            "ecg_record_contract_valid": 0,
+            "ecg_epochs": "",
+            "ecg_epochs_requested": "",
+            "ecg_epochs_effective": "",
+            "ecg_epoch_pack_bits": "",
+            "flowthrough": "off",
+        })
     return row
 
 
@@ -6325,7 +6490,7 @@ def certify_gem5_pr_results(
             continue
         key = (
             row.get("options"), row.get("l3_size"), row.get("l3_ways"),
-            row.get("prefetcher"))
+            row.get("prefetcher"), bool(row.get("ecg_record_mechanism")))
         groups.setdefault(key, []).append(row)
     for group_rows in groups.values():
         receipts = {
@@ -6379,7 +6544,7 @@ def certify_cache_sim_pr_results(
     for row in cache_rows:
         key = (
             row.get("options"), row.get("l3_size"), row.get("l3_ways"),
-            row.get("prefetcher"))
+            row.get("prefetcher"), bool(row.get("ecg_record_mechanism")))
         groups.setdefault(key, []).append(row)
     for group_rows in groups.values():
         receipts = {
@@ -6415,6 +6580,8 @@ def certify_detailed_kernel_results(
     groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for row in rows:
         simulator = str(row.get("simulator") or "")
+        if row.get("ecg_record_mechanism"):
+            continue
         if simulator not in ("gem5", "sniper"):
             continue
         if simulator == "gem5" and args.benchmark == "pr":
@@ -6473,6 +6640,42 @@ def certify_detailed_kernel_results(
                 row,
                 f"{simulator} {args.benchmark} semantic receipt mismatch "
                 f"or missing: {detail}")
+
+
+def certify_current_record_results(rows: list[dict[str, Any]]) -> None:
+    groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    for row in rows:
+        if not row.get("ecg_record_mechanism"):
+            continue
+        key = tuple(row.get(name) for name in (
+            "simulator", "benchmark", "options", "l1d_size", "l1d_ways",
+            "l2_size", "l2_ways", "l3_size", "l3_ways", "line_size",
+            "ecg_record_requested_bytes", "ecg_record_minimum_mantissa_bits"))
+        groups.setdefault(key, []).append(row)
+    for group in groups.values():
+        signatures = {
+            tuple(row.get("ecg_" + key) for key in LAYOUT_FIELDS) +
+            tuple(row.get(key) for key in (
+                "pr_iterations", "pr_semantic_edges", "pr_score_checksum"))
+            for row in group
+        }
+        matched = (len(signatures) == 1 and
+                   all(value is not None for value in next(iter(signatures))))
+        valid = matched and all(
+            row.get("status") == "ok" and row.get("ecg_record_contract_valid") == 1
+            for row in group)
+        controls = [row for row in group if row.get("ecg_record_mechanism") == "transport"]
+        controlled = valid and len(controls) == 1
+        for row in group:
+            row["pr_result_matched"] = int(matched)
+            row["ecg_current_matched_control"] = int(controlled)
+            if not valid:
+                mark_row_error(row, "current ECG group has incomplete or mismatched layout/work evidence")
+            if row.get("simulator") == "gem5":
+                row["timing_valid_for_speedup"] = "1" if controlled else "0"
+                row["timing_model"] = "native_ecg_record" if controlled else "mechanism_probe_no_record_control"
+                row["timing_caveat"] = "" if controlled else (
+                    "No successful within-run ECG_TRANSPORT control with identical layout and work.")
 
 
 def write_outputs(out_dir: Path, rows: list[dict[str, Any]]) -> None:
@@ -6774,6 +6977,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                              "(ecg.extract): the record rides the demand with no extra traffic "
                              "(idealized upper bound; isolates the eviction quality from the "
                              "delivery cost).")
+    parser.add_argument("--ecg-record-bytes", type=int, choices=[0, 4, 8], default=0,
+                        help="Current ECG record width: zero chooses the smallest sufficient graph-derived layout.")
+    parser.add_argument("--ecg-record-minimum-mantissa-bits", type=int, default=0,
+                        help="Current ECG precision floor; any necessary eight-byte carrier is fully charged.")
     parser.add_argument("--ecg-epochs", type=int, default=65535,
                         help="ECG_GRASP_POPT number of absolute epochs the per-edge mask "
                              "quantizes to (eviction-epoch resolution). Default 65535 (committed). "
@@ -6848,6 +7055,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="Allow file-backed bench/bin_sniper/sg_kernel under Sniper. Native .sg runs are clean, but Sniper/SDE sg_kernel repeated the high-memory runaway; use only for bounded run-mode debugging guarded by --sniper-memory-limit-gb.")
     parser.add_argument("--sniper-memory-limit-gb", type=float, default=16.0,
                         help="Address-space limit applied with prlimit to explicitly allowed unsafe Sniper benchmark/sg_kernel workloads. Set 0 to disable only for manual debugging.")
+    parser.add_argument("--sniper-record-rss-mib", type=int, default=2048,
+                        help="Mandatory process-tree resident-memory limit for current ECG record workloads.")
     parser.add_argument("--sniper-mimicos-memory-mb", default="4096",
                         help="Override perf_model/reserve_thp/memory_size for GraphBrew Sniper runs. The upstream baseline default is 131072 MB, which is excessive for these workloads.")
     parser.add_argument("--sniper-mimicos-kernel-mb", default="128",
@@ -7011,6 +7220,9 @@ def main(argv: list[str]) -> int:
     else:
         policy_texts = DEFAULT_POLICIES
     policies = [parse_policy_spec(p) for p in policy_texts]
+    if not 0 <= args.ecg_record_minimum_mantissa_bits <= 61:
+        raise SystemExit("ECG minimum mantissa precision must be in [0,61]")
+    args.has_record_baseline = any(spec.record_mechanism == "transport" for spec in policies)
     if any(spec.popt_se_postfinal is not None for spec in policies):
         if (args.suite != "cache-sim" or args.benchmark != "pr" or
                 int(args.cache_sim_omp_threads) != 1 or
@@ -7057,9 +7269,12 @@ def main(argv: list[str]) -> int:
                 f"{label} size must contain an integral number of "
                 "cache sets")
         sets = size_bytes // set_bytes
+        current_modulo = label == "L3" and all(
+            spec.record_mechanism is not None for spec in policies)
         if (
                 (sets & (sets - 1)) != 0 and
-                not (label == "L3" and args.suite == "cache-sim")):
+                not (label == "L3" and args.suite == "cache-sim") and
+                not current_modulo):
             raise SystemExit(
                 f"{label} cache set count must be a power of two")
     if (
@@ -7071,7 +7286,8 @@ def main(argv: list[str]) -> int:
         raise SystemExit(
             "compact ReuseBind+FlowThrough requires at least one "
             "two-epoch ReusePlan ECG FlowThrough policy")
-    args.has_lru_baseline = any(spec.label == "LRU" for spec in policies)
+    args.has_lru_baseline = any(
+        spec.label == "LRU" or spec.record_mechanism == "transport" for spec in policies)
     out_dir = Path(args.out_dir) if args.out_dir else RESULTS_ROOT / now_tag()
     if not out_dir.is_absolute():
         out_dir = PROJECT_ROOT / out_dir
@@ -7121,6 +7337,7 @@ def main(argv: list[str]) -> int:
     certify_cache_sim_pr_results(rows, args)
     certify_gem5_pr_results(rows, args)
     certify_detailed_kernel_results(rows, args)
+    certify_current_record_results(rows)
     if not args.dry_run:
         # Persist layered certification failures before any fail-closed
         # run-level validator raises. Do not emit a completion marker here.

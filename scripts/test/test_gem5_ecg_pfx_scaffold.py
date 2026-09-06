@@ -259,9 +259,10 @@ def test_gem5_reuse_plan_uses_architectural_epoch_context_csrs():
     # loads such as ecg_flow_load_compact deliberately do not; ReuseBind owns
     # delivery on the subsequent property Request. The format CSR count changes
     # for compact decode instructions.
-    assert decoder.count("MISCREG_ECG_CUR_EPOCH") == 18
-    assert decoder.count("MISCREG_ECG_CONTEXT") == 18
-    assert decoder.count("MISCREG_ECG_RECORD_FORMAT") == 2
+    legacy_decoder = decoder.split("0x0C: decode RVTYPE", 1)[0]
+    assert legacy_decoder.count("MISCREG_ECG_CUR_EPOCH") == 18
+    assert legacy_decoder.count("MISCREG_ECG_CONTEXT") == 18
+    assert legacy_decoder.count("MISCREG_ECG_RECORD_FORMAT") == 2
     assert 'asm volatile ("csrw 0x800, %0"' in harness
     assert 'asm volatile ("csrw 0x801, %0"' in harness
     assert 'asm volatile ("csrw 0x802, %0"' in harness
@@ -309,11 +310,12 @@ def test_gem5_reuse_plan_uses_architectural_epoch_context_csrs():
         assert "GEM5_SET_QUANTIZED_VERTEX_EPOCH(" in source
         assert "GEM5_SET_VERTEX_EPOCH(" not in source
     pr = read("bench/src_gem5/pr.cc")
+    legacy_pr = pr.split("pvector<ScoreT> PageRankPullGS_Gem5(", 1)[1]
     assert "GEM5_ECG_BEGIN_CONTEXT();" in pr
     assert "GEM5_ECG_END_CONTEXT();" in pr
-    assert pr.index("GEM5_ECG_BEGIN_CONTEXT();") < pr.index(
+    assert legacy_pr.index("GEM5_ECG_BEGIN_CONTEXT();") < legacy_pr.index(
         "GEM5_RESET_STATS();")
-    assert pr.index("GEM5_DUMP_STATS();") < pr.index(
+    assert legacy_pr.index("GEM5_DUMP_STATS();") < legacy_pr.index(
         "GEM5_ECG_END_CONTEXT();")
     assert "Gem5EcgMonotonicEpochCursor epoch_cursor;" in pr
     assert "GEM5_SET_MONOTONIC_VERTEX_EPOCH(epoch_cursor, u);" in pr
@@ -677,7 +679,7 @@ def test_fused_compact_load_is_architectural_and_fail_closed():
     assert "ecg_bind_iload_compact" in decoder
     compact_decode = decoder.split(
         "0x0B: decode ECG_WIDTH", 1)[1].split(
-            "\n                }", 1)[0]
+            "0x0C: decode RVTYPE", 1)[0]
     assert "0x0: ecg_bind_iload_compact" in compact_decode
     assert "0x1:" not in compact_decode
 
@@ -755,7 +757,8 @@ def test_proposal_compact_reuse_bind_flowthrough_is_fail_closed():
     assert "[ECG_REUSE_BIND_LOAD_C_FLOW]" in guest
     assert "reusePlanOffsetsMatchInCsr" in guest
     assert "[ECG-CSR-SUBSTITUTION sim=gem5 kernel=pr active=1" in guest
-    measured_roi = guest.split(
+    legacy_guest = guest.split("pvector<ScoreT> PageRankPullGS_Gem5(", 1)[1]
+    measured_roi = legacy_guest.split(
         "GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE)", 1)[1].split(
             "GEM5_WORK_END(GEM5_WORK_COMPUTE)", 1)[0]
     proposal_call = (

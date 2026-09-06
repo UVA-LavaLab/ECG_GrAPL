@@ -202,3 +202,192 @@ def validate_gem5_record(
             "prefetch candidate disposition does not close")
         result.update({"prefetch_" + key: value for key, value in fields.items()})
     return result
+
+
+def validate_functional_record(
+    text: str, *, mechanism: str, requested_bytes: int = 0, minimum_mantissa_bits: int = 0,
+) -> dict[str, int | str]:
+    require(mechanism in MECHANISMS, "unrecognized current ECG mechanism")
+    stream = receipt(text, "ECG-RECORD-STREAM")
+    runtime = receipt(text, "ECG-RECORD-FUNCTIONAL")
+    work = receipt(text, "ECG-PR-RESULT")
+    records = unsigned(stream, "records")
+    iterations = unsigned(work, "iterations")
+    layout = validate_layout(
+        stream, records=records, vertices=unsigned(stream, "vertex_count"),
+        maximum_id=unsigned(stream, "max_vertex_id"), traversals=iterations,
+        requested_bytes=requested_bytes, minimum_mantissa_bits=minimum_mantissa_bits)
+    require(all(stream.get(key) == runtime.get(key) for key in LAYOUT_FIELDS),
+            "functional stream/runtime layout disagreement")
+    require(runtime.get("mechanism") == mechanism and
+            runtime.get("timing_scope") == "access-step", "wrong functional mechanism or timing scope")
+    require(unsigned(runtime, "pending") == 0 and unsigned(runtime, "accounting") == 1,
+            "functional transport did not finish")
+    require(unsigned(stream, "source_immutable") == 1 and unsigned(stream, "matrix_bytes") == 0 and
+            stream.get("storage") == "separate", "unrecognized functional carrier ownership")
+    require(unsigned(stream, "source_stream_bytes") == unsigned(stream, "retained_source_bytes") == records * 4,
+            "functional source storage is underreported")
+    require(unsigned(stream, "carrier_payload_bytes") == records * int(layout["record_bytes"]) and
+            unsigned(stream, "carrier_allocation_bytes") >= unsigned(stream, "carrier_payload_bytes"),
+            "functional carrier storage is underreported")
+    total = records * iterations
+    require(unsigned(work, "semantic_edges") == unsigned(runtime, "record_loads") ==
+            unsigned(runtime, "governed_loads") == total, "incomplete functional semantic work")
+    require(unsigned(runtime, "record_read_bytes") == total * int(layout["record_bytes"]),
+            "functional demand record width differs from its descriptor")
+    replacement = mechanism in ("replacement", "replacement-prefetch")
+    generated = unsigned(runtime, "generated")
+    require(generated == (total if replacement else 0) and
+            generated == unsigned(runtime, "enqueued") + unsigned(runtime, "coalesced") and
+            unsigned(runtime, "enqueued") == unsigned(runtime, "delivered") and
+            unsigned(runtime, "delivered") == sum(unsigned(runtime, key) for key in (
+                "applied", "absent", "stale", "expired")) and
+            unsigned(runtime, "max_update_occupancy") <= 16 and
+            unsigned(runtime, "update_latency_steps") >= 8,
+            "functional required update accounting or bounds failed")
+    prefetch = mechanism in ("prefetch", "replacement-prefetch")
+    bank_bytes = (128 if layout["record_bytes"] == 4 else 192) if prefetch else 0
+    require(unsigned(runtime, "record_buffer_bytes") == bank_bytes and
+            unsigned(runtime, "record_acquisition_bytes") ==
+                64 * unsigned(runtime, "record_acquisition_requests"),
+            "functional record-window acquisition is not charged")
+    require(unsigned(runtime, "prefetch_candidates") == sum(unsigned(runtime, key) for key in (
+                "prefetch_issued", "prefetch_resident", "prefetch_pending_duplicates",
+                "prefetch_admission_dropped", "prefetch_queue_dropped")) and
+            unsigned(runtime, "prefetch_issued") ==
+                unsigned(runtime, "prefetch_fills") + unsigned(runtime, "prefetch_completion_dropped"),
+            "functional prefetch disposition does not close")
+    checksum = work.get("score_checksum", "")
+    require(bool(re.fullmatch(r"[0-9a-f]{16}", checksum)), "missing functional score checksum")
+    return {
+        **layout, "method": "ECG", "mechanism": mechanism, "record_contract_valid": 1,
+        "records": records, "vertex_count": unsigned(stream, "vertex_count"),
+        "max_vertex_id": unsigned(stream, "max_vertex_id"),
+        "pr_iterations": iterations, "pr_semantic_edges": total, "pr_score_checksum": checksum,
+        "retained_source_bytes": unsigned(stream, "retained_source_bytes"),
+        "carrier_allocation_bytes": unsigned(stream, "carrier_allocation_bytes"),
+        "record_payload_bytes": unsigned(stream, "carrier_payload_bytes"),
+        "construction_auxiliary_peak_bytes": unsigned(stream, "construction_auxiliary_peak_bytes"),
+        **{"functional_" + key: value for key, value in runtime.items() if key not in LAYOUT_FIELDS},
+    }
+
+
+def validate_sniper_record(
+    text: str, *, mechanism: str, requested_bytes: int = 0, minimum_mantissa_bits: int = 0,
+) -> dict[str, int | str]:
+    require(mechanism in MECHANISMS, "unrecognized current ECG mechanism")
+    stream = receipt(text, "SNIPER-ECG-RECORD-STREAM")
+    configuration = receipt(text, "SNIPER-ECG-RECORD-CONFIG")
+    runtime = receipt(text, "SNIPER-ECG-RECORD")
+    work = receipt(text, "ECG-PR-RESULT")
+    context = receipt(text, "ECG-CONTEXT-READY")
+    require(context.get("sim") == "sniper" and unsigned(context, "loaded") == 1 and
+            unsigned(context, "reref") == 0, "Sniper loaded a matrix or lacked its sealed graph context")
+    records = unsigned(stream, "records")
+    vertices = unsigned(stream, "vertex_count")
+    iterations = unsigned(work, "iterations")
+    layout = validate_layout(
+        stream, records=records, vertices=vertices,
+        maximum_id=unsigned(stream, "max_vertex_id"), traversals=iterations,
+        requested_bytes=requested_bytes, minimum_mantissa_bits=minimum_mantissa_bits)
+    require(all(configuration.get(key) == stream.get(key) for key in LAYOUT_FIELDS),
+            "Sniper guest/configuration layout disagreement")
+    require(all(fields.get("mechanism") == mechanism for fields in (stream, configuration, runtime)),
+            "Sniper mechanism differs between guest and model")
+    require(unsigned(configuration, "record_count") == records and
+            unsigned(configuration, "vertex_count") == vertices and
+            unsigned(configuration, "context") > 0 and unsigned(configuration, "line_bytes") == 64,
+            "Sniper graph context or geometry disagrees")
+    require(configuration.get("core_scope") == "single-core" and
+            configuration.get("prefetch_request_model") == "llc-only-read" and
+            configuration.get("update_link_model") == "bounded-completion-corroboration" and
+            configuration.get("dead_miss_bypass") == "llc-request-scoped",
+            "unrecognized Sniper mechanism implementation")
+    require(stream.get("storage") == "separate" and stream.get("construction") == "outside-roi",
+            "unrecognized Sniper carrier ownership")
+    require(unsigned(stream, "source_stream_bytes") == unsigned(stream, "retained_source_bytes") ==
+            records * 4, "Sniper retained source storage is underreported")
+    require(unsigned(stream, "carrier_payload_bytes") == records * int(layout["record_bytes"]) and
+            unsigned(stream, "carrier_allocation_bytes") >= unsigned(stream, "carrier_payload_bytes"),
+            "Sniper carrier storage is underreported")
+    require(unsigned(stream, "guest_window_records") == 16 and
+            unsigned(stream, "guest_window_data_bits") == 1024 and
+            unsigned(stream, "guest_window_index_bits") == 1024 and
+            unsigned(stream, "guest_window_valid_bits") == 16 and
+            unsigned(configuration, "window_entries") == 16 and
+            unsigned(configuration, "window_entry_bits") == 257,
+            "Sniper software-window storage is not fully disclosed")
+    total = records * iterations
+    require(unsigned(work, "semantic_edges") == total and all(
+        unsigned(runtime, key) == total for key in (
+            "record_reads", "loaded_values", "consumed_records", "property_accesses")),
+        "Sniper did not bind every real record/property access")
+    require(unsigned(runtime, "record_read_bytes") == total * int(layout["record_bytes"]),
+            "Sniper demand record width differs from its descriptor")
+    require(runtime.get("timing_scope") == "modeled-corroboration" and
+            unsigned(runtime, "clean") == unsigned(runtime, "accounting") == 1,
+            "Sniper did not complete its modeled scope")
+    require(all(unsigned(runtime, key) == 0 for key in (
+        "errors", "pending_updates", "pending_prefetches", "prefetch_translation_faults",
+        "prefetch_queue_full")), "Sniper ended with errors, faults or unfinished work")
+    replacement = mechanism in ("replacement", "replacement-prefetch")
+    generated = unsigned(runtime, "generated_updates")
+    enqueued = unsigned(runtime, "enqueued_updates")
+    delivered = unsigned(runtime, "delivered_updates")
+    require(generated == (total if replacement else 0) and
+            generated == enqueued + unsigned(runtime, "coalesced_updates") and
+            enqueued == delivered and delivered == sum(unsigned(runtime, key) for key in (
+                "applied_updates", "stale_updates", "expired_updates", "not_resident_updates")),
+            "Sniper required metadata update accounting does not close")
+    require(unsigned(configuration, "update_latency") >= 8 and
+            unsigned(configuration, "update_output_width") == 1 and
+            1 <= unsigned(configuration, "capture_width") <= 16 and
+            unsigned(runtime, "max_update_occupancy") <= 16,
+            "Sniper update transport violates its bound")
+    if replacement:
+        require(unsigned(runtime, "minimum_update_latency") >= unsigned(configuration, "update_latency"),
+                "Sniper metadata was delivered before completion plus link latency")
+    require(unsigned(runtime, "prefetch_candidates") == unsigned(runtime, "prefetch_enqueued") +
+            unsigned(runtime, "prefetch_pending_duplicates") and
+            unsigned(runtime, "prefetch_enqueued") == sum(unsigned(runtime, key) for key in (
+                "prefetch_issued", "prefetch_private_duplicates", "prefetch_llc_duplicates",
+                "prefetch_issue_admission_drops")) and
+            unsigned(runtime, "prefetch_issued") == sum(unsigned(runtime, key) for key in (
+                "prefetch_fills", "prefetch_completion_private_duplicates",
+                "prefetch_completion_resident", "prefetch_completion_admission_drops",
+                "prefetch_demand_merges")),
+            "Sniper prefetch request/completion accounting does not close")
+    require(unsigned(runtime, "prefetch_translation_requests") +
+            unsigned(runtime, "prefetch_translation_bypasses") ==
+            unsigned(runtime, "prefetch_enqueued"), "Sniper translation accounting does not close")
+    require(unsigned(runtime, "prefetch_request_bytes") == 64 * unsigned(runtime, "prefetch_issued") and
+            unsigned(runtime, "prefetch_fill_bytes") == 64 * unsigned(runtime, "prefetch_fills"),
+            "Sniper prefetch traffic is underreported")
+    lookup_minimum = unsigned(configuration, "lookup_latency") * (
+        2 * unsigned(runtime, "prefetch_private_lookups") +
+        unsigned(runtime, "prefetch_llc_lookups") +
+        unsigned(runtime, "prefetch_issue_admission_checks") +
+        unsigned(runtime, "prefetch_completion_admission_checks"))
+    require(unsigned(configuration, "lookup_latency") > 0 and
+            unsigned(runtime, "lookup_cycles_charged") >= lookup_minimum and
+            unsigned(configuration, "drain_max_cycles") >= unsigned(runtime, "drain_cycles_charged"),
+            "Sniper lookup or drain cost is uncharged/unbounded")
+    require(unsigned(runtime, "max_prefetch_occupancy") <= unsigned(configuration, "prefetch_queue"),
+            "Sniper prefetch queue exceeded its declared storage")
+    if unsigned(runtime, "prefetch_fills"):
+        require(unsigned(runtime, "prefetch_latency_cycles") > 0, "Sniper completed a zero-time prefetch")
+    checksum = work.get("score_checksum", "")
+    require(bool(re.fullmatch(r"[0-9a-f]{16}", checksum)), "missing Sniper PageRank checksum")
+    return {
+        **layout, "method": "ECG", "mechanism": mechanism, "record_contract_valid": 1,
+        "records": records, "vertex_count": vertices,
+        "max_vertex_id": unsigned(stream, "max_vertex_id"),
+        "pr_iterations": iterations, "pr_semantic_edges": total, "pr_score_checksum": checksum,
+        "retained_source_bytes": unsigned(stream, "retained_source_bytes"),
+        "carrier_allocation_bytes": unsigned(stream, "carrier_allocation_bytes"),
+        "record_payload_bytes": unsigned(stream, "carrier_payload_bytes"),
+        "construction_auxiliary_peak_bytes": unsigned(stream, "auxiliary_peak_bytes"),
+        **{"sniper_" + key: value for key, value in runtime.items()},
+        "sniper_nuca_sets": unsigned(configuration, "nuca_sets"),
+        "sniper_nuca_indexing": configuration.get("nuca_indexing", ""),
+    }
