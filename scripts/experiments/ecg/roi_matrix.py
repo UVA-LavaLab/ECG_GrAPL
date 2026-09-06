@@ -6971,12 +6971,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                              "prefetcher while assuming perfect matrix latency "
                              "hiding; it is a P-OPT-favorable sensitivity.")
     parser.add_argument("--ecg-charged", type=int, choices=[0, 1], default=1,
-                        help="ECG per-edge record DELIVERY charge. 1 (default) = software "
-                             "delivery: the 8B packed record is read from memory per edge "
-                             "(real bandwidth, competes for cache). 0 = ISA delivery "
-                             "(ecg.extract): the record rides the demand with no extra traffic "
-                             "(idealized upper bound; isolates the eviction quality from the "
-                             "delivery cost).")
+                        help="Legacy record-delivery sensitivity: 0 omits the delivery charge "
+                             "and is only an idealized control. Current ECG requires 1: "
+                             "native instructions still read and charge actual 4/8-byte records.")
     parser.add_argument("--ecg-record-bytes", type=int, choices=[0, 4, 8], default=0,
                         help="Current ECG record width: zero chooses the smallest sufficient graph-derived layout.")
     parser.add_argument("--ecg-record-minimum-mantissa-bits", type=int, default=0,

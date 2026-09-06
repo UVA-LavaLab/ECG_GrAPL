@@ -1815,7 +1815,7 @@ int main(int argc, char *argv[]) {
     CLPageRank cli(argc, argv, "pagerank-gem5", 1e-4, 20);
     if (!cli.ParseArgs()) return -1;
     if ((nativeRef32Requested() || nativeRecordRequested()) && cli.num_trials() != 1) {
-        std::fprintf(stderr, "[FATAL] Native Scale6 currently requires exactly one trial (-n 1)\n");
+        std::fprintf(stderr, "[FATAL] Native record paths require exactly one trial (-n 1)\n");
         return 1;
     }
     Builder b(cli);
