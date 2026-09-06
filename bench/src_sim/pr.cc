@@ -47,7 +47,33 @@ static uint64_t recordOption(const char* name, uint64_t fallback, uint64_t maxim
     return parsed;
 }
 
-static pvector<ScoreT> PageRankPullGSRecord_Sim(
+static void preparePageRankRereference(
+        const Graph& graph, GraphCacheContext& context, pvector<uint8_t>& matrix) {
+    constexpr int vertices_per_line = 64 / sizeof(ScoreT);
+    constexpr int epochs = 256;
+    const char* se = std::getenv("POPT_SE_POSTFINAL");
+    if (se) {
+        if (GraphSimEffectiveL3Policy() != EvictionPolicy::POPT ||
+            omp_get_max_threads() != 1 || GetEnvSizeBytes("CACHE_LINE_SIZE", 64) != 64 ||
+            (std::string(se) != "later_lower_bound" && std::string(se) != "distant"))
+            throw std::invalid_argument("P-OPT-SE requires serial POPT PageRank and its declared encoding");
+        const auto encoding = popt_reref::Encoding::SingleEpoch;
+        const auto postfinal = std::string(se) == "distant"
+            ? popt_reref::PostFinal::Distant : popt_reref::PostFinal::Later;
+        buildRerefMatrix(graph, true, "PR(pull/in)/SE", vertices_per_line, epochs, matrix, encoding);
+        const uint32_t lines = (graph.num_nodes() + vertices_per_line - 1) / vertices_per_line;
+        context.initRereference(matrix.data(), lines, epochs, graph.num_nodes(), 64, encoding, postfinal);
+        context.exact_vtx_per_line = vertices_per_line;
+        std::cerr << "[POPT-SE encoding=single_epoch value_bits=6 sub_epoch_bins=64 postfinal=" << se
+                  << " active_columns=1 epochs=" << epochs << " cache_lines=" << lines
+                  << " vertices=" << std::to_string(graph.num_nodes())
+                  << " one_column_lookup=1 reconstruction=1]\n";
+    } else {
+        buildAndRegisterReref(graph, context, true, "PR(pull/in)", vertices_per_line, epochs, matrix);
+    }
+}
+
+static pvector<ScoreT> PageRankPullGSFixed_Sim(
         const Graph& graph, CacheHierarchy& cache, int iterations, double epsilon) {
     if (iterations <= 0 || epsilon != 0 || omp_get_max_threads() != 1 ||
         graph.num_nodes() <= 0 || graph.num_edges_directed() == 0 ||
@@ -59,8 +85,10 @@ static pvector<ScoreT> PageRankPullGSRecord_Sim(
         if (value && std::strcmp(value, "0") != 0)
             throw std::invalid_argument(std::string("Current ECG cannot be mixed with ") + name);
     }
-    ecg_record::Mechanism mechanism;
-    if (ecg_record::parseMechanismName(std::getenv("ECG_RECORD_MECHANISM"), mechanism) !=
+    const char* mechanism_name = std::getenv("ECG_RECORD_MECHANISM");
+    const bool record_mode = mechanism_name != nullptr;
+    ecg_record::Mechanism mechanism = ecg_record::Mechanism::TRANSPORT;
+    if (record_mode && ecg_record::parseMechanismName(mechanism_name, mechanism) !=
             ecg_record::Status::OK)
         throw std::invalid_argument("Unknown current ECG mechanism");
     const uint64_t bytes = recordOption("ECG_RECORD_BYTES", 0, 8);
@@ -80,7 +108,7 @@ static pvector<ScoreT> PageRankPullGSRecord_Sim(
         requirements.max_vertex_id = std::max<uint64_t>(requirements.max_vertex_id, source[index]);
     }
     ecg_record::Layout layout;
-    if (ecg_record::selectLayout(requirements, layout) != ecg_record::Status::OK)
+    if (record_mode && ecg_record::selectLayout(requirements, layout) != ecg_record::Status::OK)
         throw std::invalid_argument("Current ECG cannot represent this graph");
     ecg_record::BuildLimits limits;
     limits.maximum_carrier_bytes = recordOption(
@@ -88,12 +116,16 @@ static pvector<ScoreT> PageRankPullGSRecord_Sim(
     limits.maximum_auxiliary_bytes = recordOption(
         "ECG_RECORD_MAX_AUXILIARY_BYTES", limits.maximum_auxiliary_bytes, UINT64_MAX);
     ecg_record::RecordStream stream;
-    const auto built = ecg_record::buildRecords(requirements, layout, 16,
-        [source](std::size_t index) { return static_cast<uint64_t>(source[index]); }, stream, limits);
-    if (built != ecg_record::Status::OK)
-        throw std::invalid_argument(std::string("Current ECG construction failed: ") +
-                                    ecg_record::statusName(built));
+    if (record_mode) {
+        const auto built = ecg_record::buildRecords(requirements, layout, 16,
+            [source](std::size_t index) { return static_cast<uint64_t>(source[index]); }, stream, limits);
+        if (built != ecg_record::Status::OK)
+            throw std::invalid_argument(std::string("Current ECG construction failed: ") +
+                                        ecg_record::statusName(built));
+    }
     const bool capture_evidence = recordOption("ECG_RECORD_EQUIVALENCE", 0, 1) != 0;
+    if (capture_evidence && !record_mode)
+        throw std::invalid_argument("Record equivalence observation requires a record carrier");
     ecg_record::EquivalenceEvidence evidence;
     if (capture_evidence)
         evidence.prepare(requirements, stream,
@@ -112,21 +144,27 @@ static pvector<ScoreT> PageRankPullGSRecord_Sim(
     GraphCacheContext context;
     context.initTopology(degrees.data(), graph.num_nodes(), graph.num_edges_directed(), graph.directed());
     const uint64_t llc_bytes = GetEnvSizeBytes("CACHE_L3_SIZE", 8 * 1024 * 1024);
-    context.registerPropertyArray(scores.data(), graph.num_nodes(), 4, llc_bytes, 0.15, true);
-    context.registerPropertyArray(contribution.data(), graph.num_nodes(), 4, llc_bytes, 0.15, true);
+    context.registerPropertyArray(scores.data(), graph.num_nodes(), 4, llc_bytes, record_mode ? 0.15 : -1.0, true);
+    context.registerPropertyArray(contribution.data(), graph.num_nodes(), 4, llc_bytes, record_mode ? 0.15 : -1.0, true);
+    static pvector<uint8_t> popt_matrix;
+    if (!record_mode && (GraphSimEffectiveL3Policy() == EvictionPolicy::POPT ||
+                         std::getenv("POPT_SE_POSTFINAL")))
+        preparePageRankRereference(graph, context, popt_matrix);
     cache.initGraphContext(&context);
-    ecg_record::NativeConfiguration configuration;
-    ecg_record::packLayout(layout, configuration.layout_descriptor);
-    configuration.record_base = reinterpret_cast<uint64_t>(stream.data());
-    configuration.property_base = reinterpret_cast<uint64_t>(contribution.data());
-    configuration.record_count = requirements.record_count;
-    configuration.vertex_count = requirements.vertex_count;
-    configuration.context = configuration.generation = 1;
-    configuration.control = ecg_record::kNativeEnable;
-    cache.configureRecord(configuration, stream, mechanism,
-        recordOption("ECG_RECORD_UPDATE_LATENCY", 8, 4096),
-        recordOption("ECG_RECORD_PREFETCH_LATENCY", 8, 4096),
-        recordOption("ECG_RECORD_PREFETCH_QUEUE", 16, 16));
+    if (record_mode) {
+        ecg_record::NativeConfiguration configuration;
+        ecg_record::packLayout(layout, configuration.layout_descriptor);
+        configuration.record_base = reinterpret_cast<uint64_t>(stream.data());
+        configuration.property_base = reinterpret_cast<uint64_t>(contribution.data());
+        configuration.record_count = requirements.record_count;
+        configuration.vertex_count = requirements.vertex_count;
+        configuration.context = configuration.generation = 1;
+        configuration.control = ecg_record::kNativeEnable;
+        cache.configureRecord(configuration, stream, mechanism,
+            recordOption("ECG_RECORD_UPDATE_LATENCY", 8, 4096),
+            recordOption("ECG_RECORD_PREFETCH_LATENCY", 8, 4096),
+            recordOption("ECG_RECORD_PREFETCH_QUEUE", 16, 16));
+    }
     for (NodeID node = 0; node < graph.num_nodes(); ++node) {
         cache.readArray(scores.data(), node);
         cache.writeArray(scores.data(), node);
@@ -134,42 +172,66 @@ static pvector<ScoreT> PageRankPullGSRecord_Sim(
         cache.writeArray(contribution.data(), node);
     }
     cache.resetStats();
-    std::cerr << "[ECG-RECORD-STREAM ";
-    ecg_record::writeLayoutFields(std::cerr, layout);
-    std::cerr << " records=" << requirements.record_count
-              << " vertex_count=" << requirements.vertex_count
-              << " max_vertex_id=" << requirements.max_vertex_id
-              << " source_stream_bytes=" << stream.stats.source_stream_bytes
-              << " retained_source_bytes=" << stream.stats.source_stream_bytes
-              << " carrier_payload_bytes=" << stream.stats.carrier_payload_bytes
-              << " carrier_allocation_bytes=" << stream.stats.carrier_allocation_bytes
-              << " construction_auxiliary_peak_bytes=" << stream.stats.auxiliary_peak_bytes
-              << " storage=separate source_immutable=1 matrix_bytes=0]\n";
+    if (record_mode) {
+        std::cerr << "[ECG-RECORD-STREAM ";
+        ecg_record::writeLayoutFields(std::cerr, layout);
+        std::cerr << " records=" << requirements.record_count
+                  << " vertex_count=" << requirements.vertex_count
+                  << " max_vertex_id=" << requirements.max_vertex_id
+                  << " source_stream_bytes=" << stream.stats.source_stream_bytes
+                  << " retained_source_bytes=" << stream.stats.source_stream_bytes
+                  << " carrier_payload_bytes=" << stream.stats.carrier_payload_bytes
+                  << " carrier_allocation_bytes=" << stream.stats.carrier_allocation_bytes
+                  << " construction_auxiliary_peak_bytes=" << stream.stats.auxiliary_peak_bytes
+                  << " storage=separate source_immutable=1 matrix_bytes=0]\n";
+    }
     const uint64_t in_index = reinterpret_cast<uint64_t>(graph.in_index_storage());
     const uint64_t out_index = reinterpret_cast<uint64_t>(graph.out_index_storage());
+    uint64_t index_reads = 0;
     for (int iteration = 0; iteration < iterations; ++iteration) {
-        cache.recordIteration(uint64_t(iteration) * requirements.record_count, iteration + 1 < iterations);
+        if (record_mode)
+            cache.recordIteration(uint64_t(iteration) * requirements.record_count, iteration + 1 < iterations);
         for (NodeID node = 0; node < graph.num_nodes(); ++node) {
+            if (!record_mode) {
+                cache.setCurrentVertex(static_cast<uint32_t>(node));
+                context.hints_for_thread().current_iteration = static_cast<uint32_t>(iteration);
+                context.hints_for_thread().iteration_count = static_cast<uint32_t>(iterations);
+            }
             cache.access(in_index + uint64_t(node) * sizeof(NodeID*));
             cache.access(in_index + uint64_t(node + 1) * sizeof(NodeID*));
+            index_reads += 2;
             ScoreT incoming = 0;
             for (uint64_t index = graph.in_offset(node); index < uint64_t(graph.in_offset(node + 1)); ++index) {
-                const uint64_t word = cache.recordLoad(index);
-                const uint64_t destination = cache.recordProperty(index, word);
+                uint64_t destination;
+                uint64_t word = 0;
+                if (record_mode) {
+                    word = cache.recordLoad(index);
+                    destination = cache.recordProperty(index, word);
+                } else {
+                    cache.readArray(source, index);
+                    destination = static_cast<uint64_t>(source[index]);
+                    cache.readArray(contribution.data(), destination);
+                }
                 incoming += contribution[destination];
                 if (capture_evidence)
                     evidence.observe(word, index, iteration);
+                if (((index + 1) & ((uint64_t{1} << 20) - 1)) == 0)
+                    std::fprintf(stderr, "[ECG-PR-PROGRESS iteration=%d records=%llu total=%llu]\n",
+                        iteration + 1, static_cast<unsigned long long>(index + 1),
+                        static_cast<unsigned long long>(requirements.record_count));
             }
             const ScoreT score = base_score + kDamp * incoming;
             cache.writeArray(scores.data(), node);
             scores[node] = score;
             cache.access(out_index + uint64_t(node) * sizeof(NodeID*));
             cache.access(out_index + uint64_t(node + 1) * sizeof(NodeID*));
+            index_reads += 2;
             cache.writeArray(contribution.data(), node);
             contribution[node] = score / graph.out_degree(node);
         }
     }
-    cache.finishRecord(requirements.record_count * iterations);
+    if (record_mode)
+        cache.finishRecord(requirements.record_count * iterations);
     if (capture_evidence)
         evidence.report(std::cerr);
     uint64_t checksum = 1469598103934665603ULL;
@@ -182,6 +244,12 @@ static pvector<ScoreT> PageRankPullGSRecord_Sim(
         "[ECG-PR-RESULT iterations=%d semantic_edges=%llu score_checksum=%016llx]\n",
         iterations, static_cast<unsigned long long>(requirements.record_count * iterations),
         static_cast<unsigned long long>(checksum));
+    std::fprintf(stderr,
+        "[ECG-PR-WORKLOAD traversal=pull-gs arithmetic=separate-f32 carrier=%s"
+        " vertices=%llu records=%llu csr_index_reads=%llu]\n",
+        record_mode ? "record" : "csr", static_cast<unsigned long long>(requirements.vertex_count),
+        static_cast<unsigned long long>(requirements.record_count),
+        static_cast<unsigned long long>(index_reads));
     return scores;
 }
 
@@ -190,9 +258,10 @@ template<typename CacheType>
 pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
                                     int max_iters, double epsilon = 0,
                                     bool logging_enabled = false) {
-    if (std::getenv("ECG_RECORD_MECHANISM")) {
+    if (std::getenv("ECG_RECORD_MECHANISM") ||
+        recordOption("ECG_CURRENT_PR_BASELINE", 0, 1) != 0) {
         if constexpr (std::is_same<CacheType, CacheHierarchy>::value)
-            return PageRankPullGSRecord_Sim(g, cache, max_iters, epsilon);
+            return PageRankPullGSFixed_Sim(g, cache, max_iters, epsilon);
         else
             throw std::invalid_argument("Current ECG requires the accurate single-core hierarchy");
     }
@@ -284,30 +353,7 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
             (popt_prefetch &&
              !matrix_free_reuse_plan && !matrix_free_next_use &&
              !matrix_free_ref32)) {
-            constexpr int numVtxPerLine = 64 / sizeof(ScoreT);
-            constexpr int numEpochs = 256;
-            if (se_postfinal) {
-                const auto encoding = popt_reref::Encoding::SingleEpoch;
-                const auto postfinal = std::string(se_postfinal) == "distant"
-                    ? popt_reref::PostFinal::Distant : popt_reref::PostFinal::Later;
-                buildRerefMatrix(g, true, "PR(pull/in)/SE", numVtxPerLine,
-                                 numEpochs, popt_matrix, encoding);
-                const uint32_t lines =
-                    (g.num_nodes() + numVtxPerLine - 1) / numVtxPerLine;
-                graph_ctx.initRereference(
-                    popt_matrix.data(), lines, numEpochs, g.num_nodes(), 64,
-                    encoding, postfinal);
-                graph_ctx.exact_vtx_per_line = numVtxPerLine;
-                std::cerr << "[POPT-SE encoding=single_epoch value_bits=6 "
-                          << "sub_epoch_bins=64 postfinal=" << se_postfinal
-                          << " active_columns=1 epochs=" << numEpochs
-                          << " cache_lines=" << lines
-                          << " vertices=" << std::to_string(g.num_nodes())
-                          << " one_column_lookup=1 reconstruction=1]\n";
-            } else {
-                buildAndRegisterReref(g, graph_ctx, true, "PR(pull/in)",
-                                      numVtxPerLine, numEpochs, popt_matrix);
-            }
+            preparePageRankRereference(g, graph_ctx, popt_matrix);
             if (std::getenv("ECG_EXACT_REREF")) {
                 const char* eb = std::getenv("ECG_EXACT_BITS");
                 if (eb) graph_ctx.exact_bits = (uint32_t)atoi(eb);

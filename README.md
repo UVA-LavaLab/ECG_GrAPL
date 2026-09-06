@@ -146,6 +146,8 @@ issued prefetch totals need not. These instrumented rows are not speedup evidenc
 Use `ecg_large_cache` for accurate, non-authorizing large-graph cache/traffic
 exploration. `ecg_detailed_final` requires both `--final-stage` and a current
 `--equivalence-receipt`; old or partial completions cannot authorize it.
+`ecg_local_release_cache` adds the full six-graph, ten-role CSR/reference/ECG
+comparison at the primary 8 MiB capacity before the lab handoff.
 Construction, target-memory, wall-time, and process-tree RSS limits stay explicit.
 See [reproduction](wiki/Reproduction.md#6-current-qualification-and-historical-campaign-recipes).
 

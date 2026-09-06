@@ -37,6 +37,38 @@ def test_layered_patch_receipt_requires_exact_material_inputs(tmp_path, monkeypa
     assert not setup_gem5.patch_receipt_matches(patch, "layer.patch", receipt)
 
 
+@pytest.mark.parametrize("goals,expected", [
+    ("gem5-riscv-m5ops-pr", ["pr"]),
+    ("bin/record_isa_smoke_riscv_m5ops", ["record_isa_smoke"]),
+    ("bin/pr_riscv_m5ops.d", ["pr"]),
+    ("bin/record_isa_smoke_riscv_m5ops.build.json", ["record_isa_smoke"]),
+    ("gem5-riscv-m5ops-pr gem5-riscv-m5ops-record_isa_smoke", ["pr", "record_isa_smoke"]),
+])
+def test_native_build_loads_only_requested_dependency_files(tmp_path, goals, expected):
+    makefile = (ROOT / "Makefile").read_text()
+    start = makefile.index("GEM5_DEP_GOALS :=")
+    end = makefile.index("\n$(BIN_GEM5_DIR)/%:", start)
+    section = makefile[start:end]
+    section = "\n".join(
+        "$(info SELECTED=" + line.removeprefix("-include ") + ")"
+        if line.startswith("-include ") else line
+        for line in section.splitlines())
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    for name in ("pr", "record_isa_smoke", "sssp"):
+        (binaries / f"{name}_riscv_m5ops.d").touch()
+    fixture = tmp_path / "scope.mk"
+    fixture.write_text(
+        f"BIN_GEM5_DIR := bin\nMAKECMDGOALS := {goals}\n" + section + "\nall: ; @:\n")
+    result = subprocess.run(
+        ["make", "--no-print-directory", "-s", "-f", str(fixture)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    selected = next(line.removeprefix("SELECTED=") for line in result.stdout.splitlines()
+                    if line.startswith("SELECTED=")).split()
+    assert sorted(selected) == sorted(f"bin/{name}_riscv_m5ops.d" for name in expected)
+
+
 def test_record_request_association_cpp(tmp_path):
     binary = tmp_path / "observation"
     result = subprocess.run(
@@ -288,6 +320,37 @@ def test_record_native_adaptive_vid_boundaries(tmp_path, requested, id_bits):
     assert f"max_vertex_id={(1 << id_bits) - 1}" in text
     assert "property_backing_bytes=16" in text and "result=PASS" in text
     assert receipt["governed_loads"] == "8"
+
+
+@pytest.mark.skipif(not native_ready(), reason="current native ECG binaries not built")
+@pytest.mark.parametrize("id_bits,records", [
+    (26, 1 << 30), (26, 1 << 31), (26, 1 << 32), (32, 1 << 30),
+])
+def test_record_native_large_horizon_and_count_driven_width(tmp_path, id_bits, records):
+    from scripts.experiments.ecg.record_receipts import resolve_layout
+
+    base = 0
+    # This sparse instruction fixture has no full graph sideband for the LLC policy.
+    text, receipt = native_run(
+        tmp_path / "scale", ROOT / "bench/bin_gem5/record_isa_smoke_riscv_m5ops",
+        f"0 {id_bits} {records} {base}", "LRU", mechanism="transport", width=0)
+    expected = resolve_layout(
+        records=records, vertices=1 << id_bits, maximum_id=(1 << id_bits) - 1,
+        traversals=2, requested_bytes=0)
+    for key, value in expected.items():
+        assert receipt[key] == str(value), key
+    assert int(receipt["last_sequence"]) == base + 4
+    assert receipt["governed_loads"] == "4" and receipt["generated"] == "0"
+    assert "probe_scope=instruction-prefix" in text and "result=PASS" in text
+    assert "property_backing_bytes=16" in text
+
+
+@pytest.mark.skipif(not native_ready(), reason="current native ECG binaries not built")
+def test_record_native_rejects_unretired_sequence_jump(tmp_path):
+    with pytest.raises(AssertionError, match="iteration_base != lastSequence"):
+        native_run(
+            tmp_path / "jump", ROOT / "bench/bin_gem5/record_isa_smoke_riscv_m5ops",
+            f"0 26 {1 << 30} {1 << 32}", "ECG", mechanism="replacement", width=0)
 
 
 @pytest.mark.skipif(not native_ready(), reason="current native ECG binaries not built")

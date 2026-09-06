@@ -7,6 +7,18 @@
 
 #include "gem5_sim/gem5_harness.h"
 
+static bool unsignedArgument(const char* text, uint64_t minimum, uint64_t maximum, uint64_t& value) {
+    if (!text || text[0] < '0' || text[0] > '9')
+        return false;
+    char* end = nullptr;
+    errno = 0;
+    const unsigned long long parsed = std::strtoull(text, &end, 10);
+    if (errno || end == text || *end || parsed < minimum || parsed > maximum)
+        return false;
+    value = parsed;
+    return true;
+}
+
 int main(int argc, char** argv) {
     const bool invalid = argc > 1 && std::strcmp(argv[1], "bad-address") == 0;
     unsigned requested_bytes = 4;
@@ -20,19 +32,21 @@ int main(int argc, char** argv) {
             return 2;
         }
     }
-    const char* id_argument = argc > 2 ? argv[2] : "5";
-    char* end = nullptr;
-    errno = 0;
-    const unsigned long id_bits = std::strtoul(id_argument, &end, 10);
-    if (argc > 3 || errno || end == id_argument || *end || id_bits < 1 || id_bits > 32) {
-        std::fprintf(stderr, "VID width must be an integer from 1 through 32\n");
+    uint64_t id_bits = 5, logical_records = 4, iteration_base = 0;
+    if (argc > 5 ||
+        (argc > 2 && !unsignedArgument(argv[2], 1, 32, id_bits)) ||
+        (argc > 3 && !unsignedArgument(argv[3], 4, uint64_t{1} << 32, logical_records)) ||
+        (argc > 4 && !unsignedArgument(argv[4], 0, uint64_t{1} << 48, iteration_base))) {
+        std::fprintf(stderr, "Expected VID bits 1..32, logical records 4..2^32, and iteration base 0..2^48\n");
         return 2;
     }
+    const bool prefix = logical_records != 4 || iteration_base != 0;
+    const uint64_t passes = prefix ? 1 : 2;
     ecg_record::Requirements requirements;
     requirements.vertex_count = uint64_t{1} << id_bits;
     requirements.max_vertex_id_known = true;
     requirements.max_vertex_id = requirements.vertex_count - 1;
-    requirements.record_count = 4;
+    requirements.record_count = logical_records;
     requirements.traversal_count = 2;
     requirements.requested_record_bytes = requested_bytes;
     ecg_record::Layout layout;
@@ -60,7 +74,7 @@ int main(int argc, char** argv) {
     const ecg_record::State states[] = {
         ecg_record::State::FINITE, ecg_record::State::DEAD,
         ecg_record::State::UNKNOWN, ecg_record::State::WRAP};
-    const uint64_t distances[] = {1, 0, 0, 4};
+    const uint64_t distances[] = {prefix ? logical_records : 1, 0, 0, logical_records};
     for (unsigned index = 0; index < 4; ++index) {
         const uint64_t backed_index = index % backed_vertices;
         if (ecg_record::encodeRecord(layout, first_destination + backed_index, distances[index],
@@ -69,24 +83,24 @@ int main(int argc, char** argv) {
         records32[index] = static_cast<uint32_t>(records64[index]);
         std::memcpy(&properties[backed_index], &bits[backed_index], sizeof(float));
     }
-    if (wide && (records64[3] & (uint64_t{1} << 63)) == 0)
-        return 4;
     ecg_record::NativeConfiguration configuration;
     configuration.record_base = wide ? reinterpret_cast<uint64_t>(records64)
                                      : reinterpret_cast<uint64_t>(records32);
     configuration.property_base = reinterpret_cast<uint64_t>(property_base);
-    configuration.record_count = 4;
+    configuration.record_count = logical_records;
     configuration.vertex_count = requirements.vertex_count;
+    configuration.iteration_base = iteration_base;
     configuration.context = 1;
     configuration.generation = 1;
     configuration.control = ecg_record::kNativeEnable;
     if (ecg_record::packLayout(layout, configuration.layout_descriptor) != ecg_record::Status::OK)
         return 5;
     Gem5RecordContext context(configuration);
-    context.activate(0, true);
+    context.activate(iteration_base, true);
     if (invalid) {
         try {
-            context.record(records32 + 4);
+            context.record(reinterpret_cast<const uint32_t*>(
+                configuration.record_base + logical_records * layout.record_bytes));
         } catch (const std::invalid_argument& error) {
             std::fprintf(stderr, "%s\n", error.what());
             return 6;
@@ -96,7 +110,7 @@ int main(int argc, char** argv) {
     bool ok = true;
     GEM5_RESET_STATS();
     GEM5_WORK_BEGIN(GEM5_WORK_COMPUTE);
-    for (uint64_t iteration = 0; iteration < 2; ++iteration) {
+    for (uint64_t iteration = 0; iteration < passes; ++iteration) {
         if (iteration)
             context.activate(4, false);
         for (unsigned index = 0; index < 4; ++index) {
@@ -115,13 +129,18 @@ int main(int argc, char** argv) {
     GEM5_WORK_END(GEM5_WORK_COMPUTE);
     GEM5_DUMP_STATS();
     context.deactivate();
-    std::printf("[ECG-RECORD-ISA native=%u record_bytes=%u cases=8 high_bit=%u result=%s"
+    std::printf("[ECG-RECORD-ISA native=%u record_bytes=%u cases=%llu high_bit=%u result=%s"
                 " requested_bytes=%u id_bits=%u metadata_bits=%u horizon_bits=%u mantissa_bits=%u"
-                " max_vertex_id=%llu property_backing_bytes=%zu]\n",
+                " max_vertex_id=%llu property_backing_bytes=%zu"
+                " logical_records=%llu iteration_base=%llu probe_scope=%s]\n",
                 Gem5RecordContext::nativeAvailable() ? 1u : 0u,
-                unsigned(layout.record_bytes), wide ? 1u : 0u, ok ? "PASS" : "FAIL",
+                unsigned(layout.record_bytes), static_cast<unsigned long long>(passes * 4),
+                unsigned(records64[3] >> 63), ok ? "PASS" : "FAIL",
                 requested_bytes, unsigned(layout.id_bits), unsigned(layout.metadata_bits),
                 unsigned(layout.horizon_bits), unsigned(layout.mantissa_bits),
-                static_cast<unsigned long long>(requirements.max_vertex_id), sizeof(properties));
+                static_cast<unsigned long long>(requirements.max_vertex_id), sizeof(properties),
+                static_cast<unsigned long long>(logical_records),
+                static_cast<unsigned long long>(iteration_base),
+                prefix ? "instruction-prefix" : "complete-small-stream");
     return ok ? 0 : 1;
 }

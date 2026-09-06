@@ -75,7 +75,7 @@ from policy_specs import (  # noqa: E402
 )
 from record_receipts import (  # noqa: E402
     LAYOUT_FIELDS, RecordReceiptError, validate_functional_record, validate_gem5_record,
-    validate_sniper_record, validate_equivalence,
+    validate_sniper_record, validate_equivalence, validate_pr_workload,
 )
 from record_resources import RecordResourceError, graph_info, plan_resources  # noqa: E402
 
@@ -1582,6 +1582,8 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             "GRASP_BOUNDARY_MODE": "capacity",
             "GRASP_HOT_FRACTION": "0.50",
         })
+    if getattr(args, "current_pr_baselines", False):
+        env["ECG_CURRENT_PR_BASELINE"] = "1"
     if spec.record_mechanism is not None:
         env.update({
             "ECG_RECORD_MECHANISM": spec.record_mechanism,
@@ -3634,7 +3636,11 @@ def apply_popt_se_receipt(
 
 
 def current_record_error(args: argparse.Namespace, spec: PolicySpec, backend: str) -> str:
-    if spec.record_mechanism is None:
+    fixed_baseline = bool(getattr(args, "current_pr_baselines", False))
+    if fixed_baseline and (backend != "cache_sim" or (
+            spec.record_mechanism is None and spec.policy not in ("LRU", "SRRIP", "GRASP", "GRASP_PAPER", "POPT"))):
+        return "Current CSR baselines support only accurate cache_sim PR with LRU/SRRIP/GRASP/P-OPT"
+    if spec.record_mechanism is None and (not fixed_baseline or getattr(args, "ecg_equivalence", False)):
         return "Equivalence observation requires a current ECG record mechanism" if getattr(args, "ecg_equivalence", False) else ""
     if (args.benchmark != "pr" or args.prefetcher != "none" or args.flowthrough != "off" or
             int(args.ecg_charged) != 1 or int(args.cache_stream_prefetch_degree) != 0 or
@@ -3780,7 +3786,8 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
 
     result = run_command(
         cmd, PROJECT_ROOT, env, args.timeout_cache, log_path, args.dry_run,
-        rss_mib=getattr(args, "cache_record_rss_mib", 2048) if spec.record_mechanism else None)
+        rss_mib=getattr(args, "cache_record_rss_mib", 2048)
+        if spec.record_mechanism or getattr(args, "current_pr_baselines", False) else None)
     if args.dry_run:
         return []
 
@@ -3810,6 +3817,18 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         row["pr_semantic_edges"] = int(pr_result.group(2))
         row["pr_score_checksum"] = pr_result.group(3).lower()
     apply_current_record_receipt(row, log_text, args, spec, "cache_sim")
+    if spec.record_mechanism or getattr(args, "current_pr_baselines", False):
+        try:
+            row.update(validate_pr_workload(
+                log_text, carrier="record" if spec.record_mechanism else "csr",
+                iterations=int(row.get("pr_iterations", 0)),
+                semantic_edges=int(row.get("pr_semantic_edges", 0))))
+            plan = getattr(args, "_record_resource_plans", {}).get(("cache_sim", args.options))
+            if plan and (row["pr_vertex_count"] != plan["vertices"] or
+                         row["pr_source_records"] != plan["records"]):
+                raise RecordReceiptError("fixed workload differs from its prepared graph")
+        except RecordReceiptError as error:
+            mark_row_error(row, f"fixed PageRank receipt failed: {error}")
     apply_popt_se_receipt(row, log_text, spec)
     apply_next_use_record_receipt(
         row, log_text, required=spec.label == "ECG_NEXT_USE_LRU")
@@ -6415,6 +6434,9 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
             "hawkeye_optgen_quanta": 128,
             "hawkeye_sampled_sets": 64,
         })
+    row["pr_workload_contract"] = (
+        "fixed-pull-gs" if spec.record_mechanism or getattr(args, "current_pr_baselines", False)
+        else "legacy")
     if spec.record_mechanism is not None:
         row.update({
             "method": "ECG",
@@ -6435,6 +6457,10 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
         plan = getattr(args, "_record_resource_plans", {}).get((simulator, args.options), {})
         row.update({"ecg_preflight_" + key: value for key, value in plan.items()})
         row["ecg_graph_sha256"] = plan.get("sha256", "")
+    elif getattr(args, "current_pr_baselines", False):
+        plan = getattr(args, "_record_resource_plans", {}).get((simulator, args.options), {})
+        row["pr_graph_sha256"] = plan.get("sha256", "")
+        row["edge_stream_bytes_per_edge"] = 4
     return row
 
 
@@ -6626,16 +6652,22 @@ def certify_cache_sim_pr_results(
         row for row in rows
         if row.get("simulator") == "cache_sim"
     ]
+    current = any(row.get("ecg_record_mechanism") for row in cache_rows)
+    if current and any(row.get("pr_workload_contract", "legacy") != "fixed-pull-gs"
+                       for row in cache_rows):
+        for row in cache_rows:
+            mark_row_error(row, "Current ECG versus CSR requires --current-pr-baselines and a common fixed workload")
+        return
     if not any(
             row.get("policy_label") in REF32_POLICY_LABELS or
             row.get("popt_se_reconstruction") == 1
-            for row in cache_rows):
+            for row in cache_rows) and not current and not getattr(args, "current_pr_baselines", False):
         return
     groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
     for row in cache_rows:
         key = (
             row.get("options"), row.get("l3_size"), row.get("l3_ways"),
-            row.get("prefetcher"), bool(row.get("ecg_record_mechanism")))
+            row.get("prefetcher"), row.get("pr_workload_contract", "legacy"))
         groups.setdefault(key, []).append(row)
     for group_rows in groups.values():
         receipts = {
@@ -6794,7 +6826,7 @@ def standalone_matrix_config_hash(
         "roi_matrix": Path(__file__).resolve(),
         "policy_specs": Path(__file__).resolve().parent / "policy_specs.py",
     }
-    if any(getattr(spec, "record_mechanism", None) for spec in policies):
+    if any(getattr(spec, "record_mechanism", None) for spec in policies) or getattr(args, "current_pr_baselines", False):
         for name in ("record_receipts.py", "record_resources.py"):
             paths[name] = Path(__file__).resolve().parent / name
         paths["record_watchdog"] = PROJECT_ROOT / "scripts/test/sniper_rss_watch.py"
@@ -7079,6 +7111,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="Current ECG precision floor; any necessary eight-byte carrier is fully charged.")
     parser.add_argument("--ecg-equivalence", action="store_true",
                         help="Observe actual record semantics on a bounded prepared graph; never speedup evidence.")
+    parser.add_argument("--current-pr-baselines", action="store_true",
+                        help="Use the common fixed PageRank arithmetic and complete CSR access stream for cache_sim baselines.")
     parser.add_argument("--ecg-record-max-carrier-bytes", type=int, default=256 << 20)
     parser.add_argument("--ecg-record-max-auxiliary-bytes", type=int, default=256 << 20)
     parser.add_argument("--cache-record-rss-mib", type=int, default=2048)

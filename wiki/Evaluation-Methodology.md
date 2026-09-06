@@ -224,6 +224,23 @@ The preliminary run took 585.786 host seconds and peaked at 964.137 MiB sampled
 process-tree RSS under a 2,048 MiB guard. These small-sample results motivate
 larger evaluation; they do not replace it.
 
+### 4.2 Ordinary CSR baseline qualification
+
+New full-graph comparisons use `--current-pr-baselines` in cache_sim.
+The ordinary CSR path and the current encoded-record path share one fixed
+pull-GS loop, separate F32 multiply/add semantics, and the same warm-up.
+Both explicitly account for two incoming-index reads and two outgoing-index
+reads per vertex per iteration. CSR uses the source IDs directly; ECG reads
+its separately allocated four/eight-byte carrier. P-OPT's reference matrix
+and its simulated column traffic remain additional costs.
+
+This distinction matters: the older CSR loop omitted those index accesses
+from its functional trace, and host FMA contraction could change its checksum.
+Those older rows are preserved with their original provenance; they are not
+silently mixed with current end-to-end comparisons. Current fixed-workload
+receipts bind graph/work counts, input carrier, arithmetic, and the index-read
+count, and all compared rows must have the same PageRank result.
+
 ## 5. P-OPT accounting
 
 Analytic P-OPT charges reserved LLC capacity and cumulative matrix traffic. It

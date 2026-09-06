@@ -335,6 +335,34 @@ screen receipt, or manually copied `valid` flag is insufficient.
 
 ### Large exploration and explicit final runs
 
+The local release gate adds ordinary CSR/reference policies to all four
+current ECG mechanisms on the six retained, preordered full core graphs:
+
+```bash
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_local_release_cache \
+  --run-dir results/ecg_experiments/runs/local_release_cache --no-build
+```
+
+This is a serial 60-row cache_sim matrix: two fixed PageRank iterations,
+32 KiB L1D / 256 KiB L2 (eight ways each), and an 8 MiB / 16-way LLC.
+It includes LRU, SRRIP, GRASP_PAPER, size-correct P-OPT, both disclosed
+P-OPT-SE reconstructions, and transport/replacement/prefetch/combined ECG.
+P-OPT matrix streams are simulated rather than added as free-latency traffic.
+The per-matrix RSS cap is 8,192 MiB and each policy has a 3,600-second wall
+limit. Successful complete graph matrices can resume; an incomplete matrix
+must be retried as a complete comparison group. Twitter is a separate scale
+stress case, not silently included in this core gate.
+
+`--current-pr-baselines` selects the common fixed PageRank workload for the
+ordinary cache_sim policies. It uses the same non-fused F32 arithmetic,
+warm-up and explicit incoming/outgoing CSR-index reads as the current record
+path, but reads ordinary four-byte source IDs instead of allocating a record
+carrier. Mixed current/legacy workloads cannot be certified as a comparison.
+Current PageRank build targets explicitly disable FP contraction; native guest
+builds retain their strict compiler/configuration receipts. Only requested
+RISC-V guest dependency files are loaded by a targeted build.
+
 The prepared large graph set is declared separately in the manifest. The
 functional tier retains accurate current record/window/traffic behavior; it
 does not switch to a reduced-behavior fast path:
@@ -375,6 +403,43 @@ L2 8 KiB / eight ways, and LLC 16 KiB / 16 ways. Native cells use RV64 O3;
 Sniper cells use translated SIFT. Do not add `--ecg-equivalence` when
 reproducing their timing numbers. See the
 [results and limitations](Evaluation-Methodology#41-current-sampled-preliminary-results).
+
+### Lab-node handoff
+
+Rebuild the selected guests on the lab node rather than assuming a workstation
+`-march=native` binary is portable. Keep compiler jobs low (`make -j1` and
+`PARALLEL=1` when building prerequisite libraries). The lab must create its own
+complete equivalence receipt: paths, code, binaries, graphs, and output hashes
+are bound to the executing checkout.
+
+From the repository root, the current whole-profile Slurm mode is:
+
+```bash
+mkdir -p results/slurm_logs
+sbatch --export=ALL,GRAPHBREW_SLURM_MODE=current-whole-profile,GRAPHBREW_CURRENT_PROFILE=ecg_current_equivalence,GRAPHBREW_CURRENT_RUN_TAG=lab_equivalence \
+  scripts/experiments/ecg/slurm/slurm_experiment_shard.sbatch
+```
+
+This runs one serial whole profile, not an array or a filtered shard. The
+wrapper first executes `lab_runtime_preflight.py` under a 512 MiB / 60-second
+watchdog on the allocated node. It checks the required tool/runtime files,
+ASLR control and, for gem5 profiles, an actual tiny FUSE mount/read/unmount.
+Missing prerequisites stop the job before experiment execution. File
+availability is not proof of CPU compatibility or SDE correctness; the
+following complete small run is still required.
+
+The same mode accepts `ecg_local_release_cache`, `ecg_large_cache`, and
+`ecg_detailed_final`. A final launch additionally requires
+`GRAPHBREW_FINAL_STAGE=1` and `GRAPHBREW_EQUIVALENCE_RECEIPT` pointing to the
+lab-generated `current_ecg_equivalence.complete.json`. The experiment runner
+remains the authoritative validator. Size the allocation's wall/RSS budgets
+for the selected whole profile; the wrapper does not increase or disable the
+profile's limits.
+
+Historical TSV shards remain a separate mode. The legacy shard generator
+rejects current whole profiles rather than emitting jobs that would fail
+current authorization. Do not add `--only`, graph/policy filters, or an old
+screen receipt to bypass this distinction.
 
 ### Current mechanism controls
 

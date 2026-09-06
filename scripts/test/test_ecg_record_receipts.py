@@ -7,6 +7,7 @@ from scripts.experiments.ecg.record_receipts import (
     RecordReceiptError, receipt, unsigned, validate_gem5_record, validate_layout,
     validate_sniper_record,
     validate_equivalence,
+    validate_pr_workload,
 )
 
 
@@ -334,3 +335,33 @@ def test_equivalence_observation_never_authorizes_native_timing():
     roi_matrix.certify_current_record_results([control, row])
     assert row["timing_valid_for_speedup"] == "0"
     assert row["timing_model"] == "record_equivalence_diagnostic"
+
+
+def test_current_comparison_rejects_a_legacy_csr_workload():
+    from scripts.experiments.ecg import roi_matrix
+    rows = [
+        {"simulator": "cache_sim", "policy_label": "POPT_SE", "popt_se_reconstruction": 1,
+         "status": "ok", "pr_iterations": 2, "pr_semantic_edges": 6898,
+         "pr_score_checksum": "259bae42decebd88", "pr_workload_contract": "legacy"},
+        {"simulator": "cache_sim", "policy_label": "ECG_TRANSPORT", "status": "ok",
+         "ecg_record_mechanism": "transport", "pr_iterations": 2,
+         "pr_semantic_edges": 6898, "pr_score_checksum": "f157f41979260953",
+         "pr_workload_contract": "fixed-pull-gs"},
+    ]
+    args = SimpleNamespace(benchmark="pr", suite="cache-sim", current_pr_baselines=False)
+    roi_matrix.certify_cache_sim_pr_results(rows, args)
+    assert all(row["status"] == "error" for row in rows)
+
+
+def test_fixed_workload_receipt_requires_all_csr_indices_and_work():
+    text = "[ECG-PR-WORKLOAD traversal=pull-gs arithmetic=separate-f32 carrier=csr vertices=32 records=34 csr_index_reads=256]"
+    result = validate_pr_workload(text, carrier="csr", iterations=2, semantic_edges=68)
+    assert result["pr_workload_contract"] == "fixed-pull-gs"
+    for bad in (
+        text.replace("csr_index_reads=256", "csr_index_reads=0"),
+        text.replace("records=34", "records=33"),
+        text.replace("carrier=csr", "carrier=record"),
+        text.replace("separate-f32", "unspecified"),
+    ):
+        with pytest.raises(RecordReceiptError):
+            validate_pr_workload(bad, carrier="csr", iterations=2, semantic_edges=68)

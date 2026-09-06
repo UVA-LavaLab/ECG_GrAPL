@@ -235,7 +235,7 @@ def roi_input_paths(
     current_record = any(
         policy_output_label(str(policy)) in {
             "ECG", "ECG_TRANSPORT", "ECG_REPLACEMENT", "ECG_PREFETCH"}
-        for policy in settings.get("policies", []))
+        for policy in settings.get("policies", [])) or bool(settings.get("current_pr_baselines"))
     if current_record:
         paths["record_process_watchdog"] = PROCESS_TREE_WATCHDOG
         paths["execution_python"] = execution_python(args)
@@ -795,7 +795,9 @@ def make_roi_job(
         "ECG", "ECG_TRANSPORT", "ECG_REPLACEMENT", "ECG_PREFETCH"}
     current_record = any(
         policy_output_label(policy) in current_record_labels
-        for policy in all_policies)
+        for policy in all_policies) or bool(settings.get("current_pr_baselines"))
+    if settings.get("current_pr_baselines"):
+        command.append("--current-pr-baselines")
     if current_record:
         command.extend([
             "--ecg-record-bytes",

@@ -4,6 +4,7 @@
   "current_profiles": [
     "ecg_current_equivalence",
     "ecg_current_equivalence_extended",
+    "ecg_local_release_cache",
     "ecg_large_cache",
     "ecg_detailed_final"
   ],
@@ -37,6 +38,7 @@
   "profiles": {
     "ecg_current_equivalence": "Current bounded three-backend ECG semantic-equivalence profile: exhaustive fixture plus focused temporal-pressure coverage.",
     "ecg_current_equivalence_extended": "Optional current ECG equivalence corroboration on the retained Orkut-4096 sample.",
+    "ecg_local_release_cache": "Serial primary-capacity full-core-corpus cache_sim qualification with fixed CSR baselines and all current ECG mechanisms; nonauthorizing.",
     "ecg_large_cache": "Current adaptive ECG large-graph cache_sim exploration; nonauthorizing functional cache/traffic evidence.",
     "ecg_detailed_final": "Explicitly authorized current ECG gem5/Sniper final-stage matrix; never selected by default.",
     "ecg_smoke": "Historical cache_sim smoke for the legacy ECG policy set; retained for reproduction.",
@@ -99,6 +101,11 @@
     "ecg_large_cache": {
       "status": "ready",
       "reason": "Large cache_sim exploration is independent and cannot authorize detailed final runs.",
+      "require_clean_worktree": true
+    },
+    "ecg_local_release_cache": {
+      "status": "ready",
+      "reason": "Local full-graph functional qualification; preserves every baseline, complete fixed work and bounded resources. It cannot authorize detailed final jobs.",
       "require_clean_worktree": true
     },
     "ecg_detailed_final": {
@@ -190,6 +197,44 @@
     }
   },
   "graph_sets": {
+    "current_local_release_pr": [
+      {
+        "name": "web-Google",
+        "path": "results/graphs/web-Google/web-Google-dbg.sg",
+        "expected_sha256": "e17c34bcc261c994bc00e14663067c5f05e7a8d23323b64788ce2fc58040854a",
+        "options_key": "file_pr_current_i2"
+      },
+      {
+        "name": "roadNet-CA",
+        "path": "results/graphs/roadNet-CA/roadNet-CA-dbg.sg",
+        "expected_sha256": "c7e900623c8ebba054c2122b9b0adf6bb11818cb3ce23568f992229967b7fa69",
+        "options_key": "file_pr_current_i2"
+      },
+      {
+        "name": "cit-Patents",
+        "path": "results/graphs/cit-Patents/cit-Patents-dbg.sg",
+        "expected_sha256": "991199a8073f9d6b50c26f04a4d49c0f0b74710e8ba8fdf28c95a4ef48a483e4",
+        "options_key": "file_pr_current_i2"
+      },
+      {
+        "name": "soc-pokec",
+        "path": "results/graphs/soc-pokec/soc-pokec-dbg.sg",
+        "expected_sha256": "adfc903477f1910b36c7ad29de124fb0dadf5354b7003c7e4971c379eba2283a",
+        "options_key": "file_pr_current_i2"
+      },
+      {
+        "name": "soc-LiveJournal1",
+        "path": "results/graphs/soc-LiveJournal1/soc-LiveJournal1-dbg.sg",
+        "expected_sha256": "e6d3535352205c9f81c6cdddb09b66cb3d96d16d42b74a3ea1718d9fe222d91e",
+        "options_key": "file_pr_current_i2"
+      },
+      {
+        "name": "com-Orkut",
+        "path": "results/graphs/com-Orkut/com-Orkut-dbg.sg",
+        "expected_sha256": "f59f054ecf2806bf5947bbd521d8396463b4afe87c54374f9baad5c2e2db4640",
+        "options_key": "file_pr_current_i2"
+      }
+    ],
     "current_equivalence_fixture": [
       {
         "name": "ecg-fixture32",
@@ -1070,6 +1115,35 @@
       "policy_sharding_allowed": false,
       "timeout_sniper": 180,
       "out_subdir": "124_current_orkut_sniper_8b"
+    },
+    {
+      "name": "129_current_local_release_cache",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_local_release_cache"],
+      "suite": "cache-sim",
+      "graph_set": "current_local_release_pr",
+      "benchmarks": ["pr"],
+      "policies": ["LRU", "SRRIP", "GRASP_PAPER", "POPT:CHARGED", "POPT_SE", "POPT_SE_DISTANT", "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"],
+      "current_pr_baselines": true,
+      "l1d_size": "32kB",
+      "l1d_ways": "8",
+      "l2_size": "256kB",
+      "l2_ways": "8",
+      "l3_sizes": ["8MB"],
+      "l3_ways": "16",
+      "prefetcher": "none",
+      "flowthrough": "off",
+      "popt_reserve_model": "size_correct",
+      "popt_matrix_stream": "simulated",
+      "ecg_record_bytes": 0,
+      "ecg_record_minimum_mantissa_bits": 0,
+      "ecg_record_max_carrier_bytes": 2147483648,
+      "ecg_record_max_auxiliary_bytes": 1073741824,
+      "cache_record_rss_mib": 8192,
+      "cache_sim_omp_threads": 1,
+      "policy_sharding_allowed": false,
+      "timeout_cache": 3600,
+      "out_subdir": "129_current_local_release_cache"
     },
     {
       "name": "130_current_large_cache",

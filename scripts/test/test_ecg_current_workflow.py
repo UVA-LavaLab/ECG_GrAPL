@@ -206,6 +206,29 @@ def test_large_and_final_profiles_have_distinct_authority():
         contract["source_paths"])
 
 
+def test_local_release_matrix_keeps_all_reference_and_mechanism_roles():
+    manifest = json.loads((ECG_DIR / "experiment_manifest.json").read_text())
+    stages = [stage for stage in manifest["stages"]
+              if "ecg_local_release_cache" in stage.get("profiles", [])]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["suite"] == "cache-sim" and stage["current_pr_baselines"] is True
+    assert stage["policy_sharding_allowed"] is False
+    assert stage["policies"] == [
+        "LRU", "SRRIP", "GRASP_PAPER", "POPT:CHARGED", "POPT_SE", "POPT_SE_DISTANT",
+        "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"]
+    assert stage["l3_sizes"] == ["8MB"] and stage["l3_ways"] == "16"
+    assert stage["popt_matrix_stream"] == "simulated"
+    assert stage["cache_record_rss_mib"] == 8192 and stage["timeout_cache"] == 3600
+    graphs = manifest["graph_sets"][stage["graph_set"]]
+    assert [graph["name"] for graph in graphs] == [
+        "web-Google", "roadNet-CA", "cit-Patents", "soc-pokec", "soc-LiveJournal1", "com-Orkut"]
+    assert all(graph["options_key"] == "file_pr_current_i2" and
+               len(graph["expected_sha256"]) == 64 for graph in graphs)
+    assert len(stage["policies"]) * len(graphs) == 60
+    assert not stage.get("requires_current_equivalence", False)
+
+
 def make_rows() -> tuple[
         dict[tuple[str, str, str, int, str, str], dict], list[dict[str, str]], dict]:
     manifest = json.loads((ECG_DIR / "experiment_manifest.json").read_text())

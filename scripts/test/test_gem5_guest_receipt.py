@@ -232,7 +232,8 @@ def test_sealed_memfd_executes_immutable_open_file():
 def test_riscv_make_rule_models_all_outputs_and_command_signature():
     makefile = (PROJECT_ROOT / "Makefile").read_text()
     assert "_riscv_m5ops.build.json &:" in makefile
-    assert "-include $(wildcard $(BIN_GEM5_DIR)/*_riscv_m5ops.d)" in makefile
+    assert "-include $(wildcard $(GEM5_REQUESTED_DEPFILES))" in makefile
+    assert "-include $(wildcard $(BIN_GEM5_DIR)/*_riscv_m5ops.d)" not in makefile
     assert "$(GEM5_GUEST_RECEIPT) build" in makefile
     assert "--build-config $(GEM5_RISCV_BUILD_CONFIG)" in makefile
     assert "RISCV_CXX_SHA256=" not in makefile

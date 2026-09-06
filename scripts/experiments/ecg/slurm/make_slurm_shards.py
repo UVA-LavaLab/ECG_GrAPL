@@ -17,7 +17,23 @@ sys.path.insert(0, str(ECG_DIR))
 from flows import experiment_run  # noqa: E402
 
 
+CURRENT_WHOLE_PROFILES = frozenset({
+    "ecg_current_equivalence",
+    "ecg_local_release_cache",
+    "ecg_large_cache",
+    "ecg_detailed_final",
+})
+
+
 def build_rows(args: argparse.Namespace) -> list[tuple[str, ...]]:
+    current_profiles = sorted(CURRENT_WHOLE_PROFILES.intersection(args.profile))
+    if current_profiles:
+        profiles = ", ".join(current_profiles)
+        raise SystemExit(
+            f"{profiles} must not be split into legacy shard rows; use the "
+            "Slurm CURRENT WHOLE-PROFILE mode "
+            "(GRAPHBREW_SLURM_MODE=current-whole-profile) instead")
+
     manifest = experiment_run.load_manifest(Path(args.manifest))
     graph_sets = manifest.get("graph_sets", {})
     rows: list[tuple[str, ...]] = []

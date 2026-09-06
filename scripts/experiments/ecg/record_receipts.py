@@ -64,6 +64,25 @@ def validate_equivalence(text: str, expected_reads: int) -> dict[str, int | str]
     }
 
 
+def validate_pr_workload(
+        text: str, *, carrier: str, iterations: int, semantic_edges: int) -> dict[str, int | str]:
+    fields = receipt(text, "ECG-PR-WORKLOAD")
+    require(fields.get("traversal") == "pull-gs" and
+            fields.get("arithmetic") == "separate-f32" and fields.get("carrier") == carrier,
+            "unexpected fixed PageRank workload contract")
+    vertices, records = unsigned(fields, "vertices"), unsigned(fields, "records")
+    require(vertices > 0 and records > 0 and iterations > 0 and
+            records * iterations == semantic_edges,
+            "fixed PageRank did not cover the requested traversal")
+    reads = unsigned(fields, "csr_index_reads")
+    require(reads == 4 * vertices * iterations, "fixed PageRank omitted CSR index accesses")
+    return {
+        "pr_workload_contract": "fixed-pull-gs", "pr_arithmetic": "separate-f32",
+        "pr_input_carrier": carrier, "pr_vertex_count": vertices,
+        "pr_source_records": records, "pr_csr_index_reads": reads,
+    }
+
+
 def resolve_layout(
     *, records: int, vertices: int, maximum_id: int,
     traversals: int, requested_bytes: int = 0, minimum_mantissa_bits: int = 0,

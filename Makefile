@@ -22,6 +22,7 @@ INCLUDES := -I$(INCLUDE_GAPBS) -I$(INCLUDE_GRAPHBREW) \
 CXXFLAGS := -std=c++17 -O3 -Wall -fopenmp -g -DNDEBUG -m64 -march=native \
 	-DTYPE=float -DMAX_THREADS=$(PARALLEL) -DREPEAT_METHOD=1
 LDLIBS :=
+PR_FP_FLAGS := -ffp-contract=off
 
 ifeq ($(RABBIT_ENABLE),1)
 CXXFLAGS += -DRABBIT_ENABLE -mcx16 -Wno-deprecated-declarations \
@@ -93,6 +94,8 @@ $(BIN_DIR)/converter: $(BENCH_DIR)/src/converter.cc $(DEP_GAPBS) \
 	$(DEP_GRAPH) $(DEP_EXTERNAL) | $(BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(LDLIBS) -o $@
 
+$(BIN_SIM_DIR)/pr: CXXFLAGS += $(PR_FP_FLAGS)
+
 $(BIN_SIM_DIR)/%: $(BENCH_DIR)/src_sim/%.cc $(DEP_GAPBS) \
 	$(DEP_GRAPH) $(DEP_EXTERNAL) $(DEP_CACHE) $(DEP_ECG) | $(BIN_SIM_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -I$(INCLUDE_CACHE) $< $(LDLIBS) -o $@
@@ -130,7 +133,7 @@ RISCV_CXX_RESOLVED := $(shell command -v $(RISCV_CXX) 2>/dev/null)
 CXXFLAGS_GEM5 := -std=c++17 -O3 -Wall -g -DNDEBUG -DNO_M5OPS -fopenmp
 CXXFLAGS_GEM5_M5OPS := $(filter-out -DNO_M5OPS,$(CXXFLAGS_GEM5)) \
 	-I$(GEM5_DIR)/include
-CXXFLAGS_GEM5_RISCV := $(CXXFLAGS_GEM5_M5OPS) -funswitch-loops -static -mno-relax
+CXXFLAGS_GEM5_RISCV := $(CXXFLAGS_GEM5_M5OPS) -funswitch-loops -static -mno-relax $(PR_FP_FLAGS)
 RISCV_GUEST_BINARIES := $(addsuffix _riscv_m5ops,$(addprefix \
 	$(BIN_GEM5_DIR)/,$(KERNELS_GEM5)))
 RISCV_GUEST_DEPFILES := $(addsuffix .d,$(RISCV_GUEST_BINARIES))
@@ -180,7 +183,12 @@ GEM5_DEP_GOALS := $(filter \
 	$(BIN_GEM5_DIR)/%_riscv_m5ops.d \
 	$(BIN_GEM5_DIR)/%_riscv_m5ops.build.json,$(MAKECMDGOALS))
 ifneq ($(GEM5_DEP_GOALS),)
--include $(wildcard $(BIN_GEM5_DIR)/*_riscv_m5ops.d)
+GEM5_REQUESTED_DEPFILES := \
+	$(patsubst gem5-riscv-m5ops-%,$(BIN_GEM5_DIR)/%_riscv_m5ops.d,$(filter gem5-riscv-m5ops-%,$(MAKECMDGOALS))) \
+	$(addsuffix .d,$(filter $(BIN_GEM5_DIR)/%_riscv_m5ops,$(MAKECMDGOALS))) \
+	$(filter $(BIN_GEM5_DIR)/%_riscv_m5ops.d,$(MAKECMDGOALS)) \
+	$(patsubst %.build.json,%.d,$(filter $(BIN_GEM5_DIR)/%_riscv_m5ops.build.json,$(MAKECMDGOALS)))
+-include $(wildcard $(GEM5_REQUESTED_DEPFILES))
 endif
 
 $(BIN_GEM5_DIR)/%: $(BENCH_DIR)/src_gem5/%.cc $(DEP_GAPBS) \
@@ -242,6 +250,8 @@ SNIPER_INCLUDE := $(SNIPER_DIR)/include
 DEP_SNIPER_GUEST := $(wildcard $(BENCH_DIR)/src_sniper/*.h)
 CXXFLAGS_SNIPER := -std=c++17 -O2 -Wall -g -DNDEBUG -fopenmp \
 	-I$(INC_DIR) -I$(SNIPER_INCLUDE)
+
+$(BIN_SNIPER_DIR)/sg_kernel: CXXFLAGS_SNIPER += $(PR_FP_FLAGS)
 
 $(BIN_SNIPER_DIR)/%: $(BENCH_DIR)/src_sniper/%.cc $(DEP_GAPBS) \
 	$(DEP_GRAPH) $(DEP_EXTERNAL) $(DEP_ECG) $(DEP_SNIPER_GUEST) | $(BIN_SNIPER_DIR)

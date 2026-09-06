@@ -73,6 +73,17 @@ This establishes instruction/address support, **not** full unsigned-32 graph
 loading: the current PageRank loaders still use signed-32 `NodeID` and reject
 out-of-domain graphs.
 
+The probe also accepts a logical record count and an optional iteration base.
+Large-count cases execute only a four-record instruction prefix, not the
+declared full traversal. They cover the low-precision 26-VID/6-metadata/H31
+layout, count-driven widening at H32, and a `2^32` record-count descriptor
+with H33. Real operand loads and property addressing remain backed by a few
+words; the tests do not allocate the logical graph. These are ISA-boundary
+checks with LRU, not large-graph replacement/prefetch evaluations.
+An initial nonzero sequence jump is rejected by retirement continuity rather
+than enabled as a testing shortcut. Wider sequence/deadline arithmetic and
+queue preservation are additionally covered by the shared C++ contract tests.
+
 ## 2. Preserve the real dependency
 
 ### Figure 2 — The mask follows the load through the core

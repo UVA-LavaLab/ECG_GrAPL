@@ -15,6 +15,7 @@ from record_receipts import (
     EQUIVALENCE_DIGESTS, LAYOUT_FIELDS as RECORD_LAYOUT_FIELDS,
     RecordReceiptError, resolve_layout, validate_equivalence,
     validate_functional_record, validate_gem5_record, validate_sniper_record,
+    validate_pr_workload,
 )
 from record_resources import graph_info
 
@@ -437,6 +438,10 @@ def validate_raw_row(row: dict[str, str], out_dir: Path) -> dict[str, Any]:
             text, mechanism=row.get("ecg_record_mechanism", ""),
             requested_bytes=integer(row, "ecg_record_requested_bytes"),
             minimum_mantissa_bits=integer(row, "ecg_record_minimum_mantissa_bits"))
+        if backend == "cache_sim":
+            fields.update(validate_pr_workload(
+                text, carrier="record", iterations=int(fields["pr_iterations"]),
+                semantic_edges=int(fields["pr_semantic_edges"])))
         fields.update(validate_equivalence(text, int(fields["pr_semantic_edges"])))
     except RecordReceiptError as error:
         raise EquivalenceGateError(f"raw record evidence failed: {error}") from error
