@@ -316,6 +316,12 @@ use repository-local locks and `<matrix-output>/scratch`, not shared temporary
 trace directories. Run from a clean worktree; successful unchanged jobs can
 resume, but a filtered invocation cannot issue full equivalence authorization.
 
+The reference-host run at `106c1227` completed all 36 rows in 604.264 seconds.
+An additional whole-workflow watchdog measured a peak sampled RSS of
+910.945 MiB, below its 2,048 MiB limit, and exited with no surviving descendants.
+These are host execution/resource observations for the instrumented semantic
+workflow, not target speedup measurements or guarantees for other machines.
+
 The dedicated receipt re-expands the canonical roster, replays current receipt
 validators against raw backend logs, and binds graph recipes, layouts, semantic
 digests, source/configuration files, binaries, and outputs. A changed method or
