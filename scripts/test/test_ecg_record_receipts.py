@@ -6,6 +6,7 @@ import pytest
 from scripts.experiments.ecg.record_receipts import (
     RecordReceiptError, receipt, unsigned, validate_gem5_record, validate_layout,
     validate_sniper_record,
+    validate_equivalence,
 )
 
 
@@ -299,3 +300,37 @@ def test_sniper_receipt_rejects_free_timing_and_missing_work():
         altered = {**runtime, key: value}
         with pytest.raises(RecordReceiptError):
             validate_sniper_record(text(altered), mechanism="replacement-prefetch")
+
+
+def test_equivalence_requires_complete_actual_load_fingerprints():
+    fields = (
+        "source_order_digest", "carrier_digest", "consumed_semantic_digest",
+        "destination_stream_digest", "window_reference_digest",
+    )
+    text = "[ECG-RECORD-EQUIVALENCE schema=ecg.record-stream observer=actual-record-load " \
+        "property_read_count=34 " + " ".join(f"{name}=0123456789abcdef" for name in fields) + "]"
+    assert validate_equivalence(text, 34)["property_read_count"] == 34
+    with pytest.raises(RecordReceiptError):
+        validate_equivalence(text, 35)
+    with pytest.raises(RecordReceiptError):
+        validate_equivalence(text.replace("actual-record-load", "host-future-table"), 34)
+    with pytest.raises(RecordReceiptError):
+        validate_equivalence(text.replace("carrier_digest=0123456789abcdef", ""), 34)
+
+
+def test_equivalence_observation_never_authorizes_native_timing():
+    from scripts.experiments.ecg import roi_matrix
+    guest, runtime = native_fixture()
+    args = SimpleNamespace(
+        ecg_record_bytes=0, ecg_record_minimum_mantissa_bits=0, has_record_baseline=True)
+    row = {
+        "status": "ok", "simulator": "gem5", "benchmark": "pr",
+        "ecg_record_mechanism": "replacement", "ecg_equivalence_only": 1,
+    }
+    roi_matrix.apply_current_record_receipt(
+        row, text_for(guest, runtime), args, roi_matrix.parse_policy_spec("ECG:replacement"), "gem5")
+    control = deepcopy(row)
+    control["ecg_record_mechanism"] = "transport"
+    roi_matrix.certify_current_record_results([control, row])
+    assert row["timing_valid_for_speedup"] == "0"
+    assert row["timing_model"] == "record_equivalence_diagnostic"

@@ -479,6 +479,7 @@ int run_pr(const Graph& graph, int max_iters) {
                     }
                     incoming_total +=
                         warm_contribution[decoded.destination];
+                    record_stream.observeEvidence(position, word);
                     ++semantic_edges;
                 }
                 scores[node] = base_score + kDamp * incoming_total;
@@ -489,6 +490,7 @@ int run_pr(const Graph& graph, int max_iters) {
         }
         record_stream.finish();
         SNIPER_ROI_END();
+        record_stream.reportEvidence(std::cerr);
 
         uint64_t checksum = 1469598103934665603ULL;
         for (ScoreT score : scores) {

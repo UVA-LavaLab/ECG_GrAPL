@@ -18,6 +18,7 @@
 #include "pvector.h"
 #include "ecg_metadata.h"
 #include "ecg_record_stream.h"
+#include "ecg_record_evidence.h"
 
 // P-OPT rereference matrix builder (same as standalone cache_sim)
 #include "graphbrew/partition/cagra/popt.h"
@@ -112,10 +113,11 @@ class Ref32BorrowedCarrier {
     uint64_t count_;
 };
 
-template<typename Word>
+template<bool Capture, typename Word>
 static void PageRankRecordIteration(
         const Graph& graph, pvector<ScoreT>& scores, pvector<ScoreT>& contribution,
-        const Word* records, const Gem5RecordContext& context, ScoreT base_score) {
+        const Word* records, const Gem5RecordContext& context, ScoreT base_score,
+        ecg_record::EquivalenceEvidence& evidence, uint64_t iteration) {
     for (NodeID outer = 0; outer < graph.num_nodes(); ++outer) {
         const Word* record = records + graph.in_offset(outer);
         const Word* end = records + graph.in_offset(outer + 1);
@@ -123,6 +125,8 @@ static void PageRankRecordIteration(
         for (; record != end; ++record) {
             const uint64_t word = context.record(record);
             incoming += context.property(contribution.data(), word, record);
+            if constexpr (Capture)
+                evidence.observe(word, static_cast<uint64_t>(record - records), iteration);
         }
         const ScoreT new_score = base_score + kDamp * incoming;
         scores[outer] = new_score;
@@ -179,6 +183,15 @@ static pvector<ScoreT> PageRankPullGSRecord_Gem5(
     if (status != ecg_record::Status::OK)
         throw std::invalid_argument(std::string("Cannot construct ECG records: ") +
                                     ecg_record::statusName(status));
+    const uint64_t evidence_option = recordUnsignedEnvironment("ECG_RECORD_EQUIVALENCE", 0);
+    if (evidence_option > 1)
+        throw std::invalid_argument("ECG_RECORD_EQUIVALENCE must be zero or one");
+    const bool capture_evidence = evidence_option != 0;
+    ecg_record::EquivalenceEvidence evidence;
+    if (capture_evidence)
+        evidence.prepare(requirements, stream,
+            [source](uint64_t index) { return static_cast<uint64_t>(source[index]); },
+            [&graph](uint64_t row) { return static_cast<uint64_t>(graph.in_offset(row)); });
 
     constexpr size_t alignment = 2 * 1024 * 1024;
     const ScoreT initial = 1.0f / graph.num_nodes();
@@ -239,17 +252,28 @@ static pvector<ScoreT> PageRankPullGSRecord_Gem5(
         if (iteration)
             context.activate(uint64_t(iteration) * requirements.record_count,
                              iteration + 1 < iterations);
-        if (layout.record_bytes == 4)
-            PageRankRecordIteration(graph, scores, contribution, stream.records32.data(),
-                                    context, base_score);
-        else
-            PageRankRecordIteration(graph, scores, contribution, stream.records64.data(),
-                                    context, base_score);
+        if (capture_evidence) {
+            if (layout.record_bytes == 4)
+                PageRankRecordIteration<true>(graph, scores, contribution, stream.records32.data(),
+                                              context, base_score, evidence, iteration);
+            else
+                PageRankRecordIteration<true>(graph, scores, contribution, stream.records64.data(),
+                                              context, base_score, evidence, iteration);
+        } else {
+            if (layout.record_bytes == 4)
+                PageRankRecordIteration<false>(graph, scores, contribution, stream.records32.data(),
+                                               context, base_score, evidence, iteration);
+            else
+                PageRankRecordIteration<false>(graph, scores, contribution, stream.records64.data(),
+                                               context, base_score, evidence, iteration);
+        }
     }
     context.finish();
     GEM5_WORK_END(GEM5_WORK_COMPUTE);
     GEM5_DUMP_STATS();
     context.deactivate();
+    if (capture_evidence)
+        evidence.report(std::cerr);
     reportPageRankResult(graph, scores, iterations);
     return scores;
 }

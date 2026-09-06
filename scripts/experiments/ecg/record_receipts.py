@@ -13,6 +13,10 @@ LAYOUT_FIELDS = (
     "exponent_bits", "mantissa_bits", "sequence_bits", "deadline_bits",
     "state_encoding", "prefetch_selection",
 )
+EQUIVALENCE_DIGESTS = (
+    "source_order_digest", "carrier_digest", "consumed_semantic_digest",
+    "destination_stream_digest", "window_reference_digest",
+)
 
 
 class RecordReceiptError(ValueError):
@@ -44,8 +48,24 @@ def require(condition: bool, message: str) -> None:
         raise RecordReceiptError(message)
 
 
-def validate_layout(
-    fields: Mapping[str, str], *, records: int, vertices: int, maximum_id: int,
+def validate_equivalence(text: str, expected_reads: int) -> dict[str, int | str]:
+    fields = receipt(text, "ECG-RECORD-EQUIVALENCE")
+    require(fields.get("schema") == "ecg.record-stream" and
+            fields.get("observer") == "actual-record-load", "unrecognized equivalence observation")
+    require(unsigned(fields, "property_read_count") == expected_reads,
+            "equivalence observation did not cover the complete property stream")
+    for key in EQUIVALENCE_DIGESTS:
+        require(bool(re.fullmatch(r"[0-9a-f]{16}", fields.get(key, ""))),
+                f"missing equivalence fingerprint: {key}")
+    return {
+        "equivalence_schema": fields["schema"],
+        "property_read_count": expected_reads,
+        **{key: fields[key] for key in EQUIVALENCE_DIGESTS},
+    }
+
+
+def resolve_layout(
+    *, records: int, vertices: int, maximum_id: int,
     traversals: int, requested_bytes: int = 0, minimum_mantissa_bits: int = 0,
 ) -> dict[str, int | str]:
     require(0 < records <= UINT64_MAX and 0 < vertices <= UINT64_MAX and
@@ -80,11 +100,20 @@ def validate_layout(
         "horizon_bits": horizon, "exponent_bits": (horizon - 1).bit_length(),
         "mantissa_bits": mantissa, "sequence_bits": 64, "deadline_bits": 64,
     }
-    for key, value in expected.items():
-        require(unsigned(fields, key) == value, f"inconsistent resolved ECG field {key}")
-    require(fields.get("state_encoding") == "joint-distance", "wrong state/reference grammar")
-    require(fields.get("prefetch_selection") == "record-window", "wrong prefetch rule")
     return {**expected, "state_encoding": "joint-distance", "prefetch_selection": "record-window"}
+
+
+def validate_layout(
+    fields: Mapping[str, str], *, records: int, vertices: int, maximum_id: int,
+    traversals: int, requested_bytes: int = 0, minimum_mantissa_bits: int = 0,
+) -> dict[str, int | str]:
+    expected = resolve_layout(
+        records=records, vertices=vertices, maximum_id=maximum_id, traversals=traversals,
+        requested_bytes=requested_bytes, minimum_mantissa_bits=minimum_mantissa_bits)
+    for key, value in expected.items():
+        actual = unsigned(fields, key) if isinstance(value, int) else fields.get(key)
+        require(actual == value, f"inconsistent resolved ECG field {key}")
+    return expected
 
 
 def validate_gem5_record(

@@ -23,6 +23,7 @@
 // P-OPT rereference matrix builder
 #include "graphbrew/partition/cagra/popt.h"
 #include "ecg_ref32.h"
+#include "ecg_record_evidence.h"
 // Shared ECG epoch helpers for cache_sim, gem5, and Sniper
 #include "ecg_reuse_plan_builder.h"
 
@@ -92,6 +93,12 @@ static pvector<ScoreT> PageRankPullGSRecord_Sim(
     if (built != ecg_record::Status::OK)
         throw std::invalid_argument(std::string("Current ECG construction failed: ") +
                                     ecg_record::statusName(built));
+    const bool capture_evidence = recordOption("ECG_RECORD_EQUIVALENCE", 0, 1) != 0;
+    ecg_record::EquivalenceEvidence evidence;
+    if (capture_evidence)
+        evidence.prepare(requirements, stream,
+            [source](uint64_t index) { return static_cast<uint64_t>(source[index]); },
+            [&graph](uint64_t row) { return static_cast<uint64_t>(graph.in_offset(row)); });
     constexpr std::size_t alignment = 2 * 1024 * 1024;
     const ScoreT initial = 1.0f / graph.num_nodes();
     const ScoreT base_score = (1.0f - kDamp) / graph.num_nodes();
@@ -150,6 +157,8 @@ static pvector<ScoreT> PageRankPullGSRecord_Sim(
                 const uint64_t word = cache.recordLoad(index);
                 const uint64_t destination = cache.recordProperty(index, word);
                 incoming += contribution[destination];
+                if (capture_evidence)
+                    evidence.observe(word, index, iteration);
             }
             const ScoreT score = base_score + kDamp * incoming;
             cache.writeArray(scores.data(), node);
@@ -161,6 +170,8 @@ static pvector<ScoreT> PageRankPullGSRecord_Sim(
         }
     }
     cache.finishRecord(requirements.record_count * iterations);
+    if (capture_evidence)
+        evidence.report(std::cerr);
     uint64_t checksum = 1469598103934665603ULL;
     for (ScoreT score : scores) {
         uint32_t bits = 0;

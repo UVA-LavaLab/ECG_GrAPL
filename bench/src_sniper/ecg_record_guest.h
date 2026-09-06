@@ -13,6 +13,7 @@
 
 #include "ecg_record_stream.h"
 #include "ecg_record_window.h"
+#include "ecg_record_evidence.h"
 #include "sniper_sim/sniper_harness.h"
 
 namespace graphbrew_sniper {
@@ -157,6 +158,12 @@ class EcgRecordPrStream
             stream_, limits);
         if (status != ecg_record::Status::OK)
             throw std::invalid_argument(ecg_record::statusName(status));
+        capture_evidence_ = ecg_record_env_u64(
+            "SNIPER_ECG_RECORD_EQUIVALENCE", 0, 0, 1) != 0;
+        if (capture_evidence_)
+            evidence_.prepare(requirements_, stream_,
+                [source](uint64_t index) { return static_cast<uint64_t>(source[index]); },
+                [&graph](uint64_t row) { return static_cast<uint64_t>(graph.in_offset(row)); });
         status = ecg_record::packLayout(layout_, descriptor_);
         if (status != ecg_record::Status::OK)
             throw std::invalid_argument(ecg_record::statusName(status));
@@ -235,6 +242,7 @@ class EcgRecordPrStream
         }
         ecg_record_iteration(
             iteration_base, iteration + 1 < traversal_count);
+        iteration_ = iteration;
         loaded_mask_ = 0;
         next_load_ = 0;
     }
@@ -258,6 +266,16 @@ class EcgRecordPrStream
     {
         if (active_)
             ecg_record_drain_report();
+    }
+
+    void observeEvidence(uint64_t position, uint64_t raw_word) {
+        if (capture_evidence_)
+            evidence_.observe(raw_word, position, iteration_);
+    }
+
+    void reportEvidence(std::ostream& output) const {
+        if (capture_evidence_)
+            evidence_.report(output);
     }
 
   private:
@@ -304,6 +322,9 @@ class EcgRecordPrStream
     uint64_t descriptor_ = 0;
     uint64_t next_load_ = 0;
     uint16_t loaded_mask_ = 0;
+    uint64_t iteration_ = 0;
+    ecg_record::EquivalenceEvidence evidence_;
+    bool capture_evidence_ = false;
     bool active_ = false;
 };
 

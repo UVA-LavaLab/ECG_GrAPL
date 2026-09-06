@@ -1,0 +1,145 @@
+"""Bounded current-record graph inspection and conservative memory planning."""
+
+from __future__ import annotations
+
+from array import array
+from dataclasses import asdict, dataclass
+import hashlib
+import os
+from pathlib import Path
+import struct
+import sys
+from functools import lru_cache
+
+try:
+    from .record_receipts import RecordReceiptError, UINT64_MAX, resolve_layout
+except ImportError:
+    from record_receipts import RecordReceiptError, UINT64_MAX, resolve_layout
+
+
+class RecordResourceError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class GraphInfo:
+    directed: bool
+    vertices: int
+    records: int
+    maximum_id: int
+    storage_bytes: int
+    sha256: str
+
+
+def _signature(stat: os.stat_result) -> tuple[int, int, int, int]:
+    return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns
+
+
+def graph_info(path: Path) -> GraphInfo:
+    resolved = path.resolve()
+    return _graph_info(str(resolved), _signature(resolved.stat()))
+
+
+@lru_cache(maxsize=32)
+def _graph_info(path_text: str, signature: tuple[int, int, int, int]) -> GraphInfo:
+    path = Path(path_text)
+    if path.suffix != ".sg":
+        raise RecordResourceError("current record preflight requires an unweighted .sg input")
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        header = handle.read(17)
+        if len(header) != 17 or header[0] not in (0, 1):
+            raise RecordResourceError("invalid serialized graph header")
+        directed, records, vertices = struct.unpack("<?qq", header)
+        if not 0 < vertices <= (1 << 31) - 1 or records <= 0:
+            raise RecordResourceError("graph exceeds the nonempty signed-32 loader domain")
+        expected = 17 + (2 if directed else 1) * (8 * (vertices + 1) + 4 * records) + 4 * vertices
+        if expected > UINT64_MAX or expected != signature[2]:
+            raise RecordResourceError("serialized graph size disagrees with its header")
+        digest.update(header)
+
+        def chunks(count: int, code: str):
+            width = struct.calcsize("<" + code)
+            while count:
+                items = min(count, (1 << 20) // width)
+                data = handle.read(items * width)
+                if len(data) != items * width:
+                    raise RecordResourceError("truncated serialized graph payload")
+                digest.update(data)
+                values = array(code)
+                values.frombytes(data)
+                if sys.byteorder != "little":
+                    values.byteswap()
+                yield values
+                count -= items
+
+        maximum = 0
+        for direction in range(2 if directed else 1):
+            previous = 0
+            position = 0
+            for offsets in chunks(vertices + 1, "q"):
+                for value in offsets:
+                    if value < previous or value > records or (position == 0 and value != 0):
+                        raise RecordResourceError("invalid serialized CSR offsets")
+                    previous = value
+                    position += 1
+            if previous != records:
+                raise RecordResourceError("serialized CSR does not cover every record")
+            for ids in chunks(records, "i"):
+                low, high = min(ids), max(ids)
+                if low < 0 or high >= vertices:
+                    raise RecordResourceError("serialized destination lies outside the graph domain")
+                if not directed or direction == 1:
+                    maximum = max(maximum, high)
+        for _ids in chunks(vertices, "i"):
+            pass
+        if _signature(os.fstat(handle.fileno())) != signature or _signature(path.stat()) != signature:
+            raise RecordResourceError("graph changed during resource preflight")
+    return GraphInfo(directed, vertices, records, maximum, expected, digest.hexdigest())
+
+
+def plan_resources(
+    graph: GraphInfo, *, traversals: int, requested_bytes: int,
+    minimum_mantissa_bits: int, carrier_limit: int, auxiliary_limit: int,
+    rss_mib: int, backend: str, target_memory_bytes: int = 0,
+    equivalence: bool = False,
+) -> dict[str, int | str | bool]:
+    if min(carrier_limit, auxiliary_limit, rss_mib) <= 0:
+        raise RecordResourceError("record allocation and RSS limits must be positive")
+    if max(carrier_limit, auxiliary_limit) > UINT64_MAX:
+        raise RecordResourceError("record allocation limit exceeds 64-bit accounting")
+    if equivalence and (graph.vertices > 4096 or graph.records > 65536):
+        raise RecordResourceError("equivalence observation is limited to bounded small graphs")
+    try:
+        layout = resolve_layout(
+            records=graph.records, vertices=graph.vertices, maximum_id=graph.maximum_id,
+            traversals=traversals, requested_bytes=requested_bytes,
+            minimum_mantissa_bits=minimum_mantissa_bits)
+    except RecordReceiptError as error:
+        raise RecordResourceError(str(error)) from error
+    carrier = graph.records * int(layout["record_bytes"])
+    if carrier > carrier_limit:
+        raise RecordResourceError(f"record carrier needs {carrier} bytes, exceeding {carrier_limit}")
+    # The auxiliary cap is a conservative reservation, not a prediction of its exact use.
+    planned = graph.storage_bytes + carrier + max(auxiliary_limit, 12 * graph.vertices) + (256 << 20)
+    if planned > UINT64_MAX:
+        raise RecordResourceError("planned graph/record memory exceeds 64-bit accounting")
+    host_planned = planned + (graph.storage_bytes if backend == "gem5" else 0)
+    if host_planned > rss_mib * 1024 * 1024:
+        raise RecordResourceError(
+            f"conservative host memory plan needs {host_planned} bytes; increase the explicit RSS budget")
+    if backend == "gem5" and (target_memory_bytes <= 0 or planned > target_memory_bytes):
+        raise RecordResourceError(
+            f"conservative target memory plan needs {planned} bytes, exceeding gem5 memory {target_memory_bytes}")
+    return {
+        **asdict(graph),
+        **layout,
+        "carrier_payload_bytes": carrier,
+        "maximum_carrier_bytes": carrier_limit,
+        "maximum_auxiliary_bytes": auxiliary_limit,
+        "planned_target_bytes": planned,
+        "planned_host_bytes": host_planned,
+        "rss_limit_mib": rss_mib,
+        "gem5_target_memory_bytes": target_memory_bytes if backend == "gem5" else 0,
+        "memory_plan": "conservative-reservation",
+    }

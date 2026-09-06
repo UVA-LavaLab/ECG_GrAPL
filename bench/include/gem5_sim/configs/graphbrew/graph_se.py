@@ -169,6 +169,7 @@ def benchmark_environment(args):
     )):
         if getattr(args, "ecg_native", False):
             pass_name = {
+                "ECG_RECORD_VARIABLE_WIDTH": "ECG_RECORD_EQUIVALENCE",
                 "ECG_REF32_RECORD": "ECG_RECORD_NATIVE",
                 "ECG_REF32_FORMAT": "ECG_RECORD_BYTES",
                 "ECG_REF32_REFERENCE_BITS": "ECG_RECORD_MIN_MANTISSA_BITS",
@@ -183,6 +184,8 @@ def benchmark_environment(args):
                 outer = str(args.ecg_record_bytes)
             elif pass_name == "ECG_RECORD_MIN_MANTISSA_BITS":
                 outer = str(args.ecg_minimum_mantissa_bits)
+            elif pass_name == "ECG_RECORD_EQUIVALENCE":
+                outer = "1" if getattr(args, "ecg_equivalence", False) else "0"
         if getattr(args, "ref32_native", False):
             if pass_name == "ECG_REF32_RECORD":
                 outer = "1"
@@ -283,6 +286,8 @@ def parse_args():
         help="Allow diagnostic degraded operation; never admissible timing evidence.")
     parser.add_argument("--ecg-native", action="store_true",
         help="Use the current graph-adaptive ECG record ISA and its bounded native controller.")
+    parser.add_argument("--ecg-equivalence", action="store_true",
+        help="Collect actual-load semantic fingerprints; diagnostic execution only.")
     parser.add_argument("--ecg-mechanism", default="replacement",
         choices=["transport", "replacement", "prefetch", "replacement-prefetch"])
     parser.add_argument("--ecg-record-bytes", type=int, default=0, choices=[0, 4, 8],

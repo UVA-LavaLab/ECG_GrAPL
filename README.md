@@ -127,6 +127,15 @@ available with their original names, revisions, encodings, receipts, and
 limitations. They are not relabeled as results for the current adaptive
 method.
 
+For bounded cross-backend diagnostics, `roi_matrix.py --ecg-equivalence`
+observes actual consumed record words and fingerprints their decoded semantics.
+All backends must use the same prepared `.sg`, explicit `-o 0`, and fixed
+iteration count. These instrumented runs are never speedup evidence; equal
+semantics do not require equal cache misses, cycles, or issued prefetches.
+Construction limits, target memory, and process-tree RSS budgets are explicit.
+See [reproduction](wiki/Reproduction.md#shared-input-diagnostics-and-resource-budgets)
+for their scope and controls.
+
 ## Documentation
 
 - [Adaptive records and cache control](wiki/ReusePlan-FlowThrough.md)

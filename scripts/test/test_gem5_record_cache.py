@@ -72,16 +72,21 @@ def test_record_guest_environment_keeps_fixed_layout(monkeypatch):
     for name in tuple(os.environ):
         if name.startswith(("ECG_", "GEM5_")):
             monkeypatch.delenv(name)
+    monkeypatch.setenv("ECG_RECORD_MAX_CARRIER_BYTES", "1048576")
+    monkeypatch.setenv("ECG_RECORD_MAX_AUXILIARY_BYTES", "2097152")
     for width in (0, 4, 8):
         args = SimpleNamespace(
             policy="ECG", ecg_mode="DBG_PRIMARY", prefetcher="none",
             ref32_native=False, ecg_native=True, ecg_record_bytes=width,
-            ecg_minimum_mantissa_bits=0)
+            ecg_minimum_mantissa_bits=0, ecg_equivalence=True)
         environment = namespace["benchmark_environment"](args)
         assert len(environment) == helper.TARGET_ENV_ENTRIES
         assert sum(len(value.encode()) + 1 for value in environment) == helper.TARGET_ENV_BYTES
         assert "ECG_RECORD_NATIVE=1" in environment
         assert f"ECG_RECORD_BYTES={width}" in environment
+        assert "ECG_RECORD_EQUIVALENCE=1" in environment
+        assert "ECG_RECORD_MAX_CARRIER_BYTES=1048576" in environment
+        assert "ECG_RECORD_MAX_AUXILIARY_BYTES=2097152" in environment
         assert "GEM5_ENABLE_VERTEX_HINTS=0" in environment
         assert not any(value.startswith("ECG_REF32_") for value in environment)
 

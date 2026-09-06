@@ -52,6 +52,17 @@ checksums. The legacy PageRank loop may differ by one ULP because of FMA
 contraction; disabling FP contraction makes the outputs exact, but archived
 results are not retroactively relabeled.
 
+The opt-in current equivalence observer fingerprints the actual consumed raw
+words, destinations, semantic sequences, normalized states, and deadlines.
+Static source-order, carrier, and reference-window digests are prepared outside
+ROI and never supply runtime hints. Within one resolved width, the layout and
+all these digests must agree across backends and mechanisms. Across widths,
+the source order, consumed destination stream, property-read count, and
+PageRank checksum must agree; raw words and quantized bounds may differ.
+Reference-window selection is not the timing-dependent issued-prefetch stream.
+Observer-enabled rows always have `timing_valid_for_speedup=0`, including when
+they contain a matching transport control.
+
 Layout selection is explicit and bit-granular. It uses the maximum encoded ID,
 record count, requested 4/8-byte width, and minimum mantissa precision. A
 32-bit VID requires the eight-byte escape. The 26-ID/M6/H31/m0 layout is an

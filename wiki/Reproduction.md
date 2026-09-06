@@ -266,6 +266,43 @@ and FlowThrough off. Native modeled-time comparisons require a successful
 matching `ECG_TRANSPORT` row in the same group. The runners enforce layout,
 work, queue, traffic, and completion receipts; do not bypass those checks.
 
+### Shared input diagnostics and resource budgets
+
+Add `--ecg-equivalence` to `roi_matrix.py` only for semantic diagnostics.
+It requires a prepared unweighted `.sg` with at most 4,096 vertices and
+65,536 adjacency records. Every backend consumes the same bytes with explicit
+`-o 0 -n 1 -i 2 -t 0`; isolated vertices are part of the graph and must not be
+discarded during preparation. All current file-backed runs require `-o 0`
+so resource preflight and execution use the same encoded IDs.
+
+The observer reports complete actual-load fingerprints, not a reconstructed
+host-side execution trace. Compare layout, carrier, consumed semantics, and
+reference-window digests within each width. Compare source order, destination
+stream, property-read count, and PageRank checksum across widths. Never require
+equal aggregate misses, cycles, or actual prefetch issue counts across models.
+Diagnostic rows have `timing_valid_for_speedup=0`; a standalone matrix
+completion is not final-experiment authorization.
+
+The current runner exposes these independent limits:
+
+| Control | Default | Meaning |
+|---|---|---|
+| `--ecg-record-max-carrier-bytes` | 268435456 | carrier allocation cap |
+| `--ecg-record-max-auxiliary-bytes` | 268435456 | construction scratch cap |
+| `--cache-record-rss-mib` | 2048 | functional child process-tree RSS budget |
+| `--gem5-record-rss-mib` | 2048 | native child process-tree RSS budget |
+| `--sniper-record-rss-mib` | 2048 | modeled child process-tree RSS budget |
+| `--gem5-mem-size` | `4GB` | native simulated physical memory |
+
+Preflight scans the serialized graph in bounded chunks, validates CSR domains,
+and resolves the width from actual pull-source IDs. Its conservative memory
+reservation includes the retained graph, carrier, configured auxiliary cap,
+and process margin; gem5 also reserves a sealed graph copy. This is not a
+measured peak or a whole-host memory guarantee. The child RSS watchdog samples
+the launched process tree; preparation and input sealing also need an outer
+workflow budget. Larger graphs require prepared inputs and appropriately sized
+explicit limits, not an unbounded synthetic generator.
+
 Direct gem5 graph runs use:
 
 ```text

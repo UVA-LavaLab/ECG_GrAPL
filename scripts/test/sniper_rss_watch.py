@@ -130,6 +130,7 @@ def main() -> int:
     parser.add_argument("--sample-ms", type=int, default=100)
     parser.add_argument("--orphan-grace-ms", type=int, default=500)
     parser.add_argument("--log", type=Path, required=True)
+    parser.add_argument("--pass-fd", type=int, action="append", default=[])
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
@@ -137,6 +138,11 @@ def main() -> int:
         parser.error("missing command")
     if args.rss_mib <= 0 or args.seconds <= 0 or args.sample_ms <= 0 or args.orphan_grace_ms < 0:
         parser.error("RSS, time and sampling limits must be positive; orphan grace must be nonnegative")
+    for descriptor in args.pass_fd:
+        try:
+            os.fstat(descriptor)
+        except OSError:
+            parser.error(f"invalid inherited file descriptor {descriptor}")
 
     args.log.parent.mkdir(parents=True, exist_ok=True)
     become_child_subreaper()
@@ -146,7 +152,8 @@ def main() -> int:
     reason = "exit"
     with args.log.open("w") as output:
         process = subprocess.Popen(
-            command, stdout=output, stderr=subprocess.STDOUT, text=True)
+            command, stdout=output, stderr=subprocess.STDOUT, text=True,
+            pass_fds=tuple(args.pass_fd))
         root_stats = process_stats(process.pid)
         if root_stats is None:
             raise RuntimeError("watchdog child disappeared before observation")

@@ -75,8 +75,9 @@ from policy_specs import (  # noqa: E402
 )
 from record_receipts import (  # noqa: E402
     LAYOUT_FIELDS, RecordReceiptError, validate_functional_record, validate_gem5_record,
-    validate_sniper_record,
+    validate_sniper_record, validate_equivalence,
 )
+from record_resources import RecordResourceError, graph_info, plan_resources  # noqa: E402
 
 _GEM5_OPT = Path(os.environ.get(
     "GEM5_OPT",
@@ -779,7 +780,8 @@ def annotate_l3_pressure(row: dict[str, Any]) -> dict[str, Any]:
 
 def graph_vertices_from_sg(path: Path) -> int | None:
     try:
-        data = path.read_bytes()[:17]
+        with path.open("rb") as handle:
+            data = handle.read(17)
     except OSError:
         return None
     if len(data) < 17:
@@ -1007,8 +1009,19 @@ def run_command(
     stdout_path: Path,
     dry_run: bool,
     pass_fds: tuple[int, ...] = (),
+    rss_mib: int | None = None,
 ) -> subprocess.CompletedProcess[str] | None:
     stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    watchdog_log = stdout_path.with_suffix(".watchdog.log")
+    if rss_mib is not None:
+        if rss_mib <= 0 or timeout <= 0:
+            raise ValueError("current record runs require positive RSS and time limits")
+        inherited = [argument for descriptor in pass_fds for argument in ("--pass-fd", str(descriptor))]
+        cmd = [
+            sys.executable, str(PROJECT_ROOT / "scripts/test/sniper_rss_watch.py"),
+            "--rss-mib", str(rss_mib), "--seconds", str(timeout),
+            "--log", str(watchdog_log), *inherited, "--", *cmd,
+        ]
     command_text = " ".join(shlex.quote(part) for part in cmd)
     stdout_path.with_suffix(stdout_path.suffix + ".cmd").write_text(command_text + "\n")
     material_env = {
@@ -1041,7 +1054,7 @@ def run_command(
             pass_fds=pass_fds,
         )
         try:
-            process.communicate(timeout=timeout)
+            process.communicate(timeout=timeout + (10 if rss_mib is not None else 0))
             returncode = process.returncode
         except subprocess.TimeoutExpired:
             elapsed = time.time() - start
@@ -1065,6 +1078,10 @@ def run_command(
                 process.wait(timeout=5)
             returncode = 124
         result = subprocess.CompletedProcess(cmd, returncode)
+        if rss_mib is not None and watchdog_log.is_file():
+            out.write("\n")
+            with watchdog_log.open() as child_output:
+                shutil.copyfileobj(child_output, out)
         out.write(f"\n[exit_code] {result.returncode}\n")
         out.write(f"[elapsed_s] {time.time() - start:.3f}\n")
     return result
@@ -1559,6 +1576,9 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             "ECG_RECORD_MECHANISM": spec.record_mechanism,
             "ECG_RECORD_BYTES": str(args.ecg_record_bytes),
             "ECG_RECORD_MIN_MANTISSA_BITS": str(args.ecg_record_minimum_mantissa_bits),
+            "ECG_RECORD_MAX_CARRIER_BYTES": str(getattr(args, "ecg_record_max_carrier_bytes", 256 << 20)),
+            "ECG_RECORD_MAX_AUXILIARY_BYTES": str(getattr(args, "ecg_record_max_auxiliary_bytes", 256 << 20)),
+            "ECG_RECORD_EQUIVALENCE": str(int(getattr(args, "ecg_equivalence", False))),
         })
     if spec.ecg_mode:
         env["ECG_MODE"] = spec.ecg_mode
@@ -3604,7 +3624,7 @@ def apply_popt_se_receipt(
 
 def current_record_error(args: argparse.Namespace, spec: PolicySpec, backend: str) -> str:
     if spec.record_mechanism is None:
-        return ""
+        return "Equivalence observation requires a current ECG record mechanism" if getattr(args, "ecg_equivalence", False) else ""
     if (args.benchmark != "pr" or args.prefetcher != "none" or args.flowthrough != "off" or
             int(args.ecg_charged) != 1 or int(args.cache_stream_prefetch_degree) != 0 or
             parse_size_bytes(str(args.line_size)) != 64):
@@ -3618,6 +3638,14 @@ def current_record_error(args: argparse.Namespace, spec: PolicySpec, backend: st
         return "Current ECG requires explicit fixed positive -i, -t 0, and -n 1"
     if iterations <= 0 or tolerance != 0 or trials != 1:
         return "Current ECG requires explicit fixed positive -i, -t 0, and -n 1"
+    rss_name = {
+        "cache_sim": "cache_record_rss_mib", "gem5": "gem5_record_rss_mib",
+        "sniper": "sniper_record_rss_mib",
+    }[backend]
+    if min(getattr(args, "ecg_record_max_carrier_bytes", 256 << 20),
+           getattr(args, "ecg_record_max_auxiliary_bytes", 256 << 20),
+           getattr(args, rss_name, 2048)) <= 0:
+        return "Current ECG requires positive construction and RSS budgets"
     if backend == "cache_sim" and int(args.cache_sim_omp_threads) != 1:
         return "Current functional ECG requires one thread"
     if backend == "gem5" and (
@@ -3629,6 +3657,39 @@ def current_record_error(args: argparse.Namespace, spec: PolicySpec, backend: st
             int(args.sniper_roi_icount) != 0 or int(args.sniper_semantic_edge_limit) != 0 or
             args.ecg_isa_variant == "computed" or args.sniper_record_rss_mib <= 0):
         return "Current Sniper ECG requires uncapped one-core sg_kernel, the record protocol, and an RSS watchdog"
+    graph = graph_path_from_options(args.options)
+    evidence = bool(getattr(args, "ecg_equivalence", False))
+    if graph is None:
+        if evidence:
+            return "Equivalence requires one prepared .sg input shared by every backend"
+        try:
+            scale = int(tokens[tokens.index("-g") + 1])
+            degree = int(tokens[tokens.index("-k") + 1]) if "-k" in tokens else 16
+        except (ValueError, IndexError):
+            return "Current ECG requires a .sg input or a bounded explicit synthetic graph"
+        if scale < 1 or scale > 12 or degree <= 0 or (1 << scale) * degree > 65536:
+            return "Prepare a .sg file for graphs beyond the bounded synthetic smoke size"
+        return ""
+    ordering = [index for index, token in enumerate(tokens) if token.startswith("-o")]
+    if len(ordering) != 1 or tokens[ordering[0]:ordering[0] + 2] != ["-o", "0"]:
+        return "Current ECG prepared .sg inputs require explicit -o 0 so preflight and execution use the same IDs"
+    if not graph.is_file() and getattr(args, "dry_run", False):
+        return ""
+    try:
+        plan = plan_resources(
+            graph_info(graph), traversals=iterations,
+            requested_bytes=getattr(args, "ecg_record_bytes", 0),
+            minimum_mantissa_bits=getattr(args, "ecg_record_minimum_mantissa_bits", 0),
+            carrier_limit=getattr(args, "ecg_record_max_carrier_bytes", 256 << 20),
+            auxiliary_limit=getattr(args, "ecg_record_max_auxiliary_bytes", 256 << 20),
+            rss_mib=getattr(args, rss_name, 2048), backend=backend,
+            target_memory_bytes=parse_size_bytes(str(getattr(args, "gem5_mem_size", "4GB"))),
+            equivalence=evidence)
+    except (OSError, ValueError) as error:
+        return f"Current ECG resource preflight failed: {error}"
+    plans = getattr(args, "_record_resource_plans", {})
+    plans[(backend, args.options)] = plan
+    args._record_resource_plans = plans
     return ""
 
 
@@ -3648,6 +3709,13 @@ def apply_current_record_receipt(
             text, mechanism=spec.record_mechanism,
             requested_bytes=args.ecg_record_bytes,
             minimum_mantissa_bits=args.ecg_record_minimum_mantissa_bits)
+        if fields["carrier_allocation_bytes"] > getattr(args, "ecg_record_max_carrier_bytes", 256 << 20) or \
+                fields["construction_auxiliary_peak_bytes"] > getattr(args, "ecg_record_max_auxiliary_bytes", 256 << 20):
+            raise RecordReceiptError("actual construction allocation exceeded its requested budget")
+        if getattr(args, "ecg_equivalence", False):
+            fields.update(validate_equivalence(text, int(fields["pr_semantic_edges"])))
+        elif "[ECG-RECORD-EQUIVALENCE " in text:
+            raise RecordReceiptError("unexpected diagnostic observation in a performance row")
     except RecordReceiptError as error:
         mark_row_error(row, f"current ECG receipt failed: {error}")
         return
@@ -3699,7 +3767,9 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
     effective_l3_ways = str(charge["popt_effective_l3_ways"])
     env = cache_sim_env(args, spec, effective_l3_size, effective_l3_ways, json_path)
 
-    result = run_command(cmd, PROJECT_ROOT, env, args.timeout_cache, log_path, args.dry_run)
+    result = run_command(
+        cmd, PROJECT_ROOT, env, args.timeout_cache, log_path, args.dry_run,
+        rss_mib=getattr(args, "cache_record_rss_mib", 2048) if spec.record_mechanism else None)
     if args.dry_run:
         return []
 
@@ -4087,7 +4157,10 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             "--ecg-native", "--ecg-mechanism", spec.record_mechanism,
             "--ecg-record-bytes", str(args.ecg_record_bytes),
             "--ecg-minimum-mantissa-bits", str(args.ecg_record_minimum_mantissa_bits),
+            "--mem-size", f"{parse_size_bytes(str(getattr(args, 'gem5_mem_size', '4GB')))}B",
         ])
+        if getattr(args, "ecg_equivalence", False):
+            cmd.append("--ecg-equivalence")
 
     if not args.dry_run:
         if gem5_out.exists():
@@ -4104,6 +4177,9 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     apply_explicit_cell_mechanism_env(env, spec)
     transport = ecg_transport_for(spec, args.benchmark)
     apply_ecg_transport_env(env, transport)
+    if spec.record_mechanism is not None:
+        env["ECG_RECORD_MAX_CARRIER_BYTES"] = str(getattr(args, "ecg_record_max_carrier_bytes", 256 << 20))
+        env["ECG_RECORD_MAX_AUXILIARY_BYTES"] = str(getattr(args, "ecg_record_max_auxiliary_bytes", 256 << 20))
     if args.flowthrough == "all":
         env["STRUCTURAL_FLOWTHROUGH"] = "1"
     env["ECG_REUSE_ADMISSION"] = (
@@ -4443,7 +4519,8 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
 
         result = run_command(
             cmd, PROJECT_ROOT, env, args.timeout_gem5, log_path,
-            args.dry_run, tuple(pass_fds))
+            args.dry_run, tuple(pass_fds),
+            rss_mib=getattr(args, "gem5_record_rss_mib", 2048) if spec.record_mechanism else None)
     if (not args.dry_run and
             hash_input_path(binary) != VALIDATED_GEM5_GUEST_SHA256):
         raise RuntimeError("gem5 guest changed after execution")
@@ -5393,6 +5470,9 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
             "SNIPER_ECG_RECORD_MINIMUM_MANTISSA_BITS": str(args.ecg_record_minimum_mantissa_bits),
             "SNIPER_ENABLE_VERTEX_HINTS": "0",
             "SNIPER_ECG_RECORD_WARM_PROPERTIES": "1",
+            "SNIPER_ECG_RECORD_MAX_CARRIER_BYTES": str(getattr(args, "ecg_record_max_carrier_bytes", 256 << 20)),
+            "SNIPER_ECG_RECORD_MAX_AUX_BYTES": str(getattr(args, "ecg_record_max_auxiliary_bytes", 256 << 20)),
+            "SNIPER_ECG_RECORD_EQUIVALENCE": str(int(getattr(args, "ecg_equivalence", False))),
         })
         row["sniper_vertex_clock"] = "record-sequence"
         row["sniper_ecg_delivery"] = "post-load-record-protocol"
@@ -5404,16 +5484,9 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
     apply_instruction_cap_provenance(row, "sniper", args)
     apply_semantic_cap_provenance(row, "sniper", args)
     watchdog_log = log_path.with_suffix(".watchdog.log")
-    if current_record:
-        cmd = [
-            sys.executable, str(PROJECT_ROOT / "scripts/test/sniper_rss_watch.py"),
-            "--rss-mib", str(args.sniper_record_rss_mib),
-            "--seconds", str(args.timeout_sniper), "--log", str(watchdog_log),
-            "--", *cmd,
-        ]
     result = run_command(
-        cmd, PROJECT_ROOT, env, args.timeout_sniper + (10 if current_record else 0),
-        log_path, args.dry_run)
+        cmd, PROJECT_ROOT, env, args.timeout_sniper, log_path, args.dry_run,
+        rss_mib=args.sniper_record_rss_mib if current_record else None)
     if args.dry_run:
         return []
 
@@ -5426,7 +5499,6 @@ def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_siz
         if not watchdog_log.is_file():
             row.update(status="error", error="Current Sniper ECG omitted its process-tree watchdog receipt")
             return [row]
-        log_text += "\n" + watchdog_log.read_text(errors="replace")
         row["sniper_record_watchdog_log"] = str(watchdog_log)
         if "[watchdog_reason] exit" not in log_text:
             row.update(status="error", error="Current Sniper ECG exceeded a watchdog bound")
@@ -6343,7 +6415,14 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
             "ecg_epochs_effective": "",
             "ecg_epoch_pack_bits": "",
             "flowthrough": "off",
+            "ecg_equivalence_only": int(getattr(args, "ecg_equivalence", False)),
+            "ecg_record_max_carrier_bytes": getattr(args, "ecg_record_max_carrier_bytes", 256 << 20),
+            "ecg_record_max_auxiliary_bytes": getattr(args, "ecg_record_max_auxiliary_bytes", 256 << 20),
+            "gem5_mem_size": getattr(args, "gem5_mem_size", "4GB"),
         })
+        plan = getattr(args, "_record_resource_plans", {}).get((simulator, args.options), {})
+        row.update({"ecg_preflight_" + key: value for key, value in plan.items()})
+        row["ecg_graph_sha256"] = plan.get("sha256", "")
     return row
 
 
@@ -6672,9 +6751,11 @@ def certify_current_record_results(rows: list[dict[str, Any]]) -> None:
             if not valid:
                 mark_row_error(row, "current ECG group has incomplete or mismatched layout/work evidence")
             if row.get("simulator") == "gem5":
-                row["timing_valid_for_speedup"] = "1" if controlled else "0"
-                row["timing_model"] = "native_ecg_record" if controlled else "mechanism_probe_no_record_control"
-                row["timing_caveat"] = "" if controlled else (
+                diagnostic = bool(row.get("ecg_equivalence_only"))
+                row["timing_valid_for_speedup"] = "1" if controlled and not diagnostic else "0"
+                row["timing_model"] = "record_equivalence_diagnostic" if diagnostic else (
+                    "native_ecg_record" if controlled else "mechanism_probe_no_record_control")
+                row["timing_caveat"] = "Diagnostic actual-load fingerprints are enabled." if diagnostic else "" if controlled else (
                     "No successful within-run ECG_TRANSPORT control with identical layout and work.")
 
 
@@ -6701,6 +6782,12 @@ def standalone_matrix_config_hash(
         "roi_matrix": Path(__file__).resolve(),
         "policy_specs": Path(__file__).resolve().parent / "policy_specs.py",
     }
+    if any(getattr(spec, "record_mechanism", None) for spec in policies):
+        for name in ("record_receipts.py", "record_resources.py"):
+            paths[name] = Path(__file__).resolve().parent / name
+        paths["record_watchdog"] = PROJECT_ROOT / "scripts/test/sniper_rss_watch.py"
+        for header in (PROJECT_ROOT / "bench/include").glob("ecg_record*.h"):
+            paths[header.name] = header
     option_parts = shlex.split(args.options)
     if "-f" in option_parts:
         index = option_parts.index("-f")
@@ -6760,7 +6847,7 @@ def standalone_matrix_config_hash(
 
     config = {
         key: value for key, value in vars(args).items()
-        if key not in {"out_dir", "dry_run"}
+        if key not in {"out_dir", "dry_run", "_record_resource_plans"}
     }
     material_env = {
         key: value for key, value in os.environ.items()
@@ -6978,6 +7065,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="Current ECG record width: zero chooses the smallest sufficient graph-derived layout.")
     parser.add_argument("--ecg-record-minimum-mantissa-bits", type=int, default=0,
                         help="Current ECG precision floor; any necessary eight-byte carrier is fully charged.")
+    parser.add_argument("--ecg-equivalence", action="store_true",
+                        help="Observe actual record semantics on a bounded prepared graph; never speedup evidence.")
+    parser.add_argument("--ecg-record-max-carrier-bytes", type=int, default=256 << 20)
+    parser.add_argument("--ecg-record-max-auxiliary-bytes", type=int, default=256 << 20)
+    parser.add_argument("--cache-record-rss-mib", type=int, default=2048)
+    parser.add_argument("--gem5-record-rss-mib", type=int, default=2048)
+    parser.add_argument("--gem5-mem-size", default="4GB",
+                        help="Explicit target memory for the current native record workload.")
     parser.add_argument("--ecg-epochs", type=int, default=65535,
                         help="ECG_GRASP_POPT number of absolute epochs the per-edge mask "
                              "quantizes to (eviction-epoch resolution). Default 65535 (committed). "
