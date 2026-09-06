@@ -264,8 +264,10 @@ def parse_args():
 
     # Cache sizes (override defaults)
     parser.add_argument("--l1d-size", default=DEFAULTS["l1d_size"])
+    parser.add_argument("--l1d-ways", type=int, default=DEFAULTS["l1d_assoc"])
     parser.add_argument("--l1i-size", default=DEFAULTS["l1i_size"])
     parser.add_argument("--l2-size", default=DEFAULTS["l2_size"])
+    parser.add_argument("--l2-ways", type=int, default=DEFAULTS["l2_assoc"])
     parser.add_argument("--l3-size", default=DEFAULTS["l3_size"])
     parser.add_argument("--l3-ways", type=int, default=DEFAULTS["l3_assoc"],
         help="L3 associativity / data ways (default: GraphBrew DEFAULTS l3_assoc)")
@@ -396,9 +398,9 @@ def create_system(args):
     system.cpu.icache = make_l1i_cache(
         policy=args.l1_policy, size=args.l1i_size)
     system.cpu.dcache = make_l1d_cache(
-        policy=args.l1_policy, size=args.l1d_size)
+        policy=args.l1_policy, size=args.l1d_size, assoc=args.l1d_ways)
     system.l2cache = make_l2_cache(
-        policy=args.l2_policy, size=args.l2_size)
+        policy=args.l2_policy, size=args.l2_size, assoc=args.l2_ways)
     system.l3cache = make_l3_cache(
         policy=args.policy, size=args.l3_size, assoc=args.l3_ways,
         **l3_policy_kwargs)

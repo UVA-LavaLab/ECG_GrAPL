@@ -4166,6 +4166,7 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
     if spec.record_mechanism is not None:
         cmd.extend([
             "--ecg-native", "--ecg-mechanism", spec.record_mechanism,
+            "--l1d-ways", str(args.l1d_ways), "--l2-ways", str(args.l2_ways),
             "--ecg-record-bytes", str(args.ecg_record_bytes),
             "--ecg-minimum-mantissa-bits", str(args.ecg_record_minimum_mantissa_bits),
             "--mem-size", f"{parse_size_bytes(str(getattr(args, 'gem5_mem_size', '4GB')))}B",

@@ -423,6 +423,20 @@ qualification covers raw4/raw8 and all four mechanisms, plus real Patents at
 exact 24 MiB/16 ways and an Orkut wide-record pressure case. These runs do not
 constitute the final paper campaign or a silicon-area result.
 
+The bounded native VID/address probes use only a few backed properties even
+when the logical ID domain reaches unsigned 32 bits:
+
+```bash
+make -j1 gem5-riscv-m5ops-record_isa_smoke
+python3 -m pytest -q scripts/test/test_gem5_record_cache.py \
+  -k 'native_raw_data or native_adaptive_vid'
+```
+
+They cover automatic four/eight-byte selection and actual high-ID property
+loads, not a full-size graph-loader run. Current native matrix runs also
+forward explicit `--l1d-ways` and `--l2-ways`; keep these equal across matched
+controls and inspect the emitted cache configuration when defining a new cell.
+
 Current Sniper rows must use:
 
 ```text

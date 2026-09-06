@@ -115,6 +115,48 @@ def test_l3_geometry_preserves_24_mib_and_sixteen_ways(monkeypatch):
     assert cache.tags.indexing_policy.entry_size == 64
 
 
+def test_current_matrix_forwards_private_cache_associativity(monkeypatch, tmp_path):
+    from scripts.experiments.ecg import roi_matrix
+
+    args = roi_matrix.parse_args([
+        "--suite", "gem5", "--gem5-cpu-type", "O3", "--dry-run", "--no-build",
+        "--policies", "ECG:transport",
+        "--options", "-g 2 -k 1 -o 0 -n 1 -i 2 -t 0",
+        "--l1d-ways", "4", "--l2-ways", "16",
+    ])
+    monkeypatch.setattr(roi_matrix, "selected_gem5_isa", lambda: "riscv")
+    monkeypatch.setattr(roi_matrix, "VALIDATED_GEM5_GUEST", None)
+    monkeypatch.setattr(roi_matrix, "VALIDATED_GEM5_GUEST_SHA256", "")
+    commands = []
+    monkeypatch.setattr(
+        roi_matrix, "run_command", lambda command, *_args, **_kwargs: commands.append(command))
+    roi_matrix.run_gem5(args, tmp_path, roi_matrix.parse_policy_spec("ECG:transport"), "16kB")
+    assert len(commands) == 1
+    for option, value in (("--l1d-ways", "4"), ("--l2-ways", "16")):
+        assert option in commands[0]
+        assert commands[0][commands[0].index(option) + 1] == value
+
+
+def test_native_private_cache_construction_uses_requested_associativity():
+    tree = ast.parse(CONFIG.read_text())
+    assignments = [
+        node for node in ast.walk(tree) if isinstance(node, ast.Assign) and
+        isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and
+        node.value.func.id in ("make_l1d_cache", "make_l2_cache")
+    ]
+    system = SimpleNamespace(cpu=SimpleNamespace())
+    namespace = {
+        "system": system,
+        "args": SimpleNamespace(
+            l1_policy="LRU", l2_policy="LRU", l1d_size="4kB", l2_size="8kB",
+            l1d_ways=4, l2_ways=16),
+        "make_l1d_cache": lambda **kwargs: SimpleNamespace(**kwargs),
+        "make_l2_cache": lambda **kwargs: SimpleNamespace(**kwargs),
+    }
+    exec(compile(ast.Module(body=assignments, type_ignores=[]), str(CONFIG), "exec"), namespace)
+    assert system.cpu.dcache.assoc == 4 and system.l2cache.assoc == 16
+
+
 def test_modulo_index_round_trips_every_requested_set(tmp_path):
     source = tmp_path / "modulo.cc"
     source.write_text(r'''
@@ -223,6 +265,28 @@ def test_record_native_raw_data_and_float_values(tmp_path, width):
         tmp_path / "isa", ROOT / "bench/bin_gem5/record_isa_smoke_riscv_m5ops",
         str(width), "LRU", width=width)
     assert f"record_bytes={width} cases=8 high_bit={int(width == 8)} result=PASS" in text
+    assert receipt["governed_loads"] == "8"
+
+
+@pytest.mark.skipif(not native_ready(), reason="current native ECG binaries not built")
+@pytest.mark.parametrize("requested,id_bits", [
+    (0, 1), (0, 5), (0, 18), (0, 19), (0, 20), (0, 26),
+    (0, 29), (0, 30), (0, 31), (0, 32), (8, 19),
+])
+def test_record_native_adaptive_vid_boundaries(tmp_path, requested, id_bits):
+    from scripts.experiments.ecg.record_receipts import resolve_layout
+
+    text, receipt = native_run(
+        tmp_path / "isa", ROOT / "bench/bin_gem5/record_isa_smoke_riscv_m5ops",
+        f"{requested} {id_bits}", "LRU", mechanism="transport", width=requested)
+    expected = resolve_layout(
+        records=4, vertices=1 << id_bits, maximum_id=(1 << id_bits) - 1,
+        traversals=2, requested_bytes=requested)
+    for field, value in expected.items():
+        assert receipt[field] == str(value), (field, receipt[field], value)
+    assert f"requested_bytes={requested} id_bits={id_bits}" in text
+    assert f"max_vertex_id={(1 << id_bits) - 1}" in text
+    assert "property_backing_bytes=16" in text and "result=PASS" in text
     assert receipt["governed_loads"] == "8"
 
 

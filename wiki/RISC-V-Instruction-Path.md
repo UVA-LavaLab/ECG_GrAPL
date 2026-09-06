@@ -49,6 +49,30 @@ Generation is a correctness identity, not a method-version API. Invalid width,
 layout, address, horizon, generation, sequence, or deadline arithmetic fails
 closed.
 
+### Graph-derived VID width reaches the instructions
+
+The PageRank guest inspects the actual incoming source IDs before selecting the
+layout. Both record opcodes and PropertyF32 decode through the descriptor in
+CSR `0x805`; the ISA does not reserve a fixed number of VID or metadata bits.
+The low `id_bits` identify the property, and all remaining record bits belong
+to the joint state/distance grammar. A 19-bit VID therefore retains 13 metadata
+bits in a four-byte record. The record-count horizon then determines how much
+of that budget is available as mantissa precision.
+
+`record_isa_smoke` exercises actual RV64 O3 loads at VID widths 1, 5, 18, 19,
+20, 26, 29, 30, 31, and 32 with automatic carrier selection, plus a forced-wide
+19-bit case. It reads IDs at the top of each domain, checks the raw word and
+exact F32 bits, and backs only the final few logical properties with 16 bytes.
+This sparse-address instruction probe avoids allocating a multi-gigabyte
+property array. In its four-record stream, 29-bit IDs still fit four bytes;
+30-32-bit IDs select eight. That transition is specific to its short horizon,
+not a fixed graph-size threshold.
+
+The high unsigned-32 VID probe succeeds through Record64 and PropertyF32.
+This establishes instruction/address support, **not** full unsigned-32 graph
+loading: the current PageRank loaders still use signed-32 `NodeID` and reject
+out-of-domain graphs.
+
 ## 2. Preserve the real dependency
 
 ### Figure 2 — The mask follows the load through the core
