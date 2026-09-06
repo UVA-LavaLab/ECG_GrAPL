@@ -241,6 +241,63 @@ silently mixed with current end-to-end comparisons. Current fixed-workload
 receipts bind graph/work counts, input carrier, arithmetic, and the index-read
 count, and all compared rows must have the same PageRank result.
 
+### 4.3 Full-core local release results
+
+The local release run at `8d50ec7c` completed all **60 cache_sim cells**:
+six full core graphs, ten policy/control roles, two complete PageRank
+iterations, automatic record width, and an 8 MiB / 16-way LLC.
+L1D is 32 KiB and L2 is 256 KiB, both eight-way. The retained corpus
+preparation's symmetrization and DBG ordering are unchanged. All ten roles
+agree on graph work and score checksum within each graph.
+
+Unlike the small preliminary samples, these layouts exercise mantissas from
+three through six bits. Every full core graph selects a four-byte carrier:
+
+| Full graph | Records | VID / metadata bits | Horizon / mantissa bits |
+|---|---:|---:|---:|
+| web-Google | 8,644,102 | 20 / 12 | 24 / 6 |
+| roadNet-CA | 5,533,214 | 21 / 11 | 23 / 5 |
+| cit-Patents | 33,037,894 | 22 / 10 | 25 / 4 |
+| soc-pokec | 44,603,928 | 21 / 11 | 26 / 5 |
+| soc-LiveJournal1 | 85,702,474 | 23 / 9 | 27 / 3 |
+| com-Orkut | 234,370,166 | 22 / 10 | 28 / 4 |
+
+The table reports the combined ECG reduction in total modeled off-chip
+line transfers, including reads, writebacks and prefetch traffic. P-OPT is the
+size-correct charged comparison with its column stream simulated. Positive
+values mean less traffic; negative values mean a regression.
+
+| Full graph | Versus CSR LRU | Versus GRASP_PAPER | Versus charged P-OPT |
+|---|---:|---:|---:|
+| web-Google | 3.97% | -19.18% | 12.27% |
+| roadNet-CA | 28.48% | 16.38% | 40.80% |
+| cit-Patents | 48.08% | 19.48% | 22.59% |
+| soc-pokec | 25.23% | 0.80% | 20.01% |
+| soc-LiveJournal1 | 39.08% | 15.87% | 20.46% |
+| com-Orkut | 38.39% | 24.15% | 11.58% |
+
+ECG reduces traffic versus LRU and charged P-OPT on all six graphs.
+Against GRASP_PAPER, the frozen +/-2% rule gives four wins, one tie, and one
+loss. **The web-Google traffic regression is retained.** Geometric-mean
+ECG/baseline traffic ratios are 0.6814 against LRU, 0.8933 against GRASP_PAPER,
+and 0.7806 against charged P-OPT; these are not CPU speedups.
+
+Replacement drives most of the traffic reduction. Prefetching additionally
+reduces reported misses on several graphs with nearly unchanged traffic.
+For example, Patents replacement-only reports 11,961,350 LLC misses and
+12,865,017 off-chip transfers; combined ECG reports 11,216,846 misses and
+12,865,128 transfers. Whether that shift improves target time remains a
+detailed-simulation question.
+
+The complete matrix, per-policy raw outputs, completion receipts and generated
+`local_release_summary.json` are retained under
+`results/ecg_experiments/runs/local_release_cache/`. The serial run took
+6,734.789 host seconds (about 1 hour 52 minutes) and peaked at 1,994.219 MiB
+sampled process-tree RSS, below the 8,192 MiB cap.
+This establishes local full-core functional readiness at the primary capacity.
+It does not cover current-method Twitter, a 24 MiB sweep, eight-byte
+full-graph performance, large native timing, or physical area/energy.
+
 ## 5. P-OPT accounting
 
 Analytic P-OPT charges reserved LLC capacity and cumulative matrix traffic. It

@@ -353,6 +353,10 @@ The per-matrix RSS cap is 8,192 MiB and each policy has a 3,600-second wall
 limit. Successful complete graph matrices can resume; an incomplete matrix
 must be retried as a complete comparison group. Twitter is a separate scale
 stress case, not silently included in this core gate.
+The completed `8d50ec7c` run contains all 60 rows and is retained at that source
+revision. It took 6,734.789 host seconds and peaked at 1,994.219 MiB sampled
+RSS. See the [full-core results](Evaluation-Methodology#43-full-core-local-release-results),
+including the web-Google regression against GRASP_PAPER.
 
 `--current-pr-baselines` selects the common fixed PageRank workload for the
 ordinary cache_sim policies. It uses the same non-fused F32 arithmetic,
@@ -435,6 +439,13 @@ lab-generated `current_ecg_equivalence.complete.json`. The experiment runner
 remains the authoritative validator. Size the allocation's wall/RSS budgets
 for the selected whole profile; the wrapper does not increase or disable the
 profile's limits.
+
+The experiment lock now covers manifest/preflight writes, job execution, and
+completion-receipt publication. A duplicate run, list, dry-run or graph-check
+invocation cannot rewrite an active run's artifacts or erase its lock-owner
+record. Use `--status` for read-only monitoring. Resume eligibility still
+requires unchanged material inputs; changing the runner does not relabel an
+older completed matrix as evidence from the new revision.
 
 Historical TSV shards remain a separate mode. The legacy shard generator
 rejects current whole profiles rather than emitting jobs that would fail

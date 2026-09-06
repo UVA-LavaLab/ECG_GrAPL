@@ -394,6 +394,60 @@ def test_missing_graph_override_is_planning_only():
         ["--allow-missing-graphs", "--list"]).list
 
 
+@pytest.mark.parametrize("flags", [[], ["--list"], ["--dry-run"], ["--check-graphs"]])
+def test_locked_run_cannot_rewrite_existing_evidence(monkeypatch, tmp_path, flags):
+    from flows import experiment_run as runner
+
+    run = tmp_path / "run"
+    run.mkdir()
+    lock = tmp_path / "run.lock"
+    job = runner.Job(
+        job_id="held", stage="held", kind="roi_matrix", command=[],
+        out_dir=run / "matrix", log_path=run / "job.log")
+    manifest = run / "resolved_manifest.json"
+    manifest.write_text(json.dumps({"jobs": [runner.job_snapshot(job)], "sentinel": "keep"}))
+    completion = run / "run.complete.json"
+    completion.write_text('{"sentinel":"completed evidence"}\n')
+    saved = {path: path.read_bytes() for path in (manifest, completion)}
+    monkeypatch.setattr(runner, "expand_jobs", lambda *_args: [job])
+    monkeypatch.setattr(runner, "run_job", lambda *_args: pytest.fail("locked job executed"))
+    with runner.run_lock(lock):
+        owner = lock.read_bytes()
+        code = runner.main([
+            "--profile", "ecg_smoke", "--run-dir", str(run),
+            "--lock-path", str(lock), "--no-build", *flags])
+        assert code == 2
+        assert {path: path.read_bytes() for path in saved} == saved
+        assert lock.read_bytes() == owner
+
+
+def test_run_lock_covers_completion_publication(monkeypatch, tmp_path):
+    import fcntl
+    from flows import experiment_run as runner
+
+    lock = tmp_path / "publish.lock"
+    job = runner.Job(
+        job_id="publish", stage="publish", kind="roi_matrix", command=[],
+        out_dir=tmp_path / "matrix", log_path=tmp_path / "job.log")
+    monkeypatch.setattr(runner, "expand_jobs", lambda *_args: [job])
+    monkeypatch.setattr(runner, "write_run_manifest", lambda *_args: None)
+    monkeypatch.setattr(runner, "write_preflight", lambda *_args: None)
+    monkeypatch.setattr(runner, "validate_job_graphs", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(runner, "run_job", lambda *_args: 0)
+    monkeypatch.setattr(runner, "write_combined_outputs", lambda *_args: None)
+
+    def publish(*_args, **_kwargs):
+        with lock.open("a+") as handle:
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+
+    monkeypatch.setattr(runner, "write_run_completion", publish)
+    assert runner.main([
+        "--profile", "ecg_smoke", "--run-dir", str(tmp_path / "run"),
+        "--lock-path", str(lock), "--no-build"]) == 0
+
+
 def test_job_output_tampering_is_rejected(monkeypatch, tmp_path):
     monkeypatch.setattr(gate, "validate_raw_row", lambda *_args: {})
     out = tmp_path / "matrix"

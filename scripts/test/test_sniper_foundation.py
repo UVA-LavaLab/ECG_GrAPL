@@ -157,6 +157,27 @@ def test_rss_watchdog_reaps_orphans_before_returning_to_outer_guard(tmp_path: Pa
     assert "[watchdog_reason] exit" in outer_log.read_text()
 
 
+@pytest.mark.parametrize("reason,rss,seconds,allocation", [
+    ("rss-limit", 16, 5, "data=bytearray(64*1024*1024);"),
+    ("timeout", 256, 1, ""),
+])
+def test_rss_watchdog_enforces_positive_limits(tmp_path, reason, rss, seconds, allocation):
+    log = tmp_path / "bounded.log"
+    pid_file = tmp_path / "child.pid"
+    child = (
+        "import os,pathlib,time;"
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(os.getpid()));"
+        + allocation + "time.sleep(10)")
+    result = subprocess.run([
+        sys.executable, str(ROOT / "scripts/test/sniper_rss_watch.py"),
+        "--rss-mib", str(rss), "--seconds", str(seconds),
+        "--log", str(log), "--", sys.executable, "-c", child,
+    ], capture_output=True, text=True, timeout=15)
+    assert result.returncode != 0
+    assert f"[watchdog_reason] {reason}" in log.read_text()
+    assert not Path("/proc", pid_file.read_text()).exists()
+
+
 def test_foundation_probe_compiles(tmp_path: Path):
     compiler = shutil.which("g++")
     if compiler is None:

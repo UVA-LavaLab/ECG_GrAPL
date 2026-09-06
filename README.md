@@ -155,6 +155,8 @@ See [reproduction](wiki/Reproduction.md#6-current-qualification-and-historical-c
 include native transport-matched speedups, traffic, and all three backends'
 miss counters, including the Sniper Patents regression. They are preliminary
 4,096-vertex pressure cases, not full-graph paper results.
+[Full-core local results](wiki/Evaluation-Methodology.md#43-full-core-local-release-results)
+cover six full graphs and all ten roles at 8 MiB, with both wins and regressions retained.
 
 ## Documentation
 

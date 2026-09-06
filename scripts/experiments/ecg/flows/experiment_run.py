@@ -29,7 +29,7 @@ import shutil
 import subprocess
 import sys
 import time
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1770,8 +1770,10 @@ def write_preflight(run_dir: Path, args: argparse.Namespace) -> None:
 @contextmanager
 def run_lock(lock_path: Path) -> Iterator[None]:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("w") as fh:
+    with lock_path.open("a+") as fh:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fh.seek(0)
+        fh.truncate()
         fh.write(f"pid={os.getpid()} created_utc={utc_now()}\n")
         fh.flush()
         try:
@@ -2396,6 +2398,17 @@ def main(argv: list[str]) -> int:
         args, jobs, manifest_path)
     args._equivalence_authorization = validate_current_final_authorization(
         args, jobs, manifest_path)
+    try:
+        with run_lock(args.lock_path):
+            return run_locked_profile(args, manifest_path, manifest, jobs, run_dir)
+    except BlockingIOError:
+        print(f"[error] another experiment run holds lock: {args.lock_path}", file=sys.stderr)
+        return 2
+
+
+def run_locked_profile(
+        args: argparse.Namespace, manifest_path: Path, manifest: dict[str, Any],
+        jobs: list[Job], run_dir: Path) -> int:
     guard_run_manifest_scope(run_dir, jobs)
     write_run_manifest(run_dir, args, manifest, jobs)
     write_preflight(run_dir, args)
@@ -2431,18 +2444,12 @@ def main(argv: list[str]) -> int:
         ):
             (run_dir / name).unlink(missing_ok=True)
     failures = 0
-    try:
-        lock_context = run_lock(args.lock_path) if not args.dry_run else nullcontext()
-        with lock_context:
-            for job in jobs:
-                code = run_job(job, run_dir, args)
-                if code != 0:
-                    failures += 1
-                    if args.stop_on_error:
-                        break
-    except BlockingIOError:
-        print(f"[error] another experiment run holds lock: {args.lock_path}", file=sys.stderr)
-        return 2
+    for job in jobs:
+        code = run_job(job, run_dir, args)
+        if code != 0:
+            failures += 1
+            if args.stop_on_error:
+                break
 
     write_run_manifest(run_dir, args, manifest, jobs)
     write_combined_outputs(run_dir, jobs)
