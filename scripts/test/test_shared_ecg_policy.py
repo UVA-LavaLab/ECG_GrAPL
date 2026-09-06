@@ -215,18 +215,21 @@ def test_every_ecg_instruction_in_the_built_decoder_is_tracked():
     simulator that cannot decode it.
     """
     applied = GEM5_APPLIED / "arch/riscv/isa/decoder.isa"
-    overlay = (GEM5_OVERLAY / "arch/riscv/isa/decoder_ecg_extract.isa")
+    overlays = tuple(
+        GEM5_OVERLAY / "arch/riscv/isa" / name
+        for name in ("decoder_ecg_extract.isa", "decoder_ecg_record.isa"))
     if not applied.exists():
         import pytest
         pytest.skip("gem5 checkout not present")
     import re
     names = lambda t: set(re.findall(r"\b(ecg_[a-z0-9_]+)\(\{\{", t))
-    built, tracked = names(applied.read_text()), names(overlay.read_text())
+    built = names(applied.read_text())
+    tracked = set().union(*(names(overlay.read_text()) for overlay in overlays))
     untracked = sorted(built - tracked)
     assert not untracked, (
         f"{untracked} exist only in the generated gem5 decoder, so they are "
         "not in version control and will vanish on a fresh checkout; add them "
-        f"to {overlay.relative_to(ROOT)}")
+        "to the managed custom-0/custom-1 decoder fragments")
     # The other direction matters too: a tracked instruction absent from the
     # build means the overlay was edited without reinstalling, so the simulator
     # being measured is not the one in version control.
