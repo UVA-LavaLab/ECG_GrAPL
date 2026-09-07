@@ -121,8 +121,8 @@ python3 -I scripts/experiments/ecg/flows/experiment_run.py \
 
 The first profile contains 84 rows: six algorithms, seven policies, and both
 record widths, checked against independent diamond/clique answers. The second
-contains 42 auto-width rows on a 512-vertex pressure graph with two components
-and isolates. SpMV/SSSP use the explicit weighted graph (integer weights 0-31);
+contains 42 auto-width rows on a 512-vertex pressure graph with two nontrivial
+components and 16 isolates. SpMV/SSSP use the explicit weighted graph (integer weights 0-31);
 the other kernels use its identical unweighted topology. Both run serially,
 with a 1 GiB process-tree RSS guard and 32 MiB algorithm workspace limit.
 Their tiny cache geometry is diagnostic, not a final-paper machine.
@@ -132,6 +132,12 @@ Their tiny cache geometry is diagnostic, not a final-paper machine.
 work, and raw transport accounting are checked. These rows report cache data
 traffic including construction, never CPU speedup, and cannot issue the PR
 equivalence authorization or authorize detailed final runs.
+
+The recorded runs at `6d83f57c` are `results/ecg_experiments/runs/current_algorithms_cache_gate`
+(84 rows) and `current_algorithms_cache_pressure` (42 rows). Every raw receipt,
+input fingerprint and output digest was replayed. Sum of guarded job wall times:
+20.931 s and 10.562 s; peak sampled process-tree RSS: 50.387 and 50.410 MiB.
+These are local runner/resource measurements, not simulated CPU execution times.
 
 | Profile | Workload | Resource scope |
 |---|---|---|

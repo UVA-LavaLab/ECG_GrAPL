@@ -1,9 +1,8 @@
 # Evaluation Methodology
 
-The full-paper successor evaluates one stable ECG design: graph-adaptive records,
-request-bound property loads, bounded resident updates and reuse-guided prefetching
-from real records. This page defines the workload, comparisons, measured results
-and evidence limits.
+The full-paper successor evaluates graph-adaptive records, request-bound loads,
+bounded resident updates and real-record prefetching. This page defines current
+workloads, comparisons, measured results and evidence limits.
 
 The mechanism is explained in [Adaptive records and cache control](ReusePlan-FlowThrough),
 the [worked graph-to-cache example](Property-to-Cache-Walkthrough), and the
@@ -27,16 +26,18 @@ The legacy algorithm executables are not substitutes for these current paths.
 | Algorithm | Current adaptive ECG implementation | Current cache_sim traffic ratio | Native CPU speedup |
 |---|---|---|---|
 | PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.6814 versus CSR LRU on the six full core graphs at 8 MiB | Not yet reported for the final workload set |
-| SpMV (CSR) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
-| BFS (`bfs`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
-| SSSP (`sssp`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
-| CC (`cc`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
-| BC (`bc`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
-| TC (`tc`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
+| SpMV (CSR) | Current shared kernel and cache_sim adapter | 2.7754 | Not measured |
+| BFS (`bfs`) | Current shared kernel and cache_sim adapter | 3.0956 | Not measured |
+| SSSP (`sssp`) | Current shared kernel and cache_sim adapter | 2.2359 | Not measured |
+| CC (`cc`) | Current shared kernel and cache_sim adapter | 2.5008 | Not measured |
+| BC (`bc`) | Current shared kernel and cache_sim adapter | 2.0792 | Not measured |
+| TC (`tc`) | Current shared kernel and cache_sim adapter | 2.3309 | Not measured |
 
 The PageRank ratio is the geometric mean of per-graph ECG/CSR-LRU modeled
 off-chip traffic; lower is better. It is **not a CPU speedup**.
-Unmeasured cells cannot be filled with legacy results. Current PR results are detailed below.
+New rows are ECG/CSR LRU on pressure512, including setup: all six regress.
+ECG/transport also regresses (1.28-1.97), so preparation is not the sole cause.
+These tiny-cache diagnostics are not final-paper speedups; native cells remain unmeasured.
 
 ### Algorithm and prediction contracts
 
