@@ -10,6 +10,7 @@ from pathlib import Path
 import struct
 import sys
 from functools import lru_cache
+from typing import Literal
 
 try:
     from .record_receipts import RecordReceiptError, UINT64_MAX, resolve_layout
@@ -29,22 +30,35 @@ class GraphInfo:
     maximum_id: int
     storage_bytes: int
     sha256: str
+    weighted: bool = False
+    minimum_weight: int | None = None
+    maximum_weight: int | None = None
 
 
 def _signature(stat: os.stat_result) -> tuple[int, int, int, int]:
     return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns
 
 
-def graph_info(path: Path) -> GraphInfo:
+def graph_info(
+        path: Path, *, allow_weighted: bool = False,
+        traversal: Literal["in", "out"] = "in") -> GraphInfo:
+    if traversal not in ("in", "out"):
+        raise RecordResourceError("graph traversal must be in or out")
     resolved = path.resolve()
-    return _graph_info(str(resolved), _signature(resolved.stat()))
+    return _graph_info(str(resolved), _signature(resolved.stat()), allow_weighted, traversal)
 
 
 @lru_cache(maxsize=32)
-def _graph_info(path_text: str, signature: tuple[int, int, int, int]) -> GraphInfo:
+def _graph_info(
+        path_text: str, signature: tuple[int, int, int, int],
+        allow_weighted: bool, traversal: Literal["in", "out"]) -> GraphInfo:
     path = Path(path_text)
-    if path.suffix != ".sg":
-        raise RecordResourceError("current record preflight requires an unweighted .sg input")
+    if path.suffix not in ((".sg", ".wsg") if allow_weighted else (".sg",)):
+        raise RecordResourceError(
+            "graph preflight requires .sg or .wsg" if allow_weighted
+            else "current record preflight requires an unweighted .sg input")
+    weighted = path.suffix == ".wsg"
+    edge_bytes = 8 if weighted else 4
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         header = handle.read(17)
@@ -53,7 +67,7 @@ def _graph_info(path_text: str, signature: tuple[int, int, int, int]) -> GraphIn
         directed, records, vertices = struct.unpack("<?qq", header)
         if not 0 < vertices <= (1 << 31) - 1 or records <= 0:
             raise RecordResourceError("graph exceeds the nonempty signed-32 loader domain")
-        expected = 17 + (2 if directed else 1) * (8 * (vertices + 1) + 4 * records) + 4 * vertices
+        expected = 17 + (2 if directed else 1) * (8 * (vertices + 1) + edge_bytes * records) + 4 * vertices
         if expected > UINT64_MAX or expected != signature[2]:
             raise RecordResourceError("serialized graph size disagrees with its header")
         digest.update(header)
@@ -74,6 +88,9 @@ def _graph_info(path_text: str, signature: tuple[int, int, int, int]) -> GraphIn
                 count -= items
 
         maximum = 0
+        minimum_weight: int | None = None
+        maximum_weight: int | None = None
+        encoded_direction = 1 if directed and traversal == "in" else 0
         for direction in range(2 if directed else 1):
             previous = 0
             position = 0
@@ -85,17 +102,25 @@ def _graph_info(path_text: str, signature: tuple[int, int, int, int]) -> GraphIn
                     position += 1
             if previous != records:
                 raise RecordResourceError("serialized CSR does not cover every record")
-            for ids in chunks(records, "i"):
+            for entries in chunks(records * (2 if weighted else 1), "i"):
+                ids = entries[::2] if weighted else entries
                 low, high = min(ids), max(ids)
                 if low < 0 or high >= vertices:
                     raise RecordResourceError("serialized destination lies outside the graph domain")
-                if not directed or direction == 1:
+                if direction == encoded_direction:
                     maximum = max(maximum, high)
+                if weighted:
+                    weights = entries[1::2]
+                    low_weight, high_weight = min(weights), max(weights)
+                    minimum_weight = low_weight if minimum_weight is None else min(minimum_weight, low_weight)
+                    maximum_weight = high_weight if maximum_weight is None else max(maximum_weight, high_weight)
         for _ids in chunks(vertices, "i"):
             pass
         if _signature(os.fstat(handle.fileno())) != signature or _signature(path.stat()) != signature:
             raise RecordResourceError("graph changed during resource preflight")
-    return GraphInfo(directed, vertices, records, maximum, expected, digest.hexdigest())
+    return GraphInfo(
+        directed, vertices, records, maximum, expected, digest.hexdigest(),
+        weighted, minimum_weight, maximum_weight)
 
 
 def plan_resources(
@@ -103,7 +128,7 @@ def plan_resources(
     minimum_mantissa_bits: int, carrier_limit: int, auxiliary_limit: int,
     rss_mib: int, backend: str, target_memory_bytes: int = 0,
     equivalence: bool = False,
-) -> dict[str, int | str | bool]:
+) -> dict[str, int | str | bool | None]:
     if min(carrier_limit, auxiliary_limit, rss_mib) <= 0:
         raise RecordResourceError("record allocation and RSS limits must be positive")
     if max(carrier_limit, auxiliary_limit) > UINT64_MAX:

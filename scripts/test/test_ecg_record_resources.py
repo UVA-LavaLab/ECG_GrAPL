@@ -44,6 +44,42 @@ def test_preflight_preserves_isolated_vertices_and_actual_pull_ids(tmp_path):
         graph_info(path)
 
 
+def test_weighted_graph_inspection_keeps_ids_weights_and_direction_separate(tmp_path):
+    path = tmp_path / "weighted-sinks.wsg"
+    # 0 -> 7 (weight 4), 1 -> 2 (weight -3); the high destination is not a pull-source ID.
+    data = struct.pack("<?qq", True, 2, 8)
+    data += struct.pack("<9q", 0, 1, 2, 2, 2, 2, 2, 2, 2)
+    data += struct.pack("<4i", 7, 4, 2, -3)
+    data += struct.pack("<9q", 0, 0, 0, 1, 1, 1, 1, 1, 2)
+    data += struct.pack("<4i", 1, -3, 0, 4)
+    data += struct.pack("<8i", *range(8))
+    path.write_bytes(data)
+    with pytest.raises(RecordResourceError, match="unweighted"):
+        graph_info(path)
+    pull = graph_info(path, allow_weighted=True, traversal="in")
+    push = graph_info(path, allow_weighted=True, traversal="out")
+    assert pull.vertices == push.vertices == 8 and pull.records == 2
+    assert pull.maximum_id == 1 and push.maximum_id == 7
+    assert pull.weighted and pull.minimum_weight == -3 and pull.maximum_weight == 4
+    assert pull.storage_bytes == len(data) and pull.sha256 == hashlib.sha256(data).hexdigest()
+    assert push.sha256 == pull.sha256
+    with pytest.raises(RecordResourceError, match="traversal"):
+        graph_info(path, allow_weighted=True, traversal="unknown")
+    path.write_bytes(data[:-1])
+    with pytest.raises(RecordResourceError, match="size"):
+        graph_info(path, allow_weighted=True)
+
+
+def test_weighted_graph_rejects_an_out_of_domain_neighbor(tmp_path):
+    path = tmp_path / "invalid.wsg"
+    data = struct.pack("<?qq", False, 1, 2)
+    data += struct.pack("<3q", 0, 1, 1)
+    data += struct.pack("<2i", 2, 1) + struct.pack("<2i", 0, 1)
+    path.write_bytes(data)
+    with pytest.raises(RecordResourceError, match="outside"):
+        graph_info(path, allow_weighted=True)
+
+
 def test_resource_limits_fail_before_launch():
     graph = GraphInfo(False, 512, 2048, 511, 16409, "0" * 64)
     kwargs = dict(
