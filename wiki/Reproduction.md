@@ -408,6 +408,40 @@ Sniper cells use translated SIFT. Do not add `--ecg-equivalence` when
 reproducing their timing numbers. See the
 [results and limitations](Evaluation-Methodology#41-current-sampled-preliminary-results).
 
+### Current Twitter archive reproduction
+
+The explicit `ecg_twitter_reproduction` profile reruns the historical
+one-iteration Twitter controls with the current implementation:
+
+```bash
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_twitter_reproduction \
+  --run-dir results/ecg_experiments/runs/current_twitter_reproduction --no-build
+```
+
+It consumes the unchanged directed `twitter-2010-dbg.sg` graph (41,652,230
+vertices and 1,468,364,884 records) with `-o 0 -n 1 -i 1 -t 0`.
+L1D is 32 KiB / eight ways, L2 is 128 KiB / eight ways, and the LLC settings
+are 8 and 24 MiB / 16 ways, matching the archive. The nine historical roles
+are retained with current ECG replacement/combined implementations, plus the
+required current transport control: 20 cells in total. Transport runs first
+to exercise full-scale record allocation before the remaining controls.
+
+P-OPT traffic is **analytic in this reproduction**, matching the historical
+archive rather than the simulated-column mode of `ecg_local_release_cache`.
+Current fixed-CSR access accounting and non-fused F32 arithmetic remain
+enabled. Changed-model counts are compared with the archive, not forced to
+equal it; this profile is not native timing or final-run authorization.
+
+The full graph resolves automatically to ID26/M6/H31/m0 and four-byte records.
+Its carrier alone needs 5,873,459,536 bytes; the bounded inspection reserves
+19,795,600,521 host bytes conservatively. The profile therefore declares a
+6 GiB carrier limit, 1 GiB construction-scratch limit, 32 GiB process-tree RSS
+cap, two hours per policy, and twelve hours for the whole matrix. Run serially
+and retain host memory headroom. A Slurm allocation must exceed the profile
+RSS cap rather than relying on the wrapper's default 32 GiB allocation.
+The old `twitter_popt_se_d9ae0a6c` archive is never overwritten.
+
 ### Lab-node handoff
 
 Rebuild the selected guests on the lab node rather than assuming a workstation
@@ -432,8 +466,8 @@ Missing prerequisites stop the job before experiment execution. File
 availability is not proof of CPU compatibility or SDE correctness; the
 following complete small run is still required.
 
-The same mode accepts `ecg_local_release_cache`, `ecg_large_cache`, and
-`ecg_detailed_final`. A final launch additionally requires
+The same mode accepts `ecg_local_release_cache`, `ecg_large_cache`,
+`ecg_twitter_reproduction`, and `ecg_detailed_final`. A final launch additionally requires
 `GRAPHBREW_FINAL_STAGE=1` and `GRAPHBREW_EQUIVALENCE_RECEIPT` pointing to the
 lab-generated `current_ecg_equivalence.complete.json`. The experiment runner
 remains the authoritative validator. Size the allocation's wall/RSS budgets

@@ -22,6 +22,7 @@ PREFLIGHT = (
 CURRENT_PROFILES = (
     "ecg_current_equivalence",
     "ecg_local_release_cache",
+    "ecg_twitter_reproduction",
     "ecg_large_cache",
     "ecg_detailed_final",
 )
@@ -113,6 +114,7 @@ def test_generator_rejects_current_whole_profiles(tmp_path, profile):
     (
         "ecg_current_equivalence",
         "ecg_local_release_cache",
+        "ecg_twitter_reproduction",
         "ecg_large_cache",
     ),
 )
@@ -332,7 +334,7 @@ def test_preflight_default_root_is_repository():
 
 
 @pytest.mark.parametrize(
-    "profile", ("ecg_local_release_cache", "ecg_large_cache")
+    "profile", ("ecg_local_release_cache", "ecg_large_cache", "ecg_twitter_reproduction")
 )
 def test_cache_only_preflight_can_pass_with_fixture_tools(
         tmp_path, monkeypatch, profile):

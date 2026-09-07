@@ -5,6 +5,7 @@
     "ecg_current_equivalence",
     "ecg_current_equivalence_extended",
     "ecg_local_release_cache",
+    "ecg_twitter_reproduction",
     "ecg_large_cache",
     "ecg_detailed_final"
   ],
@@ -39,6 +40,7 @@
     "ecg_current_equivalence": "Current bounded three-backend ECG semantic-equivalence profile: exhaustive fixture plus focused temporal-pressure coverage.",
     "ecg_current_equivalence_extended": "Optional current ECG equivalence corroboration on the retained Orkut-4096 sample.",
     "ecg_local_release_cache": "Serial primary-capacity full-core-corpus cache_sim qualification with fixed CSR baselines and all current ECG mechanisms; nonauthorizing.",
+    "ecg_twitter_reproduction": "Current fixed-workload Twitter reproduction of the archived one-iteration 8/24 MiB controls, with an added transport control; analytic P-OPT traffic and no timing authorization.",
     "ecg_large_cache": "Current adaptive ECG large-graph cache_sim exploration; nonauthorizing functional cache/traffic evidence.",
     "ecg_detailed_final": "Explicitly authorized current ECG gem5/Sniper final-stage matrix; never selected by default.",
     "ecg_smoke": "Historical cache_sim smoke for the legacy ECG policy set; retained for reproduction.",
@@ -108,6 +110,11 @@
       "reason": "Local full-graph functional qualification; preserves every baseline, complete fixed work and bounded resources. It cannot authorize detailed final jobs.",
       "require_clean_worktree": true
     },
+    "ecg_twitter_reproduction": {
+      "status": "ready",
+      "reason": "Explicit high-memory cache-only reproduction; preserves the old archive and reports changed-model results without forcing equality.",
+      "require_clean_worktree": true
+    },
     "ecg_detailed_final": {
       "status": "authorization-required",
       "reason": "Requires --final-stage and a freshly verified current ECG equivalence receipt.",
@@ -145,6 +152,9 @@
     }
   },
   "benchmark_options": {
+    "file_pr_current_i1": {
+      "pr": "-f {graph_path} -o 0 -n 1 -i 1 -t 0"
+    },
     "file_pr_current_i2": {
       "pr": "-f {graph_path} -o 0 -n 1 -i 2 -t 0"
     },
@@ -197,6 +207,17 @@
     }
   },
   "graph_sets": {
+    "current_twitter_reproduction": [
+      {
+        "name": "twitter-2010",
+        "path": "results/graphs/twitter-2010/twitter-2010-dbg.sg",
+        "expected_sha256": "7942eb7fb4376e66f2e0e0a569e6d1093659d9949e24d899d02509674d828be3",
+        "options_key": "file_pr_current_i1",
+        "expected_vertices": 41652230,
+        "expected_records": 1468364884,
+        "expected_max_vertex_id": 41652228
+      }
+    ],
     "current_local_release_pr": [
       {
         "name": "web-Google",
@@ -1166,6 +1187,38 @@
       "policy_sharding_allowed": false,
       "timeout_cache": 7200,
       "out_subdir": "130_current_large_cache"
+    },
+    {
+      "name": "131_current_twitter_reproduction",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_twitter_reproduction"],
+      "suite": "cache-sim",
+      "graph_set": "current_twitter_reproduction",
+      "benchmarks": ["pr"],
+      "policies": ["ECG:transport", "LRU", "SRRIP", "GRASP_PAPER", "POPT:UNCHARGED", "POPT:CHARGED", "POPT_SE", "POPT_SE_DISTANT", "ECG:replacement", "ECG"],
+      "current_pr_baselines": true,
+      "l1d_size": "32kB",
+      "l1d_ways": "8",
+      "l2_size": "128kB",
+      "l2_ways": "8",
+      "l3_sizes": ["8MB", "24MB"],
+      "l3_ways": "16",
+      "prefetcher": "none",
+      "flowthrough": "off",
+      "popt_reserve_model": "size_correct",
+      "popt_matrix_stream": "analytic",
+      "ecg_record_bytes": 0,
+      "ecg_record_minimum_mantissa_bits": 0,
+      "ecg_record_max_carrier_bytes": 6442450944,
+      "ecg_record_max_auxiliary_bytes": 1073741824,
+      "cache_record_rss_mib": 32768,
+      "cache_sim_omp_threads": 1,
+      "policy_sharding_allowed": false,
+      "timeout_cache": 7200,
+      "process_tree_timeout_seconds": 43200,
+      "reference_archive": "results/ecg_experiments/runs/twitter_popt_se_d9ae0a6c/roi_matrix.json",
+      "reference_archive_sha256": "6ee0e0c21bf582f55b0ef6a4c1d8c7544348558eaccc7b4cb9454c6352b2e124",
+      "out_subdir": "131_current_twitter_reproduction"
     },
     {
       "name": "140_current_detailed_final_gem5",

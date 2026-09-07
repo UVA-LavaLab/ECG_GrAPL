@@ -20,6 +20,7 @@ from flows import experiment_run  # noqa: E402
 CURRENT_WHOLE_PROFILES = frozenset({
     "ecg_current_equivalence",
     "ecg_local_release_cache",
+    "ecg_twitter_reproduction",
     "ecg_large_cache",
     "ecg_detailed_final",
 })

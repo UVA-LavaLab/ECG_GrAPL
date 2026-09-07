@@ -229,6 +229,34 @@ def test_local_release_matrix_keeps_all_reference_and_mechanism_roles():
     assert not stage.get("requires_current_equivalence", False)
 
 
+def test_twitter_reproduction_preserves_archive_controls_and_scale_budget():
+    manifest = json.loads((ECG_DIR / "experiment_manifest.json").read_text())
+    stages = [stage for stage in manifest["stages"]
+              if "ecg_twitter_reproduction" in stage.get("profiles", [])]
+    assert len(stages) == 1
+    stage = stages[0]
+    assert stage["suite"] == "cache-sim" and stage["current_pr_baselines"] is True
+    assert stage["policies"] == [
+        "ECG:transport", "LRU", "SRRIP", "GRASP_PAPER", "POPT:UNCHARGED", "POPT:CHARGED",
+        "POPT_SE", "POPT_SE_DISTANT", "ECG:replacement", "ECG"]
+    assert (stage["l1d_size"], stage["l2_size"], stage["l3_sizes"]) == (
+        "32kB", "128kB", ["8MB", "24MB"])
+    assert stage["l1d_ways"] == stage["l2_ways"] == "8" and stage["l3_ways"] == "16"
+    assert stage["popt_matrix_stream"] == "analytic" and stage["popt_reserve_model"] == "size_correct"
+    assert stage["ecg_record_bytes"] == 0 and stage["ecg_record_minimum_mantissa_bits"] == 0
+    assert stage["cache_record_rss_mib"] == 32768 and stage["timeout_cache"] == 7200
+    assert stage["process_tree_timeout_seconds"] == 43200 and stage["policy_sharding_allowed"] is False
+    assert stage["reference_archive_sha256"] == "6ee0e0c21bf582f55b0ef6a4c1d8c7544348558eaccc7b4cb9454c6352b2e124"
+    graphs = manifest["graph_sets"][stage["graph_set"]]
+    assert len(graphs) == 1 and graphs[0]["expected_records"] == 1468364884
+    assert graphs[0]["expected_vertices"] == 41652230
+    assert len(graphs[0]["expected_sha256"]) == 64
+    assert stage["ecg_record_max_carrier_bytes"] >= 4 * graphs[0]["expected_records"]
+    assert manifest["benchmark_options"][graphs[0]["options_key"]]["pr"] == (
+        "-f {graph_path} -o 0 -n 1 -i 1 -t 0")
+    assert not stage.get("requires_current_equivalence", False)
+
+
 def make_rows() -> tuple[
         dict[tuple[str, str, str, int, str, str], dict], list[dict[str, str]], dict]:
     manifest = json.loads((ECG_DIR / "experiment_manifest.json").read_text())

@@ -19,6 +19,7 @@ DEFAULT_ROOT = Path(__file__).resolve().parents[4]
 CURRENT_PROFILES = (
     "ecg_current_equivalence",
     "ecg_local_release_cache",
+    "ecg_twitter_reproduction",
     "ecg_large_cache",
     "ecg_detailed_final",
 )
@@ -186,6 +187,7 @@ def collect_preflight(
     selected = set(profiles)
     needs_cache = bool(selected & {
         "ecg_current_equivalence", "ecg_local_release_cache",
+        "ecg_twitter_reproduction",
         "ecg_large_cache",
     })
     needs_gem5 = bool(selected & {

@@ -44,6 +44,7 @@ if [[ "$mode" == "current-whole-profile" ]]; then
   fi
   if [[ "$profile" != "ecg_current_equivalence" &&
         "$profile" != "ecg_local_release_cache" &&
+        "$profile" != "ecg_twitter_reproduction" &&
         "$profile" != "ecg_large_cache" &&
         "$profile" != "ecg_detailed_final" ]]; then
     echo "Unsupported CURRENT WHOLE-PROFILE profile: $profile" >&2
@@ -189,6 +190,7 @@ if [[ ! "$run_tag" =~ ^[A-Za-z0-9._-]+$ || "$run_tag" == "." || "$run_tag" == ".
 fi
 if [[ "$profile" == "ecg_current_equivalence" ||
       "$profile" == "ecg_local_release_cache" ||
+      "$profile" == "ecg_twitter_reproduction" ||
       "$profile" == "ecg_large_cache" ||
       "$profile" == "ecg_detailed_final" ]]; then
   echo "Profile $profile requires GRAPHBREW_SLURM_MODE=current-whole-profile and cannot run as a legacy shard" >&2
