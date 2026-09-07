@@ -10,6 +10,10 @@ graph-derived reuse bound in the edge record, carries it through the real load,
 and uses it for replacement and bounded lookahead prefetching. Property values
 and graph semantics remain unchanged.
 
+This repository develops the full-paper successor to our
+[ECG workshop paper (IPDPSW 2024)](https://doi.org/10.1109/IPDPSW63119.2024.00105),
+with an improved graph-adaptive model and native RISC-V/gem5 implementation.
+
 ## One graph-adaptive record layout
 
 ECG has one current record grammar rather than public versioned or fixed-width
