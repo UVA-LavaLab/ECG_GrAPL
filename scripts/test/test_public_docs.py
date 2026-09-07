@@ -5,6 +5,8 @@ import re
 import subprocess
 import xml.etree.ElementTree as ET
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_PAGES = (
@@ -81,12 +83,46 @@ def test_graph_direction_language_is_mathematically_explicit():
     assert "property-request count is therefore `d_out(v)`" in readme
 
 
-def test_reproduction_requires_the_iteration_one_gate():
+def test_reproduction_uses_the_current_equivalence_and_final_flow():
     reproduction = (ROOT / "wiki/Reproduction.md").read_text()
-    assert "--phase early-stop" in reproduction
-    assert '"iteration_8_authorized": true' in reproduction
-    assert reproduction.index("--phase early-stop") < reproduction.index(
-        "--only 91")
+    assert "--profile ecg_current_equivalence" in reproduction
+    assert "--profile ecg_detailed_final --final-stage" in reproduction
+    assert "--equivalence-receipt" in reproduction
+    assert reproduction.index("--profile ecg_current_equivalence") < reproduction.index(
+        "--profile ecg_detailed_final --final-stage")
+    assert "--phase early-stop" not in reproduction
+    assert "--profile reuse_plan_" not in reproduction
+
+
+def test_methodology_is_current_only_and_marks_unmeasured_algorithms():
+    methodology = (ROOT / "wiki/Evaluation-Methodology.md").read_text()
+    reproduction = (ROOT / "wiki/Reproduction.md").read_text()
+    assert len(methodology.splitlines()) <= 240
+    assert len(reproduction.splitlines()) <= 300
+    for text in (methodology, reproduction):
+        for old in ("Scale6", "REF32", "Historical campaign provenance",
+                    "current_preliminary/", "Historical misses"):
+            assert old not in text
+    assert "Per-algorithm performance" in methodology
+    assert "| PageRank (`pr`)" in methodology
+    for algorithm in ("SpMV", "BFS", "SSSP", "CC", "BC", "TC"):
+        row = next(line for line in methodology.splitlines()
+                   if line.startswith(f"| {algorithm}"))
+        assert "Not integrated" in row and "Not measured" in row
+    assert "0.6814" in methodology
+
+
+@pytest.mark.parametrize("algorithm", ["bfs", "sssp", "cc", "bc", "tc"])
+def test_unmeasured_algorithm_rows_match_current_runner_scope(algorithm):
+    from scripts.experiments.ecg import roi_matrix
+
+    args = roi_matrix.parse_args([
+        "--suite", "cache-sim", "--benchmark", algorithm,
+        "--policies", "ECG", "--options", "-g 2 -k 1 -o 0 -n 1 -i 2 -t 0",
+    ])
+    error = roi_matrix.current_record_error(
+        args, roi_matrix.parse_policy_spec("ECG"), "cache_sim")
+    assert "requires PR" in error
 
 
 def test_public_links_resolve():
@@ -135,14 +171,11 @@ def test_wiki_page_links_use_rendered_slugs():
                     f"{page} links to raw wiki source {target!r}")
 
 
-def test_design_guide_uses_aligned_instruction_family():
-    guide = (ROOT / "wiki/ReusePlan-FlowThrough.md").read_text()
-    for mnemonic in (
-            "ecg.plan.load",
-            "ecg.flow.load",
-            "ecg.bind.load",
-            "ecg.bind.iload"):
-        assert mnemonic in guide
+def test_design_guide_uses_current_instruction_family():
+    guide = (ROOT / "wiki/RISC-V-Instruction-Path.md").read_text()
+    for token in ("Record32", "Record64", "PropertyF32", "0x2b", "0x805"):
+        assert token in guide
+    assert "Historical instruction families" not in guide
 
 
 def test_readme_documents_experimental_riscv_support():
@@ -165,7 +198,7 @@ def test_current_adaptive_and_sniper_contract_is_documented():
             "bounded-completion-corroboration", "retained_source_bytes"):
         assert token in combined
     flat = " ".join(combined.lower().split())
-    assert "guest software window is always 16 `uint64_t`" in flat
+    assert "window is always `16 * uint64_t`" in flat
     assert "production admission remains under review" not in combined
 
 

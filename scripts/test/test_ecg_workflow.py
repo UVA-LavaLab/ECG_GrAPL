@@ -670,11 +670,11 @@ def test_public_documents_use_the_expected_reading_flow():
     assert "gem5 O3 execution time is used for architectural speedup" in (
         method_flat)
     assert "cache_sim does not model cycles or instructions" in method_flat
-    assert "time is not used as a ReuseBind speedup" in method_flat
+    assert "Sniper time is not used as native RISC-V speedup" in method_flat
     assert "popt_target_time_charged=0" in methodology
     assert "optimistic P-OPT bound" in methodology
 
-    # README stays an overview; the wiki owns detailed implementation history.
+    # README stays an overview; the wiki owns the current mechanism and methodology.
     assert len(root_readme.splitlines()) < 180
     assert "one current record grammar" in root_readme
     assert "wiki/ReusePlan-FlowThrough.md" in root_readme
@@ -947,20 +947,21 @@ def test_final_design_docs_and_run_flow_are_consistent():
     assert "## 5. Use one real-record prefetch rule" in wiki
 
     assert "# Evaluation Methodology" in methodology
-    assert "Historical campaign provenance" in methodology
-    assert "not relabeled as current adaptive results" in methodology
-
-    assert "## 4. Inspect the earlier PageRank study" in reproduction
-    assert "reuse_plan_pagerank_study" in reproduction
-    assert "cit-Patents/cit-Patents.el" in reproduction
-    assert "cit-Patents/cit-Patents.mtx" not in reproduction
+    assert "## 1. Algorithm scope" in methodology
+    assert "Per-algorithm performance" in methodology
+    assert "Historical campaign provenance" not in methodology
+    assert "## 1. Prepare inputs" in reproduction
+    assert "## 3. Qualify the shared semantics" in reproduction
+    assert "## 4. Run current cache experiments" in reproduction
+    assert "## 5. Lab handoff and detailed execution" in reproduction
     assert "python3 -I" in reproduction
     assert "--require-reference-python" in reproduction
     assert "--no-build --no-resume" in reproduction
-    assert "## 6. Current qualification and historical campaign recipes" in reproduction
-    assert "reuse_plan_final_campaign" in reproduction
-    assert "## 7. Cross-simulator consistency" in reproduction
-    assert "--input-run-dirs" in reproduction
+    assert "--profile ecg_current_equivalence" in reproduction
+    assert "--profile ecg_local_release_cache" in reproduction
+    assert "--profile ecg_detailed_final --final-stage" in reproduction
+    assert "reuse_plan_final_campaign" not in reproduction
+    assert "--equivalence-receipt" in reproduction
 
     blocked_stage = next(
         stage for stage in manifest["stages"]

@@ -46,8 +46,8 @@ sequence/deadline arithmetic fail closed.
 
 This is bit-granular: with `H=31`, ID widths 18, 19, and 20 leave 14, 13, and
 12 metadata bits and select mantissas 8, 7, and 6. The 26-ID/6-metadata/m0
-case reproduces an older compact byte layout only as one numeric
-configuration. A full 32-bit ID requires an eight-byte record with 32 metadata
+case is one numeric configuration, not a standard for other graphs.
+A full 32-bit ID requires an eight-byte record with 32 metadata
 bits; that width alone does **not** establish exascale graph-loader support.
 
 ## Follow one checked edge
@@ -88,7 +88,7 @@ not fabricate a no-candidate result.
 | **cache_sim** | Shared codec, victim rule, real-record window and explicit access-step timing | strict admission passed for all four mechanisms, both widths, and exact 24 MiB; no CPU-cycle speedup |
 | **gem5 RV64 O3** | Raw 4/8-byte record loads, dependent F32 property loads, retirement transport, replacement and acknowledged LLC-only prefetch | native architectural/timing evidence for serial fixed-iteration PageRank |
 | **Sniper** | Actual 4/8-byte record loads and modeled transport/replacement/prefetch | all four mechanisms admitted, including 4-byte live and 8-byte SIFT translation cases; not native RISC-V timing |
-| **RTL / physical cost** | Earlier component studies | not a complete current-method silicon-area result |
+| **RTL / physical cost** | Current logical-state and interface accounting | physical area, energy and timing remain to be established |
 
 The native path is an experimental RISC-V custom-1 implementation using opcode
 `0x2b`: record32 is
@@ -126,10 +126,10 @@ For traversal over out-neighbors `N_out(u)`, the
 property `p[v]` is read once for each source in `N_in(v)`, giving `d_in(v)`. Metadata
 must describe the exact order executed.
 
-Historical Twitter, P-OPT, P-OPT-SE, ReusePlan, and FlowThrough results remain
-available with their original names, revisions, encodings, receipts, and
-limitations. They are not relabeled as results for the current adaptive
-method.
+The current end-to-end workload is fixed-iteration PageRank. Other algorithms
+need explicit integration before they contribute performance results; the
+[per-algorithm table](wiki/Evaluation-Methodology.md#per-algorithm-performance)
+makes implemented and unmeasured cases explicit.
 
 ## Run small before large
 
@@ -153,21 +153,18 @@ exploration. `ecg_detailed_final` requires both `--final-stage` and a current
 `ecg_local_release_cache` adds the full six-graph, ten-role CSR/reference/ECG
 comparison at the primary 8 MiB capacity before the lab handoff.
 Construction, target-memory, wall-time, and process-tree RSS limits stay explicit.
-See [reproduction](wiki/Reproduction.md#6-current-qualification-and-historical-campaign-recipes).
+See [reproduction](wiki/Reproduction.md#4-run-current-cache-experiments).
 
-[Current sampled results](wiki/Evaluation-Methodology.md#41-current-sampled-preliminary-results)
-include native transport-matched speedups, traffic, and all three backends'
-miss counters, including the Sniper Patents regression. They are preliminary
-4,096-vertex pressure cases, not full-graph paper results.
-[Full-core local results](wiki/Evaluation-Methodology.md#43-full-core-local-release-results)
-cover six full graphs and all ten roles at 8 MiB, with both wins and regressions retained.
+[Current PageRank results](wiki/Evaluation-Methodology.md#5-current-pagerank-results)
+cover the six full core graphs and Twitter, with both wins and regressions
+retained. They are functional cache/traffic results, not CPU speedups.
 
 ## Documentation
 
 - [Adaptive records and cache control](wiki/ReusePlan-FlowThrough.md)
 - [Native record-to-cache pipeline](wiki/RISC-V-Instruction-Path.md)
 - [Checked edge-to-cache example](wiki/Property-to-Cache-Walkthrough.md)
-- [Evaluation methodology and historical results](wiki/Evaluation-Methodology.md)
+- [Methodology and per-algorithm performance](wiki/Evaluation-Methodology.md)
 - [Related work](wiki/Related-Work.md)
 - [Build and reproduction](wiki/Reproduction.md)
 - [Repository hygiene](wiki/Repository-Hygiene.md)

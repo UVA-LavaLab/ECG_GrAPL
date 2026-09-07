@@ -65,9 +65,9 @@ conservative bound. Invalid tokens, graph horizons, addresses, and checked
 
 At `H=31`, 18-, 19-, and 20-bit IDs leave `M=14`, `13`, and `12`, selecting
 `m=8`, `7`, and `6`. There is no cliff from 14 directly to 6 metadata bits
-and no rounding of a 19-bit ID to 24 bits. The 26-ID/M6/H31/m0 case happens
-to reproduce an older compact byte layout, but is only one numeric
-configuration of this method. A full 32-bit ID requires an eight-byte record
+and no rounding of a 19-bit ID to 24 bits. The 26-ID/M6/H31/m0 case is one
+numeric configuration of this method, not a standard format for every graph.
+A full 32-bit ID requires an eight-byte record
 with `M=32`; that does not by itself demonstrate an exascale graph loader.
 
 For the fixture, `id_bits=5`, `M=27`, `H=6`, `exponent_bits=3`, and `m=23`.
@@ -147,7 +147,7 @@ requirements with logical OR so a live demand still obtains its needed fill.
 
 ### Figure 6 — Graph-sized matrices and cache-sized state
 
-![Historical P-OPT backing and active-column storage beside the current ECG per-line prediction payload](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-capacity-accounting.svg)
+![Graph-sized P-OPT backing and active-column storage beside the current ECG per-line prediction payload](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f06-capacity-accounting.svg)
 
 Current builders retain the original graph and construct a separate
 `vector<uint32_t>` or `vector<uint64_t>` carrier. Their sparse line first/next
@@ -168,14 +168,6 @@ port logic.
 These values are logical payload counts, not total silicon-area results.
 The exact 24 MiB/16-way geometry has 24,576 sets and uses true modulo
 indexing rather than rounded capacity or changed associativity.
-
-## Historical mechanisms and results
-
-The stable page slug predates the current codec. Historical
-`ecg.plan.load`, `ecg.flow.load`, `ecg.bind.load`, and `ecg.bind.iload`
-names refer to ReusePlan/ReuseBind and FlowThrough work. Historical fixed
-14-bit and 6-bit results retain their original names and revisions; they are
-not current public formats and are not relabeled as adaptive results.
 
 P-OPT active-column reservations and the complete backing matrix remain
 separate quantities. The one-column P-OPT-SE variants remain disclosed

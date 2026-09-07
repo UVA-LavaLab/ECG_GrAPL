@@ -46,10 +46,10 @@ fixed sweep.
    word, address, F32 value, deadline, and ownership boundaries.
 3. [Native processor pipeline](RISC-V-Instruction-Path) follows raw32/raw64
    record loads and the dependent property load through gem5 O3.
-4. [Evaluation methodology](Evaluation-Methodology) separates functional,
-   native, modeled, historical, and physical evidence.
-5. [Reproduction](Reproduction) gives current checks and preserves historical
-   recipes with explicit provenance.
+4. [Evaluation methodology](Evaluation-Methodology) defines the current
+   workload, per-algorithm performance scope and measurement criteria.
+5. [Reproduction](Reproduction) gives the current preparation, qualification
+   and guarded execution workflow.
 
 ## Current implementation status
 
@@ -68,6 +68,6 @@ Sniper's admitted current path is one-core, uncapped fixed PageRank through
 `sg_kernel`, with mandatory process-tree RSS protection and true modulo LLC
 indexing. Its update link is bounded completion corroboration, not retirement.
 
-Historical Twitter, P-OPT/P-OPT-SE, ReusePlan, and FlowThrough results retain
-their original policy names, revisions, encodings, and limitations. They are
-not renamed as current adaptive-record results.
+The current end-to-end workload is PageRank. See the
+[per-algorithm table](Evaluation-Methodology#per-algorithm-performance)
+before attributing this implementation's results to another algorithm.
