@@ -168,7 +168,8 @@ def run_cache_cell(
     run_command: Callable[..., Any], parse_size_bytes: Callable[[str], int],
 ) -> list[dict[str, Any]]:
     row: dict[str, Any] = {
-        "simulator": "cache_sim", "benchmark": args.benchmark, "policy": spec.label,
+        "simulator": "cache_sim", "benchmark": args.benchmark,
+        "policy": spec.policy, "policy_label": spec.label,
         "l3_size": l3_size, "l3_ways": int(args.l3_ways), "status": "error",
         "timing_valid_for_speedup": "0", "measurement_scope": "algorithm-data-traffic-including-construction",
         "current_algorithm": "1", "algorithm_record_requested_bytes": args.ecg_record_bytes,
@@ -289,7 +290,7 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
             for row in good:
                 row.update(status="error", error="current algorithm result/work differs across policies")
             continue
-        baselines = {str(row["policy"]): row for row in good}
+        baselines = {str(row["policy_label"]): row for row in good}
         for row in good:
             for label, column in (("LRU", "traffic_ratio_vs_csr_lru"),
                                   ("ECG_TRANSPORT", "traffic_ratio_vs_transport")):

@@ -148,7 +148,7 @@ def test_algorithm_profiles_and_forged_work_are_rejected(tmp_path):
 
     rows = [
         {"status": "ok", "simulator": "cache_sim", "benchmark": "bfs", "l3_size": "1kB",
-         "graph_sha256": "a" * 64, "policy": policy, "total_offchip_traffic": 10,
+         "graph_sha256": "a" * 64, "policy_label": policy, "total_offchip_traffic": 10,
          "algorithm_result_digest": "a" * 16, "algorithm_actual_records": count}
         for policy, count in (("LRU", 7), ("ECG", 8))
     ]
@@ -181,3 +181,27 @@ def test_algorithm_profiles_and_forged_work_are_rejected(tmp_path):
         forged["workload"][key] = value
         with pytest.raises(RecordReceiptError):
             algorithm_matrix.validate_payload(forged, ran.stdout + ran.stderr, **settings)
+
+
+def test_current_algorithm_rows_close_existing_runner_policy_roster(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    binary = ROOT / "bench/bin_sim/algorithms"
+    graph = ROOT / "results/graphs/ecg-algorithm-equivalence/weighted-diamond.wsg"
+    if not binary.is_file() or not graph.is_file():
+        pytest.skip("built current algorithm and prepared graph are required")
+    output = tmp_path / "matrix"
+    ran = subprocess.run([
+        "python3", str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "cache-sim", "--current-algorithms", "--benchmark", "spmv",
+        "--options", f"--graph {graph} --repeat 2",
+        "--policies", "LRU", "ECG:transport", "ECG", "--ecg-equivalence",
+        "--algorithm-workspace-bytes", str(32 << 20), "--cache-record-rss-mib", "512",
+        "--l1d-size", "128B", "--l1d-ways", "2", "--l2-size", "256B", "--l2-ways", "2",
+        "--l3-sizes", "512B", "--l3-ways", "2", "--no-build", "--out-dir", str(output),
+    ], capture_output=True, text=True, timeout=60, check=False)
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    status, detail = experiment_run.csv_status(
+        output / "roi_matrix.csv", ["LRU", "ECG:transport", "ECG"])
+    assert status == "ok", detail
+    for row in json.loads((output / "roi_matrix.json").read_text()):
+        assert row["l3_accesses"] == row["l3_hits"] + row["l3_misses"] > 0
