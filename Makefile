@@ -51,7 +51,7 @@ DEP_ECG := $(wildcard $(INC_DIR)/ecg_*.h) \
 	$(wildcard $(INC_DIR)/gem5_sim/*.h) \
 	$(wildcard $(INC_DIR)/sniper_sim/*.h)
 
-KERNELS_SIM := pr pr_spmv bfs bc cc cc_sv sssp tc ecg_preprocess \
+KERNELS_SIM := pr pr_spmv bfs bc cc cc_sv sssp tc algorithms ecg_preprocess \
 	reuse_plan_sidecar test_ecg_reuse_plan test_ecg_reuse_plan32 \
 	test_ecg_ref32 test_popt_single_epoch grasp_trace_replay
 KERNELS_GEM5 := pr pr_spmv bfs sssp cc cc_sv bc tc ref32_isa_smoke record_isa_smoke
@@ -95,6 +95,7 @@ $(BIN_DIR)/converter: $(BENCH_DIR)/src/converter.cc $(DEP_GAPBS) \
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $< $(LDLIBS) -o $@
 
 $(BIN_SIM_DIR)/pr: CXXFLAGS += $(PR_FP_FLAGS)
+$(BIN_SIM_DIR)/algorithms: CXXFLAGS += $(PR_FP_FLAGS)
 
 $(BIN_SIM_DIR)/%: $(BENCH_DIR)/src_sim/%.cc $(DEP_GAPBS) \
 	$(DEP_GRAPH) $(DEP_EXTERNAL) $(DEP_CACHE) $(DEP_ECG) | $(BIN_SIM_DIR)

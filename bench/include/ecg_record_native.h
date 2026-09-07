@@ -222,6 +222,14 @@ inline Status nativePropertyAccess(
         return status;
     result.deadline = prediction.deadline;
     result.state = prediction.state;
+    if (property.traversal == TraversalMode::ORDERED_FILTERED && result.state == State::FINITE) {
+        uint64_t end = 0;
+        if (!checkedAdd(configuration.iteration_base, configuration.record_count, end))
+            return Status::ARITHMETIC_OVERFLOW;
+        if (result.sequence == end)
+            return Status::INVALID_RECORD;
+        result.deadline = std::min(result.deadline, end);
+    }
     output = result;
     return Status::OK;
 }

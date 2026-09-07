@@ -126,8 +126,9 @@ For traversal over out-neighbors `N_out(u)`, the
 property `p[v]` is read once for each source in `N_in(v)`, giving `d_in(v)`. Metadata
 must describe the exact order executed.
 
-The current end-to-end workload is fixed-iteration PageRank. Other algorithms
-need explicit integration before they contribute performance results; the
+Fixed-iteration PageRank is integrated across all three backends. Current shared
+SpMV/BFS/SSSP/CC/BC/TC kernels now use typed records and managed passes in cache_sim;
+their detailed-backend admission is separate. The
 [per-algorithm table](wiki/Evaluation-Methodology.md#per-algorithm-performance)
 makes implemented and unmeasured cases explicit.
 

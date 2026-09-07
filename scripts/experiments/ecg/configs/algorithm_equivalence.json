@@ -1,0 +1,59 @@
+{
+  "schema": "ecg.algorithm-equivalence.v1",
+  "widths": [4, 8],
+  "policies": ["LRU", "SRRIP", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"],
+  "algorithms": {
+    "spmv": {"variant": "csr-fixed-input-f32", "semantics": "dense-actual-designated-read", "property": "x", "kind": "f32", "stride": 4},
+    "bfs": {"variant": "sorted-level-top-down", "semantics": "next-potential-designated-read", "property": "depth", "kind": "u32", "stride": 4},
+    "sssp": {"variant": "sorted-serial-delta-stepping-u64", "semantics": "next-potential-designated-read", "property": "distances", "kind": "u64", "stride": 8},
+    "cc": {"variant": "deterministic-afforest", "semantics": "next-potential-designated-read", "property": "components", "kind": "u32", "stride": 4},
+    "bc": {"variant": "sorted-single-source-list-brandes-u64-f32", "semantics": "next-potential-designated-read", "property": "depth/dependency", "kind": "u32/f32", "stride": 4},
+    "tc": {"variant": "degree-oriented-node-iterator", "semantics": "dense-actual-designated-read", "property": "target_row_start", "kind": "u64", "stride": 8}
+  },
+  "graphs": {
+    "weighted-diamond.wsg": {"sha256": "0109481885da13133ea0cb4dc0f89f205dfaa13daa594c93c27c91389a1e900c", "vertices": 8, "records": 10},
+    "diamond.sg": {"sha256": "cd22bf3d689dc92ad0d120865de1be6936b9144ac15f4c2189af1248d42e617e", "vertices": 8, "records": 10},
+    "cliques-and-isolate.sg": {"sha256": "ab7365ee410a08c3c9b1e309fc5e28f85e35a0c85bb8496746d1c369da88d66b", "vertices": 10, "records": 20},
+    "pressure512.wsg": {"sha256": "c305df482aef002e86dcc57ed2f34e140c2228e7c6802554e015b7cabd3c1557", "vertices": 512, "records": 3968},
+    "pressure512.sg": {"sha256": "87656dea741ec0714b48828afcad62047f9d7bd2bbaea59c1bd4c5f973e47eb6", "vertices": 512, "records": 3968}
+  },
+  "references": {
+    "spmv": {"graph": "weighted-diamond.wsg", "values_f32": [139, 11, 24, 5, 18, 0, 8, 0]},
+    "bfs": {"graph": "diamond.sg", "values_u32": [0, 1, 1, 2, 2, 1, 4294967295, 4294967295]},
+    "sssp": {"graph": "weighted-diamond.wsg", "values_u64": [0, 2, 3, 4, 5, 8, 18446744073709551615, 18446744073709551615]},
+    "cc": {"graph": "cliques-and-isolate.sg", "values_u32": [0, 0, 0, 0, 4, 4, 4, 7, 7, 9], "components": 4},
+    "bc": {"graph": "diamond.sg", "values_f32": [0, 0.5, 1.5, 0, 0, 0, 0, 0]},
+    "tc": {"graph": "cliques-and-isolate.sg", "triangles": 5, "oriented_edges": 10}
+  },
+  "source_paths": [
+    "Makefile",
+    "bench/include/ecg_algorithms.h",
+    "bench/include/ecg_algorithm_main.h",
+    "bench/include/ecg_record.h",
+    "bench/include/ecg_record_native.h",
+    "bench/include/ecg_record_runtime.h",
+    "bench/include/ecg_record_stream.h",
+    "bench/include/ecg_record_window.h",
+    "bench/include/ecg_record_evidence.h",
+    "bench/include/ecg_ref32_commit.h",
+    "bench/include/external/gapbs/graph.h",
+    "bench/include/external/gapbs/reader.h",
+    "scripts/experiments/ecg/algorithm_matrix.py",
+    "scripts/experiments/ecg/record_resources.py",
+    "scripts/experiments/ecg/roi_matrix.py",
+    "scripts/experiments/ecg/flows/experiment_run.py",
+    "scripts/experiments/ecg/flows/prepare_record_equivalence_graphs.py",
+    "scripts/test/sniper_rss_watch.py"
+  ],
+  "backend_source_paths": {
+    "cache-sim": [
+      "bench/include/cache_sim/ecg_algorithm.h",
+      "bench/include/cache_sim/cache_sim.h",
+      "bench/include/cache_sim/graph_cache_context.h",
+      "bench/src_sim/algorithms.cc"
+    ],
+    "gem5": [],
+    "sniper": []
+  },
+  "evidence_boundary": "These bounded algorithm receipts do not replace the current PR authorization or authorize final-paper timing."
+}

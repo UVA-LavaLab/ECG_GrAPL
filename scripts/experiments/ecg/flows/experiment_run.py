@@ -37,6 +37,7 @@ from typing import Any, Iterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from policy_specs import policy_output_label  # noqa: E402
+import algorithm_matrix  # noqa: E402
 from gem5_guest_receipt import (  # noqa: E402
     material_input_fingerprint,
     stable_receipt_fingerprint,
@@ -235,15 +236,21 @@ def roi_input_paths(
     current_record = any(
         policy_output_label(str(policy)) in {
             "ECG", "ECG_TRANSPORT", "ECG_REPLACEMENT", "ECG_PREFETCH"}
-        for policy in settings.get("policies", [])) or bool(settings.get("current_pr_baselines"))
+        for policy in settings.get("policies", [])) or bool(
+            settings.get("current_pr_baselines") or settings.get("current_algorithms"))
     if current_record:
         paths["record_process_watchdog"] = PROCESS_TREE_WATCHDOG
         paths["execution_python"] = execution_python(args)
-        contract = load_manifest(RECORD_EQUIVALENCE_CONFIG)
-        paths["record_equivalence_config"] = RECORD_EQUIVALENCE_CONFIG
-        for relative in contract["source_paths"]:
-            paths["current_source:" + relative] = PROJECT_ROOT / relative
-    if settings.get("ecg_equivalence"):
+        if settings.get("current_algorithms"):
+            paths.update(algorithm_matrix.source_paths(str(settings["suite"])))
+            paths["algorithm_corpus_receipt"] = PROJECT_ROOT / (
+                "results/graphs/ecg-algorithm-equivalence/corpus.receipt.json")
+        else:
+            contract = load_manifest(RECORD_EQUIVALENCE_CONFIG)
+            paths["record_equivalence_config"] = RECORD_EQUIVALENCE_CONFIG
+            for relative in contract["source_paths"]:
+                paths["current_source:" + relative] = PROJECT_ROOT / relative
+    if settings.get("ecg_equivalence") and not settings.get("current_algorithms"):
         paths.update({
             "record_equivalence_config": RECORD_EQUIVALENCE_CONFIG,
             "record_equivalence_gate":
@@ -349,8 +356,9 @@ def roi_input_paths(
                 str(guest_binary) + ".build.json")
     if suite in ("cache-sim", "both"):
         paths["cache_sim_benchmark_binary"] = (
-            PROJECT_ROOT / "bench" / "bin_sim" / benchmark)
-        if settings.get("ecg_equivalence"):
+            PROJECT_ROOT / "bench" / "bin_sim" / (
+                "algorithms" if settings.get("current_algorithms") else benchmark))
+        if settings.get("ecg_equivalence") and not settings.get("current_algorithms"):
             paths["cache_sim_pr_source"] = (
                 PROJECT_ROOT / "bench/src_sim/pr.cc")
             paths["cache_sim_cache_header"] = (
@@ -614,6 +622,8 @@ def expand_jobs(args: argparse.Namespace, manifest: dict[str, Any], run_dir: Pat
                 if not graph_uses_synthetic_options(graph):
                     graph_path = find_graph_path(graph, Path(args.graph_dir), True)
                 for benchmark in settings.get("benchmarks", []):
+                    if graph.get("benchmarks") is not None and benchmark not in graph["benchmarks"]:
+                        continue
                     if not token_matches(str(benchmark), args.benchmark):
                         continue
                     # Sniper multi-core LLC-constant sweep: hold per-core LLC fixed by
@@ -795,9 +805,13 @@ def make_roi_job(
         "ECG", "ECG_TRANSPORT", "ECG_REPLACEMENT", "ECG_PREFETCH"}
     current_record = any(
         policy_output_label(policy) in current_record_labels
-        for policy in all_policies) or bool(settings.get("current_pr_baselines"))
+        for policy in all_policies) or bool(
+            settings.get("current_pr_baselines") or settings.get("current_algorithms"))
     if settings.get("current_pr_baselines"):
         command.append("--current-pr-baselines")
+    if settings.get("current_algorithms"):
+        command.extend(("--current-algorithms", "--algorithm-workspace-bytes",
+                        str(settings.get("algorithm_workspace_bytes", 512 << 20))))
     if current_record:
         command.extend([
             "--ecg-record-bytes",

@@ -168,3 +168,66 @@ def plan_resources(
         "gem5_target_memory_bytes": target_memory_bytes if backend == "gem5" else 0,
         "memory_plan": "conservative-reservation",
     }
+
+
+def plan_algorithm_resources(
+    graph: GraphInfo, *, algorithm: str, records: bool,
+    requested_bytes: int, minimum_mantissa_bits: int,
+    traversals: int, sources: int, workspace_limit: int,
+    carrier_limit: int, auxiliary_limit: int, rss_mib: int,
+    backend: str = "cache_sim", target_memory_bytes: int = 0,
+) -> dict[str, int | str | bool | None]:
+    coefficients = {"spmv": 8, "bfs": 12, "sssp": 25, "cc": 12, "bc": 40, "tc": 24}
+    if algorithm not in coefficients or min(
+            traversals, sources, workspace_limit, carrier_limit, auxiliary_limit, rss_mib) <= 0:
+        raise RecordResourceError("invalid algorithm or resource limits")
+    if requested_bytes not in (0, 4, 8) or not 0 <= minimum_mantissa_bits <= 61:
+        raise RecordResourceError("invalid algorithm record layout request")
+    if algorithm in ("cc", "tc") and (graph.directed or graph.records % 2):
+        raise RecordResourceError("CC and TC require a simple undirected input")
+    if algorithm == "sssp" and graph.minimum_weight is not None and graph.minimum_weight < 0:
+        raise RecordResourceError("SSSP requires nonnegative weights")
+    carrier_records = graph.records // 2 if algorithm == "tc" else graph.records
+    property_bytes = 8 if algorithm in ("sssp", "tc") else 4
+    arrays = coefficients[algorithm] * graph.vertices
+    if algorithm == "bc":
+        arrays += 16 + 4 * sources
+    if algorithm == "tc":
+        arrays += 8 + 4 * carrier_records
+    layout = {}
+    if records and algorithm != "tc":
+        try:
+            layout = resolve_layout(
+                records=carrier_records, vertices=graph.vertices, maximum_id=graph.maximum_id,
+                traversals=traversals, requested_bytes=requested_bytes,
+                minimum_mantissa_bits=minimum_mantissa_bits)
+        except RecordReceiptError as error:
+            raise RecordResourceError(str(error)) from error
+    # TC's oriented target IDs are known only after its charged orientation.
+    width_upper = int(layout.get("record_bytes", requested_bytes or 8))
+    carrier = carrier_records * width_upper if records else 0
+    lines = min(carrier_records, (graph.vertices * property_bytes + 63) // 64)
+    slots = 1 << max(0, (2 * lines - 1).bit_length())
+    scratch = 24 * slots if records else 0
+    if carrier > carrier_limit or scratch > auxiliary_limit or arrays + carrier + scratch > workspace_limit:
+        raise RecordResourceError("algorithm arrays/carrier/construction exceed their explicit limits")
+    directions = 2 if graph.directed else 1
+    graph_peak = (directions + 1) * 8 * (graph.vertices + 1) + 12 * graph.vertices + (
+        directions * graph.records * (8 if graph.weighted else 4))
+    planned = graph_peak + workspace_limit + (256 << 20)
+    host = planned + (graph.storage_bytes if backend == "gem5" else 0)
+    if max(graph_peak, planned, host, workspace_limit, carrier_limit, auxiliary_limit) > UINT64_MAX:
+        raise RecordResourceError("algorithm memory accounting exceeds uint64")
+    if host > rss_mib * (1 << 20):
+        raise RecordResourceError("algorithm memory reservation exceeds the process-tree RSS budget")
+    if backend == "gem5" and (target_memory_bytes <= 0 or planned > target_memory_bytes):
+        raise RecordResourceError("algorithm memory reservation exceeds gem5 target memory")
+    return {
+        **asdict(graph), **layout,
+        "algorithm": algorithm, "carrier_records_upper": carrier_records,
+        "carrier_payload_bytes_upper": carrier, "array_bytes": arrays,
+        "construction_auxiliary_bytes_upper": scratch, "graph_loader_bytes_upper": graph_peak,
+        "workspace_limit_bytes": workspace_limit, "planned_host_bytes": host,
+        "planned_target_bytes": planned, "rss_limit_mib": rss_mib,
+        "memory_plan": "algorithm-conservative-reservation",
+    }

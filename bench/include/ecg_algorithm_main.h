@@ -1,0 +1,272 @@
+#ifndef GRAPHBREW_ECG_ALGORITHM_MAIN_H
+#define GRAPHBREW_ECG_ALGORITHM_MAIN_H
+
+#include <charconv>
+#include <chrono>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <string>
+#include <system_error>
+
+#include "ecg_algorithms.h"
+#include "graph.h"
+#include "reader.h"
+
+namespace ecg_algorithm {
+
+struct CommandLine {
+    Options options;
+    std::string graph_path;
+    std::string output_path;
+    std::string policy = "LRU";
+    uint64_t maximum_graph_bytes = uint64_t{512} << 20;
+    uint64_t l1_bytes = 32 * 1024, l2_bytes = 256 * 1024, llc_bytes = 8 * 1024 * 1024;
+    uint64_t l1_ways = 8, l2_ways = 4, llc_ways = 16;
+};
+
+inline uint64_t unsignedOption(const std::string& text) {
+    uint64_t value = 0;
+    const auto parsed = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size())
+        throw std::invalid_argument("expected-unsigned-option: " + text);
+    return value;
+}
+
+inline CommandLine parseCommandLine(int argc, char** argv) {
+    CommandLine command;
+    bool algorithm_seen = false;
+    for (int index = 1; index < argc; ++index) {
+        const std::string argument(argv[index]);
+        if (argument == "--evidence") {
+            command.options.evidence = true;
+            continue;
+        }
+        if (argument == "--values") {
+            command.options.capture_values = true;
+            continue;
+        }
+        if (index + 1 == argc)
+            throw std::invalid_argument("missing-option-value: " + argument);
+        const std::string value(argv[++index]);
+        if (argument == "--graph") command.graph_path = value;
+        else if (argument == "--output") command.output_path = value;
+        else if (argument == "--policy") {
+            if (value != "LRU" && value != "SRRIP" && value != "GRASP_PAPER")
+                throw std::invalid_argument("unsupported-current-algorithm-baseline");
+            command.policy = value;
+        } else if (argument == "--algorithm") {
+            algorithm_seen = false;
+            for (Algorithm candidate : {Algorithm::SPMV, Algorithm::BFS, Algorithm::SSSP,
+                                        Algorithm::CC, Algorithm::BC, Algorithm::TC}) {
+                if (value == name(candidate)) {
+                    command.options.algorithm = candidate;
+                    algorithm_seen = true;
+                    break;
+                }
+            }
+            if (!algorithm_seen)
+                throw std::invalid_argument("unknown-algorithm: " + value);
+        } else if (argument == "--mode") {
+            command.options.records = value != "csr";
+            if (command.options.records && ecg_record::parseMechanismName(
+                    value.c_str(), command.options.mechanism) != ecg_record::Status::OK)
+                throw std::invalid_argument("unknown-current-mechanism");
+        } else if (argument == "--record-bytes") {
+            const uint64_t bytes = unsignedOption(value);
+            if (bytes != 0 && bytes != 4 && bytes != 8)
+                throw std::invalid_argument("record-bytes-must-be-0-4-or-8");
+            command.options.record_bytes = static_cast<uint8_t>(bytes);
+        } else if (argument == "--source") {
+            const uint64_t source = unsignedOption(value);
+            if (source > INT32_MAX)
+                throw std::invalid_argument("source-exceeds-node-id");
+            command.options.source = static_cast<uint32_t>(source);
+        } else if (argument == "--minimum-mantissa-bits") {
+            const uint64_t bits = unsignedOption(value);
+            if (bits > 61)
+                throw std::invalid_argument("invalid-mantissa-floor");
+            command.options.minimum_mantissa_bits = static_cast<uint8_t>(bits);
+        } else if (argument == "--sources") {
+            if (!command.options.sources.empty())
+                throw std::invalid_argument("duplicate-source-list");
+            std::size_t first = 0;
+            for (;;) {
+                const std::size_t comma = value.find(',', first);
+                const uint64_t source = unsignedOption(value.substr(first,
+                    comma == std::string::npos ? comma : comma - first));
+                if (source > INT32_MAX)
+                    throw std::invalid_argument("source-exceeds-node-id");
+                command.options.sources.push_back(static_cast<uint32_t>(source));
+                if (comma == std::string::npos)
+                    break;
+                first = comma + 1;
+            }
+        } else if (argument == "--repeat") command.options.repetitions = unsignedOption(value);
+        else if (argument == "--delta") command.options.delta = unsignedOption(value);
+        else if (argument == "--max-passes") command.options.maximum_passes = unsignedOption(value);
+        else if (argument == "--workspace-bytes") command.options.maximum_workspace_bytes = unsignedOption(value);
+        else if (argument == "--graph-bytes") command.maximum_graph_bytes = unsignedOption(value);
+        else if (argument == "--carrier-bytes") command.options.build_limits.maximum_carrier_bytes = unsignedOption(value);
+        else if (argument == "--auxiliary-bytes") command.options.build_limits.maximum_auxiliary_bytes = unsignedOption(value);
+        else if (argument == "--l1-bytes") command.l1_bytes = unsignedOption(value);
+        else if (argument == "--l2-bytes") command.l2_bytes = unsignedOption(value);
+        else if (argument == "--llc-bytes") command.llc_bytes = unsignedOption(value);
+        else if (argument == "--l1-ways") command.l1_ways = unsignedOption(value);
+        else if (argument == "--l2-ways") command.l2_ways = unsignedOption(value);
+        else if (argument == "--llc-ways") command.llc_ways = unsignedOption(value);
+        else throw std::invalid_argument("unknown-option: " + argument);
+    }
+    if (!algorithm_seen || command.graph_path.empty())
+        throw std::invalid_argument("required: --algorithm spmv|bfs|sssp|cc|bc|tc --graph path.sg|path.wsg");
+    if (command.options.records && command.policy != "LRU")
+        throw std::invalid_argument("current-record-modes-own-their-replacement-policy");
+    for (const auto& geometry : {
+            std::pair<uint64_t, uint64_t>{command.l1_bytes, command.l1_ways},
+            {command.l2_bytes, command.l2_ways}, {command.llc_bytes, command.llc_ways}}) {
+        if (geometry.second == 0 || geometry.second > 64 || geometry.first == 0 ||
+            geometry.first % (64 * geometry.second) != 0)
+            throw std::invalid_argument("invalid-cache-geometry");
+    }
+    return command;
+}
+
+inline void writeHash(std::ostream& output, uint64_t value) {
+    const auto flags = output.flags();
+    const auto fill = output.fill();
+    output << '"' << std::hex << std::setfill('0') << std::setw(16) << value << '"';
+    output.flags(flags);
+    output.fill(fill);
+}
+
+inline void writeResult(std::ostream& output, const Result& result, const Options& options) {
+    const bool exact = result.algorithm == Algorithm::SPMV || result.algorithm == Algorithm::TC;
+    output << "{\"schema\":\"ecg.algorithm-workload.v1\",\"algorithm\":\"" << name(result.algorithm)
+           << "\",\"variant\":\"" << variant(result.algorithm)
+           << "\",\"prediction_semantics\":\""
+           << (exact ? "dense-actual-designated-read" : "next-potential-designated-read")
+           << "\",\"carrier\":\"" << (result.records ? "record" : "csr") << '"';
+    const auto field = [&](const char* key, uint64_t value) { output << ",\"" << key << "\":" << value; };
+    field("weighted", result.weighted);
+    field("evidence", result.evidence);
+    field("vertices", result.vertices);
+    field("source_edges", result.source_edges);
+    field("carrier_records", result.carrier_records);
+    field("passes", result.passes);
+    field("structural_positions", result.structural_positions);
+    field("actual_records", result.actual_records);
+    field("skipped_positions", result.skipped_positions);
+    field("csr_index_reads", result.csr_index_reads);
+    field("edge_reads", result.edge_reads);
+    field("weight_reads", result.weight_reads);
+    field("ordinary_property_reads", result.ordinary_property_reads);
+    field("property_writes", result.property_writes);
+    field("auxiliary_accesses", result.auxiliary_accesses);
+    field("construction_read_bytes", result.construction_reads);
+    field("construction_write_bytes", result.construction_writes);
+    field("carrier_allocation_bytes", result.carrier_bytes);
+    field("construction_auxiliary_peak_bytes", result.construction_auxiliary_peak_bytes);
+    field("workspace_peak_bytes", result.workspace_peak_bytes);
+    field("source", options.source);
+    field("source_count", options.sources.empty() ? 1 : options.sources.size());
+    field("repetitions", options.repetitions);
+    field("delta", options.delta);
+    field("reached", result.reached);
+    field("levels", result.levels);
+    field("components", result.components);
+    field("relax_attempts", result.relax_attempts);
+    field("relax_successes", result.relax_successes);
+    field("light_passes", result.light_passes);
+    field("heavy_passes", result.heavy_passes);
+    field("sigma_max", result.sigma_max);
+    field("triangles", result.triangles);
+    field("oriented_edges", result.oriented_edges);
+    field("intersection_comparisons", result.intersection_comparisons);
+    field("bindings", result.bindings);
+    field("maximum_encoded_id", result.maximum_encoded_id);
+    field("record_bytes", result.layout.record_bytes);
+    field("id_bits", result.layout.id_bits);
+    field("metadata_bits", result.layout.metadata_bits);
+    field("mantissa_bits", result.layout.mantissa_bits);
+    for (const auto& entry : {
+            std::pair<const char*, uint64_t>{"result_digest", result.result_digest},
+            {"work_trace_digest", result.work_digest}, {"position_trace_digest", result.position_digest},
+            {"source_list_digest", result.source_list_digest}}) {
+        output << ",\"" << entry.first << "\":";
+        writeHash(output, entry.second);
+    }
+    const auto values = [&](const char* key, const auto& elements) {
+        output << ",\"" << key << "\":[";
+        bool first = true;
+        for (const auto value : elements) {
+            if (!first) output << ',';
+            output << value;
+            first = false;
+        }
+        output << ']';
+    };
+    if (options.capture_values) {
+        values("values_u32", result.values_u32);
+        values("values_u64", result.values_u64);
+        output << std::setprecision(std::numeric_limits<float>::max_digits10);
+        values("values_f32", result.values_f32);
+    }
+    output << '}';
+}
+
+template<class Graph, class Invoke>
+int invokeGraph(const Graph& graph, const CommandLine& command, Invoke invoke) {
+    using Edge = std::remove_cv_t<std::remove_reference_t<decltype(*graph.out_neigh(0).begin())>>;
+    const Edge* columns = graph.out_neigh(0).begin();
+    const void* weights = nullptr;
+    if constexpr (!std::is_integral<Edge>::value)
+        weights = graph.num_edges_directed() ? static_cast<const void*>(&columns[0].w) : columns;
+    const GraphView view{static_cast<uint64_t>(graph.num_nodes()),
+        static_cast<uint64_t>(graph.num_edges_directed()), graph.directed(), graph.out_index_storage(),
+        columns, weights, sizeof(Edge), true};
+    return invoke(view, command);
+}
+
+template<class Invoke>
+int applicationMain(int argc, char** argv, Invoke invoke) {
+    try {
+        const CommandLine command = parseCommandLine(argc, argv);
+        const auto dot = command.graph_path.rfind('.');
+        const std::string suffix = dot == std::string::npos ? "" : command.graph_path.substr(dot);
+        if (suffix == ".wsg") {
+            Reader<int32_t, NodeWeight<int32_t, int32_t>> reader(command.graph_path);
+            auto graph = reader.ReadSerializedGraph(true, command.maximum_graph_bytes);
+            return invokeGraph(graph, command, invoke);
+        }
+        if (suffix != ".sg")
+            throw std::invalid_argument("current algorithms require explicit .sg or .wsg inputs");
+        Reader<int32_t> reader(command.graph_path);
+        auto graph = reader.ReadSerializedGraph(true, command.maximum_graph_bytes);
+        return invokeGraph(graph, command, invoke);
+    } catch (const std::invalid_argument& error) {
+        std::cerr << "[ECG-ALGORITHM-ERROR input=" << error.what() << "]\n";
+        return 2;
+    } catch (const std::length_error& error) {
+        std::cerr << "[ECG-ALGORITHM-ERROR resource=" << error.what() << "]\n";
+        return 3;
+    } catch (const std::overflow_error& error) {
+        std::cerr << "[ECG-ALGORITHM-ERROR arithmetic=" << error.what() << "]\n";
+        return 4;
+    } catch (const std::logic_error& error) {
+        std::cerr << "[ECG-ALGORITHM-ERROR invariant=" << error.what() << "]\n";
+        return 5;
+    } catch (const std::ios_base::failure& error) {
+        std::cerr << "[ECG-ALGORITHM-ERROR io=" << error.what() << "]\n";
+        return 6;
+    } catch (const std::system_error& error) {
+        std::cerr << "[ECG-ALGORITHM-ERROR system=" << error.what() << "]\n";
+        return 7;
+    } catch (const std::bad_alloc& error) {
+        std::cerr << "[ECG-ALGORITHM-ERROR allocation=" << error.what() << "]\n";
+        return 8;
+    }
+}
+
+} // namespace ecg_algorithm
+
+#endif

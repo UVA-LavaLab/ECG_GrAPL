@@ -487,10 +487,10 @@ public:
 
     static DestID_ **GenIndex(const pvector<SGOffset> &offsets, DestID_ *neighs)
     {
-        NodeID_ length = offsets.size();
+        const size_t length = offsets.size();
         DestID_ **index = new DestID_ *[length];
         #pragma omp parallel for
-        for (NodeID_ n = 0; n < length; n++)
+        for (size_t n = 0; n < length; n++)
             index[n] = neighs + offsets[n];
         return index;
     }
@@ -566,14 +566,14 @@ public:
 
     void copy_org_ids(const NodeID_ *new_org_ids)
     {
-        if (org_ids_ != nullptr)
-            delete[] org_ids_;
-        org_ids_ = new NodeID_[num_nodes_];
+        NodeID_* replacement = new NodeID_[num_nodes_];
         #pragma omp parallel for
         for (NodeID_ n = 0; n < num_nodes_; n++)
         {
-            org_ids_[n] = new_org_ids[n];
+            replacement[n] = new_org_ids[n];
         }
+        delete[] org_ids_;
+        org_ids_ = replacement;
     }
 
     NodeID_ get_org_id(const NodeID_ ref_id) const

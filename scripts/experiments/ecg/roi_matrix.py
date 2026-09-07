@@ -78,6 +78,7 @@ from record_receipts import (  # noqa: E402
     validate_sniper_record, validate_equivalence, validate_pr_workload,
 )
 from record_resources import RecordResourceError, graph_info, plan_resources  # noqa: E402
+import algorithm_matrix  # noqa: E402
 
 _GEM5_OPT = Path(os.environ.get(
     "GEM5_OPT",
@@ -1312,6 +1313,14 @@ def sniper_sideband_paths(sniper_out: Path) -> dict[str, Path]:
 
 def build_targets(args: argparse.Namespace) -> None:
     if args.no_build or args.dry_run:
+        return
+    if getattr(args, "current_algorithms", False):
+        result = run_command(
+            ["make", "-s", "-j1", "PARALLEL=1", "sim-algorithms"], PROJECT_ROOT, None, 300,
+            Path(args.out_dir) / "logs" / "build-algorithms.log", False,
+            rss_mib=args.cache_record_rss_mib)
+        if result is None or result.returncode != 0:
+            raise SystemExit("current algorithm build failed; see build-algorithms.log")
         return
 
     targets = []
@@ -3752,6 +3761,8 @@ def apply_current_record_receipt(
 
 
 def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size: str) -> list[dict[str, Any]]:
+    if getattr(args, "current_algorithms", False):
+        return algorithm_matrix.run_cache_cell(args, out_dir, spec, l3_size, run_command, parse_size_bytes)
     record_error = current_record_error(args, spec, "cache_sim")
     if record_error:
         row = base_row("cache_sim", args, spec, l3_size)
@@ -6826,6 +6837,9 @@ def standalone_matrix_config_hash(
         "roi_matrix": Path(__file__).resolve(),
         "policy_specs": Path(__file__).resolve().parent / "policy_specs.py",
     }
+    current_algorithms = bool(getattr(args, "current_algorithms", False))
+    if current_algorithms:
+        paths.update(algorithm_matrix.source_paths(args.suite))
     if any(getattr(spec, "record_mechanism", None) for spec in policies) or getattr(args, "current_pr_baselines", False):
         for name in ("record_receipts.py", "record_resources.py"):
             paths[name] = Path(__file__).resolve().parent / name
@@ -6833,8 +6847,9 @@ def standalone_matrix_config_hash(
         for header in (PROJECT_ROOT / "bench/include").glob("ecg_record*.h"):
             paths[header.name] = header
     option_parts = shlex.split(args.options)
-    if "-f" in option_parts:
-        index = option_parts.index("-f")
+    graph_option = "--graph" if current_algorithms else "-f"
+    if graph_option in option_parts:
+        index = option_parts.index(graph_option)
         if index + 1 < len(option_parts):
             graph = Path(option_parts[index + 1])
             paths["graph"] = (
@@ -6887,7 +6902,7 @@ def standalone_matrix_config_hash(
                 str(guest_binary) + ".build.json")
     if args.suite in ("cache-sim", "both"):
         paths["cache_sim_benchmark_binary"] = (
-            PROJECT_ROOT / "bench" / "bin_sim" / args.benchmark)
+            PROJECT_ROOT / "bench" / "bin_sim" / ("algorithms" if current_algorithms else args.benchmark))
 
     config = {
         key: value for key, value in vars(args).items()
@@ -7113,6 +7128,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="Observe actual record semantics on a bounded prepared graph; never speedup evidence.")
     parser.add_argument("--current-pr-baselines", action="store_true",
                         help="Use the common fixed PageRank arithmetic and complete CSR access stream for cache_sim baselines.")
+    parser.add_argument("--current-algorithms", action="store_true",
+                        help="Run the current shared SpMV/BFS/SSSP/CC/BC/TC kernels, not the legacy benchmark paths.")
+    parser.add_argument("--algorithm-workspace-bytes", type=int, default=512 << 20)
     parser.add_argument("--ecg-record-max-carrier-bytes", type=int, default=256 << 20)
     parser.add_argument("--ecg-record-max-auxiliary-bytes", type=int, default=256 << 20)
     parser.add_argument("--cache-record-rss-mib", type=int, default=2048)
@@ -7247,6 +7265,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    if args.current_algorithms and args.suite != "cache-sim":
+        raise SystemExit("current shared algorithm detailed-backend qualification is not yet admitted")
     semantic_edge_limit = int(args.sniper_semantic_edge_limit)
     if int(args.sniper_roi_icount) > 0 and semantic_edge_limit > 0:
         raise SystemExit(
@@ -7349,7 +7369,9 @@ def main(argv: list[str]) -> int:
             "--popt-matrix-stream simulated, or the explicit "
             "analytic_prefetch_upper_bound sensitivity: a flat analytic "
             "matrix charge cannot be prefetch-covered while ReusePlan's records can")
-    if args.all_policies:
+    if args.current_algorithms and args.policies is None and not args.all_policies:
+        policy_texts = algorithm_matrix.contract()["policies"]
+    elif args.all_policies:
         policy_texts = ALL_POLICIES
     elif args.policies is not None:
         policy_texts = args.policies
@@ -7429,6 +7451,8 @@ def main(argv: list[str]) -> int:
     out_dir = Path(args.out_dir) if args.out_dir else RESULTS_ROOT / now_tag()
     if not out_dir.is_absolute():
         out_dir = PROJECT_ROOT / out_dir
+    if args.current_algorithms:
+        args.out_dir = str(out_dir)
 
     print(f"[roi-matrix] output: {out_dir}")
     print(f"[roi-matrix] suite={args.suite} benchmark={args.benchmark} options={args.options!r}")
@@ -7470,12 +7494,15 @@ def main(argv: list[str]) -> int:
             if not args.dry_run:
                 write_outputs(out_dir, rows)
 
-    certify_sniper_semantic_work(rows, args, policies)
-    certify_cache_sim_trace_identity(rows, args, policies)
-    certify_cache_sim_pr_results(rows, args)
-    certify_gem5_pr_results(rows, args)
-    certify_detailed_kernel_results(rows, args)
-    certify_current_record_results(rows)
+    if args.current_algorithms:
+        algorithm_matrix.certify_rows(rows)
+    else:
+        certify_sniper_semantic_work(rows, args, policies)
+        certify_cache_sim_trace_identity(rows, args, policies)
+        certify_cache_sim_pr_results(rows, args)
+        certify_gem5_pr_results(rows, args)
+        certify_detailed_kernel_results(rows, args)
+        certify_current_record_results(rows)
     if not args.dry_run:
         # Persist layered certification failures before any fail-closed
         # run-level validator raises. Do not emit a completion marker here.
@@ -7497,7 +7524,8 @@ def main(argv: list[str]) -> int:
     if not args.dry_run:
         write_outputs(out_dir, rows)
         write_completion_marker(out_dir, args, policies, rows)
-    return 0
+    return int(args.current_algorithms and not args.dry_run and
+               (not rows or any(row.get("status") != "ok" for row in rows)))
 
 
 if __name__ == "__main__":

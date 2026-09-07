@@ -326,6 +326,13 @@ class Receiver {
     bool watermark_valid_ = false;
 };
 
+inline State victimState(const LineMetadata& line, const Receiver& receiver, bool enabled) {
+    if (!receiver.watermarkValid() || (receiver.filtered() &&
+        line.state == LineState::FINITE && line.value <= receiver.watermark()))
+        return State::UNKNOWN;
+    return victimState(line, enabled);
+}
+
 struct WayState {
     bool property = false;
     uint8_t rrpv = 0;

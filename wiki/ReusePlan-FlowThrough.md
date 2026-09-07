@@ -173,6 +173,36 @@ P-OPT active-column reservations and the complete backing matrix remain
 separate quantities. The one-column P-OPT-SE variants remain disclosed
 reconstructions where the public artifact did not specify behavior.
 
+## Ordered-filtered algorithm passes
+
+The additional current kernels use the same record grammar, but BFS, SSSP,
+CC and BC explicitly predict the next **potential designated read** in full
+CSR order. Sorted frontiers consume strictly increasing structural positions.
+Pass close accounts for every skipped position, including empty passes, and
+advances only to the controller-computed end.
+
+WRAP and DEAD become UNKNOWN in this mode. FINITE bounds are clamped to the
+current pass end and expire when that boundary closes, even with coarse
+quantization. Ordinary loads and stores to a governed line invalidate its
+prediction through the bounded update channel, including private-cache hits.
+UNKNOWN's existing value field prevents delayed updates from reviving an
+invalidated prediction. Structural progress and delivered event order are
+separate; the latter also orders paid ordinary-access invalidations.
+
+SSSP uses U64 distances with nonnegative int32 weights. BC uses checked U64
+path counts, U32 depth and F32 dependencies. Its property transition requires
+closed work, drain, a generation increment and one LLC metadata set per
+modeled cycle/functional step; compatible immutable carriers can be reused.
+CC pointer chasing and BC's CSR/depth DAG-membership reads remain ordinary
+and counted. TC is dense exact only for a dedicated read-only U64 target-row
+start array; its orientation, duplicate array and every adjacency intersection
+are charged, not presented as predicted list accesses.
+
+These kernels and contracts are implemented in cache_sim. Detailed-backend
+admission and fresh measurements are tracked separately in the
+[per-algorithm table](Evaluation-Methodology#per-algorithm-performance).
+The figures above retain the dense PageRank example and its original geometry.
+
 ## Implementation sources
 
 | Surface | Source |

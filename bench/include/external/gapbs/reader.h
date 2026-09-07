@@ -10,6 +10,9 @@
 #include <string>
 #include <type_traits>
 #include <cstring> // for std::strtok
+#include <limits>
+#include <memory>
+#include <stdexcept>
 #include <sys/stat.h> // for stat
 
 #include "pvector.h"
@@ -419,11 +422,16 @@ EdgeList ReadFile(bool &needs_weights) {
   return el;
 }
 
-CSRGraph<NodeID_, DestID_, invert> ReadSerializedGraph() {
+CSRGraph<NodeID_, DestID_, invert> ReadSerializedGraph(
+    bool strict = false, uint64_t maximum_allocation_bytes = UINT64_MAX) {
   bool weighted = GetSuffix() == ".wsg";
   CSRGraph<NodeID_, DestID_, invert> g_new;
   bool generate_weights = false;
   bool clear_weights = false;
+  if (strict && (GetSuffix() != ".sg" && GetSuffix() != ".wsg"))
+    throw std::invalid_argument("serialized graph suffix must be .sg or .wsg");
+  if (strict && weighted == std::is_same<NodeID_, DestID_>::value)
+    throw std::invalid_argument("serialized graph weight type mismatch");
   if (!std::is_same<NodeID_, SGID>::value) {
     std::cout << "serialized graphs only allowed for 32bit" << std::endl;
     std::exit(-5);
@@ -442,7 +450,9 @@ CSRGraph<NodeID_, DestID_, invert> ReadSerializedGraph() {
     std::cout << ".wsg only allowed for int32_t weights" << std::endl;
     std::exit(-5);
   }
-  std::ifstream file(filename_);
+  std::ifstream file(filename_, std::ios::binary);
+  if (strict)
+    file.exceptions(std::ios::badbit | std::ios::failbit);
   if (!file.is_open()) {
     std::cout << "Couldn't open file " << filename_ << std::endl;
     std::exit(-6);
@@ -453,16 +463,69 @@ CSRGraph<NodeID_, DestID_, invert> ReadSerializedGraph() {
   SGOffset num_nodes, num_edges;
   DestID_ **index = nullptr, **inv_index = nullptr;
   DestID_ *neighs = nullptr, *inv_neighs = nullptr;
-  file.read(reinterpret_cast<char *>(&directed), sizeof(bool));
+  std::unique_ptr<DestID_[]> owned_neighs, owned_inv_neighs;
+  std::unique_ptr<DestID_*[]> owned_index, owned_inv_index;
+  std::unique_ptr<NodeID_[]> owned_org_ids;
+  if (strict) {
+    uint8_t flag = 0;
+    file.read(reinterpret_cast<char *>(&flag), sizeof(flag));
+    if (flag > 1)
+      throw std::invalid_argument("invalid serialized directed flag");
+    directed = flag != 0;
+  } else {
+    file.read(reinterpret_cast<char *>(&directed), sizeof(bool));
+  }
   file.read(reinterpret_cast<char *>(&num_edges), sizeof(SGOffset));
   file.read(reinterpret_cast<char *>(&num_nodes), sizeof(SGOffset));
+  if (strict) {
+    if (num_nodes <= 0 || num_nodes > INT32_MAX || num_edges < 0 ||
+        (!directed && num_edges % 2 != 0) || (directed && !invert))
+      throw std::invalid_argument("invalid serialized graph counts");
+    using Wide = unsigned __int128;
+    const Wide directions = directed ? 2 : 1;
+    const Wide index_bytes = (Wide(num_nodes) + 1) * sizeof(SGOffset);
+    const Wide edge_bytes = Wide(num_edges) * sizeof(DestID_);
+    const Wide expected = 17 + directions * (index_bytes + edge_bytes) +
+        Wide(num_nodes) * sizeof(NodeID_);
+    file.seekg(0, std::ios::end);
+    const auto length = file.tellg();
+    if (length < 0 || expected != static_cast<uint64_t>(length))
+      throw std::invalid_argument("serialized graph size mismatch");
+    const Wide allocation = directions * (index_bytes + edge_bytes) +
+        index_bytes + Wide(num_nodes) * sizeof(NodeID_) * 3;
+    if (allocation > maximum_allocation_bytes ||
+        index_bytes > std::numeric_limits<std::streamsize>::max() ||
+        edge_bytes > std::numeric_limits<std::streamsize>::max())
+      throw std::length_error("serialized graph allocation limit");
+    file.seekg(17, std::ios::beg);
+  }
   pvector<SGOffset> offsets(num_nodes + 1);
   neighs = new DestID_[num_edges];
+  if (strict)
+    owned_neighs.reset(neighs);
   std::streamsize num_index_bytes = (num_nodes + 1) * sizeof(SGOffset);
   std::streamsize num_neigh_bytes = num_edges * sizeof(DestID_);
   std::streamsize num_neigh_bytes_clear =
     num_edges * sizeof(NodeWeight<NodeID_, WeightT_>);
   file.read(reinterpret_cast<char *>(offsets.data()), num_index_bytes);
+  const auto check_csr = [&](const DestID_* neighbors) {
+    if (!strict)
+      return;
+    if (offsets[0] != 0 || offsets[num_nodes] != num_edges)
+      throw std::invalid_argument("serialized CSR offset endpoints");
+    for (int64_t row = 1; row <= num_nodes; ++row)
+      if (offsets[row] < offsets[row - 1] || offsets[row] > num_edges)
+        throw std::invalid_argument("serialized CSR offset order");
+    for (int64_t position = 0; position < num_edges; ++position) {
+      NodeID_ id;
+      if constexpr (std::is_same<NodeID_, DestID_>::value)
+        id = neighbors[position];
+      else
+        id = neighbors[position].v;
+      if (id < 0 || id >= num_nodes)
+        throw std::invalid_argument("serialized neighbor outside vertex domain");
+    }
+  };
 
   if (generate_weights) {
     NodeID_ *temp_neighs = new NodeID_[num_edges];
@@ -492,10 +555,15 @@ CSRGraph<NodeID_, DestID_, invert> ReadSerializedGraph() {
       file.read(reinterpret_cast<char *>(neighs), num_neigh_bytes);
     }
   }
+  check_csr(neighs);
   index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, neighs);
+  if (strict)
+    owned_index.reset(index);
 
   if (directed && invert) {
     inv_neighs = new DestID_[num_edges];
+    if (strict)
+      owned_inv_neighs.reset(inv_neighs);
     file.read(reinterpret_cast<char *>(offsets.data()), num_index_bytes);
 
     if (generate_weights) {
@@ -527,9 +595,14 @@ CSRGraph<NodeID_, DestID_, invert> ReadSerializedGraph() {
         file.read(reinterpret_cast<char *>(inv_neighs), num_neigh_bytes);
       }
     }
+    check_csr(inv_neighs);
     inv_index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, inv_neighs);
+    if (strict)
+      owned_inv_index.reset(inv_index);
   }
   NodeID_ *org_ids = new NodeID_[num_nodes];
+  if (strict)
+    owned_org_ids.reset(org_ids);
   file.read(reinterpret_cast<char *>(org_ids),
             num_nodes * sizeof(NodeID_)); // Read original IDs
   file.close();
@@ -541,9 +614,14 @@ CSRGraph<NodeID_, DestID_, invert> ReadSerializedGraph() {
   else
     g_new = CSRGraph<NodeID_, DestID_, invert>(num_nodes, index, neighs);
 
+  owned_neighs.release();
+  owned_inv_neighs.release();
+  owned_index.release();
+  owned_inv_index.release();
   g_new.copy_org_ids(org_ids);
 
-  delete[] org_ids;
+  if (!strict)
+    delete[] org_ids;
   return g_new;
 }
 };

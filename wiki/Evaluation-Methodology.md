@@ -1,10 +1,9 @@
 # Evaluation Methodology
 
-The full-paper successor evaluates one stable ECG design: graph-adaptive edge
-records, request-bound property loads, bounded resident prediction updates,
-and reuse-guided prefetching from a real record window. This page defines the
-current workload, comparisons, measurements and evidence limits. It is not a
-chronology of prototype experiments.
+The full-paper successor evaluates one stable ECG design: graph-adaptive records,
+request-bound property loads, bounded resident updates and reuse-guided prefetching
+from real records. This page defines the workload, comparisons, measured results
+and evidence limits.
 
 The mechanism is explained in [Adaptive records and cache control](ReusePlan-FlowThrough),
 the [worked graph-to-cache example](Property-to-Cache-Walkthrough), and the
@@ -12,38 +11,51 @@ the [worked graph-to-cache example](Property-to-Cache-Walkthrough), and the
 
 ## 1. Algorithm scope
 
-The currently integrated end-to-end workload is **single-core, fixed-iteration
-PageRank pull-GS**, implemented in cache_sim, gem5 RV64 O3, and Sniper.
+**Single-core, fixed-iteration PageRank pull-GS** is implemented in cache_sim,
+gem5 RV64 O3, and Sniper.
 The record stream follows the exact prepared graph order. Each experiment
 uses one trial, a positive fixed iteration count, and zero convergence
 tolerance: `-o 0 -n 1 -i N -t 0`.
 
-The representation is not intrinsically limited to PageRank, but another
-algorithm must define its actual property-read order and use the current
-record, instruction and completion contracts before it contributes results.
-The presence of another benchmark binary is not evidence of that integration.
+SpMV, BFS, SSSP, CC, BC and TC now share current kernels and CSR/record access
+adapters in cache_sim. Their native and Sniper paths remain outside admission
+until the corresponding typed-load and phase-lifecycle qualification completes.
+The legacy algorithm executables are not substitutes for these current paths.
 
 ### Per-algorithm performance
 
 | Algorithm | Current adaptive ECG implementation | Current cache_sim traffic ratio | Native CPU speedup |
 |---|---|---|---|
 | PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.6814 versus CSR LRU on the six full core graphs at 8 MiB | Not yet reported for the final workload set |
-| SpMV (CSR) | Not integrated | Not measured | Not measured |
-| BFS (`bfs`) | Not integrated | Not measured | Not measured |
-| SSSP (`sssp`) | Not integrated | Not measured | Not measured |
-| CC (`cc`) | Not integrated | Not measured | Not measured |
-| BC (`bc`) | Not integrated | Not measured | Not measured |
-| TC (`tc`) | Not integrated | Not measured | Not measured |
+| SpMV (CSR) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
+| BFS (`bfs`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
+| SSSP (`sssp`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
+| CC (`cc`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
+| BC (`bc`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
+| TC (`tc`) | Current shared kernel and cache_sim adapter | Not measured | Not measured |
 
 The PageRank ratio is the geometric mean of per-graph ECG/CSR-LRU modeled
 off-chip traffic; lower is better. It is **not a CPU speedup**.
-Not measured does not mean zero benefit, and results from other implementations
-do not fill these cells. Current PageRank results are detailed below.
+Unmeasured cells cannot be filled with legacy results. Current PR results are detailed below.
 
-Static CSR SpMV is a natural extension because its property-read order is
-fixed. Frontier-based BFS/SSSP, phase-dependent CC/BC, and nested-list TC need
-algorithm-specific traversal, property-type and completion handling; they are
-not enabled merely by changing `--benchmark`.
+### Algorithm and prediction contracts
+
+| Algorithm | Declared variant | Designated property read |
+|---|---|---|
+| SpMV | Fixed-input CSR `y=A*x`, ordered non-fused F32 accumulation | Read-only F32 `x[v]`; dense exact |
+| BFS | Level-synchronous top-down with sorted frontiers | U32 depth bits; ordered-filtered |
+| SSSP | Deterministic serial delta-stepping, sorted light closures and heavy phases | U64 distance; ordered-filtered |
+| CC | Two-round deterministic Afforest, minimum-ID roots and a deterministic largest-component tie break | Initial U32 neighbor component; ordered-filtered |
+| BC | Level-synchronous Brandes over an explicit source list, sorted forward/reverse levels | U32 depth, then F32 dependency; ordered-filtered |
+| TC | Degree-order orientation and node-iterator intersections | Dedicated read-only U64 target-row start; dense exact |
+
+Ordered-filtered metadata means **next potential designated read**, not next actual reference.
+Skipped positions, ordinary-access invalidation and charged phase transitions follow the
+[filtered contract](ReusePlan-FlowThrough#ordered-filtered-algorithm-passes).
+
+New-algorithm traffic includes initialization, sorting, buckets, orientation and record construction;
+it is not the older PR kernel-only scope. Baselines are CSR LRU/SRRIP/capacity-based GRASP.
+P-OPT has not been ported to this roster; an uncharged dynamic oracle is not a substitute.
 
 ## 2. Stable design and simulator roles
 

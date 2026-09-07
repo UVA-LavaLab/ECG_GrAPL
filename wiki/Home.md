@@ -68,6 +68,8 @@ Sniper's admitted current path is one-core, uncapped fixed PageRank through
 `sg_kernel`, with mandatory process-tree RSS protection and true modulo LLC
 indexing. Its update link is bounded completion corroboration, not retirement.
 
-The current end-to-end workload is PageRank. See the
+PageRank is integrated across all three backends. SpMV/BFS/SSSP/CC/BC/TC now have
+current shared kernels and cache_sim adapters, with detailed-backend admission
+still separate. See the
 [per-algorithm table](Evaluation-Methodology#per-algorithm-performance)
 before attributing this implementation's results to another algorithm.

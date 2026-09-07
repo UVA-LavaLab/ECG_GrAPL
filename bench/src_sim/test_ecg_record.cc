@@ -725,6 +725,50 @@ void testFilteredReceiverInvalidations() {
           "filtered receivers reject a sender that claims unproven DEAD liveness");
 }
 
+void testFilteredQuantizedPassBoundary() {
+    using namespace ecg_record;
+    auto req = requirements(uint64_t{1} << 26);
+    req.record_count = uint64_t{1} << 30;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK && layout.mantissa_bits == 0,
+          "filtered boundary fixture exercises the coarse large-graph grammar");
+    NativeConfiguration configuration;
+    packLayout(layout, configuration.layout_descriptor);
+    packProperty({PropertyKind::U32, 4, TraversalMode::ORDERED_FILTERED},
+                 configuration.property_descriptor);
+    configuration.record_base = 0x1000;
+    configuration.property_base = 0x80000000;
+    configuration.record_count = req.record_count;
+    configuration.vertex_count = req.vertex_count;
+    configuration.context = configuration.generation = 1;
+    configuration.control = kNativeEnable | kNativeManagedPasses;
+    const uint64_t distance = (uint64_t{1} << 28) + 1;
+    const uint64_t sequence = req.record_count - distance - 1;
+    uint64_t word = 0;
+    encodeRecord(layout, 18, distance, State::FINITE, word);
+    NativeLoadResult load;
+    check(nativePropertyAccess(configuration, configuration.property_base, word,
+              configuration.record_base + (sequence - 1) * layout.record_bytes, load) == Status::OK &&
+          load.state == State::FINITE && load.deadline == req.record_count,
+          "a coarse potential bound cannot extend beyond its closed structural pass");
+    Receiver receiver;
+    receiver.configure(layout, req.record_count, 1, 1, TraversalMode::ORDERED_FILTERED);
+    CommitUpdate update;
+    update.context = update.generation = update.order = 1;
+    update.sequence = load.sequence;
+    update.deadline = load.deadline;
+    update.state = load.state;
+    LineMetadata line;
+    check(receiver.apply(&line, update) == ApplyResult::APPLIED &&
+          receiver.advanceProgress(1, 1, req.record_count) == ObservationResult::ACCEPTED &&
+          victimState(line, receiver, true) == State::UNKNOWN,
+          "pass closure expires a last-position potential bound without free line scanning");
+    check(nativePropertyAccess(configuration, configuration.property_base, word,
+              configuration.record_base + (req.record_count - 1) * layout.record_bytes, load) ==
+              Status::INVALID_RECORD,
+          "the last filtered structural position cannot have a finite in-pass successor");
+}
+
 }  // namespace
 
 int main() {
@@ -740,6 +784,7 @@ int main() {
     testSharedRuntimeStateAndQueue();
     testTypedPropertiesAndFilteredPasses();
     testFilteredReceiverInvalidations();
+    testFilteredQuantizedPassBoundary();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }

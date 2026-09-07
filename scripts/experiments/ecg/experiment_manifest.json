@@ -4,6 +4,8 @@
   "current_profiles": [
     "ecg_current_equivalence",
     "ecg_current_equivalence_extended",
+    "ecg_algorithm_equivalence_cache",
+    "ecg_algorithm_cache",
     "ecg_local_release_cache",
     "ecg_twitter_reproduction",
     "ecg_large_cache",
@@ -37,6 +39,8 @@
     "no_build": true
   },
   "profiles": {
+    "ecg_algorithm_equivalence_cache": "Bounded current shared-kernel mathematical and transport qualification for SpMV/BFS/SSSP/CC/BC/TC in cache_sim; not a detailed-timing authorization.",
+    "ecg_algorithm_cache": "Current six-algorithm pressure-graph data-traffic comparison including charged initialization, scheduling and record construction; nonauthorizing.",
     "ecg_current_equivalence": "Current bounded three-backend ECG semantic-equivalence profile: exhaustive fixture plus focused temporal-pressure coverage.",
     "ecg_current_equivalence_extended": "Optional current ECG equivalence corroboration on the retained Orkut-4096 sample.",
     "ecg_local_release_cache": "Serial primary-capacity full-core-corpus cache_sim qualification with fixed CSR baselines and all current ECG mechanisms; nonauthorizing.",
@@ -90,6 +94,16 @@
     "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
+    "ecg_algorithm_equivalence_cache": {
+      "status": "ready",
+      "reason": "Independent tiny graph answers plus all four real record mechanisms and CSR baselines; native/Sniper admission remains separate.",
+      "require_clean_worktree": true
+    },
+    "ecg_algorithm_cache": {
+      "status": "ready",
+      "reason": "Bounded functional data traffic only, including construction. This profile cannot authorize final-paper CPU speedup.",
+      "require_clean_worktree": true
+    },
     "ecg_current_equivalence": {
       "status": "ready",
       "reason": "Default bounded current-method semantic equivalence; all required stages and rows must complete before authorization is emitted.",
@@ -152,6 +166,14 @@
     }
   },
   "benchmark_options": {
+    "file_current_algorithms": {
+      "spmv": "--graph {graph_path} --repeat 2",
+      "bfs": "--graph {graph_path} --source 0",
+      "sssp": "--graph {graph_path} --source 0 --delta 8",
+      "cc": "--graph {graph_path}",
+      "bc": "--graph {graph_path} --source 0",
+      "tc": "--graph {graph_path}"
+    },
     "file_pr_current_i1": {
       "pr": "-f {graph_path} -o 0 -n 1 -i 1 -t 0"
     },
@@ -207,6 +229,45 @@
     }
   },
   "graph_sets": {
+    "current_algorithm_tiny": [
+      {
+        "name": "weighted-diamond",
+        "path": "results/graphs/ecg-algorithm-equivalence/weighted-diamond.wsg",
+        "expected_sha256": "0109481885da13133ea0cb4dc0f89f205dfaa13daa594c93c27c91389a1e900c",
+        "options_key": "file_current_algorithms",
+        "benchmarks": ["spmv", "sssp"]
+      },
+      {
+        "name": "diamond",
+        "path": "results/graphs/ecg-algorithm-equivalence/diamond.sg",
+        "expected_sha256": "cd22bf3d689dc92ad0d120865de1be6936b9144ac15f4c2189af1248d42e617e",
+        "options_key": "file_current_algorithms",
+        "benchmarks": ["bfs", "bc"]
+      },
+      {
+        "name": "cliques-and-isolate",
+        "path": "results/graphs/ecg-algorithm-equivalence/cliques-and-isolate.sg",
+        "expected_sha256": "ab7365ee410a08c3c9b1e309fc5e28f85e35a0c85bb8496746d1c369da88d66b",
+        "options_key": "file_current_algorithms",
+        "benchmarks": ["cc", "tc"]
+      }
+    ],
+    "current_algorithm_pressure": [
+      {
+        "name": "pressure512-weighted",
+        "path": "results/graphs/ecg-algorithm-equivalence/pressure512.wsg",
+        "expected_sha256": "c305df482aef002e86dcc57ed2f34e140c2228e7c6802554e015b7cabd3c1557",
+        "options_key": "file_current_algorithms",
+        "benchmarks": ["spmv", "sssp"]
+      },
+      {
+        "name": "pressure512",
+        "path": "results/graphs/ecg-algorithm-equivalence/pressure512.sg",
+        "expected_sha256": "87656dea741ec0714b48828afcad62047f9d7bd2bbaea59c1bd4c5f973e47eb6",
+        "options_key": "file_current_algorithms",
+        "benchmarks": ["bfs", "bc", "cc", "tc"]
+      }
+    ],
     "current_twitter_reproduction": [
       {
         "name": "twitter-2010",
@@ -777,6 +838,74 @@
     ]
   },
   "stages": [
+    {
+      "name": "150_current_algorithms_cache_4b",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_algorithm_equivalence_cache"],
+      "suite": "cache-sim",
+      "graph_set": "current_algorithm_tiny",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["LRU", "SRRIP", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"],
+      "current_algorithms": true,
+      "ecg_equivalence": true,
+      "ecg_record_bytes": 4,
+      "algorithm_workspace_bytes": 33554432,
+      "cache_record_rss_mib": 1024,
+      "l1d_size": "128B", "l1d_ways": "2",
+      "l2_size": "256B", "l2_ways": "2",
+      "l3_sizes": ["512B"], "l3_ways": "2",
+      "prefetcher": "none", "flowthrough": "off",
+      "structure_prefetch_degree": 0,
+      "cache_sim_omp_threads": 1,
+      "policy_sharding_allowed": false,
+      "timeout_cache": 30,
+      "out_subdir": "150_current_algorithms_cache_4b"
+    },
+    {
+      "name": "151_current_algorithms_cache_8b",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_algorithm_equivalence_cache"],
+      "suite": "cache-sim",
+      "graph_set": "current_algorithm_tiny",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["LRU", "SRRIP", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"],
+      "current_algorithms": true,
+      "ecg_equivalence": true,
+      "ecg_record_bytes": 8,
+      "algorithm_workspace_bytes": 33554432,
+      "cache_record_rss_mib": 1024,
+      "l1d_size": "128B", "l1d_ways": "2",
+      "l2_size": "256B", "l2_ways": "2",
+      "l3_sizes": ["512B"], "l3_ways": "2",
+      "prefetcher": "none", "flowthrough": "off",
+      "structure_prefetch_degree": 0,
+      "cache_sim_omp_threads": 1,
+      "policy_sharding_allowed": false,
+      "timeout_cache": 30,
+      "out_subdir": "151_current_algorithms_cache_8b"
+    },
+    {
+      "name": "152_current_algorithms_cache_pressure",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_algorithm_cache"],
+      "suite": "cache-sim",
+      "graph_set": "current_algorithm_pressure",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["LRU", "SRRIP", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"],
+      "current_algorithms": true,
+      "ecg_record_bytes": 0,
+      "algorithm_workspace_bytes": 33554432,
+      "cache_record_rss_mib": 1024,
+      "l1d_size": "128B", "l1d_ways": "2",
+      "l2_size": "256B", "l2_ways": "2",
+      "l3_sizes": ["1kB"], "l3_ways": "4",
+      "prefetcher": "none", "flowthrough": "off",
+      "structure_prefetch_degree": 0,
+      "cache_sim_omp_threads": 1,
+      "policy_sharding_allowed": false,
+      "timeout_cache": 120,
+      "out_subdir": "152_current_algorithms_cache_pressure"
+    },
     {
       "name": "110_current_fixture_cache_4b",
       "kind": "roi_matrix",

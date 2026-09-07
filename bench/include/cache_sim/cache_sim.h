@@ -1928,7 +1928,7 @@ private:
         way.recency = line.last_access;
         way.grasp_tier = recordTier(line.line_addr);
         way.state = ecg_record::victimState(
-            line.record_metadata, record_replacement_ && record_receiver_.watermarkValid());
+            line.record_metadata, record_receiver_, record_replacement_);
         way.deadline = line.record_metadata.value;
         return way;
     }

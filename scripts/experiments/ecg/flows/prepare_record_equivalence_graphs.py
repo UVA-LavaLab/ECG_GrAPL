@@ -18,6 +18,8 @@ CONFIG_PATH = (
 FIXTURE_PATH = PROJECT_ROOT / "fig/ecg-figure-fixture.json"
 TEMPORAL_GENERATOR = Path(__file__).with_name("generate_temporal_reuse_graph.py")
 OUTPUT_ROOT = PROJECT_ROOT / "results/graphs/ecg-current-equivalence"
+ALGORITHM_OUTPUT_ROOT = PROJECT_ROOT / "results/graphs/ecg-algorithm-equivalence"
+ALGORITHM_CONFIG = PROJECT_ROOT / "scripts/experiments/ecg/configs/algorithm_equivalence.json"
 MAX_VERTICES = 4096
 MAX_EDGES = 1_000_000
 
@@ -91,7 +93,9 @@ def encode_csr(rows: list[list[int]]) -> tuple[bytes, bytes]:
 
 def serialized_graph(
         vertices: int, edges: Iterable[tuple[int, int]],
-        directed: bool) -> tuple[bytes, dict[str, int | bool | str]]:
+        directed: bool, *, traversal: str = "in") -> tuple[bytes, dict[str, int | bool | str]]:
+    if traversal not in ("in", "out"):
+        raise ValueError("serialized traversal must be in or out")
     out_rows, in_rows, edge_count = normalized_edges(
         vertices, edges, directed)
     out_offsets, out_neighbors = encode_csr(out_rows)
@@ -105,12 +109,10 @@ def serialized_graph(
         payload.extend(in_neighbors)
     payload.extend(
         b"".join(struct.pack("<i", vertex) for vertex in range(vertices)))
-    # PageRank pull consumes IN-neighbor IDs. A high-ID sink that appears only
-    # as an OUT destination must not widen the record layout.
-    pull_rows = in_rows if directed else out_rows
-    assert pull_rows is not None
+    encoded_rows = in_rows if directed and traversal == "in" else out_rows
+    assert encoded_rows is not None
     maximum_id = max(
-        (source for row in pull_rows for source in row), default=0)
+        (source for row in encoded_rows for source in row), default=0)
     semantic = hashlib.sha256()
     semantic.update(struct.pack("<?qq", directed, edge_count, vertices))
     for source, row in enumerate(out_rows):
@@ -123,6 +125,109 @@ def serialized_graph(
         "max_vertex_id": maximum_id,
         "semantic_sha256": semantic.hexdigest(),
     }
+
+def serialized_weighted_graph(
+        vertices: int, edges: Iterable[tuple[int, int, int]],
+        directed: bool) -> tuple[bytes, dict[str, object]]:
+    if not 1 <= vertices <= MAX_VERTICES:
+        raise ValueError(f"vertices must be in [1,{MAX_VERTICES}]")
+    out_rows: list[list[tuple[int, int]]] = [[] for _ in range(vertices)]
+    in_rows: list[list[tuple[int, int]]] = [[] for _ in range(vertices)]
+    count = 0
+    for source, destination, weight in edges:
+        if not (0 <= source < vertices and 0 <= destination < vertices):
+            raise ValueError("weighted endpoint is outside the graph")
+        if not -(1 << 31) <= weight < (1 << 31):
+            raise ValueError("weight is outside signed-32")
+        out_rows[source].append((destination, weight))
+        in_rows[destination].append((source, weight))
+        count += 1
+        if count > MAX_EDGES:
+            raise ValueError("weighted graph exceeds the bounded edge limit")
+    payload = bytearray(struct.pack("<?qq", directed, count, vertices))
+    for rows in (out_rows, in_rows) if directed else (out_rows,):
+        offsets = [0]
+        records = bytearray()
+        for row in rows:
+            row.sort()
+            records.extend(b"".join(struct.pack("<ii", *edge) for edge in row))
+            offsets.append(offsets[-1] + len(row))
+        payload.extend(b"".join(struct.pack("<q", offset) for offset in offsets))
+        payload.extend(records)
+    payload.extend(b"".join(struct.pack("<i", vertex) for vertex in range(vertices)))
+    return bytes(payload), {
+        "vertices": vertices, "records": count, "directed": directed, "weighted": True,
+        "maximum_out_id": max((v for row in out_rows for v, _ in row), default=0),
+    }
+
+
+def algorithm_outputs() -> dict[str, tuple[bytes, dict[str, object]]]:
+    diamond = [
+        (0, 1, 2), (0, 2, 5), (0, 5, 20), (1, 2, 1), (1, 3, 2),
+        (2, 3, 1), (2, 4, 4), (3, 4, 1), (4, 5, 3), (6, 7, 1),
+    ]
+    cliques = [
+        (0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3),
+        (4, 5), (4, 6), (5, 6), (7, 8),
+    ]
+    symmetric = [(u, v) for left, right in cliques for u, v in ((left, right), (right, left))]
+    pressure: set[tuple[int, int]] = set()
+    for first, size in ((0, 384), (384, 112)):
+        for vertex in range(first, first + size):
+            for step in (1, 2, 17, 65):
+                target = first + (vertex - first + step) % size
+                pressure.add((min(vertex, target), max(vertex, target)))
+    pressure_edges = [
+        (u, v, (left * 13 + right * 7) % 32)
+        for left, right in sorted(pressure)
+        for u, v in ((left, right), (right, left))
+    ]
+    outputs = {
+        "weighted-diamond.wsg": serialized_weighted_graph(8, diamond, True),
+        "diamond.sg": serialized_graph(8, ((u, v) for u, v, _ in diamond), True, traversal="out"),
+        "cliques-and-isolate.sg": serialized_graph(10, symmetric, False, traversal="out"),
+        "pressure512.wsg": serialized_weighted_graph(512, pressure_edges, False),
+        "pressure512.sg": serialized_graph(
+            512, ((u, v) for u, v, _ in pressure_edges), False, traversal="out"),
+    }
+    for _data, facts in outputs.values():
+        if "max_vertex_id" in facts:
+            facts["maximum_out_id"] = facts.pop("max_vertex_id")
+        facts["traversal"] = "out"
+    return outputs
+
+
+def prepare_algorithms(output_root: Path, force: bool, check: bool) -> dict[str, object]:
+    config = json.loads(ALGORITHM_CONFIG.read_text())
+    outputs = algorithm_outputs()
+    graphs = {}
+    for name, (data, facts) in outputs.items():
+        digest = sha256_bytes(data)
+        if digest != config["graphs"][name]["sha256"]:
+            raise RuntimeError(f"algorithm recipe differs from pinned graph {name}")
+        graphs[name] = {
+            **facts, "sha256": digest, "path": display_path(output_root / name),
+            "size_bytes": len(data),
+        }
+    receipt = {
+        "schema": "ecg-algorithm-corpus.v1", "graphs": graphs,
+        "config_sha256": sha256_path(ALGORITHM_CONFIG),
+        "preparer_sha256": sha256_path(Path(__file__)),
+    }
+    encoded = (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode()
+    artifacts = {name: data for name, (data, _) in outputs.items()}
+    artifacts["corpus.receipt.json"] = encoded
+    for name, data in artifacts.items():
+        path = output_root / name
+        if check:
+            if not path.is_file() or path.read_bytes() != data:
+                raise RuntimeError(f"algorithm corpus artifact is missing or changed: {path}")
+        elif path.exists() and path.read_bytes() != data and not force:
+            raise RuntimeError(f"refusing to overwrite changed algorithm artifact {path}")
+    if not check:
+        for name, data in artifacts.items():
+            write_checked(output_root / name, data, force)
+    return receipt
 
 
 def fixture_graph() -> tuple[bytes, dict[str, object]]:
@@ -245,17 +350,18 @@ def prepare(output_root: Path, force: bool, check: bool) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)
+    parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--algorithms", action="store_true")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
     if args.check and args.force:
         parser.error("--check and --force are mutually exclusive")
-    output_root = (
-        args.output_root if args.output_root.is_absolute()
-        else PROJECT_ROOT / args.output_root)
+    requested_root = args.output_root or (ALGORITHM_OUTPUT_ROOT if args.algorithms else OUTPUT_ROOT)
+    output_root = requested_root if requested_root.is_absolute() else PROJECT_ROOT / requested_root
     try:
-        receipt = prepare(output_root, args.force, args.check)
+        receipt = (prepare_algorithms if args.algorithms else prepare)(
+            output_root, args.force, args.check)
     except (OSError, ValueError, RuntimeError) as error:
         parser.error(str(error))
     print(json.dumps(receipt, sort_keys=True))

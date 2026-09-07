@@ -100,6 +100,39 @@ On the reference host, use `/usr/bin/python3.12 -I` and add
 
 ## 4. Run current cache experiments
 
+The additional algorithms use the shared current executable, not the legacy
+`bfs`, `sssp`, `cc`, `bc`, `tc` or `pr_spmv` paths:
+
+```bash
+make -j1 PARALLEL=1 sim-algorithms
+python3 scripts/experiments/ecg/flows/prepare_record_equivalence_graphs.py --algorithms
+
+ulimit -c 0
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_algorithm_equivalence_cache \
+  --run-dir results/ecg_experiments/runs/ecg_algorithm_equivalence_cache \
+  --no-build --no-resume
+
+python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_algorithm_cache \
+  --run-dir results/ecg_experiments/runs/ecg_algorithm_cache \
+  --no-build --no-resume
+```
+
+The first profile contains 84 rows: six algorithms, seven policies, and both
+record widths, checked against independent diamond/clique answers. The second
+contains 42 auto-width rows on a 512-vertex pressure graph with two components
+and isolates. SpMV/SSSP use the explicit weighted graph (integer weights 0-31);
+the other kernels use its identical unweighted topology. Both run serially,
+with a 1 GiB process-tree RSS guard and 32 MiB algorithm workspace limit.
+Their tiny cache geometry is diagnostic, not a final-paper machine.
+
+`--current-algorithms` selects this path in `roi_matrix.py`; changing only
+`--benchmark` does not. Source/weight data, preparation, all declared algorithm
+work, and raw transport accounting are checked. These rows report cache data
+traffic including construction, never CPU speedup, and cannot issue the PR
+equivalence authorization or authorize detailed final runs.
+
 | Profile | Workload | Resource scope |
 |---|---|---|
 | `ecg_local_release_cache` | Six full core graphs, ten CSR/reference/ECG roles, two iterations, 8 MiB LLC | 8 GiB RSS; one hour per policy |
