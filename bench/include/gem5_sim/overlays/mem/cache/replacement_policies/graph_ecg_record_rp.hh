@@ -44,6 +44,11 @@ class GraphEcgRecordRP : public Base
     bool supportsEcgRecord() const override { return true; }
     bool bypassEcgRecordDead() const override { return replacementEnabled; }
     bool configureEcgRecord(const ecg_record::NativeConfiguration& value) override;
+    ecg_record::ObservationResult advanceEcgRecordProgress(
+        uint16_t context, uint64_t generation, uint64_t sequence) override;
+    void invalidateEcgRecordMetadata(
+        const std::shared_ptr<ReplacementData>& data) override;
+    void finishEcgRecordInvalidation() override;
     ecg_record::ApplyResult applyEcgRecordUpdate(
         const std::shared_ptr<ReplacementData>& data,
         const ecg_record::CommitUpdate& update) override;
@@ -65,6 +70,7 @@ class GraphEcgRecordRP : public Base
     const std::string sidebandPath;
     graph::GraphCacheContext context;
     ecg_record::NativeConfiguration configuration;
+    ecg_record::PropertyDescriptor propertyDescriptor;
     ecg_record::Receiver receiver;
 };
 

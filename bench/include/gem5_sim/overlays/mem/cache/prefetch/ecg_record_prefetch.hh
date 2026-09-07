@@ -32,6 +32,7 @@ class EcgRecordPrefetch : public ClockedObject, public EcgRecordPrefetchFilter
     void regProbeListeners() override;
     DrainState drain() override;
     void configure(const ecg_record::NativeConfiguration& configuration);
+    void invalidateBinding();
     void observeProperty(const ecg_record::NativeLoadResult& load);
     uint64_t pendingWork() const;
     void report() const;
@@ -123,6 +124,7 @@ class EcgRecordPrefetch : public ClockedObject, public EcgRecordPrefetchFilter
     std::deque<ecg_record::NativeLoadResult> windows;
     ecg_record::NativeConfiguration configuration;
     ecg_record::Layout layout;
+    ecg_record::PropertyDescriptor propertyDescriptor;
     unsigned bankCount = 0;
     uint64_t ticket = 0;
     uint64_t lastSequence = 0;

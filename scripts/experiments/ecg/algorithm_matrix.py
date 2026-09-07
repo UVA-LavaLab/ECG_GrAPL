@@ -34,6 +34,11 @@ def contract() -> dict[str, Any]:
 def source_paths(suite: str) -> dict[str, Path]:
     configuration = contract()
     relative = configuration["source_paths"] + configuration["backend_source_paths"].get(suite, [])
+    if suite in ("gem5", "sniper"):
+        shared = json.loads((CONFIG.parent / "record_equivalence.json").read_text())
+        prefixes = ("bench/include/gem5_sim/", "scripts/setup_gem5.py") if suite == "gem5" else (
+            "bench/include/sniper_sim/", "bench/src_sniper/ecg_record_guest.h", "scripts/setup_sniper.py")
+        relative += [path for path in shared["source_paths"] if path.startswith(prefixes)]
     return {"algorithm_contract": CONFIG, **{path: ROOT / path for path in relative}}
 
 
@@ -67,12 +72,15 @@ def validate_payload(
     payload: dict[str, Any], log: str, *, algorithm: str, mode: str, policy: str,
     graph: GraphInfo, graph_path: Path, options: argparse.Namespace, requested_bytes: int,
     minimum_mantissa_bits: int, evidence: bool, llc_sets: int,
+    backend: str = "cache_sim",
 ) -> dict[str, Any]:
     require(payload.get("schema") == "ecg.algorithm-result.v1" and
-            payload.get("backend") == "cache_sim" and payload.get("mode") == mode and
+            payload.get("backend") == backend and payload.get("mode") == mode and
             payload.get("policy") == policy and payload.get("timing_valid_for_speedup") is False,
             "algorithm backend/mode/policy receipt mismatch")
-    require(payload.get("measurement_scope") == "algorithm-data-traffic-including-construction",
+    require(payload.get("measurement_scope") == (
+                "algorithm-data-traffic-including-construction" if backend == "cache_sim"
+                else "algorithm-setup-kernel-drain"),
             "algorithm costs do not cover construction")
     work = payload.get("workload")
     require(isinstance(work, dict), "missing algorithm workload")
@@ -84,7 +92,8 @@ def validate_payload(
     records = mode != "csr"
     require(work.get("carrier") == ("record" if records else "csr") and
             _integer(work, "weighted") == int(graph.weighted) and
-            _integer(work, "evidence") == int(evidence) and _integer(work, "memory_counts_measured") == 1,
+            _integer(work, "evidence") == int(evidence) and
+            _integer(work, "memory_counts_measured") == int(evidence or backend == "cache_sim"),
             "algorithm carrier, weight or instrumentation mismatch")
     require(_integer(work, "vertices") == graph.vertices and
             _integer(work, "source_edges") == graph.records,
@@ -105,11 +114,13 @@ def validate_payload(
                 "BC did not execute both property phases for every source")
     else:
         require(_integer(work, "bindings") == 1, "unexpected algorithm rebind")
-    for key in ("result_digest", "work_trace_digest", "position_trace_digest", "source_list_digest"):
+    for key in ("result_digest", "work_trace_digest", "position_trace_digest", "record_trace_digest", "source_list_digest"):
         require(bool(re.fullmatch(r"[0-9a-f]{16}", str(work.get(key, "")))), f"missing algorithm digest {key}")
     if evidence:
         require(work["work_trace_digest"] != "0000000000000000" and
                 work["position_trace_digest"] != "0000000000000000", "empty algorithm evidence")
+        if records:
+            require(work["record_trace_digest"] != "0000000000000000", "empty actual-record semantic evidence")
     if records:
         maximum = _integer(work, "maximum_encoded_id")
         require(maximum <= graph.maximum_id and (algorithm == "tc" or maximum == graph.maximum_id),
@@ -123,7 +134,33 @@ def validate_payload(
         require(_integer(work, "carrier_allocation_bytes") == carrier_count * layout["record_bytes"] and
                 _integer(work, "construction_read_bytes") > 0 and _integer(work, "construction_write_bytes") > 0,
                 "missing charged immutable carrier construction")
-        runtime = receipt(log, "ECG-RECORD-FUNCTIONAL")
+        runtime = receipt(log, {"cache_sim": "ECG-RECORD-FUNCTIONAL",
+                               "gem5": "ECG-RECORD-NATIVE", "sniper": "SNIPER-ECG-RECORD"}[backend])
+        if backend == "gem5":
+            require(unsigned(runtime, "replacement") == int(mode in ("replacement", "replacement-prefetch")) and
+                    unsigned(runtime, "prefetch") == int(mode in ("prefetch", "replacement-prefetch")) and
+                    unsigned(runtime, "errors") == 0 and unsigned(runtime, "required_update_drops") == 0,
+                    "native mechanism or required-update delivery mismatch")
+            runtime = {**runtime, "mechanism": mode, "managed_passes": "1",
+                       "skipped_positions": runtime["skipped"],
+                       "invalidation_steps": runtime["invalidation_cycles"]}
+        elif backend == "sniper":
+            require(unsigned(runtime, "errors") == 0 and unsigned(runtime, "clean") == 1 and
+                    unsigned(runtime, "pending_updates") == 0 and unsigned(runtime, "pending_prefetches") == 0,
+                    "Sniper algorithm transport did not finish cleanly")
+            require(unsigned(runtime, "record_reads") == unsigned(runtime, "loaded_values") and
+                    unsigned(runtime, "record_reads") >= actual and
+                    unsigned(runtime, "record_read_bytes") == unsigned(runtime, "record_reads") * layout["record_bytes"],
+                    "Sniper software window did not use real loaded values")
+            runtime = {**runtime, "managed_passes": "1", "pending": "0",
+                       "record_loads": runtime["consumed_records"],
+                       "governed_loads": runtime["property_accesses"],
+                       "record_read_bytes": str(actual * layout["record_bytes"]),
+                       "generated": runtime["generated_updates"], "enqueued": runtime["enqueued_updates"],
+                       "coalesced": runtime["coalesced_updates"], "delivered": runtime["delivered_updates"],
+                       "applied": runtime["applied_updates"], "absent": runtime["not_resident_updates"],
+                       "stale": runtime["stale_updates"], "expired": runtime["expired_updates"],
+                       "invalidation_steps": runtime["invalidation_cycles"]}
         require(runtime.get("mechanism") == mode and unsigned(runtime, "managed_passes") == 1 and
                 unsigned(runtime, "record_loads") == actual and unsigned(runtime, "governed_loads") == actual and
                 unsigned(runtime, "record_read_bytes") == actual * layout["record_bytes"] and
@@ -287,7 +324,9 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
     for group in groups.values():
         good = [row for row in group if row.get("status") == "ok"]
         signatures = {tuple(str(row.get("algorithm_" + field, "")) for field in comparable) for row in good}
-        if len(signatures) != 1:
+        record_signatures = {str(row.get("algorithm_record_trace_digest", "")) for row in good
+                             if row.get("algorithm_carrier") == "record"}
+        if len(signatures) != 1 or len(record_signatures) > 1:
             for row in good:
                 row.update(status="error", error="current algorithm result/work differs across policies")
             continue
@@ -296,5 +335,5 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
             for label, column in (("LRU", "traffic_ratio_vs_csr_lru"),
                                   ("ECG_TRANSPORT", "traffic_ratio_vs_transport")):
                 baseline = baselines.get(label)
-                if baseline is not None and int(baseline["total_offchip_traffic"]) > 0:
+                if baseline is not None and baseline.get("total_offchip_traffic") is not None and int(baseline["total_offchip_traffic"]) > 0:
                     row[column] = int(row["total_offchip_traffic"]) / int(baseline["total_offchip_traffic"])

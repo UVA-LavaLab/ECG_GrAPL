@@ -69,6 +69,7 @@ EcgRecordPrefetch::configure(const ecg_record::NativeConfiguration& value)
     fatal_if(configured &&
         (value.record_base != configuration.record_base ||
          value.property_base != configuration.property_base ||
+         value.property_descriptor != configuration.property_descriptor ||
          value.generation != configuration.generation ||
          value.context != configuration.context ||
          value.layout_descriptor != configuration.layout_descriptor ||
@@ -76,6 +77,10 @@ EcgRecordPrefetch::configure(const ecg_record::NativeConfiguration& value)
          value.vertex_count != configuration.vertex_count),
         "%s graph identity changed without draining its prefetch engine", name());
     layout = resolved;
+    fatal_if(ecg_record::unpackProperty(
+        value.property_descriptor, propertyDescriptor) !=
+            ecg_record::Status::OK,
+        "%s received an invalid ECG property descriptor", name());
     configuration = value;
     fatal_if(!configured && buffer.configure(layout, value.record_base, value.record_count) !=
                  ecg_record::Status::OK,
@@ -83,6 +88,20 @@ EcgRecordPrefetch::configure(const ecg_record::NativeConfiguration& value)
     bankCount = buffer.bankCount();
     configured = true;
     progress();
+}
+
+void
+EcgRecordPrefetch::invalidateBinding()
+{
+    fatal_if(pendingWork(),
+        "%s cannot invalidate an active ECG prefetch binding", name());
+    configured = false;
+    configuration = {};
+    propertyDescriptor = {};
+    layout = {};
+    buffer = ecg_record::WindowBuffer{};
+    lastSequence = 0;
+    nextLookupCycle = 0;
 }
 
 void
@@ -275,7 +294,9 @@ EcgRecordPrefetch::processWindow()
     fatal_if(window.words[0] != trigger.raw_record,
              "%s acquired record bytes disagree with the actual retired load", name());
     ecg_record::PrefetchTarget target;
-    fatal_if(ecg_record::selectWindowTarget(layout, window, 16, target) != ecg_record::Status::OK,
+    fatal_if(ecg_record::selectWindowTarget(
+        layout, window, propertyDescriptor, configuration.property_base,
+        target) != ecg_record::Status::OK,
              "%s could not decode its complete real record window", name());
     windows.pop_front();
     buffer.unpin();
@@ -286,7 +307,11 @@ EcgRecordPrefetch::processWindow()
         return;
     }
     ++candidates;
-    const uint64_t address = configuration.property_base + target.destination * 4;
+    uint64_t address = 0;
+    fatal_if(ecg_record::propertyAddress(
+        propertyDescriptor, configuration.property_base,
+        target.destination, address) != ecg_record::Status::OK,
+        "%s selected an invalid ECG property address", name());
     const uint64_t line = address - address % kLineBytes;
     unsigned available = kAccesses;
     for (unsigned slot = kBanks; slot < kBanks + propertyQueueSize; ++slot) {

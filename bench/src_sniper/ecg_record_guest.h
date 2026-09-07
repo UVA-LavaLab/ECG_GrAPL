@@ -65,6 +65,223 @@ inline uint64_t ecg_record_max_source_id(
     return maximum;
 }
 
+class EcgRecordContext
+{
+  public:
+    static constexpr bool models_memory = false;
+
+    void bind(
+        ecg_record::NativeConfiguration configuration,
+        const ecg_record::RecordStream& stream)
+    {
+        configuration.control = ecg_record::kNativeEnable |
+            ecg_record::kNativeManagedPasses;
+        configuration.iteration_base = 0;
+        ecg_record::Layout layout;
+        ecg_record::PropertyDescriptor property;
+        if (ecg_record::validateNativeConfiguration(
+                configuration, layout) != ecg_record::Status::OK ||
+            ecg_record::unpackProperty(
+                configuration.property_descriptor, property) !=
+                ecg_record::Status::OK ||
+            configuration.record_base !=
+                reinterpret_cast<uint64_t>(stream.data()) ||
+            configuration.record_count != stream.size() ||
+            !(layout == stream.layout)) {
+            throw std::invalid_argument(
+                "Invalid Sniper managed ECG binding");
+        }
+        if (bound_) {
+            uint64_t next_generation = 0;
+            if (cursor_.open())
+                throw std::logic_error(
+                    "Cannot rebind an open Sniper ECG pass");
+            if (!ecg_record::checkedAdd(
+                    configuration_.generation, 1, next_generation) ||
+                configuration.generation != next_generation)
+                throw std::invalid_argument(
+                    "Sniper ECG rebind generation is not consecutive");
+            ecg_record_drain();
+            ecg_record_invalidate();
+            accumulated_passes_ += cursor_.passes();
+            accumulated_consumed_ += cursor_.consumed();
+            accumulated_skipped_ += cursor_.skipped();
+        }
+        configuration_ = configuration;
+        layout_ = layout;
+        property_ = property;
+        stream_ = &stream;
+        cursor_ = ecg_record::PassCursor{};
+        if (cursor_.configure(
+                configuration.record_count, property.traversal) !=
+                ecg_record::Status::OK)
+            throw std::invalid_argument(
+                "Cannot configure Sniper managed ECG cursor");
+        ecg_record_configure(configuration_);
+        loaded_mask_ = 0;
+        next_load_ = 0;
+        bound_ = true;
+    }
+
+    void beginPass(bool has_next = false)
+    {
+        if (!bound_ || cursor_.begin() != ecg_record::Status::OK)
+            throw std::logic_error("Cannot begin Sniper managed ECG pass");
+        configuration_.iteration_base = cursor_.base();
+        configuration_.control = ecg_record::kNativeEnable |
+            ecg_record::kNativeManagedPasses |
+            (has_next ? ecg_record::kNativeHasNext : 0);
+        ecg_record_iteration(
+            configuration_.iteration_base, has_next,
+            /*managed=*/true);
+        loaded_mask_ = 0;
+        next_load_ = 0;
+    }
+
+    void closePass()
+    {
+        if (!bound_ || !cursor_.open())
+            throw std::logic_error("No Sniper managed ECG pass is open");
+        ecg_record_pass_close();
+        if (cursor_.close() != ecg_record::Status::OK)
+            throw std::logic_error("Sniper managed ECG pass close failed");
+    }
+
+    void drain() const
+    {
+        ecg_record_drain();
+    }
+
+    uint64_t loadRecord(uint64_t index)
+    {
+        if (!bound_ || !cursor_.open() ||
+            index >= configuration_.record_count)
+            throw std::out_of_range("Sniper managed ECG record index");
+        ensureWindow(index);
+        const std::size_t slot = index % words_.size();
+        if ((loaded_mask_ & (uint16_t{1} << slot)) == 0 ||
+            indices_[slot] != index)
+            throw std::logic_error(
+                "Sniper managed ECG window missed current word");
+        return words_[slot];
+    }
+
+    template<typename T>
+    T loadProperty(
+        uint64_t index, uint64_t raw_word, const T* base)
+    {
+        constexpr bool f32 = std::is_same<T, float>::value;
+        constexpr bool u32 = std::is_same<T, uint32_t>::value;
+        constexpr bool u64 = std::is_same<T, uint64_t>::value;
+        static_assert(f32 || u32 || u64,
+            "Sniper managed ECG properties are F32, U32, or U64");
+        const ecg_record::PropertyKind expected =
+            f32 ? ecg_record::PropertyKind::F32 :
+            u32 ? ecg_record::PropertyKind::U32 :
+                  ecg_record::PropertyKind::U64;
+        if (!bound_ || !cursor_.open() ||
+            property_.kind != expected ||
+            reinterpret_cast<uint64_t>(base) != configuration_.property_base ||
+            cursor_.consume(index) != ecg_record::Status::OK)
+            throw std::invalid_argument(
+                "Invalid Sniper managed ECG property load");
+        const volatile void* record_address = addressAt(index);
+        ecg_record_consume(record_address);
+        ecg_record::NativeLoadResult result;
+        if (ecg_record::nativePropertyAccess(
+                configuration_, reinterpret_cast<uint64_t>(base),
+                raw_word,
+                reinterpret_cast<uint64_t>(
+                    const_cast<const void*>(
+                        reinterpret_cast<const volatile void*>(
+                            record_address))),
+                result) != ecg_record::Status::OK)
+            throw std::invalid_argument(
+                "Invalid Sniper managed ECG property operands");
+        return *reinterpret_cast<const volatile T*>(
+            result.property_address);
+    }
+
+    void finish()
+    {
+        if (!bound_)
+            return;
+        if (cursor_.open())
+            throw std::logic_error(
+                "Cannot finish an open Sniper ECG pass");
+        drain();
+        ecg_record_report();
+        ecg_record_deactivate();
+        bound_ = false;
+    }
+
+    void finish(uint64_t actual_records)
+    {
+        if (consumed() != actual_records)
+            throw std::logic_error(
+                "Sniper ECG actual-record count disagrees with transport");
+        finish();
+    }
+
+    uint64_t passes() const
+    {
+        return accumulated_passes_ + cursor_.passes();
+    }
+    uint64_t consumed() const
+    {
+        return accumulated_consumed_ + cursor_.consumed();
+    }
+    uint64_t skipped() const
+    {
+        return accumulated_skipped_ + cursor_.skipped();
+    }
+
+  private:
+    const volatile void* addressAt(uint64_t index) const
+    {
+        return stream_->data() + index * layout_.record_bytes;
+    }
+
+    void load(uint64_t index)
+    {
+        const volatile void* address = addressAt(index);
+        ecg_record_arm_read(address, layout_.record_bytes);
+        uint64_t word = layout_.record_bytes == 4
+            ? *reinterpret_cast<const volatile uint32_t*>(address)
+            : *reinterpret_cast<const volatile uint64_t*>(address);
+        ecg_record_report_loaded(address, word, layout_.record_bytes);
+        const std::size_t slot = index % words_.size();
+        words_[slot] = word;
+        indices_[slot] = index;
+        loaded_mask_ |= uint16_t{1} << slot;
+    }
+
+    void ensureWindow(uint64_t position)
+    {
+        const uint64_t end = std::min<uint64_t>(
+            configuration_.record_count,
+            position + ecg_record::RecordWindow::kRecords);
+        if (next_load_ < position)
+            next_load_ = position;
+        while (next_load_ < end)
+            load(next_load_++);
+    }
+
+    ecg_record::NativeConfiguration configuration_;
+    ecg_record::Layout layout_;
+    ecg_record::PropertyDescriptor property_;
+    const ecg_record::RecordStream* stream_ = nullptr;
+    ecg_record::PassCursor cursor_;
+    std::array<uint64_t, ecg_record::RecordWindow::kRecords> words_{};
+    std::array<uint64_t, ecg_record::RecordWindow::kRecords> indices_{};
+    uint64_t next_load_ = 0;
+    uint64_t accumulated_passes_ = 0;
+    uint64_t accumulated_consumed_ = 0;
+    uint64_t accumulated_skipped_ = 0;
+    uint16_t loaded_mask_ = 0;
+    bool bound_ = false;
+};
+
 template<class GraphT>
 class EcgRecordPrStream
 {

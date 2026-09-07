@@ -43,9 +43,10 @@ def test_record_atomic_execute_fragments_compile(tmp_path):
     source = (ROOT / "bench/include/gem5_sim/overlays/arch/riscv/isa/"
               "decoder_ecg_record.isa").read_text()
     fragments = re.findall(
-        r"(ecg_record_word|ecg_record_doubleword|ecg_record_property_f32)"
+        r"(ecg_record_word|ecg_record_doubleword|ecg_record_property_f32|"
+        r"ecg_record_property_u32|ecg_record_property_u64)"
         r"\(\{\{(.*?)\}\}, ea_code=\{\{(.*?)\}\}", source, re.DOTALL)
-    assert len(fragments) == 3
+    assert len(fragments) == 5
     scaffold = r'''
 #include <cstdint>
 #include <memory>
@@ -100,8 +101,12 @@ def test_record_instruction_encodings_and_three_source_operand(tmp_path):
         ".insn r 0x2b, 0x0, 0x00, a0, a1, zero\n"
         ".insn r 0x2b, 0x0, 0x01, a0, a1, zero\n"
         ".insn r4 0x2b, 0x1, 0x0, fa0, a1, a2, a3\n"
+        ".insn r4 0x2b, 0x1, 0x1, a0, a1, a2, a3\n"
+        ".insn r4 0x2b, 0x1, 0x2, a0, a1, a2, a3\n"
         ".insn r 0x2b, 0x2, 0x0, zero, zero, zero\n"
-        ".insn r 0x2b, 0x3, 0x0, a0, zero, zero\n")
+        ".insn r 0x2b, 0x3, 0x0, a0, zero, zero\n"
+        ".insn r 0x2b, 0x4, 0x0, zero, zero, zero\n"
+        ".insn r 0x2b, 0x5, 0x0, zero, zero, zero\n")
     obj = tmp_path / "record.o"
     assembled = subprocess.run(
         [assembler, "-march=rv64gc", "-o", str(obj), str(source)],
@@ -116,7 +121,8 @@ def test_record_instruction_encodings_and_three_source_operand(tmp_path):
             r"^\s*[0-9a-f]+:\s+([0-9a-f]{8})\s", decoded.stdout, re.MULTILINE)
     ]
     assert instructions == [
-        0x0005852B, 0x0205852B, 0x68C5952B, 0x0000202B, 0x0000352B], decoded.stdout
+        0x0005852B, 0x0205852B, 0x68C5952B, 0x6AC5952B, 0x6CC5952B,
+        0x0000202B, 0x0000352B, 0x0000402B, 0x0000502B], decoded.stdout
     assert all(instruction & 0x7F == 0x2B for instruction in instructions)
     assert (instructions[2] >> 27) & 0x1F == 13
 
@@ -136,12 +142,49 @@ float load_property(uint64_t base, uint64_t record, uint64_t record_address) {
                  : "memory");
     return result;
 }
+uint32_t load_property_u32(uint64_t base, uint64_t record, uint64_t record_address) {
+    uint64_t result;
+    asm volatile(".insn r4 0x2b, 0x1, 0x1, %0, %1, %2, %3"
+                 : "=r"(result)
+                 : "r"(base), "r"(record), "r"(record_address)
+                 : "memory");
+    return static_cast<uint32_t>(result);
+}
+uint64_t load_property_u64(uint64_t base, uint64_t record, uint64_t record_address) {
+    uint64_t result;
+    asm volatile(".insn r4 0x2b, 0x1, 0x2, %0, %1, %2, %3"
+                 : "=r"(result)
+                 : "r"(base), "r"(record), "r"(record_address)
+                 : "memory");
+    return result;
+}
 ''')
     compiled = subprocess.run(
         [compiler, "-std=c++17", "-O2", "-Wall", "-Wextra", "-Werror",
          "-c", str(source), "-o", str(tmp_path / "record.o")],
         capture_output=True, text=True, timeout=30, check=False)
     assert compiled.returncode == 0, compiled.stderr
+
+
+def test_managed_record_isa_and_property_csr_are_installed():
+    decoder = (ROOT / "bench/include/gem5_sim/overlays/arch/riscv/isa/"
+               "decoder_ecg_record.isa").read_text()
+    csr = (ROOT / "bench/include/gem5_sim/overlays/arch/riscv/"
+           "ecg_record_csr.patch").read_text()
+    helper = (ROOT / "bench/include/gem5_sim/overlays/arch/riscv/"
+              "ecg_record.hh").read_text()
+    harness = (ROOT / "bench/include/gem5_sim/gem5_harness.h").read_text()
+    for marker in (
+            "ecg_record_property_u32", "ecg_record_property_u64",
+            "ecg_record_pass_close", "ecg_record_invalidate"):
+        assert marker in decoder
+    assert "CSR_ECG_RECORD_PROPERTY = 0x80C" in csr
+    assert "MISCREG_ECG_RECORD_PROPERTY" in csr
+    assert "property_descriptor" in helper
+    assert "class Gem5ManagedRecordContext" in harness
+    for method in ("bind(", "beginPass(", "closePass(", "loadRecord(",
+                   "loadProperty(", "drain(", "finish("):
+        assert method in harness
 
 
 def test_record_host_data_path_and_bad_address(tmp_path):
@@ -166,3 +209,21 @@ def test_record_host_data_path_and_bad_address(tmp_path):
         [str(binary), "bad-address"], capture_output=True, text=True, timeout=10)
     assert bad.returncode == 6
     assert "Invalid native ECG record address" in bad.stderr
+
+
+def test_managed_context_host_fallback(tmp_path):
+    compiler = shutil.which("g++")
+    if not compiler:
+        pytest.skip("g++ is unavailable")
+    binary = tmp_path / "managed_record_context"
+    result = subprocess.run(
+        [compiler, "-std=c++17", "-O2", "-fopenmp", "-DNO_M5OPS",
+         "-I", str(ROOT / "bench/include"),
+         "-I", str(ROOT / "bench/include/external/gapbs"),
+         str(ROOT / "bench/src_gem5/test_ecg_managed_context.cc"),
+         "-o", str(binary)],
+        capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    ran = subprocess.run(
+        [str(binary)], capture_output=True, text=True, timeout=10)
+    assert ran.returncode == 0, ran.stdout + ran.stderr

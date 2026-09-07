@@ -29,26 +29,74 @@ GraphEcgRecordRP::configureEcgRecord(const ecg_record::NativeConfiguration& valu
     ecg_record::Layout layout;
     if (ecg_record::validateNativeConfiguration(value, layout) != ecg_record::Status::OK)
         return false;
+    ecg_record::PropertyDescriptor property;
+    if (ecg_record::unpackProperty(
+            value.property_descriptor, property) != ecg_record::Status::OK)
+        return false;
     if (!context.loaded && !context.loadFromSideband(sidebandPath))
         return false;
-    if (context.num_regions != 2 || context.regions[0].name != "scores" ||
-        context.regions[1].name != "contrib" ||
-        context.regions[1].base_address != value.property_base ||
-        context.regions[1].upper_bound != value.property_base + value.vertex_count * 4 ||
-        context.topology.num_vertices != value.vertex_count ||
-        context.topology.num_edges != value.record_count) {
-        return false;
+    const bool managed =
+        (value.control & ecg_record::kNativeManagedPasses) != 0;
+    if (!managed) {
+        if (context.num_regions != 2 || context.regions[0].name != "scores" ||
+            context.regions[1].name != "contrib" ||
+            context.regions[1].base_address != value.property_base ||
+            context.regions[1].upper_bound !=
+                value.property_base + value.vertex_count * 4 ||
+            context.topology.num_vertices != value.vertex_count ||
+            context.topology.num_edges != value.record_count) {
+            return false;
+        }
+    } else {
+        uint64_t extent = 0, record_bytes = 0;
+        uint64_t property_upper = 0, record_upper = 0;
+        if (ecg_record::propertyExtent(
+                property, value.vertex_count, extent) !=
+                ecg_record::Status::OK ||
+            !ecg_record::checkedMultiply(
+                value.record_count, layout.record_bytes, record_bytes) ||
+            !ecg_record::checkedAdd(
+                value.property_base, extent, property_upper) ||
+            !ecg_record::checkedAdd(
+                value.record_base, record_bytes, record_upper) ||
+            context.topology.num_vertices != value.vertex_count)
+            return false;
+        bool property_match = false;
+        for (uint32_t index = 0; index < context.num_regions; ++index) {
+            const auto& region = context.regions[index];
+            property_match |=
+                region.base_address == value.property_base &&
+                region.upper_bound >= property_upper &&
+                region.num_elements == value.vertex_count &&
+                region.elem_size == ecg_record::propertyBytes(property.kind) &&
+                region.stride_bytes == property.stride_bytes;
+        }
+        const bool carrier_match =
+            (context.edge_preferred.base_address == value.record_base &&
+             context.edge_preferred.upper_bound >=
+                record_upper) ||
+            (context.edge_other.base_address == value.record_base &&
+             context.edge_other.upper_bound >=
+                record_upper) ||
+            (context.flowthrough_base == value.record_base &&
+             context.flowthrough_upper >= record_upper);
+        if (!property_match || !carrier_match)
+            return false;
     }
     if (receiver.enabled() &&
         (configuration.record_base != value.record_base ||
          configuration.property_base != value.property_base ||
-         configuration.vertex_count != value.vertex_count)) {
+         configuration.vertex_count != value.vertex_count ||
+         configuration.property_descriptor != value.property_descriptor)) {
         return false;
     }
     const bool first = !receiver.enabled();
-    if (!receiver.configure(layout, value.record_count, value.context, value.generation))
+    if (!receiver.configure(
+            layout, value.record_count, value.context, value.generation,
+            property.traversal))
         return false;
     configuration = value;
+    propertyDescriptor = property;
     if (first) {
         std::cout << "[ECG-RECORD-RP ";
         ecg_record::writeLayoutFields(std::cout, layout);
@@ -69,9 +117,7 @@ bool
 GraphEcgRecordRP::isProperty(uint64_t address) const
 {
     return receiver.enabled() &&
-        lineAddress(address) >= lineAddress(configuration.property_base) &&
-        lineAddress(address) <= lineAddress(configuration.property_base +
-                                            configuration.vertex_count * 4 - 1);
+        ecg_record::nativePropertyLine(configuration, address);
 }
 
 uint8_t
@@ -113,18 +159,29 @@ GraphEcgRecordRP::observe(RecordReplData& data, const PacketPtr pkt)
     if (!replacementEnabled || !receiver.enabled() || !pkt)
         return;
     graph::EcgRecordObservation observation;
-    if (!graph::readEcgRecordObservation(pkt->req, observation))
+    if (!graph::readEcgRecordObservation(pkt->req, observation)) {
+        if (receiver.filtered() && pkt->req->hasVaddr() &&
+            isProperty(pkt->req->getVaddr())) {
+            const auto status = receiver.invalidateObservation(
+                data.metadata, receiver.context(), receiver.generation(),
+                receiver.watermark());
+            fatal_if(status == ecg_record::ObservationResult::INVALID_CONTEXT ||
+                status == ecg_record::ObservationResult::INVALID_ORDER,
+                "%s rejected an ordinary governed-region observation", name());
+        }
         return;
+    }
     if (observation.conflict) {
         data.metadata.state = ecg_record::LineState::UNKNOWN;
         data.metadata.value = 0;
         return;
     }
-    uint64_t offset = 0, address = 0;
+    uint64_t address = 0;
     fatal_if(
         observation.destination >= configuration.vertex_count ||
-        !ecg_record::checkedMultiply(observation.destination, 4, offset) ||
-        !ecg_record::checkedAdd(configuration.property_base, offset, address) ||
+        ecg_record::propertyAddress(
+            propertyDescriptor, configuration.property_base,
+            observation.destination, address) != ecg_record::Status::OK ||
         address != observation.propertyVaddr,
         "%s received an invalid ECG property observation", name());
     fatal_if(
@@ -190,7 +247,7 @@ GraphEcgRecordRP::way(const RecordReplData& data) const
     result.recency = data.recency;
     result.grasp_tier = data.graspTier;
     result.state = ecg_record::victimState(
-        data.metadata, replacementEnabled && receiver.watermarkValid());
+        data.metadata, receiver, replacementEnabled);
     result.deadline = data.metadata.value;
     return result;
 }
@@ -232,11 +289,14 @@ GraphEcgRecordRP::applyEcgRecordUpdate(
         return Result::UNSUPPORTED;
     if (update.context != receiver.context() || update.generation != receiver.generation())
         return Result::INVALID_CONTEXT;
-    if (update.secure || update.physical_line % lineSize || update.property_vaddr % 4 ||
-        update.property_vaddr < configuration.property_base ||
-        update.property_vaddr - configuration.property_base >= configuration.vertex_count * 4) {
+    if (update.secure || update.physical_line % lineSize ||
+        !ecg_record::nativePropertyContains(
+            configuration, update.property_vaddr,
+            update.invalidate ? 1 :
+                ecg_record::propertyBytes(propertyDescriptor.kind))) {
         return Result::INVALID_ADDRESS;
     }
+
     auto data = std::static_pointer_cast<RecordReplData>(replacement_data);
     if (data) {
         if (!data->valid || data->binding.bindVirtual(
@@ -247,6 +307,34 @@ GraphEcgRecordRP::applyEcgRecordUpdate(
         data->graspTier = context.classifyGRASP(update.property_vaddr, llcSize, hotFraction);
     }
     return receiver.apply(data ? &data->metadata : nullptr, update);
+}
+
+ecg_record::ObservationResult
+GraphEcgRecordRP::advanceEcgRecordProgress(
+    uint16_t context_id, uint64_t generation, uint64_t sequence)
+{
+    return receiver.advanceProgress(context_id, generation, sequence);
+}
+
+void
+GraphEcgRecordRP::invalidateEcgRecordMetadata(
+    const std::shared_ptr<ReplacementData>& replacement_data)
+{
+    if (!replacement_data)
+        return;
+    auto data = std::static_pointer_cast<RecordReplData>(replacement_data);
+    data->metadata.clear();
+    data->binding.clear();
+    data->graspTier = 3;
+}
+
+void
+GraphEcgRecordRP::finishEcgRecordInvalidation()
+{
+    receiver.disable();
+    configuration = {};
+    propertyDescriptor = {};
+    context.loaded = false;
 }
 
 bool

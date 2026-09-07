@@ -22,6 +22,7 @@ static constexpr uint64_t kWorkVertexCount = 0x4552564eULL;
 static constexpr uint64_t kWorkGeneration = 0x4552474eULL;
 static constexpr uint64_t kWorkContext = 0x45524354ULL;
 static constexpr uint64_t kWorkControl = 0x4552434fULL;
+static constexpr uint64_t kWorkPropertyDescriptor = 0x45525044ULL;
 static constexpr uint64_t kWorkConfigCommit = 0x4552434dULL;
 static constexpr uint64_t kWorkIterationBase = 0x45524942ULL;
 static constexpr uint64_t kWorkIterationCommit = 0x45524943ULL;
@@ -35,6 +36,8 @@ static constexpr uint64_t kWorkConsume = 0x45524353ULL;
 static constexpr uint64_t kWorkDrain = 0x45524452ULL;
 static constexpr uint64_t kWorkReport = 0x45525250ULL;
 static constexpr uint64_t kWorkDeactivate = 0x45524458ULL;
+static constexpr uint64_t kWorkPassClose = 0x45525043ULL;
+static constexpr uint64_t kWorkInvalidate = 0x45524956ULL;
 
 enum class ConfigurationField : uint8_t {
     LAYOUT,
@@ -46,6 +49,7 @@ enum class ConfigurationField : uint8_t {
     GENERATION,
     CONTEXT,
     CONTROL,
+    PROPERTY_DESCRIPTOR,
 };
 
 void setConfigurationField(
@@ -54,6 +58,9 @@ void commitConfiguration(uint32_t core_id);
 void updateIteration(
     uint32_t core_id, uint64_t iteration_base, uint64_t control);
 void deactivate(uint32_t core_id);
+void closePass(uint32_t core_id);
+void invalidateBinding(
+    uint32_t core_id, uint64_t sets, uint64_t cycles);
 
 void armRecordRead(uint32_t core_id, uint64_t address, uint32_t bytes);
 void observeRecordRead(
@@ -65,11 +72,11 @@ void commitLoadedValue(uint32_t core_id, uint32_t bytes);
 void consumeRecord(
     uint32_t core_id, uint64_t address, uint64_t cycle);
 
-bool beginMemoryAccess(
+MemoryAccessKind beginMemoryAccess(
     uint32_t core_id, uint64_t virtual_address, uint64_t physical_line,
     uint32_t bytes, bool read, uint64_t cycle);
 void completeMemoryAccess(
-    uint32_t core_id, bool property_access, uint64_t cycle);
+    uint32_t core_id, MemoryAccessKind kind, uint64_t cycle);
 
 bool activeObservation(
     uint32_t core_id, uint64_t physical_line, Observation& observation);
@@ -77,6 +84,9 @@ bool activeDeadDemand(uint32_t core_id, uint64_t physical_line);
 void noteDeadDemandBypass(uint32_t core_id);
 ecg_record::ObservationResult observeLine(
     uint32_t core_id, ecg_record::LineMetadata& metadata);
+ecg_record::ObservationResult observeOrdinaryLine(
+    uint32_t core_id, uint64_t physical_line,
+    ecg_record::LineMetadata& metadata);
 ecg_record::ApplyResult applyLineUpdate(
     uint32_t core_id, ecg_record::LineMetadata* metadata,
     const ecg_record::CommitUpdate& update);
@@ -90,6 +100,9 @@ uint64_t completedSequence(uint32_t core_id);
 bool receiverWatermark(
     uint32_t core_id, uint64_t& sequence,
     ecg_record::Layout& layout);
+ecg_record::State victimState(
+    uint32_t core_id, const ecg_record::LineMetadata& metadata,
+    bool enabled);
 
 void registerLlc(uint32_t core_id, Cache* cache);
 uint64_t normalizeCycle(uint32_t core_id, uint64_t observed_cycle);

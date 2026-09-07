@@ -114,6 +114,7 @@ struct PropertyRegion {
     uint64_t upper_bound = 0;
     uint32_t num_elements = 0;
     uint32_t elem_size = 0;
+    uint32_t stride_bytes = 0;
     uint32_t region_id = 0;
     uint32_t num_buckets = 0;
     bool grasp_region = true;

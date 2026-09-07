@@ -282,7 +282,7 @@ def roi_input_paths(
             "sniper_root", "bench/include/sniper_sim/snipersim")))
         workload = str(settings.get("sniper_workload", "pr_kernel_smoke"))
         binary_name = (
-            "sg_kernel" if workload == "sg_kernel"
+            "algorithms" if settings.get("current_algorithms") else "sg_kernel" if workload == "sg_kernel"
             else "pr_kernel_smoke" if workload == "pr_kernel_smoke"
             else f"{benchmark}_kernel_smoke" if workload == "kernel_smoke"
             else benchmark
@@ -321,7 +321,7 @@ def roi_input_paths(
             "gem5" / "build" / "X86" / "gem5.opt"))
         suffix = source_env.get("GEM5_KERNEL_SUFFIX", "_m5ops")
         guest_binary = PROJECT_ROOT / "bench" / "bin_gem5" / (
-            f"{benchmark}{suffix}")
+            f"{'algorithms' if settings.get('current_algorithms') else benchmark}{suffix}")
         paths.update({
             "gem5_binary": gem5_opt,
             "gem5_config": PROJECT_ROOT / "bench" / "include" /

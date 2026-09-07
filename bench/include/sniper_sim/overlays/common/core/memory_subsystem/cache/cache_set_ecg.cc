@@ -1233,8 +1233,10 @@ CacheSetECG::getReplacementIndex(CacheCntlr *cntlr)
             ways[slot].rrpv = m_rrip_bits[way];
             ways[slot].recency = m_last_touch[way];
             ways[slot].grasp_tier = m_record_tier[way];
-            ways[slot].state = ecg_record::victimState(
-                m_record_metadata[way], have_watermark);
+            ways[slot].state =
+                graphbrew::sniper::record::victimState(
+                    requester_core, m_record_metadata[way],
+                    have_watermark);
             ways[slot].deadline = m_record_metadata[way].value;
          }
          LOG_ASSERT_ERROR(
@@ -1281,6 +1283,15 @@ CacheSetECG::updateReplacementIndex(UInt32 accessed_index)
             result != ecg_record::ObservationResult::INVALID_CONTEXT &&
             result != ecg_record::ObservationResult::INVALID_ORDER,
             "Invalid current ECG hit observation");
+      } else {
+         const auto result =
+            graphbrew::sniper::record::observeOrdinaryLine(
+               requester_core, m_line_addrs[accessed_index],
+               m_record_metadata[accessed_index]);
+         LOG_ASSERT_ERROR(
+            result != ecg_record::ObservationResult::INVALID_CONTEXT &&
+            result != ecg_record::ObservationResult::INVALID_ORDER,
+            "Invalid current ECG ordinary hit observation");
       }
       if (m_record_property[accessed_index] && m_record_tier[accessed_index] == 1)
          m_rrip_bits[accessed_index] = 0;
@@ -1288,6 +1299,7 @@ CacheSetECG::updateReplacementIndex(UInt32 accessed_index)
          --m_rrip_bits[accessed_index];
       return;
    }
+
    graphbrew::sniper::record::Observation record_observation;
    if (graphbrew::sniper::record::activeObservation(
           requester_core,
@@ -1385,6 +1397,16 @@ CacheSetECG::updateReplacementIndex(UInt32 accessed_index)
    if (m_rrip_bits[accessed_index] > 0) m_rrip_bits[accessed_index]--;
 }
 
+void
+CacheSetECG::invalidateRecordMetadata()
+{
+   for (UInt32 way = 0; way < m_associativity; ++way) {
+      m_record_metadata[way].clear();
+      m_record_property[way] = false;
+      m_record_tier[way] = 3;
+   }
+}
+
 ecg_record::LineMetadata*
 CacheSetECG::recordMetadata(IntPtr line_addr)
 {
@@ -1460,8 +1482,9 @@ CacheSetECG::canAdmitRecordPrefetch(UInt64 sequence) const
       ways[way].rrpv = m_rrip_bits[way];
       ways[way].recency = m_last_touch[way];
       ways[way].grasp_tier = m_record_tier[way];
-      ways[way].state = ecg_record::victimState(
-         m_record_metadata[way], true);
+      ways[way].state =
+         graphbrew::sniper::record::victimState(
+            requester_core, m_record_metadata[way], true);
       ways[way].deadline = m_record_metadata[way].value;
    }
    bool admit = false;

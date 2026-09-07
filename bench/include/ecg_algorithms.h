@@ -70,7 +70,7 @@ struct Result {
     uint64_t ordinary_property_reads = 0, property_writes = 0, auxiliary_accesses = 0;
     uint64_t construction_reads = 0, construction_writes = 0;
     uint64_t carrier_bytes = 0, construction_auxiliary_peak_bytes = 0, workspace_peak_bytes = 0;
-    uint64_t result_digest = 0, work_digest = 0, position_digest = 0;
+    uint64_t result_digest = 0, work_digest = 0, position_digest = 0, record_digest = 0;
     uint64_t reached = 0, levels = 0, components = 0, relax_attempts = 0, relax_successes = 0;
     uint64_t light_passes = 0, heavy_passes = 0, sigma_max = 0;
     uint64_t triangles = 0, oriented_edges = 0, intersection_comparisons = 0, bindings = 0;
@@ -425,6 +425,13 @@ class Engine {
         configuration.context = 1;
         configuration.generation = result.bindings;
         configuration.control = ecg_record::kNativeEnable | ecg_record::kNativeManagedPasses;
+        configuration_ = configuration;
+        if (options.evidence) {
+            records_.add(configuration.layout_descriptor);
+            records_.add(configuration.property_descriptor);
+            records_.add(configuration.record_count);
+            records_.add(configuration.generation);
+        }
         backend_.bind(configuration, *stream_);
     }
 
@@ -434,6 +441,9 @@ class Engine {
             throw std::logic_error("algorithm-pass-limit-or-order");
         pass_open_ = true;
         pass_records_ = 0;
+        configuration_.iteration_base = cursor_.base();
+        configuration_.control = ecg_record::kNativeEnable | ecg_record::kNativeManagedPasses |
+            (has_next ? ecg_record::kNativeHasNext : 0);
         if (options.records && graph_.records)
             backend_.beginPass(has_next);
         if (options.evidence) {
@@ -472,6 +482,19 @@ class Engine {
             --result.ordinary_property_reads;
         const T value = options.records
             ? backend_.template property<T>(index, word, property.data()) : property.data()[destination];
+        if (options.records && options.evidence) {
+            ecg_record::NativeLoadResult observed;
+            if (ecg_record::nativePropertyAccess(configuration_,
+                    reinterpret_cast<uint64_t>(property.data()), word,
+                    configuration_.record_base + index * stream_->layout.record_bytes, observed) !=
+                    ecg_record::Status::OK)
+                throw std::logic_error("invalid-observed-record-semantics");
+            records_.add(word);
+            records_.add(index);
+            records_.add(observed.sequence);
+            records_.add(static_cast<uint64_t>(observed.state));
+            records_.add(observed.deadline);
+        }
         ++result.actual_records;
         ++pass_records_;
         return {destination, value};
@@ -497,6 +520,7 @@ class Engine {
         backend_.finish(result.actual_records);
         result.work_digest = options.evidence ? work_.value() : 0;
         result.position_digest = options.evidence ? positions_.value() : 0;
+        result.record_digest = options.evidence && options.records ? records_.value() : 0;
     }
 
     template<class T>
@@ -528,10 +552,11 @@ class Engine {
     Backend& backend_;
     GraphView graph_;
     ecg_record::PropertyDescriptor property_;
+    ecg_record::NativeConfiguration configuration_;
     ecg_record::PassCursor cursor_;
     const ecg_record::RecordStream* stream_ = nullptr;
     std::vector<std::unique_ptr<Carrier>> carriers_;
-    ecg_record::StreamDigest work_, positions_;
+    ecg_record::StreamDigest work_, positions_, records_;
     uint64_t workspace_ = 0, next_token_ = 3, pass_records_ = 0, id_mask_ = 0;
     bool pass_open_ = false;
 };
@@ -690,7 +715,7 @@ class BucketHeap {
         }
         while (index != 0) {
             const uint64_t parent = (index - 1) / 2;
-            if (!less(nodes_.get(index), nodes_.get(parent)))
+            if (!lessAt(index, parent))
                 break;
             exchange(index, parent);
             index = parent;
@@ -711,9 +736,9 @@ class BucketHeap {
                 uint64_t child = root * 2 + 1;
                 if (child >= size_)
                     break;
-                if (child + 1 < size_ && less(nodes_.get(child + 1), nodes_.get(child)))
+                if (child + 1 < size_ && lessAt(child + 1, child))
                     ++child;
-                if (!less(nodes_.get(child), nodes_.get(root)))
+                if (!lessAt(child, root))
                     break;
                 exchange(root, child);
                 root = child;
@@ -723,6 +748,11 @@ class BucketHeap {
     }
 
   private:
+    bool lessAt(uint64_t left, uint64_t right) const {
+        const uint32_t left_vertex = nodes_.get(left);
+        const uint32_t right_vertex = nodes_.get(right);
+        return less(left_vertex, right_vertex);
+    }
     bool less(uint32_t left, uint32_t right) const {
         const uint64_t l = distances_.get(left) / delta_, r = distances_.get(right) / delta_;
         return l < r || (l == r && left < right);

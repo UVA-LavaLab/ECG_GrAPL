@@ -89,6 +89,7 @@ constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_VERTICES = 0x4552564eULL; //
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_GENERATION = 0x4552474eULL; // "ERGN"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_CONTEXT = 0x45524354ULL; // "ERCT"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_CONTROL = 0x4552434fULL; // "ERCO"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_PROPERTY_DESCRIPTOR = 0x45525044ULL; // "ERPD"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_CONFIG_COMMIT = 0x4552434dULL; // "ERCM"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_ITERATION_BASE = 0x45524942ULL; // "ERIB"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_ITERATION_COMMIT = 0x45524943ULL; // "ERIC"
@@ -102,6 +103,8 @@ constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_CONSUME = 0x45524353ULL; // 
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_DRAIN = 0x45524452ULL; // "ERDR"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_REPORT = 0x45525250ULL; // "ERRP"
 constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_DEACTIVATE = 0x45524458ULL; // "ERDX"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_PASS_CLOSE = 0x45525043ULL; // "ERPC"
+constexpr uint64_t GRAPHBREW_SNIPER_USER_ECG_RECORD_INVALIDATE = 0x45524956ULL; // "ERIV"
 
 inline const char* env_or_default(const char* name, const char* fallback) {
     const char* value = std::getenv(name);
@@ -252,17 +255,22 @@ inline void ecg_record_configure(
     notify_user(
         GRAPHBREW_SNIPER_USER_ECG_RECORD_CONTROL,
         configuration.control);
+    notify_user(
+        GRAPHBREW_SNIPER_USER_ECG_RECORD_PROPERTY_DESCRIPTOR,
+        configuration.property_descriptor);
     notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_CONFIG_COMMIT, 0);
 }
 
 inline void ecg_record_iteration(
-        uint64_t iteration_base, bool has_next) {
+        uint64_t iteration_base, bool has_next,
+        bool managed = false) {
     notify_user(
         GRAPHBREW_SNIPER_USER_ECG_RECORD_ITERATION_BASE,
         iteration_base);
     notify_user(
         GRAPHBREW_SNIPER_USER_ECG_RECORD_ITERATION_COMMIT,
         ecg_record::kNativeEnable |
+            (managed ? ecg_record::kNativeManagedPasses : 0) |
             (has_next ? ecg_record::kNativeHasNext : 0));
 }
 
@@ -305,6 +313,26 @@ inline void ecg_record_drain_report() {
     notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_DRAIN, 0);
     notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_REPORT, 0);
     notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_DEACTIVATE, 0);
+}
+
+inline void ecg_record_pass_close() {
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_PASS_CLOSE, 0);
+}
+
+inline void ecg_record_drain() {
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_DRAIN, 0);
+}
+
+inline void ecg_record_report() {
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_REPORT, 0);
+}
+
+inline void ecg_record_deactivate() {
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_DEACTIVATE, 0);
+}
+
+inline void ecg_record_invalidate() {
+    notify_user(GRAPHBREW_SNIPER_USER_ECG_RECORD_INVALIDATE, 0);
 }
 
 inline bool reuse_plan_exact_bind_enabled() {
@@ -545,6 +573,7 @@ struct SniperPropertyRegion {
     uint32_t num_elements;
     uint32_t elem_size;
     bool grasp_region = true;
+    uint32_t stride_bytes = 0;
 };
 
 struct SniperEdgeRegion {
@@ -775,12 +804,15 @@ inline bool sniper_export_context(
     fprintf(f, "  \"property_regions\": [\n");
     for (int i = 0; i < num_regions; i++) {
         fprintf(f, "    {\"name\": \"%s\", \"base\": %lu, \"size\": %lu, "
-            "\"count\": %u, \"elem_size\": %u, \"grasp\": %s}%s\n",
+            "\"count\": %u, \"elem_size\": %u, \"stride\": %u, "
+            "\"grasp\": %s}%s\n",
                 regions[i].name,
                 (unsigned long)regions[i].base_address,
                 (unsigned long)regions[i].size_bytes,
                 regions[i].num_elements,
                 regions[i].elem_size,
+            regions[i].stride_bytes
+                ? regions[i].stride_bytes : regions[i].elem_size,
             regions[i].grasp_region ? "true" : "false",
                 (i < num_regions - 1) ? "," : "");
     }

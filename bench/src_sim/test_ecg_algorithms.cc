@@ -101,6 +101,22 @@ struct CorruptRecordBackend : ecg_algorithm::PlainBackend {
     uint64_t recordLoad(uint64_t) { return UINT32_MAX; }
 };
 
+struct HeapOrderBackend : ecg_algorithm::PlainBackend {
+    uint64_t base = 0, bytes = 0;
+    std::vector<uint64_t> reads;
+    void region(const char* name, const void* pointer, uint64_t count, uint8_t width, bool) {
+        if (std::string(name) == "bucket_heap") {
+            base = reinterpret_cast<uint64_t>(pointer);
+            bytes = count * width;
+        }
+    }
+    void memory(const void* pointer, uint64_t, bool write) {
+        const uint64_t address = reinterpret_cast<uint64_t>(pointer);
+        if (!write && address >= base && address - base < bytes)
+            reads.push_back((address - base) / sizeof(uint32_t));
+    }
+};
+
 } // namespace
 
 int main() {
@@ -175,6 +191,22 @@ int main() {
     expectError(diamond, Algorithm::TC, "simple-undirected");
     {
         Options options;
+        Result result;
+        HeapOrderBackend backend;
+        Engine<HeapOrderBackend> access(diamond.view(), options, backend, result);
+        Engine<HeapOrderBackend>::Buffer<uint64_t> distances(access, 8, "distances", true);
+        distances.fill(UINT64_MAX);
+        distances.set(0, 5);
+        distances.set(1, 2);
+        BucketHeap<Engine<HeapOrderBackend>> heap(access, 8, distances, 1);
+        heap.update(0);
+        backend.reads.clear();
+        heap.update(1);
+        check(backend.reads == std::vector<uint64_t>({1, 0, 1, 0}),
+              "heap child/parent reads have an explicit cross-compiler order");
+    }
+    {
+        Options options;
         options.maximum_workspace_bytes = 128;
         Result result;
         RejectRegionBackend backend;
@@ -226,6 +258,7 @@ int main() {
             const auto graph = algorithm == Algorithm::CC || algorithm == Algorithm::TC
                 ? cliques.view() : diamond.view(algorithm == Algorithm::SPMV || algorithm == Algorithm::SSSP);
             const auto expected = run(graph, algorithm, false, width);
+            const auto expected_record = run(graph, algorithm, true, width);
             for (const auto mechanism : {ecg_record::Mechanism::TRANSPORT, ecg_record::Mechanism::REPLACEMENT,
                     ecg_record::Mechanism::PREFETCH, ecg_record::Mechanism::REPLACEMENT_PREFETCH}) {
                 Options options;
@@ -244,6 +277,7 @@ int main() {
                 check(actual.result_digest == expected.result_digest &&
                       actual.work_digest == expected.work_digest &&
                       actual.position_digest == expected.position_digest &&
+                      actual.record_digest == expected_record.record_digest &&
                       actual.construction_reads != 0 && actual.construction_writes != 0,
                       "every algorithm uses real cache transport and charges record construction");
             }

@@ -899,12 +899,17 @@ def verify_installation_postconditions():
             "ecg_record_word",
             "ecg_record_doubleword",
             "ecg_record_property_f32",
+            "ecg_record_property_u32",
+            "ecg_record_property_u64",
             "ecg_record_configure",
             "ecg_record_pending",
+            "ecg_record_pass_close",
+            "ecg_record_invalidate",
         ],
         GEM5_DIR / "src/arch/riscv/regs/misc.hh": [
             "CSR_ECG_RECORD_FORMAT",
             "CSR_ECG_RECORD_GENERATION",
+            "CSR_ECG_RECORD_PROPERTY",
         ],
         GEM5_DIR / "src/arch/riscv/isa/operands.isa": [
             "'Rs3': IntReg('ud', 'RS3'",
@@ -920,6 +925,16 @@ def verify_installation_postconditions():
             "ecg_rp.cc",
             "ecg_record_transport.cc",
             "graph_ecg_record_rp.cc",
+        ],
+        GEM5_DIR / "src/mem/cache/base.hh": [
+            "ecgRecordSetCount",
+            "advanceEcgRecordProgress",
+            "invalidateEcgRecordMetadataSet",
+        ],
+        GEM5_DIR / "src/mem/cache/replacement_policies/ecg_record_transport.cc": [
+            "ordinaryAccess",
+            "invalidateBinding",
+            "structural_positions=",
         ],
         GEM5_DIR / "src/mem/cache/replacement_policies/GraphReplacementPolicies.py": [
             "GraphHawkeyeRP",

@@ -54,8 +54,8 @@ DEP_ECG := $(wildcard $(INC_DIR)/ecg_*.h) \
 KERNELS_SIM := pr pr_spmv bfs bc cc cc_sv sssp tc algorithms ecg_preprocess \
 	reuse_plan_sidecar test_ecg_reuse_plan test_ecg_reuse_plan32 \
 	test_ecg_ref32 test_popt_single_epoch grasp_trace_replay
-KERNELS_GEM5 := pr pr_spmv bfs sssp cc cc_sv bc tc ref32_isa_smoke record_isa_smoke
-KERNELS_SNIPER := sg_kernel pr bfs sssp bc cc cc_sv \
+KERNELS_GEM5 := pr pr_spmv bfs sssp cc cc_sv bc tc algorithms ref32_isa_smoke record_isa_smoke
+KERNELS_SNIPER := sg_kernel algorithms pr bfs sssp bc cc cc_sv \
 	pr_kernel_smoke bfs_kernel_smoke sssp_kernel_smoke hello_roi
 
 .PHONY: all artifact converter all-sim all-gem5 all-sniper \
@@ -253,6 +253,7 @@ CXXFLAGS_SNIPER := -std=c++17 -O2 -Wall -g -DNDEBUG -fopenmp \
 	-I$(INC_DIR) -I$(SNIPER_INCLUDE)
 
 $(BIN_SNIPER_DIR)/sg_kernel: CXXFLAGS_SNIPER += $(PR_FP_FLAGS)
+$(BIN_SNIPER_DIR)/algorithms: CXXFLAGS_SNIPER += $(PR_FP_FLAGS)
 
 $(BIN_SNIPER_DIR)/%: $(BENCH_DIR)/src_sniper/%.cc $(DEP_GAPBS) \
 	$(DEP_GRAPH) $(DEP_EXTERNAL) $(DEP_ECG) $(DEP_SNIPER_GUEST) | $(BIN_SNIPER_DIR)

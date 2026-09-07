@@ -79,6 +79,7 @@ from record_receipts import (  # noqa: E402
 )
 from record_resources import RecordResourceError, graph_info, plan_resources  # noqa: E402
 import algorithm_matrix  # noqa: E402
+import algorithm_detailed  # noqa: E402
 
 _GEM5_OPT = Path(os.environ.get(
     "GEM5_OPT",
@@ -1315,10 +1316,13 @@ def build_targets(args: argparse.Namespace) -> None:
     if args.no_build or args.dry_run:
         return
     if getattr(args, "current_algorithms", False):
-        result = run_command(
-            ["make", "-s", "-j1", "PARALLEL=1", "sim-algorithms"], PROJECT_ROOT, None, 300,
-            Path(args.out_dir) / "logs" / "build-algorithms.log", False,
-            rss_mib=args.cache_record_rss_mib)
+        target = {"cache-sim": "sim-algorithms", "gem5": "gem5-riscv-m5ops-algorithms",
+                  "sniper": "sniper-algorithms"}.get(args.suite)
+        if target is None:
+            raise SystemExit("current algorithms require one concrete backend per matrix")
+        result = run_command(["make", "-s", "-j1", "PARALLEL=1", target],
+            PROJECT_ROOT, None, 300, Path(args.out_dir) / "logs" / "build-algorithms.log",
+            False, rss_mib=4096)
         if result is None or result.returncode != 0:
             raise SystemExit("current algorithm build failed; see build-algorithms.log")
         return
@@ -1385,7 +1389,7 @@ def validate_selected_gem5_guest(
         VALIDATED_GEM5_GUEST_SHA256 = ""
         return
     binary, receipt, source, link_inputs, build_config = (
-        selected_gem5_guest_paths(args.benchmark))
+        selected_gem5_guest_paths("algorithms" if getattr(args, "current_algorithms", False) else args.benchmark))
     expected = str(args.expected_gem5_guest_sha256)
     if expected == PLANNING_MISSING_GEM5_GUEST_SHA256:
         if not args.dry_run:
@@ -1425,9 +1429,10 @@ def validate_selected_gem5_guest(
 
 def graph_path_from_options(options: str) -> Path | None:
     parts = shlex.split(options)
-    if "-f" not in parts:
+    graph_flag = "--graph" if "--graph" in parts else "-f"
+    if graph_flag not in parts:
         return None
-    index = parts.index("-f")
+    index = parts.index(graph_flag)
     if index + 1 >= len(parts):
         return None
     path = Path(parts[index + 1])
@@ -4112,6 +4117,8 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
 
 
 def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size: str) -> list[dict[str, Any]]:
+    if getattr(args, "current_algorithms", False):
+        return algorithm_detailed.run_cell(args, out_dir, spec, l3_size, "gem5", sys.modules[__name__])
     label = f"gem5_{args.benchmark}_{spec.safe_label}_L3{sanitize(l3_size)}"
     gem5_out = out_dir / "gem5" / label
     log_path = out_dir / "logs" / f"{label}.log"
@@ -5052,6 +5059,8 @@ def sniper_binary_and_options(args: argparse.Namespace) -> tuple[Path, list[str]
 
 
 def run_sniper(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size: str) -> list[dict[str, Any]]:
+    if getattr(args, "current_algorithms", False):
+        return algorithm_detailed.run_cell(args, out_dir, spec, l3_size, "sniper", sys.modules[__name__])
     record_error = current_record_error(args, spec, "sniper")
     if record_error:
         row = base_row("sniper", args, spec, l3_size)
@@ -6863,7 +6872,7 @@ def standalone_matrix_config_hash(
         root = sniper_root_path(args)
         workload = args.sniper_workload
         binary_name = (
-            "sg_kernel" if workload == "sg_kernel"
+            "algorithms" if current_algorithms else "sg_kernel" if workload == "sg_kernel"
             else "pr_kernel_smoke" if workload == "pr_kernel_smoke"
             else f"{args.benchmark}_kernel_smoke"
             if workload == "kernel_smoke" else args.benchmark)
@@ -6891,7 +6900,7 @@ def standalone_matrix_config_hash(
             Path(setarch) if setarch else PROJECT_ROOT / ".missing-setarch")
     if args.suite in ("gem5", "both"):
         guest_binary = PROJECT_ROOT / "bench" / "bin_gem5" / (
-            f"{args.benchmark}{GEM5_KERNEL_SUFFIX}")
+            f"{'algorithms' if current_algorithms else args.benchmark}{GEM5_KERNEL_SUFFIX}")
         paths.update({
             "gem5_binary": GEM5_OPT,
             "gem5_config": GEM5_CONFIG.parent,
@@ -7265,8 +7274,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
-    if args.current_algorithms and args.suite != "cache-sim":
-        raise SystemExit("current shared algorithm detailed-backend qualification is not yet admitted")
+    if args.current_algorithms and (
+            args.suite == "both" or args.suite != "cache-sim" and not args.ecg_equivalence):
+        raise SystemExit("current detailed algorithms require one bounded --ecg-equivalence backend")
     semantic_edge_limit = int(args.sniper_semantic_edge_limit)
     if int(args.sniper_roi_icount) > 0 and semantic_edge_limit > 0:
         raise SystemExit(

@@ -9,7 +9,7 @@
  #include "mem/packet.hh"
  #include "params/BaseReplacementPolicy.hh"
  #include "sim/sim_object.hh"
-@@ -103,6 +105,18 @@
+@@ -103,6 +105,24 @@
      virtual void setVictimRequest(const PacketPtr pkt)
      {}
  
@@ -17,6 +17,12 @@
 +    virtual bool bypassEcgRecordDead() const { return false; }
 +    virtual bool configureEcgRecord(const ecg_record::NativeConfiguration&)
 +    { return false; }
++    virtual ecg_record::ObservationResult advanceEcgRecordProgress(
++        uint16_t, uint64_t, uint64_t)
++    { return ecg_record::ObservationResult::UNSUPPORTED; }
++    virtual void invalidateEcgRecordMetadata(
++        const std::shared_ptr<ReplacementData>&) {}
++    virtual void finishEcgRecordInvalidation() {}
 +    virtual ecg_record::ApplyResult applyEcgRecordUpdate(
 +        const std::shared_ptr<ReplacementData>&,
 +        const ecg_record::CommitUpdate&)
@@ -39,7 +45,7 @@
  #include "mem/cache/replacement_policies/ecg_ref32_commit.h"
  #include "mem/packet.hh"
  #include "params/BaseTags.hh"
-@@ -273,6 +275,16 @@
+@@ -273,6 +275,21 @@
      virtual void setVictimRequest(const PacketPtr pkt)
      {}
  
@@ -47,6 +53,11 @@
 +    virtual bool bypassEcgRecordDead() const { return false; }
 +    virtual bool configureEcgRecord(const ecg_record::NativeConfiguration&)
 +    { return false; }
++    virtual uint64_t ecgRecordSetCount() const { return 0; }
++    virtual ecg_record::ObservationResult advanceEcgRecordProgress(
++        uint16_t, uint64_t, uint64_t)
++    { return ecg_record::ObservationResult::UNSUPPORTED; }
++    virtual void invalidateEcgRecordMetadataSet(uint64_t, bool) {}
 +    virtual ecg_record::ApplyResult applyEcgRecordUpdate(
 +        const ecg_record::CommitUpdate&)
 +    { return ecg_record::ApplyResult::UNSUPPORTED; }
@@ -58,7 +69,7 @@
          return false;
 --- a/src/mem/cache/tags/base_set_assoc.hh
 +++ b/src/mem/cache/tags/base_set_assoc.hh
-@@ -161,6 +161,25 @@
+@@ -161,6 +161,43 @@
          replacementPolicy->setVictimRequest(pkt);
      }
  
@@ -68,6 +79,24 @@
 +    { return replacementPolicy->bypassEcgRecordDead(); }
 +    bool configureEcgRecord(const ecg_record::NativeConfiguration& value) override
 +    { return replacementPolicy->configureEcgRecord(value); }
++    uint64_t ecgRecordSetCount() const override
++    { return numBlocks / allocAssoc; }
++    ecg_record::ObservationResult advanceEcgRecordProgress(
++        uint16_t context, uint64_t generation, uint64_t sequence) override
++    {
++        return replacementPolicy->advanceEcgRecordProgress(
++            context, generation, sequence);
++    }
++    void invalidateEcgRecordMetadataSet(uint64_t set, bool final) override
++    {
++        fatal_if(set >= numBlocks / allocAssoc,
++            "ECG metadata set walk exceeded the tag geometry");
++        for (uint64_t way = 0; way < allocAssoc; ++way)
++            replacementPolicy->invalidateEcgRecordMetadata(
++                blks[set * allocAssoc + way].replacementData);
++        if (final)
++            replacementPolicy->finishEcgRecordInvalidation();
++    }
 +    ecg_record::ApplyResult applyEcgRecordUpdate(
 +        const ecg_record::CommitUpdate& update) override
 +    {
@@ -86,7 +115,7 @@
          return replacementPolicy->supportsEcgRef32();
 --- a/src/mem/cache/base.hh
 +++ b/src/mem/cache/base.hh
-@@ -1186,6 +1186,16 @@
+@@ -1186,6 +1186,22 @@
          return blkSize;
      }
  
@@ -95,6 +124,12 @@
 +    bool bypassEcgRecordDead() const { return tags->bypassEcgRecordDead(); }
 +    bool configureEcgRecord(const ecg_record::NativeConfiguration& value)
 +    { return tags->configureEcgRecord(value); }
++    uint64_t ecgRecordSetCount() const { return tags->ecgRecordSetCount(); }
++    ecg_record::ObservationResult advanceEcgRecordProgress(
++        uint16_t context, uint64_t generation, uint64_t sequence)
++    { return tags->advanceEcgRecordProgress(context, generation, sequence); }
++    void invalidateEcgRecordMetadataSet(uint64_t set, bool final)
++    { tags->invalidateEcgRecordMetadataSet(set, final); }
 +    ecg_record::ApplyResult applyEcgRecordUpdate(const ecg_record::CommitUpdate& update)
 +    { return tags->applyEcgRecordUpdate(update); }
 +    bool canAdmitEcgRecordPrefetch(Addr address, uint64_t sequence) const

@@ -10,6 +10,7 @@
 
 #include "cache.h"
 #include "config.hpp"
+#include "graph_cache_context_sniper.h"
 #include "simulator.h"
 
 namespace graphbrew {
@@ -137,6 +138,8 @@ setConfigurationField(
         core.staging.context = value; break;
       case ConfigurationField::CONTROL:
         core.staging.control = value; break;
+      case ConfigurationField::PROPERTY_DESCRIPTOR:
+        core.staging.property_descriptor = value; break;
     }
 }
 
@@ -150,6 +153,56 @@ commitConfiguration(uint32_t core_id)
         std::fprintf(stderr,
             "[FATAL] Sniper ECG record currently requires one simulated core\n");
         std::abort();
+    }
+    if ((core.staging.control &
+            ecg_record::kNativeManagedPasses) != 0) {
+        auto& context = graphbrew::sniper::globalContext();
+        ecg_record::PropertyDescriptor property;
+        ecg_record::Layout layout;
+        uint64_t extent = 0, record_bytes = 0, property_upper = 0,
+                 record_upper = 0;
+        bool property_match = false, carrier_match = false;
+        if (!context.loaded ||
+            ecg_record::unpackProperty(
+                core.staging.property_descriptor, property) !=
+                ecg_record::Status::OK ||
+            ecg_record::unpackLayout(
+                core.staging.layout_descriptor, layout) !=
+                ecg_record::Status::OK ||
+            ecg_record::propertyExtent(
+                property, core.staging.vertex_count, extent) !=
+                ecg_record::Status::OK ||
+            !ecg_record::checkedMultiply(
+                core.staging.record_count, layout.record_bytes,
+                record_bytes) ||
+            !ecg_record::checkedAdd(
+                core.staging.property_base, extent, property_upper) ||
+            !ecg_record::checkedAdd(
+                core.staging.record_base, record_bytes, record_upper) ||
+            context.topology.num_vertices != core.staging.vertex_count) {
+            require(ecg_record::Status::INVALID_LAYOUT,
+                    "managed-sideband");
+        }
+        for (uint32_t index = 0; index < context.num_regions; ++index) {
+            const auto& region = context.regions[index];
+            property_match |=
+                region.base_address == core.staging.property_base &&
+                region.upper_bound >= property_upper &&
+                region.num_elements == core.staging.vertex_count &&
+                region.elem_size ==
+                    ecg_record::propertyBytes(property.kind) &&
+                region.stride_bytes == property.stride_bytes;
+        }
+        for (uint32_t index = 0;
+             index < context.num_edge_regions; ++index) {
+            const auto& region = context.edge_regions[index];
+            carrier_match |=
+                region.base_address == core.staging.record_base &&
+                region.upper_bound >= record_upper;
+        }
+        if (!property_match || !carrier_match)
+            require(ecg_record::Status::INVALID_LAYOUT,
+                    "managed-sideband");
     }
     const uint64_t update_latency = envUnsigned(
         "SNIPER_ECG_RECORD_UPDATE_LATENCY", 8, 8, 1 << 20);
@@ -194,15 +247,20 @@ commitConfiguration(uint32_t core_id)
         core.staging, configuredMechanism(),
         update_latency, capture_width,
         prefetch_capacity, prefetch_latency,
-        line_bytes / sizeof(uint32_t)), "configuration");
+        line_bytes), "configuration");
     core.configured = true;
     const ecg_record::Layout& layout = core.runtime.layout();
+    ecg_record::PropertyDescriptor property;
+    require(ecg_record::unpackProperty(
+        core.staging.property_descriptor, property), "property-descriptor");
     std::fprintf(stderr,
         "[SNIPER-ECG-RECORD-CONFIG core=%u mechanism=%s "
         "record_bytes=%u id_bits=%u metadata_bits=%u horizon_bits=%u "
         "exponent_bits=%u mantissa_bits=%u sequence_bits=%u "
         "deadline_bits=%u state_encoding=joint-distance "
         "prefetch_selection=record-window record_count=%llu vertex_count=%llu "
+        "property_descriptor=%llu property_kind=%s property_stride=%u "
+        "traversal_mode=%s "
         "context=%llu generation=%llu update_latency=%llu "
         "capture_width=%llu update_output_width=1 prefetch_queue=%llu "
         "prefetch_latency=%llu line_bytes=%llu lookup_latency=%llu "
@@ -220,6 +278,11 @@ commitConfiguration(uint32_t core_id)
         layout.deadline_bits,
         static_cast<unsigned long long>(core.staging.record_count),
         static_cast<unsigned long long>(core.staging.vertex_count),
+        static_cast<unsigned long long>(
+            core.staging.property_descriptor),
+        ecg_record::propertyKindName(property.kind),
+        property.stride_bytes,
+        ecg_record::traversalName(property.traversal),
         static_cast<unsigned long long>(core.staging.context),
         static_cast<unsigned long long>(core.staging.generation),
         static_cast<unsigned long long>(update_latency),
@@ -244,11 +307,23 @@ updateIteration(
     }
     require(core.runtime.updateIteration(
         iteration_base,
-        (control & ecg_record::kNativeHasNext) != 0), "iteration");
+        (control & ecg_record::kNativeHasNext) != 0,
+        (control & ecg_record::kNativeManagedPasses) != 0), "iteration");
 }
 
 void deactivate(uint32_t core_id)
 { require(state(core_id).runtime.deactivate(), "deactivate"); }
+
+void closePass(uint32_t core_id)
+{ require(state(core_id).runtime.closePass(), "pass-close"); }
+
+void
+invalidateBinding(
+    uint32_t core_id, uint64_t sets, uint64_t cycles)
+{
+    require(state(core_id).runtime.invalidateBinding(
+        sets, cycles), "invalidate");
+}
 
 void armRecordRead(uint32_t core_id, uint64_t address, uint32_t bytes)
 { require(state(core_id).runtime.armRecordRead(address, bytes), "record-arm"); }
@@ -280,7 +355,7 @@ void consumeRecord(
         "record-consume");
 }
 
-bool
+MemoryAccessKind
 beginMemoryAccess(
     uint32_t core_id, uint64_t virtual_address, uint64_t physical_line,
     uint32_t bytes, bool read, uint64_t cycle)
@@ -289,18 +364,27 @@ beginMemoryAccess(
     core.memory_scope = core.runtime.active();
     core.memory_virtual_line = virtual_address - virtual_address % 64;
     core.memory_physical_line = physical_line;
-    return read && core.runtime.beginPropertyAccess(
-        virtual_address, physical_line, bytes, cycle);
+    const MemoryAccessKind kind = core.runtime.beginMemoryAccess(
+        virtual_address, physical_line, bytes, read, cycle);
+    return kind;
 }
 
 void
 completeMemoryAccess(
-    uint32_t core_id, bool property_access, uint64_t cycle)
+    uint32_t core_id, MemoryAccessKind kind, uint64_t cycle)
 {
-    if (property_access)
-        require(state(core_id).runtime.completePropertyAccess(cycle),
-                "property-complete");
+    require(state(core_id).runtime.completeMemoryAccess(kind, cycle),
+            "memory-complete");
     state(core_id).memory_scope = false;
+}
+
+ecg_record::ObservationResult
+observeOrdinaryLine(
+    uint32_t core_id, uint64_t physical_line,
+    ecg_record::LineMetadata& metadata)
+{
+    return state(core_id).runtime.observeOrdinaryLine(
+        physical_line, metadata);
 }
 
 bool
@@ -395,6 +479,14 @@ receiverWatermark(
         return false;
     sequence = core.runtime.watermark();
     return true;
+}
+
+ecg_record::State
+victimState(
+    uint32_t core_id, const ecg_record::LineMetadata& metadata,
+    bool enabled)
+{
+    return state(core_id).runtime.victimState(metadata, enabled);
 }
 
 void registerLlc(uint32_t core_id, Cache* cache)
@@ -565,6 +657,10 @@ report(uint32_t core_id)
 {
     CoreState& core = state(core_id);
     const Counters& c = core.runtime.counters();
+    ecg_record::PropertyDescriptor property;
+    require(ecg_record::unpackProperty(
+        core.runtime.configuration().property_descriptor, property),
+        "report-property");
     const uint64_t pending_updates = core.runtime.updatePending();
     const uint64_t pending_prefetches = core.runtime.prefetchPending();
     const bool update_accounting =
@@ -572,6 +668,11 @@ report(uint32_t core_id)
             c.enqueued_updates + c.coalesced_updates &&
         c.enqueued_updates ==
             c.delivered_updates + pending_updates;
+    const bool pass_accounting =
+        (core.runtime.configuration().control &
+            ecg_record::kNativeManagedPasses) == 0 ||
+        c.consumed_records + c.skipped_positions ==
+            c.structural_positions;
     const bool prefetch_accounting =
         c.prefetch_enqueued ==
             c.prefetch_issued + c.prefetch_private_duplicates +
@@ -589,9 +690,14 @@ report(uint32_t core_id)
             c.prefetch_demand_merges +
             (core.prefetch_in_flight ? 1u : 0u);
     std::fprintf(stderr,
-        "[SNIPER-ECG-RECORD mechanism=%s record_reads=%llu "
+        "[SNIPER-ECG-RECORD mechanism=%s property_kind=%s "
+        "property_bytes=%u property_stride=%u traversal_mode=%s "
+        "record_reads=%llu "
         "record_read_bytes=%llu loaded_values=%llu consumed_records=%llu "
-        "property_accesses=%llu observations=%llu "
+        "property_accesses=%llu observations=%llu passes=%llu "
+        "structural_positions=%llu skipped_positions=%llu "
+        "ordinary_invalidations=%llu rebinds=%llu "
+        "invalidation_sets=%llu invalidation_cycles=%llu "
         "dead_demand_bypasses=%llu generated_updates=%llu "
         "enqueued_updates=%llu coalesced_updates=%llu "
         "delivered_updates=%llu minimum_update_latency=%llu applied_updates=%llu stale_updates=%llu "
@@ -619,12 +725,23 @@ report(uint32_t core_id)
         "pending_prefetches=%llu errors=%llu accounting=%u clean=%u "
         "timing_scope=modeled-corroboration]\n",
         ecg_record::mechanismName(core.runtime.mechanism()),
+        ecg_record::propertyKindName(property.kind),
+        ecg_record::propertyBytes(property.kind),
+        property.stride_bytes,
+        ecg_record::traversalName(property.traversal),
         static_cast<unsigned long long>(c.record_reads),
         static_cast<unsigned long long>(c.record_read_bytes),
         static_cast<unsigned long long>(c.loaded_values),
         static_cast<unsigned long long>(c.consumed_records),
         static_cast<unsigned long long>(c.property_accesses),
         static_cast<unsigned long long>(c.observations),
+        static_cast<unsigned long long>(c.passes),
+        static_cast<unsigned long long>(c.structural_positions),
+        static_cast<unsigned long long>(c.skipped_positions),
+        static_cast<unsigned long long>(c.ordinary_invalidations),
+        static_cast<unsigned long long>(c.rebinds),
+        static_cast<unsigned long long>(c.invalidation_sets),
+        static_cast<unsigned long long>(c.invalidation_cycles),
         static_cast<unsigned long long>(c.dead_demand_bypasses),
         static_cast<unsigned long long>(c.generated_updates),
         static_cast<unsigned long long>(c.enqueued_updates),
@@ -673,7 +790,8 @@ report(uint32_t core_id)
         static_cast<unsigned long long>(
             pending_prefetches),
         static_cast<unsigned long long>(c.errors),
-        update_accounting && prefetch_accounting ? 1u : 0u,
+        update_accounting && prefetch_accounting &&
+            pass_accounting ? 1u : 0u,
         core.runtime.clean() ? 1u : 0u);
 }
 
@@ -707,6 +825,9 @@ handleMagic(
     else if (command == kWorkControl)
         setConfigurationField(
             core_id, ConfigurationField::CONTROL, argument);
+    else if (command == kWorkPropertyDescriptor)
+        setConfigurationField(
+            core_id, ConfigurationField::PROPERTY_DESCRIPTOR, argument);
     else if (command == kWorkConfigCommit)
         commitConfiguration(core_id);
     else if (command == kWorkIterationBase)
@@ -733,6 +854,8 @@ handleMagic(
         report(core_id);
     else if (command == kWorkDeactivate)
         deactivate(core_id);
+    else if (command == kWorkPassClose)
+        closePass(core_id);
     else
         return 1;
     return 0;
@@ -750,6 +873,7 @@ isMagicCommand(uint64_t command)
       case kWorkGeneration:
       case kWorkContext:
       case kWorkControl:
+      case kWorkPropertyDescriptor:
       case kWorkConfigCommit:
       case kWorkIterationBase:
       case kWorkIterationCommit:
@@ -762,6 +886,8 @@ isMagicCommand(uint64_t command)
       case kWorkConsume:
       case kWorkReport:
       case kWorkDeactivate:
+      case kWorkPassClose:
+      case kWorkInvalidate:
         return true;
       default:
         return false;

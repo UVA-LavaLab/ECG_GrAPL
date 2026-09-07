@@ -52,8 +52,16 @@
       "bench/include/cache_sim/graph_cache_context.h",
       "bench/src_sim/algorithms.cc"
     ],
-    "gem5": [],
-    "sniper": []
+    "gem5": [
+      "bench/include/ecg_algorithm_sideband.h",
+      "bench/src_gem5/algorithms.cc",
+      "scripts/experiments/ecg/algorithm_detailed.py"
+    ],
+    "sniper": [
+      "bench/include/ecg_algorithm_sideband.h",
+      "bench/src_sniper/algorithms.cc",
+      "scripts/experiments/ecg/algorithm_detailed.py"
+    ]
   },
   "evidence_boundary": "These bounded algorithm receipts do not replace the current PR authorization or authorize final-paper timing."
 }

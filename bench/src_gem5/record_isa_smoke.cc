@@ -7,6 +7,9 @@
 
 #include "gem5_sim/gem5_harness.h"
 
+alignas(64) static volatile uint64_t intervening_memory =
+    0x6a09e667f3bcc909ULL;
+
 static bool unsignedArgument(const char* text, uint64_t minimum, uint64_t maximum, uint64_t& value) {
     if (!text || text[0] < '0' || text[0] > '9')
         return false;
@@ -119,6 +122,8 @@ int main(int argc, char** argv) {
             const uint64_t raw = wide ? context.record(records64 + index)
                                       : context.record(records32 + index);
             ok = ok && raw == records64[index];
+            const uint64_t unrelated = intervening_memory;
+            intervening_memory = unrelated ^ raw;
             const float value = context.property(property_base, raw, address);
             uint32_t loaded_bits = 0;
             std::memcpy(&loaded_bits, &value, sizeof(float));
@@ -132,7 +137,8 @@ int main(int argc, char** argv) {
     std::printf("[ECG-RECORD-ISA native=%u record_bytes=%u cases=%llu high_bit=%u result=%s"
                 " requested_bytes=%u id_bits=%u metadata_bits=%u horizon_bits=%u mantissa_bits=%u"
                 " max_vertex_id=%llu property_backing_bytes=%zu"
-                " logical_records=%llu iteration_base=%llu probe_scope=%s]\n",
+                " logical_records=%llu iteration_base=%llu probe_scope=%s"
+                " intervening_memory=1]\n",
                 Gem5RecordContext::nativeAvailable() ? 1u : 0u,
                 unsigned(layout.record_bytes), static_cast<unsigned long long>(passes * 4),
                 unsigned(records64[3] >> 63), ok ? "PASS" : "FAIL",

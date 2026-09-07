@@ -251,11 +251,27 @@ def test_record_path_is_wired_without_legacy_oracle():
     assert "EcgRecordPrStream<Graph>" in kernel
     assert "ecg_record::buildRecords" in guest
     assert "ecg_record::selectWindowTarget" in runtime
+    assert "configuration.control &" in runtime
+    assert "ecg_record::kNativeManagedPasses" in runtime
     assert "certified" not in guest.lower()
     assert "future lookup" not in guest.lower()
     assert "serviceEcgRecord(bool drain)" in setup
     assert "notePrefetchPrivateLookup" in setup
     assert "notePrefetchCompletionAdmissionCheck" in setup
+    for marker in (
+            "PROPERTY_DESCRIPTOR", "kWorkPassClose", "kWorkInvalidate",
+            "ordinary_invalidations", "invalidation_cycles"):
+        assert marker in guest + runtime + integration
+    assert "class EcgRecordContext" in guest
+    for method in ("bind(", "beginPass(", "closePass(", "loadRecord(",
+                   "loadProperty(", "drain(", "finish("):
+        assert method in guest
+    harness = read("bench/include/sniper_sim/sniper_harness.h")
+    context = read(
+        "bench/include/sniper_sim/overlays/common/core/memory_subsystem/"
+        "cache/graph_cache_context_sniper.cc")
+    assert '\\"stride\\": %u' in harness
+    assert 'parseJsonUint(obj, "\\"stride\\"")' in context
 
 
 def test_record_completion_and_drain_use_real_time():
@@ -360,9 +376,12 @@ def test_record_updates_do_not_rewrite_demand_rrpv():
     assert "m_record_property[way]" in victim
     assert "m_record_tier[way]" in victim
     assert "have_watermark" in victim
+    assert "graphbrew::sniper::record::victimState(" in victim
     assert "if (graphbrew::sniper::record::receiverWatermark(" not in victim
     assert "setRecordClass(way, update.property_vaddr)" in body
     assert "globalContext().classifyGRASP" in policy
+    assert "observeOrdinaryLine(" in policy
+    assert "invalidateRecordMetadata()" in policy
     integration = read(
         "bench/include/sniper_sim/overlays/common/core/memory_subsystem/"
         "cache/ecg_record_sniper.cc")
@@ -429,8 +448,11 @@ def test_record_setup_dry_run_normalizes_complete_functions():
     assert service.index("const UInt64 request_issue_cycle") < service.index(
         "beginPrefetchIssue(")
     assert "request.sequence, request_issue_cycle" in service
+    assert memory.count("MemoryManager::invalidateEcgRecordBinding()") == 1
+    assert "invalidateEcgRecordMetadataSet(set)" in memory
     access = memory.split(
         "MemoryManager::coreInitiateMemoryAccess(", 1)[1]
+    assert "ecg_record_access" in access
     assert access.index("processMemOpFromCore(") < access.index(
         "ecg_record_completion_cycle")
     assert "ecg_record_post_access_time - t_cache_issue" in access

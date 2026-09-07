@@ -192,6 +192,7 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
     for (const auto& entry : {
             std::pair<const char*, uint64_t>{"result_digest", result.result_digest},
             {"work_trace_digest", result.work_digest}, {"position_trace_digest", result.position_digest},
+            {"record_trace_digest", result.record_digest},
             {"source_list_digest", result.source_list_digest}}) {
         output << ",\"" << entry.first << "\":";
         writeHash(output, entry.second);

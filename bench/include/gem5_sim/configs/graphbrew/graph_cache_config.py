@@ -89,10 +89,14 @@ def make_replacement_policy(name, **kwargs):
             line_size=kwargs.get("line_size", 64),
         )
     elif upper == "GRASP":
+        hot_fraction = float(kwargs.get(
+            "hot_fraction", os.environ.get("GRASP_HOT_FRACTION", "0.15")))
+        if not 0.0 < hot_fraction <= 1.0:
+            raise ValueError("GRASP hot fraction must be finite and in (0,1]")
         return GraphGraspRP(
             max_rrpv=kwargs.get("max_rrpv", 7),
             num_buckets=kwargs.get("num_buckets", 11),
-            hot_fraction=kwargs.get("hot_fraction", 0.15),
+            hot_fraction=hot_fraction,
             llc_size_bytes=kwargs.get("llc_size_bytes", 8388608),
             sideband_path=sideband_path,
         )

@@ -27,7 +27,10 @@ sameRecord(const ecg_record::NativeLoadResult& left,
         left.context == right.context && left.generation == right.generation &&
         left.layout_descriptor == right.layout_descriptor &&
         left.sequence_bits == right.sequence_bits &&
-        left.has_next_iteration == right.has_next_iteration;
+        left.has_next_iteration == right.has_next_iteration &&
+        left.property_descriptor == right.property_descriptor &&
+        left.property_kind == right.property_kind &&
+        left.property_bytes == right.property_bytes;
 }
 
 } // anonymous namespace
@@ -37,7 +40,8 @@ EcgRecordTransport::EcgRecordTransport(const Params& params)
       prefetcher(params.prefetcher), applyUpdates(params.apply_updates),
       requiredContext(params.required_context),
       queue(static_cast<uint64_t>(params.latency), params.capture_width),
-      serviceEvent([this] { service(); }, name() + ".service")
+      serviceEvent([this] { service(); }, name() + ".service"),
+      invalidationEvent([this] { invalidateSet(); }, name() + ".invalidate")
 {
     fatal_if(!cpu || cpu->numContexts() != 1 ||
         cpu->getContext(0)->getIsaPtr()->getIsaName() != "riscv",
@@ -75,12 +79,21 @@ EcgRecordTransport::observeCommit(const o3::DynInstPtr& inst)
     if (!inst)
         return;
     switch (inst->ecgRecordHint().kind) {
-      case ecg_record::InstructionKind::NONE: return;
+      case ecg_record::InstructionKind::NONE: ordinaryAccess(inst); return;
       case ecg_record::InstructionKind::CONFIGURATION: configure(inst); return;
       case ecg_record::InstructionKind::RECORD: record(inst); return;
       case ecg_record::InstructionKind::PROPERTY: property(inst); return;
+      case ecg_record::InstructionKind::PASS_CLOSE: passClose(inst); return;
+      case ecg_record::InstructionKind::INVALIDATE: invalidateBinding(inst); return;
     }
     fatal("%s retired an invalid ECG instruction kind", name());
+}
+
+bool
+EcgRecordTransport::managed() const
+{
+    return (configuration.control &
+        ecg_record::kNativeManagedPasses) != 0;
 }
 
 void
@@ -90,16 +103,58 @@ EcgRecordTransport::configure(const o3::DynInstPtr& inst)
     ecg_record::Layout resolved;
     fatal_if(!value || pendingRecord ||
         ecg_record::validateNativeConfiguration(*value, resolved) != ecg_record::Status::OK ||
-        value->context != requiredContext || value->iteration_base != lastSequence,
+        ecg_record::unpackProperty(
+            value->property_descriptor, propertyDescriptor) != ecg_record::Status::OK ||
+        value->context != requiredContext,
         "%s rejected the retired ECG configuration", name());
-    if (configured) {
-        fatal_if(value->generation != configuration.generation ||
-            value->layout_descriptor != configuration.layout_descriptor ||
-            value->record_base != configuration.record_base ||
-            value->record_count != configuration.record_count ||
-            value->vertex_count != configuration.vertex_count ||
-            value->property_base != configuration.property_base,
-            "%s cannot change graph identity with an active ECG context", name());
+    const bool value_managed =
+        (value->control & ecg_record::kNativeManagedPasses) != 0;
+    if (configured && !bindingInvalidated) {
+        const bool same_identity =
+            value->generation == configuration.generation &&
+            value->layout_descriptor == configuration.layout_descriptor &&
+            value->record_base == configuration.record_base &&
+            value->record_count == configuration.record_count &&
+            value->vertex_count == configuration.vertex_count &&
+            value->property_base == configuration.property_base &&
+            value->property_descriptor == configuration.property_descriptor;
+        fatal_if(!same_identity,
+            "%s cannot change graph identity before a paid invalidation", name());
+        fatal_if(value_managed != managed(),
+            "%s cannot change its managed-pass contract while active", name());
+        if (!value_managed) {
+            fatal_if(value->iteration_base != lastSequence,
+                "%s rejected a discontinuous legacy ECG traversal", name());
+        } else {
+            fatal_if(passCursor.open() ||
+                value->iteration_base != passCursor.base() ||
+                passCursor.begin() != ecg_record::Status::OK,
+                "%s rejected a managed ECG pass begin", name());
+            passConfigured = true;
+        }
+    } else {
+        if (bindingInvalidated) {
+            uint64_t next_generation = 0;
+            fatal_if(!ecg_record::checkedAdd(
+                    configuration.generation, 1, next_generation) ||
+                value->generation != next_generation,
+                "%s rejected a non-consecutive ECG generation", name());
+            ++rebinds;
+        }
+        if (!value_managed) {
+            fatal_if(value->iteration_base != lastSequence,
+                "%s rejected the legacy ECG sequence base", name());
+        } else {
+            fatal_if(value->iteration_base != 0,
+                "%s managed ECG binding must precede its first pass", name());
+            passCursor = ecg_record::PassCursor{};
+            fatal_if(passCursor.configure(
+                value->record_count, propertyDescriptor.traversal) !=
+                    ecg_record::Status::OK,
+                "%s could not configure its managed pass cursor", name());
+            passConfigured = false;
+        }
+        bindingInvalidated = false;
     }
     configuration = *value;
     layout = resolved;
@@ -116,7 +171,9 @@ EcgRecordTransport::record(const o3::DynInstPtr& inst)
 {
     const auto& load = inst->ecgRecordHint().load;
     ecg_record::NativeLoadResult expected;
-    fatal_if(!configured || pendingRecord || !validLoad(inst, layout.record_bytes) ||
+    fatal_if(!configured || bindingInvalidated || pendingRecord ||
+        (managed() && (!passConfigured || !passCursor.open())) ||
+        !validLoad(inst, layout.record_bytes) ||
         inst->effAddr != load.record_address ||
         ecg_record::nativeRecordResult(
             configuration, load.record_address, load.raw_record, expected) !=
@@ -133,15 +190,29 @@ EcgRecordTransport::property(const o3::DynInstPtr& inst)
     const auto& load = inst->ecgRecordHint().load;
     ecg_record::NativeLoadResult expected;
     uint64_t next = 0;
-    fatal_if(!configured || !pendingRecord || !validLoad(inst, 4) ||
+    fatal_if(!configured || bindingInvalidated || !pendingRecord ||
+        !validLoad(inst, load.property_bytes) ||
         !sameRecord(*pendingRecord, load) || inst->effAddr != load.property_address ||
-        !ecg_record::checkedAdd(lastSequence, 1, next) || load.sequence != next ||
         ecg_record::nativePropertyAccess(
             configuration, configuration.property_base, load.raw_record,
             load.record_address, expected) != ecg_record::Status::OK ||
         !sameRecord(expected, load) || expected.deadline != load.deadline ||
         expected.state != load.state || expected.property_address != load.property_address,
         "%s retired an ECG property read without its exact record/address association", name());
+    if (managed()) {
+        ecg_record::NativeRecordAccess access;
+        fatal_if(!passConfigured || !passCursor.open() ||
+            ecg_record::nativeRecordAccess(
+                configuration, load.record_address, layout.record_bytes,
+                access) != ecg_record::Status::OK ||
+            passCursor.consume(access.index) != ecg_record::Status::OK ||
+            load.sequence != passCursor.sequence(),
+            "%s retired an out-of-order managed ECG property read", name());
+    } else {
+        fatal_if(!ecg_record::checkedAdd(lastSequence, 1, next) ||
+            load.sequence != next,
+            "%s retired a discontinuous legacy ECG property read", name());
+    }
     pendingRecord.reset();
     lastSequence = load.sequence;
     ++propertyLoads;
@@ -158,6 +229,18 @@ EcgRecordTransport::property(const o3::DynInstPtr& inst)
     update.generation = load.generation;
     update.context = load.context;
     update.state = load.state;
+    if (managed() && propertyDescriptor.traversal ==
+            ecg_record::TraversalMode::ORDERED_FILTERED) {
+        fatal_if(!ecg_record::checkedAdd(eventOrder, 1, eventOrder),
+            "%s ECG event order overflowed", name());
+        update.order = eventOrder;
+    }
+    enqueueUpdate(update);
+}
+
+void
+EcgRecordTransport::enqueueUpdate(const ecg_record::CommitUpdate& update)
+{
     ++generated;
     const auto status = queue.enqueue(update, static_cast<uint64_t>(curCycle()));
     if (status == ecg_record::EnqueueStatus::ENQUEUED)
@@ -166,9 +249,110 @@ EcgRecordTransport::property(const o3::DynInstPtr& inst)
         ++coalesced;
     else
         fatal("%s required ECG update rejected (status=%u, sequence=%llu, occupancy=%u)",
-              name(), static_cast<unsigned>(status), load.sequence, queue.pendingSize());
+              name(), static_cast<unsigned>(status), update.sequence, queue.pendingSize());
     maxOccupancy = std::max<uint64_t>(maxOccupancy, queue.pendingSize());
     scheduleService();
+}
+
+void
+EcgRecordTransport::passClose(const o3::DynInstPtr&)
+{
+    fatal_if(!configured || bindingInvalidated || !managed() ||
+        pendingRecord || !passConfigured ||
+        passCursor.close() != ecg_record::Status::OK,
+        "%s rejected a managed ECG pass close", name());
+    passConfigured = false;
+    configuration.iteration_base = passCursor.base();
+    const auto progress = llc->supportsEcgRecord()
+        ? llc->advanceEcgRecordProgress(
+            static_cast<uint16_t>(configuration.context),
+            configuration.generation, passCursor.base())
+        : ecg_record::ObservationResult::UNSUPPORTED;
+    fatal_if(llc->supportsEcgRecord() &&
+        propertyDescriptor.traversal ==
+            ecg_record::TraversalMode::ORDERED_FILTERED &&
+        progress != ecg_record::ObservationResult::ACCEPTED &&
+        progress != ecg_record::ObservationResult::IGNORED_OLD,
+        "%s LLC rejected managed ECG pass progress", name());
+    ++passes;
+    fatal_if(!ecg_record::checkedAdd(
+        structuralPositions, configuration.record_count,
+        structuralPositions),
+        "%s managed ECG structural accounting overflowed", name());
+    consumed = propertyLoads;
+    skipped = structuralPositions - consumed;
+}
+
+void
+EcgRecordTransport::ordinaryAccess(const o3::DynInstPtr& inst)
+{
+    if (!configured || bindingInvalidated || !managed() ||
+        propertyDescriptor.traversal !=
+            ecg_record::TraversalMode::ORDERED_FILTERED ||
+        !passConfigured || !passCursor.open() || !inst || !inst->isMemRef() ||
+        !inst->effAddrValid() || !inst->translationCompleted() ||
+        (inst->memReqFlags & Request::SECURE) != 0 ||
+        !ecg_record::nativePropertyContains(
+            configuration, inst->effAddr, inst->effSize))
+        return;
+    ++ordinaryInvalidations;
+    if (!applyUpdates)
+        return;
+    ecg_record::CommitUpdate update;
+    update.physical_line =
+        inst->physEffAddr - inst->physEffAddr % llc->getBlockSize();
+    update.property_vaddr = inst->effAddr;
+    update.sequence = passCursor.sequence();
+    update.generation = configuration.generation;
+    update.context = static_cast<uint16_t>(configuration.context);
+    update.state = ecg_record::State::UNKNOWN;
+    fatal_if(!ecg_record::checkedAdd(eventOrder, 1, eventOrder),
+        "%s ECG invalidation order overflowed", name());
+    update.order = eventOrder;
+    update.invalidate = true;
+    enqueueUpdate(update);
+}
+
+void
+EcgRecordTransport::invalidateBinding(const o3::DynInstPtr&)
+{
+    fatal_if(!configured || bindingInvalidated || !managed() ||
+        passCursor.open() || pendingRecord || queue.pendingSize() ||
+        (prefetcher && prefetcher->pendingWork()) ||
+        invalidationEvent.scheduled(),
+        "%s rejected an undrained ECG binding invalidation", name());
+    invalidationSetCount = llc->supportsEcgRecord()
+        ? llc->ecgRecordSetCount() : 0;
+    invalidationSet = 0;
+    if (prefetcher)
+        prefetcher->invalidateBinding();
+    if (invalidationSetCount == 0) {
+        bindingInvalidated = true;
+        passConfigured = false;
+    } else {
+        schedule(invalidationEvent, clockEdge(Cycles(1)));
+    }
+}
+
+void
+EcgRecordTransport::invalidateSet()
+{
+    fatal_if(invalidationSet >= invalidationSetCount,
+        "%s ECG metadata set walk overflowed", name());
+    const bool final = invalidationSet + 1 == invalidationSetCount;
+    llc->invalidateEcgRecordMetadataSet(invalidationSet, final);
+    ++invalidationSet;
+    ++invalidationSets;
+    ++invalidationCycles;
+    if (final) {
+        bindingInvalidated = true;
+        passConfigured = false;
+        if (drainState() == DrainState::Draining && queue.empty() &&
+            !invalidationEvent.scheduled())
+            signalDrainDone();
+    } else {
+        schedule(invalidationEvent, clockEdge(Cycles(1)));
+    }
 }
 
 void
@@ -215,7 +399,7 @@ EcgRecordTransport::service()
 DrainState
 EcgRecordTransport::drain()
 {
-    if (queue.empty())
+    if (queue.empty() && !invalidationEvent.scheduled())
         return DrainState::Drained;
     scheduleService();
     return DrainState::Draining;
@@ -225,7 +409,9 @@ uint64_t
 EcgRecordTransport::pendingWork() const
 {
     return queue.pendingSize() + (pendingRecord ? 1 : 0) +
-        (prefetcher ? prefetcher->pendingWork() : 0);
+        (prefetcher ? prefetcher->pendingWork() : 0) +
+        (invalidationEvent.scheduled()
+            ? invalidationSetCount - invalidationSet : 0);
 }
 
 void
@@ -234,8 +420,11 @@ EcgRecordTransport::report() const
     const bool accounting = generated == enqueued + coalesced &&
         enqueued == delivered + queue.pendingSize() &&
         delivered == applied + stale + expired + absent &&
-        recordLoads == propertyLoads && recordReadBytes == recordLoads * layout.record_bytes;
-    fatal_if(!configured || !accounting || pendingWork(),
+        recordLoads == propertyLoads && recordReadBytes == recordLoads * layout.record_bytes &&
+        (!managed() || (consumed == propertyLoads &&
+            consumed + skipped == structuralPositions));
+    fatal_if(!configured || bindingInvalidated || !accounting || pendingWork() ||
+        (managed() && passCursor.open()),
              "%s ECG work is incomplete or accounting failed", name());
     std::cout << "[ECG-RECORD-NATIVE ";
     ecg_record::writeLayoutFields(std::cout, layout);
@@ -243,6 +432,18 @@ EcgRecordTransport::report() const
               << " configurations=" << configurations
               << " record_loads=" << recordLoads << " record_read_bytes=" << recordReadBytes
               << " governed_loads=" << propertyLoads << " last_sequence=" << lastSequence
+              << " traversal_mode=" << ecg_record::traversalName(propertyDescriptor.traversal)
+              << " property_kind=" << ecg_record::propertyKindName(propertyDescriptor.kind)
+              << " property_bytes=" << unsigned(ecg_record::propertyBytes(propertyDescriptor.kind))
+              << " property_stride=" << propertyDescriptor.stride_bytes
+              << " passes=" << passes
+              << " structural_positions=" << structuralPositions
+              << " consumed=" << consumed
+              << " skipped=" << skipped
+              << " ordinary_invalidations=" << ordinaryInvalidations
+              << " rebinds=" << rebinds
+              << " invalidation_sets=" << invalidationSets
+              << " invalidation_cycles=" << invalidationCycles
               << " generated=" << generated << " accepted=" << enqueued + coalesced
               << " enqueued=" << enqueued << " coalesced=" << coalesced
               << " delivered=" << delivered << " applied=" << applied

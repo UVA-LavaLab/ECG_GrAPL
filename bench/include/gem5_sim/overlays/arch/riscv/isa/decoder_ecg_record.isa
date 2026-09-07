@@ -81,7 +81,8 @@
                         ecg_record::NativeLoadResult result;
                         const auto status = ecg_record::nativePropertyAccess(
                             configuration, Rs1, Rs2, Rs3, result);
-                        if (status != ecg_record::Status::OK)
+                        if (status != ecg_record::Status::OK ||
+                            result.property_kind != ecg_record::PropertyKind::F32)
                             return std::make_shared<IllegalInstFault>(
                                 "Invalid ECG property operands", machInst);
                         xc->setEcgRecordLoadHint(
@@ -89,6 +90,46 @@
                         EA = rvZext(result.property_address);
                     }
                 }}, inst_flags=FloatMemReadOp);
+                0x1: ecg_record_property_u32({{
+                    {
+                        Rd = rvZext(static_cast<uint32_t>(Mem_uw));
+                    }
+                }}, ea_code={{
+                    {
+                        const auto configuration =
+                            RiscvISA::readEcgRecordConfiguration(xc);
+                        ecg_record::NativeLoadResult result;
+                        const auto status = ecg_record::nativePropertyAccess(
+                            configuration, Rs1, Rs2, Rs3, result);
+                        if (status != ecg_record::Status::OK ||
+                            result.property_kind != ecg_record::PropertyKind::U32)
+                            return std::make_shared<IllegalInstFault>(
+                                "Invalid ECG U32 property operands", machInst);
+                        xc->setEcgRecordLoadHint(
+                            ecg_record::InstructionKind::PROPERTY, result);
+                        EA = rvZext(result.property_address);
+                    }
+                }});
+                0x2: ecg_record_property_u64({{
+                    {
+                        Rd = Mem_ud;
+                    }
+                }}, ea_code={{
+                    {
+                        const auto configuration =
+                            RiscvISA::readEcgRecordConfiguration(xc);
+                        ecg_record::NativeLoadResult result;
+                        const auto status = ecg_record::nativePropertyAccess(
+                            configuration, Rs1, Rs2, Rs3, result);
+                        if (status != ecg_record::Status::OK ||
+                            result.property_kind != ecg_record::PropertyKind::U64)
+                            return std::make_shared<IllegalInstFault>(
+                                "Invalid ECG U64 property operands", machInst);
+                        xc->setEcgRecordLoadHint(
+                            ecg_record::InstructionKind::PROPERTY, result);
+                        EA = rvZext(result.property_address);
+                    }
+                }});
               }
             }
             format EcgExtractOp {
@@ -113,6 +154,24 @@
                         return std::make_shared<IllegalInstFault>(
                             "ECG pending query requires its native controller", machInst);
                     Rd = pending;
+                }}, IsNonSpeculative, IsSerializeAfter);
+              }
+              0x4: decode FUNCT7 {
+                0x00: ecg_record_pass_close({{
+                    if ((static_cast<uint32_t>(machInst) & 0x01FF8F80u) != 0)
+                        return std::make_shared<IllegalInstFault>(
+                            "Invalid ECG pass-close operands", machInst);
+                    xc->setEcgRecordLoadHint(
+                        ecg_record::InstructionKind::PASS_CLOSE, {});
+                }}, IsNonSpeculative, IsSerializeAfter);
+              }
+              0x5: decode FUNCT7 {
+                0x00: ecg_record_invalidate({{
+                    if ((static_cast<uint32_t>(machInst) & 0x01FF8F80u) != 0)
+                        return std::make_shared<IllegalInstFault>(
+                            "Invalid ECG invalidate operands", machInst);
+                    xc->setEcgRecordLoadHint(
+                        ecg_record::InstructionKind::INVALIDATE, {});
                 }}, IsNonSpeculative, IsSerializeAfter);
               }
             }

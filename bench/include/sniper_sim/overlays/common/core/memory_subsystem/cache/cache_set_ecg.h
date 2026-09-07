@@ -25,6 +25,7 @@ class CacheSetECG : public CacheSet
       ecg_record::ApplyResult applyRecordUpdate(
           IntPtr line_addr, const ecg_record::CommitUpdate& update);
       bool canAdmitRecordPrefetch(UInt64 sequence) const;
+      void invalidateRecordMetadata();
 
    private:
       void bindRecordClass(UInt32 way);

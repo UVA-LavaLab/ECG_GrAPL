@@ -72,7 +72,7 @@ void exercise(uint8_t requested_bytes)
     check(runtime.configure(
               configuration,
               ecg_record::Mechanism::REPLACEMENT_PREFETCH,
-              8, 4, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 4, 8, 8, 64) == ecg_record::Status::OK &&
           runtime.updateIteration(0, false) ==
               ecg_record::Status::OK,
           "configure runtime");
@@ -200,6 +200,7 @@ void negativeProtocols()
     configuration.generation = 7;
     configuration.context = 3;
     configuration.control = ecg_record::kNativeEnable;
+    const uint64_t word = stream.word(0);
 
     graphbrew::sniper::record::Runtime geometry;
     check(geometry.configure(
@@ -207,10 +208,52 @@ void negativeProtocols()
               8, 1, 8, 8, 32) == ecg_record::Status::INVALID_LAYOUT,
           "runtime rejects geometry inconsistent with its 64-byte protocol");
 
+    ecg_record::NativeConfiguration managed_zero_configuration =
+        configuration;
+    managed_zero_configuration.control =
+        ecg_record::kNativeEnable |
+        ecg_record::kNativeManagedPasses;
+    graphbrew::sniper::record::Runtime managed_zero;
+    check(managed_zero.configure(
+              managed_zero_configuration,
+              ecg_record::Mechanism::TRANSPORT,
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
+          managed_zero.updateIteration(
+              0, false, true) == ecg_record::Status::OK &&
+          managed_zero.armRecordRead(
+              managed_zero_configuration.record_base, 4) ==
+              ecg_record::Status::OK &&
+          managed_zero.observeRecordRead(
+              managed_zero_configuration.record_base, 4, 10) ==
+              ecg_record::Status::OK &&
+          managed_zero.setLoadedAddress(
+              managed_zero_configuration.record_base) ==
+              ecg_record::Status::OK &&
+          managed_zero.setLoadedChunk(
+              static_cast<uint32_t>(word), false) ==
+              ecg_record::Status::OK &&
+          managed_zero.commitLoadedValue(4) ==
+              ecg_record::Status::OK &&
+          managed_zero.consumeRecord(
+              managed_zero_configuration.record_base, 10) ==
+              ecg_record::Status::OK &&
+          managed_zero.beginMemoryAccess(
+              managed_zero_configuration.property_base,
+              managed_zero_configuration.property_base & ~uint64_t{63},
+              4, true, 20) ==
+              graphbrew::sniper::record::MemoryAccessKind::DESIGNATED &&
+          managed_zero.completeMemoryAccess(
+              graphbrew::sniper::record::MemoryAccessKind::DESIGNATED,
+              21) == ecg_record::Status::OK &&
+          managed_zero.closePass() == ecg_record::Status::OK &&
+          managed_zero.clean() &&
+          managed_zero.deactivate() == ecg_record::Status::OK,
+          "managed flag enables descriptor-zero F32 pass lifecycle");
+
     graphbrew::sniper::record::Runtime missing;
     check(missing.configure(
               configuration, ecg_record::Mechanism::REPLACEMENT,
-              8, 1, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
           missing.updateIteration(0, false) == ecg_record::Status::OK &&
           missing.consumeRecord(
               configuration.record_base, 1) ==
@@ -224,7 +267,7 @@ void negativeProtocols()
     graphbrew::sniper::record::Runtime chunks;
     check(chunks.configure(
               configuration, ecg_record::Mechanism::REPLACEMENT,
-              8, 1, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
           chunks.updateIteration(0, false) == ecg_record::Status::OK &&
           chunks.armRecordRead(
               configuration.record_base, 4) ==
@@ -236,7 +279,7 @@ void negativeProtocols()
     graphbrew::sniper::record::Runtime delayed;
     check(delayed.configure(
               configuration, ecg_record::Mechanism::REPLACEMENT,
-              8, 1, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
           delayed.updateIteration(0, false) == ecg_record::Status::OK &&
           delayed.armRecordRead(
               configuration.record_base, 4) ==
@@ -257,13 +300,54 @@ void negativeProtocols()
               ecg_record::Status::NOT_READY,
           "premature record consume is rejected");
 
+    graphbrew::sniper::record::Runtime intervening;
+    check(intervening.configure(
+              configuration, ecg_record::Mechanism::REPLACEMENT,
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
+          intervening.updateIteration(0, false) ==
+              ecg_record::Status::OK &&
+          intervening.armRecordRead(
+              configuration.record_base, 4) ==
+              ecg_record::Status::OK &&
+          intervening.observeRecordRead(
+              configuration.record_base, 4, 10) ==
+              ecg_record::Status::OK &&
+          intervening.setLoadedAddress(
+              configuration.record_base) ==
+              ecg_record::Status::OK &&
+          intervening.setLoadedChunk(
+              static_cast<uint32_t>(word), false) ==
+              ecg_record::Status::OK &&
+          intervening.commitLoadedValue(4) ==
+              ecg_record::Status::OK &&
+          intervening.consumeRecord(
+              configuration.record_base, 10) ==
+              ecg_record::Status::OK &&
+          intervening.beginMemoryAccess(
+              configuration.property_base + 128,
+              (configuration.property_base + 128) & ~uint64_t{63},
+              4, true, 11) ==
+              graphbrew::sniper::record::MemoryAccessKind::NONE &&
+          intervening.completeMemoryAccess(
+              graphbrew::sniper::record::MemoryAccessKind::NONE,
+              12) == ecg_record::Status::OK &&
+          intervening.beginMemoryAccess(
+              configuration.property_base,
+              configuration.property_base & ~uint64_t{63},
+              4, true, 13) ==
+              graphbrew::sniper::record::MemoryAccessKind::DESIGNATED &&
+          intervening.completeMemoryAccess(
+              graphbrew::sniper::record::MemoryAccessKind::DESIGNATED,
+              14) == ecg_record::Status::OK,
+          "unrelated memory may intervene before the matching property");
+
     graphbrew::sniper::record::Runtime reconfigure;
     check(reconfigure.configure(
               configuration, ecg_record::Mechanism::TRANSPORT,
-              8, 1, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
           reconfigure.configure(
               configuration, ecg_record::Mechanism::TRANSPORT,
-              8, 1, 8, 8, 16) ==
+              8, 1, 8, 8, 64) ==
               ecg_record::Status::INVALID_SEQUENCE,
           "active reconfiguration is rejected");
     check(reconfigure.updateIteration(1, false) ==
@@ -274,10 +358,9 @@ void negativeProtocols()
           "incomplete final drain is rejected");
 
     graphbrew::sniper::record::Runtime prefetch_only;
-    const uint64_t word = stream.word(0);
     check(prefetch_only.configure(
               configuration, ecg_record::Mechanism::PREFETCH,
-              8, 1, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
           prefetch_only.updateIteration(0, false) ==
               ecg_record::Status::OK &&
           prefetch_only.armRecordRead(
@@ -329,7 +412,7 @@ void negativeProtocols()
     ecg_record::LineMetadata generation_line;
     check(generation.configure(
               configuration, ecg_record::Mechanism::REPLACEMENT,
-              8, 1, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
           generation.applyUpdate(
               &generation_line, wrong_generation) ==
               ecg_record::ApplyResult::INVALID_CONTEXT,
@@ -340,7 +423,7 @@ void negativeProtocols()
         ecg_record::kNativeEnable | ecg_record::kNativeHasNext;
     check(boundary.configure(
               configuration, ecg_record::Mechanism::REPLACEMENT,
-              8, 1, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
           boundary.updateIteration(0, true) ==
               ecg_record::Status::OK &&
           boundary.armRecordRead(
@@ -379,7 +462,7 @@ void negativeProtocols()
     graphbrew::sniper::record::Runtime dead;
     check(dead.configure(
               configuration, ecg_record::Mechanism::REPLACEMENT,
-              8, 1, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
           dead.updateIteration(0, false) ==
               ecg_record::Status::OK &&
           dead.armRecordRead(
@@ -403,6 +486,237 @@ void negativeProtocols()
               sizeof(float), 20) &&
           dead.activeDeadDemand(property_address & ~uint64_t{63}),
           "known-dead demand is exposed for LLC allocation bypass");
+}
+
+void managedFilteredLifecycle()
+{
+    const std::vector<uint64_t> destinations = {0, 1, 2, 3};
+    ecg_record::Requirements requirements;
+    requirements.vertex_count = 4;
+    requirements.max_vertex_id_known = true;
+    requirements.max_vertex_id = 3;
+    requirements.record_count = destinations.size();
+    requirements.requested_record_bytes = 4;
+    ecg_record::Layout layout;
+    ecg_record::selectLayout(requirements, layout);
+    ecg_record::PropertyDescriptor property{
+        ecg_record::PropertyKind::U64, 8,
+        ecg_record::TraversalMode::ORDERED_FILTERED};
+    ecg_record::RecordStream stream;
+    ecg_record::BuildLimits limits;
+    limits.maximum_carrier_bytes = 4096;
+    limits.maximum_auxiliary_bytes = 4096;
+    check(ecg_record::buildRecords(
+              requirements, layout, property, 0x90000008,
+              [&](std::size_t index) { return destinations[index]; },
+              stream, limits) == ecg_record::Status::OK,
+          "build filtered U64 stream");
+    ecg_record::NativeConfiguration configuration;
+    ecg_record::packLayout(layout, configuration.layout_descriptor);
+    ecg_record::packProperty(property, configuration.property_descriptor);
+    configuration.record_base =
+        reinterpret_cast<uint64_t>(stream.data());
+    configuration.property_base = 0x90000008;
+    configuration.record_count = stream.size();
+    configuration.vertex_count = 4;
+    configuration.generation = 1;
+    configuration.context = 1;
+    configuration.control = ecg_record::kNativeEnable |
+        ecg_record::kNativeManagedPasses;
+
+    graphbrew::sniper::record::Runtime runtime;
+    check(runtime.configure(
+              configuration, ecg_record::Mechanism::REPLACEMENT,
+              8, 4, 8, 8, 64) == ecg_record::Status::OK &&
+          runtime.updateIteration(
+              0, false, true) == ecg_record::Status::OK,
+          "configure filtered U64 managed pass");
+
+    for (uint64_t index = 0; index < stream.size(); ++index) {
+        uint64_t address = 0;
+        ecg_record::recordAddress(
+            layout, configuration.record_base, index,
+            configuration.record_count, address);
+        const uint64_t word = stream.word(index);
+        check(runtime.armRecordRead(address, 4) == ecg_record::Status::OK &&
+              runtime.observeRecordRead(address, 4, 10 + index) ==
+                  ecg_record::Status::OK &&
+              runtime.setLoadedAddress(address) == ecg_record::Status::OK &&
+              runtime.setLoadedChunk(
+                  static_cast<uint32_t>(word), false) ==
+                  ecg_record::Status::OK &&
+              runtime.commitLoadedValue(4) == ecg_record::Status::OK,
+              "load filtered record window");
+    }
+
+    std::array<ecg_record::LineMetadata, 3> metadata{};
+    auto consume = [&](uint64_t index, uint64_t cycle, std::size_t slot) {
+        uint64_t address = 0;
+        ecg_record::recordAddress(
+            layout, configuration.record_base, index,
+            configuration.record_count, address);
+        ecg_record::DecodedRecord decoded;
+        ecg_record::decodeRecord(layout, stream.word(index), decoded);
+        uint64_t property_address = 0;
+        ecg_record::propertyAddress(
+            property, configuration.property_base,
+            decoded.destination, property_address);
+        bool prefix_ok = runtime.consumeRecord(address, cycle) ==
+            ecg_record::Status::OK;
+        if (index == 1) {
+            const uint64_t ordinary_address =
+                configuration.property_base;
+            prefix_ok = prefix_ok &&
+                runtime.beginMemoryAccess(
+                    ordinary_address,
+                    ordinary_address & ~uint64_t{63},
+                    8, true, cycle) ==
+                    graphbrew::sniper::record::MemoryAccessKind::ORDINARY &&
+                runtime.observeOrdinaryLine(
+                    ordinary_address & ~uint64_t{63},
+                    metadata[slot]) ==
+                    ecg_record::ObservationResult::ACCEPTED &&
+                runtime.completeMemoryAccess(
+                    graphbrew::sniper::record::MemoryAccessKind::ORDINARY,
+                    cycle + 1) == ecg_record::Status::OK;
+        }
+        check(prefix_ok &&
+              runtime.beginMemoryAccess(
+                  property_address, property_address & ~uint64_t{63},
+                  8, true, cycle + 2) ==
+                  graphbrew::sniper::record::MemoryAccessKind::DESIGNATED &&
+              runtime.observeLine(metadata[slot]) ==
+                  ecg_record::ObservationResult::ACCEPTED &&
+              runtime.completeMemoryAccess(
+                  graphbrew::sniper::record::MemoryAccessKind::DESIGNATED,
+                  cycle + 3) == ecg_record::Status::OK,
+              "consume filtered designated U64 access");
+    };
+    consume(1, 100, 0);
+    const uint64_t ordinary_address = configuration.property_base;
+    check(runtime.beginMemoryAccess(
+              ordinary_address, ordinary_address & ~uint64_t{63},
+              8, true, 110) ==
+              graphbrew::sniper::record::MemoryAccessKind::ORDINARY &&
+          runtime.observeOrdinaryLine(
+              ordinary_address & ~uint64_t{63}, metadata[1]) ==
+              ecg_record::ObservationResult::ACCEPTED &&
+          runtime.completeMemoryAccess(
+              graphbrew::sniper::record::MemoryAccessKind::ORDINARY,
+              111) == ecg_record::Status::OK,
+          "ordinary governed access invalidates through paid path");
+    consume(3, 120, 2);
+    check(runtime.closePass() == ecg_record::Status::OK,
+          "filtered pass closes with skipped positions");
+    ecg_record::LineMetadata closed_bound;
+    closed_bound.state = ecg_record::LineState::FINITE;
+    closed_bound.value = configuration.record_count;
+    check(runtime.victimState(closed_bound, true) ==
+              ecg_record::State::UNKNOWN,
+          "closed-pass filtered bound is not ranked finite");
+    for (uint64_t cycle = 130; !runtime.updateQueueEmpty(); ++cycle) {
+        const auto update = runtime.popReadyUpdate(cycle);
+        if (update.status == ecg_record::PopStatus::POPPED)
+            runtime.applyUpdate(nullptr, update.ready.update);
+    }
+    check(runtime.clean() &&
+          runtime.invalidateBinding(4, 4) ==
+              ecg_record::Status::OK &&
+          runtime.counters().passes == 1 &&
+          runtime.counters().consumed_records == 2 &&
+          runtime.counters().skipped_positions == 2 &&
+          runtime.counters().ordinary_invalidations == 2 &&
+          runtime.counters().invalidation_sets == 4 &&
+          runtime.counters().invalidation_cycles == 4,
+          "filtered accounting and modeled invalidation close");
+
+    configuration.generation = 2;
+    check(runtime.configure(
+              configuration, ecg_record::Mechanism::REPLACEMENT,
+              8, 4, 8, 8, 64) == ecg_record::Status::OK &&
+          runtime.counters().rebinds == 1,
+          "consecutive generation rebind succeeds");
+}
+
+void managedGuestContext()
+{
+    const std::vector<uint64_t> destinations = {0, 1, 2, 3};
+    uint64_t values[] = {10, 20, 30, 40};
+    ecg_record::Requirements requirements;
+    requirements.vertex_count = 4;
+    requirements.max_vertex_id_known = true;
+    requirements.max_vertex_id = 3;
+    requirements.record_count = destinations.size();
+    requirements.requested_record_bytes = 4;
+    ecg_record::Layout layout;
+    ecg_record::selectLayout(requirements, layout);
+    const ecg_record::PropertyDescriptor property{
+        ecg_record::PropertyKind::U64, 8,
+        ecg_record::TraversalMode::ORDERED_FILTERED};
+    ecg_record::RecordStream stream;
+    ecg_record::BuildLimits limits;
+    limits.maximum_carrier_bytes = 4096;
+    limits.maximum_auxiliary_bytes = 4096;
+    ecg_record::buildRecords(
+        requirements, layout, property,
+        reinterpret_cast<uint64_t>(values),
+        [&](std::size_t index) { return destinations[index]; },
+        stream, limits);
+    ecg_record::NativeConfiguration configuration;
+    ecg_record::packLayout(layout, configuration.layout_descriptor);
+    ecg_record::packProperty(property, configuration.property_descriptor);
+    configuration.record_base =
+        reinterpret_cast<uint64_t>(stream.data());
+    configuration.property_base =
+        reinterpret_cast<uint64_t>(values);
+    configuration.record_count = stream.size();
+    configuration.vertex_count = 4;
+    configuration.generation = 1;
+    configuration.context = 1;
+    configuration.control = ecg_record::kNativeEnable;
+
+    graphbrew_sniper::EcgRecordContext context;
+    context.bind(configuration, stream);
+    context.beginPass();
+    const uint64_t first_record = context.loadRecord(1);
+    const uint64_t first =
+        context.loadProperty(1, first_record, values);
+    const uint64_t second_record = context.loadRecord(3);
+    const uint64_t second =
+        context.loadProperty(3, second_record, values);
+    context.closePass();
+    check(first == 20 && second == 40 &&
+          context.passes() == 1 && context.consumed() == 2 &&
+          context.skipped() == 2,
+          "generic Sniper guest context supports filtered U64");
+
+    float values_f32[] = {1, 2, 3, 4};
+    const ecg_record::PropertyDescriptor property_f32{};
+    ecg_record::RecordStream stream_f32;
+    ecg_record::buildRecords(
+        requirements, layout, property_f32,
+        reinterpret_cast<uint64_t>(values_f32),
+        [&](std::size_t index) { return destinations[index]; },
+        stream_f32, limits);
+    configuration.record_base =
+        reinterpret_cast<uint64_t>(stream_f32.data());
+    configuration.property_base =
+        reinterpret_cast<uint64_t>(values_f32);
+    configuration.generation = 2;
+    ecg_record::packProperty(
+        property_f32, configuration.property_descriptor);
+    context.bind(configuration, stream_f32);
+    context.beginPass();
+    bool f32_ok = configuration.property_descriptor == 0;
+    for (uint64_t index = 0; index < stream_f32.size(); ++index) {
+        const uint64_t record = context.loadRecord(index);
+        f32_ok &= context.loadProperty(
+            index, record, values_f32) == values_f32[index];
+    }
+    context.closePass();
+    check(f32_ok,
+          "generic Sniper guest context manages descriptor-zero F32");
+    context.finish(6);
 }
 
 void isolatedVertexLayout()
@@ -467,7 +781,7 @@ void incompletePrefetchWindow()
     ecg_record::encodeRecord(layout, 0, 4, ecg_record::State::FINITE, word);
     graphbrew::sniper::record::Runtime runtime;
     check(runtime.configure(configuration, ecg_record::Mechanism::PREFETCH,
-              8, 1, 8, 8, 16) == ecg_record::Status::OK &&
+              8, 1, 8, 8, 64) == ecg_record::Status::OK &&
           runtime.updateIteration(0, false) == ecg_record::Status::OK &&
           runtime.armRecordRead(0x1000, 4) == ecg_record::Status::OK &&
           runtime.observeRecordRead(0x1000, 4, 10) == ecg_record::Status::OK &&
@@ -486,6 +800,8 @@ int main()
     exercise(4);
     exercise(8);
     negativeProtocols();
+    managedFilteredLifecycle();
+    managedGuestContext();
     isolatedVertexLayout();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures == 0 ? 0 : 1;

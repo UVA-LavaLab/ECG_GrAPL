@@ -6,6 +6,8 @@
     "ecg_current_equivalence_extended",
     "ecg_algorithm_equivalence_cache",
     "ecg_algorithm_cache",
+    "ecg_algorithm_equivalence_gem5",
+    "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
     "ecg_twitter_reproduction",
     "ecg_large_cache",
@@ -41,6 +43,8 @@
   "profiles": {
     "ecg_algorithm_equivalence_cache": "Bounded current shared-kernel mathematical and transport qualification for SpMV/BFS/SSSP/CC/BC/TC in cache_sim; not a detailed-timing authorization.",
     "ecg_algorithm_cache": "Current six-algorithm pressure-graph data-traffic comparison including charged initialization, scheduling and record construction; nonauthorizing.",
+    "ecg_algorithm_equivalence_gem5": "Bounded native RV64 typed-load and complete algorithm/phase qualification; diagnostic only.",
+    "ecg_algorithm_equivalence_sniper": "Bounded translated SIFT typed-record and complete algorithm/phase corroboration; diagnostic only.",
     "ecg_current_equivalence": "Current bounded three-backend ECG semantic-equivalence profile: exhaustive fixture plus focused temporal-pressure coverage.",
     "ecg_current_equivalence_extended": "Optional current ECG equivalence corroboration on the retained Orkut-4096 sample.",
     "ecg_local_release_cache": "Serial primary-capacity full-core-corpus cache_sim qualification with fixed CSR baselines and all current ECG mechanisms; nonauthorizing.",
@@ -102,6 +106,16 @@
     "ecg_algorithm_cache": {
       "status": "ready",
       "reason": "Bounded functional data traffic only, including construction. This profile cannot authorize final-paper CPU speedup.",
+      "require_clean_worktree": true
+    },
+    "ecg_algorithm_equivalence_gem5": {
+      "status": "ready",
+      "reason": "Explicit bounded current-algorithm qualification, not final timing authorization.",
+      "require_clean_worktree": true
+    },
+    "ecg_algorithm_equivalence_sniper": {
+      "status": "ready",
+      "reason": "Explicit bounded current-algorithm corroboration, not native timing authorization.",
       "require_clean_worktree": true
     },
     "ecg_current_equivalence": {
@@ -838,6 +852,78 @@
     ]
   },
   "stages": [
+    {
+      "name": "153_current_algorithms_gem5_4b",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_algorithm_equivalence_gem5"],
+      "suite": "gem5", "graph_set": "current_algorithm_tiny",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["LRU", "SRRIP", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"],
+      "current_algorithms": true, "ecg_equivalence": true, "ecg_record_bytes": 4,
+      "algorithm_workspace_bytes": 33554432, "gem5_record_rss_mib": 2048,
+      "gem5_cpu_type": "O3", "gem5_mem_size": "4GB",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      },
+      "l1d_size": "1kB", "l1d_ways": "8", "l2_size": "1kB", "l2_ways": "8",
+      "l3_sizes": ["1kB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_gem5": 180,
+      "out_subdir": "153_current_algorithms_gem5_4b"
+    },
+    {
+      "name": "154_current_algorithms_gem5_8b",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_algorithm_equivalence_gem5"],
+      "suite": "gem5", "graph_set": "current_algorithm_tiny",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["LRU", "SRRIP", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"],
+      "current_algorithms": true, "ecg_equivalence": true, "ecg_record_bytes": 8,
+      "algorithm_workspace_bytes": 33554432, "gem5_record_rss_mib": 2048,
+      "gem5_cpu_type": "O3", "gem5_mem_size": "4GB",
+      "env": {
+        "GEM5_OPT": "bench/include/gem5_sim/gem5/build/RISCV/gem5.opt",
+        "GEM5_KERNEL_SUFFIX": "_riscv_m5ops"
+      },
+      "l1d_size": "1kB", "l1d_ways": "8", "l2_size": "1kB", "l2_ways": "8",
+      "l3_sizes": ["1kB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_gem5": 180,
+      "out_subdir": "154_current_algorithms_gem5_8b"
+    },
+    {
+      "name": "155_current_algorithms_sniper_4b",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_algorithm_equivalence_sniper"],
+      "suite": "sniper", "graph_set": "current_algorithm_tiny",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["LRU", "SRRIP", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"],
+      "current_algorithms": true, "ecg_equivalence": true, "ecg_record_bytes": 4,
+      "algorithm_workspace_bytes": 33554432, "sniper_record_rss_mib": 2048,
+      "sniper_frontend": "sift", "sniper_cores": "1", "sniper_address_domain": "translated",
+      "l1d_size": "1kB", "l1d_ways": "8", "l2_size": "1kB", "l2_ways": "8",
+      "l3_sizes": ["1kB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_sniper": 180,
+      "out_subdir": "155_current_algorithms_sniper_4b"
+    },
+    {
+      "name": "156_current_algorithms_sniper_8b",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_algorithm_equivalence_sniper"],
+      "suite": "sniper", "graph_set": "current_algorithm_tiny",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["LRU", "SRRIP", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG:prefetch", "ECG"],
+      "current_algorithms": true, "ecg_equivalence": true, "ecg_record_bytes": 8,
+      "algorithm_workspace_bytes": 33554432, "sniper_record_rss_mib": 2048,
+      "sniper_frontend": "sift", "sniper_cores": "1", "sniper_address_domain": "translated",
+      "l1d_size": "1kB", "l1d_ways": "8", "l2_size": "1kB", "l2_ways": "8",
+      "l3_sizes": ["1kB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_sniper": 180,
+      "out_subdir": "156_current_algorithms_sniper_8b"
+    },
     {
       "name": "150_current_algorithms_cache_4b",
       "kind": "roi_matrix",

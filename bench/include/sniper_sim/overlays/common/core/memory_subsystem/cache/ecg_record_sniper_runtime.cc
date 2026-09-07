@@ -21,13 +21,21 @@ Runtime::configure(
     ecg_record::Mechanism mechanism,
     uint64_t update_latency, std::size_t capture_width,
     std::size_t prefetch_capacity, uint64_t prefetch_latency,
-    uint64_t vertices_per_line)
+    uint64_t line_bytes)
 {
-    if (active_ || update_queue_ || pending_property_.valid ||
+    if (active_ || (!invalidated_ && update_queue_) ||
+        pending_property_.valid || pending_ordinary_.valid ||
         armed_read_bytes_ != 0 || !prefetch_queue_.empty()) {
         return fail(ecg_record::Status::INVALID_SEQUENCE);
     }
     ecg_record::Layout layout;
+    if (invalidated_) {
+        uint64_t next_generation = 0;
+        if (!ecg_record::checkedAdd(
+                configuration_.generation, 1, next_generation) ||
+            configuration.generation != next_generation)
+            return fail(ecg_record::Status::INVALID_SEQUENCE);
+    }
     const ecg_record::Status status =
         ecg_record::validateNativeConfiguration(configuration, layout);
     if (status != ecg_record::Status::OK ||
@@ -36,7 +44,10 @@ Runtime::configure(
         capture_width == 0 ||
         capture_width > ecg_record::CommitQueue::kMaximumCaptureWidth ||
         prefetch_capacity == 0 || prefetch_capacity > 256 ||
-        prefetch_latency == 0 || vertices_per_line != 16) {
+        prefetch_latency == 0 || line_bytes != 64 ||
+        ecg_record::unpackProperty(
+            configuration.property_descriptor,
+            property_descriptor_) != ecg_record::Status::OK) {
         return fail(status == ecg_record::Status::OK
             ? ecg_record::Status::INVALID_LAYOUT : status);
     }
@@ -48,13 +59,34 @@ Runtime::configure(
     if (!receiver_.configure(
             layout_, configuration.record_count,
             static_cast<uint16_t>(configuration.context),
-            configuration.generation)) {
+            configuration.generation,
+            property_descriptor_.traversal)) {
         return fail(ecg_record::Status::INVALID_LAYOUT);
     }
     prefetch_capacity_ = prefetch_capacity;
     prefetch_latency_ = prefetch_latency;
-    vertices_per_line_ = vertices_per_line;
-    line_bytes_ = vertices_per_line * sizeof(uint32_t);
+    line_bytes_ = line_bytes;
+    managed_ = (configuration.control &
+        ecg_record::kNativeManagedPasses) != 0;
+    if (managed_) {
+        pass_cursor_ = ecg_record::PassCursor{};
+        if (pass_cursor_.configure(
+                configuration.record_count,
+                property_descriptor_.traversal) !=
+                ecg_record::Status::OK)
+            return fail(ecg_record::Status::INVALID_LAYOUT);
+    }
+    if (invalidated_)
+        ++counters_.rebinds;
+    invalidated_ = false;
+    iteration_configured_ = false;
+    iteration_consumed_count_ = 0;
+    have_last_consumed_ = false;
+    last_consumed_sequence_ = 0;
+    completed_sequence_ = 0;
+    event_order_ = 0;
+    bank_ = {};
+    next_bank_slot_ = 0;
     active_ = true;
     return ecg_record::Status::OK;
 }
@@ -74,11 +106,29 @@ Runtime::prefetchActive() const
 }
 
 ecg_record::Status
-Runtime::updateIteration(uint64_t iteration_base, bool has_next)
+Runtime::updateIteration(
+    uint64_t iteration_base, bool has_next, bool managed)
 {
     if (!active_ || pending_property_.valid || armed_read_bytes_ != 0 ||
-        read_observed_ || loaded_chunks_ != 0)
+        pending_ordinary_.valid || read_observed_ || loaded_chunks_ != 0)
         return fail(ecg_record::Status::INVALID_LAYOUT);
+    if (managed) {
+        if (!managed_ || pass_cursor_.open() ||
+            iteration_base != pass_cursor_.base() ||
+            pass_cursor_.begin() != ecg_record::Status::OK)
+            return fail(ecg_record::Status::INVALID_SEQUENCE);
+        iteration_consumed_count_ = 0;
+        iteration_configured_ = true;
+        configuration_.iteration_base = iteration_base;
+        configuration_.control = ecg_record::kNativeEnable |
+            ecg_record::kNativeManagedPasses |
+            (has_next ? ecg_record::kNativeHasNext : 0);
+        have_last_consumed_ = iteration_base != 0;
+        last_consumed_sequence_ = iteration_base;
+        return ecg_record::Status::OK;
+    }
+    if (managed_)
+        return fail(ecg_record::Status::INVALID_SEQUENCE);
     uint64_t end = 0;
     if (!ecg_record::checkedAdd(
             iteration_base, configuration_.record_count, end)) {
@@ -104,10 +154,62 @@ Runtime::updateIteration(uint64_t iteration_base, bool has_next)
 }
 
 ecg_record::Status
+Runtime::closePass()
+{
+    if (!active_ || !managed_ || pending_property_.valid ||
+        pending_ordinary_.valid || armed_read_bytes_ != 0 ||
+        !iteration_configured_ ||
+        pass_cursor_.close() != ecg_record::Status::OK)
+        return fail(ecg_record::Status::INVALID_SEQUENCE);
+    configuration_.iteration_base = pass_cursor_.base();
+    iteration_configured_ = false;
+    if (!ecg_record::checkedAdd(
+            counters_.passes, 1, counters_.passes) ||
+        !ecg_record::checkedAdd(
+            counters_.structural_positions,
+            configuration_.record_count,
+            counters_.structural_positions))
+        return fail(ecg_record::Status::ARITHMETIC_OVERFLOW);
+    counters_.skipped_positions =
+        counters_.structural_positions - counters_.consumed_records;
+    if (property_descriptor_.traversal ==
+            ecg_record::TraversalMode::ORDERED_FILTERED) {
+        const auto result = receiver_.advanceProgress(
+            static_cast<uint16_t>(configuration_.context),
+            configuration_.generation, pass_cursor_.base());
+        if (result != ecg_record::ObservationResult::ACCEPTED &&
+            result != ecg_record::ObservationResult::IGNORED_OLD)
+            return fail(ecg_record::Status::INVALID_SEQUENCE);
+    }
+    return ecg_record::Status::OK;
+}
+
+ecg_record::Status
+Runtime::invalidateBinding(uint64_t sets, uint64_t cycles)
+{
+    if (!active_ || !managed_ || pass_cursor_.open() ||
+        !clean() || sets == 0 || cycles != sets)
+        return fail(ecg_record::Status::NOT_READY);
+    if (!ecg_record::checkedAdd(
+            counters_.invalidation_sets, sets,
+            counters_.invalidation_sets) ||
+        !ecg_record::checkedAdd(
+            counters_.invalidation_cycles, cycles,
+            counters_.invalidation_cycles))
+        return fail(ecg_record::Status::ARITHMETIC_OVERFLOW);
+    receiver_.disable();
+    active_ = false;
+    invalidated_ = true;
+    return ecg_record::Status::OK;
+}
+
+ecg_record::Status
 Runtime::deactivate()
 {
-    if (!clean() || !iteration_configured_ ||
-        iteration_consumed_count_ != configuration_.record_count) {
+    if (!clean() || (managed_
+            ? pass_cursor_.open() || iteration_configured_
+            : !iteration_configured_ ||
+                iteration_consumed_count_ != configuration_.record_count)) {
         return fail(ecg_record::Status::NOT_READY);
     }
     active_ = false;
@@ -117,7 +219,8 @@ Runtime::deactivate()
 ecg_record::Status
 Runtime::armRecordRead(uint64_t address, uint32_t bytes)
 {
-    if (!active_ || bytes != layout_.record_bytes ||
+    if (!active_ || (managed_ && !pass_cursor_.open()) ||
+        bytes != layout_.record_bytes ||
         armed_read_bytes_ != 0) {
         return fail(ecg_record::Status::INVALID_WIDTH);
     }
@@ -292,20 +395,19 @@ Runtime::selectPrefetch(
         return window_status;
     ecg_record::PrefetchTarget target;
     const ecg_record::Status selected = ecg_record::selectWindowTarget(
-        layout_, window, vertices_per_line_, target);
+        layout_, window, property_descriptor_,
+        configuration_.property_base, target);
     if (selected != ecg_record::Status::OK)
         return selected;
     if (!target.valid)
         return ecg_record::Status::OK;
     ++counters_.prefetch_candidates;
-    uint64_t offset = 0;
     uint64_t address = 0;
-    if (!ecg_record::checkedMultiply(
-            target.destination, sizeof(uint32_t), offset) ||
-        !ecg_record::checkedAdd(
-            configuration_.property_base, offset, address)) {
-        return ecg_record::Status::ARITHMETIC_OVERFLOW;
-    }
+    const ecg_record::Status addressed = ecg_record::propertyAddress(
+        property_descriptor_, configuration_.property_base,
+        target.destination, address);
+    if (addressed != ecg_record::Status::OK)
+        return addressed;
     property.prefetch_vaddr = address;
     property.prefetch_valid = true;
     return ecg_record::Status::OK;
@@ -346,7 +448,8 @@ Runtime::enqueuePrefetch(
 ecg_record::Status
 Runtime::consumeRecord(uint64_t address, uint64_t cycle)
 {
-    if (!active_ || !iteration_configured_ || pending_property_.valid)
+    if (!active_ || !iteration_configured_ || pending_property_.valid ||
+        pending_ordinary_.valid)
         return fail(ecg_record::Status::INVALID_SEQUENCE);
     const BankEntry* entry = findBank(address);
     if (!entry || entry->completion_cycle > cycle)
@@ -357,15 +460,26 @@ Runtime::consumeRecord(uint64_t address, uint64_t cycle)
         entry->word, address, load);
     if (status != ecg_record::Status::OK)
         return fail(status);
-    uint64_t expected = 0;
-    if (!ecg_record::checkedAdd(
-            have_last_consumed_ ? last_consumed_sequence_
-                                : configuration_.iteration_base,
-            1, expected)) {
-        return fail(ecg_record::Status::ARITHMETIC_OVERFLOW);
+    if (managed_) {
+        ecg_record::NativeRecordAccess access;
+        const uint64_t prior_sequence = pass_cursor_.sequence();
+        status = ecg_record::nativeRecordAccess(
+            configuration_, address, layout_.record_bytes, access);
+        if (status != ecg_record::Status::OK ||
+            pass_cursor_.consume(access.index) != ecg_record::Status::OK ||
+            load.sequence != pass_cursor_.sequence())
+            return fail(ecg_record::Status::INVALID_SEQUENCE);
+        pending_property_.prior_sequence = prior_sequence;
+    } else {
+        uint64_t expected = 0;
+        if (!ecg_record::checkedAdd(
+                have_last_consumed_ ? last_consumed_sequence_
+                                    : configuration_.iteration_base,
+                1, expected))
+            return fail(ecg_record::Status::ARITHMETIC_OVERFLOW);
+        if (load.sequence != expected)
+            return fail(ecg_record::Status::INVALID_SEQUENCE);
     }
-    if (load.sequence != expected)
-        return fail(ecg_record::Status::INVALID_SEQUENCE);
     last_consumed_sequence_ = load.sequence;
     have_last_consumed_ = true;
     pending_property_.load = load;
@@ -387,7 +501,8 @@ Runtime::beginPropertyAccess(
     uint32_t bytes, uint64_t cycle)
 {
     if (!active_ || !pending_property_.valid ||
-        pending_property_.memory_active || bytes != sizeof(uint32_t) ||
+        pending_property_.memory_active ||
+        bytes != pending_property_.load.property_bytes ||
         virtual_address != pending_property_.load.property_address) {
         return false;
     }
@@ -396,6 +511,32 @@ Runtime::beginPropertyAccess(
     pending_property_.memory_active = true;
     ++counters_.property_accesses;
     return true;
+}
+
+MemoryAccessKind
+Runtime::beginMemoryAccess(
+    uint64_t virtual_address, uint64_t physical_line,
+    uint32_t bytes, bool read, uint64_t cycle)
+{
+    if (read && beginPropertyAccess(
+            virtual_address, physical_line, bytes, cycle))
+        return MemoryAccessKind::DESIGNATED;
+    if (!active_ || !managed_ ||
+        property_descriptor_.traversal !=
+            ecg_record::TraversalMode::ORDERED_FILTERED ||
+        !pass_cursor_.open() || pending_ordinary_.valid ||
+        !ecg_record::nativePropertyContains(
+            configuration_, virtual_address, bytes))
+        return MemoryAccessKind::NONE;
+    pending_ordinary_.physical_line = physical_line;
+    pending_ordinary_.property_vaddr = virtual_address;
+    pending_ordinary_.sequence = pending_property_.valid
+        ? pending_property_.prior_sequence
+        : pass_cursor_.sequence();
+    pending_ordinary_.begin_cycle = cycle;
+    pending_ordinary_.valid = true;
+    ++counters_.ordinary_invalidations;
+    return MemoryAccessKind::ORDINARY;
 }
 
 ecg_record::Status
@@ -423,6 +564,30 @@ Runtime::completePropertyAccess(uint64_t cycle)
     update.context = pending_property_.load.context;
     update.sequence_bits = pending_property_.load.sequence_bits;
     update.state = pending_property_.load.state;
+    if (managed_ && property_descriptor_.traversal ==
+            ecg_record::TraversalMode::ORDERED_FILTERED) {
+        if (!ecg_record::checkedAdd(
+                event_order_, 1, event_order_)) {
+            pending_property_ = PendingProperty{};
+            return fail(ecg_record::Status::ARITHMETIC_OVERFLOW);
+        }
+        update.order = event_order_;
+    }
+    const ecg_record::Status queued = enqueueUpdate(update, cycle);
+    if (queued != ecg_record::Status::OK) {
+        pending_property_ = PendingProperty{};
+        return queued;
+    }
+    const ecg_record::Status prefetch =
+        enqueuePrefetch(pending_property_, cycle);
+    pending_property_ = PendingProperty{};
+    return prefetch;
+}
+
+ecg_record::Status
+Runtime::enqueueUpdate(
+    const ecg_record::CommitUpdate& update, uint64_t cycle)
+{
     ++counters_.generated_updates;
     const ecg_record::EnqueueStatus result =
         update_queue_->enqueue(update, cycle);
@@ -440,15 +605,46 @@ Runtime::completePropertyAccess(uint64_t cycle)
             static_cast<unsigned long long>(update.sequence),
             static_cast<unsigned long long>(
                 update_queue_->pendingSize()));
-        pending_property_ = PendingProperty{};
         return fail(ecg_record::Status::RESOURCE_LIMIT);
     }
     counters_.max_update_occupancy = std::max<uint64_t>(
         counters_.max_update_occupancy, update_queue_->pendingSize());
-    const ecg_record::Status prefetch =
-        enqueuePrefetch(pending_property_, cycle);
-    pending_property_ = PendingProperty{};
-    return prefetch;
+    return ecg_record::Status::OK;
+}
+
+ecg_record::Status
+Runtime::completeMemoryAccess(
+    MemoryAccessKind kind, uint64_t cycle)
+{
+    if (kind == MemoryAccessKind::NONE)
+        return ecg_record::Status::OK;
+    if (kind == MemoryAccessKind::DESIGNATED)
+        return completePropertyAccess(cycle);
+    if (!active_ || !pending_ordinary_.valid ||
+        cycle < pending_ordinary_.begin_cycle)
+        return fail(ecg_record::Status::INVALID_SEQUENCE);
+    if (replacementActive()) {
+        ecg_record::CommitUpdate update;
+        update.physical_line = pending_ordinary_.physical_line;
+        update.property_vaddr = pending_ordinary_.property_vaddr;
+        update.sequence = pending_ordinary_.sequence;
+        update.generation = configuration_.generation;
+        update.context = static_cast<uint16_t>(configuration_.context);
+        update.sequence_bits = layout_.sequence_bits;
+        update.state = ecg_record::State::UNKNOWN;
+        if (!ecg_record::checkedAdd(
+                event_order_, 1, event_order_)) {
+            pending_ordinary_ = PendingOrdinary{};
+            return fail(ecg_record::Status::ARITHMETIC_OVERFLOW);
+        }
+        update.order = event_order_;
+        update.invalidate = true;
+        const auto status = enqueueUpdate(update, cycle);
+        pending_ordinary_ = PendingOrdinary{};
+        return status;
+    }
+    pending_ordinary_ = PendingOrdinary{};
+    return ecg_record::Status::OK;
 }
 
 bool
@@ -503,6 +699,18 @@ Runtime::observeLine(ecg_record::LineMetadata& metadata)
     if (result == ecg_record::ObservationResult::ACCEPTED)
         ++counters_.observations;
     return result;
+}
+
+ecg_record::ObservationResult
+Runtime::observeOrdinaryLine(
+    uint64_t physical_line, ecg_record::LineMetadata& metadata)
+{
+    if (!active_ || !pending_ordinary_.valid ||
+        pending_ordinary_.physical_line != physical_line)
+        return ecg_record::ObservationResult::UNSUPPORTED;
+    return receiver_.invalidateObservation(
+        metadata, static_cast<uint16_t>(configuration_.context),
+        configuration_.generation, pending_ordinary_.sequence);
 }
 
 ecg_record::PopResult
@@ -632,11 +840,14 @@ Runtime::updateQueueEmpty() const
 bool
 Runtime::clean() const
 {
-    return !pending_property_.valid && armed_read_bytes_ == 0 &&
+    return !pending_property_.valid && !pending_ordinary_.valid &&
+        armed_read_bytes_ == 0 &&
         !read_observed_ && loaded_chunks_ == 0 &&
         updateQueueEmpty() && prefetch_queue_.empty() &&
-        iteration_configured_ &&
-        iteration_consumed_count_ == configuration_.record_count &&
+        (managed_
+            ? !pass_cursor_.open() && !iteration_configured_
+            : iteration_configured_ &&
+                iteration_consumed_count_ == configuration_.record_count) &&
         counters_.errors == 0;
 }
 

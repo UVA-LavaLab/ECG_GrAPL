@@ -245,6 +245,49 @@ def normalize_cpp_function(
     return True
 
 
+def remove_duplicate_cpp_functions(
+    path: Path, signature: str, dry_run: bool
+) -> None:
+    """Remove duplicate definitions after the first complete C++ function."""
+    text = _overlay_text(path, dry_run)
+    starts: list[int] = []
+    cursor = 0
+    while True:
+        start = text.find(signature, cursor)
+        if start < 0:
+            break
+        starts.append(start)
+        cursor = start + len(signature)
+    if len(starts) <= 1:
+        return
+    for start in reversed(starts[1:]):
+        brace = text.find("{", start + len(signature))
+        if brace < 0:
+            raise SystemExit(
+                f"Malformed duplicate C++ function {signature!r} in {path}")
+        depth = 0
+        end = brace
+        while end < len(text):
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+                if depth == 0:
+                    end += 1
+                    while end < len(text) and text[end] == "\n":
+                        end += 1
+                    break
+            end += 1
+        if depth != 0:
+            raise SystemExit(
+                f"Unbalanced duplicate C++ function {signature!r} in {path}")
+        text = text[:start] + text[end:]
+    log.info(
+        f"Remove duplicate {signature} definitions in "
+        f"{path.relative_to(SNIPER_DIR)}")
+    _write_overlay_text(path, text, dry_run)
+
+
 def normalize_between(
     path: Path, start_marker: str, end_marker: str,
     replacement: str, dry_run: bool
@@ -1874,7 +1917,20 @@ def patch_sniper_foundation(args: argparse.Namespace) -> None:
          }
 """
     foundation_chunk_handlers = foundation_handlers
-    foundation_handlers += """         if (arg0 == graphbrew::sniper::record::kWorkDrain)
+    foundation_handlers += """         if (arg0 == graphbrew::sniper::record::kWorkInvalidate)
+         {
+            Core* record_core =
+               Sim()->getCoreManager()->getCoreFromID(core_id);
+            auto* record_memory = dynamic_cast<
+               ParametricDramDirectoryMSI::MemoryManager*>(
+                  record_core ? record_core->getMemoryManager() : nullptr);
+            LOG_ASSERT_ERROR(
+               record_memory != nullptr,
+               "SNIPER ECG record invalidation requires parametric memory manager");
+            record_memory->invalidateEcgRecordBinding();
+            return 0;
+         }
+         if (arg0 == graphbrew::sniper::record::kWorkDrain)
          {
             Core* record_core =
                Sim()->getCoreManager()->getCoreFromID(core_id);
@@ -1911,6 +1967,27 @@ def patch_sniper_foundation(args: argparse.Namespace) -> None:
         foundation_handlers + fallback,
         args.dry_run,
         ["GRAPHBREW_FOUNDATION_ECHO_WORK_ID"],
+    )
+    replace_once(
+        magic_server,
+        "         if (arg0 == graphbrew::sniper::record::kWorkDrain)\n",
+        """         if (arg0 == graphbrew::sniper::record::kWorkInvalidate)
+         {
+            Core* record_core =
+               Sim()->getCoreManager()->getCoreFromID(core_id);
+            auto* record_memory = dynamic_cast<
+               ParametricDramDirectoryMSI::MemoryManager*>(
+                  record_core ? record_core->getMemoryManager() : nullptr);
+            LOG_ASSERT_ERROR(
+               record_memory != nullptr,
+               "SNIPER ECG record invalidation requires parametric memory manager");
+            record_memory->invalidateEcgRecordBinding();
+            return 0;
+         }
+         if (arg0 == graphbrew::sniper::record::kWorkDrain)
+""",
+        args.dry_run,
+        ["kWorkInvalidate"],
     )
     migrate_if_present(
         magic_server,
@@ -2000,6 +2077,7 @@ def patch_sniper_foundation(args: argparse.Namespace) -> None:
         """\t\tvoid measureNucaStats();
 \t\tvoid serviceEcgRecord(
 \t\t\tbool drain, UInt64 start_cycle = UINT64_MAX);
+\t\tvoid invalidateEcgRecordBinding();
 """,
         args.dry_run,
         ["serviceEcgRecord("],
@@ -2010,6 +2088,14 @@ def patch_sniper_foundation(args: argparse.Namespace) -> None:
         "\t\tvoid serviceEcgRecord(\n"
         "\t\t\tbool drain, UInt64 start_cycle = UINT64_MAX);\n",
         args.dry_run,
+    )
+    replace_once(
+        memory_header,
+        "\t\t\tbool drain, UInt64 start_cycle = UINT64_MAX);\n",
+        "\t\t\tbool drain, UInt64 start_cycle = UINT64_MAX);\n"
+        "\t\tvoid invalidateEcgRecordBinding();\n",
+        args.dry_run,
+        ["invalidateEcgRecordBinding"],
     )
     replace_once(
         memory_header,
@@ -2414,9 +2500,40 @@ DramDirectoryCntlr::processShReqFromL2Cache(ShmemReq* shmem_req, Byte* cached_da
       {
          return m_cache->canAdmitEcgRecordPrefetch(address, sequence);
       }
+      UInt32 ecgRecordSetCount() const
+      {
+         return m_cache->getNumSets();
+      }
+      void invalidateEcgRecordMetadataSet(UInt32 set_index)
+      {
+         m_cache->invalidateEcgRecordMetadataSet(set_index);
+      }
 """,
         args.dry_run,
         ["canAdmitEcgRecordPrefetch"],
+    )
+    replace_once(
+        nuca_header,
+        """      bool canAdmitEcgRecordPrefetch(IntPtr address, UInt64 sequence)
+      {
+         return m_cache->canAdmitEcgRecordPrefetch(address, sequence);
+      }
+""",
+        """      bool canAdmitEcgRecordPrefetch(IntPtr address, UInt64 sequence)
+      {
+         return m_cache->canAdmitEcgRecordPrefetch(address, sequence);
+      }
+      UInt32 ecgRecordSetCount() const
+      {
+         return m_cache->getNumSets();
+      }
+      void invalidateEcgRecordMetadataSet(UInt32 set_index)
+      {
+         m_cache->invalidateEcgRecordMetadataSet(set_index);
+      }
+""",
+        args.dry_run,
+        ["ecgRecordSetCount"],
     )
 
     before_access = """		// Perform the memory access -> send the request to the cache hierarchy
@@ -2431,7 +2548,7 @@ DramDirectoryCntlr::processShReqFromL2Cache(ShmemReq* shmem_req, Byte* cached_da
 		graphbrew::sniper::record::serviceUpdates(
 			static_cast<uint32_t>(getCore()->getId()),
 			ecg_record_issue_cycle);
-		const bool ecg_record_property =
+		const auto ecg_record_access =
 			graphbrew::sniper::record::beginMemoryAccess(
 				static_cast<uint32_t>(getCore()->getId()),
 				static_cast<uint64_t>(address + offset),
@@ -2576,7 +2693,7 @@ DramDirectoryCntlr::processShReqFromL2Cache(ShmemReq* shmem_req, Byte* cached_da
 		}
 		graphbrew::sniper::record::completeMemoryAccess(
 			static_cast<uint32_t>(getCore()->getId()),
-			ecg_record_property, ecg_record_completion_cycle);
+			ecg_record_access, ecg_record_completion_cycle);
 		serviceEcgRecord(false, ecg_record_completion_cycle);
 
 		// Clear the MetadataContext after the data access
@@ -2825,6 +2942,38 @@ MemoryManager::serviceEcgRecord(bool drain, UInt64 start_cycle)
     if not normalized_service:
         raise SystemExit(
             "Could not install canonical MemoryManager::serviceEcgRecord")
+    invalidate_service = r'''
+void
+MemoryManager::invalidateEcgRecordBinding()
+{
+	const uint32_t core_id = static_cast<uint32_t>(getCore()->getId());
+	LOG_ASSERT_ERROR(
+		m_nuca_cache != nullptr,
+		"SNIPER ECG record invalidation requires the NUCA LLC");
+	serviceEcgRecord(true);
+	const UInt32 sets = m_nuca_cache->ecgRecordSetCount();
+	LOG_ASSERT_ERROR(sets != 0, "SNIPER ECG record LLC has no sets");
+	const SubsecondTime period = getCore()->getDvfsDomain()->getPeriod();
+	for (UInt32 set = 0; set < sets; ++set) {
+		m_nuca_cache->invalidateEcgRecordMetadataSet(set);
+		incrElapsedTime(period, ShmemPerfModel::_USER_THREAD);
+	}
+	graphbrew::sniper::record::invalidateBinding(core_id, sets, sets);
+}
+
+'''
+    replace_once(
+        memory_manager,
+        "\tMemoryManager::~MemoryManager()\n",
+        invalidate_service + "\tMemoryManager::~MemoryManager()\n",
+        args.dry_run,
+        ["MemoryManager::invalidateEcgRecordBinding"],
+    )
+    remove_duplicate_cpp_functions(
+        memory_manager,
+        "void\nMemoryManager::invalidateEcgRecordBinding()\n",
+        args.dry_run,
+    )
 
     replace_once(
         cache_header,
@@ -2848,9 +2997,18 @@ MemoryManager::serviceEcgRecord(bool drain, UInt64 start_cycle)
 \tecg_record::ApplyResult applyEcgRecordUpdate(
 \t\tconst ecg_record::CommitUpdate& update);
 \tbool canAdmitEcgRecordPrefetch(IntPtr addr, UInt64 sequence);
+\tvoid invalidateEcgRecordMetadataSet(UInt32 set_index);
 """,
         args.dry_run,
         ["applyEcgRecordUpdate("],
+    )
+    replace_once(
+        cache_header,
+        "\tbool canAdmitEcgRecordPrefetch(IntPtr addr, UInt64 sequence);\n",
+        "\tbool canAdmitEcgRecordPrefetch(IntPtr addr, UInt64 sequence);\n"
+        "\tvoid invalidateEcgRecordMetadataSet(UInt32 set_index);\n",
+        args.dry_run,
+        ["invalidateEcgRecordMetadataSet"],
     )
     replace_once(
         cache_source,
@@ -2894,6 +3052,17 @@ Cache::canAdmitEcgRecordPrefetch(IntPtr addr, UInt64 sequence)
 	return !set || set->canAdmitRecordPrefetch(sequence);
 }
 
+void
+Cache::invalidateEcgRecordMetadataSet(UInt32 set_index)
+{
+	LOG_ASSERT_ERROR(
+		set_index < m_num_sets,
+		"ECG metadata set walk exceeded cache geometry");
+	auto *set = dynamic_cast<CacheSetECG*>(m_sets[set_index]);
+	if (set)
+		set->invalidateRecordMetadata();
+}
+
 '''
     replace_once(
         cache_source,
@@ -2901,6 +3070,25 @@ Cache::canAdmitEcgRecordPrefetch(IntPtr addr, UInt64 sequence)
         cache_methods + "CacheBlockInfo *\nCache::accessSingleLine(",
         args.dry_run,
         ["Cache::applyEcgRecordUpdate"],
+    )
+    replace_once(
+        cache_source,
+        "CacheBlockInfo *\nCache::accessSingleLine(",
+        """void
+Cache::invalidateEcgRecordMetadataSet(UInt32 set_index)
+{
+\tLOG_ASSERT_ERROR(
+\t\tset_index < m_num_sets,
+\t\t"ECG metadata set walk exceeded cache geometry");
+\tauto *set = dynamic_cast<CacheSetECG*>(m_sets[set_index]);
+\tif (set)
+\t\tset->invalidateRecordMetadata();
+}
+
+CacheBlockInfo *
+Cache::accessSingleLine(""",
+        args.dry_run,
+        ["Cache::invalidateEcgRecordMetadataSet"],
     )
     replace_once(
         nuca_source,

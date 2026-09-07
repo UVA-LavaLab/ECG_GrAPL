@@ -1,6 +1,6 @@
 --- a/src/arch/riscv/regs/misc.hh
 +++ b/src/arch/riscv/regs/misc.hh
-@@ -204,6 +204,13 @@
+@@ -204,6 +204,14 @@
      MISCREG_ECG_CONTEXT,
      MISCREG_ECG_RECORD_FORMAT,
      MISCREG_ECG_REF32_BASE,
@@ -12,9 +12,10 @@
 +    MISCREG_ECG_RECORD_ITERATION_BASE,
 +    MISCREG_ECG_RECORD_CONTROL,
 +    MISCREG_ECG_RECORD_GENERATION,
++    MISCREG_ECG_RECORD_PROPERTY,
  
      // These registers are not in the standard, hence does not exist in the
-@@ -290,6 +297,13 @@
+@@ -290,6 +298,14 @@
      CSR_ECG_CONTEXT = 0x801,
      CSR_ECG_RECORD_FORMAT = 0x802,
      CSR_ECG_REF32_BASE = 0x803,
@@ -26,9 +27,10 @@
 +    CSR_ECG_RECORD_ITERATION_BASE = 0x809,
 +    CSR_ECG_RECORD_CONTROL = 0x80A,
 +    CSR_ECG_RECORD_GENERATION = 0x80B,
++    CSR_ECG_RECORD_PROPERTY = 0x80C,
  
      CSR_CYCLE = 0xC00,
-@@ -587,5 +601,26 @@
+@@ -587,5 +603,29 @@
      {CSR_ECG_REF32_CONFIG,
          {"ecg.ref32_config", MISCREG_ECG_REF32_CONFIG,
           rvTypeFlags(RV64), isaExtsFlags()}},
@@ -53,11 +55,14 @@
 +    {CSR_ECG_RECORD_GENERATION,
 +        {"ecg.record_generation", MISCREG_ECG_RECORD_GENERATION,
 +         rvTypeFlags(RV64), isaExtsFlags()}},
++    {CSR_ECG_RECORD_PROPERTY,
++        {"ecg.record_property", MISCREG_ECG_RECORD_PROPERTY,
++         rvTypeFlags(RV64), isaExtsFlags()}},
      {CSR_CYCLE,
          {"cycle", MISCREG_CYCLE, rvTypeFlags(RV64, RV32), isaExtsFlags()}},
 --- a/src/arch/riscv/isa.cc
 +++ b/src/arch/riscv/isa.cc
-@@ -206,5 +206,12 @@
+@@ -206,5 +206,13 @@
      [MISCREG_ECG_RECORD_FORMAT] = "ECG_RECORD_FORMAT",
      [MISCREG_ECG_REF32_BASE] = "ECG_REF32_BASE",
      [MISCREG_ECG_REF32_CONFIG] = "ECG_REF32_CONFIG",
@@ -68,5 +73,6 @@
 +    [MISCREG_ECG_RECORD_ITERATION_BASE] = "ECG_RECORD_ITERATION_BASE",
 +    [MISCREG_ECG_RECORD_CONTROL] = "ECG_RECORD_CONTROL",
 +    [MISCREG_ECG_RECORD_GENERATION] = "ECG_RECORD_GENERATION",
++    [MISCREG_ECG_RECORD_PROPERTY] = "ECG_RECORD_PROPERTY",
  
      [MISCREG_NMIVEC]        = "NMIVEC",

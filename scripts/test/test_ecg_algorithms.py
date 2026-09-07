@@ -205,3 +205,71 @@ def test_current_algorithm_rows_close_existing_runner_policy_roster(tmp_path):
     assert status == "ok", detail
     for row in json.loads((output / "roi_matrix.json").read_text()):
         assert row["l3_accesses"] == row["l3_hits"] + row["l3_misses"] > 0
+
+
+def test_detailed_algorithm_commands_bind_the_current_guest_and_geometry(tmp_path):
+    from scripts.experiments.ecg import algorithm_detailed, algorithm_matrix, roi_matrix
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    args = roi_matrix.parse_args([
+        "--suite", "gem5", "--current-algorithms", "--ecg-equivalence", "--benchmark", "sssp",
+        "--l3-sizes", "1kB", "2kB", "--ecg-record-bytes", "8",
+    ])
+    options = algorithm_matrix.parse_options("--graph /tmp/explicit.wsg --source 3 --delta 16")
+    values = algorithm_detailed.guest_options(
+        args, options, {"graph_loader_bytes_upper": 4096}, parse_policy_spec("ECG"),
+        roi_matrix.parse_size_bytes, "2kB", tmp_path / "result.json")
+    assert values[values.index("--algorithm") + 1] == "sssp"
+    assert values[values.index("--llc-bytes") + 1] == "2048"
+    assert values[values.index("--mode") + 1] == "replacement-prefetch"
+    assert values[values.index("--record-bytes") + 1] == "8"
+    assert "--evidence" in values and "--values" in values
+    assert roi_matrix.graph_path_from_options("--graph /tmp/explicit.wsg") == Path("/tmp/explicit.wsg")
+    assert "bench/src_gem5/algorithms.cc" in algorithm_matrix.source_paths("gem5")
+    assert "bench/src_sniper/algorithms.cc" in algorithm_matrix.source_paths("sniper")
+
+
+def test_rv64_sideband_publication_uses_supported_atomic_syscall(tmp_path):
+    source = tmp_path / "publish.cc"
+    source.write_text(r'''
+#include <cstdarg>
+#include <cstdlib>
+#include <cstdio>
+#include "ecg_algorithm_sideband.h"
+unsigned calls = 0;
+extern "C" long syscall(long number, ...) noexcept {
+    if (number != 38) std::abort();
+    va_list arguments;
+    va_start(arguments, number);
+    const int old_fd = va_arg(arguments, int);
+    const char* old_path = va_arg(arguments, const char*);
+    const int new_fd = va_arg(arguments, int);
+    const char* new_path = va_arg(arguments, const char*);
+    va_end(arguments);
+    if (old_fd != -100 || new_fd != -100) std::abort();
+    ++calls;
+    return std::rename(old_path, new_path);
+}
+int main(int argc, char** argv) {
+    if (argc != 2 || setenv("GEM5_GRAPHBREW_CTX", argv[1], 1)) return 2;
+    uint64_t offsets[] = {0, 1, 1};
+    int32_t columns[] = {1};
+    float values[] = {1, 2};
+    ecg_algorithm::AlgorithmSideband sideband("GEM5_GRAPHBREW_CTX");
+    sideband.graph({2, 1, true, offsets, columns, nullptr, 4, false});
+    sideband.region("x", values, 2, 4, true);
+    sideband.publish();
+    return calls == 1 ? 0 : 1;
+}
+''')
+    binary = tmp_path / "publish"
+    built = subprocess.run([
+        "g++", "-std=c++17", "-O2", "-fopenmp", "-D__riscv=1", "-D__riscv_xlen=64",
+        "-I", str(ROOT / "bench/include"), "-I", str(ROOT / "bench/include/external/gapbs"),
+        str(source), "-o", str(binary),
+    ], capture_output=True, text=True, timeout=60, check=False)
+    assert built.returncode == 0, built.stderr
+    output = tmp_path / "sideband.json"
+    ran = subprocess.run([str(binary), str(output)], timeout=10, check=False)
+    assert ran.returncode == 0, "RV64 publication must not invoke unsupported renameat2"
+    assert json.loads(output.read_text())["num_vertices"] == 2
+    assert not output.with_suffix(".json.new").exists()

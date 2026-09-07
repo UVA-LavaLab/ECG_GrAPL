@@ -787,6 +787,10 @@ bool GraphCacheContext::loadFromSideband(const std::string& path)
                 region.upper_bound = region.base_address + size;
                 region.num_elements = static_cast<uint32_t>(parseJsonUint(obj, "\"count\""));
                 region.elem_size = static_cast<uint32_t>(parseJsonUint(obj, "\"elem_size\""));
+                region.stride_bytes = static_cast<uint32_t>(
+                    parseJsonUint(obj, "\"stride\""));
+                if (region.stride_bytes == 0)
+                    region.stride_bytes = region.elem_size;
                 region.region_id = num_regions;
                 region.grasp_region = obj.find("\"grasp\"") == std::string::npos ||
                     parseJsonBool(obj, "\"grasp\"");

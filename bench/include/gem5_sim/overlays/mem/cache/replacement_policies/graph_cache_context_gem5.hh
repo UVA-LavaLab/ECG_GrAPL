@@ -588,6 +588,7 @@ struct PropertyRegion {
     uint64_t upper_bound = 0;
     uint32_t num_elements = 0;
     uint32_t elem_size = 0;
+    uint32_t stride_bytes = 0;
     uint32_t region_id = 0;
     uint32_t num_buckets = 0;
     bool grasp_region = true;
@@ -1128,6 +1129,11 @@ struct GraphCacheContext {
                         parseJsonUint(obj, "\"count\""));
                     regions[num_regions].elem_size = static_cast<uint32_t>(
                         parseJsonUint(obj, "\"elem_size\""));
+                    regions[num_regions].stride_bytes = static_cast<uint32_t>(
+                        parseJsonUint(obj, "\"stride\""));
+                    if (regions[num_regions].stride_bytes == 0)
+                        regions[num_regions].stride_bytes =
+                            regions[num_regions].elem_size;
                     regions[num_regions].region_id = num_regions;
                     regions[num_regions].grasp_region =
                         obj.find("\"grasp\"") == std::string::npos || parseJsonBool(obj, "\"grasp\"");

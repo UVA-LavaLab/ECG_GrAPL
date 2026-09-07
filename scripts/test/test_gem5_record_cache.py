@@ -37,6 +37,28 @@ def test_layered_patch_receipt_requires_exact_material_inputs(tmp_path, monkeypa
     assert not setup_gem5.patch_receipt_matches(patch, "layer.patch", receipt)
 
 
+def test_completed_rebind_invalidates_cached_sideband(tmp_path):
+    policy = (OVERLAYS / "mem/cache/replacement_policies/graph_ecg_record_rp.cc").read_text()
+    body = policy.split("GraphEcgRecordRP::finishEcgRecordInvalidation()\n{", 1)[1].split("\n}", 1)[0]
+    source = tmp_path / "rebind.cc"
+    source.write_text(
+        '#include "ecg_record_native.h"\n#include "ecg_record_runtime.h"\n'
+        'int main() {\n'
+        '  ecg_record::Receiver receiver;\n'
+        '  ecg_record::NativeConfiguration configuration;\n'
+        '  ecg_record::PropertyDescriptor propertyDescriptor;\n'
+        '  struct { bool loaded = true; } context;\n' +
+        body + '\n  return context.loaded ? 1 : 0;\n}\n')
+    binary = tmp_path / "rebind"
+    built = subprocess.run([
+        "g++", "-std=c++17", "-O2", "-I", str(ROOT / "bench/include"),
+        str(source), "-o", str(binary),
+    ], capture_output=True, text=True, timeout=60, check=False)
+    assert built.returncode == 0, built.stderr
+    ran = subprocess.run([str(binary)], timeout=10, check=False)
+    assert ran.returncode == 0, "completed invalidation must reload a new carrier/property sideband"
+
+
 @pytest.mark.parametrize("goals,expected", [
     ("gem5-riscv-m5ops-pr", ["pr"]),
     ("bin/record_isa_smoke_riscv_m5ops", ["record_isa_smoke"]),
@@ -147,6 +169,21 @@ def test_l3_geometry_preserves_24_mib_and_sixteen_ways(monkeypatch):
     assert cache.tags.indexing_policy.entry_size == 64
 
 
+def test_native_grasp_uses_the_declared_paper_fraction(monkeypatch):
+    path = CONFIG.with_name("graph_cache_config.py")
+    function = next(node for node in ast.parse(path.read_text()).body
+                    if isinstance(node, ast.FunctionDef) and node.name == "make_replacement_policy")
+    namespace = {"os": os, "POLICY_MAP": {},
+                 "GraphGraspRP": lambda **kwargs: SimpleNamespace(**kwargs)}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), str(path), "exec"), namespace)
+    monkeypatch.setenv("GRASP_HOT_FRACTION", "0.50")
+    assert namespace["make_replacement_policy"]("GRASP").hot_fraction == 0.50
+    assert namespace["make_replacement_policy"]("GRASP", hot_fraction=0.25).hot_fraction == 0.25
+    monkeypatch.setenv("GRASP_HOT_FRACTION", "nan")
+    with pytest.raises(ValueError):
+        namespace["make_replacement_policy"]("GRASP")
+
+
 def test_current_matrix_forwards_private_cache_associativity(monkeypatch, tmp_path):
     from scripts.experiments.ecg import roi_matrix
 
@@ -243,6 +280,46 @@ def test_record_update_and_prefetch_paths_do_not_touch_recency():
     assert "selectWindowTarget(" in source and "req->hasVaddr()" in source
     assert "l1->inCache" in source and "l2->inCache" in source and "llc->inCache" in source
     assert "reserveLookup()" in source and "progressLimit" in source
+
+
+def test_managed_record_transport_has_paid_filtered_lifecycle():
+    transport_hh = (
+        OVERLAYS /
+        "mem/cache/replacement_policies/ecg_record_transport.hh").read_text()
+    transport_cc = (
+        OVERLAYS /
+        "mem/cache/replacement_policies/ecg_record_transport.cc").read_text()
+    policy_hh = (
+        OVERLAYS /
+        "mem/cache/replacement_policies/graph_ecg_record_rp.hh").read_text()
+    policy_cc = (
+        OVERLAYS /
+        "mem/cache/replacement_policies/graph_ecg_record_rp.cc").read_text()
+    cache_patch = (OVERLAYS / "mem/cache/ecg_record_cache.patch").read_text()
+
+    assert "ecg_record::PassCursor" in transport_hh
+    assert "configuration.control &" in transport_cc
+    assert "ecg_record::kNativeManagedPasses" in transport_cc
+    for marker in (
+            "passClose(", "invalidateBinding(", "ordinaryAccess(",
+            "ordinaryInvalidations", "invalidationCycles", "rebinds"):
+        assert marker in transport_hh + transport_cc
+    assert "property_descriptor" in transport_cc
+    assert "load.property_bytes" in transport_cc
+    assert "invalidateEcgRecordMetadata" in policy_hh + policy_cc
+    assert "advanceEcgRecordProgress" in policy_hh + policy_cc + cache_patch
+    assert "receiver.invalidateObservation" in policy_cc
+    assert "intervening memory operation" not in transport_cc
+    smoke = (ROOT / "bench/src_gem5/record_isa_smoke.cc").read_text()
+    assert "intervening_memory=1" in smoke
+    assert smoke.index("intervening_memory = unrelated ^ raw") < smoke.index(
+        "context.property(property_base, raw, address)")
+    harness = (ROOT / "bench/include/gem5_sim/gem5_harness.h").read_text()
+    context = (
+        OVERLAYS /
+        "mem/cache/replacement_policies/graph_cache_context_gem5.hh").read_text()
+    assert '\\"stride\\": %u' in harness
+    assert 'parseJsonUint(obj, "\\"stride\\"")' in context
 
 
 def native_ready():

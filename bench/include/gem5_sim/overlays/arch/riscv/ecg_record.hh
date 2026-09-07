@@ -34,6 +34,8 @@ readEcgRecordConfiguration(ExecutionContext* context)
         context->readMiscReg(MISCREG_ECG_CONTEXT);
     configuration.control =
         context->readMiscReg(MISCREG_ECG_RECORD_CONTROL);
+    configuration.property_descriptor =
+        context->readMiscReg(MISCREG_ECG_RECORD_PROPERTY);
     return configuration;
 }
 

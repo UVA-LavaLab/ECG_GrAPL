@@ -22,6 +22,13 @@ struct Counters {
     uint64_t loaded_values = 0;
     uint64_t consumed_records = 0;
     uint64_t property_accesses = 0;
+    uint64_t passes = 0;
+    uint64_t structural_positions = 0;
+    uint64_t skipped_positions = 0;
+    uint64_t ordinary_invalidations = 0;
+    uint64_t rebinds = 0;
+    uint64_t invalidation_sets = 0;
+    uint64_t invalidation_cycles = 0;
     uint64_t observations = 0;
     uint64_t generated_updates = 0;
     uint64_t enqueued_updates = 0;
@@ -82,6 +89,12 @@ struct PrefetchRequest {
     bool valid = false;
 };
 
+enum class MemoryAccessKind : uint8_t {
+    NONE,
+    DESIGNATED,
+    ORDINARY,
+};
+
 class Runtime {
   public:
     Runtime() = default;
@@ -91,10 +104,13 @@ class Runtime {
         ecg_record::Mechanism mechanism,
         uint64_t update_latency, std::size_t capture_width,
         std::size_t prefetch_capacity, uint64_t prefetch_latency,
-        uint64_t vertices_per_line);
+        uint64_t line_bytes);
 
     ecg_record::Status updateIteration(
-        uint64_t iteration_base, bool has_next);
+        uint64_t iteration_base, bool has_next, bool managed = false);
+    ecg_record::Status closePass();
+    ecg_record::Status invalidateBinding(
+        uint64_t sets, uint64_t cycles);
     ecg_record::Status deactivate();
     bool active() const { return active_; }
     ecg_record::Mechanism mechanism() const { return mechanism_; }
@@ -104,9 +120,7 @@ class Runtime {
     }
     bool propertyLine(uint64_t virtual_address) const {
         return active_ &&
-            virtual_address / 64 >= configuration_.property_base / 64 &&
-            virtual_address / 64 <=
-                (configuration_.property_base + configuration_.vertex_count * 4 - 1) / 64;
+            ecg_record::nativePropertyLine(configuration_, virtual_address);
     }
     uint64_t completedSequence() const { return completed_sequence_; }
     const Counters& counters() const { return counters_; }
@@ -124,7 +138,12 @@ class Runtime {
     bool beginPropertyAccess(
         uint64_t virtual_address, uint64_t physical_line,
         uint32_t bytes, uint64_t cycle);
+    MemoryAccessKind beginMemoryAccess(
+        uint64_t virtual_address, uint64_t physical_line,
+        uint32_t bytes, bool read, uint64_t cycle);
     ecg_record::Status completePropertyAccess(uint64_t cycle);
+    ecg_record::Status completeMemoryAccess(
+        MemoryAccessKind kind, uint64_t cycle);
 
     bool activeObservation(
         uint64_t physical_line, Observation& observation) const;
@@ -132,6 +151,8 @@ class Runtime {
     void noteDeadDemandBypass();
     ecg_record::ObservationResult observeLine(
         ecg_record::LineMetadata& metadata);
+    ecg_record::ObservationResult observeOrdinaryLine(
+        uint64_t physical_line, ecg_record::LineMetadata& metadata);
 
     ecg_record::PopResult popReadyUpdate(uint64_t cycle);
     ecg_record::ApplyResult applyUpdate(
@@ -167,6 +188,12 @@ class Runtime {
     std::size_t prefetchPending() const { return prefetch_queue_.size(); }
     bool watermarkValid() const { return receiver_.watermarkValid(); }
     uint64_t watermark() const { return receiver_.watermark(); }
+    ecg_record::State victimState(
+        const ecg_record::LineMetadata& metadata,
+        bool enabled) const {
+        return ecg_record::victimState(
+            metadata, receiver_, enabled);
+    }
     bool clean() const;
 
   private:
@@ -180,6 +207,7 @@ class Runtime {
 
     struct PendingProperty {
         ecg_record::NativeLoadResult load;
+        uint64_t prior_sequence = 0;
         uint64_t physical_line = 0;
         uint64_t begin_cycle = 0;
         uint64_t prefetch_vaddr = 0;
@@ -194,6 +222,14 @@ class Runtime {
         uint64_t ready_cycle = 0;
     };
 
+    struct PendingOrdinary {
+        uint64_t physical_line = 0;
+        uint64_t property_vaddr = 0;
+        uint64_t sequence = 0;
+        uint64_t begin_cycle = 0;
+        bool valid = false;
+    };
+
     ecg_record::Status fail(ecg_record::Status status);
     BankEntry* findBank(uint64_t address);
     const BankEntry* findBank(uint64_t address) const;
@@ -205,16 +241,21 @@ class Runtime {
         PendingProperty& property, uint64_t cycle);
     ecg_record::Status enqueuePrefetch(
         const PendingProperty& property, uint64_t cycle);
+    ecg_record::Status enqueueUpdate(
+        const ecg_record::CommitUpdate& update, uint64_t cycle);
     bool replacementActive() const;
     bool prefetchActive() const;
 
     ecg_record::NativeConfiguration configuration_;
     ecg_record::Layout layout_;
+    ecg_record::PropertyDescriptor property_descriptor_;
+    ecg_record::PassCursor pass_cursor_;
     ecg_record::Mechanism mechanism_ = ecg_record::Mechanism::INVALID;
     std::unique_ptr<ecg_record::CommitQueue> update_queue_;
     ecg_record::Receiver receiver_;
     std::array<BankEntry, kBankEntries> bank_{};
     PendingProperty pending_property_;
+    PendingOrdinary pending_ordinary_;
     std::deque<PendingPrefetch> prefetch_queue_;
     Counters counters_;
 
@@ -227,17 +268,19 @@ class Runtime {
     uint64_t expected_iteration_base_ = 0;
     uint64_t iteration_consumed_count_ = 0;
     uint64_t last_prefetch_output_cycle_ = 0;
+    uint64_t event_order_ = 0;
     uint32_t armed_read_bytes_ = 0;
     uint8_t loaded_chunks_ = 0;
     std::size_t next_bank_slot_ = 0;
     std::size_t prefetch_capacity_ = 0;
     uint64_t prefetch_latency_ = 0;
-    uint64_t vertices_per_line_ = 0;
     uint64_t line_bytes_ = 0;
     bool read_observed_ = false;
     bool have_last_consumed_ = false;
     bool prefetch_output_seen_ = false;
     bool iteration_configured_ = false;
+    bool managed_ = false;
+    bool invalidated_ = false;
     bool active_ = false;
 };
 

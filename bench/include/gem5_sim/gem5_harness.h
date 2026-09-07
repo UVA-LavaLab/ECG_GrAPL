@@ -33,6 +33,7 @@
 
 #include "ecg_ref32.h"
 #include "ecg_record_native.h"
+#include "ecg_record_stream.h"
 #include <type_traits>
 #include "ecg_reuse_plan_builder.h"
 #include <string>
@@ -1292,6 +1293,264 @@ class Gem5RecordContext {
     ecg_record::Layout layout_;
 };
 
+class Gem5ManagedRecordContext {
+  public:
+    static constexpr bool models_memory = false;
+
+    Gem5ManagedRecordContext() = default;
+
+    void bind(
+            ecg_record::NativeConfiguration configuration,
+            const ecg_record::RecordStream& stream) {
+        configuration.control = ecg_record::kNativeEnable |
+            ecg_record::kNativeManagedPasses;
+        configuration.iteration_base = 0;
+        ecg_record::Layout layout;
+        ecg_record::PropertyDescriptor property;
+        if (ecg_record::validateNativeConfiguration(configuration, layout) !=
+                ecg_record::Status::OK ||
+            ecg_record::unpackProperty(
+                configuration.property_descriptor, property) !=
+                ecg_record::Status::OK ||
+            configuration.record_base !=
+                reinterpret_cast<uint64_t>(stream.data()) ||
+            configuration.record_count != stream.size() ||
+            !(layout == stream.layout)) {
+            throw std::invalid_argument(
+                "Invalid managed ECG record binding");
+        }
+        if (bound_) {
+            uint64_t next_generation = 0;
+            if (cursor_.open())
+                throw std::logic_error(
+                    "Cannot rebind an open ECG record pass");
+            if (!ecg_record::checkedAdd(
+                    configuration_.generation, 1, next_generation) ||
+                configuration.generation != next_generation)
+                throw std::invalid_argument(
+                    "ECG record rebind generation is not consecutive");
+            drain();
+            invalidate();
+            drain();
+            accumulated_passes_ += cursor_.passes();
+            accumulated_consumed_ += cursor_.consumed();
+            accumulated_skipped_ += cursor_.skipped();
+        }
+        configuration_ = configuration;
+        layout_ = layout;
+        property_ = property;
+        stream_ = &stream;
+        cursor_ = ecg_record::PassCursor{};
+        if (cursor_.configure(
+                configuration.record_count, property.traversal) !=
+                ecg_record::Status::OK)
+            throw std::invalid_argument("Cannot configure managed ECG pass cursor");
+        writeConfiguration();
+        bound_ = true;
+    }
+
+    void beginPass(bool has_next = false) {
+        if (!bound_ || cursor_.begin() != ecg_record::Status::OK)
+            throw std::logic_error("Cannot begin managed ECG pass");
+        configuration_.iteration_base = cursor_.base();
+        configuration_.control = ecg_record::kNativeEnable |
+            ecg_record::kNativeManagedPasses |
+            (has_next ? ecg_record::kNativeHasNext : 0);
+        writeConfiguration();
+    }
+
+    void closePass() {
+        if (!bound_ || !cursor_.open())
+            throw std::logic_error("No managed ECG pass is open");
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        asm volatile(
+            ".insn r 0x2b, 0x4, 0x0, zero, zero, zero" ::: "memory");
+#endif
+        if (cursor_.close() != ecg_record::Status::OK)
+            throw std::logic_error("Managed ECG pass close failed");
+    }
+
+    void drain() const {
+        drainTransport();
+    }
+
+    uint64_t loadRecord(uint64_t index) const {
+        if (!bound_ || !cursor_.open() ||
+            index >= configuration_.record_count)
+            throw std::out_of_range("Managed ECG record index");
+        const uint8_t* bytes = stream_->data() +
+            index * layout_.record_bytes;
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        uint64_t value = 0;
+        if (layout_.record_bytes == 4) {
+            asm volatile(
+                ".insn r 0x2b, 0x0, 0x00, %0, %1, zero"
+                : "=r"(value) : "r"(bytes) : "memory");
+        } else {
+            asm volatile(
+                ".insn r 0x2b, 0x0, 0x01, %0, %1, zero"
+                : "=r"(value) : "r"(bytes) : "memory");
+        }
+        return value;
+#else
+        ecg_record::NativeRecordAccess access;
+        if (ecg_record::nativeRecordAccess(
+                configuration_, reinterpret_cast<uint64_t>(bytes),
+                layout_.record_bytes, access) != ecg_record::Status::OK ||
+            access.index != index)
+            throw std::invalid_argument(
+                "Invalid managed ECG record address");
+        const uint64_t value = layout_.record_bytes == 4
+            ? *reinterpret_cast<const uint32_t*>(bytes)
+            : *reinterpret_cast<const uint64_t*>(bytes);
+        ecg_record::NativeLoadResult result;
+        if (ecg_record::nativeRecordResult(
+                configuration_, reinterpret_cast<uint64_t>(bytes),
+                value, result) != ecg_record::Status::OK)
+            throw std::invalid_argument(
+                "Invalid managed ECG record word");
+        return value;
+#endif
+    }
+
+    template<typename T>
+    T loadProperty(
+            uint64_t index, uint64_t raw_word, const T* base) {
+        constexpr bool f32 = std::is_same<T, float>::value;
+        constexpr bool u32 = std::is_same<T, uint32_t>::value;
+        constexpr bool u64 = std::is_same<T, uint64_t>::value;
+        static_assert(f32 || u32 || u64,
+            "Managed ECG properties are F32, U32, or U64");
+        const ecg_record::PropertyKind expected =
+            f32 ? ecg_record::PropertyKind::F32 :
+            u32 ? ecg_record::PropertyKind::U32 :
+                  ecg_record::PropertyKind::U64;
+        if (!bound_ || !cursor_.open() ||
+            property_.kind != expected ||
+            reinterpret_cast<uint64_t>(base) != configuration_.property_base ||
+            cursor_.consume(index) != ecg_record::Status::OK)
+            throw std::invalid_argument("Invalid managed ECG property load");
+        const void* record_address =
+            stream_->data() + index * layout_.record_bytes;
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        if constexpr (f32) {
+            float result;
+            asm volatile(
+                ".insn r4 0x2b, 0x1, 0x0, %0, %1, %2, %3"
+                : "=f"(result)
+                : "r"(base), "r"(raw_word), "r"(record_address)
+                : "memory");
+            return result;
+        } else if constexpr (u32) {
+            uint64_t result;
+            asm volatile(
+                ".insn r4 0x2b, 0x1, 0x1, %0, %1, %2, %3"
+                : "=r"(result)
+                : "r"(base), "r"(raw_word), "r"(record_address)
+                : "memory");
+            return static_cast<uint32_t>(result);
+        } else {
+            uint64_t result;
+            asm volatile(
+                ".insn r4 0x2b, 0x1, 0x2, %0, %1, %2, %3"
+                : "=r"(result)
+                : "r"(base), "r"(raw_word), "r"(record_address)
+                : "memory");
+            return result;
+        }
+#else
+        ecg_record::NativeLoadResult result;
+        if (ecg_record::nativePropertyAccess(
+                configuration_, reinterpret_cast<uint64_t>(base),
+                raw_word, reinterpret_cast<uint64_t>(record_address),
+                result) != ecg_record::Status::OK)
+            throw std::invalid_argument(
+                "Invalid managed ECG property operands");
+        return *reinterpret_cast<const T*>(result.property_address);
+#endif
+    }
+
+    void finish() {
+        if (!bound_)
+            return;
+        if (cursor_.open())
+            throw std::logic_error("Cannot finish an open ECG record pass");
+        drain();
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        asm volatile("csrw 0x80a, zero" ::: "memory");
+        gem5_ecg_write_context_csr(0);
+#endif
+        bound_ = false;
+    }
+
+    void finish(uint64_t actual_records) {
+        if (consumed() != actual_records)
+            throw std::logic_error(
+                "Managed ECG actual-record count disagrees with transport");
+        finish();
+    }
+
+    uint64_t passes() const {
+        return accumulated_passes_ + cursor_.passes();
+    }
+    uint64_t consumed() const {
+        return accumulated_consumed_ + cursor_.consumed();
+    }
+    uint64_t skipped() const {
+        return accumulated_skipped_ + cursor_.skipped();
+    }
+
+  private:
+    void writeConfiguration() const {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        asm volatile("csrw 0x803, %0" :: "r"(configuration_.record_base) : "memory");
+        asm volatile("csrw 0x805, %0" :: "r"(configuration_.layout_descriptor) : "memory");
+        asm volatile("csrw 0x806, %0" :: "r"(configuration_.record_count) : "memory");
+        asm volatile("csrw 0x807, %0" :: "r"(configuration_.vertex_count) : "memory");
+        asm volatile("csrw 0x808, %0" :: "r"(configuration_.property_base) : "memory");
+        asm volatile("csrw 0x809, %0" :: "r"(configuration_.iteration_base) : "memory");
+        asm volatile("csrw 0x80a, %0" :: "r"(configuration_.control) : "memory");
+        asm volatile("csrw 0x80b, %0" :: "r"(configuration_.generation) : "memory");
+        asm volatile("csrw 0x80c, %0" :: "r"(configuration_.property_descriptor) : "memory");
+        gem5_ecg_write_context_csr(configuration_.context);
+        asm volatile(
+            ".insn r 0x2b, 0x2, 0x0, zero, zero, zero" ::: "memory");
+#endif
+    }
+
+    static void drainTransport() {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        for (uint64_t attempt = 0; attempt < 1000000; ++attempt) {
+            uint64_t pending;
+            asm volatile(
+                ".insn r 0x2b, 0x3, 0x0, %0, zero, zero"
+                : "=r"(pending) :: "memory");
+            if (pending == 0)
+                return;
+        }
+        throw std::runtime_error(
+            "Managed ECG transport did not drain within its poll bound");
+#endif
+    }
+
+    static void invalidate() {
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(NO_M5OPS)
+        asm volatile(
+            ".insn r 0x2b, 0x5, 0x0, zero, zero, zero" ::: "memory");
+#endif
+    }
+
+    ecg_record::NativeConfiguration configuration_;
+    ecg_record::Layout layout_;
+    ecg_record::PropertyDescriptor property_;
+    const ecg_record::RecordStream* stream_ = nullptr;
+    ecg_record::PassCursor cursor_;
+    uint64_t accumulated_passes_ = 0;
+    uint64_t accumulated_consumed_ = 0;
+    uint64_t accumulated_skipped_ = 0;
+    bool bound_ = false;
+};
+
 class Gem5Ref32Context {
   public:
     Gem5Ref32Context(const uint32_t* record_base, uint64_t config,
@@ -1525,6 +1784,7 @@ struct Gem5PropertyRegion {
     uint32_t num_elements;
     uint32_t elem_size;
     bool grasp_region = true;
+    uint32_t stride_bytes = 0;
 };
 
 struct Gem5EdgeRegion {
@@ -1764,12 +2024,15 @@ inline void gem5_export_context(
     fprintf(f, "  \"property_regions\": [\n");
     for (int i = 0; i < num_regions; i++) {
         fprintf(f, "    {\"name\": \"%s\", \"base\": %lu, \"size\": %lu, "
-            "\"count\": %u, \"elem_size\": %u, \"grasp\": %s}%s\n",
+            "\"count\": %u, \"elem_size\": %u, \"stride\": %u, "
+            "\"grasp\": %s}%s\n",
                 regions[i].name,
                 (unsigned long)regions[i].base_address,
                 (unsigned long)regions[i].size_bytes,
                 regions[i].num_elements,
                 regions[i].elem_size,
+            regions[i].stride_bytes
+                ? regions[i].stride_bytes : regions[i].elem_size,
             regions[i].grasp_region ? "true" : "false",
                 (i < num_regions - 1) ? "," : "");
     }
