@@ -731,3 +731,12 @@ cache/traffic claims. The current native mechanisms have separate qualification
 receipts, but the final paper campaign is not complete. Energy and silicon-area
 claims require separate physical implementation and qualification; failed or
 infeasible diagnostics are never promoted into results.
+
+Passing the admitted workload and protocol gates is not a proof of bug
+freedom outside their scope. Novelty claims must identify the contribution
+beyond the authors' ECG 2024 predecessor and the closest published comparators,
+not claim that graph-guided caching itself is new.
+Current logical bit counts and a functioning simulator also do not establish
+low hardware area, energy, or critical-path overhead; those claims require
+current-design physical evidence, including the assumed ports and queue
+saturation behavior.

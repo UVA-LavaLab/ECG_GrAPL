@@ -167,6 +167,24 @@ port logic. At 8 MiB it is 8,781,824 bits (1,097,728 bytes); at 24 MiB it is
 26,345,472 bits (3,293,184 bytes). These are payload counts, not complete
 silicon-area results.
 
+For a 64-byte data line, `67 / 512 = 13.1%`: even the prediction payload is
+not zero-cost. This ratio is relative to data bits, not total cache or CPU
+area. Physical "low overhead" remains an open measurement claim.
+
+| Current requirement | Hardware evidence still needed |
+|---|---|
+| 67-bit resident prediction plus binding/classification state | Map `RecordReplData` and VA/PA identity checks to baseline tags versus genuinely additional state; do not treat a C++ object size as an SRAM implementation. |
+| PropertyF32's three integer source operands | Establish RF/forwarding/AGU integration and its port, latency, and energy cost. |
+| Dedicated update tag access and three prefetch presence-check ports | Account for ports, arbitration, or duplicated tag structures. `normal_tag_contention=0` is an explicit modeled resource assumption, not evidence that the resource is free. |
+| Sixteen update slots, bounded prefetch queues, and two/three record banks | Include tags, valid/control state and routing, not only record-bank data bytes. A real design must define saturation/backpressure behavior; the current native observer rejects required-update overflow instead of modeling a commit stall. |
+| Current decoder, replacement, transport and prefetch logic | Provide current-design RTL/synthesis and activity-based energy estimates. The retained 49-bit ReusePlan/ECC studies do not characterize this 67-bit design. |
+
+Masks, shifts, address arithmetic, comparisons, FIFOs and SRAMs make a bounded
+implementation plausible. They do not establish frequency, power, or total
+area. Configuration-time validation and simulation bookkeeping must be
+distinguished from per-access hardware, and any simplification must preserve
+the checked request/lifetime contract.
+
 The native path has passed focused raw4/raw8 checks for transport, replacement,
 prefetch, and replacement-prefetch, plus Patents at exact 24 MiB/16 ways and
 an Orkut wide-record pressure case with matching work/checksums and closed

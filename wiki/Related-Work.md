@@ -51,6 +51,12 @@ analysis communicating low-value or last accesses to hardware. Here the
 source of knowledge is the graph plus traversal, and the native path preserves
 the hint's association with the specific load through rename and retirement.
 
+Vijaykumar et al., **"A Case for Richer Cross-Layer Abstractions: Bridging the
+Semantic Gap with Expressive Memory,"** ISCA 2018
+([DOI](https://doi.org/10.1109/ISCA.2018.00027)), supplies broader precedent
+for communicating software semantics to the memory system. A cross-layer
+hint interface alone is therefore not the contribution claimed here.
+
 ## Position of the current implementation
 
 The mechanism has four connected parts: derive property-line reuse from a
@@ -64,3 +70,41 @@ native mechanisms are implemented; Sniper has strict current-path admission
 but remains modeled corroboration. Historical Twitter comparisons preserve
 their original fixed-format labels and P-OPT controls. Neither those results
 nor current logical bit counts establish final campaign or silicon-area claims.
+
+### Contribution boundary relative to published work
+
+This is a successor to the authors' **ECG 2024**, not a claim to have invented
+edge-carried graph metadata from scratch. The current repository is this
+work's artifact, not independent evidence of a competing design.
+
+The closest published overlap is concrete:
+
+| Published source | Already established | Distinction that the current work must substantiate |
+|---|---|---|
+| [ECG 2024, pp. 520-521, Sections III.A-B](https://www.cs.virginia.edu/~rgq5aw/files/ecg.pdf) | Spare vertex-ID bits can carry GRASP/P-OPT/prefetch information, consumed through a specialized graph-addressing path. | The new line-next-use semantics, graph-derived joint state/distance code, actual raw-record/property association, and bounded update/prefetch protocol must add more than renamed fields or implementation detail. |
+| [P-OPT, Sections III-V](https://users.ece.cmu.edu/~vigneshb/papers/POPT_HPCA21_CameraReady.pdf) | Graph-transpose-derived future references, epoch quantization, a rereference matrix, and current/next columns in reserved LLC ways. | Per-record reference position and delivery through the consumed edge replace a separate runtime matrix; matched-capacity and costed controls must separate prediction quality from capacity and traffic advantages. |
+| [GRASP, HPCA 2020](https://ease-lab.github.io/ease_website/pubs/GRASP_HPCA20.pdf) | Lightweight graph/software guidance and preferential cache treatment for hot vertices. | Current next-line-reference annotations are not merely another hot/cold region hint. |
+| [Basak et al., HPCA 2019 / DROPLET](https://doi.org/10.1109/HPCA.2019.00051) ([author slides](https://abasak24.github.io/slides/hpca2019_droplet.pdf)) | Fetched graph structure can drive decoupled indirect-property prefetching. | The reuse-ranked bounded window, actual-byte readiness, LLC-only allocation and accounting must explain a meaningful difference beyond structure-triggered prefetching alone. |
+
+A candidate contribution statement is:
+
+> Building on ECG 2024, the current mechanism defines a graph-adaptive
+> property-line reuse annotation in each consumed edge record, binds it to the
+> actual dependent property load, applies resident prediction updates after
+> retirement without refreshing ordinary recency, and reuses the fetched
+> record stream for bounded, reuse-guided LLC lookahead.
+
+The reviewed peer-reviewed sources did not establish this exact combination
+as a single mechanism. That is a bounded literature finding, **not** a
+guarantee that no related work exists. Offline next-use prediction,
+quantization, software hints, resident reuse metadata and structure-driven
+prefetching are not individually new.
+
+The paper must connect the distinction to evidence: comparison with the
+published ECG predecessor, replacement/prefetch ablations, equal-data-capacity
+P-OPT controls, approximation/record-width sensitivity, and full hardware
+state/port/latency costs. The archived Twitter controls and the current
+reproduction are relevant to attribution, but historical results must not be
+relabeled as the current implementation. See the
+[hardware evidence boundary](RISC-V-Instruction-Path#5-state-and-evidence-boundaries)
+before describing the design as low-overhead hardware.
