@@ -8,6 +8,7 @@ namespace cache_sim {
 
 class AlgorithmBackend {
   public:
+    static constexpr bool models_memory = true;
     AlgorithmBackend(CacheHierarchy& cache, const ecg_algorithm::Options& options,
                      uint64_t llc_bytes = 8 * 1024 * 1024, bool grasp_paper = false)
         : cache_(cache), options_(options), llc_bytes_(llc_bytes), grasp_paper_(grasp_paper) {}

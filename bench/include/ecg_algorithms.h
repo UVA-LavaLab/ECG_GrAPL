@@ -77,7 +77,7 @@ struct Result {
     uint64_t source_list_digest = 0;
     uint64_t maximum_encoded_id = 0;
     ecg_record::Layout layout;
-    bool weighted = false, records = false, evidence = false;
+    bool weighted = false, records = false, evidence = false, memory_counts_measured = false;
     std::vector<uint32_t> values_u32;
     std::vector<uint64_t> values_u64;
     std::vector<float> values_f32;
@@ -145,6 +145,7 @@ struct GraphView {
 
 class PlainBackend {
   public:
+    static constexpr bool models_memory = false;
     void start(const GraphView&) {}
     void memory(const void*, uint64_t, bool) {}
     void region(const char*, const void*, uint64_t, uint8_t, bool) {}
@@ -272,6 +273,7 @@ class Engine {
         result.weighted = graph.weights != nullptr;
         result.records = options.records;
         result.evidence = options.evidence;
+        result.memory_counts_measured = options.evidence || Backend::models_memory;
         backend_.start(graph);
     }
     const Options& options;
@@ -293,6 +295,8 @@ class Engine {
                uint64_t token = 0, uint64_t index = 0, bool trace = true, bool model = true) {
         if (model)
             backend_.memory(address, bytes, write);
+        if (!result.memory_counts_measured)
+            return;
         switch (kind) {
           case MemoryKind::INDEX: ++result.csr_index_reads; break;
           case MemoryKind::EDGE: ++result.edge_reads; break;
@@ -410,6 +414,7 @@ class Engine {
             carriers_.push_back(std::move(prepared));
         }
         stream_ = &carrier->stream;
+        id_mask_ = ecg_record::lowMask(stream_->layout.id_bits);
         ecg_record::NativeConfiguration configuration;
         ecg_record::packLayout(stream_->layout, configuration.layout_descriptor);
         ecg_record::packProperty(property_, configuration.property_descriptor);
@@ -446,11 +451,10 @@ class Engine {
         uint32_t destination;
         if (options.records) {
             word = backend_.recordLoad(index);
-            ecg_record::DecodedRecord decoded;
-            if (ecg_record::decodeRecord(stream_->layout, word, decoded) != ecg_record::Status::OK ||
-                decoded.destination >= property.size())
+            const uint64_t id = word & id_mask_;
+            if (id >= property.size())
                 throw std::logic_error("invalid-actual-record");
-            destination = static_cast<uint32_t>(decoded.destination);
+            destination = static_cast<uint32_t>(id);
         } else {
             destination = graph_.id(*this, index, MemoryKind::EDGE, false);
         }
@@ -464,7 +468,8 @@ class Engine {
         }
         touch(property.data() + destination, sizeof(T), false, MemoryKind::PROPERTY,
             property.token(), destination, true, !options.records);
-        --result.ordinary_property_reads;
+        if (result.memory_counts_measured)
+            --result.ordinary_property_reads;
         const T value = options.records
             ? backend_.template property<T>(index, word, property.data()) : property.data()[destination];
         ++result.actual_records;
@@ -527,7 +532,7 @@ class Engine {
     const ecg_record::RecordStream* stream_ = nullptr;
     std::vector<std::unique_ptr<Carrier>> carriers_;
     ecg_record::StreamDigest work_, positions_;
-    uint64_t workspace_ = 0, next_token_ = 3, pass_records_ = 0;
+    uint64_t workspace_ = 0, next_token_ = 3, pass_records_ = 0, id_mask_ = 0;
     bool pass_open_ = false;
 };
 

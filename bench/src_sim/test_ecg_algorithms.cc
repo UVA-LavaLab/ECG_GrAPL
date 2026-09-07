@@ -97,6 +97,10 @@ struct RejectRegionBackend : ecg_algorithm::PlainBackend {
     }
 };
 
+struct CorruptRecordBackend : ecg_algorithm::PlainBackend {
+    uint64_t recordLoad(uint64_t) { return UINT32_MAX; }
+};
+
 } // namespace
 
 int main() {
@@ -199,6 +203,22 @@ int main() {
               repeated.bindings == 4 && repeated.reached == 12 &&
               repeated.carrier_bytes == repeated.carrier_records * repeated.layout.record_bytes,
               "BC charges explicit source traversal and reuses one immutable compatible carrier");
+        check(!repeated.memory_counts_measured && repeated.ordinary_property_reads == 0 &&
+              repeated.auxiliary_accesses == 0,
+              "nonfunctional timing adapters do not execute diagnostic counters in the hot loop");
+    }
+    {
+        Options options;
+        options.algorithm = Algorithm::BFS;
+        options.records = true;
+        CorruptRecordBackend backend;
+        bool rejected = false;
+        try {
+            ecg_algorithm::run(diamond.view(), options, backend);
+        } catch (const std::logic_error&) {
+            rejected = true;
+        }
+        check(rejected, "the owning record/property adapter rejects malformed actual metadata");
     }
     for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
         for (Algorithm algorithm : {Algorithm::SPMV, Algorithm::BFS, Algorithm::SSSP,

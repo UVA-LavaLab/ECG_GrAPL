@@ -84,7 +84,7 @@ def validate_payload(
     records = mode != "csr"
     require(work.get("carrier") == ("record" if records else "csr") and
             _integer(work, "weighted") == int(graph.weighted) and
-            _integer(work, "evidence") == int(evidence),
+            _integer(work, "evidence") == int(evidence) and _integer(work, "memory_counts_measured") == 1,
             "algorithm carrier, weight or instrumentation mismatch")
     require(_integer(work, "vertices") == graph.vertices and
             _integer(work, "source_edges") == graph.records,
@@ -276,7 +276,8 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
         key = tuple(str(row.get(field, "")) for field in ("simulator", "benchmark", "l3_size", "graph_sha256"))
         groups.setdefault(key, []).append(row)
     comparable = (
-        "variant", "prediction_semantics", "result_digest", "work_trace_digest", "position_trace_digest",
+        "variant", "prediction_semantics", "memory_counts_measured",
+        "result_digest", "work_trace_digest", "position_trace_digest",
         "source", "source_count", "source_list_digest", "repetitions", "delta", "vertices", "source_edges",
         "carrier_records", "passes", "structural_positions", "actual_records", "skipped_positions",
         "csr_index_reads", "weight_reads", "ordinary_property_reads", "property_writes", "auxiliary_accesses",

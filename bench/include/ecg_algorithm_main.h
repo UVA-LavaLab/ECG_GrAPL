@@ -149,6 +149,7 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
     const auto field = [&](const char* key, uint64_t value) { output << ",\"" << key << "\":" << value; };
     field("weighted", result.weighted);
     field("evidence", result.evidence);
+    field("memory_counts_measured", result.memory_counts_measured);
     field("vertices", result.vertices);
     field("source_edges", result.source_edges);
     field("carrier_records", result.carrier_records);
