@@ -56,6 +56,81 @@ bool exerciseHierarchy(uint8_t bytes, ecg_record::Mechanism mechanism) {
         cache.getPrefetchRequests() > 0;
 }
 
+bool exerciseFilteredHierarchy(uint8_t bytes, ecg_record::Mechanism mechanism) {
+    using namespace cache_sim;
+    using namespace ecg_record;
+    constexpr uint64_t vertices = 32, records = 4;
+    alignas(64) std::array<uint64_t, vertices> distances{};
+    alignas(64) std::array<uint32_t, vertices> depths{};
+    std::vector<uint32_t> degrees(vertices, 1);
+    Requirements requirements;
+    requirements.vertex_count = vertices;
+    requirements.record_count = records;
+    requirements.requested_record_bytes = bytes;
+    const uint32_t ids[] = {0, 8, 0, 16};
+    Layout layout;
+    PropertyDescriptor property{PropertyKind::U64, 8, TraversalMode::ORDERED_FILTERED};
+    RecordStream stream;
+    if (selectLayout(requirements, layout) != Status::OK ||
+        buildRecords(requirements, layout, property, reinterpret_cast<uint64_t>(distances.data()),
+            [&](std::size_t i) { return ids[i]; }, stream) != Status::OK)
+        return false;
+    const bool replacement = mechanism == Mechanism::REPLACEMENT ||
+        mechanism == Mechanism::REPLACEMENT_PREFETCH;
+    CacheHierarchy cache(128, 2, 256, 2, 256, 2, 64,
+        EvictionPolicy::LRU, EvictionPolicy::LRU,
+        replacement ? EvictionPolicy::ECG : EvictionPolicy::LRU);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), vertices, 12, true);
+    context.registerPropertyArray(distances.data(), vertices, 8, 256, 0.15, true);
+    context.registerPropertyArray(depths.data(), vertices, 4, 256, 0.15, true);
+    cache.initGraphContext(&context);
+    NativeConfiguration configuration;
+    packLayout(layout, configuration.layout_descriptor);
+    packProperty(property, configuration.property_descriptor);
+    configuration.record_base = reinterpret_cast<uint64_t>(stream.data());
+    configuration.property_base = reinterpret_cast<uint64_t>(distances.data());
+    configuration.record_count = records;
+    configuration.vertex_count = vertices;
+    configuration.context = configuration.generation = 1;
+    configuration.control = kNativeEnable | kNativeManagedPasses;
+    cache.configureRecord(configuration, stream, mechanism);
+    cache.recordBeginPass();
+    auto word = cache.recordLoad(0);
+    if (cache.recordProperty(0, word) != 0)
+        return false;
+    cache.readArray(distances.data(), 0);
+    cache.writeArray(distances.data(), 0);
+    word = cache.recordLoad(2);
+    if (cache.recordProperty(2, word) != 0)
+        return false;
+    try {
+        cache.rebindRecord(configuration, stream);
+        return false;
+    } catch (const std::logic_error&) {}
+    cache.recordClosePass();
+    cache.recordBeginPass();
+    cache.recordClosePass();
+
+    property = {PropertyKind::U32, 4, TraversalMode::ORDERED_FILTERED};
+    RecordStream next_stream;
+    if (buildRecords(requirements, layout, property, reinterpret_cast<uint64_t>(depths.data()),
+            [&](std::size_t i) { return ids[i]; }, next_stream) != Status::OK)
+        return false;
+    packProperty(property, configuration.property_descriptor);
+    configuration.record_base = reinterpret_cast<uint64_t>(next_stream.data());
+    configuration.property_base = reinterpret_cast<uint64_t>(depths.data());
+    configuration.generation = 2;
+    cache.rebindRecord(configuration, next_stream);
+    cache.recordBeginPass();
+    word = cache.recordLoad(3);
+    if (cache.recordProperty(3, word) != 16)
+        return false;
+    cache.recordClosePass();
+    cache.finishRecord(3);
+    return true;
+}
+
 int main() {
     using namespace cache_sim;
     ecg_record::Requirements requirements;
@@ -138,6 +213,10 @@ int main() {
             if (!exerciseHierarchy(bytes, mechanism)) {
                 std::puts("functional hierarchy mechanism failed [FAIL]");
                 return 8;
+            }
+            if (!exerciseFilteredHierarchy(bytes, mechanism)) {
+                std::puts("filtered hierarchy lifecycle failed [FAIL]");
+                return 9;
             }
         }
     }

@@ -37,12 +37,17 @@ struct CommitUpdate {
     uint8_t sequence_bits = 64;
     State state = State::UNKNOWN;
     bool secure = false;
+    uint64_t order = 0;
+    bool invalidate = false;
 };
 
 struct CommitUpdateTraits {
     static bool valid(const CommitUpdate& update) {
         return update.context != 0 &&
-            update.sequence_bits == 64 && update.sequence != 0 &&
+            update.sequence_bits == 64 &&
+            (update.sequence != 0 || (update.invalidate && update.order != 0)) &&
+            (!update.invalidate ||
+                (update.state == State::UNKNOWN && update.deadline == 0 && update.order != 0)) &&
             (update.state == State::UNKNOWN || update.state == State::FINITE ||
              update.state == State::DEAD);
     }
@@ -54,9 +59,10 @@ struct CommitUpdateTraits {
     }
 
     static SequenceOrder compare(const CommitUpdate& left, const CommitUpdate& right) {
-        if (left.sequence_bits != right.sequence_bits)
+        if (left.sequence_bits != right.sequence_bits || (left.order == 0) != (right.order == 0))
             return SequenceOrder::AMBIGUOUS;
-        return compareSequence(left.sequence_bits, left.sequence, right.sequence);
+        return compareSequence(left.sequence_bits,
+            left.order ? left.order : left.sequence, right.order ? right.order : right.sequence);
     }
 };
 
@@ -120,14 +126,15 @@ class Receiver {
   public:
     bool configure(
             const Layout& layout, uint64_t record_count, uint16_t context,
-            uint64_t generation) {
+            uint64_t generation, TraversalMode mode = TraversalMode::DENSE_EXACT) {
         if (validateLayout(layout) != Status::OK || record_count == 0 || context == 0 ||
-            bitWidth(record_count) != layout.horizon_bits) {
+            bitWidth(record_count) != layout.horizon_bits ||
+            (mode != TraversalMode::DENSE_EXACT && mode != TraversalMode::ORDERED_FILTERED)) {
             return false;
         }
         if (enabled_) {
             return layout_ == layout && record_count_ == record_count &&
-                context_ == context && generation_ == generation;
+                context_ == context && generation_ == generation && mode_ == mode;
         }
         layout_ = layout;
         record_count_ = record_count;
@@ -135,19 +142,49 @@ class Receiver {
         generation_ = generation;
         watermark_ = 0;
         watermark_valid_ = false;
+        mode_ = mode;
+        progress_ = delivery_order_ = 0;
         enabled_ = true;
         return true;
     }
 
     void disable() { enabled_ = false; }
     bool enabled() const { return enabled_; }
-    bool watermarkValid() const { return watermark_valid_; }
-    uint64_t watermark() const { return watermark_; }
+    bool watermarkValid() const { return filtered() ? progress_ != 0 : watermark_valid_; }
+    uint64_t watermark() const { return filtered() ? progress_ : watermark_; }
+    uint64_t deliveredWatermark() const { return watermark_; }
+    bool filtered() const { return mode_ == TraversalMode::ORDERED_FILTERED; }
     uint64_t generation() const { return generation_; }
     uint16_t context() const { return context_; }
     const Layout& layout() const { return layout_; }
     unsigned valueBits() const {
         return std::max(layout_.sequence_bits, layout_.deadline_bits);
+    }
+
+    ObservationResult advanceProgress(
+            uint16_t context, uint64_t generation, uint64_t sequence) {
+        if (!enabled_ || !filtered())
+            return ObservationResult::UNSUPPORTED;
+        if (context != context_ || generation != generation_)
+            return ObservationResult::INVALID_CONTEXT;
+        if (sequence <= progress_)
+            return ObservationResult::IGNORED_OLD;
+        if (sequence - progress_ > record_count_)
+            return ObservationResult::IGNORED_HORIZON;
+        progress_ = sequence;
+        return ObservationResult::ACCEPTED;
+    }
+
+    ObservationResult invalidateObservation(
+            LineMetadata& line, uint16_t context, uint64_t generation, uint64_t sequence) {
+        const auto result = advanceProgress(context, generation, sequence);
+        if (result != ObservationResult::ACCEPTED && result != ObservationResult::IGNORED_OLD)
+            return result;
+        // UNKNOWN's otherwise unused value prevents delayed updates from reviving the line.
+        line.value = std::max(progress_,
+            line.state == LineState::PENDING || line.state == LineState::UNKNOWN ? line.value : 0);
+        line.state = LineState::UNKNOWN;
+        return ObservationResult::ACCEPTED;
     }
 
     ObservationResult observe(
@@ -157,6 +194,18 @@ class Receiver {
             return ObservationResult::UNSUPPORTED;
         if (context != context_ || generation != generation_)
             return ObservationResult::INVALID_CONTEXT;
+        if (filtered()) {
+            const auto result = advanceProgress(context, generation, sequence);
+            if (result != ObservationResult::ACCEPTED && result != ObservationResult::IGNORED_OLD)
+                return result;
+            if (sequence <= watermark_ ||
+                ((line.state == LineState::PENDING || line.state == LineState::UNKNOWN) &&
+                    line.value >= sequence))
+                return ObservationResult::IGNORED_OLD;
+            line.value = sequence;
+            line.state = LineState::PENDING;
+            return ObservationResult::ACCEPTED;
+        }
         const uint64_t base = watermark_valid_ ? watermark_ : 0;
         const SequenceOrder order =
             compareSequence(layout_.sequence_bits, sequence, base);
@@ -193,6 +242,10 @@ class Receiver {
             update.sequence_bits != layout_.sequence_bits) {
             return ApplyResult::INVALID_ORDER;
         }
+        if (filtered())
+            return applyFiltered(line, update);
+        if (update.order != 0 || update.invalidate)
+            return ApplyResult::INVALID_ORDER;
         const uint64_t base = watermark_valid_ ? watermark_ : 0;
         if (compareSequence(layout_.sequence_bits, update.sequence, base) !=
             SequenceOrder::NEWER) {
@@ -230,10 +283,44 @@ class Receiver {
     }
 
   private:
+    ApplyResult applyFiltered(LineMetadata* line, const CommitUpdate& update) {
+        if (update.order == 0 || update.order <= delivery_order_ || update.state == State::DEAD)
+            return ApplyResult::INVALID_ORDER;
+        delivery_order_ = update.order;
+        watermark_ = std::max(watermark_, update.sequence);
+        progress_ = std::max(progress_, update.sequence);
+        watermark_valid_ = true;
+        if (!line)
+            return ApplyResult::NOT_RESIDENT;
+        if (update.invalidate) {
+            invalidateObservation(*line, context_, generation_, progress_);
+            return ApplyResult::APPLIED;
+        }
+        if ((line->state == LineState::PENDING && update.sequence < line->value) ||
+            (line->state == LineState::UNKNOWN && update.sequence <= line->value))
+            return ApplyResult::STALE;
+        if (update.state == State::FINITE) {
+            if (update.deadline <= progress_) {
+                line->state = LineState::UNKNOWN;
+                line->value = progress_;
+                return ApplyResult::EXPIRED;
+            }
+            line->state = LineState::FINITE;
+            line->value = update.deadline;
+        } else {
+            line->state = LineState::UNKNOWN;
+            line->value = update.sequence;
+        }
+        return ApplyResult::APPLIED;
+    }
+
     Layout layout_;
+    TraversalMode mode_ = TraversalMode::DENSE_EXACT;
     uint64_t record_count_ = 0;
     uint64_t generation_ = 0;
     uint64_t watermark_ = 0;
+    uint64_t progress_ = 0;
+    uint64_t delivery_order_ = 0;
     uint16_t context_ = 0;
     bool enabled_ = false;
     bool watermark_valid_ = false;

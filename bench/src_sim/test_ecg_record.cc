@@ -586,6 +586,145 @@ void testSharedRuntimeStateAndQueue() {
           "prefetch admission does not invent a near-future threshold");
 }
 
+void testTypedPropertiesAndFilteredPasses() {
+    using namespace ecg_record;
+    PropertyDescriptor property;
+    uint64_t descriptor = 0, address = 0, extent = 0;
+    check(unpackProperty(0, property) == Status::OK &&
+          property.kind == PropertyKind::F32 && property.stride_bytes == 4 &&
+          property.traversal == TraversalMode::DENSE_EXACT,
+          "the absent property descriptor preserves the original F32 PR contract");
+    property = {PropertyKind::U64, 16, TraversalMode::ORDERED_FILTERED};
+    PropertyDescriptor restored;
+    check(packProperty(property, descriptor) == Status::OK &&
+          unpackProperty(descriptor, restored) == Status::OK && restored == property &&
+          propertyAddress(property, 0x1008, 3, address) == Status::OK && address == 0x1038 &&
+          propertyExtent(property, 4, extent) == Status::OK && extent == 56,
+          "typed properties retain their real width, stride and unaligned line base");
+    check(unpackProperty(descriptor | (uint64_t{1} << 63), restored) != Status::OK,
+          "reserved property descriptor bits fail closed");
+    property.stride_bytes = 4;
+    check(packProperty(property, descriptor) == Status::INVALID_WIDTH,
+          "an eight-byte property cannot overlap its next element");
+    property.stride_bytes = 16;
+    check(propertyAddress(property, UINT64_MAX - 7, 1, address) ==
+              Status::ARITHMETIC_OVERFLOW,
+          "typed property address overflow fails before a memory request");
+
+    auto req = requirements(17);
+    req.record_count = 4;
+    Layout layout;
+    RecordStream stream;
+    const uint32_t ids[] = {0, 7, 8, 0};
+    property = {PropertyKind::U64, 8, TraversalMode::ORDERED_FILTERED};
+    check(selectLayout(req, layout) == Status::OK &&
+          buildRecords(req, layout, property, 0x1008,
+              [&](std::size_t i) { return ids[i]; }, stream) == Status::OK,
+          "record construction groups the actual strided property cache lines");
+    DecodedRecord decoded;
+    check(decodeRecord(layout, stream.word(0), decoded) == Status::OK &&
+          decoded.state == State::FINITE && decoded.distance == 3,
+          "a non-line-aligned base does not falsely join VID zero with VID seven");
+    check(decodeRecord(layout, stream.word(1), decoded) == Status::OK &&
+          decoded.state == State::FINITE && decoded.distance == 1,
+          "VID seven and eight share the next actual eight-byte property line");
+    NativeConfiguration configuration;
+    packLayout(layout, configuration.layout_descriptor);
+    packProperty(property, configuration.property_descriptor);
+    configuration.record_base = 0x2000;
+    configuration.property_base = 0x1008;
+    configuration.record_count = 4;
+    configuration.vertex_count = 17;
+    configuration.context = configuration.generation = 1;
+    configuration.control = kNativeEnable | kNativeHasNext;
+    NativeLoadResult load;
+    check(nativePropertyAccess(configuration, 0x1008, stream.word(1),
+              0x2000 + layout.record_bytes, load) == Status::OK &&
+          load.property_address == 0x1040 && load.property_bytes == 8 &&
+          load.property_kind == PropertyKind::U64 && load.state == State::FINITE,
+          "the native record association generates an integer doubleword address");
+    check(nativePropertyAccess(configuration, 0x1008, stream.word(3),
+              0x2000 + 3 * layout.record_bytes, load) == Status::OK &&
+          load.state == State::UNKNOWN && load.deadline == 0,
+          "filtered WRAP never claims another traversal or DEAD liveness");
+
+    PassCursor cursor;
+    check(cursor.configure(4, TraversalMode::ORDERED_FILTERED) == Status::OK &&
+          cursor.begin() == Status::OK && cursor.consume(1) == Status::OK &&
+          cursor.consume(3) == Status::OK && cursor.consume(2) == Status::INVALID_SEQUENCE &&
+          cursor.close() == Status::OK && cursor.base() == 4 &&
+          cursor.consumed() == 2 && cursor.skipped() == 2,
+          "filtered positions increase and a close accounts for first/middle/tail skips");
+    check(cursor.begin() == Status::OK && cursor.close() == Status::OK &&
+          cursor.base() == 8 && cursor.passes() == 2 && cursor.skipped() == 6 &&
+          cursor.consumed() + cursor.skipped() == cursor.base(),
+          "an empty filtered pass advances only the internally computed structural span");
+    PassCursor exact;
+    check(exact.configure(4, TraversalMode::DENSE_EXACT) == Status::OK &&
+          exact.begin() == Status::OK && exact.consume(1) == Status::INVALID_SEQUENCE &&
+          exact.consume(0) == Status::OK && exact.close() == Status::INVALID_SEQUENCE,
+          "dense exact traversal still rejects omitted records and premature close");
+}
+
+void testFilteredReceiverInvalidations() {
+    using namespace ecg_record;
+    auto req = requirements(32);
+    req.record_count = 8;
+    Layout layout;
+    Receiver receiver;
+    check(selectLayout(req, layout) == Status::OK &&
+          receiver.configure(layout, 8, 1, 1, TraversalMode::ORDERED_FILTERED),
+          "filtered receivers explicitly declare potential-reference semantics");
+    LineMetadata line;
+    CommitUpdate update;
+    update.context = update.generation = 1;
+    update.sequence = 2;
+    update.order = 1;
+    update.deadline = 5;
+    update.state = State::FINITE;
+    check(receiver.observe(line, 1, 1, 2) == ObservationResult::ACCEPTED &&
+          receiver.watermark() == 2 &&
+          receiver.apply(&line, update) == ApplyResult::APPLIED,
+          "filtered structural progress is independent of delivered event order");
+    check(receiver.advanceProgress(1, 1, 8) == ObservationResult::ACCEPTED &&
+          resolveFuture(State::FINITE, line.value, receiver.watermark()).state == State::UNKNOWN,
+          "skipping a potential occurrence expires its prediction without inventing DEAD");
+    update.sequence = 4;
+    update.order = 2;
+    update.deadline = 6;
+    check(receiver.apply(&line, update) == ApplyResult::EXPIRED,
+          "delayed metadata cannot revive a deadline behind structural progress");
+    check(receiver.observe(line, 1, 1, 10) == ObservationResult::ACCEPTED &&
+          receiver.invalidateObservation(line, 1, 1, 10) == ObservationResult::ACCEPTED,
+          "ordinary governed-region traffic destroys pending potential liveness");
+    update.sequence = 10;
+    update.order = 3;
+    update.deadline = 15;
+    check(receiver.apply(&line, update) == ApplyResult::STALE &&
+          line.state == LineState::UNKNOWN,
+          "a queued designated update cannot resurrect an ordinary-invalidated line");
+    update.order = 4;
+    update.invalidate = true;
+    update.state = State::UNKNOWN;
+    update.deadline = 0;
+    CommitQueue queue;
+    check(queue.enqueue(update, 0) == EnqueueStatus::ENQUEUED &&
+          receiver.apply(&line, queue.popReady(8).ready.update) == ApplyResult::APPLIED,
+          "ordinary invalidation uses the same paid bounded queue");
+    update.order = 5;
+    update.invalidate = false;
+    update.sequence = 11;
+    update.state = State::FINITE;
+    update.deadline = 16;
+    check(receiver.apply(&line, update) == ApplyResult::APPLIED &&
+          line.state == LineState::FINITE && line.value == 16,
+          "a later designated use can install a new potential-reference prediction");
+    update.order = 6;
+    update.state = State::DEAD;
+    check(receiver.apply(&line, update) == ApplyResult::INVALID_ORDER,
+          "filtered receivers reject a sender that claims unproven DEAD liveness");
+}
+
 }  // namespace
 
 int main() {
@@ -599,6 +738,8 @@ int main() {
     testWindowCaptureReadinessAndPinning();
     testNativeConfigurationAndBinding();
     testSharedRuntimeStateAndQueue();
+    testTypedPropertiesAndFilteredPasses();
+    testFilteredReceiverInvalidations();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }

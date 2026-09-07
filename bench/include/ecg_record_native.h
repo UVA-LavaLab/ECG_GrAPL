@@ -7,7 +7,9 @@ namespace ecg_record {
 
 static constexpr uint64_t kNativeEnable = 1;
 static constexpr uint64_t kNativeHasNext = 2;
-static constexpr uint64_t kNativeControlMask = kNativeEnable | kNativeHasNext;
+static constexpr uint64_t kNativeManagedPasses = 4;
+static constexpr uint64_t kNativeControlMask =
+    kNativeEnable | kNativeHasNext | kNativeManagedPasses;
 
 struct NativeConfiguration {
     uint64_t layout_descriptor = 0;
@@ -19,6 +21,7 @@ struct NativeConfiguration {
     uint64_t generation = 0;
     uint64_t context = 0;
     uint64_t control = 0;
+    uint64_t property_descriptor = 0;
 };
 
 struct NativeRecordAccess {
@@ -41,6 +44,9 @@ struct NativeLoadResult {
     uint8_t sequence_bits = 0;
     bool has_next_iteration = false;
     State state = State::UNKNOWN;
+    uint64_t property_descriptor = 0;
+    PropertyKind property_kind = PropertyKind::F32;
+    uint8_t property_bytes = 4;
 };
 
 enum class InstructionKind : uint8_t {
@@ -48,6 +54,8 @@ enum class InstructionKind : uint8_t {
     CONFIGURATION,
     RECORD,
     PROPERTY,
+    PASS_CLOSE,
+    INVALIDATE,
 };
 
 struct InstructionHint {
@@ -84,13 +92,16 @@ inline Status validateNativeConfiguration(
                            configuration.record_count, first_record);
     if (status != Status::OK)
         return status;
-    if (configuration.property_base % sizeof(uint32_t) != 0)
-        return Status::INVALID_ADDRESS;
-    uint64_t property_bytes = 0, last_property = 0, iteration_end = 0;
-    if (!checkedMultiply(configuration.vertex_count, sizeof(uint32_t), property_bytes) ||
-        !checkedAdd(configuration.property_base, property_bytes - 1, last_property) ||
-        !checkedAdd(configuration.iteration_base, configuration.record_count,
-                    iteration_end)) {
+    PropertyDescriptor property;
+    status = unpackProperty(configuration.property_descriptor, property);
+    if (status != Status::OK)
+        return status;
+    uint64_t last_property = 0, iteration_end = 0;
+    status = propertyAddress(property, configuration.property_base,
+                             configuration.vertex_count - 1, last_property);
+    if (status != Status::OK)
+        return status;
+    if (!checkedAdd(configuration.iteration_base, configuration.record_count, iteration_end)) {
         return Status::ARITHMETIC_OVERFLOW;
     }
     uint64_t last_deadline = 0;
@@ -98,6 +109,28 @@ inline Status validateNativeConfiguration(
         return Status::ARITHMETIC_OVERFLOW;
     layout = decoded;
     return Status::OK;
+}
+
+inline bool nativePropertyContains(
+        const NativeConfiguration& configuration, uint64_t address, uint64_t bytes = 1) {
+    PropertyDescriptor property;
+    uint64_t extent = 0;
+    return bytes != 0 && address >= configuration.property_base &&
+        unpackProperty(configuration.property_descriptor, property) == Status::OK &&
+        propertyExtent(property, configuration.vertex_count, extent) == Status::OK &&
+        address - configuration.property_base < extent &&
+        bytes <= extent - (address - configuration.property_base);
+}
+
+inline bool nativePropertyLine(
+        const NativeConfiguration& configuration, uint64_t address) {
+    PropertyDescriptor property;
+    uint64_t extent = 0, last = 0;
+    if (unpackProperty(configuration.property_descriptor, property) != Status::OK ||
+        propertyExtent(property, configuration.vertex_count, extent) != Status::OK ||
+        !checkedAdd(configuration.property_base, extent - 1, last))
+        return false;
+    return address / 64 >= configuration.property_base / 64 && address / 64 <= last / 64;
 }
 
 inline Status nativeRecordAccess(
@@ -153,6 +186,11 @@ inline Status nativeRecordResult(
     result.has_next_iteration =
         (configuration.control & kNativeHasNext) != 0;
     result.state = decoded.state;
+    PropertyDescriptor property;
+    unpackProperty(configuration.property_descriptor, property);
+    result.property_descriptor = configuration.property_descriptor;
+    result.property_kind = property.kind;
+    result.property_bytes = propertyBytes(property.kind);
     output = result;
     return Status::OK;
 }
@@ -172,16 +210,16 @@ inline Status nativePropertyAccess(
     if (status != Status::OK)
         return status;
     Prediction prediction;
+    PropertyDescriptor property;
+    unpackProperty(configuration.property_descriptor, property);
     status = makePrediction(
         layout, raw_record, result.sequence,
-        (configuration.control & kNativeHasNext) != 0, prediction);
+        (configuration.control & kNativeHasNext) != 0, prediction, property.traversal);
     if (status != Status::OK)
         return status;
-    uint64_t offset = 0;
-    if (!checkedMultiply(result.destination, sizeof(uint32_t), offset) ||
-        !checkedAdd(property_base, offset, result.property_address)) {
-        return Status::ARITHMETIC_OVERFLOW;
-    }
+    status = propertyAddress(property, property_base, result.destination, result.property_address);
+    if (status != Status::OK)
+        return status;
     result.deadline = prediction.deadline;
     result.state = prediction.state;
     output = result;

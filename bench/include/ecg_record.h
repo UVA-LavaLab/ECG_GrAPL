@@ -104,6 +104,181 @@ inline bool checkedMultiply(uint64_t left, uint64_t right, uint64_t& result) {
     return true;
 }
 
+enum class PropertyKind : uint8_t { F32, U32, U64 };
+enum class TraversalMode : uint8_t { DENSE_EXACT, ORDERED_FILTERED };
+
+struct PropertyDescriptor {
+    PropertyKind kind = PropertyKind::F32;
+    uint32_t stride_bytes = 4;
+    TraversalMode traversal = TraversalMode::DENSE_EXACT;
+
+    bool operator==(const PropertyDescriptor& other) const {
+        return kind == other.kind && stride_bytes == other.stride_bytes &&
+            traversal == other.traversal;
+    }
+};
+
+inline const char* propertyKindName(PropertyKind kind) {
+    switch (kind) {
+      case PropertyKind::F32: return "f32";
+      case PropertyKind::U32: return "u32";
+      case PropertyKind::U64: return "u64";
+    }
+    return "invalid";
+}
+
+inline const char* traversalName(TraversalMode mode) {
+    switch (mode) {
+      case TraversalMode::DENSE_EXACT: return "dense-exact";
+      case TraversalMode::ORDERED_FILTERED: return "ordered-filtered";
+    }
+    return "invalid";
+}
+
+inline uint8_t propertyBytes(PropertyKind kind) {
+    return kind == PropertyKind::U64 ? 8
+        : kind == PropertyKind::F32 || kind == PropertyKind::U32 ? 4 : 0;
+}
+
+inline Status validateProperty(const PropertyDescriptor& property) {
+    const uint8_t bytes = propertyBytes(property.kind);
+    if (bytes == 0 || property.stride_bytes < bytes ||
+        property.stride_bytes > UINT16_MAX || property.stride_bytes % bytes != 0)
+        return Status::INVALID_WIDTH;
+    if (property.traversal != TraversalMode::DENSE_EXACT &&
+        property.traversal != TraversalMode::ORDERED_FILTERED)
+        return Status::INVALID_DESCRIPTOR;
+    return Status::OK;
+}
+
+inline Status packProperty(const PropertyDescriptor& property, uint64_t& descriptor) {
+    descriptor = 0;
+    const Status status = validateProperty(property);
+    if (status != Status::OK)
+        return status;
+    // Zero retains the original PR configuration and instruction ABI.
+    if (!(property == PropertyDescriptor{}))
+        descriptor = 0xED | (uint64_t(property.kind) << 8) |
+            (uint64_t(property.traversal) << 10) | (uint64_t(property.stride_bytes) << 16);
+    return Status::OK;
+}
+
+inline Status unpackProperty(uint64_t descriptor, PropertyDescriptor& property) {
+    property = PropertyDescriptor{};
+    if (descriptor == 0)
+        return Status::OK;
+    if ((descriptor & 0xFF) != 0xED || (descriptor & ~uint64_t{0xFFFF07FF}) != 0)
+        return Status::INVALID_DESCRIPTOR;
+    PropertyDescriptor decoded{
+        static_cast<PropertyKind>((descriptor >> 8) & 3),
+        static_cast<uint32_t>(descriptor >> 16),
+        static_cast<TraversalMode>((descriptor >> 10) & 1)};
+    const Status status = validateProperty(decoded);
+    if (status == Status::OK)
+        property = decoded;
+    return status;
+}
+
+inline Status propertyExtent(
+        const PropertyDescriptor& property, uint64_t vertices, uint64_t& extent) {
+    extent = 0;
+    const Status status = validateProperty(property);
+    if (status != Status::OK)
+        return status;
+    if (vertices == 0)
+        return Status::INVALID_COUNTS;
+    uint64_t offset = 0;
+    if (!checkedMultiply(vertices - 1, property.stride_bytes, offset) ||
+        !checkedAdd(offset, propertyBytes(property.kind), extent))
+        return Status::ARITHMETIC_OVERFLOW;
+    return Status::OK;
+}
+
+inline Status propertyAddress(
+        const PropertyDescriptor& property, uint64_t base, uint64_t vertex,
+        uint64_t& address) {
+    address = 0;
+    const Status status = validateProperty(property);
+    if (status != Status::OK)
+        return status;
+    if (base % propertyBytes(property.kind) != 0)
+        return Status::INVALID_ADDRESS;
+    uint64_t offset = 0, last = 0, start = 0;
+    if (!checkedMultiply(vertex, property.stride_bytes, offset) ||
+        !checkedAdd(base, offset, start) ||
+        !checkedAdd(start, propertyBytes(property.kind) - 1, last))
+        return Status::ARITHMETIC_OVERFLOW;
+    address = start;
+    return Status::OK;
+}
+
+class PassCursor {
+  public:
+    Status configure(uint64_t records, TraversalMode mode) {
+        if (records == 0 || records_ != 0)
+            return Status::INVALID_COUNTS;
+        if (mode != TraversalMode::DENSE_EXACT && mode != TraversalMode::ORDERED_FILTERED)
+            return Status::INVALID_DESCRIPTOR;
+        records_ = records;
+        mode_ = mode;
+        return Status::OK;
+    }
+
+    Status begin() {
+        if (open_ || records_ == 0)
+            return Status::INVALID_SEQUENCE;
+        uint64_t end = 0;
+        if (!checkedAdd(base_, records_, end))
+            return Status::ARITHMETIC_OVERFLOW;
+        last_ = 0;
+        open_ = true;
+        return Status::OK;
+    }
+
+    Status consume(uint64_t index) {
+        if (!open_ || index >= records_ || index + 1 <= last_ ||
+            (mode_ == TraversalMode::DENSE_EXACT && index != last_))
+            return Status::INVALID_SEQUENCE;
+        const uint64_t gap = index - last_;
+        uint64_t consumed = 0, skipped = 0;
+        if (!checkedAdd(consumed_, 1, consumed) || !checkedAdd(skipped_, gap, skipped))
+            return Status::ARITHMETIC_OVERFLOW;
+        consumed_ = consumed;
+        skipped_ = skipped;
+        last_ = index + 1;
+        return Status::OK;
+    }
+
+    Status close() {
+        if (!open_ || (mode_ == TraversalMode::DENSE_EXACT && last_ != records_))
+            return Status::INVALID_SEQUENCE;
+        uint64_t end = 0, skipped = 0, passes = 0;
+        if (!checkedAdd(base_, records_, end) ||
+            !checkedAdd(skipped_, records_ - last_, skipped) ||
+            !checkedAdd(passes_, 1, passes))
+            return Status::ARITHMETIC_OVERFLOW;
+        base_ = end;
+        skipped_ = skipped;
+        passes_ = passes;
+        last_ = 0;
+        open_ = false;
+        return Status::OK;
+    }
+
+    bool open() const { return open_; }
+    uint64_t base() const { return base_; }
+    uint64_t sequence() const { return base_ + last_; }
+    uint64_t passes() const { return passes_; }
+    uint64_t consumed() const { return consumed_; }
+    uint64_t skipped() const { return skipped_; }
+
+  private:
+    TraversalMode mode_ = TraversalMode::DENSE_EXACT;
+    uint64_t records_ = 0, base_ = 0, last_ = 0;
+    uint64_t passes_ = 0, consumed_ = 0, skipped_ = 0;
+    bool open_ = false;
+};
+
 inline uint8_t bitWidth(uint64_t value) {
     uint8_t bits = 1;
     while (value >>= 1)
@@ -409,8 +584,11 @@ struct Prediction {
 
 inline Status makePrediction(
         const Layout& layout, uint64_t word, uint64_t sequence,
-        bool has_next_iteration, Prediction& output) {
+        bool has_next_iteration, Prediction& output,
+        TraversalMode mode = TraversalMode::DENSE_EXACT) {
     output = Prediction{};
+    if (mode != TraversalMode::DENSE_EXACT && mode != TraversalMode::ORDERED_FILTERED)
+        return Status::INVALID_DESCRIPTOR;
     DecodedRecord decoded;
     const Status status = decodeRecord(layout, word, decoded);
     if (status != Status::OK)
@@ -427,6 +605,11 @@ inline Status makePrediction(
         const uint64_t token = has_next_iteration
             ? (word >> layout.id_bits) - layout.codes_per_state : 1;
         prediction.normalized_record = decoded.destination | (token << layout.id_bits);
+    }
+    if (mode == TraversalMode::ORDERED_FILTERED &&
+        (decoded.state == State::WRAP || decoded.state == State::DEAD)) {
+        prediction.state = State::UNKNOWN;
+        prediction.normalized_record = decoded.destination;
     }
     if (prediction.state == State::FINITE &&
         !checkedAdd(sequence, decoded.distance, prediction.deadline)) {
@@ -451,14 +634,14 @@ struct PrefetchTarget {
     bool valid = false;
 };
 
-inline Status selectWindowTarget(
+template<typename LineAt>
+inline Status selectWindowTargetMapped(
         const Layout& layout, const RecordWindow& window,
-        uint64_t vertices_per_line, PrefetchTarget& output) {
+        LineAt line_at, PrefetchTarget& output, TraversalMode mode) {
     output = PrefetchTarget{};
     if (validateLayout(layout) != Status::OK)
         return Status::INVALID_LAYOUT;
-    if (window.remaining_records == 0 || window.vertex_count == 0 ||
-        vertices_per_line == 0) {
+    if (window.remaining_records == 0 || window.vertex_count == 0) {
         return Status::INVALID_COUNTS;
     }
     const uint32_t count = static_cast<uint32_t>(
@@ -472,7 +655,7 @@ inline Status selectWindowTarget(
         return status;
     if (current.destination >= window.vertex_count)
         return Status::INVALID_ID;
-    const uint64_t current_line = current.destination / vertices_per_line;
+    const uint64_t current_line = line_at(current.destination);
     std::array<uint64_t, RecordWindow::kRecords> previous_lines{};
     std::size_t previous_count = 0;
     uint64_t best_distance = 0;
@@ -484,14 +667,15 @@ inline Status selectWindowTarget(
             return status;
         if (target.destination >= window.vertex_count)
             return Status::INVALID_ID;
-        const uint64_t line = target.destination / vertices_per_line;
+        const uint64_t line = line_at(target.destination);
         const bool seen = std::find(
             previous_lines.begin(), previous_lines.begin() + previous_count,
             line) != previous_lines.begin() + previous_count;
         previous_lines[previous_count++] = line;
         if (lead < 8 || line == current_line || seen)
             continue;
-        const uint64_t distance = target.distance_valid
+        const uint64_t distance = target.distance_valid &&
+            (mode == TraversalMode::DENSE_EXACT || target.state == State::FINITE)
             ? target.distance : std::numeric_limits<uint64_t>::max();
         const uint32_t error = lead > 10 ? lead - 10 : 10 - lead;
         if (!output.valid || distance < best_distance ||
@@ -502,6 +686,32 @@ inline Status selectWindowTarget(
         }
     }
     return Status::OK;
+}
+
+inline Status selectWindowTarget(
+        const Layout& layout, const RecordWindow& window,
+        uint64_t vertices_per_line, PrefetchTarget& output) {
+    output = PrefetchTarget{};
+    if (vertices_per_line == 0)
+        return Status::INVALID_COUNTS;
+    return selectWindowTargetMapped(layout, window,
+        [vertices_per_line](uint64_t id) { return id / vertices_per_line; },
+        output, TraversalMode::DENSE_EXACT);
+}
+
+inline Status selectWindowTarget(
+        const Layout& layout, const RecordWindow& window,
+        const PropertyDescriptor& property, uint64_t base, PrefetchTarget& output) {
+    output = PrefetchTarget{};
+    if (window.vertex_count == 0)
+        return Status::INVALID_COUNTS;
+    uint64_t last = 0;
+    const Status status = propertyAddress(property, base, window.vertex_count - 1, last);
+    if (status != Status::OK)
+        return status;
+    return selectWindowTargetMapped(layout, window,
+        [base, &property](uint64_t id) { return (base + id * property.stride_bytes) / 64; },
+        output, property.traversal);
 }
 
 inline Status recordAddress(

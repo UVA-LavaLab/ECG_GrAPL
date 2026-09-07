@@ -117,17 +117,16 @@ inline Status storeWord(RecordStream& stream, std::size_t index, uint64_t word) 
 }  // namespace detail
 
 // Source IDs must remain immutable. Only sparse line positions are temporary.
-template<typename DestinationAt>
-Status buildRecords(
+template<typename DestinationAt, typename LineAt>
+Status buildRecordsMapped(
         const Requirements& requirements, const Layout& layout,
-        uint64_t vertices_per_line, DestinationAt destination_at,
+        DestinationAt destination_at, LineAt line_at,
         RecordStream& output, const BuildLimits& limits = BuildLimits{}) {
     output = RecordStream{};
     const Status configuration = validateConfiguration(requirements, layout);
     if (configuration != Status::OK)
         return configuration;
-    if (vertices_per_line == 0 ||
-        (limits.source_id_bytes != 4 && limits.source_id_bytes != 8)) {
+    if (limits.source_id_bytes != 4 && limits.source_id_bytes != 8) {
         return Status::INVALID_WIDTH;
     }
     uint64_t carrier_bytes = 0, source_bytes = 0;
@@ -177,13 +176,13 @@ Status buildRecords(
                 destination > lowMask(unsigned(limits.source_id_bytes) * 8)) {
                 return Status::INVALID_ID;
             }
-            Position& positions = lines[destination / vertices_per_line];
+            Position& positions = lines[line_at(destination)];
             if (positions.first == Position::kAbsent)
                 positions.first = position;
         }
         for (std::size_t position = count; position-- > 0;) {
             const uint64_t destination = destination_at(position);
-            Position& positions = lines.at(destination / vertices_per_line);
+            Position& positions = lines.at(line_at(destination));
             const bool in_iteration = positions.next != Position::kAbsent;
             const uint64_t distance = in_iteration
                 ? positions.next - position
@@ -203,6 +202,137 @@ Status buildRecords(
         stream.stats.auxiliary_peak_bytes = budget.peak;
     } catch (const detail::AuxiliaryLimitExceeded&) {
         return Status::RESOURCE_LIMIT;
+    }
+    output = std::move(stream);
+    return Status::OK;
+}
+
+template<typename DestinationAt>
+Status buildRecords(
+        const Requirements& requirements, const Layout& layout,
+        uint64_t vertices_per_line, DestinationAt destination_at,
+        RecordStream& output, const BuildLimits& limits = BuildLimits{}) {
+    if (vertices_per_line == 0) {
+        output = RecordStream{};
+        return Status::INVALID_WIDTH;
+    }
+    return buildRecordsMapped(requirements, layout, destination_at,
+        [vertices_per_line](uint64_t id) { return id / vertices_per_line; }, output, limits);
+}
+
+struct UnobservedConstruction {
+    void operator()(const void*, uint64_t, bool) const {}
+};
+
+template<typename DestinationAt, typename Observe = UnobservedConstruction>
+Status buildRecords(
+        const Requirements& requirements, const Layout& layout,
+        const PropertyDescriptor& property, uint64_t property_base,
+        DestinationAt destination_at, RecordStream& output,
+        const BuildLimits& limits = BuildLimits{}, Observe observe = Observe{}) {
+    output = RecordStream{};
+    const Status configuration = validateConfiguration(requirements, layout);
+    if (configuration != Status::OK)
+        return configuration;
+    if (limits.source_id_bytes != 4 && limits.source_id_bytes != 8)
+        return Status::INVALID_WIDTH;
+    uint64_t last = 0;
+    const Status status = propertyAddress(
+        property, property_base, requirements.vertex_count - 1, last);
+    if (status != Status::OK)
+        return status;
+    struct Slot {
+        uint64_t key = UINT64_MAX;
+        uint64_t first = UINT64_MAX;
+        uint64_t next = UINT64_MAX;
+    };
+    const uint64_t maximum_lines = std::min(requirements.record_count,
+        last / 64 - property_base / 64 + 1);
+    uint64_t capacity = 1, slots_needed = 0, scratch_bytes = 0;
+    uint64_t carrier_bytes = 0, source_bytes = 0;
+    if (!checkedMultiply(maximum_lines, 2, slots_needed) ||
+        !checkedMultiply(requirements.record_count, layout.record_bytes, carrier_bytes) ||
+        !checkedMultiply(requirements.record_count, limits.source_id_bytes, source_bytes))
+        return Status::ARITHMETIC_OVERFLOW;
+    while (capacity < slots_needed) {
+        if (capacity > UINT64_MAX / 2)
+            return Status::ARITHMETIC_OVERFLOW;
+        capacity *= 2;
+    }
+    if (!checkedMultiply(capacity, sizeof(Slot), scratch_bytes) ||
+        scratch_bytes > limits.maximum_auxiliary_bytes ||
+        carrier_bytes > limits.maximum_carrier_bytes ||
+        capacity > std::vector<Slot>{}.max_size() ||
+        requirements.record_count > std::numeric_limits<std::size_t>::max())
+        return Status::RESOURCE_LIMIT;
+    std::vector<Slot> slots(static_cast<std::size_t>(capacity));
+    observe(slots.data(), scratch_bytes, true);
+    RecordStream stream;
+    stream.layout = layout;
+    if (layout.record_bytes == 4)
+        stream.records32.resize(static_cast<std::size_t>(requirements.record_count));
+    else
+        stream.records64.resize(static_cast<std::size_t>(requirements.record_count));
+    stream.stats.source_stream_bytes = source_bytes;
+    stream.stats.carrier_payload_bytes = carrier_bytes;
+    stream.stats.carrier_allocation_bytes = layout.record_bytes == 4
+        ? stream.records32.capacity() * uint64_t{4} : stream.records64.capacity() * uint64_t{8};
+    stream.stats.auxiliary_peak_bytes = slots.capacity() * sizeof(Slot);
+    if (stream.stats.carrier_allocation_bytes > limits.maximum_carrier_bytes ||
+        stream.stats.auxiliary_peak_bytes > limits.maximum_auxiliary_bytes)
+        return Status::RESOURCE_LIMIT;
+    observe(stream.data(), carrier_bytes, true);
+    const auto find = [&](uint64_t id) -> Slot& {
+        const uint64_t line = (property_base + id * property.stride_bytes) / 64;
+        uint64_t index = (line * 11400714819323198485ULL) & (capacity - 1);
+        for (;;) {
+            Slot& slot = slots[index];
+            observe(&slot.key, sizeof(slot.key), false);
+            if (slot.key == UINT64_MAX || slot.key == line)
+                return slot;
+            index = (index + 1) & (capacity - 1);
+        }
+    };
+    const uint64_t maximum_id = requirements.max_vertex_id_known
+        ? requirements.max_vertex_id : requirements.vertex_count - 1;
+    for (uint64_t position = 0; position < requirements.record_count; ++position) {
+        const uint64_t id = destination_at(position);
+        if (id > maximum_id || id >= requirements.vertex_count || id > lowMask(layout.id_bits) ||
+            id > lowMask(unsigned(limits.source_id_bytes) * 8))
+            return Status::INVALID_ID;
+        Slot& slot = find(id);
+        if (slot.key == UINT64_MAX) {
+            observe(&slot.key, sizeof(slot.key), true);
+            slot.key = (property_base + id * property.stride_bytes) / 64;
+            observe(&slot.first, sizeof(slot.first), true);
+            slot.first = position;
+            ++stream.stats.property_lines;
+        }
+    }
+    for (uint64_t position = requirements.record_count; position-- > 0;) {
+        const uint64_t id = destination_at(position);
+        if (id > maximum_id || id >= requirements.vertex_count || id > lowMask(layout.id_bits))
+            return Status::INVALID_ID;
+        Slot& slot = find(id);
+        if (slot.key == UINT64_MAX)
+            return Status::INVALID_RECORD;
+        observe(&slot.next, sizeof(slot.next), false);
+        const bool in_pass = slot.next != UINT64_MAX;
+        if (!in_pass)
+            observe(&slot.first, sizeof(slot.first), false);
+        const uint64_t distance = in_pass ? slot.next - position
+            : requirements.record_count - position + slot.first;
+        uint64_t word = 0;
+        const Status encoded = encodeRecord(
+            layout, id, distance, in_pass ? State::FINITE : State::WRAP, word);
+        if (encoded != Status::OK)
+            return encoded;
+        observe(stream.data() + position * layout.record_bytes, layout.record_bytes, true);
+        const Status stored = detail::storeWord(stream, position, word);
+        if (stored != Status::OK)
+            return stored;
+        observe(&slot.next, sizeof(slot.next), true);
+        slot.next = position;
     }
     output = std::move(stream);
     return Status::OK;
