@@ -238,6 +238,14 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
                    planned_host_bytes=plan["planned_host_bytes"],
                    **{"algorithm_" + key: value for key, value in work.items()
                       if key != "algorithm" and not key.startswith("values_")})
+        if backend == "gem5":
+            row.update(
+                gem5_guest_staged_path=str(binary),
+                gem5_guest_staged_sha256=binary_hash,
+                gem5_guest_expected_sha256=str(args.expected_gem5_guest_sha256),
+                gem5_opt_expected_sha256=str(args.expected_gem5_opt_sha256),
+                gem5_config_expected_sha256=str(args.expected_gem5_config_sha256),
+                graph_expected_sha256=str(args.expected_graph_sha256))
     except (RecordReceiptError, RecordResourceError, OSError, json.JSONDecodeError) as error:
         row["error"] = str(error)
     return [row]

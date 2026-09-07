@@ -8,6 +8,7 @@ import os
 import shutil
 import struct
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -273,3 +274,42 @@ int main(int argc, char** argv) {
     assert ran.returncode == 0, "RV64 publication must not invoke unsupported renameat2"
     assert json.loads(output.read_text())["num_vertices"] == 2
     assert not output.with_suffix(".json.new").exists()
+
+
+def test_detailed_rows_preserve_existing_guest_provenance_gate(tmp_path, monkeypatch):
+    import csv
+    from scripts.experiments.ecg import algorithm_detailed as detailed, roi_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.record_resources import GraphInfo
+    digest = "a" * 64
+    guest = tmp_path / "algorithms_riscv_m5ops"
+    guest.write_bytes(b"unit guest")
+    args = roi_matrix.parse_args([
+        "--suite", "gem5", "--current-algorithms", "--ecg-equivalence",
+        "--benchmark", "spmv", "--options", "--graph /tmp/fixture.sg",
+        "--expected-gem5-guest-sha256", digest,
+    ])
+    graph = GraphInfo(False, 4, 2, 3, 100, digest)
+    monkeypatch.setattr(detailed, "graph_info", lambda *_args, **_kwargs: graph)
+    monkeypatch.setattr(detailed.algorithms, "validate_payload",
+                        lambda *_args, **_kwargs: {"algorithm": "spmv", "result_digest": "0" * 16})
+    def launch(_args, _spec, _size, _options, _plan, _directory, output, log, _env, _roi):
+        output.write_text("{}")
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text("")
+        return subprocess.CompletedProcess([], 0)
+    monkeypatch.setattr(detailed, "run_gem5", launch)
+    services = SimpleNamespace(
+        VALIDATED_GEM5_GUEST=guest, hash_input_path=lambda _path: digest,
+        parse_size_bytes=roi_matrix.parse_size_bytes, parse_gem5_sections=lambda _path: [{}])
+    rows = detailed.run_cell(args, tmp_path, roi_matrix.parse_policy_spec("LRU"), "1kB", "gem5", services)
+    assert rows[0]["status"] == "ok", rows
+    output = tmp_path / "roi_matrix.csv"
+    with output.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
+        writer.writeheader()
+        writer.writerows(rows)
+    job = experiment_run.Job("unit", "unit", "roi_matrix", [], tmp_path, tmp_path / "job.log",
+                             {"expected_gem5_guest_sha256": digest})
+    ok, error = experiment_run.validate_cross_job_guest_hashes([job])
+    assert ok, error
