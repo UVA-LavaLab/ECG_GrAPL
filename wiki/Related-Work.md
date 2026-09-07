@@ -109,6 +109,9 @@ published ECG predecessor, replacement/prefetch ablations, equal-data-capacity
 P-OPT controls, approximation/record-width sensitivity, and full hardware
 state/port/latency costs. The archived Twitter controls and the current
 reproduction are relevant to attribution, but historical results must not be
-relabeled as the current implementation. See the
+relabeled as the current implementation. The completed
+[current Twitter control study](Evaluation-Methodology#44-current-twitter-reproduction)
+shows a replacement-only advantage over full-capacity uncharged P-OPT, while
+leaving equal-area and encoding-only attribution as separate questions. See the
 [hardware evidence boundary](RISC-V-Instruction-Path#5-state-and-evidence-boundaries)
 before describing the design as low-overhead hardware.

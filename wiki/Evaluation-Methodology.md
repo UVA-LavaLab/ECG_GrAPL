@@ -298,6 +298,86 @@ This establishes local full-core functional readiness at the primary capacity.
 It does not cover current-method Twitter, a 24 MiB sweep, eight-byte
 full-graph performance, large native timing, or physical area/energy.
 
+### 4.4 Current Twitter reproduction
+
+The current `ecg_twitter_reproduction` run completed all **20 cells** on the
+unchanged directed Twitter graph: 41,652,230 vertices, 1,468,364,884 records,
+one full PageRank iteration, and 8/24 MiB LLCs with 16 ways. L1D is
+32 KiB / eight ways and L2 is 128 KiB / eight ways, matching the historical
+archive. The nine archived roles are retained with current implementations,
+plus the current transport control.
+
+The actual maximum encoded VID is 41,652,228. Automatic selection resolves
+ID26/M6/H31/m0 and a four-byte carrier; this is an outcome of the graph, not
+a special Twitter format. Every current row executes 1,468,364,884 property
+reads with checksum `dddc74350d2ba275`. Current fixed-CSR index accounting and
+separate F32 multiply/add semantics are enabled. P-OPT traffic is **analytic
+for this reproduction**, matching the archive rather than the simulated-column
+mode of the six-graph local release.
+
+| Current role | 8 MiB LLC misses | 24 MiB LLC misses |
+|---|---:|---:|
+| ECG transport | 464,308,686 | 361,623,056 |
+| CSR LRU | 464,309,250 | 361,621,634 |
+| SRRIP | 442,002,233 | 337,325,406 |
+| GRASP_PAPER | 390,948,985 | 287,209,317 |
+| Full-capacity uncharged P-OPT | 381,863,469 | 263,368,938 |
+| Size-correct charged P-OPT | 494,198,565 | 296,839,055 |
+| P-OPT-SE | 428,141,504 | 282,695,186 |
+| P-OPT-SE distant | 428,140,810 | 282,596,674 |
+| ECG replacement-only | 337,001,382 | 240,903,813 |
+| ECG replacement-prefetch | 286,341,706 | 210,824,491 |
+
+The equal-data-capacity comparison is particularly useful: uncharged P-OPT,
+ECG replacement-only and combined ECG all retain 16 data ways. Relative to
+that P-OPT control:
+
+| LLC | Replacement-only miss reduction | Combined miss reduction | Replacement-only traffic reduction | Combined traffic reduction |
+|---|---:|---:|---:|---:|
+| 8 MiB | 11.75% | 25.01% | 11.64% | 11.59% |
+| 24 MiB | 8.53% | 19.95% | 8.42% | 8.42% |
+
+Thus the current replacement mechanism's advantage is not solely a P-OPT
+reserved-way effect or an ECG prefetch effect. This is not an equal-area
+comparison or an isolation of encoding precision from every replacement,
+admission and update decision.
+
+Prefetching primarily moves requests away from the demand-miss path. At
+8 MiB, replacement-only and combined ECG incur 340,734,917 and 340,895,117
+total off-chip line transfers; at 24 MiB, they incur 244,609,873 and
+244,613,399. Combined ECG reduces reported misses more strongly while
+leaving total traffic almost unchanged. These are functional cache/traffic
+results, not native CPU speedups.
+
+The trend is reproduced, but the historical counts are not copied:
+
+| ECG role / LLC | Historical misses | Current misses |
+|---|---:|---:|
+| Replacement-only / 8 MiB | 326,257,584 | 337,001,382 |
+| Combined / 8 MiB | 292,056,469 | 286,341,706 |
+| Replacement-only / 24 MiB | 230,428,305 | 240,903,813 |
+| Combined / 24 MiB | 208,422,358 | 210,824,491 |
+
+The newer trace includes incoming/outgoing CSR-index reads omitted before:
+166,608,920 index accesses for this traversal. The two pointer arrays span
+roughly 10.4 million 64-byte lines, explaining the scale of an important
+accounting difference; cache competition and the changed window/transport
+implementation also affect results. The historical build's checksum
+`df4fdaf1e3957ce9` remains attached to its original floating-point contract.
+Current controls are compared with one another, not forced to reproduce
+that checksum.
+
+The profile was frozen in `f9963796`; its resolved run revision is
+`61a10f32`, with only documentation changes during execution. Material inputs,
+raw receipts and completed output digests agree, and the historical
+`twitter_popt_se_d9ae0a6c` archive is unchanged. The complete new matrix and
+`twitter_reproduction_summary.json` are under
+`results/ecg_experiments/runs/current_twitter_reproduction/`.
+The serial run took 23,681.348 host seconds (6 hours 34 minutes) and peaked
+at 25,020.707 MiB sampled RSS under the 32 GiB cap. This whole-process peak
+is not incremental ECG hardware cost; the current carrier is 5,873,459,536
+bytes and its measured construction scratch peak is 106,265,432 bytes.
+
 ## 5. P-OPT accounting
 
 Analytic P-OPT charges reserved LLC capacity and cumulative matrix traffic. It

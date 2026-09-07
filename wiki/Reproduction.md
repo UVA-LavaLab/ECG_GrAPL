@@ -434,13 +434,21 @@ enabled. Changed-model counts are compared with the archive, not forced to
 equal it; this profile is not native timing or final-run authorization.
 
 The full graph resolves automatically to ID26/M6/H31/m0 and four-byte records.
-Its carrier alone needs 5,873,459,536 bytes; the bounded inspection reserves
-19,795,600,521 host bytes conservatively. The profile therefore declares a
+Its carrier alone needs 5,873,459,536 bytes; the initial preflight reservation
+was 19,795,600,521 host bytes. That heuristic is not a peak-allocation bound:
+the completed run measured 25,020.707 MiB peak process-tree RSS. Use the
+measured peak and headroom when sizing the next run. The profile declares a
 6 GiB carrier limit, 1 GiB construction-scratch limit, 32 GiB process-tree RSS
 cap, two hours per policy, and twelve hours for the whole matrix. Run serially
 and retain host memory headroom. A Slurm allocation must exceed the profile
 RSS cap rather than relying on the wrapper's default 32 GiB allocation.
 The old `twitter_popt_se_d9ae0a6c` archive is never overwritten.
+
+The current reproduction completed all 20 cells in 23,681.348 host seconds.
+All rows match the current full-work checksum; relative improvements over
+full-capacity P-OPT persist, but the changed implementation/accounting does
+not reproduce identical historical counts. See the
+[current and archived comparison](Evaluation-Methodology#44-current-twitter-reproduction).
 
 ### Lab-node handoff
 
