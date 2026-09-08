@@ -115,6 +115,8 @@ def test_methodology_is_current_only_and_marks_unmeasured_algorithms():
     assert "8 MiB Patents kernel ECG/LRU" in methodology
     assert "1 KiB diagnostic total ECG/LRU" in methodology
     assert "0.5091" in methodology and "1.1613" in methodology
+    assert "1.4033" in methodology and "1.7235" in methodology
+    assert "synthetic weights 1-32" in methodology
 
 
 @pytest.mark.parametrize("algorithm", ["bfs", "sssp", "cc", "bc", "tc"])

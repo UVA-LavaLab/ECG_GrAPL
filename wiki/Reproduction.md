@@ -5,9 +5,9 @@ committed checkout and keep builds and simulations serial. Graphs, binaries,
 simulator checkouts and results are untracked; stage them separately on the
 machine that will execute the experiments.
 
-Current end-to-end algorithm support is PageRank. The
+Current kernels cover PR, SpMV, BFS, SSSP, CC, BC and TC. The
 [per-algorithm performance table](Evaluation-Methodology#per-algorithm-performance)
-distinguishes that implementation from algorithms not yet integrated.
+distinguishes bounded qualification, measured cache behavior and unmeasured CPU speedups.
 
 ## 1. Prepare inputs
 
@@ -28,6 +28,9 @@ preparation flow when downloads/conversion are required:
 ```bash
 make -j1 PARALLEL=1 converter
 python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py
+python3 scripts/experiments/ecg/flows/prepare_final_graph_corpus.py \
+  --weighted-source results/graphs/cit-Patents/cit-Patents-dbg.sg \
+  --weighted-output results/graphs/cit-Patents/cit-Patents-dbg-w32.wsg --weight-maximum 32
 ```
 
 The core set is web-Google, roadNet-CA, cit-Patents, soc-pokec,
@@ -147,6 +150,7 @@ These are local runner/resource measurements, not simulated CPU execution times.
 | Profile | Workload | Resource scope |
 |---|---|---|
 | `ecg_matched_8mb_cache` | Full Patents PR/SpMV, two traversals, common LRU/GRASP/T/R/RP controls, 8 MiB/16-way LLC | Serial; 4 GiB RSS; 30 minutes per policy |
+| `ecg_dynamic_8mb_cache` | Full Patents BFS/weighted SSSP, source 0, delta 8, LRU/T/RP, 8 MiB/16-way LLC | Six serial cells; 4 GiB RSS; 30 minutes per policy |
 | `ecg_local_release_cache` | Six full core graphs, ten CSR/reference/ECG roles, two iterations, 8 MiB LLC | 8 GiB RSS; one hour per policy |
 | `ecg_large_cache` | Focused current-mechanism capacity exploration | Explicit manifest limits; no final authorization |
 | `ecg_twitter_reproduction` | Directed Twitter, ten roles, one iteration, 8/24 MiB LLC | 32 GiB RSS; two hours per policy; twelve hours per matrix |
@@ -157,6 +161,8 @@ measurements are reported as Twitter-scale evaluation.
 The matched run is `results/ecg_experiments/runs/matched_8mb_pr_spmv` at `36713a44`.
 SpMV reports `traffic_phases.setup/kernel`; their sum equals the unchanged total.
 Compare its kernel phase with PR's existing kernel-only window, not with SpMV's setup-inclusive total.
+The dynamic run is `dynamic_8mb_bfs_sssp` at `55e1a852`. Its weighted copy preserves graph order and IDs;
+the receipt records synthetic `1+(13*min(stored_u,stored_v)+7*max(stored_u,stored_v))%32` weights and input/output hashes.
 
 ```bash
 python3 -I scripts/experiments/ecg/flows/experiment_run.py \

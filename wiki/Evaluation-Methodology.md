@@ -27,17 +27,17 @@ The legacy algorithm executables are not substitutes for these current paths.
 |---|---|---:|---:|---|
 | PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.5191 | Not measured | Not reported for final workloads |
 | SpMV (CSR) | All three (bounded) | 0.5091 | 2.7754 | Not measured |
-| BFS (`bfs`) | All three (bounded) | Not measured | 3.0956 | Not measured |
-| SSSP (`sssp`) | All three (bounded) | Not measured | 2.2321 | Not measured |
+| BFS (`bfs`) | All three (bounded) | 1.4033 | 3.0956 | Not measured |
+| SSSP (`sssp`) | All three (bounded) | 1.7235 | 2.2321 | Not measured |
 | CC (`cc`) | All three (bounded) | Not measured | 2.5008 | Not measured |
 | BC (`bc`) | All three (bounded) | Not measured | 2.0792 | Not measured |
 | TC (`tc`) | All three (bounded) | Not measured | 2.3309 | Not measured |
 
-Ratios are modeled off-chip traffic; lower is better, **not CPU speedup**.
-The matched 8 MiB/16-way runs use full Patents, two traversals, 32 KiB L1D and 256 KiB L2;
-each governed F32 array is 14.40 MiB. PR/SpMV reduce kernel traffic by 48.1%/49.1%.
-GRASP/LRU kernel ratios are 0.6446/0.6402. SpMV including setup is still **1.1613** after two repeats;
-PR setup traffic is unmeasured. The 1 KiB pressure512 totals include setup and are not comparable.
+Ratios are modeled off-chip traffic, **not CPU speedup**; lower is better. Patents uses 32 KiB L1D/256 KiB L2.
+PR/SpMV use two traversals and 14.40 MiB F32 arrays; their GRASP/LRU kernel ratios are 0.6446/0.6402.
+BFS/SSSP converge from source 0; SSSP uses declared synthetic weights 1-32 and delta 8. Both regress in the kernel.
+Including setup, BFS/SSSP totals are **2.1670/2.0173**, and SpMV is **1.1613** after two repeats; PR setup is unmeasured.
+The 1 KiB pressure512 totals include setup and are not comparable to the 8 MiB kernel column.
 
 ### Algorithm and prediction contracts
 
