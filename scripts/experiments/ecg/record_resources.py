@@ -176,6 +176,7 @@ def plan_algorithm_resources(
     traversals: int, sources: int, workspace_limit: int,
     carrier_limit: int, auxiliary_limit: int, rss_mib: int,
     backend: str = "cache_sim", target_memory_bytes: int = 0,
+    bfs_direction_optimizing: bool = False,
 ) -> dict[str, int | str | bool | None]:
     coefficients = {"spmv": 8, "bfs": 12, "sssp": 25, "cc": 12, "bc": 40, "tc": 24}
     if algorithm not in coefficients or min(
@@ -190,6 +191,10 @@ def plan_algorithm_resources(
     carrier_records = graph.records // 2 if algorithm == "tc" else graph.records
     property_bytes = 8 if algorithm in ("sssp", "tc") else 4
     arrays = coefficients[algorithm] * graph.vertices
+    if bfs_direction_optimizing:
+        if algorithm != "bfs":
+            raise RecordResourceError("direction optimization requires BFS")
+        arrays += 16 * ((graph.vertices + 63) // 64)
     if algorithm == "bc":
         arrays += 16 + 4 * sources
     if algorithm == "tc":

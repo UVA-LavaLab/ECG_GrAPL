@@ -15,6 +15,8 @@ struct Fixture {
     struct Edge { int32_t id, weight; };
     std::vector<uint64_t> offsets;
     std::vector<Edge> edges;
+    std::vector<uint64_t> in_offsets;
+    std::vector<Edge> in_edges;
     bool directed;
 
     Fixture(uint32_t vertices, bool is_directed,
@@ -32,12 +34,26 @@ struct Fixture {
             offsets[vertex + 1] += offsets[vertex];
         for (const auto& edge : input)
             edges.push_back({static_cast<int32_t>(std::get<1>(edge)), std::get<2>(edge)});
+        if (directed) {
+            std::vector<std::tuple<uint32_t, uint32_t, int32_t>> incoming;
+            for (const auto& edge : input)
+                incoming.emplace_back(std::get<1>(edge), std::get<0>(edge), std::get<2>(edge));
+            std::sort(incoming.begin(), incoming.end());
+            in_offsets.resize(vertices + 1);
+            for (const auto& edge : incoming)
+                ++in_offsets[std::get<0>(edge) + 1];
+            for (uint32_t vertex = 0; vertex < vertices; ++vertex)
+                in_offsets[vertex + 1] += in_offsets[vertex];
+            for (const auto& edge : incoming)
+                in_edges.push_back({static_cast<int32_t>(std::get<1>(edge)), std::get<2>(edge)});
+        }
     }
 
     ecg_algorithm::GraphView view(bool weighted = false) const {
         return {offsets.size() - 1, edges.size(), directed, offsets.data(),
             edges.data(), weighted && !edges.empty() ? &edges[0].weight : nullptr,
-            sizeof(Edge), false};
+            sizeof(Edge), false, directed ? in_offsets.data() : nullptr,
+            directed ? in_edges.data() : nullptr};
     }
 };
 
@@ -91,6 +107,17 @@ Fixture layered(uint32_t layers) {
     return Fixture(2 * layers + 2, true, edges);
 }
 
+Fixture directionSwitchGraph() {
+    std::vector<std::tuple<uint32_t, uint32_t, int32_t>> edges{{0, 1, 1}};
+    for (uint32_t vertex = 2; vertex <= 65; ++vertex) {
+        edges.emplace_back(1, vertex, 1);
+        edges.emplace_back(vertex, 66, 1);
+    }
+    for (uint32_t vertex = 66; vertex < 128; ++vertex)
+        edges.emplace_back(vertex, vertex + 1, 1);
+    return Fixture(130, true, edges);
+}
+
 struct RejectRegionBackend : ecg_algorithm::PlainBackend {
     void region(const char*, const void*, uint64_t, uint8_t, bool) {
         throw std::invalid_argument("rejected-region");
@@ -136,6 +163,73 @@ int main() {
         {0,1,1}, {0,2,1}, {0,3,1}, {1,2,1}, {1,3,1}, {2,3,1},
         {4,5,1}, {4,6,1}, {5,6,1}, {7,8,1}});
     const Fixture paths = layered(34);
+    const Fixture switching = directionSwitchGraph();
+    for (const Fixture* fixture : {&diamond, &cliques, &switching}) {
+        const auto expected = run(fixture->view(), Algorithm::BFS, false, 4);
+        for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+            for (const auto mechanism : {ecg_record::Mechanism::TRANSPORT,
+                    ecg_record::Mechanism::REPLACEMENT, ecg_record::Mechanism::PREFETCH,
+                    ecg_record::Mechanism::REPLACEMENT_PREFETCH}) {
+                Options options;
+                options.algorithm = Algorithm::BFS;
+                options.bfs_direction_optimizing = true;
+                options.record_bytes = width;
+                options.evidence = options.capture_values = true;
+                PlainBackend baseline;
+                const auto csr = ecg_algorithm::run(fixture->view(), options, baseline);
+                options.records = true;
+                options.mechanism = mechanism;
+                const bool replacement = mechanism == ecg_record::Mechanism::REPLACEMENT ||
+                    mechanism == ecg_record::Mechanism::REPLACEMENT_PREFETCH;
+                cache_sim::CacheHierarchy cache(128, 2, 256, 2, 512, 2, 64,
+                    cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU,
+                    replacement ? cache_sim::EvictionPolicy::ECG : cache_sim::EvictionPolicy::LRU);
+                cache_sim::AlgorithmBackend backend(cache, options);
+                const auto actual = ecg_algorithm::run(fixture->view(), options, backend);
+                check(actual.values_u32 == expected.values_u32 && actual.levels == expected.levels &&
+                      actual.work_digest == csr.work_digest && actual.result_digest == csr.result_digest,
+                      "direction-optimized BFS preserves depths and identical CSR/record work");
+                check(actual.bfs_bu_levels > 0 &&
+                      actual.bfs_td_levels + actual.bfs_bu_levels == actual.levels &&
+                      actual.bfs_td_edges == actual.actual_records &&
+                      actual.passes == actual.bfs_td_levels,
+                      "BU bitmap probes are ordinary accesses, not fake governed records");
+                if (fixture == &switching)
+                    check(actual.bfs_td_levels > 1 && actual.bfs_direction_switches >= 2 &&
+                          actual.bfs_bu_edges == 253 &&
+                          actual.values_u32[128] == 65 && actual.values_u32[129] == UINT32_MAX,
+                          "TD/BU/TD preserves bitmap boundaries, isolates and BU early exit");
+            }
+        }
+    }
+    {
+        Options options;
+        options.algorithm = Algorithm::BFS;
+        options.bfs_direction_optimizing = true;
+        options.bfs_alpha = 1;
+        options.capture_values = true;
+        PlainBackend backend;
+        const auto result = ecg_algorithm::run(switching.view(), options, backend);
+        check(result.bfs_bu_levels == 0 && result.bfs_td_levels == result.levels &&
+              result.values_u32 == run(switching.view(), Algorithm::BFS, false, 4).values_u32,
+              "direction thresholds can select pure TD without changing BFS answers");
+        options.source = 7;
+        options.records = true;
+        PlainBackend isolated_backend;
+        const auto isolated = ecg_algorithm::run(diamond.view(), options, isolated_backend);
+        check(isolated.actual_records == 0 && isolated.reached == 1 && isolated.levels == 1,
+              "direction-optimized isolated source does not invent governed accesses");
+        auto missing_inverse = diamond.view();
+        missing_inverse.in_offsets = missing_inverse.in_columns = nullptr;
+        bool rejected = false;
+        try {
+            PlainBackend invalid_backend;
+            ecg_algorithm::run(missing_inverse, options, invalid_backend);
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        check(rejected, "directed BU cannot silently substitute outgoing adjacency");
+    }
     for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
         for (bool records : {false, true}) {
             const auto spmv = run(diamond.view(true), Algorithm::SPMV, records, width);

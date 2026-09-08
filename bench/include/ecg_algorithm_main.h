@@ -104,6 +104,12 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             }
         } else if (argument == "--repeat") command.options.repetitions = unsignedOption(value);
         else if (argument == "--delta") command.options.delta = unsignedOption(value);
+        else if (argument == "--bfs-direction") {
+            if (value != "td" && value != "do")
+                throw std::invalid_argument("bfs-direction-must-be-td-or-do");
+            command.options.bfs_direction_optimizing = value == "do";
+        } else if (argument == "--bfs-alpha") command.options.bfs_alpha = unsignedOption(value);
+        else if (argument == "--bfs-beta") command.options.bfs_beta = unsignedOption(value);
         else if (argument == "--max-passes") command.options.maximum_passes = unsignedOption(value);
         else if (argument == "--workspace-bytes") command.options.maximum_workspace_bytes = unsignedOption(value);
         else if (argument == "--graph-bytes") command.maximum_graph_bytes = unsignedOption(value);
@@ -142,7 +148,8 @@ inline void writeHash(std::ostream& output, uint64_t value) {
 inline void writeResult(std::ostream& output, const Result& result, const Options& options) {
     const bool exact = result.algorithm == Algorithm::SPMV || result.algorithm == Algorithm::TC;
     output << "{\"schema\":\"ecg.algorithm-workload.v1\",\"algorithm\":\"" << name(result.algorithm)
-           << "\",\"variant\":\"" << variant(result.algorithm)
+           << "\",\"variant\":\"" << (options.bfs_direction_optimizing
+                ? "sorted-direction-optimizing-td-records-bu-bitmap" : variant(result.algorithm))
            << "\",\"prediction_semantics\":\""
            << (exact ? "dense-actual-designated-read" : "next-potential-designated-read")
            << "\",\"carrier\":\"" << (result.records ? "record" : "csr") << '"';
@@ -172,6 +179,19 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
     field("source_count", options.sources.empty() ? 1 : options.sources.size());
     field("repetitions", options.repetitions);
     field("delta", options.delta);
+    if (result.algorithm == Algorithm::BFS) {
+        output << ",\"bfs_direction\":\"" << (options.bfs_direction_optimizing ? "do" : "td")
+               << "\",\"bfs_bu_transport\":\"ordinary-bitmap\"";
+        field("bfs_alpha", options.bfs_alpha);
+        field("bfs_beta", options.bfs_beta);
+        field("bfs_td_levels", result.bfs_td_levels);
+        field("bfs_bu_levels", result.bfs_bu_levels);
+        field("bfs_td_edges", result.bfs_td_edges);
+        field("bfs_bu_edges", result.bfs_bu_edges);
+        field("bfs_bu_vertices", result.bfs_bu_vertices);
+        field("bfs_frontier_peak", result.bfs_frontier_peak);
+        field("bfs_direction_switches", result.bfs_direction_switches);
+    }
     field("reached", result.reached);
     field("levels", result.levels);
     field("components", result.components);
@@ -225,7 +245,9 @@ int invokeGraph(const Graph& graph, const CommandLine& command, Invoke invoke) {
         weights = graph.num_edges_directed() ? static_cast<const void*>(&columns[0].w) : columns;
     const GraphView view{static_cast<uint64_t>(graph.num_nodes()),
         static_cast<uint64_t>(graph.num_edges_directed()), graph.directed(), graph.out_index_storage(),
-        columns, weights, sizeof(Edge), true};
+        columns, weights, sizeof(Edge), true,
+        graph.directed() ? graph.in_index_storage() : nullptr,
+        graph.directed() ? graph.in_neigh(0).begin() : nullptr};
     return invoke(view, command);
 }
 

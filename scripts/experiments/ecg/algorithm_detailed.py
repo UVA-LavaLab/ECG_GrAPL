@@ -62,6 +62,9 @@ def guest_options(args, options, plan, spec, size_bytes, l3_size: str, output: P
     ]
     if options.sources:
         values.extend(("--sources", options.sources))
+    if args.benchmark == "bfs":
+        values.extend(("--bfs-direction", options.bfs_direction,
+                       "--bfs-alpha", str(options.bfs_alpha), "--bfs-beta", str(options.bfs_beta)))
     if args.ecg_equivalence:
         values.extend(("--evidence", "--values"))
     return values
@@ -201,6 +204,7 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
         require(mode in algorithms.MODES or spec.label in ("LRU", "SRRIP", "GRASP_PAPER"),
                 "unsupported detailed algorithm policy")
         options = algorithms.parse_options(args.options)
+        require(options.bfs_direction == "td", "direction-optimized BFS is currently cache_sim-only")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
         require(graph.vertices <= 4096 and graph.records <= 65536, "detailed algorithm qualification is bounded")
         plan = plan_algorithm_resources(

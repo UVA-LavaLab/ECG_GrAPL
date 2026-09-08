@@ -214,6 +214,21 @@ Bounded qualification and fresh performance measurements remain distinct in the
 [per-algorithm table](Evaluation-Methodology#per-algorithm-performance).
 The figures above retain the dense PageRank example and its original geometry.
 
+### Direction-optimizing BFS trial
+
+The opt-in cache_sim variant `--bfs-direction do` uses sorted TD frontiers and
+standard alpha/beta switching (15/18 by default). Dense levels scan unvisited
+vertices through incoming CSR and stop at the first frontier neighbor. Frontier
+membership uses packed 64-bit bitmaps, not a widened per-vertex marker array.
+Bitmap clearing, conversion, degree queries and all probes are counted.
+
+Only TD depth loads carry current ECG records. Before BU, the closed TD pass is
+drained; BU uses ordinary CSR/bitmap accesses with no predictive annotation.
+No metadata is rebuilt from future frontiers, and no BU work is falsely counted
+as record consumption. TD/BU level counts and examined edges are reported
+separately. This trial is cache_sim-only; default TD and its detailed-backend
+admission remain unchanged. Compare policies within the same direction schedule.
+
 ## Implementation sources
 
 | Surface | Source |

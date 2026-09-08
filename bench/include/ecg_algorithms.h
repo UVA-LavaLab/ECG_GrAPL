@@ -55,6 +55,8 @@ struct Options {
     uint32_t source = 0;
     uint64_t repetitions = 1;
     uint64_t delta = 1;
+    bool bfs_direction_optimizing = false;
+    uint64_t bfs_alpha = 15, bfs_beta = 18;
     uint64_t maximum_passes = 1000000;
     uint64_t maximum_workspace_bytes = uint64_t{512} << 20;
     ecg_record::BuildLimits build_limits;
@@ -73,6 +75,8 @@ struct Result {
     uint64_t result_digest = 0, work_digest = 0, position_digest = 0, record_digest = 0;
     uint64_t reached = 0, levels = 0, components = 0, relax_attempts = 0, relax_successes = 0;
     uint64_t light_passes = 0, heavy_passes = 0, sigma_max = 0;
+    uint64_t bfs_td_levels = 0, bfs_bu_levels = 0, bfs_td_edges = 0, bfs_bu_edges = 0;
+    uint64_t bfs_bu_vertices = 0, bfs_frontier_peak = 0, bfs_direction_switches = 0;
     uint64_t triangles = 0, oriented_edges = 0, intersection_comparisons = 0, bindings = 0;
     uint64_t source_list_digest = 0;
     uint64_t maximum_encoded_id = 0;
@@ -91,6 +95,17 @@ struct GraphView {
     const void* weights = nullptr;
     uint32_t edge_stride = 4;
     bool pointer_offsets = false;
+    const void* in_offsets = nullptr;
+    const void* in_columns = nullptr;
+
+    GraphView incoming() const {
+        if (!directed)
+            return *this;
+        if (!in_offsets || (records && !in_columns))
+            throw std::invalid_argument("direction-optimized BFS requires incoming CSR");
+        return {vertices, records, true, in_offsets, in_columns, nullptr, edge_stride,
+                pointer_offsets, offsets, columns};
+    }
 
     template<class Access>
     uint64_t offset(Access& access, uint64_t row) const {
@@ -523,6 +538,11 @@ class Engine {
         result.record_digest = options.evidence && options.records ? records_.value() : 0;
     }
 
+    void drainRecords() {
+        if (options.records && graph_.records)
+            backend_.drain();
+    }
+
     template<class T>
     void capture(const Buffer<T>& values) {
         ecg_record::StreamDigest digest;
@@ -657,8 +677,145 @@ void spmv(const GraphView& graph, Access& access) {
     access.capture(y);
 }
 
+struct BfsStep {
+    uint64_t size = 0, scouts = 0;
+};
+
+template<class Access>
+BfsStep bfsTopDownLevel(
+        const GraphView& graph, Access& access,
+        typename Access::template Buffer<uint32_t>& depth,
+        const typename Access::template Buffer<uint32_t>& frontier,
+        typename Access::template Buffer<uint32_t>& next,
+        uint64_t size, uint32_t level, bool count_scouts) {
+    BfsStep step;
+    access.beginPass();
+    ++access.result.bfs_td_levels;
+    for (uint64_t position = 0; position < size; ++position) {
+        const uint32_t vertex = frontier.get(position);
+        const auto row = graph.row(access, vertex);
+        for (uint64_t index = row.first; index < row.second; ++index) {
+            const auto item = access.neighbor(index, depth);
+            ++access.result.bfs_td_edges;
+            if (item.second == UINT32_MAX) {
+                depth.set(item.first, level + 1);
+                next.set(step.size++, item.first);
+                ++access.result.reached;
+                if (count_scouts) {
+                    const auto target_row = graph.row(access, item.first);
+                    step.scouts += target_row.second - target_row.first;
+                }
+            }
+        }
+    }
+    access.closePass();
+    return step;
+}
+
+template<class Buffer>
+void setFrontierBit(Buffer& bitmap, uint32_t vertex) {
+    const uint64_t word = vertex / 64;
+    bitmap.set(word, bitmap.get(word) | (uint64_t{1} << (vertex % 64)));
+}
+
+template<class Access>
+void bfsDirectionOptimizing(const GraphView& graph, Access& access) {
+    typename Access::template Buffer<uint32_t> depth(access, graph.vertices, "depth", true);
+    typename Access::template Buffer<uint32_t> frontier(access, graph.vertices, "frontier");
+    typename Access::template Buffer<uint32_t> next(access, graph.vertices, "next_frontier");
+    const uint64_t words = (graph.vertices + 63) / 64;
+    typename Access::template Buffer<uint64_t> front_bits(access, words, "frontier_bits");
+    typename Access::template Buffer<uint64_t> next_bits(access, words, "next_frontier_bits");
+    const GraphView incoming = graph.incoming();
+    depth.fill(UINT32_MAX);
+    depth.set(access.options.source, 0);
+    frontier.set(0, access.options.source);
+    uint64_t size = 1;
+    uint32_t level = 0;
+    const auto source_row = graph.row(access, access.options.source);
+    uint64_t scouts = source_row.second - source_row.first;
+    uint64_t remaining_edges = graph.records;
+    access.result.reached = 1;
+    access.result.bfs_frontier_peak = 1;
+    access.bind(graph, depth, ecg_record::TraversalMode::ORDERED_FILTERED);
+    while (size != 0) {
+        if (level >= access.options.maximum_passes)
+            throw std::logic_error("algorithm-pass-limit-or-order");
+        if (scouts > remaining_edges / access.options.bfs_alpha) {
+            access.drainRecords();
+            ++access.result.bfs_direction_switches;
+            front_bits.fill(0);
+            for (uint64_t index = 0; index < size; ++index)
+                setFrontierBit(front_bits, frontier.get(index));
+            uint64_t previous_size;
+            do {
+                if (level >= access.options.maximum_passes)
+                    throw std::logic_error("algorithm-pass-limit-or-order");
+                previous_size = size;
+                size = 0;
+                next_bits.fill(0);
+                ++access.result.bfs_bu_levels;
+                for (uint64_t vertex = 0; vertex < graph.vertices; ++vertex) {
+                    ++access.result.bfs_bu_vertices;
+                    if (depth.get(vertex) != UINT32_MAX)
+                        continue;
+                    const auto row = incoming.row(access, vertex);
+                    for (uint64_t index = row.first; index < row.second; ++index) {
+                        const uint32_t neighbor = incoming.id(access, index);
+                        const uint64_t bits = front_bits.get(neighbor / 64);
+                        ++access.result.bfs_bu_edges;
+                        if ((bits >> (neighbor % 64)) & 1) {
+                            depth.set(vertex, level + 1);
+                            setFrontierBit(next_bits, static_cast<uint32_t>(vertex));
+                            ++size;
+                            ++access.result.reached;
+                            break;
+                        }
+                    }
+                }
+                front_bits.swap(next_bits);
+                access.result.bfs_frontier_peak = std::max(access.result.bfs_frontier_peak, size);
+                ++level;
+            } while (size >= previous_size || size > graph.vertices / access.options.bfs_beta);
+            if (size == 0)
+                break;
+            uint64_t count = 0;
+            for (uint64_t word = 0; word < words; ++word) {
+                uint64_t bits = front_bits.get(word);
+                while (bits) {
+                    const uint64_t vertex = word * 64 + __builtin_ctzll(bits);
+                    if (vertex >= graph.vertices)
+                        throw std::logic_error("frontier-bitmap-padding-is-set");
+                    frontier.set(count++, static_cast<uint32_t>(vertex));
+                    bits &= bits - 1;
+                }
+            }
+            if (count != size)
+                throw std::logic_error("frontier-bitmap-count-mismatch");
+            ++access.result.bfs_direction_switches;
+            scouts = 1;
+        } else {
+            remaining_edges -= scouts;
+            const auto step = bfsTopDownLevel(graph, access, depth, frontier, next, size, level, true);
+            sortPrefix(next, step.size);
+            frontier.swap(next);
+            size = step.size;
+            scouts = step.scouts;
+            access.result.bfs_frontier_peak = std::max(access.result.bfs_frontier_peak, size);
+            ++level;
+        }
+    }
+    access.result.levels = level;
+    access.complete();
+    access.capture(depth);
+}
+
 template<class Access>
 void bfs(const GraphView& graph, Access& access) {
+    if (access.options.bfs_direction_optimizing) {
+        bfsDirectionOptimizing(graph, access);
+        return;
+    }
     typename Access::template Buffer<uint32_t> depth(access, graph.vertices, "depth", true);
     typename Access::template Buffer<uint32_t> frontier(access, graph.vertices, "frontier");
     typename Access::template Buffer<uint32_t> next(access, graph.vertices, "next_frontier");
@@ -667,27 +824,14 @@ void bfs(const GraphView& graph, Access& access) {
     frontier.set(0, access.options.source);
     uint64_t size = 1;
     uint32_t level = 0;
-    access.result.reached = 1;
+    access.result.reached = access.result.bfs_frontier_peak = 1;
     access.bind(graph, depth, ecg_record::TraversalMode::ORDERED_FILTERED);
     while (size != 0) {
-        uint64_t next_size = 0;
-        access.beginPass();
-        for (uint64_t position = 0; position < size; ++position) {
-            const uint32_t vertex = frontier.get(position);
-            const auto row = graph.row(access, vertex);
-            for (uint64_t index = row.first; index < row.second; ++index) {
-                const auto item = access.neighbor(index, depth);
-                if (item.second == UINT32_MAX) {
-                    depth.set(item.first, level + 1);
-                    next.set(next_size++, item.first);
-                    ++access.result.reached;
-                }
-            }
-        }
-        access.closePass();
-        sortPrefix(next, next_size);
+        const auto step = bfsTopDownLevel(graph, access, depth, frontier, next, size, level, false);
+        sortPrefix(next, step.size);
         frontier.swap(next);
-        size = next_size;
+        size = step.size;
+        access.result.bfs_frontier_peak = std::max(access.result.bfs_frontier_peak, size);
         ++level;
     }
     access.result.levels = level;
@@ -1100,6 +1244,8 @@ template<class Backend>
 Result run(const GraphView& graph, const Options& options, Backend& backend) {
     name(options.algorithm);
     if (options.repetitions == 0 || options.delta == 0 || options.maximum_passes == 0 ||
+        options.bfs_alpha == 0 || options.bfs_beta == 0 ||
+        (options.algorithm != Algorithm::BFS && options.bfs_direction_optimizing) ||
         (options.record_bytes != 0 && options.record_bytes != 4 && options.record_bytes != 8) ||
         options.minimum_mantissa_bits > 61 ||
         (options.algorithm != Algorithm::SPMV && options.algorithm != Algorithm::TC &&
@@ -1117,6 +1263,8 @@ Result run(const GraphView& graph, const Options& options, Backend& backend) {
     Result result;
     Engine<Backend> access(graph, options, backend, result);
     validateGraph(graph, access, options.algorithm == Algorithm::CC || options.algorithm == Algorithm::TC);
+    if (options.bfs_direction_optimizing && graph.directed)
+        validateGraph(graph.incoming(), access, false);
     switch (options.algorithm) {
       case Algorithm::SPMV: spmv(graph, access); break;
       case Algorithm::BFS: bfs(graph, access); break;

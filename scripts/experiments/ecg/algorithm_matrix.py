@@ -50,8 +50,11 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--delta", type=int, default=8)
     parser.add_argument("--max-passes", type=int, default=1000000)
+    parser.add_argument("--bfs-direction", choices=("td", "do"), default="td")
+    parser.add_argument("--bfs-alpha", type=int, default=15)
+    parser.add_argument("--bfs-beta", type=int, default=18)
     parsed = parser.parse_args(shlex.split(text))
-    if min(parsed.repeat, parsed.delta, parsed.max_passes) <= 0 or parsed.source < 0:
+    if min(parsed.repeat, parsed.delta, parsed.max_passes, parsed.bfs_alpha, parsed.bfs_beta) <= 0 or parsed.source < 0:
         raise RecordResourceError("invalid current algorithm parameters")
     parsed.source_list = []
     if parsed.sources:
@@ -85,8 +88,11 @@ def validate_payload(
     work = payload.get("workload")
     require(isinstance(work, dict), "missing algorithm workload")
     specification = contract()["algorithms"][algorithm]
+    direction_optimizing = options.bfs_direction == "do"
+    require(not direction_optimizing or algorithm == "bfs", "direction optimization requires BFS")
+    expected_variant = "sorted-direction-optimizing-td-records-bu-bitmap" if direction_optimizing else specification["variant"]
     require(work.get("schema") == "ecg.algorithm-workload.v1" and
-            work.get("algorithm") == algorithm and work.get("variant") == specification["variant"] and
+            work.get("algorithm") == algorithm and work.get("variant") == expected_variant and
             work.get("prediction_semantics") == specification["semantics"],
             "algorithm variant or prediction semantics mismatch")
     records = mode != "csr"
@@ -101,8 +107,20 @@ def validate_payload(
     carrier_count = graph.records // 2 if algorithm == "tc" else graph.records
     require(_integer(work, "carrier_records") == carrier_count, "unexpected structural stream count")
     passes, actual, skipped = (_integer(work, key) for key in ("passes", "actual_records", "skipped_positions"))
-    require(passes > 0 and actual + skipped == _integer(work, "structural_positions") == passes * carrier_count,
+    require((passes > 0 or direction_optimizing) and
+            actual + skipped == _integer(work, "structural_positions") == passes * carrier_count,
             "algorithm pass accounting does not close")
+    if algorithm == "bfs":
+        td, bu = _integer(work, "bfs_td_levels"), _integer(work, "bfs_bu_levels")
+        require(work.get("bfs_direction") == options.bfs_direction and
+                _integer(work, "bfs_alpha") == options.bfs_alpha and
+                _integer(work, "bfs_beta") == options.bfs_beta and
+                td == passes and td + bu == _integer(work, "levels") and td + bu > 0 and
+                _integer(work, "bfs_td_edges") == actual and
+                _integer(work, "bfs_bu_vertices") == bu * graph.vertices and
+                work.get("bfs_bu_transport") == "ordinary-bitmap" and
+                (direction_optimizing or bu == 0),
+                "BFS direction, bitmap or level-work accounting mismatch")
     require(_integer(work, "source") == options.source and
             _integer(work, "source_count") == (len(options.source_list) or 1) and
             _integer(work, "repetitions") == options.repeat and _integer(work, "delta") == options.delta,
@@ -254,7 +272,7 @@ def run_cache_cell(
             traversals=options.repeat, sources=len(options.source_list) or 1,
             workspace_limit=args.algorithm_workspace_bytes,
             carrier_limit=args.ecg_record_max_carrier_bytes, auxiliary_limit=args.ecg_record_max_auxiliary_bytes,
-            rss_mib=args.cache_record_rss_mib)
+            rss_mib=args.cache_record_rss_mib, bfs_direction_optimizing=options.bfs_direction == "do")
         binary = ROOT / "bench/bin_sim/algorithms"
         label = f"cache_sim_{args.benchmark}_{spec.safe_label}_L3{parse_size_bytes(l3_size)}"
         data_path = out_dir / "cache_sim" / f"{label}.json"
@@ -277,6 +295,9 @@ def run_cache_cell(
         ]
         if options.sources:
             command.extend(("--sources", options.sources))
+        if args.benchmark == "bfs":
+            command.extend(("--bfs-direction", options.bfs_direction,
+                            "--bfs-alpha", str(options.bfs_alpha), "--bfs-beta", str(options.bfs_beta)))
         if args.ecg_equivalence:
             command.extend(("--evidence", "--values"))
         setarch = shutil.which("setarch")
@@ -341,6 +362,8 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
         "csr_index_reads", "weight_reads", "ordinary_property_reads", "property_writes", "auxiliary_accesses",
         "reached", "levels", "components", "relax_attempts", "relax_successes", "light_passes", "heavy_passes",
         "sigma_max", "triangles", "oriented_edges", "intersection_comparisons", "bindings",
+        "bfs_direction", "bfs_alpha", "bfs_beta", "bfs_td_levels", "bfs_bu_levels",
+        "bfs_td_edges", "bfs_bu_edges", "bfs_bu_vertices", "bfs_frontier_peak", "bfs_direction_switches",
     )
     for group in groups.values():
         good = [row for row in group if row.get("status") == "ok"]

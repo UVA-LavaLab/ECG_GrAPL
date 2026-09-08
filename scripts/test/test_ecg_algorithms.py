@@ -85,6 +85,31 @@ def test_current_algorithm_cli_and_independent_receipts(tmp_path):
                     assert workload["construction_write_bytes"] > 0
 
 
+def test_direction_optimized_cli_uses_real_incoming_csr(tmp_path):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import serialized_graph
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    data, _ = serialized_graph(5, [(0, 1), (0, 2), (1, 3), (2, 3)], True)
+    graph = tmp_path / "directed.sg"
+    graph.write_bytes(data)
+    for mode in ("csr", "transport", "replacement", "replacement-prefetch"):
+        output = tmp_path / f"{mode}.json"
+        ran = subprocess.run([
+            str(binary), "--algorithm", "bfs", "--bfs-direction", "do",
+            "--graph", str(graph), "--source", "0", "--mode", mode,
+            "--record-bytes", "4", "--values", "--evidence", "--output", str(output),
+        ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+            capture_output=True, text=True, timeout=20, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        work = json.loads(output.read_text())["workload"]
+        assert work["values_u32"] == [0, 1, 1, 2, 4294967295]
+        assert work["bfs_bu_levels"] > 0
+        assert work["bfs_bu_transport"] == "ordinary-bitmap"
+        assert work["passes"] == work["bfs_td_levels"]
+        assert work["levels"] == work["bfs_td_levels"] + work["bfs_bu_levels"]
+
+
 def test_checked_algorithm_graph_reader(tmp_path):
     binary = tmp_path / "reader"
     built = subprocess.run([
@@ -408,3 +433,22 @@ def test_dynamic_8mb_profile_is_six_bounded_cells(tmp_path):
     weighted = next(job for job in jobs if job.metadata["benchmark"] == "sssp")
     assert "--delta 8" in weighted.command[weighted.command.index("--options") + 1]
     assert weighted.metadata["graph_path"].endswith("-w32.wsg")
+
+
+def test_dobfs_profile_is_one_bounded_three_policy_trial(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.algorithm_matrix import parse_options
+    from scripts.experiments.ecg.record_resources import GraphInfo, plan_algorithm_resources
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    args = experiment_run.parse_args(["--profile", "ecg_dobfs_8mb_cache", "--list"])
+    jobs = experiment_run.expand_jobs(args, manifest, tmp_path)
+    assert len(jobs) == 1 and jobs[0].metadata["policies"] == ["LRU", "ECG:transport", "ECG:replacement"]
+    command = jobs[0].command
+    options = parse_options(command[command.index("--options") + 1])
+    assert options.bfs_direction == "do" and options.bfs_alpha == 15 and options.bfs_beta == 18
+    plan = plan_algorithm_resources(
+        GraphInfo(False, 130, 200, 129, 2000, "a" * 64), algorithm="bfs",
+        records=False, requested_bytes=4, minimum_mantissa_bits=0, traversals=1,
+        sources=1, workspace_limit=1 << 20, carrier_limit=1 << 20,
+        auxiliary_limit=1 << 20, rss_mib=1024, bfs_direction_optimizing=True)
+    assert plan["array_bytes"] == 12 * 130 + 2 * 3 * 8
