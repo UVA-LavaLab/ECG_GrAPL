@@ -313,3 +313,14 @@ def test_detailed_rows_preserve_existing_guest_provenance_gate(tmp_path, monkeyp
                              {"expected_gem5_guest_sha256": digest})
     ok, error = experiment_run.validate_cross_job_guest_hashes([job])
     assert ok, error
+
+
+def test_sniper_metrics_report_observed_llc_activity():
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    metrics = {"l1d_loads": 100, "l1d_load_misses": 30,
+               "l2_loads": 30, "l2_load_misses": 20,
+               "llc_loads": 20, "llc_load_misses": 8}
+    row = {"status": "ok", **algorithm_detailed.normalize_sniper_metrics(metrics)}
+    roi_matrix.annotate_l3_pressure(row)
+    assert row["l3_accesses"] == 20 and row["l3_misses"] == 8
+    assert row["l3_miss_rate"] == 0.4 and row["l3_exercised"] is True

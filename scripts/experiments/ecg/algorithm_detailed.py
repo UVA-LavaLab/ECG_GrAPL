@@ -30,6 +30,18 @@ def environment() -> dict[str, str]:
     return env
 
 
+def normalize_sniper_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    result = dict(metrics)
+    for level, prefix in (("l1", "l1d"), ("l2", "l2"), ("l3", "llc")):
+        accesses, misses = metrics.get(prefix + "_loads"), metrics.get(prefix + "_load_misses")
+        require(type(accesses) is int and type(misses) is int and 0 <= misses <= accesses,
+                f"missing or invalid Sniper {level} load counters")
+        result[level + "_accesses"] = accesses
+        result[level + "_misses"] = misses
+        result[level + "_miss_rate"] = misses / accesses if accesses else 0
+    return result
+
+
 def guest_options(args, options, plan, spec, size_bytes, l3_size: str, output: Path) -> list[str]:
     values = [
         "--algorithm", args.benchmark, "--graph", str(options.graph),
@@ -230,7 +242,7 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
         else:
             raw = roi.read_sniper_stats(directory)
             require(raw.get("success"), "Sniper algorithm stats are missing")
-            metrics = roi.extract_graphbrew_metrics(raw)
+            metrics = normalize_sniper_metrics(roi.extract_graphbrew_metrics(raw))
         row.update(metrics)
         row.update(status="ok", timing_valid_for_speedup="0", algorithm_workload_verified="1",
                    graph_sha256=graph.sha256, benchmark_binary_sha256=binary_hash,
