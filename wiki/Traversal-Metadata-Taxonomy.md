@@ -229,9 +229,65 @@ BU bitmap and TC list-body annotations remain unimplemented.
 
 The next-only construction change preserves the effective filtered predictions
 and window targets, but changes raw terminal WRAP tokens to UNKNOWN.
-Its Patents scratch bounds are 5.4 MiB for scoped CC and 7.2 MiB for scoped
-SSSP, versus 28/40 MiB above. These are storage bounds, not refreshed traffic
-results; the measured table remains tied to `530d3774`.
+Its Patents scratch allocations are 5.4 MiB for scoped CC and 7.2 MiB for
+scoped SSSP, versus 28/40 MiB above. The earlier table remains tied to
+`530d3774`; the next comparison measures the compact implementation.
+
+### Matched GRASP and P-OPT comparison
+
+`results/ecg_experiments/runs/competitive_8mb_patents_074cbf75` contains the
+forty-two-cell comparison at implementation `074cbf75`. Each of the six
+algorithms has seven controls: CSR LRU, CSR GRASP, favorable full-capacity
+P-OPT, and ECG transport/replacement on explicit LRU and GRASP bases.
+Inputs, source/repetition parameters, outputs, work counts and binary match
+within each algorithm. Every T/R pair has identical setup counters.
+
+Geometry and graph are unchanged from the earlier experiment. SpMV runs two
+sweeps, TC one; BFS/BC/SSSP use source 0 and SSSP delta 8. CC/SSSP use the
+static phase masks; the other ECG arms retain full-CSR masks. P-OPT keeps
+all sixteen data ways and free runtime matrix lookup, while its real matrix
+construction and storage remain counted. Its graph-pass/region contract is
+described in [Related Work](Related-Work#current-shared-kernel-p-opt-control).
+
+The following table fixes the ECG base to GRASP for every row; it does not
+select the winning base after observing each result. Negative changes mean
+less traffic. All kernel columns count demand fills plus dirty writebacks.
+
+| Algorithm | GRASP kernel transfers | P-OPT kernel transfers | ECG/GRASP-base kernel transfers | Change vs GRASP | Change vs P-OPT | Total change vs GRASP |
+|---|---:|---:|---:|---:|---:|---:|
+| SpMV | 15,456,930 | 12,398,416 | 14,916,849 | -3.49% | +20.31% | +86.05% |
+| BFS TD | 13,416,757 | 10,852,949 | 13,665,286 | +1.85% | +25.91% | +78.72% |
+| SSSP | 153,532,836 | 120,828,383 | 161,549,614 | +5.22% | +33.70% | +16.56% |
+| CC | 7,155,453 | 7,688,682 | 7,222,426 | +0.94% | -6.06% | +18.63% |
+| BC | 59,671,588 | 54,530,972 | 62,343,237 | +4.48% | +14.33% | +23.69% |
+| TC | 33,483,453 | 38,114,637 | 32,991,372 | -1.47% | -13.44% | +10.07% |
+
+TC beats both baselines on kernel misses and traffic within this implemented
+scalar-property contract. Its setup-inclusive traffic also falls 6.89%
+versus P-OPT, but remains 10.07% above GRASP. TC list bodies are still
+unannotated; this is not a general list-reuse or native-runtime claim.
+SpMV beats GRASP but not P-OPT. The LRU-base alternative is better for SSSP:
+137,956,514 kernel transfers, 10.15% below GRASP but 14.18% above P-OPT.
+Neither base wins all six algorithms.
+
+Against its own GRASP-base transport, temporal refinement reduces kernel
+traffic by 3.87% for SpMV and 4.72% for TC, but increases it for BFS, SSSP,
+CC and BC. Thus retaining a strong base does not make uncertain temporal
+overrides harmless. The graph-static prediction problem is not solved by
+changing the fallback alone.
+
+Construction improved materially: LRU-base scoped SSSP setup falls from
+87,277,643 to 30,444,907 transfers, and CC from 116,898,772 to 88,340,373.
+Those reductions do not remove the separately retained carrier, weighted
+ID/weight transport cost, or BC's repeated structural-ID acquisition.
+The GRASP-base six-kernel geometric-mean traffic ratio is 1.0121 versus
+GRASP and 1.1112 versus P-OPT for the kernel; including setup, it is
+1.3576 and 1.1995. These are fixed-base aggregates, not an oracle selector.
+
+**Competitive target: not achieved across the suite.** Keep the GRASP base
+explicitly opt-in and preserve the LRU default. The result identifies a
+limited kernel win and the remaining prediction/transport costs; it does
+not justify claiming ECG generally outperforms GRASP or P-OPT.
 
 ## Semantics and cache decisions must stay honest
 
@@ -242,8 +298,8 @@ confidence as DEAD. The encoding and receiver contract would need to state
 what the information means before allocating bits.
 
 For filtered passes, the current implementation converts WRAP/DEAD to UNKNOWN,
-caps FINITE predictions at pass end and expires them at closure. UNKNOWN is
-LRU-neutral. **Visited, settled, updated or no longer active does not mean
+caps FINITE predictions at pass end and expires them at closure. UNKNOWN preserves
+the selected base policy, LRU by default. **Visited, settled, updated or no longer active does not mean
 never read again**, and a cache line can contain both active and inactive
 vertices. Any stronger deadness claim must cover all relevant accesses, not
 only the algorithm's work queue.

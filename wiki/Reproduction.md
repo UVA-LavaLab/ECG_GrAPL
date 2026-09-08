@@ -171,9 +171,9 @@ The pre-isolation DO trial is `results/ecg_experiments/runs/dobfs_8mb_patents` a
 with same-build TD/LRU reference `results/ecg_experiments/roi_matrix/dobfs_same_build_td_lru`.
 It used 12 TD/5 BU levels; only 1.10M TD probes were annotated, versus 29.05M ordinary BU probes.
 
-The twenty-cell isolated run `results/ecg_experiments/runs/preprocessing_8mb_patents_530d3774` has equal LRU T/R setup.
-Its `run.complete.json` and `combined_roi_matrix.csv` bind the complete result;
-see the [measured effects and limits](Traversal-Metadata-Taxonomy#8-mib-patents-results).
+The forty-two-cell run `results/ecg_experiments/runs/competitive_8mb_patents_074cbf75` compares both ECG bases and full-capacity P-OPT.
+Its `run.complete.json` and `combined_roi_matrix.csv` bind the complete result, including twelve matched-base T/R setup pairs;
+see the [measured effects and limits](Traversal-Metadata-Taxonomy#matched-grasp-and-p-opt-comparison).
 
 ```bash
 python3 -I scripts/experiments/ecg/flows/experiment_run.py \

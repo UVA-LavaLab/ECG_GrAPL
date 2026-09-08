@@ -113,12 +113,11 @@ def test_methodology_is_current_only_and_marks_unmeasured_algorithms():
     assert "next potential designated read" in methodology
     assert "`POPT:UNCHARGED` is a cache-only graph-pass control" in methodology
     assert "0.6814" in methodology
-    assert "8 MiB Patents kernel R/LRU" in methodology
-    assert "8 MiB Patents kernel RP/LRU" in methodology
-    assert "neutral LRU preparation" in methodology and "pre-isolation" in methodology
+    assert "LRU-base R / GRASP" in methodology and "GRASP-base R / P-OPT" in methodology
+    assert "P-OPT keeps full data capacity" in methodology and "Pre-isolation" in methodology
     assert "UNKNOWN no longer pins" in methodology
     assert "predate the LRU-neutral selector repair" in methodology
-    assert "BFS DO" in methodology and "same variant's LRU" in methodology
+    assert "BFS DO" in methodology and "same variant's" in methodology
     assert "traversal benefit, not an ECG gain" in methodology
 
 

@@ -48,6 +48,8 @@ Filtered frontiers, relaxation eligibility and root chasing still make this
 graph-derived potential reuse, not an oracle. This is the published policy's
 mechanics on the current kernels, not a claim to reproduce the authors'
 different application implementations or native runtimes.
+The [matched results](Traversal-Metadata-Taxonomy#matched-grasp-and-p-opt-comparison)
+retain both wins and losses; they do not establish suite-wide ECG superiority.
 
 ## General replacement and admission foundations
 

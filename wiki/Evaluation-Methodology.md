@@ -23,21 +23,21 @@ Direction-optimizing BFS and scoped preprocessing are cache_sim-only; BU remains
 
 ### Per-algorithm performance
 
-| Algorithm | Current implementation | 8 MiB Patents kernel R/LRU | 8 MiB Patents kernel RP/LRU | Native CPU speedup |
-|---|---|---:|---:|---|
-| PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.6844 | 0.6844 | Not reported for final workloads |
-| SpMV (CSR) | All three (bounded) | Needs refresh | Needs refresh | Not measured |
-| BFS TD (`bfs`) | All three (bounded) | 0.9780 | Needs refresh (pre-isolation) | Not measured |
-| BFS DO (`bfs --bfs-direction do`) | cache_sim; TD-only ECG hints | Needs refresh (pre-isolation) | Not measured | Not measured |
-| SSSP (`sssp`) | All three (bounded) | 1.0680 | Needs refresh | Not measured |
-| CC (`cc`) | All three (bounded) | 0.9879 | Not measured | Not measured |
-| BC (`bc`) | All three (bounded) | 1.0348 | Not measured | Not measured |
-| TC (`tc`) | All three (bounded) | Not measured | Not measured | Not measured |
+| Algorithm | Current implementation | LRU-base R / GRASP | GRASP-base R / GRASP | GRASP-base R / P-OPT | Native CPU speedup |
+|---|---|---:|---:|---:|---|
+| PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | Not in this comparison | Not in this comparison | Not in this comparison | Not reported for final workloads |
+| SpMV (CSR) | All three (bounded) | 1.0466 | 0.9651 | 1.2031 | Not measured |
+| BFS TD (`bfs`) | All three (bounded) | 1.2275 | 1.0185 | 1.2591 | Not measured |
+| BFS DO (`bfs --bfs-direction do`) | cache_sim; TD-only ECG hints | Pre-isolation only | Not measured | Not measured | Not measured |
+| SSSP (`sssp`) | All three (bounded) | 0.8985 | 1.0522 | 1.3370 | Not measured |
+| CC (`cc`) | All three (bounded) | 1.2607 | 1.0094 | 0.9394 | Not measured |
+| BC (`bc`) | All three (bounded) | 1.2352 | 1.0448 | 1.1433 | Not measured |
+| TC (`tc`) | All three (bounded) | 1.1284 | 0.9853 | 0.8656 | Not measured |
 
-Ratios are traffic versus the **same variant's LRU**, not CPU speedup. Patents uses 32 KiB L1D/256 KiB L2.
-R is replacement-only; RP adds prefetching. UNKNOWN no longer pins property data over other arrays.
+Ratios are kernel traffic at 8 MiB versus the **same variant's** named baseline, not CPU speedup; P-OPT keeps full data capacity.
+R is replacement-only at `074cbf75`; CC/SSSP use phase masks. UNKNOWN no longer pins property data independently of its explicit base.
 DO-LRU reduces misses by 54.9% versus same-build TD-LRU: a traversal benefit, not an ECG gain.
-BFS/SSSP/CC/BC R rows use default full-CSR masks and neutral LRU preparation at `530d3774`.
+The earlier PR R/LRU ratio is 0.6844. See [competitive results](Traversal-Metadata-Taxonomy#matched-grasp-and-p-opt-comparison) for setup costs and limits.
 
 ### Algorithm and prediction contracts
 
