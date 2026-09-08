@@ -148,6 +148,19 @@ hits/misses, so property gains can be separated from other-data losses without
 mixing in changed construction traffic. The measurements do not claim a
 bitmap/list-body implementation or CPU speedup.
 
+Current record modes use plain LRU during modeled preparation, before the
+first binding exists. Binding activates the configured mechanism without
+flushing data or resetting counters. Cache results declare
+`setup_cache_policy=LRU`; archived ECG selectors are not a fallback for an
+unbound current stream.
+
+The initial twenty-cell run
+`results/ecg_experiments/runs/preprocessing_8mb_patents_9dc8c642`
+predates this isolation. Its replacement arms used legacy ECG during
+preparation, producing different setup traffic and warm cache state from
+transport. Those raw receipts are retained as pre-isolation diagnostics, not
+the final preprocessing comparison.
+
 ## Semantics and cache decisions must stay honest
 
 A structural next-reference bound, an estimated reuse rank and a frequency

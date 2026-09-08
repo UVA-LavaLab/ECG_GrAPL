@@ -166,6 +166,38 @@ struct InspectRecordsBackend : ecg_algorithm::PlainBackend {
     }
 };
 
+void testUnboundRecordPreparation() {
+    using namespace ecg_algorithm;
+    const Fixture graph(32, true, {{0, 1, 1}});
+    uint64_t expected = 0;
+    for (const auto mechanism : {ecg_record::Mechanism::TRANSPORT,
+            ecg_record::Mechanism::REPLACEMENT, ecg_record::Mechanism::PREFETCH,
+            ecg_record::Mechanism::REPLACEMENT_PREFETCH}) {
+        Options options;
+        options.records = true;
+        options.mechanism = mechanism;
+        const bool replacement = mechanism == ecg_record::Mechanism::REPLACEMENT ||
+            mechanism == ecg_record::Mechanism::REPLACEMENT_PREFETCH;
+        cache_sim::CacheHierarchy cache(64, 1, 64, 1, 128, 2, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU,
+            replacement ? cache_sim::EvictionPolicy::ECG : cache_sim::EvictionPolicy::LRU);
+        cache_sim::AlgorithmBackend backend(cache, options, 128);
+        backend.start(graph.view());
+        backend.region("property", reinterpret_cast<const void*>(0x1000), 32, 4, true);
+        for (unsigned iteration = 0; iteration < 16; ++iteration)
+            for (uint64_t address : {0x1000, 0x2000, 0x2040, 0x1000})
+                backend.memory(reinterpret_cast<const void*>(address), 4, false);
+        if (mechanism == ecg_record::Mechanism::TRANSPORT)
+            expected = cache.getMemoryAccesses();
+        if (cache.getMemoryAccesses() != expected)
+            std::cerr << "unbound transport misses=" << expected
+                      << " mechanism misses=" << cache.getMemoryAccesses() << '\n';
+        check(cache.getMemoryAccesses() == expected,
+              "current-record preparation is LRU-neutral before any binding exists");
+        backend.finish(0);
+    }
+}
+
 void testTraversalPreprocessing() {
     using namespace ecg_algorithm;
     using ecg_record::State;
@@ -250,6 +282,7 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testUnboundRecordPreparation();
     testTraversalPreprocessing();
     const Fixture diamond(8, true, {
         {0,1,2}, {0,2,5}, {0,5,20}, {1,2,1}, {1,3,2},

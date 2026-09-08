@@ -54,6 +54,8 @@ class AlgorithmBackend {
         context_.topology.num_edges = graph.records;
         context_.topology.directed = graph.directed;
         cache_.initGraphContext(&context_);
+        if (options_.records)
+            cache_.prepareRecord();
     }
 
     void memory(const void* pointer, uint64_t bytes, bool write) {

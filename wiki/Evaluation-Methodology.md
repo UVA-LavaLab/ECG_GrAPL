@@ -51,11 +51,11 @@ Within DO, R changes traffic only -0.11% versus transport; setup-inclusive traff
 | TC | Degree-order orientation and node-iterator intersections | Dedicated read-only U64 target-row start; dense exact |
 
 Ordered-filtered metadata means **next potential designated read**, not next actual reference.
-Skipped positions, ordinary-access invalidation and charged phase transitions follow the
-[filtered contract](ReusePlan-FlowThrough#ordered-filtered-algorithm-passes).
+Skipped work, invalidation and paid transitions follow the [filtered contract](ReusePlan-FlowThrough#ordered-filtered-algorithm-passes).
 
-New-algorithm totals include initialization, sorting, buckets, orientation and record construction;
-nonintrusive first-binding snapshots also report kernel traffic without resetting cache contents.
+Totals include initialization, scheduling, orientation and record construction.
+Kernel snapshots preserve cache contents; current record setup uses LRU.
+See [preprocessing isolation](Traversal-Metadata-Taxonomy#opt-in-preprocessing-experiment) for older-policy limits.
 P-OPT has not been ported to this roster; an uncharged dynamic oracle is not a substitute.
 
 ## 2. Stable design and simulator roles

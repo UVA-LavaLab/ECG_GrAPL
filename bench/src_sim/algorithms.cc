@@ -29,6 +29,7 @@ int main(int argc, char** argv) {
                        << "\"mode\":\"" << (command.options.records ?
                             ecg_record::mechanismName(command.options.mechanism) : "csr")
                        << "\",\"policy\":\"" << command.policy << "\","
+                       << "\"setup_cache_policy\":\"" << (command.options.records ? "LRU" : command.policy) << "\","
                        << "\"host_seconds\":" << std::setprecision(12) << seconds << ",\"workload\":";
                 ecg_algorithm::writeResult(output, result, command.options);
                 output << ",\"metrics\":" << cache.toJSON()

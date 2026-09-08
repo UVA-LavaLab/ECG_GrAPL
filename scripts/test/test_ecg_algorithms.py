@@ -73,6 +73,7 @@ def test_current_algorithm_cli_and_independent_receipts(tmp_path):
                 assert phases["cache_state_preserved"] is True
                 assert payload["timing_valid_for_speedup"] is False
                 assert payload["mode"] == mode
+                assert payload["setup_cache_policy"] == "LRU"
                 assert workload["algorithm"] == algorithm
                 assert workload["variant"] == config["algorithms"][algorithm]["variant"]
                 for key, value in expected.items():

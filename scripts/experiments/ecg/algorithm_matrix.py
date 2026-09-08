@@ -350,6 +350,8 @@ def run_cache_cell(
         require(graph_info(options.graph, allow_weighted=True, traversal="out").sha256 == graph.sha256,
                 "algorithm input changed while executing")
         payload = json.loads(data_path.read_text())
+        require(payload.get("setup_cache_policy") == ("LRU" if mode != "csr" else policy),
+                "current algorithm preparation did not use its declared unbound cache policy")
         work = validate_payload(payload, log_path.read_text(), algorithm=args.benchmark, mode=mode, policy=policy,
             graph=graph, graph_path=options.graph, options=options, requested_bytes=args.ecg_record_bytes,
             minimum_mantissa_bits=args.ecg_record_minimum_mantissa_bits, evidence=args.ecg_equivalence,
@@ -362,6 +364,7 @@ def run_cache_cell(
         row.update(validate_traffic_phases(payload))
         row.update({
             "status": "ok", "json_path": str(data_path), "log_path": str(log_path),
+            "setup_cache_policy": payload["setup_cache_policy"],
             "graph_sha256": graph.sha256, "benchmark_binary_sha256": before,
             "algorithm_workload_verified": "1",
             **{"algorithm_" + key: value for key, value in work.items()

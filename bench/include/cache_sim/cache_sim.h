@@ -1346,6 +1346,8 @@ public:
                 observeRecord(set[victim_idx], *record);
             return;
         }
+        if (record_prepared_)
+            return;
 
         if (policy_ == EvictionPolicy::HAWKEYE && hawkeye_state_) {
             const uint64_t signature = currentHawkeyeSite();
@@ -1768,7 +1770,7 @@ public:
         graph_ctx_ = ctx;
         if (ctx) {
             ecg_mode_snapshot_ = ctx->mask_config.ecg_mode;
-            if (!record_configured_)
+            if (!record_configured_ && !record_prepared_)
                 record_mode_snapshot_ = false;
         }
     }
@@ -1780,6 +1782,17 @@ public:
     size_t selectVictimForTest(std::vector<CacheLine>& set) { return findVictim(set); }
     size_t setIndexForAddress(uint64_t address) const {
         return getSetIndex(address);
+    }
+
+    void prepareRecord() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (record_prepared_ || record_configured_ || !graph_ctx_ || line_size_ != 64 ||
+            associativity_ > 64 || set_dueling_ ||
+            (policy_ != EvictionPolicy::ECG && policy_ != EvictionPolicy::LRU))
+            throw std::invalid_argument("Invalid current ECG cache preparation");
+        // Until binding, current records have no prediction and must not select legacy ECG.
+        record_prepared_ = true;
+        record_mode_snapshot_ = true;
     }
 
     void configureRecord(
@@ -1810,6 +1823,7 @@ public:
         record_replacement_ = replacement;
         record_dead_bypasses_ = 0;
         record_mode_snapshot_ = true;
+        record_prepared_ = true;
         record_configured_ = true;
     }
 
@@ -1895,6 +1909,7 @@ private:
     ecg_record::NativeConfiguration record_configuration_;
     ecg_record::Receiver record_receiver_;
     bool record_configured_ = false;
+    bool record_prepared_ = false;
     bool record_replacement_ = false;
     bool record_mode_snapshot_ = false;
     uint64_t record_dead_bypasses_ = 0;
@@ -1991,6 +2006,8 @@ private:
                 --set[idx].rrpv;
             return;
         }
+        if (record_prepared_)
+            return;
         
         // SRRIP: reset RRPV to 0 on hit
         if (policy_ == EvictionPolicy::SRRIP) {
@@ -2233,6 +2250,8 @@ private:
                 throw std::logic_error("Invalid current ECG victim selection");
             return victim;
         }
+        if (record_prepared_)
+            return findVictimLRU(set);
         
         // All lines valid, use eviction policy
         switch (policy_) {
@@ -3565,6 +3584,14 @@ public:
         l1_->insert(address, is_write);
         if (ref32_prefetch_enabled_ && ref32_record_request)
             issueCurrentRef32Prefetch();
+    }
+
+    void prepareRecord() {
+        if (record_model_ || record_loads_ != 0 || ref32_commit_channel_ ||
+            ref32_prefetch_enabled_ || refresh_exact_stamp_ ||
+            l1_->getPolicy() != EvictionPolicy::LRU || l2_->getPolicy() != EvictionPolicy::LRU)
+            throw std::invalid_argument("Invalid functional ECG record preparation");
+        l3_->prepareRecord();
     }
 
     void configureRecord(
