@@ -153,6 +153,7 @@ These are local runner/resource measurements, not simulated CPU execution times.
 | `ecg_dynamic_8mb_cache` | Full Patents BFS/weighted SSSP, source 0, delta 8, LRU/T/RP, 8 MiB/16-way LLC | Six serial cells; 4 GiB RSS; 30 minutes per policy |
 | `ecg_dobfs_8mb_cache` | Opt-in direction-optimizing BFS, source 0, alpha 15/beta 18, TD records and ordinary BU bitmaps, LRU/T/R | Three serial cache-only cells; 4 GiB RSS; 30 minutes per policy |
 | `ecg_preprocessing_8mb_cache` | Full Patents BFS/SSSP/CC/BC, current LRU/T/R versus `--record-preprocess traversal` T/R | Twenty serial cache-only cells; 4 GiB RSS; 30 minutes per policy |
+| `ecg_grasp_8mb_cache` | Six shared-kernel GRASP cells plus missing SpMV/TC LRU/T/R controls; reuse other controls only after exact binary/input/work matching | Twelve serial cache-only cells; 4 GiB RSS; 30 minutes per policy |
 | `ecg_local_release_cache` | Six full core graphs, ten CSR/reference/ECG roles, two iterations, 8 MiB LLC | 8 GiB RSS; one hour per policy |
 | `ecg_large_cache` | Focused current-mechanism capacity exploration | Explicit manifest limits; no final authorization |
 | `ecg_twitter_reproduction` | Directed Twitter, ten roles, one iteration, 8/24 MiB LLC | 32 GiB RSS; two hours per policy; twelve hours per matrix |

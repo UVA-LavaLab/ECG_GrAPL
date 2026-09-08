@@ -237,6 +237,27 @@ def test_preprocessing_profile_has_matched_serial_controls(tmp_path):
     assert cells == 20
 
 
+def test_grasp_profile_covers_all_shared_kernels_without_rebuilding_controls(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.algorithm_matrix import parse_options
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    args = experiment_run.parse_args(["--profile", "ecg_grasp_8mb_cache", "--list"])
+    jobs = experiment_run.expand_jobs(args, manifest, tmp_path)
+    assert len(jobs) == 8
+    grasp = [job for job in jobs if job.metadata["policies"] == ["GRASP_PAPER"]]
+    assert {job.metadata["benchmark"] for job in grasp} == {"spmv", "bfs", "sssp", "cc", "bc", "tc"}
+    controls = [job for job in jobs if job not in grasp]
+    assert {job.metadata["benchmark"] for job in controls} == {"spmv", "tc"}
+    assert all(job.metadata["policies"] == ["LRU", "ECG:transport", "ECG:replacement"] for job in controls)
+    assert sum(len(job.metadata["policies"]) for job in jobs) == 12
+    for job in jobs:
+        command = job.command
+        options = parse_options(command[command.index("--options") + 1])
+        assert options.record_preprocess == "csr" and options.bfs_direction == "td"
+        assert command[command.index("--l3-sizes") + 1] == "8MB"
+        assert command[command.index("--cache-sim-omp-threads") + 1] == "1"
+
+
 def test_algorithm_profiles_and_forged_work_are_rejected(tmp_path):
     from scripts.experiments.ecg import algorithm_matrix
     from scripts.experiments.ecg.flows import experiment_run
