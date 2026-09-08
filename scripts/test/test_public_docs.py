@@ -108,7 +108,7 @@ def test_methodology_is_current_only_and_marks_unmeasured_algorithms():
     for algorithm in ("SpMV", "BFS", "SSSP", "CC", "BC", "TC"):
         row = next(line for line in methodology.splitlines()
                    if line.startswith(f"| {algorithm}"))
-        assert "Current shared kernel and cache_sim adapter" in row and "Not measured" in row
+        assert "All three (bounded)" in row and "Not measured" in row
     assert "next potential designated read" in methodology
     assert "P-OPT has not been ported" in methodology
     assert "0.6814" in methodology

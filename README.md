@@ -86,14 +86,14 @@ not fabricate a no-candidate result.
 | Surface | Current role | Evidence boundary |
 |---|---|---|
 | **cache_sim** | Shared codec, victim rule, real-record window and explicit access-step timing | strict admission passed for all four mechanisms, both widths, and exact 24 MiB; no CPU-cycle speedup |
-| **gem5 RV64 O3** | Raw 4/8-byte record loads, dependent F32 property loads, retirement transport, replacement and acknowledged LLC-only prefetch | native architectural/timing evidence for serial fixed-iteration PageRank |
+| **gem5 RV64 O3** | Raw 4/8-byte records, F32/U32/U64 property loads, managed phases, retirement transport and LLC-only prefetch | PR timing path; bounded current-algorithm qualification |
 | **Sniper** | Actual 4/8-byte record loads and modeled transport/replacement/prefetch | all four mechanisms admitted, including 4-byte live and 8-byte SIFT translation cases; not native RISC-V timing |
 | **RTL / physical cost** | Current logical-state and interface accounting | physical area, energy and timing remain to be established |
 
 The native path is an experimental RISC-V custom-1 implementation using opcode
 `0x2b`: record32 is
-funct3 `0`/funct7 `0`, record64 uses funct7 `1`, and PropertyF32 is funct3
-`1`/FUNCT2 `0`. The property instruction consumes property base, raw record
+funct3 `0`/funct7 `0`, record64 uses funct7 `1`, and typed property loads use
+funct3 `1` with FUNCT2 `0/1/2` for F32/U32/U64. Each consumes property base, raw record
 word, and the real record address. P17 in the fixture contains raw
 `0x0000000020000052`; semantic sequence 19 is computed and checked separately.
 This is not a ratified RISC-V extension.
@@ -112,8 +112,8 @@ Current builders retain the source graph and construct a separate
 scratch. Receipts distinguish `source_stream_bytes`, `retained_source_bytes`,
 carrier payload/allocation, and auxiliary peak bytes.
 
-Current Sniper rows require `--sniper-workload sg_kernel`, one core, an
-uncapped fixed PageRank traversal, true modulo LLC indexing, and the mandatory
+Current Sniper uses `sg_kernel` for fixed PageRank and `algorithms` for the six
+additional kernels. Both require one core, complete uncapped work, modulo LLC indexing, and the mandatory
 `--sniper-record-rss-mib` process-tree watchdog (default 2048 MiB). Its guest
 window is always `16 * uint64_t`: 1,024 data bits plus 1,024 index bits and
 16 valid bits, even for 4-byte records. The separate runtime word bank is
@@ -127,8 +127,8 @@ property `p[v]` is read once for each source in `N_in(v)`, giving `d_in(v)`. Met
 must describe the exact order executed.
 
 Fixed-iteration PageRank is integrated across all three backends. Current shared
-SpMV/BFS/SSSP/CC/BC/TC kernels now use typed records and managed passes in cache_sim;
-their detailed-backend admission is separate. The
+SpMV/BFS/SSSP/CC/BC/TC kernels use typed records and managed passes across all three,
+with bounded detailed qualification rather than final-workload speedup claims. The
 [per-algorithm table](wiki/Evaluation-Methodology.md#per-algorithm-performance)
 makes implemented and unmeasured cases explicit.
 

@@ -4,7 +4,8 @@ The current native path implements the same graph-adaptive 4/8-byte record
 layout as the functional model. It performs real record and property loads in
 RV64 gem5 O3, preserves their dependency through renamed state, transports
 predictions at retirement, and supports replacement and acknowledged LLC-only
-prefetching. Its current workload scope is serial fixed-iteration PageRank.
+prefetching. PageRank retains its dense exact contract; SpMV, BFS, SSSP, CC,
+BC and TC additionally have bounded current-path qualification.
 
 ## 1. Two loads, two distinct results
 
@@ -23,8 +24,12 @@ custom-0 funct3 space is occupied by older controls:
 | Record32 | funct3 `0`, funct7 `0` | real 4-byte load; zero-extended raw word |
 | Record64 | funct3 `0`, funct7 `1` | real 8-byte load; raw word |
 | PropertyF32 R4 | funct3 `1`, FUNCT2 `0` | sources are property base, raw record word, and real record address; result is normal F32 data |
+| PropertyU32 R4 | funct3 `1`, FUNCT2 `1` | same three integer sources; real 4-byte load returned as zero-extended integer bits |
+| PropertyU64 R4 | funct3 `1`, FUNCT2 `2` | same sources; real 8-byte integer result, without float reinterpretation |
 | Configure | funct3 `2` | non-speculative configuration operation |
 | Pending query | funct3 `3` | non-speculative bounded completion query |
+| Pass close | funct3 `4` | serialized controller-derived structural boundary |
+| Invalidate binding | funct3 `5` | serialized, drained metadata set walk before rebind |
 
 The GPR contains the raw record, not a packed `sequence32|word32`. For the
 fixture, optional record base `0x60000000` gives record address `0x60000048`;
@@ -42,8 +47,9 @@ Configuration uses CSR `0x803` for record base and `0x801` for context, plus:
 | `0x807` | vertex count |
 | `0x808` | property base |
 | `0x809` | iteration base |
-| `0x80A` | enable / has-next control |
+| `0x80A` | enable / has-next / managed-pass control |
 | `0x80B` | generation identity |
+| `0x80C` | property kind, byte stride and traversal-mode descriptor; zero preserves the original F32 PR ABI |
 
 Generation is a correctness identity, not a method-version API. Invalid width,
 layout, address, horizon, generation, sequence, or deadline arithmetic fails
@@ -100,11 +106,11 @@ I1 additionally consumes the real record address so it can derive and validate
 the semantic position without a shared mailbox or host future table.
 
 I1's decoded prediction stays on its own `DynInst`. Its property result remains
-ordinary floating-point data. At retirement, the instruction exports its own
+ordinary F32 or integer data. At retirement, the instruction exports its own
 translated physical line, semantic sequence, deadline, state, context, and
 generation. A squashed or faulted instruction exports nothing.
 
-An LLC demand observation and a retirement update have different authority:
+In dense exact mode, LLC demand observation and retirement have different authority:
 
 1. A private miss may mark the resident line PENDING with its newest observed
    sequence. It never installs FINITE/DEAD and never advances the watermark.
@@ -133,6 +139,29 @@ configurable capture width from 1 through 16 (default CPU commit width), and
 one output per cycle. Same-ready entries preserve capture-lane order.
 Semantic sequence and deadline are checked 64-bit values; coalescing may span
 multiple traversals.
+
+### Managed algorithm passes
+
+SpMV and TC use managed dense passes; BFS, SSSP, CC and BC use ordered-filtered
+passes with **next-potential designated-read** semantics. Structural positions
+increase within a pass. Close accounts for skipped positions and advances only
+to the controller-computed end. It cannot seed an arbitrary future sequence.
+
+Filtered WRAP/DEAD become UNKNOWN. FINITE bounds are capped at the pass end and
+expire at closure, including coarse quantized bounds. Filtered structural progress
+is separate from delivered update order. Ordinary governed accesses use ordered
+invalidations; unrelated memory operations may intervene between the two custom
+loads without breaking their exact record/address association.
+
+Rebind requires closed work, no pending pair, drained queues, a consecutive
+generation, and one LLC metadata set per cycle. It does not evict data or perform
+a free global reset. BC uses U32 depth then F32 dependency, retaining checked U64
+path counts. TC's governed U64 row-start array is distinct from its ordinary
+adjacency-list traffic. The figures retain the dense PageRank example unchanged.
+
+Boundary workloads cover distance `6442450941`, a 70-vertex Brandes graph with
+`2^34` paths at its sink and score sum `1156`, zero-governed-work sources, and
+explicit rejection of U64 path-count overflow across all three backends.
 
 ## 4. Native record-window prefetch
 
@@ -174,9 +203,10 @@ area. Physical "low overhead" remains an open measurement claim.
 | Current requirement | Hardware evidence still needed |
 |---|---|
 | 67-bit resident prediction plus binding/classification state | Map `RecordReplData` and VA/PA identity checks to baseline tags versus genuinely additional state; do not treat a C++ object size as an SRAM implementation. |
-| PropertyF32's three integer source operands | Establish RF/forwarding/AGU integration and its port, latency, and energy cost. |
+| Typed property loads' three integer source operands | Establish RF/forwarding/AGU integration and its port, latency, and energy cost. |
 | Dedicated update tag access and three prefetch presence-check ports | Account for ports, arbitration, or duplicated tag structures. `normal_tag_contention=0` is an explicit modeled resource assumption, not evidence that the resource is free. |
 | Sixteen update slots, bounded prefetch queues, and two/three record banks | Include tags, valid/control state and routing, not only record-bank data bytes. A real design must define saturation/backpressure behavior; the current native observer rejects required-update overflow instead of modeling a commit stall. |
+| Filtered event ordering, invalidation and phase control | The current update structure adds a 64-bit event ordinal and invalidation flag; include controller cursors, set-walk control and their routing/energy costs. The 67-bit line payload is still only a lower bound. |
 | Current decoder, replacement, transport and prefetch logic | Provide current-design RTL/synthesis and activity-based energy estimates; complete physical characterization is not yet available. |
 
 Masks, shifts, address arithmetic, comparisons, FIFOs and SRAMs make a bounded

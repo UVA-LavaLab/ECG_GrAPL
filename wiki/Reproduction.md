@@ -60,6 +60,7 @@ Build the current guests with one compiler job:
 ```bash
 make -j1 PARALLEL=1 sim-pr sniper-sg_kernel gem5-riscv-m5ops-pr
 make -j1 PARALLEL=1 gem5-riscv-m5ops-record_isa_smoke
+make -j1 PARALLEL=1 sim-algorithms gem5-riscv-m5ops-algorithms sniper-algorithms
 ```
 
 PageRank builds use explicit non-fused F32 arithmetic. Native build receipts
@@ -104,14 +105,15 @@ The additional algorithms use the shared current executable, not the legacy
 `bfs`, `sssp`, `cc`, `bc`, `tc` or `pr_spmv` paths:
 
 ```bash
-make -j1 PARALLEL=1 sim-algorithms
 python3 scripts/experiments/ecg/flows/prepare_record_equivalence_graphs.py --algorithms
 
 ulimit -c 0
-python3 -I scripts/experiments/ecg/flows/experiment_run.py \
-  --profile ecg_algorithm_equivalence_cache \
-  --run-dir results/ecg_experiments/runs/ecg_algorithm_equivalence_cache \
-  --no-build --no-resume
+for backend in cache gem5 sniper; do
+  python3 -I scripts/experiments/ecg/flows/experiment_run.py \
+    --profile "ecg_algorithm_equivalence_${backend}" \
+    --run-dir "results/ecg_experiments/runs/algorithm_equivalence_${backend}" \
+    --no-build --no-resume
+done
 
 python3 -I scripts/experiments/ecg/flows/experiment_run.py \
   --profile ecg_algorithm_cache \
@@ -119,24 +121,27 @@ python3 -I scripts/experiments/ecg/flows/experiment_run.py \
   --no-build --no-resume
 ```
 
-The first profile contains 84 rows: six algorithms, seven policies, and both
-record widths, checked against independent diamond/clique answers. The second
+Each qualification profile contains 84 rows: six algorithms, seven policies and
+both record widths, with independent diamond/clique answers and actual-record
+semantic digests. The cache performance profile
 contains 42 auto-width rows on a 512-vertex pressure graph with two nontrivial
 components and 16 isolates. SpMV/SSSP use the explicit weighted graph (integer weights 0-31);
-the other kernels use its identical unweighted topology. Both run serially,
-with a 1 GiB process-tree RSS guard and 32 MiB algorithm workspace limit.
-Their tiny cache geometry is diagnostic, not a final-paper machine.
+the other kernels use its identical unweighted topology. All run serially with
+32 MiB algorithm workspace, 1 GiB cache-process or 2 GiB detailed-process RSS
+guards. The tiny cache geometry is diagnostic, not a final-paper machine.
 
-`--current-algorithms` selects this path in `roi_matrix.py`; changing only
-`--benchmark` does not. Source/weight data, preparation, all declared algorithm
-work, and raw transport accounting are checked. These rows report cache data
-traffic including construction, never CPU speedup, and cannot issue the PR
-equivalence authorization or authorize detailed final runs.
+`--current-algorithms` selects this path; changing only `--benchmark` does not.
+Detailed algorithm runs currently require bounded `--ecg-equivalence`; their
+instrumented work is not CPU speedup. The profiles cannot substitute for the
+PR authorization or authorize unmeasured detailed final workloads.
 
-The recorded runs at `6d83f57c` are `results/ecg_experiments/runs/current_algorithms_cache_gate`
-(84 rows) and `current_algorithms_cache_pressure` (42 rows). Every raw receipt,
-input fingerprint and output digest was replayed. Sum of guarded job wall times:
-20.931 s and 10.562 s; peak sampled process-tree RSS: 50.387 and 50.410 MiB.
+Recorded semantic runs are under `results/ecg_experiments/runs/`:
+`algorithm_equivalence_cache_afda774e`, `algorithm_equivalence_gem5_complete`
+and `algorithm_equivalence_sniper_final`. Every raw workload/transport receipt
+must replay, and corresponding output, work, position and metadata digests must match.
+
+The current pressure table uses `algorithm_cache_current_final` at `bf730824`:
+42 rows, 10.525 s summed guarded job time, and 50.449 MiB peak sampled RSS.
 These are local runner/resource measurements, not simulated CPU execution times.
 
 | Profile | Workload | Resource scope |

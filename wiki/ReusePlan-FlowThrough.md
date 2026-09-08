@@ -198,8 +198,8 @@ and counted. TC is dense exact only for a dedicated read-only U64 target-row
 start array; its orientation, duplicate array and every adjacency intersection
 are charged, not presented as predicted list accesses.
 
-These kernels and contracts are implemented in cache_sim. Detailed-backend
-admission and fresh measurements are tracked separately in the
+These kernels and contracts are implemented in cache_sim, RV64 gem5 and Sniper.
+Bounded qualification and fresh performance measurements remain distinct in the
 [per-algorithm table](Evaluation-Methodology#per-algorithm-performance).
 The figures above retain the dense PageRank example and its original geometry.
 

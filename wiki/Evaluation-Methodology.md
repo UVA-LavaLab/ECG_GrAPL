@@ -16,9 +16,9 @@ The record stream follows the exact prepared graph order. Each experiment
 uses one trial, a positive fixed iteration count, and zero convergence
 tolerance: `-o 0 -n 1 -i N -t 0`.
 
-SpMV, BFS, SSSP, CC, BC and TC now share current kernels and CSR/record access
-adapters in cache_sim. Their native and Sniper paths remain outside admission
-until the corresponding typed-load and phase-lifecycle qualification completes.
+SpMV, BFS, SSSP, CC, BC and TC share current kernels and CSR/record adapters
+across cache_sim, gem5 RV64 O3 and Sniper. Their detailed paths are admitted for
+bounded semantic qualification, not final-workload CPU speedup.
 The legacy algorithm executables are not substitutes for these current paths.
 
 ### Per-algorithm performance
@@ -26,17 +26,17 @@ The legacy algorithm executables are not substitutes for these current paths.
 | Algorithm | Current adaptive ECG implementation | Current cache_sim traffic ratio | Native CPU speedup |
 |---|---|---|---|
 | PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.6814 versus CSR LRU on the six full core graphs at 8 MiB | Not yet reported for the final workload set |
-| SpMV (CSR) | Current shared kernel and cache_sim adapter | 2.7754 | Not measured |
-| BFS (`bfs`) | Current shared kernel and cache_sim adapter | 3.0956 | Not measured |
-| SSSP (`sssp`) | Current shared kernel and cache_sim adapter | 2.2359 | Not measured |
-| CC (`cc`) | Current shared kernel and cache_sim adapter | 2.5008 | Not measured |
-| BC (`bc`) | Current shared kernel and cache_sim adapter | 2.0792 | Not measured |
-| TC (`tc`) | Current shared kernel and cache_sim adapter | 2.3309 | Not measured |
+| SpMV (CSR) | All three (bounded) | 2.7754 | Not measured |
+| BFS (`bfs`) | All three (bounded) | 3.0956 | Not measured |
+| SSSP (`sssp`) | All three (bounded) | 2.2321 | Not measured |
+| CC (`cc`) | All three (bounded) | 2.5008 | Not measured |
+| BC (`bc`) | All three (bounded) | 2.0792 | Not measured |
+| TC (`tc`) | All three (bounded) | 2.3309 | Not measured |
 
 The PageRank ratio is the geometric mean of per-graph ECG/CSR-LRU modeled
 off-chip traffic; lower is better. It is **not a CPU speedup**.
 New rows are ECG/CSR LRU on pressure512, including setup: all six regress.
-ECG/transport also regresses (1.28-1.97), so preparation is not the sole cause.
+ECG/transport also regresses (1.31-1.97), so preparation is not the sole cause.
 These tiny-cache diagnostics are not final-paper speedups; native cells remain unmeasured.
 
 ### Algorithm and prediction contracts
@@ -81,7 +81,7 @@ updates and optional prefetches have separate bounded accounting.
 | Backend | Evidence provided | Limit |
 |---|---|---|
 | cache_sim | Complete modeled cache accesses, replacement, record acquisition and traffic | Access-step model, not architectural time |
-| gem5 RV64 O3 | Actual raw-record and dependent F32 loads, retirement transport and LLC prefetch | Current single-core fixed-iteration PageRank scope |
+| gem5 RV64 O3 | Actual raw records and typed F32/U32/U64 loads, retirement transport and LLC prefetch | PR timing path plus bounded current-algorithm qualification |
 | Sniper | Actual record loads and modeled transport/replacement/prefetch corroboration | Its `bounded-completion-corroboration` link is not native retirement |
 
 Only gem5 O3 execution time is used for architectural speedup.

@@ -56,7 +56,7 @@ fixed sweep.
 | Surface | Implemented | Scope |
 |---|---|---|
 | cache_sim | adaptive 4/8-byte records, replacement, prefetch, matched transport | all four mechanisms admitted at both widths and exact 24 MiB; no native timing |
-| gem5 RV64 O3 | raw record loads, dependent F32 loads, retirement updates, replacement and acknowledged LLC-only prefetch | serial fixed-iteration PageRank; native timing evidence |
+| gem5 RV64 O3 | raw records, typed F32/U32/U64 loads, managed phases, retirement and LLC-only prefetch | PR timing path and bounded current-algorithm qualification |
 | Sniper | actual 4/8-byte loads and modeled transport/replacement/prefetch | all four mechanisms admitted; corroboration only, not RISC-V timing |
 | physical design | 67-bit per-line payload can be counted | complete area, energy and timing are not established |
 
@@ -64,12 +64,12 @@ The native encoding is experimental custom-1 opcode `0x2b`, not a ratified
 RISC-V extension. The guest polls bounded pending work before ROI end and
 before releasing its separately allocated carrier.
 
-Sniper's admitted current path is one-core, uncapped fixed PageRank through
-`sg_kernel`, with mandatory process-tree RSS protection and true modulo LLC
+Sniper uses `sg_kernel` for fixed PageRank and `algorithms` for the six additional
+kernels, with one core, complete work, mandatory process-tree RSS protection and modulo LLC
 indexing. Its update link is bounded completion corroboration, not retirement.
 
 PageRank is integrated across all three backends. SpMV/BFS/SSSP/CC/BC/TC now have
-current shared kernels and cache_sim adapters, with detailed-backend admission
-still separate. See the
+current shared kernels and adapters across all three, with bounded detailed
+qualification distinct from final-workload timing. See the
 [per-algorithm table](Evaluation-Methodology#per-algorithm-performance)
 before attributing this implementation's results to another algorithm.
