@@ -14,6 +14,13 @@ destinations in `N_out(v)`, so its request count is `d_out(v)`. A traversal
 over out-neighbors `N_out(u)` instead reads `p[v]` once for each source in
 `N_in(v)`, giving `d_in(v)`. Metadata must match the actual traversal order.
 
+The current builder makes forward/reverse preprocessing passes over that
+order; it does not replay the algorithm. For filtered kernels this is a
+potential-use plan, not knowledge of future active rows.
+[Traversal-aware preprocessing](Traversal-Metadata-Taxonomy) classifies how
+the scan and its target data must specialize beyond PR before choosing new
+mask semantics.
+
 ### Figure 1 — From one graph edge to its reuse mask
 
 ![The same internal vertex IDs carried from the graph through CSR offsets and neighbor entries, with positions 18 and 22 establishing a four-request line reuse distance and the current adaptive mask](../fig/wiki/reuse-plan-flowthrough/reuse-plan-flowthrough-f01-offline-construction.svg)

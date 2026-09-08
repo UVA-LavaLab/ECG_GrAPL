@@ -15,6 +15,7 @@ PUBLIC_PAGES = (
     ROOT / "fig/README.md",
     ROOT / "wiki/Home.md",
     ROOT / "wiki/ReusePlan-FlowThrough.md",
+    ROOT / "wiki/Traversal-Metadata-Taxonomy.md",
     ROOT / "wiki/RISC-V-Instruction-Path.md",
     ROOT / "wiki/Property-to-Cache-Walkthrough.md",
     ROOT / "wiki/Evaluation-Methodology.md",

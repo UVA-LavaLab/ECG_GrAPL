@@ -42,13 +42,15 @@ fixed sweep.
 
 1. [Adaptive records and cache control](ReusePlan-FlowThrough) derives the
    layout, joint token, victim decision, record window, and storage costs.
-2. [One edge, end to end](Property-to-Cache-Walkthrough) verifies the exact
+2. [Traversal-aware preprocessing](Traversal-Metadata-Taxonomy) analyzes
+   phase/data-specific metadata requirements beyond PR, without algorithm replay.
+3. [One edge, end to end](Property-to-Cache-Walkthrough) verifies the exact
    word, address, F32 value, deadline, and ownership boundaries.
-3. [Native processor pipeline](RISC-V-Instruction-Path) follows raw32/raw64
+4. [Native processor pipeline](RISC-V-Instruction-Path) follows raw32/raw64
    record loads and the dependent property load through gem5 O3.
-4. [Evaluation methodology](Evaluation-Methodology) defines the current
+5. [Evaluation methodology](Evaluation-Methodology) defines the current
    workload, per-algorithm performance scope and measurement criteria.
-5. [Reproduction](Reproduction) gives the current preparation, qualification
+6. [Reproduction](Reproduction) gives the current preparation, qualification
    and guarded execution workflow.
 
 ## Current implementation status
