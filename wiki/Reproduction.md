@@ -164,6 +164,9 @@ Corrected focused rows are in `results/ecg_experiments/roi_matrix/pr_lru_neutral
 and `bfs_lru_neutral_policy`; their `.log.cmd` receipts preserve the exact commands.
 `traffic_phases.setup/kernel` close to the unchanged total; compare kernel-only scopes.
 Weighted-input receipts bind the topology-preserving synthetic 1-32 weight recipe and both file hashes.
+The DO trial is `results/ecg_experiments/runs/dobfs_8mb_patents` at `336e3840`,
+with same-build TD/LRU reference `results/ecg_experiments/roi_matrix/dobfs_same_build_td_lru`.
+It used 12 TD/5 BU levels; only 1.10M TD probes were annotated, versus 29.05M ordinary BU probes.
 
 ```bash
 python3 -I scripts/experiments/ecg/flows/experiment_run.py \

@@ -117,6 +117,8 @@ def test_methodology_is_current_only_and_marks_unmeasured_algorithms():
     assert "0.9776" in methodology and "1.1251" in methodology
     assert "UNKNOWN no longer pins" in methodology
     assert "predate the LRU-neutral selector repair" in methodology
+    assert "BFS DO" in methodology and "same variant's LRU" in methodology
+    assert "traversal benefit, not an ECG gain" in methodology
 
 
 @pytest.mark.parametrize("algorithm", ["bfs", "sssp", "cc", "bc", "tc"])

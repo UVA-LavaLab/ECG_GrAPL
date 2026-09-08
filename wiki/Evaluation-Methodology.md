@@ -19,7 +19,7 @@ tolerance: `-o 0 -n 1 -i N -t 0`.
 SpMV, BFS, SSSP, CC, BC and TC share current kernels and CSR/record adapters
 across cache_sim, gem5 RV64 O3 and Sniper. Their detailed paths are admitted for
 bounded semantic qualification, not final-workload CPU speedup.
-The legacy algorithm executables are not substitutes for these current paths.
+The opt-in direction-optimizing BFS trial is cache_sim-only, with ordinary BU bitmaps.
 
 ### Per-algorithm performance
 
@@ -27,17 +27,17 @@ The legacy algorithm executables are not substitutes for these current paths.
 |---|---|---:|---:|---|
 | PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.6844 | 0.6844 | Not reported for final workloads |
 | SpMV (CSR) | All three (bounded) | Needs refresh | Needs refresh | Not measured |
-| BFS (`bfs`) | All three (bounded) | 0.9776 | 1.1251 | Not measured |
+| BFS TD (`bfs`) | All three (bounded) | 0.9776 | 1.1251 | Not measured |
+| BFS DO (`bfs --bfs-direction do`) | cache_sim; TD-only ECG hints | 0.9861 | Not measured | Not measured |
 | SSSP (`sssp`) | All three (bounded) | Needs refresh | Needs refresh | Not measured |
 | CC (`cc`) | All three (bounded) | Not measured | Not measured | Not measured |
 | BC (`bc`) | All three (bounded) | Not measured | Not measured | Not measured |
 | TC (`tc`) | All three (bounded) | Not measured | Not measured | Not measured |
 
-Ratios are modeled off-chip traffic, **not CPU speedup**; lower is better. Patents uses 32 KiB L1D/256 KiB L2.
-R is replacement-only; RP adds prefetching. These focused rows use the corrected LRU-neutral selector:
-UNKNOWN no longer pins property data over other arrays, and old invalidations cannot erase newer state.
-BFS R has exactly the same 438,095,550 kernel demands as LRU; RP adds lookahead and 2,477,969 data prefetches.
-Earlier tables used categorical property protection; those archived measurements do not qualify the corrected selector.
+Ratios are traffic versus the **same variant's LRU**, not CPU speedup. Patents uses 32 KiB L1D/256 KiB L2.
+R is replacement-only; RP adds prefetching. UNKNOWN no longer pins property data over other arrays.
+DO-LRU reduces misses by 54.9% versus same-build TD-LRU: a traversal benefit, not an ECG gain.
+Within DO, R changes traffic only -0.11% versus transport; setup-inclusive traffic is 2.54x DO-LRU.
 
 ### Algorithm and prediction contracts
 
