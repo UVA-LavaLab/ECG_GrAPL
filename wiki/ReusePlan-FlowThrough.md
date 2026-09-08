@@ -112,6 +112,13 @@ do not protect property arrays over frontier, heap or adjacency data. A live
 FINITE LRU candidate may be replaced by a farther live FINITE property candidate.
 This is an LRU-neutral fallback, not a universal never-worse-than-LRU guarantee.
 
+The cache-only `--record-base-policy GRASP_PAPER` experiment instead refines
+the actual GRASP victim, with its same insertion, hit promotion and declared
+0.50-capacity regions. UNKNOWN leaves that base decision unchanged.
+Base selection is lazy, so an invalid or DEAD decision does not age GRASP
+speculatively. Its matched transport arm also uses GRASP, including setup;
+the default remains LRU and the record grammar is unchanged.
+
 A request observation may mark a resident line PENDING, but never FINITE or
 DEAD and never advances the receiver watermark for free. A paid delivered
 update advances the watermark even when stale or nonresident. Updates never

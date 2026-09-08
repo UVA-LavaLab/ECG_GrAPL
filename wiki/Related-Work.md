@@ -22,6 +22,33 @@ repository therefore keeps two disclosed reconstructions of its unspecified
 post-final-use case rather than presenting either as an exact reproduction.
 See [baseline accounting](Evaluation-Methodology#p-opt-and-p-opt-se).
 
+### Current shared-kernel P-OPT control
+
+`POPT:UNCHARGED` now has a cache-only path through the shared six-algorithm
+executable. It retains all nominal data ways and does not charge runtime
+matrix lookup traffic, deliberately favoring P-OPT. Matrix construction,
+storage and ordinary algorithm accesses are still counted. The charged
+current-kernel variant is not admitted by this path.
+
+The builder preserves the canonical FULL byte encoding: last sub-epoch for
+a referenced epoch, otherwise distance to the next referenced epoch.
+It produces epoch-major bytes directly from the actual OUT traversal,
+including TC's oriented graph, without executing the algorithm to learn its
+future. A bounded distance block replaces the uncompressed vertex matrix.
+
+All declared irregular vertex arrays are covered, with separate banks for
+different element widths and access patterns. Known source-indexed accesses
+are included for mixed source/neighbor arrays; streamed output-only arrays
+remain ordinary data. BC therefore covers depth, U64 path counts and
+dependency rather than silently applying one F32 matrix to everything.
+
+Only real graph-pass/outer-vertex progress selects epochs. Outside those
+passes, where that graph clock is unavailable, the policy falls back to LRU.
+Filtered frontiers, relaxation eligibility and root chasing still make this
+graph-derived potential reuse, not an oracle. This is the published policy's
+mechanics on the current kernels, not a claim to reproduce the authors'
+different application implementations or native runtimes.
+
 ## General replacement and admission foundations
 
 | Work | Mechanism | Relationship to current ECG |

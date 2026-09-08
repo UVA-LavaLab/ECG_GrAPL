@@ -154,6 +154,7 @@ These are local runner/resource measurements, not simulated CPU execution times.
 | `ecg_dobfs_8mb_cache` | Opt-in direction-optimizing BFS, source 0, alpha 15/beta 18, TD records and ordinary BU bitmaps, LRU/T/R | Three serial cache-only cells; 4 GiB RSS; 30 minutes per policy |
 | `ecg_preprocessing_8mb_cache` | Full Patents BFS/SSSP/CC/BC, current LRU/T/R versus `--record-preprocess traversal` T/R | Twenty serial cache-only cells; 4 GiB RSS; 30 minutes per policy |
 | `ecg_grasp_8mb_cache` | Six shared-kernel GRASP cells plus missing SpMV/TC LRU/T/R controls; reuse other controls only after exact binary/input/work matching | Twelve serial cache-only cells; 4 GiB RSS; 30 minutes per policy |
+| `ecg_competitive_8mb_cache` | Six kernels: LRU/GRASP/full-capacity P-OPT plus ECG T/R on explicit LRU and GRASP bases | Forty-two serial cache-only cells; 4 GiB RSS; 30 minutes per policy |
 | `ecg_local_release_cache` | Six full core graphs, ten CSR/reference/ECG roles, two iterations, 8 MiB LLC | 8 GiB RSS; one hour per policy |
 | `ecg_large_cache` | Focused current-mechanism capacity exploration | Explicit manifest limits; no final authorization |
 | `ecg_twitter_reproduction` | Directed Twitter, ten roles, one iteration, 8/24 MiB LLC | 32 GiB RSS; two hours per policy; twelve hours per matrix |
@@ -170,8 +171,7 @@ The pre-isolation DO trial is `results/ecg_experiments/runs/dobfs_8mb_patents` a
 with same-build TD/LRU reference `results/ecg_experiments/roi_matrix/dobfs_same_build_td_lru`.
 It used 12 TD/5 BU levels; only 1.10M TD probes were annotated, versus 29.05M ordinary BU probes.
 
-The isolated preprocessing run is `results/ecg_experiments/runs/preprocessing_8mb_patents_530d3774`:
-twenty cells, `setup_cache_policy=LRU`, and equal T/R setup within each preprocessing mode.
+The twenty-cell isolated run `results/ecg_experiments/runs/preprocessing_8mb_patents_530d3774` has equal LRU T/R setup.
 Its `run.complete.json` and `combined_roi_matrix.csv` bind the complete result;
 see the [measured effects and limits](Traversal-Metadata-Taxonomy#8-mib-patents-results).
 

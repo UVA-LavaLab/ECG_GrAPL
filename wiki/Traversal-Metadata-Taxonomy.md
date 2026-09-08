@@ -154,11 +154,13 @@ hits/misses, so property gains can be separated from other-data losses without
 mixing in changed construction traffic. The measurements do not claim a
 bitmap/list-body implementation or CPU speedup.
 
-Current cache_sim record modes use plain LRU during modeled preparation, before the
+Default cache_sim record modes use plain LRU during modeled preparation, before the
 first binding exists. Binding activates the configured mechanism without
 flushing data or resetting counters. Cache results declare
 `setup_cache_policy=LRU`; archived ECG selectors are not a fallback for an
 unbound current stream.
+An explicit `--record-base-policy GRASP_PAPER` uses the declared GRASP policy
+for both preparation and its transport control; it is not the legacy ECG fallback.
 
 The initial twenty-cell run
 `results/ecg_experiments/runs/preprocessing_8mb_patents_9dc8c642`

@@ -885,6 +885,69 @@ void testUnknownPredictionIsNeutralToLru() {
           "known property futures do not displace an unknown LRU baseline victim");
 }
 
+void testSelectedBaseVictimRefinement() {
+    using namespace ecg_record;
+    for (const uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        auto req = requirements(32);
+        req.record_count = 8;
+        req.requested_record_bytes = width;
+        Layout layout;
+        check(selectLayout(req, layout) == Status::OK &&
+              layout.record_bytes == width,
+              "base-victim refinement covers both record widths");
+        WayState ways[3];
+        for (auto& way : ways)
+            way.property = true;
+        ways[0].state = State::UNKNOWN;
+        ways[0].recency = 1;
+        ways[1].state = State::FINITE;
+        ways[1].deadline = 40;
+        ways[1].recency = 2;
+        ways[2].state = State::FINITE;
+        ways[2].deadline = 30;
+        ways[2].recency = 3;
+        std::size_t selected = 99;
+        unsigned calls = 0;
+        auto select_base = [&]() {
+            ++calls;
+            return std::size_t{0};
+        };
+        check(selectVictim(layout, ways, 3, 20, select_base, selected) ==
+                  Status::OK && selected == 0 && calls == 1,
+              "UNKNOWN metadata preserves the selected base victim");
+        ways[0].state = State::FINITE;
+        ways[0].deadline = 19;
+        calls = 0;
+        check(selectVictim(layout, ways, 3, 20, select_base, selected) ==
+                  Status::OK && selected == 0 && calls == 1,
+              "expired metadata preserves the selected base victim");
+        ways[0].deadline = 25;
+        calls = 0;
+        check(selectVictim(layout, ways, 3, 20, select_base, selected) ==
+                  Status::OK && selected == 1 && calls == 1,
+              "a farther live finite property overrides an eligible base victim");
+        ways[2].state = State::DEAD;
+        ways[2].recency = 0;
+        calls = 0;
+        check(selectVictim(layout, ways, 3, 20, select_base, selected) ==
+                  Status::OK && selected == 2 && calls == 0,
+              "known-DEAD selection does not invoke or age the base policy");
+        bool valid[] = {true, false, true};
+        bool admit = false;
+        calls = 0;
+        check(canAdmitPrefetch(
+                  layout, ways, valid, 3, 20, select_base, admit) ==
+                  Status::OK && admit && calls == 0,
+              "an invalid way admits without invoking the base policy");
+        Layout invalid = layout;
+        invalid.record_bytes = 3;
+        calls = 0;
+        check(selectVictim(invalid, ways, 3, 20, select_base, selected) ==
+                  Status::INVALID_LAYOUT && calls == 0,
+              "invalid configuration fails before invoking the base policy");
+    }
+}
+
 void testFilteredQuantizedPassBoundary() {
     using namespace ecg_record;
     auto req = requirements(uint64_t{1} << 26);
@@ -947,6 +1010,7 @@ int main() {
     testFilteredReceiverInvalidations();
     testOlderInvalidationPreservesNewerUse();
     testUnknownPredictionIsNeutralToLru();
+    testSelectedBaseVictimRefinement();
     testFilteredQuantizedPassBoundary();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;

@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any, Iterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from policy_specs import policy_output_label  # noqa: E402
+from policy_specs import policy_output_label, parse_policy_spec  # noqa: E402
 import algorithm_matrix  # noqa: E402
 from gem5_guest_receipt import (  # noqa: E402
     material_input_fingerprint,
@@ -752,10 +752,20 @@ def make_roi_job(
     else:
         options = options_for(manifest, graph, graph_path, benchmark)
     if "algorithm_record_preprocess" in settings:
-        preprocessing = str(settings["algorithm_record_preprocess"])
+        requested_preprocessing = settings["algorithm_record_preprocess"]
+        if isinstance(requested_preprocessing, dict):
+            if benchmark not in requested_preprocessing:
+                raise SystemExit(f"missing preprocessing mode for {benchmark}")
+            requested_preprocessing = requested_preprocessing[benchmark]
+        preprocessing = str(requested_preprocessing)
         if not settings.get("current_algorithms") or preprocessing not in ("csr", "traversal"):
             raise SystemExit("algorithm_record_preprocess requires a valid current-algorithm preprocessing mode")
         options += " --record-preprocess " + preprocessing
+    if "algorithm_record_base_policy" in settings:
+        base = str(settings["algorithm_record_base_policy"])
+        if not settings.get("current_algorithms") or base not in ("LRU", "GRASP_PAPER"):
+            raise SystemExit("invalid current record base policy")
+        options += " --record-base-policy " + base
     core_tag = str(settings.get("_core_tag", ""))
     scaling_series_id = sanitize(
         f"{settings['name']}_{graph_name}_{benchmark}")
@@ -1036,8 +1046,10 @@ def make_roi_job(
     config_hash = hashlib.sha256(json.dumps(
         {"command": command, "env": material_env, "inputs": inputs},
         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    expected_policy_labels = [
-        policy_output_label(policy) for policy in all_policies]
+    record_base = algorithm_matrix.parse_options(options).record_base_policy if (
+        settings.get("current_algorithms")) else "LRU"
+    expected_policy_labels = algorithm_matrix.policy_labels(
+        [parse_policy_spec(policy) for policy in all_policies], record_base)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
@@ -1113,6 +1125,7 @@ def make_roi_job(
             "options": options,
             "policies": policies,
             "expected_policy_labels": expected_policy_labels,
+            "record_base_policy": record_base,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1144,7 +1157,8 @@ def make_roi_job(
 
 def csv_status(
         path: Path,
-        expected_policies: list[str] | None = None) -> tuple[str, str]:
+        expected_policies: list[str] | None = None,
+        record_base_policy: str = "LRU") -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1156,8 +1170,9 @@ def csv_status(
     statuses = {row.get("status", "") for row in rows}
     if statuses == {"ok"}:
         if expected_policies:
-            expected = {
-                policy_output_label(policy) for policy in expected_policies}
+            expected = ({policy_output_label(policy) for policy in expected_policies}
+                        if record_base_policy == "LRU" else set(algorithm_matrix.policy_labels(
+                            [parse_policy_spec(policy) for policy in expected_policies], record_base_policy)))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1176,7 +1191,8 @@ def csv_status(
 def job_csv_status(job: Job) -> tuple[str, str]:
     expected = [
         str(policy) for policy in job.metadata.get("policies", [])]
-    status, detail = csv_status(job.output_csv, expected)
+    record_base = str(job.metadata.get("record_base_policy", "LRU"))
+    status, detail = csv_status(job.output_csv, expected, record_base)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
@@ -1211,7 +1227,9 @@ def job_csv_status(job: Job) -> tuple[str, str]:
             payload.get("all_rows_ok") is not True):
         return "partial", "completion marker is not successful"
 
-    expected_labels = [policy_output_label(policy) for policy in expected]
+    expected_labels = ([policy_output_label(policy) for policy in expected] if record_base == "LRU"
+                       else algorithm_matrix.policy_labels(
+                           [parse_policy_spec(policy) for policy in expected], record_base))
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),

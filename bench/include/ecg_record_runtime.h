@@ -346,18 +346,18 @@ struct WayState {
     uint64_t deadline = 0;
 };
 
+template<class SelectBaseVictim>
 inline Status selectVictim(
         const Layout& layout, const WayState* ways, std::size_t count,
-        uint64_t sequence, std::size_t& victim) {
+        uint64_t sequence, SelectBaseVictim select_base_victim,
+        std::size_t& victim) {
     victim = std::numeric_limits<std::size_t>::max();
     if (validateLayout(layout) != Status::OK)
         return Status::INVALID_LAYOUT;
     if (!ways || count == 0 || count > 64)
         return Status::INVALID_COUNTS;
-    std::size_t lru = 0, dead = count;
+    std::size_t dead = count;
     for (std::size_t index = 0; index < count; ++index) {
-        if (ways[index].recency < ways[lru].recency)
-            lru = index;
         if (ways[index].property && ways[index].state == State::DEAD &&
             (dead == count || ways[index].recency < ways[dead].recency))
             dead = index;
@@ -366,11 +366,15 @@ inline Status selectVictim(
         victim = dead;
         return Status::OK;
     }
-    victim = lru;
-    EffectiveFuture best = resolveFuture(ways[lru].state, ways[lru].deadline, sequence);
-    if (!ways[lru].property || best.state != State::FINITE || best.remaining == 0)
+    victim = select_base_victim();
+    if (victim >= count)
+        return Status::INVALID_COUNTS;
+    EffectiveFuture best = resolveFuture(
+        ways[victim].state, ways[victim].deadline, sequence);
+    if (!ways[victim].property || best.state != State::FINITE || best.remaining == 0)
         return Status::OK;
-    // Override LRU only by comparing two live property futures; UNKNOWN never pins a line.
+    // Override the selected base only by comparing two live property futures;
+    // UNKNOWN never pins a line or changes the base policy's decision.
     for (std::size_t index = 0; index < count; ++index) {
         if (!ways[index].property)
             continue;
@@ -385,9 +389,25 @@ inline Status selectVictim(
     return Status::OK;
 }
 
+inline Status selectVictim(
+        const Layout& layout, const WayState* ways, std::size_t count,
+        uint64_t sequence, std::size_t& victim) {
+    const auto select_lru = [ways, count]() {
+        std::size_t lru = 0;
+        for (std::size_t index = 1; index < count; ++index)
+            if (ways[index].recency < ways[lru].recency)
+                lru = index;
+        return lru;
+    };
+    return selectVictim(
+        layout, ways, count, sequence, select_lru, victim);
+}
+
+template<class SelectBaseVictim>
 inline Status canAdmitPrefetch(
         const Layout& layout, const WayState* ways, const bool* valid,
-        std::size_t count, uint64_t sequence, bool& admit) {
+        std::size_t count, uint64_t sequence,
+        SelectBaseVictim select_base_victim, bool& admit) {
     admit = false;
     if (validateLayout(layout) != Status::OK)
         return Status::INVALID_LAYOUT;
@@ -400,13 +420,28 @@ inline Status canAdmitPrefetch(
         }
     }
     std::size_t victim = 0;
-    const Status status = selectVictim(layout, ways, count, sequence, victim);
+    const Status status = selectVictim(
+        layout, ways, count, sequence, select_base_victim, victim);
     if (status != Status::OK)
         return status;
     const auto future = resolveFuture(ways[victim].state, ways[victim].deadline, sequence);
     admit = !ways[victim].property || future.state != State::FINITE ||
         ecg_ref32::distanceRRPV(future.remaining) >= 7;
     return Status::OK;
+}
+
+inline Status canAdmitPrefetch(
+        const Layout& layout, const WayState* ways, const bool* valid,
+        std::size_t count, uint64_t sequence, bool& admit) {
+    const auto select_lru = [ways, count]() {
+        std::size_t lru = 0;
+        for (std::size_t index = 1; index < count; ++index)
+            if (ways[index].recency < ways[lru].recency)
+                lru = index;
+        return lru;
+    };
+    return canAdmitPrefetch(
+        layout, ways, valid, count, sequence, select_lru, admit);
 }
 
 }  // namespace ecg_record

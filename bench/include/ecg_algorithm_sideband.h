@@ -108,7 +108,10 @@ inline void writeDetailedResult(
                << "\"measurement_scope\":\"algorithm-setup-kernel-drain\","
                << "\"mode\":\"" << (command.options.records ?
                     ecg_record::mechanismName(command.options.mechanism) : "csr")
-               << "\",\"policy\":\"" << command.policy << "\",\"workload\":";
+               << "\",\"policy\":\"" << command.policy
+               << "\",\"record_base_policy\":\""
+               << recordBasePolicyName(command.options.record_base_policy)
+               << "\",\"workload\":";
         writeResult(output, result, command.options);
         output << "}\n";
     };

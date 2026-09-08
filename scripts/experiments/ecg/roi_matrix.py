@@ -6840,6 +6840,13 @@ def write_outputs(out_dir: Path, rows: list[dict[str, Any]]) -> None:
     print(f"[write] {csv_path}")
 
 
+def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -> list[str]:
+    if getattr(args, "current_algorithms", False):
+        return algorithm_matrix.policy_labels(
+            policies, algorithm_matrix.parse_options(args.options).record_base_policy)
+    return [spec.label for spec in policies]
+
+
 def standalone_matrix_config_hash(
         args: argparse.Namespace, policies: list[PolicySpec]) -> str:
     paths: dict[str, Path] = {
@@ -6926,7 +6933,7 @@ def standalone_matrix_config_hash(
     }
     payload = {
         "config": config,
-        "policy_labels": [spec.label for spec in policies],
+        "policy_labels": output_policy_labels(args, policies),
         "env": material_env,
         "explicit_cell_env": explicit_cell_mechanism_env(),
         "inputs": {
@@ -6979,9 +6986,9 @@ def write_completion_marker(
         "matrix_config_hash": matrix_config_hash,
         "comparison_config_hash": os.environ.get(
             "GRAPHBREW_COMPARISON_CONFIG_HASH", ""),
-        "policy_labels": [spec.label for spec in policies],
+        "policy_labels": output_policy_labels(args, policies),
         "expected_policy_labels": (
-            expected_policy_labels or [spec.label for spec in policies]),
+            expected_policy_labels or output_policy_labels(args, policies)),
         "l3_sizes": [str(size) for size in args.l3_sizes],
         "threads": [
             str(value) for value in (args.threads or [args.sniper_cores])

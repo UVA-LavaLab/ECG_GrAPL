@@ -166,6 +166,73 @@ struct InspectRecordsBackend : ecg_algorithm::PlainBackend {
     }
 };
 
+void testPoptDirectMatrix() {
+    for (uint32_t vertices : {1u, 129u, 513u, 33025u}) {
+        std::vector<std::tuple<uint32_t, uint32_t, int32_t>> edges;
+        for (uint32_t source = 0; source < vertices; source += 17) {
+            edges.emplace_back(source, (source * 13 + 1) % vertices, 1);
+            edges.emplace_back(source, (source * 29 + 3) % vertices, 1);
+        }
+        const Fixture graph(vertices, true, edges);
+        for (uint32_t per_line : {8u, 16u}) {
+            const uint32_t lines = (vertices + per_line - 1) / per_line;
+            const uint32_t epoch_size = (vertices + 255) / 256;
+            const uint32_t sub_epoch = (epoch_size + 127) / 128;
+            popt_reref::FullMatrix direct;
+            direct.configure(vertices, lines, uint64_t(lines) * 256);
+            for (uint32_t source = 0; source < vertices; ++source)
+                for (uint64_t index = graph.offsets[source]; index < graph.offsets[source + 1]; ++index)
+                    direct.reference(graph.edges[index].id / per_line, source);
+            direct.finish();
+            std::vector<int32_t> last(uint64_t(lines) * 256, -1);
+            for (uint32_t vertex = 0; vertex < vertices; ++vertex)
+                for (uint64_t index = graph.in_offsets[vertex]; index < graph.in_offsets[vertex + 1]; ++index) {
+                    const uint32_t source = graph.in_edges[index].id;
+                    int32_t& value = last[uint64_t(vertex / per_line) * 256 + source / epoch_size];
+                    value = std::max(value, static_cast<int32_t>(source));
+                }
+            bool equal = true;
+            for (uint32_t line = 0; line < lines; ++line) {
+                uint8_t distance = 127;
+                for (uint32_t epoch = 256; epoch-- > 0;) {
+                    const int32_t source = last[uint64_t(line) * 256 + epoch];
+                    uint8_t expected;
+                    if (source >= 0) {
+                        expected = static_cast<uint8_t>((source % epoch_size) / sub_epoch) & 0x7f;
+                        distance = 1;
+                    } else {
+                        expected = 0x80 | distance;
+                        if (distance < 127)
+                            ++distance;
+                    }
+                    equal = equal && direct.data()[uint64_t(epoch) * lines + line] == expected;
+                }
+            }
+            check(equal && direct.bytes() == uint64_t(lines) * 256,
+                  "direct compressed P-OPT construction equals the canonical transpose formulation");
+        }
+    }
+    popt_reref::FullMatrix matrix;
+    matrix.configure(32, 6, 6 * 256);
+    matrix.reference(0, 17);
+    matrix.reference(2, 5);
+    matrix.finish();
+    cache_sim::GraphCacheContext context;
+    context.topology.num_vertices = 32;
+    context.registerPropertyArray(reinterpret_cast<const void*>(0x1000), 32, 4, 512);
+    context.registerPropertyArray(reinterpret_cast<const void*>(0x2000), 32, 8, 512);
+    context.registerPropertyArray(reinterpret_cast<const void*>(0x3000), 32, 4, 512);
+    context.regions[0].popt_line_offset = 0;
+    context.regions[1].popt_line_offset = 2;
+    context.compound_popt = true;
+    context.initRereference(matrix.data(), 6, 256, 32, 64);
+    context.setCurrentVertices(0, 0);
+    check(context.findNextRef(0x1000) == 17 && context.findNextRef(0x2000) == 5 &&
+          context.isPoptData(0x1000) && !context.isPoptData(0x3000) &&
+          context.findRegion(0x3000) != nullptr,
+          "P-OPT uses the correct typed bank and excludes source-only streamed output");
+}
+
 void testUnboundRecordPreparation() {
     using namespace ecg_algorithm;
     const Fixture graph(32, true, {{0, 1, 1}});
@@ -282,6 +349,7 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testPoptDirectMatrix();
     testUnboundRecordPreparation();
     testTraversalPreprocessing();
     const Fixture diamond(8, true, {

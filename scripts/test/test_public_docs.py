@@ -111,7 +111,7 @@ def test_methodology_is_current_only_and_marks_unmeasured_algorithms():
                    if line.startswith(f"| {algorithm}"))
         assert "All three (bounded)" in row and "Not measured" in row
     assert "next potential designated read" in methodology
-    assert "P-OPT has not been ported" in methodology
+    assert "`POPT:UNCHARGED` is a cache-only graph-pass control" in methodology
     assert "0.6814" in methodology
     assert "8 MiB Patents kernel R/LRU" in methodology
     assert "8 MiB Patents kernel RP/LRU" in methodology

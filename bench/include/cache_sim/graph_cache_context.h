@@ -132,6 +132,7 @@ struct PropertyRegion {
     uint32_t num_buckets = 0;       // Active bucket count (0 = uninitialized)
     uint32_t grasp_hot_percent = 15; // GRASP frontier_frac as % of VERTEX SPACE (array-relative, GRASP-faithful per ligra.h add_region). ~0.15 reproduces Faldu corpus results AND auto-scales (vs the old fixed 0.50-of-LLC which under-protected large graphs). ~ Faldu's stated 10% (which is vertex-relative).
     bool grasp_region = true;       // Whether GRASP treats this as propertyA/B
+    uint32_t popt_line_offset = UINT32_MAX;
 
     // Bucket boundaries: bucket_bounds[i] = upper byte address of bucket i
     // Bucket 0 = highest-degree (most important to cache)
@@ -1000,6 +1001,8 @@ struct GraphCacheContext {
 
     // --- Rereference Matrix (P-OPT) ---
     RereferenceConfig rereference;
+    bool compound_popt = false;
+    mutable uint64_t popt_lookup_count = 0;
 
     // --- Exact position-indexed next-reference (ECG per-edge idea) ---
     // The per-edge mask is traversed in order, so the CURRENT vertex (src) is
@@ -1998,6 +2001,13 @@ struct GraphCacheContext {
         return nullptr;
     }
 
+    bool isPoptData(uint64_t addr) const {
+        if (!compound_popt)
+            return isPropertyData(addr);
+        const PropertyRegion* region = findRegion(addr);
+        return region && region->popt_line_offset != UINT32_MAX;
+    }
+
     // Compute P-OPT rereference distance for a cache line address.
     uint32_t findNextRef(uint64_t line_addr) const {
         const uint32_t max_rank = popt_reref::maxRank(rereference.encoding);
@@ -2007,6 +2017,12 @@ struct GraphCacheContext {
         if (r == nullptr) return max_rank;
         uint32_t cline_id = static_cast<uint32_t>(
             (line_addr - r->base_address) / rereference.line_size);
+        if (compound_popt) {
+            if (r->popt_line_offset == UINT32_MAX)
+                return max_rank;
+            cline_id += r->popt_line_offset;
+            ++popt_lookup_count;
+        }
         return rereference.findNextRef(cline_id, hints_for_thread().current_src);
     }
 

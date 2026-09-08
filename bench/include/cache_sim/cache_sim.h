@@ -1340,14 +1340,16 @@ public:
         set[victim_idx].record_metadata.clear();
         if (record_configured_) {
             set[victim_idx].record_metadata.prefetch_origin = is_prefetch;
-            const uint8_t tier = recordTier(address);
-            set[victim_idx].rrpv = tier == 1 ? 1 : tier == 2 ? 6 : 7;
+            applyGraspInsertion(set[victim_idx], address);
             if (record)
                 observeRecord(set[victim_idx], *record);
             return;
         }
-        if (record_prepared_)
+        if (record_prepared_) {
+            if (record_base_policy_ == EvictionPolicy::GRASP)
+                applyGraspInsertion(set[victim_idx], address);
             return;
+        }
 
         if (policy_ == EvictionPolicy::HAWKEYE && hawkeye_state_) {
             const uint64_t signature = currentHawkeyeSite();
@@ -1386,20 +1388,7 @@ public:
         // each property region. Moderate = next 10%. Cold = rest.
         // After DBG reorder, highest-degree vertices are at front (low addr).
         if (policy_ == EvictionPolicy::GRASP) {
-            constexpr uint8_t P_RRIP = 1;   // Priority insertion (hot), matching upstream GRASP
-            constexpr uint8_t I_RRIP = 6;   // Intermediate (moderate)
-            constexpr uint8_t M_RRIP = 7;   // Max (cold)
-            if (graph_ctx_) {
-                uint32_t tier = graph_ctx_->classifyGRASP(address, size_bytes_);
-                if (tier == 1)       set[victim_idx].rrpv = P_RRIP;
-                else if (tier == 2)  set[victim_idx].rrpv = I_RRIP;
-                else                 set[victim_idx].rrpv = M_RRIP;
-            } else if (grasp_state_.enabled) {
-                auto t = grasp_state_.classify(address);
-                if (t == GRASPState::ReuseTier::HIGH)           set[victim_idx].rrpv = P_RRIP;
-                else if (t == GRASPState::ReuseTier::MODERATE)  set[victim_idx].rrpv = I_RRIP;
-                else                                            set[victim_idx].rrpv = M_RRIP;
-            }
+            applyGraspInsertion(set[victim_idx], address);
         }
 
         // P-OPT: insert with SRRIP-style RRPV (long re-reference = M-1)
@@ -1784,19 +1773,24 @@ public:
         return getSetIndex(address);
     }
 
-    void prepareRecord() {
+    void prepareRecord(EvictionPolicy base_policy = EvictionPolicy::LRU) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (record_prepared_ || record_configured_ || !graph_ctx_ || line_size_ != 64 ||
             associativity_ > 64 || set_dueling_ ||
-            (policy_ != EvictionPolicy::ECG && policy_ != EvictionPolicy::LRU))
+            (base_policy != EvictionPolicy::LRU && base_policy != EvictionPolicy::GRASP) ||
+            (base_policy == EvictionPolicy::LRU &&
+             policy_ != EvictionPolicy::ECG && policy_ != EvictionPolicy::LRU) ||
+            (base_policy == EvictionPolicy::GRASP && policy_ != EvictionPolicy::GRASP))
             throw std::invalid_argument("Invalid current ECG cache preparation");
-        // Until binding, current records have no prediction and must not select legacy ECG.
+        // Until binding, current records have no prediction and use their declared base.
+        record_base_policy_ = base_policy;
         record_prepared_ = true;
         record_mode_snapshot_ = true;
     }
 
     void configureRecord(
-            const ecg_record::NativeConfiguration& configuration, bool replacement) {
+            const ecg_record::NativeConfiguration& configuration, bool replacement,
+            EvictionPolicy base_policy = EvictionPolicy::LRU) {
         std::lock_guard<std::mutex> lock(mutex_);
         ecg_record::Layout layout;
         ecg_record::PropertyDescriptor property;
@@ -1808,8 +1802,12 @@ public:
             graph_ctx_->topology.num_vertices != configuration.vertex_count ||
             (!managed && graph_ctx_->topology.num_edges != configuration.record_count) ||
             !graph_ctx_->findRegion(configuration.property_base) ||
-            (replacement && policy_ != EvictionPolicy::ECG) ||
-            (!replacement && policy_ != EvictionPolicy::LRU))
+            (base_policy != EvictionPolicy::LRU && base_policy != EvictionPolicy::GRASP) ||
+            (base_policy == EvictionPolicy::LRU &&
+             ((replacement && policy_ != EvictionPolicy::ECG) ||
+              (!replacement && policy_ != EvictionPolicy::LRU))) ||
+            (base_policy == EvictionPolicy::GRASP && policy_ != EvictionPolicy::GRASP) ||
+            (record_prepared_ && base_policy != record_base_policy_))
             throw std::invalid_argument("Invalid current ECG cache configuration");
         record_configuration_ = configuration;
         if (!record_receiver_.configure(
@@ -1821,6 +1819,7 @@ public:
                 for (auto& line : set)
                     line.record_metadata.clear();
         record_replacement_ = replacement;
+        record_base_policy_ = base_policy;
         record_dead_bypasses_ = 0;
         record_mode_snapshot_ = true;
         record_prepared_ = true;
@@ -1884,9 +1883,16 @@ public:
             ways[index] = recordWay(set[index]);
             valid[index] = set[index].valid;
         }
+        auto selection_set = set;
+        const auto select_base = [&]() {
+            return record_base_policy_ == EvictionPolicy::GRASP
+                ? findVictimGRASP(selection_set)
+                : findVictimLRU(selection_set);
+        };
         bool admit = false;
         if (ecg_record::canAdmitPrefetch(
-                record_receiver_.layout(), ways.data(), valid.data(), set.size(), sequence, admit) !=
+                record_receiver_.layout(), ways.data(), valid.data(), set.size(), sequence,
+                select_base, admit) !=
                     ecg_record::Status::OK)
             throw std::logic_error("Invalid current ECG prefetch admission");
         return admit;
@@ -1911,6 +1917,7 @@ private:
     bool record_configured_ = false;
     bool record_prepared_ = false;
     bool record_replacement_ = false;
+    EvictionPolicy record_base_policy_ = EvictionPolicy::LRU;
     bool record_mode_snapshot_ = false;
     uint64_t record_dead_bypasses_ = 0;
 
@@ -1932,8 +1939,32 @@ private:
         }
     }
 
+    uint8_t graspTier(uint64_t address) const {
+        if (graph_ctx_)
+            return static_cast<uint8_t>(
+                graph_ctx_->classifyGRASP(address, size_bytes_));
+        if (grasp_state_.enabled) {
+            const auto tier = grasp_state_.classify(address);
+            if (tier == GRASPState::ReuseTier::HIGH) return 1;
+            if (tier == GRASPState::ReuseTier::MODERATE) return 2;
+        }
+        return 3;
+    }
+
+    void applyGraspInsertion(CacheLine& line, uint64_t address) const {
+        const uint8_t tier = graspTier(address);
+        line.rrpv = tier == 1 ? 1 : tier == 2 ? 6 : 7;
+    }
+
+    void applyGraspHit(CacheLine& line) const {
+        if (graspTier(line.line_addr) == 1)
+            line.rrpv = 0;
+        else if (line.rrpv)
+            --line.rrpv;
+    }
+
     uint8_t recordTier(uint64_t address) const {
-        return static_cast<uint8_t>(graph_ctx_->classifyGRASP(address, size_bytes_));
+        return graspTier(address);
     }
 
     ecg_record::WayState recordWay(const CacheLine& line) const {
@@ -2000,14 +2031,14 @@ private:
         set[idx].ecg_ref32_prefetch = false;
         if (record_configured_) {
             set[idx].record_metadata.prefetch_origin = false;
-            if (recordProperty(set[idx].line_addr) && recordTier(set[idx].line_addr) == 1)
-                set[idx].rrpv = 0;
-            else if (set[idx].rrpv)
-                --set[idx].rrpv;
+            applyGraspHit(set[idx]);
             return;
         }
-        if (record_prepared_)
+        if (record_prepared_) {
+            if (record_base_policy_ == EvictionPolicy::GRASP)
+                applyGraspHit(set[idx]);
             return;
+        }
         
         // SRRIP: reset RRPV to 0 on hit
         if (policy_ == EvictionPolicy::SRRIP) {
@@ -2027,19 +2058,7 @@ private:
         // GRASP: 3-tier hit promotion (Faldu et al., 2020)
         // Hot region → RRPV=0 (aggressive reset), others → decrement by 1
         if (policy_ == EvictionPolicy::GRASP) {
-            uint64_t addr = set[idx].line_addr;
-            if (graph_ctx_) {
-                uint32_t tier = graph_ctx_->classifyGRASP(addr, size_bytes_);
-                if (tier == 1) {
-                    set[idx].rrpv = 0;  // Hot (hub): aggressive reset
-                } else if (set[idx].rrpv > 0) {
-                    set[idx].rrpv--;    // Others: gradual decrement
-                }
-            } else if (grasp_state_.enabled) {
-                auto t = grasp_state_.classify(addr);
-                if (t == GRASPState::ReuseTier::HIGH) set[idx].rrpv = 0;
-                else if (set[idx].rrpv > 0) set[idx].rrpv--;
-            }
+            applyGraspHit(set[idx]);
         }
 
         // P-OPT: reset RRPV to 0 on hit (same as SRRIP hit promotion)
@@ -2230,7 +2249,7 @@ private:
         // evicting valid lines while empty ways sat idle — and unfairly weakened
         // the GRASP baseline relative to SRRIP/ECG. Fixed: always invalid-first.)
         const bool replayOfficialGraspEmptyWayBehavior =
-            policy_ == EvictionPolicy::GRASP &&
+            !record_prepared_ && policy_ == EvictionPolicy::GRASP &&
             std::getenv("GRASP_OFFICIAL_TRACE_EMPTY_WAYS") != nullptr;
         if (!replayOfficialGraspEmptyWayBehavior) {
             for (size_t i = 0; i < associativity_; i++) {
@@ -2239,19 +2258,26 @@ private:
         }
         if (record_configured_) {
             if (!record_replacement_)
-                return findVictimLRU(set);
+                return record_base_policy_ == EvictionPolicy::GRASP
+                    ? findVictimGRASP(set) : findVictimLRU(set);
             std::array<ecg_record::WayState, 64> ways{};
             for (std::size_t index = 0; index < set.size(); ++index)
                 ways[index] = recordWay(set[index]);
+            const auto select_base = [&]() {
+                return record_base_policy_ == EvictionPolicy::GRASP
+                    ? findVictimGRASP(set) : findVictimLRU(set);
+            };
             std::size_t victim = 0;
             if (ecg_record::selectVictim(
                     record_receiver_.layout(), ways.data(), set.size(),
-                    record_receiver_.watermark(), victim) != ecg_record::Status::OK)
+                    record_receiver_.watermark(), select_base, victim) !=
+                        ecg_record::Status::OK)
                 throw std::logic_error("Invalid current ECG victim selection");
             return victim;
         }
         if (record_prepared_)
-            return findVictimLRU(set);
+            return record_base_policy_ == EvictionPolicy::GRASP
+                ? findVictimGRASP(set) : findVictimLRU(set);
         
         // All lines valid, use eviction policy
         switch (policy_) {
@@ -2429,7 +2455,9 @@ private:
     // ================================================================
     size_t findVictimPOPT(std::vector<CacheLine>& set) {
         // Check if either unified context or legacy state is available
-        bool has_popt = (graph_ctx_ && graph_ctx_->rereference.matrix) || popt_state_.enabled;
+        bool has_popt = (graph_ctx_ && graph_ctx_->rereference.matrix &&
+            (!graph_ctx_->compound_popt || graph_ctx_->hints_for_thread().current_src != UINT32_MAX)) ||
+            popt_state_.enabled;
         if (!has_popt) {
             return findVictimLRU(set);  // Fallback if not initialized
         }
@@ -2439,7 +2467,7 @@ private:
             uint64_t la = set[i].line_addr;
             bool is_graph_data = false;
             if (graph_ctx_) {
-                is_graph_data = graph_ctx_->isPropertyData(la);
+                is_graph_data = graph_ctx_->isPoptData(la);
             } else {
                 is_graph_data = (la >= popt_state_.irreg_base && la < popt_state_.irreg_bound);
             }
@@ -3586,19 +3614,20 @@ public:
             issueCurrentRef32Prefetch();
     }
 
-    void prepareRecord() {
+    void prepareRecord(EvictionPolicy base_policy = EvictionPolicy::LRU) {
         if (record_model_ || record_loads_ != 0 || ref32_commit_channel_ ||
             ref32_prefetch_enabled_ || refresh_exact_stamp_ ||
             l1_->getPolicy() != EvictionPolicy::LRU || l2_->getPolicy() != EvictionPolicy::LRU)
             throw std::invalid_argument("Invalid functional ECG record preparation");
-        l3_->prepareRecord();
+        l3_->prepareRecord(base_policy);
     }
 
     void configureRecord(
             const ecg_record::NativeConfiguration& configuration,
             const ecg_record::RecordStream& stream, ecg_record::Mechanism mechanism,
             uint64_t update_latency = 8, uint64_t prefetch_latency = 8,
-            std::size_t prefetch_capacity = 16) {
+            std::size_t prefetch_capacity = 16,
+            EvictionPolicy base_policy = EvictionPolicy::LRU) {
         if (record_model_ || record_loads_ != 0 || line_size_ != 64 || !graph_ctx_ ||
             l1_->getPolicy() != EvictionPolicy::LRU || l2_->getPolicy() != EvictionPolicy::LRU ||
             ref32_commit_channel_ || ref32_prefetch_enabled_ || refresh_exact_stamp_ ||
@@ -3623,7 +3652,7 @@ public:
             throw std::invalid_argument("Functional ECG filtered traversal requires managed passes");
         const bool replacement = mechanism == ecg_record::Mechanism::REPLACEMENT ||
             mechanism == ecg_record::Mechanism::REPLACEMENT_PREFETCH;
-        l3_->configureRecord(configuration, replacement);
+        l3_->configureRecord(configuration, replacement, base_policy);
         record_configuration_ = configuration;
         record_stream_ = &stream;
         record_mechanism_ = mechanism;
@@ -3631,12 +3660,21 @@ public:
         record_prefetch_latency_ = prefetch_latency;
         record_prefetch_capacity_ = prefetch_capacity;
         record_replacement_ = replacement;
+        record_base_policy_ = base_policy;
         record_prefetch_ = mechanism == ecg_record::Mechanism::PREFETCH ||
             mechanism == ecg_record::Mechanism::REPLACEMENT_PREFETCH;
         if (record_window_.configure(layout, configuration.record_base, stream.size()) !=
                 ecg_record::Status::OK)
             throw std::invalid_argument("Functional ECG record window does not fit");
         record_model_ = true;
+    }
+
+    void configureRecord(
+            const ecg_record::NativeConfiguration& configuration,
+            const ecg_record::RecordStream& stream, ecg_record::Mechanism mechanism,
+            EvictionPolicy base_policy) {
+        configureRecord(
+            configuration, stream, mechanism, 8, 8, 16, base_policy);
     }
 
     void recordIteration(uint64_t base, bool has_next) {
@@ -3723,7 +3761,8 @@ public:
             ++record_invalidation_steps_;
         }
         l3_->disableRecord();
-        l3_->configureRecord(configuration, record_replacement_);
+        l3_->configureRecord(
+            configuration, record_replacement_, record_base_policy_);
         record_configuration_ = configuration;
         record_property_ = property;
         record_stream_ = &stream;
@@ -4760,6 +4799,7 @@ private:
     bool record_model_ = false;
     bool record_replacement_ = false;
     bool record_prefetch_ = false;
+    EvictionPolicy record_base_policy_ = EvictionPolicy::LRU;
     bool record_pending_ = false;
     bool record_managed_ = false;
     ecg_record::PassCursor record_cursor_;

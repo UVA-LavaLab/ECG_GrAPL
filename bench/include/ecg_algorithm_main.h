@@ -52,7 +52,7 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
         if (argument == "--graph") command.graph_path = value;
         else if (argument == "--output") command.output_path = value;
         else if (argument == "--policy") {
-            if (value != "LRU" && value != "SRRIP" && value != "GRASP_PAPER")
+            if (value != "LRU" && value != "SRRIP" && value != "GRASP_PAPER" && value != "POPT_UNCHARGED")
                 throw std::invalid_argument("unsupported-current-algorithm-baseline");
             command.policy = value;
         } else if (argument == "--algorithm") {
@@ -72,6 +72,13 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (command.options.records && ecg_record::parseMechanismName(
                     value.c_str(), command.options.mechanism) != ecg_record::Status::OK)
                 throw std::invalid_argument("unknown-current-mechanism");
+        } else if (argument == "--record-base-policy") {
+            if (value == "LRU")
+                command.options.record_base_policy = RecordBasePolicy::LRU;
+            else if (value == "GRASP_PAPER")
+                command.options.record_base_policy = RecordBasePolicy::GRASP_PAPER;
+            else
+                throw std::invalid_argument("record-base-policy-must-be-LRU-or-GRASP_PAPER");
         } else if (argument == "--record-bytes") {
             const uint64_t bytes = unsignedOption(value);
             if (bytes != 0 && bytes != 4 && bytes != 8)
@@ -131,6 +138,9 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
         throw std::invalid_argument("required: --algorithm spmv|bfs|sssp|cc|bc|tc --graph path.sg|path.wsg");
     if (command.options.records && command.policy != "LRU")
         throw std::invalid_argument("current-record-modes-own-their-replacement-policy");
+    if (!command.options.records &&
+        command.options.record_base_policy != RecordBasePolicy::LRU)
+        throw std::invalid_argument("record-base-policy-requires-record-mode");
     for (const auto& geometry : {
             std::pair<uint64_t, uint64_t>{command.l1_bytes, command.l1_ways},
             {command.l2_bytes, command.l2_ways}, {command.llc_bytes, command.llc_ways}}) {
@@ -157,6 +167,8 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
            << "\",\"prediction_semantics\":\""
            << (exact ? "dense-actual-designated-read" : "next-potential-designated-read")
            << "\",\"carrier\":\"" << (result.records ? "record" : "csr")
+           << "\",\"record_base_policy\":\""
+           << recordBasePolicyName(options.record_base_policy)
            << "\",\"record_preprocess\":\"" << (options.traversal_preprocessing ? "traversal" : "csr")
            << "\",\"record_reuse_scope\":\"" << recordReuseScope(options) << '"';
     const auto field = [&](const char* key, uint64_t value) { output << ",\"" << key << "\":" << value; };
@@ -261,9 +273,16 @@ int invokeGraph(const Graph& graph, const CommandLine& command, Invoke invoke) {
 }
 
 template<class Invoke>
-int applicationMain(int argc, char** argv, Invoke invoke) {
+int applicationMain(
+        int argc, char** argv, Invoke invoke, bool allow_popt = false,
+        bool allow_grasp_record_base = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        if (command.policy == "POPT_UNCHARGED" && !allow_popt)
+            throw std::invalid_argument("current P-OPT is cache_sim-only");
+        if (command.options.record_base_policy == RecordBasePolicy::GRASP_PAPER &&
+            !allow_grasp_record_base)
+            throw std::invalid_argument("GRASP_PAPER record base is cache_sim-only");
         const auto dot = command.graph_path.rfind('.');
         const std::string suffix = dot == std::string::npos ? "" : command.graph_path.substr(dot);
         if (suffix == ".wsg") {

@@ -11,6 +11,7 @@
     "ecg_dobfs_8mb_cache",
     "ecg_preprocessing_8mb_cache",
     "ecg_grasp_8mb_cache",
+    "ecg_competitive_8mb_cache",
     "ecg_algorithm_equivalence_gem5",
     "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
@@ -46,6 +47,7 @@
     "no_build": true
   },
   "profiles": {
+    "ecg_competitive_8mb_cache": "Forty-two serial full-Patents cells: six shared kernels, LRU/GRASP/full-capacity P-OPT, and matched ECG T/R on explicit LRU and GRASP bases. All construction is visible.",
     "ecg_grasp_8mb_cache": "Six matched full-Patents GRASP cells plus fresh LRU/T/R controls for SpMV and TC. Existing dynamic-algorithm controls may be joined only after exact binary/input/work matching.",
     "ecg_preprocessing_8mb_cache": "Twenty serial full-Patents BFS/SSSP/CC/BC cache cells at 8 MiB: current CSR preprocessing versus opt-in static phase/row preprocessing, with matched LRU/T/R controls.",
     "ecg_dobfs_8mb_cache": "Opt-in sorted direction-optimizing BFS on full Patents at 8 MiB; LRU/T/R, TD records and ordinary BU bitmaps, with all switching work charged.",
@@ -108,6 +110,11 @@
     "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
+    "ecg_competitive_8mb_cache": {
+      "status": "ready",
+      "reason": "Same-work cache-only comparison; P-OPT keeps full data capacity and free runtime matrix lookup as a favorable control. No CPU speedup or universal win is authorized.",
+      "require_clean_worktree": true
+    },
     "ecg_grasp_8mb_cache": {
       "status": "ready",
       "reason": "Serial same-binary GRASP comparison on the current shared kernels; cache traffic only, not native timing.",
@@ -961,6 +968,53 @@
     ]
   },
   "stages": [
+    {
+      "name": "168_competitive_baselines_8mb", "kind": "roi_matrix",
+      "profiles": ["ecg_competitive_8mb_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["LRU", "GRASP_PAPER", "POPT:UNCHARGED"],
+      "current_algorithms": true, "ecg_record_bytes": 0,
+      "algorithm_workspace_bytes": 536870912,
+      "cache_record_rss_mib": 4096, "cache_sim_omp_threads": 1,
+      "l1d_size": "32kB", "l1d_ways": "8", "l2_size": "256kB", "l2_ways": "8",
+      "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "168_competitive_baselines_8mb"
+    },
+    {
+      "name": "169_competitive_ecg_lru_8mb", "kind": "roi_matrix",
+      "profiles": ["ecg_competitive_8mb_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["ECG:transport", "ECG:replacement"],
+      "current_algorithms": true, "algorithm_record_base_policy": "LRU",
+      "algorithm_record_preprocess": {"spmv": "csr", "bfs": "csr", "sssp": "traversal", "cc": "traversal", "bc": "csr", "tc": "csr"},
+      "ecg_record_bytes": 0, "algorithm_workspace_bytes": 536870912,
+      "cache_record_rss_mib": 4096, "cache_sim_omp_threads": 1,
+      "l1d_size": "32kB", "l1d_ways": "8", "l2_size": "256kB", "l2_ways": "8",
+      "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "169_competitive_ecg_lru_8mb"
+    },
+    {
+      "name": "170_competitive_ecg_grasp_8mb", "kind": "roi_matrix",
+      "profiles": ["ecg_competitive_8mb_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv", "bfs", "sssp", "cc", "bc", "tc"],
+      "policies": ["ECG:transport", "ECG:replacement"],
+      "current_algorithms": true, "algorithm_record_base_policy": "GRASP_PAPER",
+      "algorithm_record_preprocess": {"spmv": "csr", "bfs": "csr", "sssp": "traversal", "cc": "traversal", "bc": "csr", "tc": "csr"},
+      "ecg_record_bytes": 0, "algorithm_workspace_bytes": 536870912,
+      "cache_record_rss_mib": 4096, "cache_sim_omp_threads": 1,
+      "l1d_size": "32kB", "l1d_ways": "8", "l2_size": "256kB", "l2_ways": "8",
+      "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "170_competitive_ecg_grasp_8mb"
+    },
     {
       "name": "166_grasp_current_algorithms_8mb", "kind": "roi_matrix",
       "profiles": ["ecg_grasp_8mb_cache"],

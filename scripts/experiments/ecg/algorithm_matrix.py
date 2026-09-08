@@ -15,10 +15,10 @@ from typing import Any, Callable
 
 if __package__:
     from .record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned
-    from .record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources
+    from .record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines
 else:
     from record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned
-    from record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources
+    from record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -51,6 +51,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--delta", type=int, default=8)
     parser.add_argument("--max-passes", type=int, default=1000000)
     parser.add_argument("--record-preprocess", choices=("csr", "traversal"), default="csr")
+    parser.add_argument("--record-base-policy", choices=("LRU", "GRASP_PAPER"), default="LRU")
     parser.add_argument("--bfs-direction", choices=("td", "do"), default="td")
     parser.add_argument("--bfs-alpha", type=int, default=15)
     parser.add_argument("--bfs-beta", type=int, default=18)
@@ -72,6 +73,17 @@ def _integer(fields: dict[str, Any], name: str) -> int:
     return value
 
 
+def record_policy_label(label: str, mode: str, base_policy: str) -> str:
+    if mode == "csr" or base_policy == "LRU":
+        return label
+    return f"{label}_BASE_{base_policy}"
+
+
+def policy_labels(policies, base_policy: str = "LRU") -> list[str]:
+    return [record_policy_label(spec.label, spec.record_mechanism or "csr", base_policy)
+            for spec in policies]
+
+
 def validate_payload(
     payload: dict[str, Any], log: str, *, algorithm: str, mode: str, policy: str,
     graph: GraphInfo, graph_path: Path, options: argparse.Namespace, requested_bytes: int,
@@ -82,6 +94,9 @@ def validate_payload(
             payload.get("backend") == backend and payload.get("mode") == mode and
             payload.get("policy") == policy and payload.get("timing_valid_for_speedup") is False,
             "algorithm backend/mode/policy receipt mismatch")
+    expected_base = options.record_base_policy if mode != "csr" else "LRU"
+    require(payload.get("record_base_policy") == expected_base,
+            "algorithm record base-policy receipt mismatch")
     require(payload.get("measurement_scope") == (
                 "algorithm-data-traffic-including-construction" if backend == "cache_sim"
                 else "algorithm-setup-kernel-drain"),
@@ -94,7 +109,8 @@ def validate_payload(
     expected_variant = "sorted-direction-optimizing-td-records-bu-bitmap" if direction_optimizing else specification["variant"]
     require(work.get("schema") == "ecg.algorithm-workload.v1" and
             work.get("algorithm") == algorithm and work.get("variant") == expected_variant and
-            work.get("prediction_semantics") == specification["semantics"],
+            work.get("prediction_semantics") == specification["semantics"] and
+            work.get("record_base_policy") == expected_base,
             "algorithm variant or prediction semantics mismatch")
     records = mode != "csr"
     reuse_scope = ({"sssp": "light-heavy", "cc": "sample-rounds", "bfs": "row-local", "bc": "row-local"}
@@ -216,6 +232,23 @@ def validate_payload(
                 if replacement else 0), "ordinary governed-region invalidations are unaccounted")
     else:
         require(_integer(work, "carrier_allocation_bytes") == 0, "CSR baseline built an ECG carrier")
+    if policy == "POPT_UNCHARGED":
+        popt = payload.get("popt")
+        require(backend == "cache_sim" and mode == "csr" and not direction_optimizing and
+                isinstance(popt, dict) and popt.get("encoding") == "full" and
+                popt.get("scope") == "graph-pass-irregular-regions" and
+                popt.get("full_data_capacity") is True and
+                popt.get("runtime_matrix_traffic_charged") is False,
+                "P-OPT must declare its favorable full-capacity graph-pass scope")
+        lines = popt_matrix_lines(algorithm, graph.vertices)
+        require(_integer(popt, "matrix_lines") == lines and
+                _integer(popt, "matrix_bytes") == lines * 256 and _integer(popt, "epochs") == 256 and
+                _integer(popt, "banks") == (3 if algorithm == "bc" else 1) and
+                _integer(popt, "covered_regions") == (3 if algorithm == "bc" else 1) and
+                _integer(popt, "passes") == passes and _integer(popt, "governed_reads") == actual and
+                _integer(popt, "construction_read_bytes") > 0 and
+                _integer(popt, "construction_write_bytes") > 0,
+                "P-OPT matrix coverage, construction or progress mismatch")
     reference = contract()["references"][algorithm]
     if evidence and graph_path.name == reference["graph"] and options.source == 0 and not options.source_list:
         require(graph.sha256 == contract()["graphs"][reference["graph"]]["sha256"],
@@ -286,9 +319,14 @@ def run_cache_cell(
                 "current algorithms require serial real-record execution without legacy mechanisms")
         mode = spec.record_mechanism or "csr"
         policy = "LRU" if mode != "csr" else spec.label
-        require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER")),
-                "unsupported current algorithm policy; dynamic P-OPT would require an oracle")
+        require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED")),
+                "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
+        require(mode != "csr" or options.record_base_policy == "LRU",
+                "record base policy requires a current record mode")
+        row["record_base_policy"] = options.record_base_policy
+        row["policy_label"] = record_policy_label(
+            spec.label, mode, options.record_base_policy)
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
         require(options.source < graph.vertices and all(source < graph.vertices for source in options.source_list),
                 "algorithm source is outside the graph")
@@ -302,9 +340,12 @@ def run_cache_cell(
             workspace_limit=args.algorithm_workspace_bytes,
             carrier_limit=args.ecg_record_max_carrier_bytes, auxiliary_limit=args.ecg_record_max_auxiliary_bytes,
             rss_mib=args.cache_record_rss_mib, bfs_direction_optimizing=options.bfs_direction == "do",
-            preprocessing=options.record_preprocess)
+            preprocessing=options.record_preprocess, popt_full_capacity=policy == "POPT_UNCHARGED")
         binary = ROOT / "bench/bin_sim/algorithms"
-        label = f"cache_sim_{args.benchmark}_{spec.safe_label}_L3{parse_size_bytes(l3_size)}"
+        base_suffix = "" if options.record_base_policy == "LRU" else (
+            "_BASE_" + options.record_base_policy)
+        label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}"
+                 f"_L3{parse_size_bytes(l3_size)}")
         data_path = out_dir / "cache_sim" / f"{label}.json"
         log_path = out_dir / "logs" / f"{label}.log"
         data_path.parent.mkdir(parents=True, exist_ok=True)
@@ -313,6 +354,7 @@ def run_cache_cell(
             "--source", str(options.source), "--repeat", str(options.repeat), "--delta", str(options.delta),
             "--max-passes", str(options.max_passes), "--mode", mode, "--policy", policy,
             "--record-preprocess", options.record_preprocess,
+            "--record-base-policy", options.record_base_policy,
             "--record-bytes", str(args.ecg_record_bytes),
             "--minimum-mantissa-bits", str(args.ecg_record_minimum_mantissa_bits),
             "--graph-bytes", str(plan["graph_loader_bytes_upper"]),
@@ -350,7 +392,9 @@ def run_cache_cell(
         require(graph_info(options.graph, allow_weighted=True, traversal="out").sha256 == graph.sha256,
                 "algorithm input changed while executing")
         payload = json.loads(data_path.read_text())
-        require(payload.get("setup_cache_policy") == ("LRU" if mode != "csr" else policy),
+        require(payload.get("setup_cache_policy") == (
+                    options.record_base_policy if mode != "csr"
+                    else "LRU" if policy == "POPT_UNCHARGED" else policy),
                 "current algorithm preparation did not use its declared unbound cache policy")
         work = validate_payload(payload, log_path.read_text(), algorithm=args.benchmark, mode=mode, policy=policy,
             graph=graph, graph_path=options.graph, options=options, requested_bytes=args.ecg_record_bytes,
@@ -359,12 +403,18 @@ def run_cache_cell(
         metrics = payload.get("metrics")
         require(isinstance(metrics, dict) and isinstance(metrics.get("L3"), dict),
                 "algorithm cache metrics are missing")
+        if policy == "POPT_UNCHARGED":
+            require(_integer(metrics["L3"], "size_bytes") == parse_size_bytes(l3_size) and
+                    _integer(metrics["L3"], "ways") == int(args.l3_ways),
+                    "P-OPT full-capacity control lost data capacity")
+            row.update({"popt_" + key: value for key, value in payload["popt"].items()})
         traffic = _integer(metrics, "total_offchip_traffic")
         misses, hits = _integer(metrics["L3"], "misses"), _integer(metrics["L3"], "hits")
         row.update(validate_traffic_phases(payload))
         row.update({
             "status": "ok", "json_path": str(data_path), "log_path": str(log_path),
             "setup_cache_policy": payload["setup_cache_policy"],
+            "record_base_policy": payload["record_base_policy"],
             "graph_sha256": graph.sha256, "benchmark_binary_sha256": before,
             "algorithm_workload_verified": "1",
             **{"algorithm_" + key: value for key, value in work.items()
@@ -410,8 +460,11 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
             continue
         baselines = {str(row["policy_label"]): row for row in good}
         for row in good:
+            transport_label = record_policy_label(
+                "ECG_TRANSPORT", "transport",
+                str(row.get("record_base_policy", "LRU")))
             for label, column in (("LRU", "traffic_ratio_vs_csr_lru"),
-                                  ("ECG_TRANSPORT", "traffic_ratio_vs_transport")):
+                                  (transport_label, "traffic_ratio_vs_transport")):
                 baseline = baselines.get(label)
                 if baseline is not None and baseline.get("total_offchip_traffic") is not None and int(baseline["total_offchip_traffic"]) > 0:
                     row[column] = int(row["total_offchip_traffic"]) / int(baseline["total_offchip_traffic"])

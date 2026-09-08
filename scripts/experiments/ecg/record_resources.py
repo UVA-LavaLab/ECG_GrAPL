@@ -170,6 +170,14 @@ def plan_resources(
     }
 
 
+def popt_matrix_lines(algorithm: str, vertices: int) -> int:
+    widths = {"spmv": (4,), "bfs": (4,), "sssp": (8,), "cc": (4,),
+              "bc": (4, 8, 4), "tc": (8,)}
+    if algorithm not in widths:
+        raise RecordResourceError("unsupported P-OPT algorithm")
+    return sum((vertices * width + 63) // 64 for width in widths[algorithm])
+
+
 def plan_algorithm_resources(
     graph: GraphInfo, *, algorithm: str, records: bool,
     requested_bytes: int, minimum_mantissa_bits: int,
@@ -178,6 +186,7 @@ def plan_algorithm_resources(
     backend: str = "cache_sim", target_memory_bytes: int = 0,
     bfs_direction_optimizing: bool = False,
     preprocessing: str = "csr",
+    popt_full_capacity: bool = False,
 ) -> dict[str, int | str | bool | None]:
     coefficients = {"spmv": 8, "bfs": 12, "sssp": 25, "cc": 12, "bc": 40, "tc": 24}
     if algorithm not in coefficients or min(
@@ -187,6 +196,8 @@ def plan_algorithm_resources(
         raise RecordResourceError("invalid algorithm record layout request")
     if preprocessing not in ("csr", "traversal"):
         raise RecordResourceError("invalid algorithm preprocessing")
+    if popt_full_capacity and (records or bfs_direction_optimizing or backend != "cache_sim"):
+        raise RecordResourceError("current P-OPT requires cache-only CSR scalar graph passes")
     if algorithm in ("cc", "tc") and (graph.directed or graph.records % 2):
         raise RecordResourceError("CC and TC require a simple undirected input")
     if algorithm == "sssp" and graph.minimum_weight is not None and graph.minimum_weight < 0:
@@ -220,7 +231,12 @@ def plan_algorithm_resources(
     filtered = algorithm not in ("spmv", "tc")
     scratch = (min(lines * 8 * partitions, slots * (8 + 8 * partitions)) if filtered
                else slots * (8 + 16 * partitions)) if records else 0
-    if carrier > carrier_limit or scratch > auxiliary_limit or arrays + carrier + scratch > workspace_limit:
+    popt_lines = popt_matrix_lines(algorithm, graph.vertices) if popt_full_capacity else 0
+    popt_bytes = popt_lines * 256
+    if popt_full_capacity:
+        scratch += 192
+    if carrier > carrier_limit or scratch + popt_bytes > auxiliary_limit or (
+            arrays + carrier + scratch + popt_bytes > workspace_limit):
         raise RecordResourceError("algorithm arrays/carrier/construction exceed their explicit limits")
     directions = 2 if graph.directed else 1
     graph_peak = (directions + 1) * 8 * (graph.vertices + 1) + 12 * graph.vertices + (
@@ -239,6 +255,7 @@ def plan_algorithm_resources(
         "carrier_payload_bytes_upper": carrier, "array_bytes": arrays,
         "construction_auxiliary_bytes_upper": scratch, "graph_loader_bytes_upper": graph_peak,
         "record_preprocess": preprocessing, "construction_partitions": partitions,
+        "popt_matrix_lines": popt_lines, "popt_matrix_bytes_upper": popt_bytes,
         "workspace_limit_bytes": workspace_limit, "planned_host_bytes": host,
         "planned_target_bytes": planned, "rss_limit_mib": rss_mib,
         "memory_plan": "algorithm-conservative-reservation",

@@ -56,7 +56,7 @@ Skipped work, invalidation and paid transitions follow the [filtered contract](R
 Totals include initialization, scheduling, orientation and record construction.
 Kernel snapshots preserve cache contents; current cache_sim record setup uses LRU.
 See the [scoped-preprocessing results](Traversal-Metadata-Taxonomy#8-mib-patents-results) for the opt-in experiment and older-policy limits.
-P-OPT has not been ported to this roster; an uncharged dynamic oracle is not a substitute.
+`POPT:UNCHARGED` is a cache-only graph-pass control with full data capacity; construction is counted, not replayed.
 
 ## 2. Stable design and simulator roles
 

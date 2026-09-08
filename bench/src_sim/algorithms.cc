@@ -4,20 +4,30 @@
 int main(int argc, char** argv) {
     return ecg_algorithm::applicationMain(argc, argv,
         [](const ecg_algorithm::GraphView& graph, const ecg_algorithm::CommandLine& command) {
+            const bool popt = command.policy == "POPT_UNCHARGED";
             const bool replacement = command.options.records &&
                 (command.options.mechanism == ecg_record::Mechanism::REPLACEMENT ||
                  command.options.mechanism == ecg_record::Mechanism::REPLACEMENT_PREFETCH);
-            const auto policy = replacement ? cache_sim::EvictionPolicy::ECG :
+            const bool grasp_record_base = command.options.records &&
+                command.options.record_base_policy ==
+                    ecg_algorithm::RecordBasePolicy::GRASP_PAPER;
+            const auto policy = popt ? cache_sim::EvictionPolicy::POPT :
+                grasp_record_base ? cache_sim::EvictionPolicy::GRASP :
+                replacement ? cache_sim::EvictionPolicy::ECG :
                 command.policy == "SRRIP" ? cache_sim::EvictionPolicy::SRRIP :
                 command.policy == "GRASP_PAPER" ? cache_sim::EvictionPolicy::GRASP :
                 cache_sim::EvictionPolicy::LRU;
-            if (setenv("GRASP_BOUNDARY_MODE", command.policy == "GRASP_PAPER" ? "capacity" : "vertex", 1) != 0)
+            const bool grasp_paper =
+                command.policy == "GRASP_PAPER" || grasp_record_base;
+            if (setenv("GRASP_BOUNDARY_MODE", grasp_paper ? "capacity" : "vertex", 1) != 0)
                 throw std::system_error(errno, std::generic_category(), "GRASP boundary configuration");
+            if (popt && setenv("POPT_MATRIX_STREAM_SIM", "0", 1) != 0)
+                throw std::system_error(errno, std::generic_category(), "P-OPT full-capacity configuration");
             cache_sim::CacheHierarchy cache(command.l1_bytes, command.l1_ways,
                 command.l2_bytes, command.l2_ways, command.llc_bytes, command.llc_ways, 64,
                 cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, policy);
             cache_sim::AlgorithmBackend backend(cache, command.options, command.llc_bytes,
-                command.policy == "GRASP_PAPER");
+                grasp_paper, popt);
             const auto start = std::chrono::steady_clock::now();
             const auto result = ecg_algorithm::run(graph, command.options, backend);
             const double seconds = std::chrono::duration<double>(
@@ -28,8 +38,16 @@ int main(int argc, char** argv) {
                        << "\"measurement_scope\":\"algorithm-data-traffic-including-construction\","
                        << "\"mode\":\"" << (command.options.records ?
                             ecg_record::mechanismName(command.options.mechanism) : "csr")
-                       << "\",\"policy\":\"" << command.policy << "\","
-                       << "\"setup_cache_policy\":\"" << (command.options.records ? "LRU" : command.policy) << "\","
+                       << "\",\"policy\":\"" << command.policy
+                       << "\",\"record_base_policy\":\""
+                       << ecg_algorithm::recordBasePolicyName(
+                            command.options.record_base_policy)
+                       << "\",\"setup_cache_policy\":\""
+                       << (command.options.records
+                            ? ecg_algorithm::recordBasePolicyName(
+                                command.options.record_base_policy)
+                            : popt ? "LRU" : command.policy)
+                       << "\","
                        << "\"host_seconds\":" << std::setprecision(12) << seconds << ",\"workload\":";
                 ecg_algorithm::writeResult(output, result, command.options);
                 output << ",\"metrics\":" << cache.toJSON()
@@ -38,7 +56,9 @@ int main(int argc, char** argv) {
                 backend.setupTraffic().write(output);
                 output << ",\"kernel\":";
                 backend.kernelTraffic().write(output);
-                output << "}}\n";
+                output << "},\"popt\":";
+                backend.writePopt(output);
+                output << "}\n";
             };
             if (command.output_path.empty()) {
                 report(std::cout);
@@ -50,5 +70,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        });
+        }, true, true);
 }

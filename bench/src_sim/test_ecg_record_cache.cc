@@ -131,6 +131,114 @@ bool exerciseFilteredHierarchy(uint8_t bytes, ecg_record::Mechanism mechanism) {
     return true;
 }
 
+bool exerciseGraspRecordBase(uint8_t bytes, bool replacement) {
+    using namespace cache_sim;
+    using namespace ecg_record;
+    constexpr uint64_t vertices = 256, records = 8;
+    alignas(64) std::array<uint32_t, vertices> properties{};
+    std::vector<uint32_t> degrees(vertices, 1);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), vertices, records, true);
+    context.registerPropertyArray(
+        properties.data(), vertices, 4, 256, 0.50, true);
+    CacheLevel grasp("L3", 256, 64, 4, EvictionPolicy::GRASP);
+    CacheLevel prepared("L3", 256, 64, 4, EvictionPolicy::GRASP);
+    grasp.initGraphContext(&context);
+    prepared.initGraphContext(&context);
+    prepared.prepareRecord(EvictionPolicy::GRASP);
+    const uint64_t base = reinterpret_cast<uint64_t>(properties.data());
+    for (const uint64_t address : {base, base + 128, base + 256}) {
+        grasp.insert(address, false);
+        prepared.insert(address, false);
+        CacheLine expected, actual;
+        if (!grasp.lineSnapshotForTest(address, expected) ||
+            !prepared.lineSnapshotForTest(address, actual) ||
+            expected.rrpv != actual.rrpv)
+            return false;
+        grasp.access(address, false);
+        prepared.access(address, false);
+        if (!grasp.lineSnapshotForTest(address, expected) ||
+            !prepared.lineSnapshotForTest(address, actual) ||
+            expected.rrpv != actual.rrpv)
+            return false;
+    }
+    std::vector<CacheLine> ordinary_set(4), prepared_set(4);
+    for (std::size_t index = 0; index < ordinary_set.size(); ++index) {
+        ordinary_set[index].valid = prepared_set[index].valid = true;
+        ordinary_set[index].line_addr = prepared_set[index].line_addr =
+            base + index * 64;
+        ordinary_set[index].rrpv = prepared_set[index].rrpv =
+            static_cast<uint8_t>(index + 1);
+    }
+    if (grasp.selectVictimForTest(ordinary_set) !=
+            prepared.selectVictimForTest(prepared_set))
+        return false;
+    for (std::size_t index = 0; index < ordinary_set.size(); ++index)
+        if (ordinary_set[index].rrpv != prepared_set[index].rrpv)
+            return false;
+
+    Requirements requirements;
+    requirements.vertex_count = vertices;
+    requirements.record_count = records;
+    requirements.requested_record_bytes = bytes;
+    Layout layout;
+    if (selectLayout(requirements, layout) != Status::OK)
+        return false;
+    NativeConfiguration configuration;
+    packLayout(layout, configuration.layout_descriptor);
+    packProperty(
+        {PropertyKind::U32, 4, TraversalMode::ORDERED_FILTERED},
+        configuration.property_descriptor);
+    configuration.record_base = base + 4096;
+    configuration.property_base = base;
+    configuration.record_count = records;
+    configuration.vertex_count = vertices;
+    configuration.context = configuration.generation = 1;
+    configuration.control = kNativeEnable | kNativeManagedPasses;
+    CacheLevel configured("L3", 256, 64, 4, EvictionPolicy::GRASP);
+    configured.initGraphContext(&context);
+    configured.prepareRecord(EvictionPolicy::GRASP);
+    configured.configureRecord(
+        configuration, replacement, EvictionPolicy::GRASP);
+    configured.advanceRecordProgress(1);
+    ordinary_set.assign(4, CacheLine{});
+    auto configured_set = ordinary_set;
+    for (std::size_t index = 0; index < ordinary_set.size(); ++index) {
+        ordinary_set[index].valid = configured_set[index].valid = true;
+        ordinary_set[index].line_addr = configured_set[index].line_addr =
+            base + index * 64;
+        ordinary_set[index].rrpv = configured_set[index].rrpv =
+            static_cast<uint8_t>(index + 1);
+        ordinary_set[index].last_access = configured_set[index].last_access =
+            index + 1;
+    }
+    auto invalid_set = configured_set;
+    invalid_set[1].valid = false;
+    const auto invalid_before = invalid_set;
+    if (configured.selectVictimForTest(invalid_set) != 1)
+        return false;
+    for (std::size_t index = 0; index < invalid_set.size(); ++index)
+        if (invalid_set[index].rrpv != invalid_before[index].rrpv)
+            return false;
+    const std::size_t expected = grasp.selectVictimForTest(ordinary_set);
+    const std::size_t actual = configured.selectVictimForTest(configured_set);
+    if (expected != actual)
+        return false;
+    for (std::size_t index = 0; index < ordinary_set.size(); ++index)
+        if (ordinary_set[index].rrpv != configured_set[index].rrpv)
+            return false;
+    if (replacement) {
+        configured_set[2].record_metadata.state = LineState::DEAD;
+        const auto before = configured_set;
+        if (configured.selectVictimForTest(configured_set) != 2)
+            return false;
+        for (std::size_t index = 0; index < configured_set.size(); ++index)
+            if (configured_set[index].rrpv != before[index].rrpv)
+                return false;
+    }
+    return true;
+}
+
 int main() {
     using namespace cache_sim;
     ecg_record::Requirements requirements;
@@ -207,16 +315,21 @@ int main() {
         return 7;
     } catch (const std::logic_error&) {}
     for (const uint8_t bytes : {uint8_t{4}, uint8_t{8}}) {
+        if (!exerciseGraspRecordBase(bytes, false) ||
+            !exerciseGraspRecordBase(bytes, true)) {
+            std::puts("GRASP record base parity failed [FAIL]");
+            return 8;
+        }
         for (const auto mechanism : {ecg_record::Mechanism::TRANSPORT,
                 ecg_record::Mechanism::REPLACEMENT, ecg_record::Mechanism::PREFETCH,
                 ecg_record::Mechanism::REPLACEMENT_PREFETCH}) {
             if (!exerciseHierarchy(bytes, mechanism)) {
                 std::puts("functional hierarchy mechanism failed [FAIL]");
-                return 8;
+                return 9;
             }
             if (!exerciseFilteredHierarchy(bytes, mechanism)) {
                 std::puts("filtered hierarchy lifecycle failed [FAIL]");
-                return 9;
+                return 10;
             }
         }
     }

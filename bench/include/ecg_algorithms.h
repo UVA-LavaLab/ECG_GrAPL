@@ -20,6 +20,16 @@ namespace ecg_algorithm {
 
 enum class Algorithm : uint8_t { SPMV, BFS, SSSP, CC, BC, TC };
 enum class MemoryKind : uint8_t { INDEX, EDGE, WEIGHT, PROPERTY, AUXILIARY, CONSTRUCTION };
+enum class ReferencePattern : uint8_t { NEIGHBOR, VERTEX, NEIGHBOR_AND_VERTEX };
+enum class RecordBasePolicy : uint8_t { LRU, GRASP_PAPER };
+
+inline const char* recordBasePolicyName(RecordBasePolicy policy) {
+    switch (policy) {
+      case RecordBasePolicy::LRU: return "LRU";
+      case RecordBasePolicy::GRASP_PAPER: return "GRASP_PAPER";
+    }
+    throw std::invalid_argument("invalid-record-base-policy");
+}
 
 inline const char* name(Algorithm algorithm) {
     switch (algorithm) {
@@ -62,6 +72,7 @@ struct Options {
     uint64_t maximum_workspace_bytes = uint64_t{512} << 20;
     ecg_record::BuildLimits build_limits;
     ecg_record::Mechanism mechanism = ecg_record::Mechanism::TRANSPORT;
+    RecordBasePolicy record_base_policy = RecordBasePolicy::LRU;
     std::vector<uint32_t> sources;
 };
 
@@ -223,7 +234,8 @@ template<class Backend> class Engine;
 template<class T, class Access>
 class Array {
   public:
-    Array(Access& access, uint64_t count, const char* name, bool property = false)
+    Array(Access& access, uint64_t count, const char* name, bool property = false,
+          ReferencePattern references = ReferencePattern::NEIGHBOR)
         : access_(access), count_(count), property_(property), token_(access.nextToken()),
           storage_(nullptr, DeleteStorage{&access, 0, std::align_val_t{64}}) {
         static_assert(std::is_trivially_copyable<T>::value, "algorithm arrays hold scalar data");
@@ -240,7 +252,7 @@ class Array {
             throw;
         }
         data_ = storage_.get();
-        access_.region(name, data_, count, sizeof(T), property);
+        access_.region(name, data_, count, sizeof(T), property, references);
     }
     ~Array() = default;
     Array(const Array&) = delete;
@@ -322,8 +334,13 @@ class Engine {
         result.workspace_peak_bytes = std::max(result.workspace_peak_bytes, workspace_);
     }
     void release(uint64_t bytes) { workspace_ -= bytes; }
-    void region(const char* name, const void* base, uint64_t count, uint8_t bytes, bool property) {
+    void region(const char* name, const void* base, uint64_t count, uint8_t bytes, bool property,
+                ReferencePattern references = ReferencePattern::NEIGHBOR) {
         backend_.region(name, base, count, bytes, property);
+        if constexpr (Backend::models_memory) {
+            if (property)
+                backend_.propertyReferences(base, references);
+        }
     }
 
     void touch(const void* address, uint64_t bytes, bool write, MemoryKind kind,
@@ -518,6 +535,8 @@ class Engine {
             throw std::logic_error("algorithm-pass-limit-or-order");
         pass_open_ = true;
         pass_records_ = 0;
+        if constexpr (Backend::models_memory)
+            backend_.beginGraphPass();
         configuration_.iteration_base = cursor_.base();
         configuration_.control = ecg_record::kNativeEnable | ecg_record::kNativeManagedPasses |
             (has_next ? ecg_record::kNativeHasNext : 0);
@@ -530,10 +549,17 @@ class Engine {
         }
     }
 
+    void visitVertex(uint64_t vertex) {
+        if constexpr (Backend::models_memory)
+            backend_.visitVertex(vertex);
+    }
+
     template<class T>
     std::pair<uint32_t, T> neighbor(uint64_t index, Buffer<T>& property) {
         if (!pass_open_ || cursor_.consume(index) != ecg_record::Status::OK)
             throw std::logic_error("nonmonotone-governed-reference");
+        if constexpr (Backend::models_memory)
+            backend_.governedReference();
         uint64_t word = 0;
         uint32_t destination;
         if (options.records) {
@@ -587,6 +613,8 @@ class Engine {
             throw std::overflow_error("structural-count-overflow");
         if (options.records && graph_.records)
             backend_.closePass();
+        if constexpr (Backend::models_memory)
+            backend_.endGraphPass();
         ++result.passes;
         pass_open_ = false;
     }
@@ -718,13 +746,15 @@ void sortPrefix(Buffer& values, uint64_t count) {
 template<class Access>
 void spmv(const GraphView& graph, Access& access) {
     typename Access::template Buffer<float> x(access, graph.vertices, "x", true);
-    typename Access::template Buffer<float> y(access, graph.vertices, "y", true);
+    typename Access::template Buffer<float> y(
+        access, graph.vertices, "y", true, ReferencePattern::VERTEX);
     for (uint64_t vertex = 0; vertex < graph.vertices; ++vertex)
         x.set(vertex, static_cast<float>(vertex + 1));
     access.bind(graph, x, ecg_record::TraversalMode::DENSE_EXACT);
     for (uint64_t pass = 0; pass < access.options.repetitions; ++pass) {
         access.beginPass(pass + 1 < access.options.repetitions);
         for (uint64_t vertex = 0; vertex < graph.vertices; ++vertex) {
+            access.visitVertex(vertex);
             float sum = 0;
             const auto row = graph.row(access, vertex);
             for (uint64_t index = row.first; index < row.second; ++index) {
@@ -756,6 +786,7 @@ BfsStep bfsTopDownLevel(
     ++access.result.bfs_td_levels;
     for (uint64_t position = 0; position < size; ++position) {
         const uint32_t vertex = frontier.get(position);
+        access.visitVertex(vertex);
         const auto row = graph.row(access, vertex);
         for (uint64_t index = row.first; index < row.second; ++index) {
             const auto item = access.neighbor(index, depth);
@@ -981,7 +1012,8 @@ void sssp(const GraphView& graph, Access& access) {
     for (uint64_t index = 0; index < graph.records; ++index)
         if (graph.weight(access, index) < 0)
             throw std::invalid_argument("negative-weight");
-    typename Access::template Buffer<uint64_t> distance(access, graph.vertices, "distances", true);
+    typename Access::template Buffer<uint64_t> distance(
+        access, graph.vertices, "distances", true, ReferencePattern::NEIGHBOR_AND_VERTEX);
     typename Access::template Buffer<uint32_t> frontier(access, graph.vertices, "frontier");
     typename Access::template Buffer<uint32_t> removed(access, graph.vertices, "heavy_frontier");
     typename Access::template Buffer<uint8_t> marked(access, graph.vertices, "heavy_membership");
@@ -992,6 +1024,7 @@ void sssp(const GraphView& graph, Access& access) {
     heap.update(access.options.source);
     access.bind(graph, distance, ecg_record::TraversalMode::ORDERED_FILTERED);
     const auto relax = [&](uint32_t vertex, bool light) {
+        access.visitVertex(vertex);
         const uint64_t source_distance = distance.get(vertex);
         const auto row = graph.row(access, vertex);
         for (uint64_t index = row.first; index < row.second; ++index) {
@@ -1071,7 +1104,8 @@ void link(Buffer& components, uint32_t left, uint32_t right) {
 
 template<class Access>
 void cc(const GraphView& graph, Access& access) {
-    typename Access::template Buffer<uint32_t> components(access, graph.vertices, "components", true);
+    typename Access::template Buffer<uint32_t> components(
+        access, graph.vertices, "components", true, ReferencePattern::NEIGHBOR_AND_VERTEX);
     typename Access::template Buffer<uint64_t> counts(access, graph.vertices, "component_counts");
     for (uint64_t vertex = 0; vertex < graph.vertices; ++vertex)
         components.set(vertex, static_cast<uint32_t>(vertex));
@@ -1083,6 +1117,7 @@ void cc(const GraphView& graph, Access& access) {
     for (uint64_t round = 0; round < 2; ++round) {
         access.beginPass();
         for (uint64_t vertex = 0; vertex < graph.vertices; ++vertex) {
+            access.visitVertex(vertex);
             const auto row = graph.row(access, vertex);
             if (row.second - row.first > round) {
                 const auto item = access.neighbor(row.first + round, components);
@@ -1108,6 +1143,7 @@ void cc(const GraphView& graph, Access& access) {
     }
     access.beginPass();
     for (uint64_t vertex = 0; vertex < graph.vertices; ++vertex) {
+        access.visitVertex(vertex);
         if (components.get(vertex) == largest)
             continue;
         const auto row = graph.row(access, vertex);
@@ -1129,9 +1165,12 @@ void cc(const GraphView& graph, Access& access) {
 template<class Access>
 void bc(const GraphView& graph, Access& access) {
     typename Access::template Buffer<uint32_t> depth(access, graph.vertices, "depth", true);
-    typename Access::template Buffer<uint64_t> sigma(access, graph.vertices, "path_counts", true);
-    typename Access::template Buffer<float> dependency(access, graph.vertices, "dependency", true);
-    typename Access::template Buffer<float> scores(access, graph.vertices, "scores", true);
+    typename Access::template Buffer<uint64_t> sigma(
+        access, graph.vertices, "path_counts", true, ReferencePattern::NEIGHBOR_AND_VERTEX);
+    typename Access::template Buffer<float> dependency(
+        access, graph.vertices, "dependency", true, ReferencePattern::NEIGHBOR_AND_VERTEX);
+    typename Access::template Buffer<float> scores(
+        access, graph.vertices, "scores", true, ReferencePattern::VERTEX);
     typename Access::template Buffer<uint32_t> frontier(access, graph.vertices, "frontier");
     typename Access::template Buffer<uint32_t> next(access, graph.vertices, "next_frontier");
     typename Access::template Buffer<uint32_t> order(access, graph.vertices, "level_vertices");
@@ -1164,6 +1203,7 @@ void bc(const GraphView& graph, Access& access) {
             access.beginPass();
             for (uint64_t position = 0; position < size; ++position) {
                 const uint32_t vertex = frontier.get(position);
+                access.visitVertex(vertex);
                 order.set(reached++, vertex);
                 const uint64_t paths = sigma.get(vertex);
                 access.result.sigma_max = std::max(access.result.sigma_max, paths);
@@ -1199,6 +1239,7 @@ void bc(const GraphView& graph, Access& access) {
             access.beginPass();
             for (uint64_t position = first; position < last; ++position) {
                 const uint32_t vertex = order.get(position);
+                access.visitVertex(vertex);
                 const uint64_t paths = sigma.get(vertex);
                 float sum = 0;
                 const auto row = graph.row(access, vertex);
@@ -1273,6 +1314,7 @@ void tc(const GraphView& graph, Access& access) {
         triangles = 0;
         access.beginPass(pass + 1 < access.options.repetitions);
         for (uint64_t vertex = 0; vertex < oriented.vertices; ++vertex) {
+            access.visitVertex(vertex);
             const auto row = oriented.row(access, vertex);
             for (uint64_t index = row.first; index < row.second; ++index) {
                 const auto item = access.neighbor(index, target_start);

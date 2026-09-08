@@ -382,7 +382,7 @@ def test_popt_headers_are_sim_build_dependencies(header):
         capture_output=True, text=True, timeout=30)
     assert result.returncode in (0, 1), result.stderr
     rule = next(line for line in result.stdout.splitlines()
-                if line.startswith("bench/bin_sim/pr:"))
+                if line.startswith("bench/bin_sim/pr:") and "bench/src_sim/pr.cc" in line.split())
     assert header in rule.split(), f"{header} must invalidate the PR binary"
 
 

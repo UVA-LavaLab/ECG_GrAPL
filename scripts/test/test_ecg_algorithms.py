@@ -74,6 +74,8 @@ def test_current_algorithm_cli_and_independent_receipts(tmp_path):
                 assert payload["timing_valid_for_speedup"] is False
                 assert payload["mode"] == mode
                 assert payload["setup_cache_policy"] == "LRU"
+                assert payload["record_base_policy"] == "LRU"
+                assert workload["record_base_policy"] == "LRU"
                 assert workload["algorithm"] == algorithm
                 assert workload["variant"] == config["algorithms"][algorithm]["variant"]
                 for key, value in expected.items():
@@ -84,6 +86,122 @@ def test_current_algorithm_cli_and_independent_receipts(tmp_path):
                     assert workload["record_bytes"] == width
                     assert workload["construction_read_bytes"] > 0
                     assert workload["construction_write_bytes"] > 0
+
+
+def test_current_grasp_record_base_preserves_program_work_and_provenance(tmp_path):
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    data, _ = algorithm_outputs()["weighted-diamond.wsg"]
+    graph = tmp_path / "weighted-diamond.wsg"
+    graph.write_bytes(data)
+    baselines = {}
+    setups = {}
+    for width in (4, 8):
+        for mode in ("transport", "replacement"):
+            for base in ("LRU", "GRASP_PAPER"):
+                output = tmp_path / f"{width}-{mode}-{base}.json"
+                ran = subprocess.run([
+                    str(binary), "--algorithm", "spmv", "--graph", str(graph),
+                    "--repeat", "2", "--delta", "8", "--mode", mode,
+                    "--record-bytes", str(width),
+                    "--record-base-policy", base, "--values", "--evidence",
+                    "--l1-bytes", "128", "--l1-ways", "2",
+                    "--l2-bytes", "256", "--l2-ways", "2",
+                    "--llc-bytes", "512", "--llc-ways", "2",
+                    "--output", str(output),
+                ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+                    capture_output=True, text=True, timeout=20, check=False)
+                assert ran.returncode == 0, ran.stdout + ran.stderr
+                payload = json.loads(output.read_text())
+                work = payload["workload"]
+                options = algorithm_matrix.parse_options(
+                    f"--graph {graph} --repeat 2 --record-base-policy {base}")
+                graph_info = algorithm_matrix.graph_info(
+                    graph, allow_weighted=True, traversal="out")
+                algorithm_matrix.validate_payload(
+                    payload, ran.stdout + ran.stderr, algorithm="spmv", mode=mode,
+                    policy="LRU", graph=graph_info, graph_path=graph, options=options,
+                    requested_bytes=width, minimum_mantissa_bits=0,
+                    evidence=True, llc_sets=4)
+                assert payload["record_base_policy"] == base
+                assert payload["setup_cache_policy"] == base
+                assert work["record_base_policy"] == base
+                setups[(width, base, mode)] = payload["traffic_phases"]["setup"]
+                signature = tuple(work[key] for key in (
+                    "result_digest", "work_trace_digest", "position_trace_digest",
+                    "record_trace_digest", "actual_records", "passes", "values_f32"))
+                baselines.setdefault((width, mode), signature)
+                assert signature == baselines[(width, mode)]
+    for width in (4, 8):
+        for base in ("LRU", "GRASP_PAPER"):
+            assert setups[(width, base, "transport")] == setups[
+                (width, base, "replacement")]
+
+
+def test_record_base_cli_rejects_nonrecord_and_popt_combinations(tmp_path):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    data, _ = algorithm_outputs()["diamond.sg"]
+    graph = tmp_path / "diamond.sg"
+    graph.write_bytes(data)
+    for extra in (
+            ["--record-base-policy", "GRASP_PAPER"],
+            ["--policy", "POPT_UNCHARGED", "--record-base-policy", "GRASP_PAPER"]):
+        ran = subprocess.run([
+            str(binary), "--algorithm", "bfs", "--graph", str(graph), *extra,
+        ], env={**os.environ, "OMP_NUM_THREADS": "1"},
+            capture_output=True, text=True, timeout=10, check=False)
+        assert ran.returncode == 2
+        assert "record-base-policy-requires-record-mode" in ran.stderr
+
+
+def test_current_popt_full_capacity_preserves_work_and_declares_coverage(tmp_path):
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    config = algorithm_matrix.contract()
+    for filename, (data, _) in algorithm_outputs().items():
+        (tmp_path / filename).write_bytes(data)
+    for algorithm, expected in config["references"].items():
+        graph_path = tmp_path / expected["graph"]
+        outputs = []
+        for policy in ("LRU", "POPT_UNCHARGED"):
+            output = tmp_path / f"{algorithm}-{policy}.json"
+            ran = subprocess.run([
+                str(binary), "--algorithm", algorithm, "--graph", str(graph_path),
+                "--delta", "2", "--policy", policy, "--values", "--evidence",
+                "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256",
+                "--l2-ways", "2", "--llc-bytes", "512", "--llc-ways", "2",
+                "--output", str(output),
+            ], env={**os.environ, "OMP_NUM_THREADS": "1", "POPT_MATRIX_STREAM_SIM": "1"},
+                capture_output=True, text=True, timeout=30, check=False)
+            assert ran.returncode == 0, ran.stdout + ran.stderr
+            payload = json.loads(output.read_text())
+            options = algorithm_matrix.parse_options(f"--graph {graph_path} --delta 2")
+            graph = algorithm_matrix.graph_info(graph_path, allow_weighted=True, traversal="out")
+            work = algorithm_matrix.validate_payload(
+                payload, ran.stdout + ran.stderr, algorithm=algorithm, mode="csr", policy=policy,
+                graph=graph, graph_path=graph_path, options=options, requested_bytes=0,
+                minimum_mantissa_bits=0, evidence=True, llc_sets=4)
+            algorithm_matrix.validate_traffic_phases(payload)
+            assert payload["metrics"]["L3"]["size_bytes"] == 512
+            assert payload["metrics"]["L3"]["ways"] == 2
+            if policy == "POPT_UNCHARGED":
+                assert payload["metrics"]["popt_matrix_stream_lines_simulated"] == 0
+                assert payload["popt"]["workspace_peak_bytes"] >= payload["popt"]["matrix_bytes"]
+                assert payload["setup_cache_policy"] == "LRU"
+                assert payload["record_base_policy"] == "LRU"
+            outputs.append(work)
+        for key in ("result_digest", "work_trace_digest", "position_trace_digest",
+                    "actual_records", "passes", "bindings", "values_u32", "values_u64", "values_f32"):
+            assert outputs[0][key] == outputs[1][key], (algorithm, key)
 
 
 def test_direction_optimized_cli_uses_real_incoming_csr(tmp_path):
@@ -212,6 +330,12 @@ def test_algorithm_resource_plans_cover_auxiliary_work():
         assert specialized["carrier_payload_bytes_upper"] == original["carrier_payload_bytes_upper"]
     with pytest.raises(RecordResourceError, match="preprocessing"):
         plan_algorithm_resources(graph, algorithm="bfs", preprocessing="oracle", **options)
+    popt = plan_algorithm_resources(graph, algorithm="bc", popt_full_capacity=True,
+                                    **{**options, "records": False})
+    assert popt["popt_matrix_bytes_upper"] == (2 * 32 + 64) * 256
+    assert popt["carrier_payload_bytes_upper"] == 0
+    with pytest.raises(RecordResourceError, match="P-OPT"):
+        plan_algorithm_resources(graph, algorithm="bc", popt_full_capacity=True, **options)
 
 
 def test_preprocessing_profile_has_matched_serial_controls(tmp_path):
@@ -256,6 +380,31 @@ def test_grasp_profile_covers_all_shared_kernels_without_rebuilding_controls(tmp
         assert options.record_preprocess == "csr" and options.bfs_direction == "td"
         assert command[command.index("--l3-sizes") + 1] == "8MB"
         assert command[command.index("--cache-sim-omp-threads") + 1] == "1"
+
+
+def test_competitive_profile_keeps_capacity_work_and_base_labels_explicit(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.algorithm_matrix import parse_options
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    args = experiment_run.parse_args(["--profile", "ecg_competitive_8mb_cache", "--list"])
+    jobs = experiment_run.expand_jobs(args, manifest, tmp_path)
+    assert len(jobs) == 18
+    assert sum(len(job.metadata["policies"]) for job in jobs) == 42
+    for job in jobs:
+        options = parse_options(job.metadata["options"])
+        assert options.bfs_direction == "td"
+        assert job.command[job.command.index("--l3-sizes") + 1] == "8MB"
+        assert job.command[job.command.index("--l3-ways") + 1] == "16"
+        if options.record_base_policy == "GRASP_PAPER":
+            assert set(job.metadata["expected_policy_labels"]) == {
+                "ECG_TRANSPORT_BASE_GRASP_PAPER", "ECG_REPLACEMENT_BASE_GRASP_PAPER"}
+        elif job.stage.startswith("168_"):
+            assert job.metadata["policies"] == ["LRU", "GRASP_PAPER", "POPT:UNCHARGED"]
+        else:
+            assert job.metadata["policies"] == ["ECG:transport", "ECG:replacement"]
+        if not job.stage.startswith("168_"):
+            assert options.record_preprocess == (
+                "traversal" if job.metadata["benchmark"] in ("sssp", "cc") else "csr")
 
 
 def test_algorithm_profiles_and_forged_work_are_rejected(tmp_path):
@@ -335,6 +484,45 @@ def test_current_algorithm_rows_close_existing_runner_policy_roster(tmp_path):
         assert row["l3_accesses"] == row["l3_hits"] + row["l3_misses"] > 0
 
 
+def test_current_grasp_base_runner_rows_have_distinct_provenance(tmp_path):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("built current algorithm is required")
+    data, _ = algorithm_outputs()["weighted-diamond.wsg"]
+    graph = tmp_path / "weighted-diamond.wsg"
+    graph.write_bytes(data)
+    output = tmp_path / "matrix"
+    ran = subprocess.run([
+        "python3", str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "cache-sim", "--current-algorithms", "--benchmark", "spmv",
+        "--options", f"--graph {graph} --repeat 2 --record-base-policy GRASP_PAPER",
+        "--policies", "ECG:transport", "ECG:replacement", "--ecg-equivalence",
+        "--algorithm-workspace-bytes", str(32 << 20), "--cache-record-rss-mib", "512",
+        "--l1d-size", "128B", "--l1d-ways", "2", "--l2-size", "256B", "--l2-ways", "2",
+        "--l3-sizes", "512B", "--l3-ways", "2", "--no-build", "--out-dir", str(output),
+    ], capture_output=True, text=True, timeout=60, check=False)
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    rows = json.loads((output / "roi_matrix.json").read_text())
+    completion = json.loads((output / "roi_matrix.complete.json").read_text())
+    assert set(completion["policy_labels"]) == {row["policy_label"] for row in rows}
+    assert set(completion["expected_policy_labels"]) == {row["policy_label"] for row in rows}
+    from scripts.experiments.ecg.flows.experiment_run import csv_status
+    policies = ["ECG:transport", "ECG:replacement"]
+    assert csv_status(output / "roi_matrix.csv", policies, "GRASP_PAPER")[0] == "ok"
+    assert csv_status(output / "roi_matrix.csv", policies)[0] == "partial"
+    assert {row["policy_label"] for row in rows} == {
+        "ECG_TRANSPORT_BASE_GRASP_PAPER",
+        "ECG_REPLACEMENT_BASE_GRASP_PAPER",
+    }
+    assert all(row["record_base_policy"] == "GRASP_PAPER" and
+               row["setup_cache_policy"] == "GRASP_PAPER" for row in rows)
+    replacement = next(
+        row for row in rows
+        if row["policy_label"] == "ECG_REPLACEMENT_BASE_GRASP_PAPER")
+    assert replacement["traffic_ratio_vs_transport"] > 0
+
+
 def test_detailed_algorithm_commands_bind_the_current_guest_and_geometry(tmp_path):
     from scripts.experiments.ecg import algorithm_detailed, algorithm_matrix, roi_matrix
     from scripts.experiments.ecg.policy_specs import parse_policy_spec
@@ -349,6 +537,7 @@ def test_detailed_algorithm_commands_bind_the_current_guest_and_geometry(tmp_pat
     assert values[values.index("--algorithm") + 1] == "sssp"
     assert values[values.index("--llc-bytes") + 1] == "2048"
     assert values[values.index("--mode") + 1] == "replacement-prefetch"
+    assert values[values.index("--record-base-policy") + 1] == "LRU"
     assert values[values.index("--record-bytes") + 1] == "8"
     assert "--evidence" in values and "--values" in values
     assert roi_matrix.graph_path_from_options("--graph /tmp/explicit.wsg") == Path("/tmp/explicit.wsg")
@@ -387,6 +576,33 @@ def test_detailed_preprocessing_is_rejected_before_loading_graph(tmp_path, backe
         args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "8MB", backend, services)
     assert rows[0]["status"] == "error"
     assert rows[0]["error"] == "traversal preprocessing is currently cache_sim-only"
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_detailed_grasp_record_base_is_rejected_before_loading_graph(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--current-algorithms", "--ecg-equivalence", "--benchmark", "sssp",
+        "--options", f"--graph {tmp_path / 'not-read.wsg'} --record-base-policy GRASP_PAPER",
+        "--prefetcher", "none", "--flowthrough", "off",
+    ])
+    services = SimpleNamespace(parse_size_bytes=roi_matrix.parse_size_bytes)
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "8MB", backend, services)
+    assert rows[0]["status"] == "error"
+    assert rows[0]["error"] == "GRASP_PAPER record base is cache_sim-only"
+
+
+def test_grasp_record_base_labels_cannot_alias_lru_base():
+    from scripts.experiments.ecg.algorithm_matrix import record_policy_label
+    assert record_policy_label("ECG_TRANSPORT", "transport", "LRU") == "ECG_TRANSPORT"
+    assert record_policy_label(
+        "ECG_TRANSPORT", "transport", "GRASP_PAPER") == (
+            "ECG_TRANSPORT_BASE_GRASP_PAPER")
+    assert record_policy_label(
+        "ECG_REPLACEMENT", "replacement", "GRASP_PAPER") == (
+            "ECG_REPLACEMENT_BASE_GRASP_PAPER")
+    assert record_policy_label("GRASP_PAPER", "csr", "LRU") == "GRASP_PAPER"
 
 
 def test_rv64_sideband_publication_uses_supported_atomic_syscall(tmp_path):

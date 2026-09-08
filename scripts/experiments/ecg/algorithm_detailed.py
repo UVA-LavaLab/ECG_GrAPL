@@ -47,6 +47,7 @@ def guest_options(args, options, plan, spec, size_bytes, l3_size: str, output: P
         "--algorithm", args.benchmark, "--graph", str(options.graph),
         "--mode", spec.record_mechanism or "csr",
         "--policy", "LRU" if spec.record_mechanism else spec.label,
+        "--record-base-policy", options.record_base_policy,
         "--source", str(options.source), "--repeat", str(options.repeat), "--delta", str(options.delta),
         "--max-passes", str(options.max_passes),
         "--record-bytes", str(args.ecg_record_bytes),
@@ -204,6 +205,8 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
         require(mode in algorithms.MODES or spec.label in ("LRU", "SRRIP", "GRASP_PAPER"),
                 "unsupported detailed algorithm policy")
         options = algorithms.parse_options(args.options)
+        require(options.record_base_policy == "LRU",
+                "GRASP_PAPER record base is cache_sim-only")
         require(options.bfs_direction == "td", "direction-optimized BFS is currently cache_sim-only")
         require(options.record_preprocess == "csr", "traversal preprocessing is currently cache_sim-only")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
