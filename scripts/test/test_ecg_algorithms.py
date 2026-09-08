@@ -65,6 +65,12 @@ def test_current_algorithm_cli_and_independent_receipts(tmp_path):
                 assert ran.returncode == 0, (algorithm, mode, ran.stdout, ran.stderr)
                 payload = json.loads(output.read_text())
                 workload = payload["workload"]
+                phases = payload["traffic_phases"]
+                for key in ("total_accesses", "memory_accesses", "prefetch_fills",
+                            "llc_writebacks", "total_offchip_traffic"):
+                    assert phases["setup"][key] + phases["kernel"][key] == payload["metrics"][key]
+                assert phases["boundary"] == "first-binding-complete"
+                assert phases["cache_state_preserved"] is True
                 assert payload["timing_valid_for_speedup"] is False
                 assert payload["mode"] == mode
                 assert workload["algorithm"] == algorithm
@@ -348,3 +354,40 @@ def test_sniper_metrics_report_observed_llc_activity():
     roi_matrix.annotate_l3_pressure(row)
     assert row["l3_accesses"] == 20 and row["l3_misses"] == 8
     assert row["l3_miss_rate"] == 0.4 and row["l3_exercised"] is True
+
+
+def test_setup_and_kernel_traffic_must_close():
+    from scripts.experiments.ecg.algorithm_matrix import validate_traffic_phases
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    setup = {"total_accesses": 100, "memory_accesses": 20, "prefetch_fills": 0,
+             "llc_writebacks": 5, "total_offchip_traffic": 25}
+    kernel = {"total_accesses": 200, "memory_accesses": 30, "prefetch_fills": 2,
+              "llc_writebacks": 8, "total_offchip_traffic": 40}
+    payload = {"metrics": {key: setup[key] + kernel[key] for key in setup},
+               "traffic_phases": {"boundary": "first-binding-complete", "cache_state_preserved": True,
+                                  "setup": setup, "kernel": kernel}}
+    assert validate_traffic_phases(payload)["kernel_total_offchip_traffic"] == 40
+    broken = copy.deepcopy(payload)
+    broken["traffic_phases"]["kernel"]["total_offchip_traffic"] = 65
+    with pytest.raises(RecordReceiptError, match="do not close"):
+        validate_traffic_phases(broken)
+    broken = copy.deepcopy(payload)
+    broken["traffic_phases"]["cache_state_preserved"] = False
+    with pytest.raises(RecordReceiptError, match="nonintrusive"):
+        validate_traffic_phases(broken)
+
+
+def test_matched_8mb_profile_uses_equal_geometry_and_real_pressure():
+    manifest = json.loads((ROOT / "scripts/experiments/ecg/experiment_manifest.json").read_text())
+    stages = [stage for stage in manifest["stages"] if "ecg_matched_8mb_cache" in stage["profiles"]]
+    assert len(stages) == 2
+    assert {stage["benchmarks"][0] for stage in stages} == {"pr", "spmv"}
+    for key in ("graph_set", "policies", "l1d_size", "l1d_ways", "l2_size", "l2_ways",
+                "l3_sizes", "l3_ways", "line_size", "prefetcher", "flowthrough"):
+        assert stages[0].get(key) == stages[1].get(key)
+    assert stages[0]["l3_sizes"] == ["8MB"] and stages[0]["l3_ways"] == "16"
+    graph = manifest["graph_sets"][stages[0]["graph_set"]][0]
+    assert graph["expected_vertices"] * 4 > 8 << 20
+    options = manifest["benchmark_options"][graph["options_key"]]
+    assert "-i 2" in options["pr"] and "--repeat 2" in options["spmv"]
+    assert len(stages[0]["policies"]) == 5

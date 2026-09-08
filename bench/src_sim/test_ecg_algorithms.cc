@@ -290,6 +290,12 @@ int main() {
                     replacement ? cache_sim::EvictionPolicy::ECG : cache_sim::EvictionPolicy::LRU);
                 cache_sim::AlgorithmBackend backend(cache, options);
                 const auto actual = ecg_algorithm::run(graph, options, backend);
+                const auto setup = backend.setupTraffic();
+                const auto kernel = backend.kernelTraffic();
+                check(setup.total_accesses > 0 && kernel.total_accesses > 0 &&
+                      setup.total_accesses + kernel.total_accesses == cache.getTotalAccesses() &&
+                      setup.offchip() + kernel.offchip() == cache.getTotalOffChipTraffic(),
+                      "setup and kernel snapshots close without resetting cache state");
                 check(actual.result_digest == expected.result_digest &&
                       actual.work_digest == expected.work_digest &&
                       actual.position_digest == expected.position_digest &&

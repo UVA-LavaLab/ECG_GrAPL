@@ -31,7 +31,13 @@ int main(int argc, char** argv) {
                        << "\",\"policy\":\"" << command.policy << "\","
                        << "\"host_seconds\":" << std::setprecision(12) << seconds << ",\"workload\":";
                 ecg_algorithm::writeResult(output, result, command.options);
-                output << ",\"metrics\":" << cache.toJSON() << "}\n";
+                output << ",\"metrics\":" << cache.toJSON()
+                       << ",\"traffic_phases\":{\"boundary\":\"first-binding-complete\","
+                       << "\"cache_state_preserved\":true,\"setup\":";
+                backend.setupTraffic().write(output);
+                output << ",\"kernel\":";
+                backend.kernelTraffic().write(output);
+                output << "}}\n";
             };
             if (command.output_path.empty()) {
                 report(std::cout);

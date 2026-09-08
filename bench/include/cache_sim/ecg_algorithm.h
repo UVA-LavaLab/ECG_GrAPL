@@ -6,6 +6,31 @@
 
 namespace cache_sim {
 
+struct AlgorithmTraffic {
+    uint64_t total_accesses = 0;
+    uint64_t memory_accesses = 0;
+    uint64_t prefetch_fills = 0;
+    uint64_t llc_writebacks = 0;
+
+    uint64_t offchip() const { return memory_accesses + prefetch_fills + llc_writebacks; }
+
+    AlgorithmTraffic since(const AlgorithmTraffic& before) const {
+        if (total_accesses < before.total_accesses || memory_accesses < before.memory_accesses ||
+            prefetch_fills < before.prefetch_fills || llc_writebacks < before.llc_writebacks)
+            throw std::logic_error("algorithm phase counters were reset");
+        return {total_accesses - before.total_accesses, memory_accesses - before.memory_accesses,
+                prefetch_fills - before.prefetch_fills, llc_writebacks - before.llc_writebacks};
+    }
+
+    void write(std::ostream& output) const {
+        output << "{\"total_accesses\":" << total_accesses
+               << ",\"memory_accesses\":" << memory_accesses
+               << ",\"prefetch_fills\":" << prefetch_fills
+               << ",\"llc_writebacks\":" << llc_writebacks
+               << ",\"total_offchip_traffic\":" << offchip() << '}';
+    }
+};
+
 class AlgorithmBackend {
   public:
     static constexpr bool models_memory = true;
@@ -47,12 +72,14 @@ class AlgorithmBackend {
             llc_bytes_, grasp_paper_ ? 0.50 : 0.15, true);
     }
 
-    void selectProperty(const ecg_algorithm::GraphView&, const void* base,
+    void selectProperty(const ecg_algorithm::GraphView& graph, const void* base,
                         const ecg_record::PropertyDescriptor& property) {
         const auto* region = context_.findRegion(reinterpret_cast<uint64_t>(base));
         if (!region || region->elem_size != ecg_record::propertyBytes(property.kind) ||
             property.stride_bytes != region->elem_size)
             throw std::invalid_argument("unregistered-algorithm-property");
+        if (!options_.records || graph.records == 0)
+            beginKernel();
     }
 
     void bind(const ecg_record::NativeConfiguration& configuration,
@@ -64,6 +91,7 @@ class AlgorithmBackend {
             cache_.rebindRecord(configuration, stream);
         }
         configuration_ = configuration;
+        beginKernel();
     }
     void beginPass(bool has_next) { cache_.recordBeginPass(has_next); }
     void closePass() { cache_.recordClosePass(); }
@@ -91,7 +119,26 @@ class AlgorithmBackend {
             cache_.initGraphContext(nullptr);
     }
 
+    AlgorithmTraffic setupTraffic() const {
+        if (!kernel_started_)
+            throw std::logic_error("algorithm kernel boundary was not observed");
+        return setup_traffic_;
+    }
+
+    AlgorithmTraffic kernelTraffic() const { return traffic().since(setupTraffic()); }
+
   private:
+    AlgorithmTraffic traffic() const {
+        return {cache_.getTotalAccesses(), cache_.getMemoryAccesses(),
+                cache_.getPrefetchFills(), cache_.getWritebackTraffic()};
+    }
+    void beginKernel() {
+        if (!kernel_started_) {
+            setup_traffic_ = traffic();
+            kernel_started_ = true;
+        }
+    }
+
     CacheHierarchy& cache_;
     const ecg_algorithm::Options& options_;
     uint64_t llc_bytes_;
@@ -99,6 +146,8 @@ class AlgorithmBackend {
     GraphCacheContext context_;
     ecg_record::NativeConfiguration configuration_;
     bool active_ = false;
+    AlgorithmTraffic setup_traffic_;
+    bool kernel_started_ = false;
 };
 
 } // namespace cache_sim

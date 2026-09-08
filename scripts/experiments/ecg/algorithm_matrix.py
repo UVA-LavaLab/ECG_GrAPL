@@ -200,6 +200,26 @@ def _file_hash(path: Path) -> str:
     return digest.hexdigest()
 
 
+def validate_traffic_phases(payload: dict[str, Any]) -> dict[str, int]:
+    phases = payload.get("traffic_phases")
+    require(isinstance(phases, dict) and phases.get("boundary") == "first-binding-complete" and
+            phases.get("cache_state_preserved") is True, "missing nonintrusive setup/kernel traffic boundary")
+    metrics = payload.get("metrics")
+    require(isinstance(metrics, dict), "missing total traffic counters")
+    result = {}
+    for phase in ("setup", "kernel"):
+        require(isinstance(phases.get(phase), dict), f"missing {phase} counters")
+    for key in ("total_accesses", "memory_accesses", "prefetch_fills", "llc_writebacks", "total_offchip_traffic"):
+        setup, kernel = _integer(phases["setup"], key), _integer(phases["kernel"], key)
+        require(setup + kernel == _integer(metrics, key), f"setup/kernel counters do not close: {key}")
+        result["setup_" + key] = setup
+        result["kernel_" + key] = kernel
+    for phase in ("setup", "kernel"):
+        require(result[phase + "_total_offchip_traffic"] == sum(result[phase + "_" + key] for key in
+                ("memory_accesses", "prefetch_fills", "llc_writebacks")), f"invalid {phase} traffic sum")
+    return result
+
+
 def run_cache_cell(
     args: argparse.Namespace, out_dir: Path, spec: Any, l3_size: str,
     run_command: Callable[..., Any], parse_size_bytes: Callable[[str], int],
@@ -287,6 +307,7 @@ def run_cache_cell(
                 "algorithm cache metrics are missing")
         traffic = _integer(metrics, "total_offchip_traffic")
         misses, hits = _integer(metrics["L3"], "misses"), _integer(metrics["L3"], "hits")
+        row.update(validate_traffic_phases(payload))
         row.update({
             "status": "ok", "json_path": str(data_path), "log_path": str(log_path),
             "graph_sha256": graph.sha256, "benchmark_binary_sha256": before,
@@ -337,3 +358,6 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
                 baseline = baselines.get(label)
                 if baseline is not None and baseline.get("total_offchip_traffic") is not None and int(baseline["total_offchip_traffic"]) > 0:
                     row[column] = int(row["total_offchip_traffic"]) / int(baseline["total_offchip_traffic"])
+                if baseline is not None and int(baseline.get("kernel_total_offchip_traffic", 0)) > 0:
+                    row["kernel_" + column] = int(row["kernel_total_offchip_traffic"]) / int(
+                        baseline["kernel_total_offchip_traffic"])

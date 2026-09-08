@@ -6,6 +6,7 @@
     "ecg_current_equivalence_extended",
     "ecg_algorithm_equivalence_cache",
     "ecg_algorithm_cache",
+    "ecg_matched_8mb_cache",
     "ecg_algorithm_equivalence_gem5",
     "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
@@ -41,6 +42,7 @@
     "no_build": true
   },
   "profiles": {
+    "ecg_matched_8mb_cache": "Focused full-Patents PR/SpMV comparison at 8 MiB LLC with common LRU/GRASP/T/R/RP controls; kernel traffic is compared separately from setup.",
     "ecg_algorithm_equivalence_cache": "Bounded current shared-kernel mathematical and transport qualification for SpMV/BFS/SSSP/CC/BC/TC in cache_sim; not a detailed-timing authorization.",
     "ecg_algorithm_cache": "Current six-algorithm pressure-graph data-traffic comparison including charged initialization, scheduling and record construction; nonauthorizing.",
     "ecg_algorithm_equivalence_gem5": "Bounded native RV64 typed-load and complete algorithm/phase qualification; diagnostic only.",
@@ -98,6 +100,11 @@
     "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
+    "ecg_matched_8mb_cache": {
+      "status": "ready",
+      "reason": "One full graph, two fixed traversals, realistic identical cache geometry; nonauthorizing cache/traffic evidence only.",
+      "require_clean_worktree": true
+    },
     "ecg_algorithm_equivalence_cache": {
       "status": "ready",
       "reason": "Independent tiny graph answers plus all four real record mechanisms and CSR baselines; native/Sniper admission remains separate.",
@@ -180,6 +187,10 @@
     }
   },
   "benchmark_options": {
+    "file_matched_8mb": {
+      "pr": "-f {graph_path} -o 0 -n 1 -i 2 -t 0",
+      "spmv": "--graph {graph_path} --repeat 2"
+    },
     "file_current_algorithms": {
       "spmv": "--graph {graph_path} --repeat 2",
       "bfs": "--graph {graph_path} --source 0",
@@ -243,6 +254,16 @@
     }
   },
   "graph_sets": {
+    "matched_8mb_patents": [
+      {
+        "name": "cit-Patents",
+        "path": "results/graphs/cit-Patents/cit-Patents-dbg.sg",
+        "expected_sha256": "991199a8073f9d6b50c26f04a4d49c0f0b74710e8ba8fdf28c95a4ef48a483e4",
+        "options_key": "file_matched_8mb",
+        "expected_vertices": 3774768,
+        "expected_records": 33037894
+      }
+    ],
     "current_algorithm_tiny": [
       {
         "name": "weighted-diamond",
@@ -852,6 +873,37 @@
     ]
   },
   "stages": [
+    {
+      "name": "160_matched_cache_pr_8mb",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_matched_8mb_cache"],
+      "suite": "cache-sim", "graph_set": "matched_8mb_patents",
+      "benchmarks": ["pr"],
+      "policies": ["LRU", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG"],
+      "current_pr_baselines": true, "ecg_record_bytes": 0,
+      "cache_record_rss_mib": 4096, "cache_sim_omp_threads": 1,
+      "l1d_size": "32kB", "l1d_ways": "8", "l2_size": "256kB", "l2_ways": "8",
+      "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "160_matched_cache_pr_8mb"
+    },
+    {
+      "name": "161_matched_cache_spmv_8mb",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_matched_8mb_cache"],
+      "suite": "cache-sim", "graph_set": "matched_8mb_patents",
+      "benchmarks": ["spmv"],
+      "policies": ["LRU", "GRASP_PAPER", "ECG:transport", "ECG:replacement", "ECG"],
+      "current_algorithms": true, "ecg_record_bytes": 0,
+      "algorithm_workspace_bytes": 536870912,
+      "cache_record_rss_mib": 4096, "cache_sim_omp_threads": 1,
+      "l1d_size": "32kB", "l1d_ways": "8", "l2_size": "256kB", "l2_ways": "8",
+      "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "161_matched_cache_spmv_8mb"
+    },
     {
       "name": "153_current_algorithms_gem5_4b",
       "kind": "roi_matrix",
