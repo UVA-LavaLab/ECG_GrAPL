@@ -99,10 +99,11 @@ At watermark 19, A has remaining bound 1 and score 0; B has remaining bound 4
 and score 1. LRU evicts older A, while ECG evicts B and retains the line needed
 at `s=20`. This is a teaching snapshot, not a benchmark result.
 
-The current victim order is invalid way, explicit DEAD property, non-property,
-then scored property. FINITE uses the decoded remaining bound; UNKNOWN uses
-the maximum of ordinary RRPV and local GRASP fallback. Eligibility/locked-way
-constraints are honored.
+Invalid ways and explicit DEAD properties are considered first. Otherwise the
+baseline victim is LRU across all eligible lines: UNKNOWN and expired predictions
+do not protect property arrays over frontier, heap or adjacency data. A live
+FINITE LRU candidate may be replaced by a farther live FINITE property candidate.
+This is an LRU-neutral fallback, not a universal never-worse-than-LRU guarantee.
 
 A request observation may mark a resident line PENDING, but never FINITE or
 DEAD and never advances the receiver watermark for free. A paid delivered
@@ -138,8 +139,9 @@ and final drain are charged.
 
 Property reads enter at the LLC boundary using `Request::PREFETCH` and an
 acknowledged `ReadReq`; cache-owned `HardPFReq` is not used. Issue and
-completion both suppress private/LLC duplicates and apply the shared
-invalid/DEAD/nongoverned/score-at-least-seven admission rule. A known-DEAD
+completion both suppress private/LLC duplicates. Admission examines the actual
+selected victim, not an unrelated non-property way; a near FINITE victim blocks
+the prefetch. A known-DEAD
 demand miss has a request-scoped allocation bypass. MSHRs merge allocation
 requirements with logical OR so a live demand still obtains its needed fill.
 
@@ -188,6 +190,8 @@ prediction through the bounded update channel, including private-cache hits.
 UNKNOWN's existing value field prevents delayed updates from reviving an
 invalidated prediction. Structural progress and delivered event order are
 separate; the latter also orders paid ordinary-access invalidations.
+An older delivered invalidation retains its original sequence and cannot erase
+a newer observation or poison a subsequently delivered property update.
 
 SSSP uses U64 distances with nonnegative int32 weights. BC uses checked U64
 path counts, U32 depth and F32 dependencies. Its property transition requires

@@ -725,6 +725,75 @@ void testFilteredReceiverInvalidations() {
           "filtered receivers reject a sender that claims unproven DEAD liveness");
 }
 
+void testOlderInvalidationPreservesNewerUse() {
+    using namespace ecg_record;
+    auto req = requirements(32);
+    req.record_count = 8;
+    Layout layout;
+    selectLayout(req, layout);
+    for (const bool reaches_llc : {false, true}) {
+        Receiver receiver;
+        receiver.configure(layout, 8, 1, 1, TraversalMode::ORDERED_FILTERED);
+        LineMetadata line;
+        receiver.observe(line, 1, 1, 1);
+        receiver.invalidateObservation(line, 1, 1, 1);
+        if (reaches_llc)
+            receiver.observe(line, 1, 1, 2);
+        else
+            receiver.advanceProgress(1, 1, 2);
+        CommitUpdate invalidation;
+        invalidation.context = invalidation.generation = invalidation.order = 1;
+        invalidation.sequence = 1;
+        invalidation.invalidate = true;
+        const auto applied = receiver.apply(&line, invalidation);
+        check(applied == ApplyResult::APPLIED || applied == ApplyResult::STALE,
+              "an older ordinary invalidation remains a valid delivered event");
+        CommitUpdate later;
+        later.context = later.generation = 1;
+        later.order = later.sequence = 2;
+        later.state = State::FINITE;
+        later.deadline = 7;
+        check(receiver.apply(&line, later) == ApplyResult::APPLIED &&
+              line.state == LineState::FINITE && line.value == 7,
+              "older invalidation must not poison a newer private-hit or LLC-observed use");
+    }
+}
+
+void testUnknownPredictionIsNeutralToLru() {
+    using namespace ecg_record;
+    auto req = requirements(32);
+    req.record_count = 8;
+    Layout layout;
+    selectLayout(req, layout);
+    WayState ways[3];
+    ways[0].property = true;
+    ways[0].state = State::UNKNOWN;
+    ways[0].recency = 1;
+    ways[0].grasp_tier = 1;
+    ways[1].recency = 100;
+    ways[2].recency = 101;
+    std::size_t selected = 99;
+    check(selectVictim(layout, ways, 3, 20, selected) == Status::OK && selected == 0,
+          "UNKNOWN property metadata does not pin data ahead of hot non-property lines");
+    ways[0].state = State::FINITE;
+    ways[0].deadline = 19;
+    check(selectVictim(layout, ways, 3, 20, selected) == Status::OK && selected == 0,
+          "expired metadata returns to the same LRU victim");
+    ways[0].deadline = 21;
+    const bool valid[] = {true, true, true};
+    bool admit = true;
+    check(canAdmitPrefetch(layout, ways, valid, 3, 20, admit) == Status::OK && !admit,
+          "prefetch admission considers its real victim, not an unrelated non-property way");
+    ways[1].property = true;
+    ways[1].state = State::FINITE;
+    ways[1].deadline = 27;
+    check(selectVictim(layout, ways, 3, 20, selected) == Status::OK && selected == 1,
+          "a live finite LRU candidate may yield to a farther known finite property");
+    ways[0].property = false;
+    check(selectVictim(layout, ways, 3, 20, selected) == Status::OK && selected == 0,
+          "known property futures do not displace an unknown LRU baseline victim");
+}
+
 void testFilteredQuantizedPassBoundary() {
     using namespace ecg_record;
     auto req = requirements(uint64_t{1} << 26);
@@ -784,6 +853,8 @@ int main() {
     testSharedRuntimeStateAndQueue();
     testTypedPropertiesAndFilteredPasses();
     testFilteredReceiverInvalidations();
+    testOlderInvalidationPreservesNewerUse();
+    testUnknownPredictionIsNeutralToLru();
     testFilteredQuantizedPassBoundary();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;

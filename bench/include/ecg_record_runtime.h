@@ -293,7 +293,11 @@ class Receiver {
         if (!line)
             return ApplyResult::NOT_RESIDENT;
         if (update.invalidate) {
-            invalidateObservation(*line, context_, generation_, progress_);
+            if ((line->state == LineState::PENDING || line->state == LineState::UNKNOWN) &&
+                line->value > update.sequence)
+                return ApplyResult::STALE;
+            line->state = LineState::UNKNOWN;
+            line->value = update.sequence;
             return ApplyResult::APPLIED;
         }
         if ((line->state == LineState::PENDING && update.sequence < line->value) ||
@@ -350,18 +354,34 @@ inline Status selectVictim(
         return Status::INVALID_LAYOUT;
     if (!ways || count == 0 || count > 64)
         return Status::INVALID_COUNTS;
-    std::array<ecg_ref32::WayState, 64> adapted{};
+    std::size_t lru = 0, dead = count;
     for (std::size_t index = 0; index < count; ++index) {
-        adapted[index].property = ways[index].property;
-        adapted[index].rrpv = ways[index].rrpv;
-        adapted[index].recency = ways[index].recency;
-        adapted[index].grasp_tier = ways[index].grasp_tier;
-        adapted[index].state = ways[index].state;
-        adapted[index].exact_deadline = ways[index].deadline;
+        if (ways[index].recency < ways[lru].recency)
+            lru = index;
+        if (ways[index].property && ways[index].state == State::DEAD &&
+            (dead == count || ways[index].recency < ways[dead].recency))
+            dead = index;
     }
-    // The legacy helper's "exact" flag selects linear 64-bit storage, not an oracle.
-    victim = ecg_ref32::selectVictim(
-        adapted.data(), count, sequence, true);
+    if (dead != count) {
+        victim = dead;
+        return Status::OK;
+    }
+    victim = lru;
+    EffectiveFuture best = resolveFuture(ways[lru].state, ways[lru].deadline, sequence);
+    if (!ways[lru].property || best.state != State::FINITE || best.remaining == 0)
+        return Status::OK;
+    // Override LRU only by comparing two live property futures; UNKNOWN never pins a line.
+    for (std::size_t index = 0; index < count; ++index) {
+        if (!ways[index].property)
+            continue;
+        const auto future = resolveFuture(ways[index].state, ways[index].deadline, sequence);
+        if (future.state == State::FINITE && future.remaining > 0 &&
+            (future.remaining > best.remaining ||
+                (future.remaining == best.remaining && ways[index].recency < ways[victim].recency))) {
+            victim = index;
+            best = future;
+        }
+    }
     return Status::OK;
 }
 
@@ -374,21 +394,18 @@ inline Status canAdmitPrefetch(
     if (!ways || !valid || count == 0 || count > 64)
         return Status::INVALID_COUNTS;
     for (std::size_t index = 0; index < count; ++index) {
-        if (!valid[index] || !ways[index].property || ways[index].state == State::DEAD) {
-            admit = true;
-            return Status::OK;
-        }
-        const EffectiveFuture future =
-            resolveFuture(ways[index].state, ways[index].deadline, sequence);
-        const uint8_t score = future.state == State::FINITE
-            ? ecg_ref32::distanceRRPV(future.remaining)
-            : std::max<uint8_t>(ways[index].rrpv,
-                ecg_policy::graspTierRRPV(ways[index].grasp_tier, 7));
-        if (score >= 7) {
+        if (!valid[index]) {
             admit = true;
             return Status::OK;
         }
     }
+    std::size_t victim = 0;
+    const Status status = selectVictim(layout, ways, count, sequence, victim);
+    if (status != Status::OK)
+        return status;
+    const auto future = resolveFuture(ways[victim].state, ways[victim].deadline, sequence);
+    admit = !ways[victim].property || future.state != State::FINITE ||
+        ecg_ref32::distanceRRPV(future.remaining) >= 7;
     return Status::OK;
 }
 
