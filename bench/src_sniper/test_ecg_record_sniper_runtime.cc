@@ -638,6 +638,112 @@ void managedFilteredLifecycle()
           "consecutive generation rebind succeeds");
 }
 
+void filteredBackwardRestartWindow()
+{
+    constexpr uint64_t records = 136;
+    std::vector<uint64_t> destinations(records);
+    for (uint64_t index = 0; index < records; ++index)
+        destinations[index] = index % 70;
+    ecg_record::Requirements requirements;
+    requirements.vertex_count = 70;
+    requirements.max_vertex_id_known = true;
+    requirements.max_vertex_id = 69;
+    requirements.record_count = records;
+    requirements.requested_record_bytes = 8;
+    ecg_record::Layout layout;
+    ecg_record::selectLayout(requirements, layout);
+    const ecg_record::PropertyDescriptor property{
+        ecg_record::PropertyKind::U32, 4,
+        ecg_record::TraversalMode::ORDERED_FILTERED};
+    ecg_record::RecordStream stream;
+    ecg_record::BuildLimits limits;
+    limits.maximum_carrier_bytes = 1 << 20;
+    limits.maximum_auxiliary_bytes = 1 << 20;
+    check(ecg_record::buildRecords(
+              requirements, layout, property, 0xa0000000,
+              [&](std::size_t index) { return destinations[index]; },
+              stream, limits) == ecg_record::Status::OK,
+          "build backward-restart record stream");
+
+    ecg_record::NativeConfiguration configuration;
+    ecg_record::packLayout(layout, configuration.layout_descriptor);
+    ecg_record::packProperty(property, configuration.property_descriptor);
+    configuration.record_base =
+        reinterpret_cast<uint64_t>(stream.data());
+    configuration.property_base = 0xa0000000;
+    configuration.record_count = records;
+    configuration.vertex_count = 70;
+    configuration.generation = 1;
+    configuration.context = 1;
+    configuration.control = ecg_record::kNativeEnable |
+        ecg_record::kNativeManagedPasses;
+
+    graphbrew::sniper::record::Runtime runtime;
+    check(runtime.configure(
+              configuration, ecg_record::Mechanism::TRANSPORT,
+              8, 1, 8, 8, 64) == ecg_record::Status::OK,
+          "configure backward-restart runtime");
+
+    uint64_t cycle = 10;
+    auto loadRange = [&](uint64_t begin, uint64_t end) {
+        bool ok = true;
+        for (uint64_t index = begin; index < end; ++index) {
+            uint64_t address = 0;
+            ecg_record::recordAddress(
+                layout, configuration.record_base, index,
+                configuration.record_count, address);
+            const uint64_t word = stream.word(index);
+            ok = ok &&
+                runtime.armRecordRead(address, 8) ==
+                    ecg_record::Status::OK &&
+                runtime.observeRecordRead(address, 8, cycle++) ==
+                    ecg_record::Status::OK &&
+                runtime.setLoadedAddress(address) ==
+                    ecg_record::Status::OK &&
+                runtime.setLoadedChunk(
+                    static_cast<uint32_t>(word), false) ==
+                    ecg_record::Status::OK &&
+                runtime.setLoadedChunk(
+                    static_cast<uint32_t>(word >> 32), true) ==
+                    ecg_record::Status::OK &&
+                runtime.commitLoadedValue(8) ==
+                    ecg_record::Status::OK;
+        }
+        return ok;
+    };
+    auto consume = [&](uint64_t index) {
+        uint64_t address = 0, property_address = 0;
+        ecg_record::recordAddress(
+            layout, configuration.record_base, index,
+            configuration.record_count, address);
+        ecg_record::DecodedRecord decoded;
+        ecg_record::decodeRecord(layout, stream.word(index), decoded);
+        ecg_record::propertyAddress(
+            property, configuration.property_base,
+            decoded.destination, property_address);
+        return runtime.consumeRecord(address, cycle++) ==
+                ecg_record::Status::OK &&
+            runtime.beginMemoryAccess(
+                property_address, property_address & ~uint64_t{63},
+                4, true, cycle++) ==
+                graphbrew::sniper::record::MemoryAccessKind::DESIGNATED &&
+            runtime.completeMemoryAccess(
+                graphbrew::sniper::record::MemoryAccessKind::DESIGNATED,
+                cycle++) == ecg_record::Status::OK;
+    };
+
+    check(runtime.updateIteration(0, true, true) ==
+              ecg_record::Status::OK &&
+          loadRange(83, 99) && consume(83) &&
+          loadRange(131, 136) && consume(131) &&
+          runtime.closePass() == ecg_record::Status::OK,
+          "seed mixed retained word-bank window");
+    check(runtime.updateIteration(records, false, true) ==
+              ecg_record::Status::OK &&
+          loadRange(94, 110) && consume(94),
+          "backward pass restart retains its current record");
+}
+
 void managedGuestContext()
 {
     const std::vector<uint64_t> destinations = {0, 1, 2, 3};
@@ -801,6 +907,7 @@ int main()
     exercise(8);
     negativeProtocols();
     managedFilteredLifecycle();
+    filteredBackwardRestartWindow();
     managedGuestContext();
     isolatedVertexLayout();
     std::printf("[SUMMARY] failures=%d\n", failures);

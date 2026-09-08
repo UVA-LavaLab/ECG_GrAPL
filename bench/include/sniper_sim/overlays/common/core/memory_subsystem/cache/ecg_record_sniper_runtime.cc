@@ -86,7 +86,6 @@ Runtime::configure(
     completed_sequence_ = 0;
     event_order_ = 0;
     bank_ = {};
-    next_bank_slot_ = 0;
     active_ = true;
     return ecg_record::Status::OK;
 }
@@ -311,7 +310,7 @@ Runtime::findBank(uint64_t address) const
 Runtime::BankEntry&
 Runtime::allocateBank(uint64_t index)
 {
-    BankEntry& entry = bank_[next_bank_slot_++ % bank_.size()];
+    BankEntry& entry = bank_[index % bank_.size()];
     entry = BankEntry{};
     entry.index = index;
     entry.valid = true;

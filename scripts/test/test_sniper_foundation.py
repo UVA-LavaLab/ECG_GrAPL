@@ -251,6 +251,8 @@ def test_record_path_is_wired_without_legacy_oracle():
     assert "EcgRecordPrStream<Graph>" in kernel
     assert "ecg_record::buildRecords" in guest
     assert "ecg_record::selectWindowTarget" in runtime
+    assert "bank_[index % bank_.size()]" in runtime
+    assert "next_bank_slot_" not in runtime
     assert "configuration.control &" in runtime
     assert "ecg_record::kNativeManagedPasses" in runtime
     assert "certified" not in guest.lower()

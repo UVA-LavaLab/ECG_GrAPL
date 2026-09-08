@@ -271,7 +271,6 @@ class Runtime {
     uint64_t event_order_ = 0;
     uint32_t armed_read_bytes_ = 0;
     uint8_t loaded_chunks_ = 0;
-    std::size_t next_bank_slot_ = 0;
     std::size_t prefetch_capacity_ = 0;
     uint64_t prefetch_latency_ = 0;
     uint64_t line_bytes_ = 0;
