@@ -275,6 +275,10 @@ def roi_input_paths(
         })
     if graph_path is not None:
         paths["graph"] = graph_path
+        weighted_receipt = graph_path.with_suffix(".wsg.weights.json")
+        if graph_path.suffix == ".wsg" and weighted_receipt.is_file():
+            paths["weighted_input_receipt"] = weighted_receipt
+            paths["weighted_input_preparer"] = Path(__file__).with_name("prepare_final_graph_corpus.py")
 
     suite = str(settings.get("suite"))
     if suite == "sniper":

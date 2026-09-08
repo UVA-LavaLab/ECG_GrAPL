@@ -1,6 +1,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import struct
 import subprocess
 
 import pytest
@@ -28,6 +29,47 @@ def load_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.mark.parametrize("directed", [False, True])
+def test_weighted_copy_preserves_csr_and_original_ids(tmp_path, directed):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import serialized_graph
+    from scripts.experiments.ecg.record_resources import graph_info
+    module = load_module()
+    edges = [(0, 3), (0, 4), (1, 3), (4, 1)]
+    if not directed:
+        edges += [(v, u) for u, v in edges]
+    data, _ = serialized_graph(5, edges, directed)
+    original_ids = struct.pack("<5i", 4, 3, 2, 1, 0)
+    data = data[:-20] + original_ids
+    source, output = tmp_path / "input.sg", tmp_path / "weighted.wsg"
+    source.write_bytes(data)
+    report = module.prepare_weighted_copy(source, output, 32, chunk_records=2)
+    assert source.read_bytes() == data
+    result = output.read_bytes()
+    assert result[:17] == data[:17] and result[-20:] == original_ids
+    position = 17
+    for direction in range(2 if directed else 1):
+        offsets = struct.unpack_from("<6q", result, position)
+        position += 48
+        expected_rows = [[] for _ in range(5)]
+        for u, v in edges:
+            expected_rows[v if direction else u].append(u if direction else v)
+        for row, neighbors in enumerate(expected_rows):
+            actual = [struct.unpack_from("<ii", result, position + 8 * index)
+                      for index in range(offsets[row], offsets[row + 1])]
+            expected = [(v, 1 + (13 * min(row, v) + 7 * max(row, v)) % 32)
+                        for v in sorted(neighbors)]
+            assert actual == expected
+        position += 8 * len(edges)
+    info = graph_info(output, allow_weighted=True, traversal="out")
+    assert info.weighted and report["output_sha256"] == info.sha256
+    assert report["source_sha256"] == module.sha256(source)
+    assert report["vertices"] == 5 and report["records"] == len(edges)
+    assert module.prepare_weighted_copy(source, output, 32, chunk_records=2) == report
+    output.write_bytes(result + b"changed")
+    with pytest.raises(ValueError, match="existing"):
+        module.prepare_weighted_copy(source, output, 32)
 
 
 def test_final_graph_corpus_matches_literature_scale():

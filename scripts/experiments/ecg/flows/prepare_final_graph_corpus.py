@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from array import array
 import gzip
 import hashlib
 import json
@@ -11,7 +12,9 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import struct
 import sys
+import tempfile
 from typing import Any
 
 
@@ -31,6 +34,7 @@ SAMPLE_SCRIPT = (
 sys.path.insert(
     0, str(PROJECT_ROOT / "scripts/experiments/ecg"))
 from analysis import three_costs  # noqa: E402
+from record_resources import graph_info  # noqa: E402
 
 
 def sha256(path: Path) -> str:
@@ -39,6 +43,126 @@ def sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def prepare_weighted_copy(
+        source: Path, output: Path, maximum_weight: int = 32,
+        *, chunk_records: int = 65536) -> dict[str, Any]:
+    source, output = source.resolve(), output.resolve()
+    if source.suffix != ".sg" or output.suffix != ".wsg" or source == output:
+        raise ValueError("weighted copy requires distinct .sg source and .wsg output")
+    if not 1 <= maximum_weight <= (1 << 31) - 1 or not 1 <= chunk_records <= 65536:
+        raise ValueError("invalid weight range or bounded record chunk")
+    info = graph_info(source, traversal="out")
+    recipe = {
+        "schema": "ecg.weighted-input.v1", "source": str(source),
+        "source_sha256": info.sha256, "output": str(output),
+        "vertices": info.vertices, "records": info.records, "directed": info.directed,
+        "weights": f"1+(13*min(stored_u,stored_v)+7*max(stored_u,stored_v))%{maximum_weight}",
+        "weight_maximum": maximum_weight, "weights_synthetic": True,
+        "topology_order_and_original_ids": "preserved",
+        "producer_sha256": sha256(Path(__file__)),
+    }
+    receipt = output.with_suffix(".wsg.weights.json")
+    if output.exists() or receipt.exists():
+        if output.is_file() and receipt.is_file():
+            existing = json.loads(receipt.read_text())
+            if all(existing.get(key) == value for key, value in recipe.items()) and (
+                    existing.get("output_sha256") == sha256(output)):
+                return existing
+        raise ValueError("existing weighted output or receipt does not match the requested copy")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    receipt_temporary: Path | None = None
+    input_hash = hashlib.sha256()
+    source_stat = source.stat()
+    try:
+        with tempfile.NamedTemporaryFile(
+                dir=output.parent, prefix=".weights-", suffix=".wsg", delete=False) as target:
+            temporary = Path(target.name)
+            with source.open("rb") as original, source.open("rb") as offsets:
+                def read_exact(count: int) -> bytes:
+                    data = original.read(count)
+                    if len(data) != count:
+                        raise ValueError("source graph changed or was truncated during weighted copy")
+                    input_hash.update(data)
+                    return data
+
+                def copy_exact(count: int) -> None:
+                    while count:
+                        size = min(count, 1 << 20)
+                        target.write(read_exact(size))
+                        count -= size
+
+                copy_exact(17)
+                index_bytes = 8 * (info.vertices + 1)
+                direction_bytes = index_bytes + 4 * info.records
+                for direction in range(2 if info.directed else 1):
+                    offsets.seek(17 + direction * direction_bytes)
+                    if offsets.read(8) != struct.pack("<q", 0):
+                        raise ValueError("source CSR offsets changed")
+                    copy_exact(index_bytes)
+                    previous = 0
+                    for vertex in range(info.vertices):
+                        raw_offset = offsets.read(8)
+                        if len(raw_offset) != 8:
+                            raise ValueError("truncated source CSR offsets")
+                        end = struct.unpack("<q", raw_offset)[0]
+                        if not previous <= end <= info.records:
+                            raise ValueError("invalid source CSR offsets")
+                        remaining = end - previous
+                        while remaining:
+                            count = min(remaining, chunk_records)
+                            neighbors = array("i")
+                            neighbors.frombytes(read_exact(4 * count))
+                            if sys.byteorder != "little":
+                                neighbors.byteswap()
+                            weighted = array("i")
+                            for neighbor in neighbors:
+                                if not 0 <= neighbor < info.vertices:
+                                    raise ValueError("source neighbor changed")
+                                left, right = (vertex, neighbor) if vertex <= neighbor else (neighbor, vertex)
+                                weight = 1 + (13 * left + 7 * right) % maximum_weight
+                                weighted.append(neighbor)
+                                weighted.append(weight)
+                            if sys.byteorder != "little":
+                                weighted.byteswap()
+                            target.write(weighted.tobytes())
+                            remaining -= count
+                        previous = end
+                    if previous != info.records:
+                        raise ValueError("source CSR does not cover its records")
+                copy_exact(4 * info.vertices)
+                if original.read(1) or input_hash.hexdigest() != info.sha256:
+                    raise ValueError("source graph changed during weighted copy")
+                final_stat = source.stat()
+                if (final_stat.st_dev, final_stat.st_ino, final_stat.st_size, final_stat.st_mtime_ns) != (
+                        source_stat.st_dev, source_stat.st_ino, source_stat.st_size, source_stat.st_mtime_ns):
+                    raise ValueError("source graph identity changed during weighted copy")
+            target.flush()
+            os.fsync(target.fileno())
+        generated = graph_info(temporary, allow_weighted=True, traversal="out")
+        if (generated.vertices, generated.records, generated.maximum_id) != (
+                info.vertices, info.records, info.maximum_id):
+            raise ValueError("weighted output changed graph dimensions or IDs")
+        report = {**recipe, "output_sha256": generated.sha256,
+                  "output_bytes": generated.storage_bytes,
+                  "minimum_weight": generated.minimum_weight, "maximum_weight": generated.maximum_weight}
+        with tempfile.NamedTemporaryFile(
+                dir=output.parent, prefix=".weights-", suffix=".json", mode="w", delete=False) as handle:
+            receipt_temporary = Path(handle.name)
+            handle.write(json.dumps(report, indent=2, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary, output)
+        os.link(receipt_temporary, receipt)
+        return report
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        if receipt_temporary is not None:
+            receipt_temporary.unlink(missing_ok=True)
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -420,11 +544,25 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--prepare-semantics", action="store_true")
     parser.add_argument("--semantics-only", action="store_true")
     parser.add_argument("--force-semantics", action="store_true")
+    parser.add_argument("--weighted-source", type=Path)
+    parser.add_argument("--weighted-output", type=Path)
+    parser.add_argument("--weight-maximum", type=int, default=32)
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    if args.weighted_source is not None or args.weighted_output is not None:
+        if args.weighted_source is None or args.weighted_output is None:
+            raise SystemExit("--weighted-source and --weighted-output are required together")
+        if args.graphs or any((args.download_only, args.convert_only, args.receipt_only,
+                              args.samples_only, args.semantics_only, args.prepare_samples,
+                              args.prepare_semantics, args.force_download, args.force_decompress,
+                              args.force_convert, args.force_samples, args.force_semantics)):
+            raise SystemExit("weighted copy cannot be combined with corpus mutation modes")
+        print(json.dumps(prepare_weighted_copy(
+            args.weighted_source, args.weighted_output, args.weight_maximum), sort_keys=True))
+        return 0
     config_path = args.config.resolve()
     graph_root = args.graph_root.resolve()
     receipt_path = args.receipt.resolve()

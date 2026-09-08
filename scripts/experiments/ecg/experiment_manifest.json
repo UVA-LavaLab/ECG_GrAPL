@@ -7,6 +7,7 @@
     "ecg_algorithm_equivalence_cache",
     "ecg_algorithm_cache",
     "ecg_matched_8mb_cache",
+    "ecg_dynamic_8mb_cache",
     "ecg_algorithm_equivalence_gem5",
     "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
@@ -42,6 +43,7 @@
     "no_build": true
   },
   "profiles": {
+    "ecg_dynamic_8mb_cache": "Six serial full-Patents BFS/weighted-SSSP cache cells at 8 MiB: LRU/T/RP with separate setup/kernel accounting and explicit deterministic weights.",
     "ecg_matched_8mb_cache": "Focused full-Patents PR/SpMV comparison at 8 MiB LLC with common LRU/GRASP/T/R/RP controls; kernel traffic is compared separately from setup.",
     "ecg_algorithm_equivalence_cache": "Bounded current shared-kernel mathematical and transport qualification for SpMV/BFS/SSSP/CC/BC/TC in cache_sim; not a detailed-timing authorization.",
     "ecg_algorithm_cache": "Current six-algorithm pressure-graph data-traffic comparison including charged initialization, scheduling and record construction; nonauthorizing.",
@@ -100,6 +102,11 @@
     "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
+    "ecg_dynamic_8mb_cache": {
+      "status": "ready",
+      "reason": "Focused dynamic-algorithm follow-up on one topology with declared SSSP weights; cache/traffic evidence only.",
+      "require_clean_worktree": true
+    },
     "ecg_matched_8mb_cache": {
       "status": "ready",
       "reason": "One full graph, two fixed traversals, realistic identical cache geometry; nonauthorizing cache/traffic evidence only.",
@@ -254,6 +261,27 @@
     }
   },
   "graph_sets": {
+    "dynamic_8mb_patents": [
+      {
+        "name": "cit-Patents",
+        "path": "results/graphs/cit-Patents/cit-Patents-dbg.sg",
+        "expected_sha256": "991199a8073f9d6b50c26f04a4d49c0f0b74710e8ba8fdf28c95a4ef48a483e4",
+        "options_key": "file_current_algorithms",
+        "benchmarks": ["bfs"],
+        "expected_vertices": 3774768,
+        "expected_records": 33037894
+      },
+      {
+        "name": "cit-Patents-w32",
+        "path": "results/graphs/cit-Patents/cit-Patents-dbg-w32.wsg",
+        "expected_sha256": "3db55f73ea7a7b6c787e54b7f5c9799e598c1a0fad7a890a38d0613fbd7c0090",
+        "options_key": "file_current_algorithms",
+        "benchmarks": ["sssp"],
+        "expected_vertices": 3774768,
+        "expected_records": 33037894,
+        "weight_recipe": "1+(13*min(stored_u,stored_v)+7*max(stored_u,stored_v))%32"
+      }
+    ],
     "matched_8mb_patents": [
       {
         "name": "cit-Patents",
@@ -873,6 +901,22 @@
     ]
   },
   "stages": [
+    {
+      "name": "162_dynamic_cache_bfs_sssp_8mb",
+      "kind": "roi_matrix",
+      "profiles": ["ecg_dynamic_8mb_cache"],
+      "suite": "cache-sim", "graph_set": "dynamic_8mb_patents",
+      "benchmarks": ["bfs", "sssp"],
+      "policies": ["LRU", "ECG:transport", "ECG"],
+      "current_algorithms": true, "ecg_record_bytes": 0,
+      "algorithm_workspace_bytes": 536870912,
+      "cache_record_rss_mib": 4096, "cache_sim_omp_threads": 1,
+      "l1d_size": "32kB", "l1d_ways": "8", "l2_size": "256kB", "l2_ways": "8",
+      "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "162_dynamic_cache_bfs_sssp_8mb"
+    },
     {
       "name": "160_matched_cache_pr_8mb",
       "kind": "roi_matrix",

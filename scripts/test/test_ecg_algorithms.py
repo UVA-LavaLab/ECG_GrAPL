@@ -391,3 +391,20 @@ def test_matched_8mb_profile_uses_equal_geometry_and_real_pressure():
     options = manifest["benchmark_options"][graph["options_key"]]
     assert "-i 2" in options["pr"] and "--repeat 2" in options["spmv"]
     assert len(stages[0]["policies"]) == 5
+
+
+def test_dynamic_8mb_profile_is_six_bounded_cells(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    args = experiment_run.parse_args(["--profile", "ecg_dynamic_8mb_cache", "--list"])
+    jobs = experiment_run.expand_jobs(args, manifest, tmp_path)
+    assert len(jobs) == 2
+    assert {job.metadata["benchmark"] for job in jobs} == {"bfs", "sssp"}
+    for job in jobs:
+        assert len(job.metadata["policies"]) == 3
+        assert job.metadata["process_tree_rss_mib"] == 4096
+        assert job.command[job.command.index("--l3-sizes") + 1] == "8MB"
+        assert job.command[job.command.index("--l3-ways") + 1] == "16"
+    weighted = next(job for job in jobs if job.metadata["benchmark"] == "sssp")
+    assert "--delta 8" in weighted.command[weighted.command.index("--options") + 1]
+    assert weighted.metadata["graph_path"].endswith("-w32.wsg")
