@@ -17,9 +17,9 @@ over out-neighbors `N_out(u)` instead reads `p[v]` once for each source in
 The current builder makes forward/reverse preprocessing passes over that
 order; it does not replay the algorithm. For filtered kernels this is a
 potential-use plan, not knowledge of future active rows.
-[Traversal-aware preprocessing](Traversal-Metadata-Taxonomy) classifies how
-the scan and its target data must specialize beyond PR before choosing new
-mask semantics.
+[Traversal-aware preprocessing](Traversal-Metadata-Taxonomy) documents the
+opt-in static phase/row restrictions and their measured limits without adding
+record fields.
 
 ### Figure 1 — From one graph edge to its reuse mask
 
@@ -191,7 +191,7 @@ reconstructions where the public artifact did not specify behavior.
 
 ## Ordered-filtered algorithm passes
 
-The additional current kernels use the same record grammar, but BFS, SSSP,
+The additional current kernels use the same record grammar. By default, BFS, SSSP,
 CC and BC explicitly predict the next **potential designated read** in full
 CSR order. Sorted frontiers consume strictly increasing structural positions.
 Pass close accounts for every skipped position, including empty passes, and

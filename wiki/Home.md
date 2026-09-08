@@ -43,7 +43,7 @@ fixed sweep.
 1. [Adaptive records and cache control](ReusePlan-FlowThrough) derives the
    layout, joint token, victim decision, record window, and storage costs.
 2. [Traversal-aware preprocessing](Traversal-Metadata-Taxonomy) analyzes
-   phase/data-specific metadata requirements beyond PR, without algorithm replay.
+   phase/data-specific requirements and measured preprocessing effects beyond PR, without algorithm replay.
 3. [One edge, end to end](Property-to-Cache-Walkthrough) verifies the exact
    word, address, F32 value, deadline, and ownership boundaries.
 4. [Native processor pipeline](RISC-V-Instruction-Path) follows raw32/raw64

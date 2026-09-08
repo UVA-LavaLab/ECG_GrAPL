@@ -148,7 +148,7 @@ hits/misses, so property gains can be separated from other-data losses without
 mixing in changed construction traffic. The measurements do not claim a
 bitmap/list-body implementation or CPU speedup.
 
-Current record modes use plain LRU during modeled preparation, before the
+Current cache_sim record modes use plain LRU during modeled preparation, before the
 first binding exists. Binding activates the configured mechanism without
 flushing data or resetting counters. Cache results declare
 `setup_cache_policy=LRU`; archived ECG selectors are not a fallback for an
@@ -160,6 +160,64 @@ predates this isolation. Its replacement arms used legacy ECG during
 preparation, producing different setup traffic and warm cache state from
 transport. Those raw receipts are retained as pre-isolation diagnostics, not
 the final preprocessing comparison.
+
+### 8 MiB Patents results
+
+The isolated run is
+`results/ecg_experiments/runs/preprocessing_8mb_patents_530d3774`,
+using implementation `530d3774`. All twenty cells completed with identical
+algorithm outputs and work counts across the five controls per algorithm.
+All eight current/scoped T/R pairs have identical setup counters.
+The raw receipts, input fingerprints and combined CSV are retained there.
+
+The graph has 3,774,768 vertices and 33,037,894 adjacency records. BFS/BC use
+stored source 0; SSSP uses its declared topology-preserving 1-32 weights and
+delta 8. L1D is 32 KiB/eight-way, L2 is 256 KiB/eight-way, and LLC is
+8 MiB/16-way with 64-byte lines. All carriers remain four bytes.
+Prefetching is off: this isolates replacement and preprocessing.
+
+Here, **current R** uses default full-CSR masks and **scoped R** uses the
+opt-in analysis. Misses are kernel demand fills from memory. Total traffic
+includes demand fills and dirty writebacks during graph validation,
+initialization, construction and the kernel; it is not CPU execution time.
+
+| Algorithm | Current R misses | Scoped R misses | Miss change | Setup-inclusive traffic change |
+|---|---:|---:|---:|---:|
+| BFS TD | 16,185,130 | 16,455,301 | +1.67% | +4.57% |
+| SSSP | 118,794,988 | 118,645,301 | -0.13% | +9.16% |
+| CC | 8,617,515 | 8,516,385 | -1.17% | +24.26% |
+| BC | 72,191,591 | 72,643,478 | +0.63% | +1.96% |
+
+The matched transport control distinguishes a prediction benefit from a
+changed preparation footprint or cache state. Registered-property misses
+cover the declared property arrays, not every graph-related allocation.
+
+| Scoped R versus its own T | Property misses saved | Other misses saved | Total misses saved | Scoped total traffic / CSR LRU |
+|---|---:|---:|---:|---:|
+| BFS TD | 0 | 0 | 0 | 1.9966 |
+| SSSP | 310,489 | 69,460 | 379,949 | 1.6151 |
+| CC | 108,890 | 0 | 108,890 | 1.5141 |
+| BC | 0 | 0 | 0 | 1.2978 |
+
+BFS/BC retain only 36,183 FINITE records out of 33,037,894 (0.11%); the
+remaining records are UNKNOWN. Their scoped R and T traffic is identical.
+Restricting prediction to one row removes useful between-row information
+without supplying a better estimate of frontier-conditioned reuse.
+This does not prove that every graph-only BFS preprocessing method must fail.
+
+CC's static sampling phases and SSSP's weight classes provide useful additional
+eligibility information, but the gains are small. Scratch allocation grows
+from 12 to 28 MiB for CC and 24 to 40 MiB for SSSP. Their setup transfers rise
+from 92,208,218 to 116,898,772 and from 68,220,928 to 87,277,643, respectively.
+BFS/BC retain 12 MiB scratch but add charged CSR-offset scans.
+These are preparation costs, not extra runtime mask-demand requests:
+kernel request counts remain unchanged across the five controls.
+
+**Outcome:** none of these variants improves setup-inclusive traffic over
+the current masks on this workload. Keep `csr` as the default. The experiment
+supports small phase-specific replacement gains, not a broad cache win,
+measured amortization across future queries, or a CPU-speedup claim.
+BU bitmap and TC list-body annotations remain unimplemented.
 
 ## Semantics and cache decisions must stay honest
 
@@ -183,10 +241,10 @@ do not themselves require another property-side demand. Construction,
 eight-byte carriers, weighted-source overfetch, lookahead acquisition and data
 prefetches have separate costs.
 
-The existing [8 MiB results](Evaluation-Methodology#per-algorithm-performance)
-show substantial PR replacement benefit, much smaller TD-BFS benefit and a
-TD-BFS combined-prefetch traffic regression. The direction-optimizing BFS
-trial's main improvement comes from changing traversal, not a new mask:
+The [default-preprocessing results](Evaluation-Methodology#per-algorithm-performance)
+show substantial PR replacement benefit and much smaller TD-BFS benefit.
+Earlier combined-prefetch and DO replacement measurements predate setup
+isolation. The direction-optimizing BFS trial's main improvement comes from changing traversal, not a new mask:
 TD still uses the existing builder and BU is unannotated. These observations
 motivate specialization; they do not establish which candidate summary works.
 

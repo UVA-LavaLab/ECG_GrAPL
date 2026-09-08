@@ -19,7 +19,7 @@ tolerance: `-o 0 -n 1 -i N -t 0`.
 SpMV, BFS, SSSP, CC, BC and TC share current kernels and CSR/record adapters
 across cache_sim, gem5 RV64 O3 and Sniper. Their detailed paths are admitted for
 bounded semantic qualification, not final-workload CPU speedup.
-The opt-in direction-optimizing BFS trial is cache_sim-only, with ordinary BU bitmaps.
+Direction-optimizing BFS and scoped preprocessing are cache_sim-only; BU remains ordinary.
 
 ### Per-algorithm performance
 
@@ -27,17 +27,17 @@ The opt-in direction-optimizing BFS trial is cache_sim-only, with ordinary BU bi
 |---|---|---:|---:|---|
 | PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.6844 | 0.6844 | Not reported for final workloads |
 | SpMV (CSR) | All three (bounded) | Needs refresh | Needs refresh | Not measured |
-| BFS TD (`bfs`) | All three (bounded) | 0.9776 | 1.1251 | Not measured |
-| BFS DO (`bfs --bfs-direction do`) | cache_sim; TD-only ECG hints | 0.9861 | Not measured | Not measured |
-| SSSP (`sssp`) | All three (bounded) | Needs refresh | Needs refresh | Not measured |
-| CC (`cc`) | All three (bounded) | Not measured | Not measured | Not measured |
-| BC (`bc`) | All three (bounded) | Not measured | Not measured | Not measured |
+| BFS TD (`bfs`) | All three (bounded) | 0.9780 | Needs refresh (pre-isolation) | Not measured |
+| BFS DO (`bfs --bfs-direction do`) | cache_sim; TD-only ECG hints | Needs refresh (pre-isolation) | Not measured | Not measured |
+| SSSP (`sssp`) | All three (bounded) | 1.0680 | Needs refresh | Not measured |
+| CC (`cc`) | All three (bounded) | 0.9879 | Not measured | Not measured |
+| BC (`bc`) | All three (bounded) | 1.0348 | Not measured | Not measured |
 | TC (`tc`) | All three (bounded) | Not measured | Not measured | Not measured |
 
 Ratios are traffic versus the **same variant's LRU**, not CPU speedup. Patents uses 32 KiB L1D/256 KiB L2.
 R is replacement-only; RP adds prefetching. UNKNOWN no longer pins property data over other arrays.
 DO-LRU reduces misses by 54.9% versus same-build TD-LRU: a traversal benefit, not an ECG gain.
-Within DO, R changes traffic only -0.11% versus transport; setup-inclusive traffic is 2.54x DO-LRU.
+BFS/SSSP/CC/BC R rows use default full-CSR masks and neutral LRU preparation at `530d3774`.
 
 ### Algorithm and prediction contracts
 
@@ -54,8 +54,8 @@ Ordered-filtered metadata means **next potential designated read**, not next act
 Skipped work, invalidation and paid transitions follow the [filtered contract](ReusePlan-FlowThrough#ordered-filtered-algorithm-passes).
 
 Totals include initialization, scheduling, orientation and record construction.
-Kernel snapshots preserve cache contents; current record setup uses LRU.
-See [preprocessing isolation](Traversal-Metadata-Taxonomy#opt-in-preprocessing-experiment) for older-policy limits.
+Kernel snapshots preserve cache contents; current cache_sim record setup uses LRU.
+See the [scoped-preprocessing results](Traversal-Metadata-Taxonomy#8-mib-patents-results) for the opt-in experiment and older-policy limits.
 P-OPT has not been ported to this roster; an uncharged dynamic oracle is not a substitute.
 
 ## 2. Stable design and simulator roles
@@ -176,7 +176,7 @@ profiles require a freshly validated equivalence receipt and explicit
 
 The full-core/Twitter snapshots below predate the LRU-neutral selector repair.
 They remain provenance records, not performance evidence for the corrected policy.
-The focused current PR/BFS measurements are in the per-algorithm table above.
+Current fixed-sweep and default-preprocessing results are in the per-algorithm table above.
 
 ### Full core graphs
 

@@ -161,13 +161,18 @@ The executable Twitter profile name is retained as an interface; its current
 measurements are reported as Twitter-scale evaluation.
 
 The earlier `matched_8mb_pr_spmv` and `dynamic_8mb_bfs_sssp` runs predate the LRU-neutral repair.
-Corrected focused rows are in `results/ecg_experiments/roi_matrix/pr_lru_neutral_policy`
-and `bfs_lru_neutral_policy`; their `.log.cmd` receipts preserve the exact commands.
+Corrected PR rows are in `results/ecg_experiments/roi_matrix/pr_lru_neutral_policy`.
+`bfs_lru_neutral_policy` predates setup isolation; its `.log.cmd` receipts preserve the commands.
 `traffic_phases.setup/kernel` close to the unchanged total; compare kernel-only scopes.
 Weighted-input receipts bind the topology-preserving synthetic 1-32 weight recipe and both file hashes.
-The DO trial is `results/ecg_experiments/runs/dobfs_8mb_patents` at `336e3840`,
+The pre-isolation DO trial is `results/ecg_experiments/runs/dobfs_8mb_patents` at `336e3840`,
 with same-build TD/LRU reference `results/ecg_experiments/roi_matrix/dobfs_same_build_td_lru`.
 It used 12 TD/5 BU levels; only 1.10M TD probes were annotated, versus 29.05M ordinary BU probes.
+
+The isolated preprocessing run is `results/ecg_experiments/runs/preprocessing_8mb_patents_530d3774`:
+twenty cells, `setup_cache_policy=LRU`, and equal T/R setup within each preprocessing mode.
+Its `run.complete.json` and `combined_roi_matrix.csv` bind the complete result;
+see the [measured effects and limits](Traversal-Metadata-Taxonomy#8-mib-patents-results).
 
 ```bash
 python3 -I scripts/experiments/ecg/flows/experiment_run.py \

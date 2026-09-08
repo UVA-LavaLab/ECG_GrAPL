@@ -115,7 +115,7 @@ def test_methodology_is_current_only_and_marks_unmeasured_algorithms():
     assert "0.6814" in methodology
     assert "8 MiB Patents kernel R/LRU" in methodology
     assert "8 MiB Patents kernel RP/LRU" in methodology
-    assert "0.9776" in methodology and "1.1251" in methodology
+    assert "neutral LRU preparation" in methodology and "pre-isolation" in methodology
     assert "UNKNOWN no longer pins" in methodology
     assert "predate the LRU-neutral selector repair" in methodology
     assert "BFS DO" in methodology and "same variant's LRU" in methodology
