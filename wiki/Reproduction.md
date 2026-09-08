@@ -146,12 +146,17 @@ These are local runner/resource measurements, not simulated CPU execution times.
 
 | Profile | Workload | Resource scope |
 |---|---|---|
+| `ecg_matched_8mb_cache` | Full Patents PR/SpMV, two traversals, common LRU/GRASP/T/R/RP controls, 8 MiB/16-way LLC | Serial; 4 GiB RSS; 30 minutes per policy |
 | `ecg_local_release_cache` | Six full core graphs, ten CSR/reference/ECG roles, two iterations, 8 MiB LLC | 8 GiB RSS; one hour per policy |
 | `ecg_large_cache` | Focused current-mechanism capacity exploration | Explicit manifest limits; no final authorization |
 | `ecg_twitter_reproduction` | Directed Twitter, ten roles, one iteration, 8/24 MiB LLC | 32 GiB RSS; two hours per policy; twelve hours per matrix |
 
 The executable Twitter profile name is retained as an interface; its current
 measurements are reported as Twitter-scale evaluation.
+
+The matched run is `results/ecg_experiments/runs/matched_8mb_pr_spmv` at `36713a44`.
+SpMV reports `traffic_phases.setup/kernel`; their sum equals the unchanged total.
+Compare its kernel phase with PR's existing kernel-only window, not with SpMV's setup-inclusive total.
 
 ```bash
 python3 -I scripts/experiments/ecg/flows/experiment_run.py \

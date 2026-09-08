@@ -112,6 +112,9 @@ def test_methodology_is_current_only_and_marks_unmeasured_algorithms():
     assert "next potential designated read" in methodology
     assert "P-OPT has not been ported" in methodology
     assert "0.6814" in methodology
+    assert "8 MiB Patents kernel ECG/LRU" in methodology
+    assert "1 KiB diagnostic total ECG/LRU" in methodology
+    assert "0.5091" in methodology and "1.1613" in methodology
 
 
 @pytest.mark.parametrize("algorithm", ["bfs", "sssp", "cc", "bc", "tc"])

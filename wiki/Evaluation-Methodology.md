@@ -23,21 +23,21 @@ The legacy algorithm executables are not substitutes for these current paths.
 
 ### Per-algorithm performance
 
-| Algorithm | Current adaptive ECG implementation | Current cache_sim traffic ratio | Native CPU speedup |
-|---|---|---|---|
-| PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.6814 versus CSR LRU on the six full core graphs at 8 MiB | Not yet reported for the final workload set |
-| SpMV (CSR) | All three (bounded) | 2.7754 | Not measured |
-| BFS (`bfs`) | All three (bounded) | 3.0956 | Not measured |
-| SSSP (`sssp`) | All three (bounded) | 2.2321 | Not measured |
-| CC (`cc`) | All three (bounded) | 2.5008 | Not measured |
-| BC (`bc`) | All three (bounded) | 2.0792 | Not measured |
-| TC (`tc`) | All three (bounded) | 2.3309 | Not measured |
+| Algorithm | Current implementation | 8 MiB Patents kernel ECG/LRU | 1 KiB diagnostic total ECG/LRU | Native CPU speedup |
+|---|---|---:|---:|---|
+| PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.5191 | Not measured | Not reported for final workloads |
+| SpMV (CSR) | All three (bounded) | 0.5091 | 2.7754 | Not measured |
+| BFS (`bfs`) | All three (bounded) | Not measured | 3.0956 | Not measured |
+| SSSP (`sssp`) | All three (bounded) | Not measured | 2.2321 | Not measured |
+| CC (`cc`) | All three (bounded) | Not measured | 2.5008 | Not measured |
+| BC (`bc`) | All three (bounded) | Not measured | 2.0792 | Not measured |
+| TC (`tc`) | All three (bounded) | Not measured | 2.3309 | Not measured |
 
-The PageRank ratio is the geometric mean of per-graph ECG/CSR-LRU modeled
-off-chip traffic; lower is better. It is **not a CPU speedup**.
-New rows are ECG/CSR LRU on pressure512, including setup: all six regress.
-ECG/transport also regresses (1.31-1.97), so preparation is not the sole cause.
-These tiny-cache diagnostics are not final-paper speedups; native cells remain unmeasured.
+Ratios are modeled off-chip traffic; lower is better, **not CPU speedup**.
+The matched 8 MiB/16-way runs use full Patents, two traversals, 32 KiB L1D and 256 KiB L2;
+each governed F32 array is 14.40 MiB. PR/SpMV reduce kernel traffic by 48.1%/49.1%.
+GRASP/LRU kernel ratios are 0.6446/0.6402. SpMV including setup is still **1.1613** after two repeats;
+PR setup traffic is unmeasured. The 1 KiB pressure512 totals include setup and are not comparable.
 
 ### Algorithm and prediction contracts
 
@@ -54,8 +54,8 @@ Ordered-filtered metadata means **next potential designated read**, not next act
 Skipped positions, ordinary-access invalidation and charged phase transitions follow the
 [filtered contract](ReusePlan-FlowThrough#ordered-filtered-algorithm-passes).
 
-New-algorithm traffic includes initialization, sorting, buckets, orientation and record construction;
-it is not the older PR kernel-only scope. Baselines are CSR LRU/SRRIP/capacity-based GRASP.
+New-algorithm totals include initialization, sorting, buckets, orientation and record construction;
+nonintrusive first-binding snapshots also report kernel traffic without resetting cache contents.
 P-OPT has not been ported to this roster; an uncharged dynamic oracle is not a substitute.
 
 ## 2. Stable design and simulator roles
