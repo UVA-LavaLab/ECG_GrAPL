@@ -23,7 +23,12 @@ class AlgorithmSideband {
         path_ = path;
     }
 
-    void graph(const GraphView& value) { graph_ = value; }
+    void graph(const GraphView& value) { graph_ = input_graph_ = value; }
+    void activeGraph(const GraphView& value) {
+        if (value.vertices != input_graph_.vertices)
+            throw std::invalid_argument("active-graph-property-domain-mismatch");
+        graph_ = value;
+    }
 
     void region(const char* name, const void* base, uint64_t count, uint8_t bytes, bool property) {
         if (!property)
@@ -53,6 +58,10 @@ class AlgorithmSideband {
                << ",\"edge_other_size\":" << graph_.records * graph_.edge_stride
                << ",\"csr_offsets_base\":" << reinterpret_cast<uint64_t>(graph_.offsets)
                << ",\"csr_offsets_size\":" << (graph_.vertices + 1) * sizeof(uint64_t)
+               << ",\"input_num_edges\":" << input_graph_.records
+               << ",\"input_edges_base\":" << reinterpret_cast<uint64_t>(input_graph_.columns)
+               << ",\"input_edges_size\":" << input_graph_.records * input_graph_.edge_stride
+               << ",\"input_csr_offsets_base\":" << reinterpret_cast<uint64_t>(input_graph_.offsets)
                << ",\"property_regions\":[";
         for (std::size_t index = 0; index < region_count_; ++index) {
             const auto& region = regions_[index];
@@ -86,7 +95,7 @@ class AlgorithmSideband {
         uint8_t bytes = 0;
     };
     std::string path_;
-    GraphView graph_;
+    GraphView graph_, input_graph_;
     std::array<Region, 8> regions_{};
     std::size_t region_count_ = 0;
 };

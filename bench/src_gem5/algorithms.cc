@@ -17,7 +17,9 @@ class AlgorithmBackend {
     void region(const char* name, const void* base, uint64_t count, uint8_t bytes, bool property) {
         sideband_.region(name, base, count, bytes, property);
     }
-    void selectProperty(const void*, const ecg_record::PropertyDescriptor&) {
+    void selectProperty(const ecg_algorithm::GraphView& graph, const void*,
+                        const ecg_record::PropertyDescriptor&) {
+        sideband_.activeGraph(graph);
         if (!options_.records)
             sideband_.publish();
     }

@@ -227,6 +227,24 @@ def test_detailed_algorithm_commands_bind_the_current_guest_and_geometry(tmp_pat
     assert roi_matrix.graph_path_from_options("--graph /tmp/explicit.wsg") == Path("/tmp/explicit.wsg")
     assert "bench/src_gem5/algorithms.cc" in algorithm_matrix.source_paths("gem5")
     assert "bench/src_sniper/algorithms.cc" in algorithm_matrix.source_paths("sniper")
+    args.dry_run = True
+    args.gem5_cpu_type = "O3"
+    services = SimpleNamespace(
+        selected_gem5_isa=lambda: "riscv",
+        VALIDATED_GEM5_GUEST=tmp_path / "guest",
+        VALIDATED_GEM5_GUEST_SHA256="a" * 64,
+        verify_staged_guest=lambda *_args: None,
+        gem5_sideband_paths=roi_matrix.gem5_sideband_paths,
+        GEM5_OPT=tmp_path / "gem5.opt", GEM5_CONFIG=tmp_path / "graph_se.py",
+        parse_size_bytes=roi_matrix.parse_size_bytes, run_command=lambda *_args, **_kwargs: None)
+    environment = {}
+    algorithm_detailed.run_gem5(
+        args, parse_policy_spec("ECG"), "2kB", options, {"graph_loader_bytes_upper": 4096},
+        tmp_path, tmp_path / "result.json", tmp_path / "run.log", environment, services)
+    paths = roi_matrix.gem5_sideband_paths(tmp_path)
+    for name, key in (("GEM5_GRAPHBREW_CTX", "context"), ("GEM5_POPT_MATRIX", "popt_matrix"),
+                      ("GEM5_GRAPHBREW_OUT_EDGES", "out_edges"), ("GEM5_GRAPHBREW_IN_EDGES", "in_edges")):
+        assert environment.get(name) == str(paths[key]), "all startup-cleanup paths must be cell-local"
 
 
 def test_rv64_sideband_publication_uses_supported_atomic_syscall(tmp_path):
@@ -254,10 +272,13 @@ int main(int argc, char** argv) {
     if (argc != 2 || setenv("GEM5_GRAPHBREW_CTX", argv[1], 1)) return 2;
     uint64_t offsets[] = {0, 1, 1};
     int32_t columns[] = {1};
+    uint64_t input_offsets[] = {0, 1, 2};
+    int32_t input_columns[] = {1, 0};
     float values[] = {1, 2};
     ecg_algorithm::AlgorithmSideband sideband("GEM5_GRAPHBREW_CTX");
-    sideband.graph({2, 1, true, offsets, columns, nullptr, 4, false});
+    sideband.graph({2, 2, false, input_offsets, input_columns, nullptr, 4, false});
     sideband.region("x", values, 2, 4, true);
+    sideband.activeGraph({2, 1, true, offsets, columns, nullptr, 4, false});
     sideband.publish();
     return calls == 1 ? 0 : 1;
 }
@@ -272,7 +293,10 @@ int main(int argc, char** argv) {
     output = tmp_path / "sideband.json"
     ran = subprocess.run([str(binary), str(output)], timeout=10, check=False)
     assert ran.returncode == 0, "RV64 publication must not invoke unsupported renameat2"
-    assert json.loads(output.read_text())["num_vertices"] == 2
+    published = json.loads(output.read_text())
+    assert published["num_vertices"] == 2 and published["num_edges"] == 1
+    assert published["input_num_edges"] == 2
+    assert published["csr_offsets_base"] != published["input_csr_offsets_base"]
     assert not output.with_suffix(".json.new").exists()
 
 

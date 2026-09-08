@@ -75,7 +75,11 @@ def run_gem5(args, spec, l3_size, options, plan, directory, output, log, env, ro
     roi.verify_staged_guest(binary, roi.VALIDATED_GEM5_GUEST_SHA256)
     sidebands = roi.gem5_sideband_paths(directory)
     sidebands["context"].parent.mkdir(parents=True, exist_ok=True)
-    env.update(GEM5_GRAPHBREW_CTX=str(sidebands["context"]), GRASP_BOUNDARY_MODE="capacity"
+    env.update(GEM5_GRAPHBREW_CTX=str(sidebands["context"]),
+               GEM5_POPT_MATRIX=str(sidebands["popt_matrix"]),
+               GEM5_GRAPHBREW_OUT_EDGES=str(sidebands["out_edges"]),
+               GEM5_GRAPHBREW_IN_EDGES=str(sidebands["in_edges"]),
+               GRASP_BOUNDARY_MODE="capacity"
                if spec.label == "GRASP_PAPER" else "vertex",
                GRASP_HOT_FRACTION="0.50" if spec.label == "GRASP_PAPER" else "0.15")
     values = guest_options(args, options, plan, spec, roi.parse_size_bytes, l3_size, output)

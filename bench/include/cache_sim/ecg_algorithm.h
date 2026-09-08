@@ -47,7 +47,8 @@ class AlgorithmBackend {
             llc_bytes_, grasp_paper_ ? 0.50 : 0.15, true);
     }
 
-    void selectProperty(const void* base, const ecg_record::PropertyDescriptor& property) {
+    void selectProperty(const ecg_algorithm::GraphView&, const void* base,
+                        const ecg_record::PropertyDescriptor& property) {
         const auto* region = context_.findRegion(reinterpret_cast<uint64_t>(base));
         if (!region || region->elem_size != ecg_record::propertyBytes(property.kind) ||
             property.stride_bytes != region->elem_size)

@@ -149,7 +149,7 @@ class PlainBackend {
     void start(const GraphView&) {}
     void memory(const void*, uint64_t, bool) {}
     void region(const char*, const void*, uint64_t, uint8_t, bool) {}
-    void selectProperty(const void*, const ecg_record::PropertyDescriptor&) {}
+    void selectProperty(const GraphView&, const void*, const ecg_record::PropertyDescriptor&) {}
     void bind(const ecg_record::NativeConfiguration& configuration,
               const ecg_record::RecordStream& stream) {
         configuration_ = configuration;
@@ -349,7 +349,7 @@ class Engine {
             throw std::logic_error("invalid-pass-domain");
         ++result.bindings;
         result.carrier_records = graph.records;
-        backend_.selectProperty(property.data(), property_);
+        backend_.selectProperty(graph, property.data(), property_);
         if (!options.records || graph.records == 0)
             return;
         backend_.drain();

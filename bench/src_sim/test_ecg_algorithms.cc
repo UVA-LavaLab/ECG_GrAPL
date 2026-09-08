@@ -117,6 +117,14 @@ struct HeapOrderBackend : ecg_algorithm::PlainBackend {
     }
 };
 
+struct BoundGraphBackend : ecg_algorithm::PlainBackend {
+    using ecg_algorithm::PlainBackend::selectProperty;
+    ecg_algorithm::GraphView active;
+    void start(const ecg_algorithm::GraphView& graph) { active = graph; }
+    void selectProperty(const ecg_algorithm::GraphView& graph, const void*,
+                        const ecg_record::PropertyDescriptor&) { active = graph; }
+};
+
 } // namespace
 
 int main() {
@@ -189,6 +197,14 @@ int main() {
     expectError(duplicate, Algorithm::CC, "simple-undirected");
     expectError(loop, Algorithm::TC, "simple-undirected");
     expectError(diamond, Algorithm::TC, "simple-undirected");
+    {
+        Options options;
+        options.algorithm = Algorithm::TC;
+        BoundGraphBackend backend;
+        const auto triangles = ecg_algorithm::run(cliques.view(), options, backend);
+        check(backend.active.records == triangles.oriented_edges && backend.active.directed,
+              "backend attribution follows the actual oriented TC stream");
+    }
     {
         Options options;
         Result result;
