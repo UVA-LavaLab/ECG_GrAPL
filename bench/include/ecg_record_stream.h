@@ -116,6 +116,28 @@ inline Status storeWord(RecordStream& stream, std::size_t index, uint64_t word) 
     return Status::OK;
 }
 
+inline Status allocateStream(const Requirements& requirements, const Layout& layout,
+                             const BuildLimits& limits, RecordStream& stream) {
+    uint64_t carrier_bytes = 0, source_bytes = 0;
+    if (!checkedMultiply(requirements.record_count, layout.record_bytes, carrier_bytes) ||
+        !checkedMultiply(requirements.record_count, limits.source_id_bytes, source_bytes))
+        return Status::ARITHMETIC_OVERFLOW;
+    if (carrier_bytes > limits.maximum_carrier_bytes ||
+        requirements.record_count > std::numeric_limits<std::size_t>::max())
+        return Status::RESOURCE_LIMIT;
+    stream.layout = layout;
+    if (layout.record_bytes == 4)
+        stream.records32.resize(static_cast<std::size_t>(requirements.record_count));
+    else
+        stream.records64.resize(static_cast<std::size_t>(requirements.record_count));
+    stream.stats.source_stream_bytes = source_bytes;
+    stream.stats.carrier_payload_bytes = carrier_bytes;
+    stream.stats.carrier_allocation_bytes = layout.record_bytes == 4
+        ? stream.records32.capacity() * uint64_t{4} : stream.records64.capacity() * uint64_t{8};
+    return stream.stats.carrier_allocation_bytes <= limits.maximum_carrier_bytes
+        ? Status::OK : Status::RESOURCE_LIMIT;
+}
+
 }  // namespace detail
 
 // Source IDs must remain immutable. Only sparse line positions are temporary.
@@ -235,6 +257,129 @@ struct FullBuildScope {
     BuildScope operator()(uint64_t) const { return {}; }
 };
 
+namespace detail {
+
+template<std::size_t Partitions, typename DestinationAt, typename Observe, typename ScopeAt>
+Status buildFilteredRecords(
+        const Requirements& requirements, const Layout& layout,
+        const PropertyDescriptor& property, uint64_t property_base, uint64_t last_address,
+        DestinationAt destination_at, RecordStream& output, const BuildLimits& limits,
+        Observe observe, ScopeAt scope_at) {
+    struct Positions {
+        std::array<uint64_t, Partitions> next;
+        Positions() { next.fill(UINT64_MAX); }
+    };
+    const uint64_t first_line = property_base / 64;
+    const uint64_t line_count = last_address / 64 - first_line + 1;
+    uint64_t carrier_bytes = 0;
+    if (!checkedMultiply(requirements.record_count, layout.record_bytes, carrier_bytes))
+        return Status::ARITHMETIC_OVERFLOW;
+    if (carrier_bytes > limits.maximum_carrier_bytes ||
+        requirements.record_count > std::numeric_limits<std::size_t>::max())
+        return Status::RESOURCE_LIMIT;
+    uint64_t slots_needed = 0, capacity = 1, dense_bytes = 0, hash_bytes = 0;
+    if (!checkedMultiply(std::min(requirements.record_count, line_count), 2, slots_needed))
+        return Status::ARITHMETIC_OVERFLOW;
+    while (capacity < slots_needed) {
+        if (capacity > UINT64_MAX / 2)
+            return Status::ARITHMETIC_OVERFLOW;
+        capacity *= 2;
+    }
+    const bool dense_valid = checkedMultiply(line_count, sizeof(Positions), dense_bytes);
+    const bool hash_valid = checkedMultiply(capacity, sizeof(Positions) + sizeof(uint64_t), hash_bytes);
+    if (!dense_valid && !hash_valid)
+        return Status::ARITHMETIC_OVERFLOW;
+    const bool dense = dense_valid && (!hash_valid || dense_bytes <= hash_bytes);
+    const uint64_t count = dense ? line_count : capacity;
+    if ((dense ? dense_bytes : hash_bytes) > limits.maximum_auxiliary_bytes ||
+        count > std::vector<Positions>{}.max_size() ||
+        (!dense && count > std::vector<uint64_t>{}.max_size()))
+        return Status::RESOURCE_LIMIT;
+    std::vector<Positions> positions(static_cast<std::size_t>(count));
+    std::vector<uint64_t> keys;
+    if (!dense)
+        keys.assign(static_cast<std::size_t>(count), UINT64_MAX);
+    const uint64_t auxiliary_bytes = positions.capacity() * sizeof(Positions) +
+        keys.capacity() * sizeof(uint64_t);
+    if (auxiliary_bytes > limits.maximum_auxiliary_bytes)
+        return Status::RESOURCE_LIMIT;
+    observe(positions.data(), count * sizeof(Positions), true);
+    if (!dense)
+        observe(keys.data(), count * sizeof(uint64_t), true);
+    RecordStream stream;
+    const Status allocated = allocateStream(requirements, layout, limits, stream);
+    if (allocated != Status::OK)
+        return allocated;
+    stream.stats.auxiliary_peak_bytes = auxiliary_bytes;
+    observe(stream.data(), stream.stats.carrier_payload_bytes, true);
+    const uint64_t maximum_id = requirements.max_vertex_id_known
+        ? requirements.max_vertex_id : requirements.vertex_count - 1;
+    for (uint64_t position = requirements.record_count; position-- > 0;) {
+        const uint64_t id = destination_at(position);
+        if (id > maximum_id || id >= requirements.vertex_count || id > lowMask(layout.id_bits) ||
+            id > lowMask(unsigned(limits.source_id_bytes) * 8))
+            return Status::INVALID_ID;
+        const BuildScope scope = scope_at(position);
+        if (scope.partition >= Partitions || (scope.end != UINT64_MAX &&
+            (scope.end <= position || scope.end > requirements.record_count)))
+            return Status::INVALID_COUNTS;
+        const uint64_t line = (property_base + id * property.stride_bytes) / 64;
+        uint64_t index = line - first_line;
+        bool new_line = false;
+        if (!dense) {
+            index = (line * 11400714819323198485ULL) & (capacity - 1);
+            for (;;) {
+                observe(&keys[index], sizeof(uint64_t), false);
+                if (keys[index] == UINT64_MAX) {
+                    observe(&keys[index], sizeof(uint64_t), true);
+                    keys[index] = line;
+                    new_line = true;
+                    break;
+                }
+                if (keys[index] == line)
+                    break;
+                index = (index + 1) & (capacity - 1);
+            }
+        }
+        uint64_t& next = positions[index].next[scope.partition];
+        observe(&next, sizeof(next), false);
+        if (dense && next == UINT64_MAX) {
+            new_line = true;
+            for (std::size_t part = 0; part < Partitions; ++part) {
+                if (part == scope.partition)
+                    continue;
+                observe(&positions[index].next[part], sizeof(uint64_t), false);
+                if (positions[index].next[part] != UINT64_MAX) {
+                    new_line = false;
+                    break;
+                }
+            }
+        }
+        if (new_line)
+            ++stream.stats.property_lines;
+        const bool finite = next != UINT64_MAX && next < scope.end;
+        uint64_t word = 0;
+        const Status encoded = encodeRecord(layout, id, finite ? next - position : 0,
+            finite ? State::FINITE : State::UNKNOWN, word);
+        if (encoded != Status::OK)
+            return encoded;
+        observe(stream.data() + position * layout.record_bytes, layout.record_bytes, true);
+        const Status stored = storeWord(stream, position, word);
+        if (stored != Status::OK)
+            return stored;
+        observe(&next, sizeof(next), true);
+        next = position;
+        if (finite)
+            ++stream.stats.finite_records;
+        else
+            ++stream.stats.unknown_records;
+    }
+    output = std::move(stream);
+    return Status::OK;
+}
+
+}  // namespace detail
+
 template<std::size_t Partitions = 1, typename DestinationAt,
          typename Observe = UnobservedConstruction, typename ScopeAt = FullBuildScope>
 Status buildRecords(
@@ -255,6 +400,9 @@ Status buildRecords(
         property, property_base, requirements.vertex_count - 1, last);
     if (status != Status::OK)
         return status;
+    if (property.traversal == TraversalMode::ORDERED_FILTERED)
+        return detail::buildFilteredRecords<Partitions>(requirements, layout, property,
+            property_base, last, destination_at, output, limits, observe, scope_at);
     struct Slot {
         uint64_t key = UINT64_MAX;
         std::array<uint64_t, Partitions> first, next;
@@ -285,15 +433,9 @@ Status buildRecords(
     std::vector<Slot> slots(static_cast<std::size_t>(capacity));
     observe(slots.data(), scratch_bytes, true);
     RecordStream stream;
-    stream.layout = layout;
-    if (layout.record_bytes == 4)
-        stream.records32.resize(static_cast<std::size_t>(requirements.record_count));
-    else
-        stream.records64.resize(static_cast<std::size_t>(requirements.record_count));
-    stream.stats.source_stream_bytes = source_bytes;
-    stream.stats.carrier_payload_bytes = carrier_bytes;
-    stream.stats.carrier_allocation_bytes = layout.record_bytes == 4
-        ? stream.records32.capacity() * uint64_t{4} : stream.records64.capacity() * uint64_t{8};
+    const Status allocated = detail::allocateStream(requirements, layout, limits, stream);
+    if (allocated != Status::OK)
+        return allocated;
     stream.stats.auxiliary_peak_bytes = slots.capacity() * sizeof(Slot);
     if (stream.stats.carrier_allocation_bytes > limits.maximum_carrier_bytes ||
         stream.stats.auxiliary_peak_bytes > limits.maximum_auxiliary_bytes)

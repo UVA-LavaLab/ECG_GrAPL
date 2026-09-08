@@ -204,11 +204,11 @@ def test_algorithm_resource_plans_cover_auxiliary_work():
         plan_algorithm_resources(graph, algorithm="tc", **{**options, "workspace_limit": 4096})
     with pytest.raises(RecordResourceError, match="RSS budget"):
         plan_algorithm_resources(graph, algorithm="bfs", **{**options, "rss_mib": 64})
-    for algorithm, slot_bytes in (("sssp", 40), ("cc", 56), ("bfs", 24), ("bc", 24)):
+    for algorithm, partitions in (("sssp", 2), ("cc", 3), ("bfs", 1), ("bc", 1)):
         original = plan_algorithm_resources(graph, algorithm=algorithm, **options)
         specialized = plan_algorithm_resources(graph, algorithm=algorithm, preprocessing="traversal", **options)
         assert specialized["construction_auxiliary_bytes_upper"] == (
-            original["construction_auxiliary_bytes_upper"] // 24 * slot_bytes)
+            original["construction_auxiliary_bytes_upper"] * partitions)
         assert specialized["carrier_payload_bytes_upper"] == original["carrier_payload_bytes_upper"]
     with pytest.raises(RecordResourceError, match="preprocessing"):
         plan_algorithm_resources(graph, algorithm="bfs", preprocessing="oracle", **options)

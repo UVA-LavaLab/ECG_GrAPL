@@ -586,6 +586,97 @@ void testSharedRuntimeStateAndQueue() {
           "prefetch admission does not invent a near-future threshold");
 }
 
+void testFilteredConstructionBudgetAndSemantics() {
+    using namespace ecg_record;
+    auto req = requirements(64);
+    req.record_count = 16;
+    const uint32_t ids[] = {0, 1, 7, 8, 0, 9, 7, 8, 31, 32, 63, 31, 32, 63, 31, 32};
+    const PropertyDescriptor property{PropertyKind::U64, 8, TraversalMode::ORDERED_FILTERED};
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        req.requested_record_bytes = width;
+        Layout layout;
+        check(selectLayout(req, layout) == Status::OK, "filtered compact fixture layout");
+        BuildLimits limits;
+        limits.maximum_auxiliary_bytes = 9 * 2 * sizeof(uint64_t);
+        uint64_t source_reads = 0;
+        RecordStream stream;
+        const auto scope = [](uint64_t index) {
+            return BuildScope{static_cast<uint8_t>(index % 2), index < 8 ? 8u : 16u};
+        };
+        const Status status = buildRecords<2>(req, layout, property, 0x1008,
+            [&](uint64_t index) { ++source_reads; return ids[index]; },
+            stream, limits, UnobservedConstruction{}, scope);
+        check(status == Status::OK && source_reads == req.record_count &&
+              stream.stats.auxiliary_peak_bytes == limits.maximum_auxiliary_bytes,
+              "filtered records need one reverse source scan and only dense next positions");
+        if (status != Status::OK)
+            continue;
+        for (uint64_t index = 0; index < req.record_count; ++index) {
+            uint64_t next = index + 1;
+            while (next < scope(index).end &&
+                   (scope(next).partition != scope(index).partition ||
+                    (0x1008 + ids[next] * 8) / 64 != (0x1008 + ids[index] * 8) / 64))
+                ++next;
+            uint64_t expected = 0;
+            check(encodeRecord(layout, ids[index], next < scope(index).end ? next - index : 0,
+                      next < scope(index).end ? State::FINITE : State::UNKNOWN, expected) == Status::OK &&
+                  stream.word(index) == expected,
+                  "compact construction preserves scoped finite references and neutral terminal state");
+        }
+        RecordWindow old_window, new_window;
+        old_window.remaining_records = new_window.remaining_records = 16;
+        old_window.vertex_count = new_window.vertex_count = req.vertex_count;
+        old_window.valid_mask = new_window.valid_mask = UINT16_MAX;
+        check(buildRecords<2>(req, layout, property, 0x1008,
+                  [&](uint64_t index) { return ids[index]; }, stream, limits,
+                  UnobservedConstruction{},
+                  [](uint64_t index) { return BuildScope{static_cast<uint8_t>(index % 2), UINT64_MAX}; }) ==
+                  Status::OK, "unbounded filtered next-only construction");
+        for (uint64_t index = 0; index < req.record_count; ++index) {
+            uint64_t gap = 1;
+            while ((index + gap) % 2 != index % 2 ||
+                   (0x1008 + ids[(index + gap) % 16] * 8) / 64 != (0x1008 + ids[index] * 8) / 64)
+                ++gap;
+            const State old_state = index + gap < 16 ? State::FINITE : State::WRAP;
+            check(encodeRecord(layout, ids[index], gap, old_state, old_window.words[index]) ==
+                  Status::OK, "reference cyclic token");
+            new_window.words[index] = stream.word(index);
+            for (bool has_next : {false, true}) {
+                Prediction old_prediction, new_prediction;
+                check(makePrediction(layout, old_window.words[index], index + 1, has_next,
+                          old_prediction, TraversalMode::ORDERED_FILTERED) == Status::OK &&
+                      makePrediction(layout, new_window.words[index], index + 1, has_next,
+                          new_prediction, TraversalMode::ORDERED_FILTERED) == Status::OK &&
+                      old_prediction.state == new_prediction.state &&
+                      old_prediction.deadline == new_prediction.deadline &&
+                      old_prediction.normalized_record == new_prediction.normalized_record,
+                      "discarding filtered wrap construction preserves delivered predictions");
+            }
+        }
+        PrefetchTarget old_target, new_target;
+        check(selectWindowTarget(layout, old_window, property, 0x1008, old_target) == Status::OK &&
+              selectWindowTarget(layout, new_window, property, 0x1008, new_target) == Status::OK &&
+              old_target.valid == new_target.valid && old_target.lead == new_target.lead &&
+              old_target.destination == new_target.destination,
+              "next-only construction preserves filtered record-window target selection");
+    }
+    req = requirements(uint64_t{UINT32_MAX} + 1);
+    req.record_count = 3;
+    Layout layout;
+    RecordStream stream;
+    BuildLimits limits;
+    limits.maximum_auxiliary_bytes = 4096;
+    uint64_t reads = 0;
+    check(selectLayout(req, layout) == Status::OK &&
+          buildRecords<2>(req, layout, property, 0,
+              [&](uint64_t index) { ++reads; return index == 1 ? uint64_t{UINT32_MAX} : 0; },
+              stream, limits, UnobservedConstruction{},
+              [](uint64_t index) { return BuildScope{static_cast<uint8_t>(index % 2), UINT64_MAX}; }) ==
+              Status::OK && reads == 3 && stream.stats.property_lines == 2 &&
+          stream.stats.auxiliary_peak_bytes <= limits.maximum_auxiliary_bytes,
+          "sparse high-VID domains retain a bounded next-only hash representation");
+}
+
 void testTypedPropertiesAndFilteredPasses() {
     using namespace ecg_record;
     PropertyDescriptor property;
@@ -851,6 +942,7 @@ int main() {
     testWindowCaptureReadinessAndPinning();
     testNativeConfigurationAndBinding();
     testSharedRuntimeStateAndQueue();
+    testFilteredConstructionBudgetAndSemantics();
     testTypedPropertiesAndFilteredPasses();
     testFilteredReceiverInvalidations();
     testOlderInvalidationPreservesNewerUse();

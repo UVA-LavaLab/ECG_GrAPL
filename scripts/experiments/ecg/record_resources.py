@@ -214,10 +214,12 @@ def plan_algorithm_resources(
     # TC's oriented target IDs are known only after its charged orientation.
     width_upper = int(layout.get("record_bytes", requested_bytes or 8))
     carrier = carrier_records * width_upper if records else 0
-    lines = min(carrier_records, (graph.vertices * property_bytes + 63) // 64)
-    slots = 1 << max(0, (2 * lines - 1).bit_length())
+    lines = (graph.vertices * property_bytes + 63) // 64
+    slots = 1 << max(0, (2 * min(carrier_records, lines) - 1).bit_length())
     partitions = {"sssp": 2, "cc": 3}.get(algorithm, 1) if preprocessing == "traversal" else 1
-    scratch = (8 + 16 * partitions) * slots if records else 0
+    filtered = algorithm not in ("spmv", "tc")
+    scratch = (min(lines * 8 * partitions, slots * (8 + 8 * partitions)) if filtered
+               else slots * (8 + 16 * partitions)) if records else 0
     if carrier > carrier_limit or scratch > auxiliary_limit or arrays + carrier + scratch > workspace_limit:
         raise RecordResourceError("algorithm arrays/carrier/construction exceed their explicit limits")
     directions = 2 if graph.directed else 1

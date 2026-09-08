@@ -32,12 +32,18 @@ metadata, cost or accuracy. See [Related Work](Related-Work#direct-lineage-and-g
 
 ### What the current implementation does
 
-The current builder already performs graph-only preprocessing:
+The original builder performs graph-only preprocessing:
 
 1. Scan the chosen adjacency stream forward to find each target property
    cache line's first occurrence.
 2. Scan backward to find its next occurrence, or its wraparound distance.
 3. Quantize that distance and pack the token beside the vertex ID.
+
+Dense traversals retain this cyclic construction. Filtered traversals now
+use one reverse scan and next positions only: WRAP already normalizes to
+UNKNOWN in their receiver and window selector, so its first-occurrence data
+is unnecessary. Direct line indexing is used when smaller than a bounded
+next-only hash table; sparse high-VID inputs retain the hashed alternative.
 
 The shared kernels also scan for the maximum encoded ID before selecting the
 layout. Thus the two mask-construction scans are not the entire preparation
@@ -118,11 +124,11 @@ load from other, often value-dependent accesses to the same arrays.
 record width, cache victim rule or native token grammar. The default remains
 `csr`. The existing experiment runner admits this trial in cache_sim only.
 
-| Kernel | Implemented selection | Construction state per allocated hash slot |
+| Kernel | Implemented selection | Reference state |
 |---|---|---|
-| SSSP | Next same-line occurrence within the edge's light/heavy weight class for the declared delta. | One line key and two first/next pairs: 40 bytes rather than 24. |
-| CC | Separate first-neighbor, second-neighbor and remaining-edge occurrences. Runtime component skipping is still unknown. | One line key and three first/next pairs: 56 bytes rather than 24. |
-| BFS/BC | Retain same-row next-potential-use predictions; emit UNKNOWN instead of predicting another row or pass. | The original 24-byte slot; a bounded forward/reverse row cursor reads CSR offsets. |
+| SSSP | Next same-line occurrence within the edge's light/heavy weight class for the declared delta. | Two next positions per line: 16 bytes with direct indexing. |
+| CC | Separate first-neighbor, second-neighbor and remaining-edge occurrences. Runtime component skipping is still unknown. | Three next positions per line: 24 bytes with direct indexing. |
+| BFS/BC | Retain same-row next-potential-use predictions; emit UNKNOWN instead of predicting another row or pass. | One next position per line: eight bytes with direct indexing; a reverse row cursor reads CSR offsets. |
 | SpMV/TC | Preserve the current dense scalar-property analysis as a control. | Unchanged; TC list bodies still have no annotation. |
 
 Distances remain in original structural-index units, not a compressed
@@ -132,12 +138,12 @@ Filtered WRAP handling, ordinary-access invalidation and LRU-neutral UNKNOWN
 are unchanged. DO BFS applies the row restriction only to its TD depth loads;
 BU still uses ordinary bitmap/CSR accesses.
 
-There is no per-edge class array or runtime reconstruction. SSSP rereads the
+There is no per-edge class array or runtime reconstruction. SSSP reads the
 already-declared weights during construction; row-based analyses walk existing
-CSR offsets in both directions. These accesses, carrier writes and larger
-phase-slot allocations are charged and bounded by the existing limits.
-Empty hash slots occupy the same space; allocation remains a power of two
-covering at least twice the maximum number of distinct target lines.
+CSR offsets in reverse. These accesses, carrier writes and phase-state
+allocations are charged and bounded by the existing limits.
+The sparse alternative adds an eight-byte key per allocated hash slot and
+uses a power-of-two capacity covering twice the maximum distinct line count.
 The work is expected `O(E)` for weight classes and `O(V+E)` for row-based
 analysis. Compatible immutable carriers are still reused.
 
@@ -206,7 +212,7 @@ without supplying a better estimate of frontier-conditioned reuse.
 This does not prove that every graph-only BFS preprocessing method must fail.
 
 CC's static sampling phases and SSSP's weight classes provide useful additional
-eligibility information, but the gains are small. Scratch allocation grows
+eligibility information, but the gains are small. In this two-pass run, scratch allocation grows
 from 12 to 28 MiB for CC and 24 to 40 MiB for SSSP. Their setup transfers rise
 from 92,208,218 to 116,898,772 and from 68,220,928 to 87,277,643, respectively.
 BFS/BC retain 12 MiB scratch but add charged CSR-offset scans.
@@ -218,6 +224,12 @@ the current masks on this workload. Keep `csr` as the default. The experiment
 supports small phase-specific replacement gains, not a broad cache win,
 measured amortization across future queries, or a CPU-speedup claim.
 BU bitmap and TC list-body annotations remain unimplemented.
+
+The next-only construction change preserves the effective filtered predictions
+and window targets, but changes raw terminal WRAP tokens to UNKNOWN.
+Its Patents scratch bounds are 5.4 MiB for scoped CC and 7.2 MiB for scoped
+SSSP, versus 28/40 MiB above. These are storage bounds, not refreshed traffic
+results; the measured table remains tied to `530d3774`.
 
 ## Semantics and cache decisions must stay honest
 

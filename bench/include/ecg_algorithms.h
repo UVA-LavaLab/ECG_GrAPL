@@ -393,7 +393,7 @@ class Engine {
         for (const auto& prepared : carriers_) {
             if (prepared->columns == graph.columns && prepared->records == graph.records &&
                 prepared->vertices == graph.vertices && prepared->stride == sizeof(T) &&
-                prepared->line_offset == base % 64) {
+                prepared->line_offset == base % 64 && prepared->mode == mode) {
                 carrier = prepared.get();
                 break;
             }
@@ -405,6 +405,7 @@ class Engine {
             prepared->vertices = graph.vertices;
             prepared->stride = sizeof(T);
             prepared->line_offset = base % 64;
+            prepared->mode = mode;
             ecg_record::Requirements requirements;
             requirements.vertex_count = graph.vertices;
             requirements.record_count = graph.records;
@@ -442,8 +443,9 @@ class Engine {
                     return {static_cast<uint8_t>(weight > options.delta), UINT64_MAX};
                 }
                 if (!row_ready) {
-                    first = graph.offset(*this, 0, MemoryKind::CONSTRUCTION, false);
-                    last = graph.offset(*this, 1, MemoryKind::CONSTRUCTION, false);
+                    row = index == 0 ? 0 : graph.vertices - 1;
+                    first = graph.offset(*this, row, MemoryKind::CONSTRUCTION, false);
+                    last = graph.offset(*this, row + 1, MemoryKind::CONSTRUCTION, false);
                     row_ready = true;
                 }
                 while (index >= last) {
@@ -627,6 +629,7 @@ class Engine {
     struct Carrier {
         const void* columns = nullptr;
         uint64_t vertices = 0, records = 0, stride = 0, line_offset = 0;
+        ecg_record::TraversalMode mode = ecg_record::TraversalMode::DENSE_EXACT;
         ecg_record::RecordStream stream;
     };
     Backend& backend_;

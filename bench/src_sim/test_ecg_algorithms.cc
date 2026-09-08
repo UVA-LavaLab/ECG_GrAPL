@@ -219,8 +219,8 @@ void testTraversalPreprocessing() {
         InspectRecordsBackend split;
         const auto actual = ecg_algorithm::run(weighted.view(true), options, split);
         check(split.records[0].distance == 2 && split.records[1].distance == 2 &&
-              split.records[2].distance == 2 && split.records[4].state == State::WRAP &&
-              split.records[5].state == State::WRAP,
+              split.records[2].distance == 2 && split.records[4].state == State::UNKNOWN &&
+              split.records[5].state == State::UNKNOWN,
               "SSSP predicts the next same-line reference within its static weight class");
         check(actual.result_digest == baseline.result_digest &&
               actual.work_digest == baseline.work_digest &&
@@ -228,8 +228,8 @@ void testTraversalPreprocessing() {
               actual.carrier_bytes == baseline.carrier_bytes &&
               actual.construction_auxiliary_peak_bytes > baseline.construction_auxiliary_peak_bytes,
               "phase partitioning preserves work/carrier width and charges its larger scratch");
-        check(split.stats.finite_records == 4 && split.stats.wrap_records == 2 &&
-              split.stats.unknown_records == 0 && split.stats.property_lines == 1,
+        check(split.stats.finite_records == 4 && split.stats.wrap_records == 0 &&
+              split.stats.unknown_records == 2 && split.stats.property_lines == 1,
               "phase slots do not falsely count one physical property line twice");
         options.algorithm = Algorithm::CC;
         InspectRecordsBackend rounds;
@@ -261,7 +261,7 @@ void testTraversalPreprocessing() {
     const auto id = [](uint64_t index) { return 8 + index % 3; };
     ecg_record::RecordStream stream;
     ecg_record::BuildLimits limits;
-    limits.maximum_auxiliary_bytes = 24 * 8;
+    limits.maximum_auxiliary_bytes = 63;
     check(ecg_record::buildRecords<2>(requirements, layout, property, 0x1000, id,
               stream, limits) == ecg_record::Status::RESOURCE_LIMIT && stream.size() == 0,
           "phase-slot allocation is rejected before exceeding its construction budget");
