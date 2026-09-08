@@ -137,6 +137,13 @@ property queues, one lookup-pipeline input per cycle, dedicated L1/L2/LLC
 presence ports, the default 12-cycle lookup, the 8-cycle prefetch pipeline,
 and final drain are charged.
 
+The in-band mask is not an additional property-side demand: a 4-byte encoded
+record replaces the 4-byte neighbor ID. Construction is separate setup work.
+Lookahead acquisition and data prefetches can create additional traffic.
+Weighted inputs currently retain stride-8 ID/weight source records alongside
+the encoded ID stream; their cache-line overfetch is a layout cost, not free
+mask storage, and must not be called bandwidth-neutral.
+
 Property reads enter at the LLC boundary using `Request::PREFETCH` and an
 acknowledged `ReadReq`; cache-owned `HardPFReq` is not used. Issue and
 completion both suppress private/LLC duplicates. Admission examines the actual

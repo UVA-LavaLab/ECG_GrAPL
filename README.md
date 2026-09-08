@@ -156,7 +156,7 @@ comparison at the primary 8 MiB capacity before the lab handoff.
 Construction, target-memory, wall-time, and process-tree RSS limits stay explicit.
 See [reproduction](wiki/Reproduction.md#4-run-current-cache-experiments).
 
-[Current PageRank results](wiki/Evaluation-Methodology.md#5-current-pagerank-results)
+[Pre-correction PageRank evidence](wiki/Evaluation-Methodology.md#5-pre-correction-pagerank-evidence)
 cover the six full core graphs and Twitter, with both wins and regressions
 retained. They are functional cache/traffic results, not CPU speedups.
 

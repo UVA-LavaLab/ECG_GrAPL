@@ -23,21 +23,21 @@ The legacy algorithm executables are not substitutes for these current paths.
 
 ### Per-algorithm performance
 
-| Algorithm | Current implementation | 8 MiB Patents kernel ECG/LRU | 1 KiB diagnostic total ECG/LRU | Native CPU speedup |
+| Algorithm | Current implementation | 8 MiB Patents kernel R/LRU | 8 MiB Patents kernel RP/LRU | Native CPU speedup |
 |---|---|---:|---:|---|
-| PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.5191 | Not measured | Not reported for final workloads |
-| SpMV (CSR) | All three (bounded) | 0.5091 | 2.7754 | Not measured |
-| BFS (`bfs`) | All three (bounded) | 1.4033 | 3.0956 | Not measured |
-| SSSP (`sssp`) | All three (bounded) | 1.7235 | 2.2321 | Not measured |
-| CC (`cc`) | All three (bounded) | Not measured | 2.5008 | Not measured |
-| BC (`bc`) | All three (bounded) | Not measured | 2.0792 | Not measured |
-| TC (`tc`) | All three (bounded) | Not measured | 2.3309 | Not measured |
+| PageRank (`pr`) | cache_sim, gem5 RV64 O3, Sniper | 0.6844 | 0.6844 | Not reported for final workloads |
+| SpMV (CSR) | All three (bounded) | Needs refresh | Needs refresh | Not measured |
+| BFS (`bfs`) | All three (bounded) | 0.9776 | 1.1251 | Not measured |
+| SSSP (`sssp`) | All three (bounded) | Needs refresh | Needs refresh | Not measured |
+| CC (`cc`) | All three (bounded) | Not measured | Not measured | Not measured |
+| BC (`bc`) | All three (bounded) | Not measured | Not measured | Not measured |
+| TC (`tc`) | All three (bounded) | Not measured | Not measured | Not measured |
 
 Ratios are modeled off-chip traffic, **not CPU speedup**; lower is better. Patents uses 32 KiB L1D/256 KiB L2.
-PR/SpMV use two traversals and 14.40 MiB F32 arrays; their GRASP/LRU kernel ratios are 0.6446/0.6402.
-BFS/SSSP converge from source 0; SSSP uses declared synthetic weights 1-32 and delta 8. Both regress in the kernel.
-Including setup, BFS/SSSP totals are **2.1670/2.0173**, and SpMV is **1.1613** after two repeats; PR setup is unmeasured.
-The 1 KiB pressure512 totals include setup and are not comparable to the 8 MiB kernel column.
+R is replacement-only; RP adds prefetching. These focused rows use the corrected LRU-neutral selector:
+UNKNOWN no longer pins property data over other arrays, and old invalidations cannot erase newer state.
+BFS R has exactly the same 438,095,550 kernel demands as LRU; RP adds lookahead and 2,477,969 data prefetches.
+Earlier tables used categorical property protection; those archived measurements do not qualify the corrected selector.
 
 ### Algorithm and prediction contracts
 
@@ -172,11 +172,11 @@ Large cache_sim runs are independent functional evidence. Detailed final
 profiles require a freshly validated equivalence receipt and explicit
 `--final-stage`. A partial or generic completion marker is not authorization.
 
-## 5. Current PageRank results
+## 5. Pre-correction PageRank evidence
 
-These are current-model **functional cache/traffic measurements**, not a
-cross-algorithm or native-speedup claim. Final CPU timing cells remain
-unreported until their workload matrix is complete.
+The full-core/Twitter snapshots below predate the LRU-neutral selector repair.
+They remain provenance records, not performance evidence for the corrected policy.
+The focused current PR/BFS measurements are in the per-algorithm table above.
 
 ### Full core graphs
 

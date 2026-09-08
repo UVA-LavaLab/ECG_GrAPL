@@ -158,11 +158,11 @@ These are local runner/resource measurements, not simulated CPU execution times.
 The executable Twitter profile name is retained as an interface; its current
 measurements are reported as Twitter-scale evaluation.
 
-The matched run is `results/ecg_experiments/runs/matched_8mb_pr_spmv` at `36713a44`.
-SpMV reports `traffic_phases.setup/kernel`; their sum equals the unchanged total.
-Compare its kernel phase with PR's existing kernel-only window, not with SpMV's setup-inclusive total.
-The dynamic run is `dynamic_8mb_bfs_sssp` at `55e1a852`. Its weighted copy preserves graph order and IDs;
-the receipt records synthetic `1+(13*min(stored_u,stored_v)+7*max(stored_u,stored_v))%32` weights and input/output hashes.
+The earlier `matched_8mb_pr_spmv` and `dynamic_8mb_bfs_sssp` runs predate the LRU-neutral repair.
+Corrected focused rows are in `results/ecg_experiments/roi_matrix/pr_lru_neutral_policy`
+and `bfs_lru_neutral_policy`; their `.log.cmd` receipts preserve the exact commands.
+`traffic_phases.setup/kernel` close to the unchanged total; compare kernel-only scopes.
+Weighted-input receipts bind the topology-preserving synthetic 1-32 weight recipe and both file hashes.
 
 ```bash
 python3 -I scripts/experiments/ecg/flows/experiment_run.py \
@@ -186,7 +186,7 @@ planning estimate. Keep the 32 GiB guard and host headroom; a scheduler
 allocation must exceed that cap. Resource estimates are not allocation bounds.
 
 Current cache/traffic results are summarized in
-[Evaluation Methodology](Evaluation-Methodology#5-current-pagerank-results).
+[Evaluation Methodology](Evaluation-Methodology#5-pre-correction-pagerank-evidence).
 
 ## 5. Lab handoff and detailed execution
 
