@@ -11,15 +11,20 @@ struct AlgorithmTraffic {
     uint64_t memory_accesses = 0;
     uint64_t prefetch_fills = 0;
     uint64_t llc_writebacks = 0;
+    uint64_t llc_hits = 0, llc_misses = 0, llc_property_hits = 0, llc_property_misses = 0;
 
     uint64_t offchip() const { return memory_accesses + prefetch_fills + llc_writebacks; }
 
     AlgorithmTraffic since(const AlgorithmTraffic& before) const {
         if (total_accesses < before.total_accesses || memory_accesses < before.memory_accesses ||
-            prefetch_fills < before.prefetch_fills || llc_writebacks < before.llc_writebacks)
+            prefetch_fills < before.prefetch_fills || llc_writebacks < before.llc_writebacks ||
+            llc_hits < before.llc_hits || llc_misses < before.llc_misses ||
+            llc_property_hits < before.llc_property_hits || llc_property_misses < before.llc_property_misses)
             throw std::logic_error("algorithm phase counters were reset");
         return {total_accesses - before.total_accesses, memory_accesses - before.memory_accesses,
-                prefetch_fills - before.prefetch_fills, llc_writebacks - before.llc_writebacks};
+                prefetch_fills - before.prefetch_fills, llc_writebacks - before.llc_writebacks,
+                llc_hits - before.llc_hits, llc_misses - before.llc_misses,
+                llc_property_hits - before.llc_property_hits, llc_property_misses - before.llc_property_misses};
     }
 
     void write(std::ostream& output) const {
@@ -27,6 +32,9 @@ struct AlgorithmTraffic {
                << ",\"memory_accesses\":" << memory_accesses
                << ",\"prefetch_fills\":" << prefetch_fills
                << ",\"llc_writebacks\":" << llc_writebacks
+               << ",\"llc_hits\":" << llc_hits << ",\"llc_misses\":" << llc_misses
+               << ",\"llc_property_hits\":" << llc_property_hits
+               << ",\"llc_property_misses\":" << llc_property_misses
                << ",\"total_offchip_traffic\":" << offchip() << '}';
     }
 };
@@ -129,8 +137,10 @@ class AlgorithmBackend {
 
   private:
     AlgorithmTraffic traffic() const {
+        const auto& llc = cache_.getL3Stats();
         return {cache_.getTotalAccesses(), cache_.getMemoryAccesses(),
-                cache_.getPrefetchFills(), cache_.getWritebackTraffic()};
+                cache_.getPrefetchFills(), cache_.getWritebackTraffic(),
+                llc.hits.load(), llc.misses.load(), llc.prop_hits.load(), llc.prop_misses.load()};
     }
     void beginKernel() {
         if (!kernel_started_) {

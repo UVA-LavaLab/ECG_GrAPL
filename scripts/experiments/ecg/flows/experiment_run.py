@@ -751,6 +751,11 @@ def make_roi_job(
         )
     else:
         options = options_for(manifest, graph, graph_path, benchmark)
+    if "algorithm_record_preprocess" in settings:
+        preprocessing = str(settings["algorithm_record_preprocess"])
+        if not settings.get("current_algorithms") or preprocessing not in ("csr", "traversal"):
+            raise SystemExit("algorithm_record_preprocess requires a valid current-algorithm preprocessing mode")
+        options += " --record-preprocess " + preprocessing
     core_tag = str(settings.get("_core_tag", ""))
     scaling_series_id = sanitize(
         f"{settings['name']}_{graph_name}_{benchmark}")

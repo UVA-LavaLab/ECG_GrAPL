@@ -152,10 +152,105 @@ struct BoundGraphBackend : ecg_algorithm::PlainBackend {
                         const ecg_record::PropertyDescriptor&) { active = graph; }
 };
 
+struct InspectRecordsBackend : ecg_algorithm::PlainBackend {
+    std::vector<ecg_record::DecodedRecord> records;
+    ecg_record::BuildStats stats;
+    void bind(const ecg_record::NativeConfiguration& configuration,
+              const ecg_record::RecordStream& stream) {
+        ecg_algorithm::PlainBackend::bind(configuration, stream);
+        records.resize(stream.size());
+        for (std::size_t index = 0; index < stream.size(); ++index)
+            check(ecg_record::decodeRecord(stream.layout, stream.word(index), records[index]) ==
+                  ecg_record::Status::OK, "preprocessing emits valid records");
+        stats = stream.stats;
+    }
+};
+
+void testTraversalPreprocessing() {
+    using namespace ecg_algorithm;
+    using ecg_record::State;
+    const Fixture weighted(32, true, {
+        {0,8,1}, {0,9,3}, {0,10,1}, {1,8,3}, {1,9,1}, {1,10,3}});
+    const Fixture sampled(32, false, {
+        {0,8,1}, {0,9,1}, {0,10,1}, {1,8,1}, {1,9,1}, {1,10,1}});
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        Options options;
+        options.records = options.evidence = true;
+        options.record_bytes = width;
+        options.delta = 2;
+        options.algorithm = Algorithm::SSSP;
+        InspectRecordsBackend original;
+        const auto baseline = ecg_algorithm::run(weighted.view(true), options, original);
+        check(original.records[0].distance == 1 && original.records[0].state == State::FINITE,
+              "full CSR predicts the intervening opposite-weight-class reference");
+        options.traversal_preprocessing = true;
+        InspectRecordsBackend split;
+        const auto actual = ecg_algorithm::run(weighted.view(true), options, split);
+        check(split.records[0].distance == 2 && split.records[1].distance == 2 &&
+              split.records[2].distance == 2 && split.records[4].state == State::WRAP &&
+              split.records[5].state == State::WRAP,
+              "SSSP predicts the next same-line reference within its static weight class");
+        check(actual.result_digest == baseline.result_digest &&
+              actual.work_digest == baseline.work_digest &&
+              actual.position_digest == baseline.position_digest &&
+              actual.carrier_bytes == baseline.carrier_bytes &&
+              actual.construction_auxiliary_peak_bytes > baseline.construction_auxiliary_peak_bytes,
+              "phase partitioning preserves work/carrier width and charges its larger scratch");
+        check(split.stats.finite_records == 4 && split.stats.wrap_records == 2 &&
+              split.stats.unknown_records == 0 && split.stats.property_lines == 1,
+              "phase slots do not falsely count one physical property line twice");
+        options.algorithm = Algorithm::CC;
+        InspectRecordsBackend rounds;
+        ecg_algorithm::run(sampled.view(), options, rounds);
+        check(rounds.records[0].distance == 3 && rounds.records[1].distance == 3 &&
+              rounds.records[2].distance == 3,
+              "CC sample round zero, round one and remaining edges have separate next uses");
+        for (Algorithm algorithm : {Algorithm::BFS, Algorithm::BC}) {
+            options.algorithm = algorithm;
+            InspectRecordsBackend local;
+            ecg_algorithm::run(weighted.view(), options, local);
+            check(local.records[0].state == State::FINITE && local.records[0].distance == 1 &&
+                  local.records[2].state == State::UNKNOWN &&
+                  local.records[5].state == State::UNKNOWN &&
+                  local.stats.finite_records == 4 && local.stats.unknown_records == 2 &&
+                  local.stats.wrap_records == 0,
+                  "row-local preprocessing never claims another frontier row will execute");
+        }
+    }
+    ecg_record::Requirements requirements;
+    requirements.vertex_count = 32;
+    requirements.record_count = 6;
+    requirements.traversal_count = 1;
+    ecg_record::Layout layout;
+    check(ecg_record::selectLayout(requirements, layout) == ecg_record::Status::OK,
+          "partitioned fixture has a valid layout");
+    const ecg_record::PropertyDescriptor property{
+        ecg_record::PropertyKind::U64, 8, ecg_record::TraversalMode::ORDERED_FILTERED};
+    const auto id = [](uint64_t index) { return 8 + index % 3; };
+    ecg_record::RecordStream stream;
+    ecg_record::BuildLimits limits;
+    limits.maximum_auxiliary_bytes = 24 * 8;
+    check(ecg_record::buildRecords<2>(requirements, layout, property, 0x1000, id,
+              stream, limits) == ecg_record::Status::RESOURCE_LIMIT && stream.size() == 0,
+          "phase-slot allocation is rejected before exceeding its construction budget");
+    limits.maximum_auxiliary_bytes = 4096;
+    check(ecg_record::buildRecords<2>(requirements, layout, property, 0x1000, id,
+              stream, limits, ecg_record::UnobservedConstruction{},
+              [](uint64_t) { return ecg_record::BuildScope{2, UINT64_MAX}; }) ==
+              ecg_record::Status::INVALID_COUNTS && stream.size() == 0,
+          "an invalid static partition cannot publish a partial carrier");
+    check(ecg_record::buildRecords(requirements, layout, property, 0x1000, id,
+              stream, limits, ecg_record::UnobservedConstruction{},
+              [](uint64_t index) { return ecg_record::BuildScope{0, index}; }) ==
+              ecg_record::Status::INVALID_COUNTS && stream.size() == 0,
+          "an invalid row horizon cannot publish a partial carrier");
+}
+
 } // namespace
 
 int main() {
     using namespace ecg_algorithm;
+    testTraversalPreprocessing();
     const Fixture diamond(8, true, {
         {0,1,2}, {0,2,5}, {0,5,20}, {1,2,1}, {1,3,2},
         {2,3,1}, {2,4,4}, {3,4,1}, {4,5,3}, {6,7,1}});

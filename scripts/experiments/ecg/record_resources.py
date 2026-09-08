@@ -177,6 +177,7 @@ def plan_algorithm_resources(
     carrier_limit: int, auxiliary_limit: int, rss_mib: int,
     backend: str = "cache_sim", target_memory_bytes: int = 0,
     bfs_direction_optimizing: bool = False,
+    preprocessing: str = "csr",
 ) -> dict[str, int | str | bool | None]:
     coefficients = {"spmv": 8, "bfs": 12, "sssp": 25, "cc": 12, "bc": 40, "tc": 24}
     if algorithm not in coefficients or min(
@@ -184,6 +185,8 @@ def plan_algorithm_resources(
         raise RecordResourceError("invalid algorithm or resource limits")
     if requested_bytes not in (0, 4, 8) or not 0 <= minimum_mantissa_bits <= 61:
         raise RecordResourceError("invalid algorithm record layout request")
+    if preprocessing not in ("csr", "traversal"):
+        raise RecordResourceError("invalid algorithm preprocessing")
     if algorithm in ("cc", "tc") and (graph.directed or graph.records % 2):
         raise RecordResourceError("CC and TC require a simple undirected input")
     if algorithm == "sssp" and graph.minimum_weight is not None and graph.minimum_weight < 0:
@@ -213,7 +216,8 @@ def plan_algorithm_resources(
     carrier = carrier_records * width_upper if records else 0
     lines = min(carrier_records, (graph.vertices * property_bytes + 63) // 64)
     slots = 1 << max(0, (2 * lines - 1).bit_length())
-    scratch = 24 * slots if records else 0
+    partitions = {"sssp": 2, "cc": 3}.get(algorithm, 1) if preprocessing == "traversal" else 1
+    scratch = (8 + 16 * partitions) * slots if records else 0
     if carrier > carrier_limit or scratch > auxiliary_limit or arrays + carrier + scratch > workspace_limit:
         raise RecordResourceError("algorithm arrays/carrier/construction exceed their explicit limits")
     directions = 2 if graph.directed else 1
@@ -232,6 +236,7 @@ def plan_algorithm_resources(
         "algorithm": algorithm, "carrier_records_upper": carrier_records,
         "carrier_payload_bytes_upper": carrier, "array_bytes": arrays,
         "construction_auxiliary_bytes_upper": scratch, "graph_loader_bytes_upper": graph_peak,
+        "record_preprocess": preprocessing, "construction_partitions": partitions,
         "workspace_limit_bytes": workspace_limit, "planned_host_bytes": host,
         "planned_target_bytes": planned, "rss_limit_mib": rss_mib,
         "memory_plan": "algorithm-conservative-reservation",

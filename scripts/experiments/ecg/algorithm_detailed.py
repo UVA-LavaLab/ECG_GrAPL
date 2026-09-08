@@ -205,6 +205,7 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
                 "unsupported detailed algorithm policy")
         options = algorithms.parse_options(args.options)
         require(options.bfs_direction == "td", "direction-optimized BFS is currently cache_sim-only")
+        require(options.record_preprocess == "csr", "traversal preprocessing is currently cache_sim-only")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
         require(graph.vertices <= 4096 and graph.records <= 65536, "detailed algorithm qualification is bounded")
         plan = plan_algorithm_resources(

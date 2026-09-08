@@ -110,6 +110,47 @@ def test_direction_optimized_cli_uses_real_incoming_csr(tmp_path):
         assert work["levels"] == work["bfs_td_levels"] + work["bfs_bu_levels"]
 
 
+@pytest.mark.parametrize("width", [4, 8])
+@pytest.mark.parametrize("mode", ["transport", "replacement", "prefetch", "replacement-prefetch"])
+def test_traversal_preprocessing_preserves_algorithm_work(tmp_path, width, mode):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    config = json.loads((ROOT / "scripts/experiments/ecg/configs/algorithm_equivalence.json").read_text())
+    for filename, (data, _) in algorithm_outputs().items():
+        (tmp_path / filename).write_bytes(data)
+    for algorithm, scope in (("bfs", "row-local"), ("sssp", "light-heavy"),
+                             ("cc", "sample-rounds"), ("bc", "row-local")):
+        results = []
+        for preprocessing in ("csr", "traversal"):
+            output = tmp_path / f"{algorithm}-{preprocessing}.json"
+            ran = subprocess.run([
+                str(binary), "--algorithm", algorithm,
+                "--graph", str(tmp_path / config["references"][algorithm]["graph"]),
+                "--delta", "2", "--mode", mode, "--record-bytes", str(width),
+                "--record-preprocess", preprocessing, "--values", "--evidence",
+                "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256",
+                "--l2-ways", "2", "--llc-bytes", "512", "--llc-ways", "2",
+                "--output", str(output),
+            ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+                capture_output=True, text=True, timeout=20, check=False)
+            assert ran.returncode == 0, ran.stdout + ran.stderr
+            payload = json.loads(output.read_text())
+            from scripts.experiments.ecg.algorithm_matrix import validate_traffic_phases
+            counters = validate_traffic_phases(payload)
+            assert "kernel_llc_property_misses" in counters
+            work = payload["workload"]
+            assert work["record_preprocess"] == preprocessing
+            assert work["record_reuse_scope"] == ("full-csr" if preprocessing == "csr" else scope)
+            results.append(work)
+        for field in ("result_digest", "work_trace_digest", "position_trace_digest",
+                      "actual_records", "passes", "structural_positions", "skipped_positions",
+                      "values_u32", "values_u64", "values_f32", "carrier_allocation_bytes"):
+            assert results[0][field] == results[1][field], (algorithm, field)
+        assert results[0]["record_trace_digest"] != results[1]["record_trace_digest"], algorithm
+
+
 def test_checked_algorithm_graph_reader(tmp_path):
     binary = tmp_path / "reader"
     built = subprocess.run([
@@ -162,6 +203,37 @@ def test_algorithm_resource_plans_cover_auxiliary_work():
         plan_algorithm_resources(graph, algorithm="tc", **{**options, "workspace_limit": 4096})
     with pytest.raises(RecordResourceError, match="RSS budget"):
         plan_algorithm_resources(graph, algorithm="bfs", **{**options, "rss_mib": 64})
+    for algorithm, slot_bytes in (("sssp", 40), ("cc", 56), ("bfs", 24), ("bc", 24)):
+        original = plan_algorithm_resources(graph, algorithm=algorithm, **options)
+        specialized = plan_algorithm_resources(graph, algorithm=algorithm, preprocessing="traversal", **options)
+        assert specialized["construction_auxiliary_bytes_upper"] == (
+            original["construction_auxiliary_bytes_upper"] // 24 * slot_bytes)
+        assert specialized["carrier_payload_bytes_upper"] == original["carrier_payload_bytes_upper"]
+    with pytest.raises(RecordResourceError, match="preprocessing"):
+        plan_algorithm_resources(graph, algorithm="bfs", preprocessing="oracle", **options)
+
+
+def test_preprocessing_profile_has_matched_serial_controls(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.algorithm_matrix import parse_options
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    args = experiment_run.parse_args(["--profile", "ecg_preprocessing_8mb_cache", "--list"])
+    jobs = experiment_run.expand_jobs(args, manifest, tmp_path)
+    assert len(jobs) == 8
+    cells = 0
+    for job in jobs:
+        command = job.command
+        options = parse_options(command[command.index("--options") + 1])
+        assert options.bfs_direction == "td"
+        expected = ["ECG:transport", "ECG:replacement"]
+        if options.record_preprocess == "csr":
+            expected.insert(0, "LRU")
+        assert job.metadata["policies"] == expected
+        cells += len(expected)
+        assert job.metadata["benchmark"] in ("bfs", "sssp", "cc", "bc")
+        assert command[command.index("--l3-sizes") + 1] == "8MB"
+        assert command[command.index("--cache-sim-omp-threads") + 1] == "1"
+    assert cells == 20
 
 
 def test_algorithm_profiles_and_forged_work_are_rejected(tmp_path):
@@ -208,7 +280,9 @@ def test_algorithm_profiles_and_forged_work_are_rejected(tmp_path):
                     minimum_mantissa_bits=0, evidence=True, llc_sets=4)
     algorithm_matrix.validate_payload(payload, ran.stdout + ran.stderr, **settings)
     for key, value in (("skipped_positions", 0), ("weighted", 0), ("record_bytes", 8),
-                       ("variant", "legacy-sssp"), ("prediction_semantics", "dense-actual-designated-read")):
+                       ("variant", "legacy-sssp"), ("prediction_semantics", "dense-actual-designated-read"),
+                       ("record_preprocess", "traversal"), ("record_reuse_scope", "row-local"),
+                       ("constructed_unknown_records", 1 << 32)):
         forged = copy.deepcopy(payload)
         forged["workload"][key] = value
         with pytest.raises(RecordReceiptError):
@@ -276,6 +350,21 @@ def test_detailed_algorithm_commands_bind_the_current_guest_and_geometry(tmp_pat
     for name, key in (("GEM5_GRAPHBREW_CTX", "context"), ("GEM5_POPT_MATRIX", "popt_matrix"),
                       ("GEM5_GRAPHBREW_OUT_EDGES", "out_edges"), ("GEM5_GRAPHBREW_IN_EDGES", "in_edges")):
         assert environment.get(name) == str(paths[key]), "all startup-cleanup paths must be cell-local"
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_detailed_preprocessing_is_rejected_before_loading_graph(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--current-algorithms", "--ecg-equivalence", "--benchmark", "sssp",
+        "--options", f"--graph {tmp_path / 'not-read.wsg'} --record-preprocess traversal",
+        "--prefetcher", "none", "--flowthrough", "off",
+    ])
+    services = SimpleNamespace(parse_size_bytes=roi_matrix.parse_size_bytes)
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "8MB", backend, services)
+    assert rows[0]["status"] == "error"
+    assert rows[0]["error"] == "traversal preprocessing is currently cache_sim-only"
 
 
 def test_rv64_sideband_publication_uses_supported_atomic_syscall(tmp_path):
@@ -399,6 +488,17 @@ def test_setup_and_kernel_traffic_must_close():
     broken = copy.deepcopy(payload)
     broken["traffic_phases"]["cache_state_preserved"] = False
     with pytest.raises(RecordReceiptError, match="nonintrusive"):
+        validate_traffic_phases(broken)
+    for key, total, before, after in (
+            ("llc_hits", "hits", 9, 100), ("llc_misses", "misses", 20, 30),
+            ("llc_property_hits", "prop_hits", 5, 80), ("llc_property_misses", "prop_misses", 12, 18)):
+        setup[key], kernel[key] = before, after
+        payload["metrics"].setdefault("L3", {})[total] = before + after
+    assert validate_traffic_phases(payload)["kernel_llc_property_misses"] == 18
+    broken = copy.deepcopy(payload)
+    broken["traffic_phases"]["kernel"]["llc_property_misses"] = 31
+    broken["metrics"]["L3"]["prop_misses"] = 43
+    with pytest.raises(RecordReceiptError, match="property LLC"):
         validate_traffic_phases(broken)
 
 

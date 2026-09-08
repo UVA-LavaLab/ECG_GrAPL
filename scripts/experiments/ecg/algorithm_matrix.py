@@ -50,6 +50,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--delta", type=int, default=8)
     parser.add_argument("--max-passes", type=int, default=1000000)
+    parser.add_argument("--record-preprocess", choices=("csr", "traversal"), default="csr")
     parser.add_argument("--bfs-direction", choices=("td", "do"), default="td")
     parser.add_argument("--bfs-alpha", type=int, default=15)
     parser.add_argument("--bfs-beta", type=int, default=18)
@@ -96,6 +97,14 @@ def validate_payload(
             work.get("prediction_semantics") == specification["semantics"],
             "algorithm variant or prediction semantics mismatch")
     records = mode != "csr"
+    reuse_scope = ({"sssp": "light-heavy", "cc": "sample-rounds", "bfs": "row-local", "bc": "row-local"}
+                   .get(algorithm, "full-csr") if options.record_preprocess == "traversal" else "full-csr")
+    if not records:
+        reuse_scope = "none"
+    require(work.get("record_preprocess", "csr") == options.record_preprocess and
+            (("record_preprocess" not in work and options.record_preprocess == "csr") or
+             work.get("record_reuse_scope") == reuse_scope),
+            "algorithm preprocessing or reference-scope mismatch")
     require(work.get("carrier") == ("record" if records else "csr") and
             _integer(work, "weighted") == int(graph.weighted) and
             _integer(work, "evidence") == int(evidence) and
@@ -152,6 +161,13 @@ def validate_payload(
         require(_integer(work, "carrier_allocation_bytes") == carrier_count * layout["record_bytes"] and
                 _integer(work, "construction_read_bytes") > 0 and _integer(work, "construction_write_bytes") > 0,
                 "missing charged immutable carrier construction")
+        if "record_preprocess" in work:
+            require(sum(_integer(work, "constructed_" + state + "_records") for state in
+                        ("finite", "wrap", "unknown")) == carrier_count,
+                    "constructed record states do not cover the carrier")
+            if reuse_scope == "row-local":
+                require(_integer(work, "constructed_wrap_records") == 0,
+                        "row-local preprocessing incorrectly predicts another row/pass")
         runtime = receipt(log, {"cache_sim": "ECG-RECORD-FUNCTIONAL",
                                "gem5": "ECG-RECORD-NATIVE", "sniper": "SNIPER-ECG-RECORD"}[backend])
         if backend == "gem5":
@@ -235,6 +251,19 @@ def validate_traffic_phases(payload: dict[str, Any]) -> dict[str, int]:
     for phase in ("setup", "kernel"):
         require(result[phase + "_total_offchip_traffic"] == sum(result[phase + "_" + key] for key in
                 ("memory_accesses", "prefetch_fills", "llc_writebacks")), f"invalid {phase} traffic sum")
+    llc_fields = {"llc_hits": "hits", "llc_misses": "misses",
+                  "llc_property_hits": "prop_hits", "llc_property_misses": "prop_misses"}
+    if any(key in phases[phase] for key in llc_fields for phase in ("setup", "kernel")):
+        require(isinstance(metrics.get("L3"), dict), "missing LLC phase totals")
+        for key, total_key in llc_fields.items():
+            setup, kernel = _integer(phases["setup"], key), _integer(phases["kernel"], key)
+            require(setup + kernel == _integer(metrics["L3"], total_key),
+                    f"setup/kernel LLC counters do not close: {key}")
+            result["setup_" + key], result["kernel_" + key] = setup, kernel
+        for phase in ("setup", "kernel"):
+            for kind in ("hits", "misses"):
+                require(result[phase + "_llc_property_" + kind] <= result[phase + "_llc_" + kind],
+                        "property LLC counters exceed all-data counters")
     return result
 
 
@@ -272,7 +301,8 @@ def run_cache_cell(
             traversals=options.repeat, sources=len(options.source_list) or 1,
             workspace_limit=args.algorithm_workspace_bytes,
             carrier_limit=args.ecg_record_max_carrier_bytes, auxiliary_limit=args.ecg_record_max_auxiliary_bytes,
-            rss_mib=args.cache_record_rss_mib, bfs_direction_optimizing=options.bfs_direction == "do")
+            rss_mib=args.cache_record_rss_mib, bfs_direction_optimizing=options.bfs_direction == "do",
+            preprocessing=options.record_preprocess)
         binary = ROOT / "bench/bin_sim/algorithms"
         label = f"cache_sim_{args.benchmark}_{spec.safe_label}_L3{parse_size_bytes(l3_size)}"
         data_path = out_dir / "cache_sim" / f"{label}.json"
@@ -282,6 +312,7 @@ def run_cache_cell(
             str(binary), "--algorithm", args.benchmark, "--graph", str(options.graph),
             "--source", str(options.source), "--repeat", str(options.repeat), "--delta", str(options.delta),
             "--max-passes", str(options.max_passes), "--mode", mode, "--policy", policy,
+            "--record-preprocess", options.record_preprocess,
             "--record-bytes", str(args.ecg_record_bytes),
             "--minimum-mantissa-bits", str(args.ecg_record_minimum_mantissa_bits),
             "--graph-bytes", str(plan["graph_loader_bytes_upper"]),

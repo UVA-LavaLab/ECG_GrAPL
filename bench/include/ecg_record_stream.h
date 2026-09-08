@@ -1,6 +1,7 @@
 #ifndef GRAPHBREW_ECG_RECORD_STREAM_H
 #define GRAPHBREW_ECG_RECORD_STREAM_H
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -25,6 +26,7 @@ struct BuildStats {
     uint64_t carrier_allocation_bytes = 0;
     uint64_t auxiliary_peak_bytes = 0;
     uint64_t property_lines = 0;
+    uint64_t finite_records = 0, wrap_records = 0, unknown_records = 0;
 };
 
 struct RecordStream {
@@ -224,12 +226,24 @@ struct UnobservedConstruction {
     void operator()(const void*, uint64_t, bool) const {}
 };
 
-template<typename DestinationAt, typename Observe = UnobservedConstruction>
+struct BuildScope {
+    uint8_t partition = 0;
+    uint64_t end = UINT64_MAX;
+};
+
+struct FullBuildScope {
+    BuildScope operator()(uint64_t) const { return {}; }
+};
+
+template<std::size_t Partitions = 1, typename DestinationAt,
+         typename Observe = UnobservedConstruction, typename ScopeAt = FullBuildScope>
 Status buildRecords(
         const Requirements& requirements, const Layout& layout,
         const PropertyDescriptor& property, uint64_t property_base,
         DestinationAt destination_at, RecordStream& output,
-        const BuildLimits& limits = BuildLimits{}, Observe observe = Observe{}) {
+        const BuildLimits& limits = BuildLimits{}, Observe observe = Observe{},
+        ScopeAt scope_at = ScopeAt{}) {
+    static_assert(Partitions > 0 && Partitions <= 64, "bounded static reference partitions");
     output = RecordStream{};
     const Status configuration = validateConfiguration(requirements, layout);
     if (configuration != Status::OK)
@@ -243,8 +257,11 @@ Status buildRecords(
         return status;
     struct Slot {
         uint64_t key = UINT64_MAX;
-        uint64_t first = UINT64_MAX;
-        uint64_t next = UINT64_MAX;
+        std::array<uint64_t, Partitions> first, next;
+        Slot() {
+            first.fill(UINT64_MAX);
+            next.fill(UINT64_MAX);
+        }
     };
     const uint64_t maximum_lines = std::min(requirements.record_count,
         last / 64 - property_base / 64 + 1);
@@ -295,44 +312,81 @@ Status buildRecords(
     };
     const uint64_t maximum_id = requirements.max_vertex_id_known
         ? requirements.max_vertex_id : requirements.vertex_count - 1;
+    const auto valid_scope = [&](const BuildScope& scope, uint64_t position) {
+        return scope.partition < Partitions && (scope.end == UINT64_MAX ||
+            (scope.end > position && scope.end <= requirements.record_count));
+    };
     for (uint64_t position = 0; position < requirements.record_count; ++position) {
         const uint64_t id = destination_at(position);
         if (id > maximum_id || id >= requirements.vertex_count || id > lowMask(layout.id_bits) ||
             id > lowMask(unsigned(limits.source_id_bytes) * 8))
             return Status::INVALID_ID;
+        const BuildScope scope = scope_at(position);
+        if (!valid_scope(scope, position))
+            return Status::INVALID_COUNTS;
         Slot& slot = find(id);
-        if (slot.key == UINT64_MAX) {
+        const bool new_line = slot.key == UINT64_MAX;
+        if (new_line) {
             observe(&slot.key, sizeof(slot.key), true);
             slot.key = (property_base + id * property.stride_bytes) / 64;
-            observe(&slot.first, sizeof(slot.first), true);
-            slot.first = position;
             ++stream.stats.property_lines;
+        }
+        uint64_t& first = slot.first[scope.partition];
+        bool new_partition = new_line;
+        if constexpr (Partitions != 1) {
+            observe(&first, sizeof(first), false);
+            new_partition = first == UINT64_MAX;
+        }
+        if (new_partition) {
+            observe(&first, sizeof(first), true);
+            first = position;
         }
     }
     for (uint64_t position = requirements.record_count; position-- > 0;) {
         const uint64_t id = destination_at(position);
         if (id > maximum_id || id >= requirements.vertex_count || id > lowMask(layout.id_bits))
             return Status::INVALID_ID;
+        const BuildScope scope = scope_at(position);
+        if (!valid_scope(scope, position))
+            return Status::INVALID_COUNTS;
         Slot& slot = find(id);
         if (slot.key == UINT64_MAX)
             return Status::INVALID_RECORD;
-        observe(&slot.next, sizeof(slot.next), false);
-        const bool in_pass = slot.next != UINT64_MAX;
-        if (!in_pass)
-            observe(&slot.first, sizeof(slot.first), false);
-        const uint64_t distance = in_pass ? slot.next - position
-            : requirements.record_count - position + slot.first;
+        uint64_t& next = slot.next[scope.partition];
+        const uint64_t& first = slot.first[scope.partition];
+        if constexpr (Partitions != 1) {
+            observe(&first, sizeof(first), false);
+            if (first == UINT64_MAX)
+                return Status::INVALID_RECORD;
+        }
+        observe(&next, sizeof(next), false);
+        const bool in_scope = next != UINT64_MAX && next < scope.end;
+        State state = in_scope ? State::FINITE : State::UNKNOWN;
+        uint64_t distance = in_scope ? next - position : 0;
+        if (!in_scope && scope.end == UINT64_MAX) {
+            if constexpr (Partitions == 1)
+                observe(&first, sizeof(first), false);
+            if (first == UINT64_MAX)
+                return Status::INVALID_RECORD;
+            state = State::WRAP;
+            distance = requirements.record_count - position + first;
+        }
         uint64_t word = 0;
-        const Status encoded = encodeRecord(
-            layout, id, distance, in_pass ? State::FINITE : State::WRAP, word);
+        const Status encoded = encodeRecord(layout, id, distance, state, word);
         if (encoded != Status::OK)
             return encoded;
         observe(stream.data() + position * layout.record_bytes, layout.record_bytes, true);
         const Status stored = detail::storeWord(stream, position, word);
         if (stored != Status::OK)
             return stored;
-        observe(&slot.next, sizeof(slot.next), true);
-        slot.next = position;
+        observe(&next, sizeof(next), true);
+        next = position;
+        if (state == State::FINITE)
+            ++stream.stats.finite_records;
+        else if (state == State::WRAP)
+            ++stream.stats.wrap_records;
+        else
+            ++stream.stats.unknown_records;
     }
     output = std::move(stream);
     return Status::OK;

@@ -4449,6 +4449,7 @@ public:
 
     uint64_t getTotalAccesses() const { return total_accesses_; }
     uint64_t getMemoryAccesses() const { return memory_accesses_; }
+    const CacheStats& getL3Stats() const { return l3_->getStats(); }
     uint64_t getStructuralFlowThroughAccesses() const {
         return structural_flowthrough_accesses_;
     }

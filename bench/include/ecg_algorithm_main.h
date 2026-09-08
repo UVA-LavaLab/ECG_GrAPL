@@ -77,6 +77,10 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (bytes != 0 && bytes != 4 && bytes != 8)
                 throw std::invalid_argument("record-bytes-must-be-0-4-or-8");
             command.options.record_bytes = static_cast<uint8_t>(bytes);
+        } else if (argument == "--record-preprocess") {
+            if (value != "csr" && value != "traversal")
+                throw std::invalid_argument("record-preprocess-must-be-csr-or-traversal");
+            command.options.traversal_preprocessing = value == "traversal";
         } else if (argument == "--source") {
             const uint64_t source = unsignedOption(value);
             if (source > INT32_MAX)
@@ -152,7 +156,9 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
                 ? "sorted-direction-optimizing-td-records-bu-bitmap" : variant(result.algorithm))
            << "\",\"prediction_semantics\":\""
            << (exact ? "dense-actual-designated-read" : "next-potential-designated-read")
-           << "\",\"carrier\":\"" << (result.records ? "record" : "csr") << '"';
+           << "\",\"carrier\":\"" << (result.records ? "record" : "csr")
+           << "\",\"record_preprocess\":\"" << (options.traversal_preprocessing ? "traversal" : "csr")
+           << "\",\"record_reuse_scope\":\"" << recordReuseScope(options) << '"';
     const auto field = [&](const char* key, uint64_t value) { output << ",\"" << key << "\":" << value; };
     field("weighted", result.weighted);
     field("evidence", result.evidence);
@@ -174,6 +180,9 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
     field("construction_write_bytes", result.construction_writes);
     field("carrier_allocation_bytes", result.carrier_bytes);
     field("construction_auxiliary_peak_bytes", result.construction_auxiliary_peak_bytes);
+    field("constructed_finite_records", result.constructed_finite_records);
+    field("constructed_wrap_records", result.constructed_wrap_records);
+    field("constructed_unknown_records", result.constructed_unknown_records);
     field("workspace_peak_bytes", result.workspace_peak_bytes);
     field("source", options.source);
     field("source_count", options.sources.empty() ? 1 : options.sources.size());

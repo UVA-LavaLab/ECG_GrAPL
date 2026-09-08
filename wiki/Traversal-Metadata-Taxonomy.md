@@ -6,8 +6,9 @@ accessed data**, not just the algorithm name. A common delivery format need
 not force every phase to use the same prediction algorithm.
 
 This page analyzes the implemented kernels and identifies candidate
-preprocessing capabilities. It does not select new mask fields, implement a
-new predictor, or establish a performance improvement.
+preprocessing capabilities. The opt-in experiment below implements a bounded
+subset with the existing record grammar; bitmap/list-body coverage and new
+mask fields remain separate design questions.
 
 ## Preprocessing is allowed; algorithm replay is not
 
@@ -50,8 +51,9 @@ This is in-process preparation, not a persistent preprocessed artifact reused
 automatically across program launches. A changed traversal stream or line
 grouping can require another carrier; property value changes alone do not.
 
-For fixed PR/SpMV sweeps, the builder knows the designated property-reference
-order. For filtered BFS/SSSP/CC/BC passes, it knows only the next **potential
+With the default `--record-preprocess csr`, fixed PR/SpMV sweeps have a known
+designated property-reference order. For filtered BFS/SSSP/CC/BC passes, the
+builder knows only the next **potential
 designated read in full CSR order**. It does not know which later rows will
 execute. Improving preprocessing therefore means improving this analysis, not
 merely making the PR distance encoding more precise.
@@ -97,7 +99,7 @@ without assuming that every edge predicts a four-byte PR contribution.
 | Phase and lifetime validity | The executing algorithm already knows its current phase, direction, property binding and pass boundary. | Preprocessing must not turn an unknown future into a guaranteed deadline. Phase changes and ordinary accesses must invalidate or expire incompatible state. |
 | Explicit cost and reuse | Actual scan work, carrier bytes, temporary storage, retained input, binding work and compatible-carrier reuse. | No hidden preprocessing pass, side table, extra runtime graph fetch or metadata update stream is free. |
 
-The first concrete specialization opportunity is SSSP's static light/heavy
+The first concrete specialization is SSSP's static light/heavy
 predicate: it can remove references that cannot be governed in the current
 phase without solving SSSP first. That is an analysis opportunity, not a claim
 that it will improve caching. TD BFS instead needs a useful approximation of
@@ -109,6 +111,42 @@ bitmap lines and adjacency ranges, respectively. A better scan that still
 annotates only depth values or row headers would leave those accesses
 uncovered. CC and BC further require distinguishing the designated edge-driven
 load from other, often value-dependent accesses to the same arrays.
+
+## Opt-in preprocessing experiment
+
+`--record-preprocess traversal` changes reference selection, not the algorithm,
+record width, cache victim rule or native token grammar. The default remains
+`csr`. The existing experiment runner admits this trial in cache_sim only.
+
+| Kernel | Implemented selection | Construction state per allocated hash slot |
+|---|---|---|
+| SSSP | Next same-line occurrence within the edge's light/heavy weight class for the declared delta. | One line key and two first/next pairs: 40 bytes rather than 24. |
+| CC | Separate first-neighbor, second-neighbor and remaining-edge occurrences. Runtime component skipping is still unknown. | One line key and three first/next pairs: 56 bytes rather than 24. |
+| BFS/BC | Retain same-row next-potential-use predictions; emit UNKNOWN instead of predicting another row or pass. | The original 24-byte slot; a bounded forward/reverse row cursor reads CSR offsets. |
+| SpMV/TC | Preserve the current dense scalar-property analysis as a control. | Unchanged; TC list bodies still have no annotation. |
+
+Distances remain in original structural-index units, not a compressed
+phase-specific coordinate. A row-local candidate is still quantized upward;
+this changes candidate selection, not the runtime pass-expiry protocol.
+Filtered WRAP handling, ordinary-access invalidation and LRU-neutral UNKNOWN
+are unchanged. DO BFS applies the row restriction only to its TD depth loads;
+BU still uses ordinary bitmap/CSR accesses.
+
+There is no per-edge class array or runtime reconstruction. SSSP rereads the
+already-declared weights during construction; row-based analyses walk existing
+CSR offsets in both directions. These accesses, carrier writes and larger
+phase-slot allocations are charged and bounded by the existing limits.
+Empty hash slots occupy the same space; allocation remains a power of two
+covering at least twice the maximum number of distinct target lines.
+The work is expected `O(E)` for weight classes and `O(V+E)` for row-based
+analysis. Compatible immutable carriers are still reused.
+
+`ecg_preprocessing_8mb_cache` compares same-build full-Patents BFS/SSSP/CC/BC:
+current LRU/T/R versus specialized T/R, twenty serial cells at 8 MiB.
+New setup/kernel snapshots include LLC hits/misses and registered-property
+hits/misses, so property gains can be separated from other-data losses without
+mixing in changed construction traffic. The measurements do not claim a
+bitmap/list-body implementation or CPU speedup.
 
 ## Semantics and cache decisions must stay honest
 
@@ -149,20 +187,20 @@ amortization. Native runtime and hardware cost remain separate measurements.
 
 ## Code anchors
 
-These anchors describe the implementation before any new preprocessing
-specialization is selected.
+The shared kernel functions define the access patterns independently of the
+selected preprocessing mode.
 
 | Topic | Source |
 |---|---|
-| Current forward/reverse builders | `bench/include/ecg_record_stream.h:118-337`, `buildRecordsMapped` and typed `buildRecords` |
-| Carrier preparation and reuse | `bench/include/ecg_algorithms.h:345-443`, `Engine::bind` |
+| Current forward/reverse builders | `bench/include/ecg_record_stream.h`, `buildRecordsMapped` and scoped typed `buildRecords` |
+| Carrier preparation and reuse | `bench/include/ecg_algorithms.h`, `Engine::bind` |
 | PR fixed pull loop | `bench/src_sim/pr.cc:193-231`, `PageRankPullGSFixed_Sim` |
-| SpMV | `bench/include/ecg_algorithms.h:656-681`, `spmv` |
-| TD and direction-optimizing BFS | `bench/include/ecg_algorithms.h:685-840`, TD helper, `bfsDirectionOptimizing`, `bfs` |
-| SSSP | `bench/include/ecg_algorithms.h:843-985`, `BucketHeap`, `sssp` |
-| CC | `bench/include/ecg_algorithms.h:988-1064`, `root`, `link`, `cc` |
-| BC | `bench/include/ecg_algorithms.h:1067-1167`, `bc` |
-| TC | `bench/include/ecg_algorithms.h:1170-1241`, `tc` |
+| SpMV | `bench/include/ecg_algorithms.h`, `spmv` |
+| TD and direction-optimizing BFS | `bench/include/ecg_algorithms.h`, `bfsTopDownLevel`, `bfsDirectionOptimizing`, `bfs` |
+| SSSP | `bench/include/ecg_algorithms.h`, `BucketHeap`, `sssp` |
+| CC | `bench/include/ecg_algorithms.h`, `root`, `link`, `cc` |
+| BC | `bench/include/ecg_algorithms.h`, `bc` |
+| TC | `bench/include/ecg_algorithms.h`, `tc` |
 | P-OPT preprocessing comparison | `bench/include/graphbrew/partition/cagra/popt.h:396-574`, transpose selection and `makeOffsetMatrix` |
 
 For current token, invalidation and victim semantics, see

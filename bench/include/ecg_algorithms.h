@@ -50,6 +50,7 @@ struct Options {
     bool records = false;
     bool evidence = false;
     bool capture_values = false;
+    bool traversal_preprocessing = false;
     uint8_t record_bytes = 0;
     uint8_t minimum_mantissa_bits = 0;
     uint32_t source = 0;
@@ -64,6 +65,22 @@ struct Options {
     std::vector<uint32_t> sources;
 };
 
+inline const char* recordReuseScope(const Options& options) {
+    if (!options.records)
+        return "none";
+    if (options.traversal_preprocessing) {
+        switch (options.algorithm) {
+          case Algorithm::SSSP: return "light-heavy";
+          case Algorithm::CC: return "sample-rounds";
+          case Algorithm::BFS:
+          case Algorithm::BC: return "row-local";
+          case Algorithm::SPMV:
+          case Algorithm::TC: break;
+        }
+    }
+    return "full-csr";
+}
+
 struct Result {
     Algorithm algorithm = Algorithm::SPMV;
     uint64_t vertices = 0, source_edges = 0, carrier_records = 0;
@@ -72,6 +89,7 @@ struct Result {
     uint64_t ordinary_property_reads = 0, property_writes = 0, auxiliary_accesses = 0;
     uint64_t construction_reads = 0, construction_writes = 0;
     uint64_t carrier_bytes = 0, construction_auxiliary_peak_bytes = 0, workspace_peak_bytes = 0;
+    uint64_t constructed_finite_records = 0, constructed_wrap_records = 0, constructed_unknown_records = 0;
     uint64_t result_digest = 0, work_digest = 0, position_digest = 0, record_digest = 0;
     uint64_t reached = 0, levels = 0, components = 0, relax_attempts = 0, relax_successes = 0;
     uint64_t light_passes = 0, heavy_passes = 0, sigma_max = 0;
@@ -108,12 +126,13 @@ struct GraphView {
     }
 
     template<class Access>
-    uint64_t offset(Access& access, uint64_t row) const {
+    uint64_t offset(Access& access, uint64_t row,
+                    MemoryKind kind = MemoryKind::INDEX, bool trace = true) const {
         if (row > vertices)
             throw std::out_of_range("csr-row");
         const auto* address = static_cast<const uint8_t*>(offsets) + row * sizeof(uint64_t);
         const uint64_t raw = access.template read<uint64_t>(
-            address, MemoryKind::INDEX, 0, row);
+            address, kind, 0, row, trace);
         uint64_t result = raw;
         if (pointer_offsets) {
             const uint64_t base = reinterpret_cast<uint64_t>(columns);
@@ -148,13 +167,14 @@ struct GraphView {
     }
 
     template<class Access>
-    int32_t weight(Access& access, uint64_t index) const {
+    int32_t weight(Access& access, uint64_t index,
+                   MemoryKind kind = MemoryKind::WEIGHT, bool trace = true) const {
         if (!weights)
             return 1;
         if (index >= records)
             throw std::out_of_range("csr-weight");
         const auto* address = static_cast<const uint8_t*>(weights) + index * edge_stride;
-        return access.template read<int32_t>(address, MemoryKind::WEIGHT, 2, index);
+        return access.template read<int32_t>(address, kind, 2, index, trace);
     }
 };
 
@@ -410,12 +430,49 @@ class Engine {
             limits.maximum_carrier_bytes = std::min(limits.maximum_carrier_bytes, payload);
             limits.maximum_auxiliary_bytes = std::min(limits.maximum_auxiliary_bytes,
                 options.maximum_workspace_bytes - workspace_ - payload);
-            status = ecg_record::buildRecords(requirements, layout, property_, base,
-                [&](uint64_t index) { return graph.id(*this, index, MemoryKind::CONSTRUCTION, false); },
-                prepared->stream, limits,
-                [&](const void* address, uint64_t bytes, bool write) {
-                    touch(address, bytes, write, MemoryKind::CONSTRUCTION, 0, 0, false);
-                });
+            uint64_t row = 0, first = 0, last = 0;
+            bool row_ready = false;
+            const auto scope_at = [&](uint64_t index) -> ecg_record::BuildScope {
+                if (!options.traversal_preprocessing || options.algorithm == Algorithm::SPMV ||
+                    options.algorithm == Algorithm::TC)
+                    return {};
+                if (options.algorithm == Algorithm::SSSP) {
+                    const uint64_t weight = static_cast<uint32_t>(
+                        graph.weight(*this, index, MemoryKind::CONSTRUCTION, false));
+                    return {static_cast<uint8_t>(weight > options.delta), UINT64_MAX};
+                }
+                if (!row_ready) {
+                    first = graph.offset(*this, 0, MemoryKind::CONSTRUCTION, false);
+                    last = graph.offset(*this, 1, MemoryKind::CONSTRUCTION, false);
+                    row_ready = true;
+                }
+                while (index >= last) {
+                    first = last;
+                    last = graph.offset(*this, ++row + 1, MemoryKind::CONSTRUCTION, false);
+                }
+                while (index < first) {
+                    last = first;
+                    first = graph.offset(*this, --row, MemoryKind::CONSTRUCTION, false);
+                }
+                if (options.algorithm == Algorithm::CC)
+                    return {static_cast<uint8_t>(std::min<uint64_t>(index - first, 2)), UINT64_MAX};
+                return {0, last};
+            };
+            const auto build = [&](auto partitions) {
+                return ecg_record::buildRecords<decltype(partitions)::value>(
+                    requirements, layout, property_, base,
+                    [&](uint64_t index) { return graph.id(*this, index, MemoryKind::CONSTRUCTION, false); },
+                    prepared->stream, limits,
+                    [&](const void* address, uint64_t bytes, bool write) {
+                        touch(address, bytes, write, MemoryKind::CONSTRUCTION, 0, 0, false);
+                    }, scope_at);
+            };
+            if (options.traversal_preprocessing && options.algorithm == Algorithm::SSSP)
+                status = build(std::integral_constant<std::size_t, 2>{});
+            else if (options.traversal_preprocessing && options.algorithm == Algorithm::CC)
+                status = build(std::integral_constant<std::size_t, 3>{});
+            else
+                status = build(std::integral_constant<std::size_t, 1>{});
             if (status != ecg_record::Status::OK)
                 throw std::length_error(std::string("record-construction-") + ecg_record::statusName(status));
             const auto& stats = prepared->stream.stats;
@@ -425,6 +482,9 @@ class Engine {
             result.carrier_bytes += stats.carrier_allocation_bytes;
             result.construction_auxiliary_peak_bytes =
                 std::max(result.construction_auxiliary_peak_bytes, stats.auxiliary_peak_bytes);
+            result.constructed_finite_records += stats.finite_records;
+            result.constructed_wrap_records += stats.wrap_records;
+            result.constructed_unknown_records += stats.unknown_records;
             carrier = prepared.get();
             carriers_.push_back(std::move(prepared));
         }
