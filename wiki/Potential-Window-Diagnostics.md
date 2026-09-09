@@ -108,3 +108,74 @@ Passing noninterference establishes trustworthy observation of this one
 baseline history. It does not authorize enabling the window policy,
 choosing parameters from held-out results, or claiming superiority over
 [the existing GRASP/P-OPT controls](Traversal-Metadata-Taxonomy#matched-grasp-and-p-opt-comparison).
+
+## Full Patents observation
+
+The run `results/ecg_experiments/runs/window_observer_patents_7cd262d5`
+uses source `7cd262d5`, stored BFS source 0, and the existing 8 MiB/16-way
+LLC with 32 KiB L1D and 256 KiB L2, both eight-way. Both roles execute
+all seventeen levels and return depth digest `3865ba0b18ab9fe2`.
+
+The paired audit gate passes: identical output/work, complete cache
+counters, setup/kernel snapshots, demand digest `f687a6da1055b468` and
+victim digest `2d0587da55b70715`. The kernel remains at 438,095,550
+requests, 13,052,296 memory misses and 13,416,757 transfers. These are
+unchanged GRASP counts, not window-policy gains.
+
+Known tokens accompany 31,499,996 of 33,023,480 actual designated depth
+reads (95.39%). At evictions, the situation is different. The fixed sample
+contains 42,775 decisions from 10,950,597 graph-pass evictions; the
+remainder of the kernel's evictions occurs outside those passes.
+
+| Actual base-victim state, delayed view | Samples | Share of sampled decisions |
+|---|---:|---:|
+| Not depth data | 24,275 | 56.75% |
+| Invalidated by ordinary depth accesses | 7,119 | 16.64% |
+| Live compatible window | 6,431 | 15.03% |
+| UNKNOWN token | 2,425 | 5.67% |
+| Expired | 1,967 | 4.60% |
+| Previous pass | 442 | 1.03% |
+| No observed hint | 115 | 0.27% |
+| Pending update | 1 | 0.002% |
+
+Among the 18,500 sampled depth victims, 34.76% have a live window and
+38.48% are invalidated. There are no ordinary depth reads in this scoped
+run; the invalidations originate from 3,764,116 discovery writes.
+That identifies a validity-rule question, not permission to remove
+ordering or invalidation safeguards without a new contract.
+
+Only **204 sampled decisions (0.477%)** have a strictly different
+eligible victim under the reference window ranking. Both immediate and
+delayed views find the same 204; delayed delivery removes just one live
+eligible candidate across the sample. The queue peaks at five entries
+and drains without loss. Under this shadow timing model, update latency
+is not the main limiter at the sampled decision points.
+
+| Subsequent-read observation for the 204 pairs | Count |
+|---|---:|
+| GRASP's evicted line read first | 54 |
+| Proposed alternative read first | 13 |
+| Neither read before the fixed horizon | 137 |
+| Capacity drops / pass-end censoring | 0 / 0 |
+
+All 67 resolved first reads reach the LLC. The 54 base-line reads miss in
+memory; two of the thirteen alternative-line reads do. This is read-order
+evidence under unchanged GRASP, not an accuracy percentage or an estimate
+of saved misses. In particular, 67.16% of pairs remain unresolved at the
+declared horizon, and subsequent reads are not required to occur before
+the annotation's endpoint. Do not count censored pairs as successes or
+extend the horizon after seeing the outcome.
+
+The observer reserves 69.88 MiB of diagnostic host state, including the
+66,075,788-byte token side table and 5,242,880-byte dual shadow. It counts
+15,507 source-control exchanges, or 744,336 logical control bytes, only
+in the shadow model. These costs are excluded from active cache counters
+by design and cannot support an end-to-end performance or hardware claim.
+
+**Decision:** the producer passes the bounded functional and structural
+checks, but this consumer exposes little actionable separation on the
+observed history. Keep the window policy disabled. The next design review
+should distinguish preservation of graph-static potential after depth
+updates from restrictions in the base candidate set. Expanding property
+priority indiscriminately or claiming that more metadata bits solve the
+problem is not justified by this result.
