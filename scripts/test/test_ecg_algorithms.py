@@ -260,9 +260,10 @@ def test_window_observer_does_not_change_grasp_or_bfs(tmp_path):
         assert payload["diagnostic_only"] is True
         assert payload["measurement_scope"] == "observation-only-unchanged-grasp"
         observer = payload["window_observer"]
-        assert observer["schema"] == "ecg.window-eviction-observer.v3"
+        assert observer["schema"] == "ecg.window-eviction-observer.v4"
         assert observer["publication_rule"] == "checked-read-store-new-event"
         assert observer["association_rejected"] == 0
+        assert observer["protected_probe"]["candidate_floor"] == 6
         if mode == "window":
             assert observer["forwarded_store_updates"] == payload["workload"]["reached"] - 1
         assert observer["mode"] == mode and observer["active_policy_changed"] is False
@@ -308,6 +309,14 @@ def test_window_observer_does_not_change_grasp_or_bfs(tmp_path):
     forged = copy.deepcopy(b)
     forged["window_observer"]["association_accepted"] += 1
     with pytest.raises(RecordReceiptError, match="paired-store"):
+        validate_window_observer(forged, options)
+    forged = copy.deepcopy(b)
+    forged["window_observer"]["protected_probe"]["candidate_floor"] = 5
+    with pytest.raises(RecordReceiptError, match="protected probe"):
+        validate_window_observer(forged, options)
+    forged = copy.deepcopy(b)
+    forged["window_observer"]["protected_probe"]["retargeted_choices"] += 1
+    with pytest.raises(RecordReceiptError, match="double-counts"):
         validate_window_observer(forged, options)
     forged = copy.deepcopy(b)
     forged["window_observer"]["association_rule"] = "same-cache-line-only"

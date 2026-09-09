@@ -114,6 +114,32 @@ change later cache history, and a later read can hit a private cache. No
 pair state feeds back into the policy, token generator or parameter choice.
 There is no full address trace or future-derived mask artifact.
 
+### One-step protected-candidate probe
+
+The v4 diagnostic adds one fixed relaxation, still without changing GRASP.
+Starting with the forwarded view's hypothetical RRPV-7 choice, it considers
+only live, compatible depth ways at RRPV 6. A protected way must have a
+strictly poorer window-retention rank than the current hypothetical choice.
+An equal rank keeps the existing choice. RRPV 0-5, non-depth ways and
+unrankable base victims remain excluded.
+
+The probe separately counts new interventions where the tie-only rule kept
+GRASP's victim and retargeted interventions where the tie-only rule already
+chose another RRPV-7 way. The expanded decision count is the old tie-only
+count plus new interventions, not the sum of both pair books.
+
+Each selected protected candidate is compared with the actual GRASP victim,
+including in retargeted cases. Its independent 256-pair book uses the same
+131,072-request horizon. These observations are not a simulation of either
+the tie-only or expanded cache history, nor an incremental savings estimate.
+
+The immediate LLC dirty-state comparison is also recorded: a dirty
+protected candidate versus a clean actual victim implies one extra
+immediate writeback in that snapshot, and the reverse can avoid one.
+Future writebacks can differ, so neither number is end-to-end traffic.
+Availability histograms count decisions with a worse-ranked protected way
+at each RRPV; bins overlap and deeper-protected ways are never selected.
+
 ## Guarded execution and noninterference
 
 `--window-observer control` records real demand/eviction digests without
@@ -144,7 +170,9 @@ contains aggregate and per-pass sample counts, state histograms, bounded
 queue/trial accounting and immutable-stream digests.
 Schema `ecg.window-eviction-observer.v2` adds write-survival and candidate
 attribution; v3 adds checked store publication and a third independent
-256-pair book. The earlier runs retain their original receipts.
+256-pair book; v4 adds the one-step probe and a fourth book. The earlier
+runs retain their original receipts. Per-book sampling and horizons do
+not change when another diagnostic book is added.
 The extra shadow values and ordering state are diagnostic storage, not
 proof that simultaneous hint retention and an order cutoff fit the proposed
 67-bit native payload. That hardware contract remains unqualified.

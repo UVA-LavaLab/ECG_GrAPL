@@ -517,6 +517,76 @@ void testWindowCheckedStorePublication() {
     }
 }
 
+void testProtectedWindowProbe() {
+    using cache_sim::window_observation::Observer;
+    for (unsigned scenario = 0; scenario < 8; ++scenario) {
+        const uint32_t future_a = scenario == 2 || scenario == 3 ? 16 : 1;
+        const uint32_t future_b = scenario == 2 ? 17 : scenario == 3 ? 1 : scenario == 5 ? 8 : 16;
+        const bool tie_alternative = scenario >= 5;
+        std::vector<std::tuple<uint32_t, uint32_t, int32_t>> edges{
+            {0, 0, 1}, {0, 16, 1}, {future_b, 16, 1}};
+        if (scenario != 4)
+            edges.emplace_back(future_a, 0, 1);
+        if (tie_alternative) {
+            edges.emplace_back(0, 32, 1);
+            edges.emplace_back(scenario == 6 ? 8 : scenario == 7 ? 17 : 16, 32, 1);
+        }
+        const Fixture graph(128, true, edges);
+        Observer observer(graph.view(), 0x1000, 1, 4, true, 1 << 20);
+        std::vector<cache_sim::CacheLine> lines(4);
+        for (std::size_t way = 0; way < lines.size(); ++way) {
+            lines[way].line_addr = way < 2 || (way == 2 && tie_alternative) ?
+                0x1000 + way * 64 : 0x2000 + way * 64;
+            lines[way].valid = true;
+            lines[way].rrpv = way == 1 ? (scenario == 1 ? 5 : 6) : 7;
+        }
+        lines[1].dirty = scenario == 0;
+        lines[0].dirty = scenario == 6;
+        observer.initialSet(0, lines.data(), lines.size());
+        observer.beginPass();
+        observer.visitVertex(0);
+        const uint32_t reads = tie_alternative ? 3 : 2;
+        for (uint32_t index = 0; index < reads; ++index) {
+            observer.designated(index, index * 16);
+            observer.beforeAccess(0x1000 + index * 64, false);
+            observer.afterAccess(0x1000 + index * 64, false, false, false);
+        }
+        for (uint64_t event = 0; event < Observer::kSamplePeriod; ++event) {
+            const std::size_t victim = event + 1 == Observer::kSamplePeriod ? 0 : 3;
+            const uint64_t incoming = 0x4000 + event * 64;
+            observer.beforeAccess(incoming, false);
+            const auto before = lines;
+            observer.insertion(0, lines.data(), lines.size(), victim, incoming);
+            for (std::size_t way = 0; way < lines.size(); ++way)
+                check(lines[way].line_addr == before[way].line_addr &&
+                      lines[way].dirty == before[way].dirty && lines[way].rrpv == before[way].rrpv,
+                      "protected candidate analysis never changes cache contents, dirtiness or RRIP");
+            lines[victim].line_addr = incoming;
+            observer.afterAccess(incoming, false, true, true);
+        }
+        observer.endPass();
+        observer.finish(reads);
+        std::ostringstream report;
+        observer.write(report);
+        const auto text = report.str();
+        const auto start = text.find("\"protected_probe\":");
+        const auto section = start == std::string::npos ? "" : text.substr(start, text.find('}', start) - start);
+        const bool selected = scenario == 0 || scenario == 6;
+        check(section.find(std::string("\"protected_selected\":") + (selected ? "1" : "0")) !=
+                  std::string::npos,
+              "only live RRPV6 strictly worse than the current hypothetical choice enters the protected probe");
+        if (scenario == 0)
+            check(section.find("\"extra_immediate_writeback\":1") != std::string::npos &&
+                  section.find("\"additional_choices\":1") != std::string::npos,
+                  "protected probe counts dirty-line risk and new interventions separately");
+        if (scenario == 6)
+            check(section.find("\"avoided_immediate_writeback\":1") != std::string::npos &&
+                  section.find("\"retargeted_choices\":1") != std::string::npos &&
+                  section.find("\"additional_choices\":0") != std::string::npos,
+                  "retargeting a tie-only choice is not counted as an additional decision");
+    }
+}
+
 void testUnboundRecordPreparation() {
     using namespace ecg_algorithm;
     testWindowObservationProfile();
@@ -634,6 +704,7 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testProtectedWindowProbe();
     testWindowCheckedStorePublication();
     testWindowCandidateAttribution();
     testWindowPublishedWriteSurvival();

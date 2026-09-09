@@ -74,6 +74,12 @@ struct Profile {
         const uint64_t start = pass_base + ((end - 1 - pass_base) / 8) * 8;
         return start > watermark ? start - watermark : 0;
     }
+
+    bool poorerRetention(uint64_t candidate, uint64_t reference, uint64_t watermark, uint64_t pass_base) const {
+        const uint64_t a = distance(candidate, watermark, pass_base);
+        const uint64_t b = distance(reference, watermark, pass_base);
+        return a > b || (a == b && (candidate & 7) < (reference & 7));
+    }
 };
 
 class Observer final : public CacheObservationSink {
@@ -85,13 +91,14 @@ class Observer final : public CacheObservationSink {
     static constexpr std::size_t kImmediate = 0, kDelivered = 1;
     static constexpr std::size_t kPreservedImmediate = 2, kPreservedDelivered = 3;
     static constexpr std::size_t kForwardedDelivered = 4;
-    static constexpr std::size_t kViews = 5, kTrialViews = 3;
+    static constexpr std::size_t kViews = 5, kPublicationTrialViews = 3, kTrialViews = 4;
+    static constexpr uint8_t kProtectedRrpv = 6;
     inline static constexpr std::array<const char*, kViews> kViewNames{
         "immediate", "delivered", "preserved_immediate", "preserved_delivered", "forwarded_delivered"};
-    inline static constexpr std::array<std::size_t, kTrialViews> kTrialViewIds{
+    inline static constexpr std::array<std::size_t, kPublicationTrialViews> kTrialViewIds{
         kDelivered, kPreservedDelivered, kForwardedDelivered};
     inline static constexpr std::array<const char*, kTrialViews> kTrialNames{
-        "trials", "preserved_trials", "forwarded_trials"};
+        "trials", "preserved_trials", "forwarded_trials", "protected_trials"};
 
     Observer(const ecg_algorithm::GraphView& graph, uint64_t property_base,
              std::size_t sets, std::size_t ways, bool windows, uint64_t maximum_bytes)
@@ -147,8 +154,14 @@ class Observer final : public CacheObservationSink {
                 ++pass_evictions_;
                 ++passes_[pass_count_ - 1].evictions;
                 if (windows_ && pass_evictions_ % kSamplePeriod == 0) {
-                    for (std::size_t view = 0; view < kViews; ++view)
-                        sample(set, lines, victim, view, samples_[view], passes_[pass_count_ - 1].samples[view]);
+                    std::size_t tie_only = victim;
+                    for (std::size_t view = 0; view < kViews; ++view) {
+                        const std::size_t choice = sample(
+                            set, lines, victim, view, samples_[view], passes_[pass_count_ - 1].samples[view]);
+                        if (view == kForwardedDelivered)
+                            tie_only = choice;
+                    }
+                    probeProtected(set, lines, victim, tie_only, protected_, passes_[pass_count_ - 1].protected_probe);
                 }
             }
         }
@@ -332,16 +345,21 @@ class Observer final : public CacheObservationSink {
             throw std::logic_error("window-observer-incomplete-accounting");
         for (std::size_t group = 0; group < kTrialViews; ++group) {
             const auto& trials = trial_stats_[group];
-            const auto& samples = samples_[kTrialViewIds[group]];
+            const uint64_t expected = group < kPublicationTrialViews ?
+                samples_[kTrialViewIds[group]].overrides : protected_.selected;
             if (trials.active || trials.started != trials.base_first + trials.alternative_first +
                 trials.censored_horizon + trials.censored_pass ||
-                trials.started + trials.dropped != samples.overrides)
+                trials.started + trials.dropped != expected)
                 throw std::logic_error("window-observer-incomplete-trial-accounting");
         }
+        if (protected_.expanded_choices != protected_.tie_choices + protected_.additional ||
+            protected_.selected != protected_.additional + protected_.retargeted ||
+            protected_.selected != protected_.extra_writeback + protected_.avoided_writeback + protected_.same_dirty)
+            throw std::logic_error("window-observer-incomplete-protected-accounting");
     }
 
     void write(std::ostream& output) const {
-        output << "{\"schema\":\"ecg.window-eviction-observer.v3\",\"mode\":\""
+        output << "{\"schema\":\"ecg.window-eviction-observer.v4\",\"mode\":\""
                << (windows_ ? "window" : "control")
                << "\",\"active_policy_changed\":false,\"diagnostic_costs_in_cache_counters\":false,"
                << "\"delivery_model\":\"uncoalesced-eight-access-steps-serialized-markers\","
@@ -404,6 +422,8 @@ class Observer final : public CacheObservationSink {
             output << ",\"" << kTrialNames[group] << "\":";
             trial_stats_[group].write(output);
         }
+        output << ",\"protected_probe\":";
+        protected_.write(output);
         output << ",\"per_pass\":[";
         for (std::size_t pass = 0; pass < pass_count_; ++pass) {
             if (pass) output << ',';
@@ -414,6 +434,8 @@ class Observer final : public CacheObservationSink {
                 output << ",\"" << kViewNames[view] << "\":";
                 stats.samples[view].write(output);
             }
+            output << ",\"protected_probe\":";
+            stats.protected_probe.write(output);
             output << '}';
         }
         output << "]}";
@@ -453,9 +475,36 @@ class Observer final : public CacheObservationSink {
             output << "]}";
         }
     };
+    struct ProtectedSamples {
+        uint64_t count = 0, live_base = 0, tie_choices = 0, expanded_choices = 0;
+        uint64_t selected = 0, additional = 0, retargeted = 0;
+        uint64_t extra_writeback = 0, avoided_writeback = 0, same_dirty = 0;
+        uint64_t farther = 0, weaker = 0;
+        std::array<uint64_t, 7> worse_by_rrpv{};
+        void write(std::ostream& output) const {
+            output << "{\"rule\":\"one-step-RRPV6-strictly-worse\","
+                   << "\"reference\":\"actual-GRASP-victim\",\"view\":\"forwarded_delivered\","
+                   << "\"candidate_floor\":" << unsigned(kProtectedRrpv)
+                   << ",\"samples\":" << count << ",\"live_base\":" << live_base
+                   << ",\"tie_only_choices\":" << tie_choices << ",\"expanded_choices\":" << expanded_choices
+                   << ",\"protected_selected\":" << selected << ",\"additional_choices\":" << additional
+                   << ",\"retargeted_choices\":" << retargeted
+                   << ",\"extra_immediate_writeback\":" << extra_writeback
+                   << ",\"avoided_immediate_writeback\":" << avoided_writeback
+                   << ",\"same_dirty_state\":" << same_dirty
+                   << ",\"farther_window\":" << farther << ",\"equal_distance_weaker\":" << weaker
+                   << ",\"worse_available_by_rrpv\":[";
+            for (std::size_t index = 0; index < worse_by_rrpv.size(); ++index) {
+                if (index) output << ',';
+                output << worse_by_rrpv[index];
+            }
+            output << "]}";
+        }
+    };
     struct PassStats {
         uint64_t vertices = 0, designated = 0, evictions = 0;
         std::array<Samples, kViews> samples;
+        ProtectedSamples protected_probe;
     };
     enum class UpdateKind : uint8_t { HINT, INVALIDATE_READ, WRITE_BARRIER, FORWARDED_WRITE };
     struct Update {
@@ -618,7 +667,7 @@ class Observer final : public CacheObservationSink {
         ++markers_;
     }
 
-    void sample(std::size_t set, const CacheLine* lines, std::size_t base, std::size_t view,
+    std::size_t sample(std::size_t set, const CacheLine* lines, std::size_t base, std::size_t view,
                 Samples& total, Samples& pass) {
         if (lines[base].rrpv < 7)
             throw std::logic_error("window-observer-non-GRASP-eviction-candidate");
@@ -667,13 +716,12 @@ class Observer final : public CacheObservationSink {
             if (db == original_distance && (b & 7) == (original & 7))
                 ++equal_ranks;
             const uint64_t a = entries[proposed].values[view];
-            const uint64_t da = profile_.distance(a, watermark_, pass_base_);
-            if (db > da || (db == da && (b & 7) < (a & 7)))
+            if (profile_.poorerRetention(b, a, watermark_, pass_base_))
                 proposed = way;
         }
         if (proposed != base) {
             add(&Samples::overrides, 1);
-            for (std::size_t group = 0; group < kTrialViews; ++group)
+            for (std::size_t group = 0; group < kPublicationTrialViews; ++group)
                 if (view == kTrialViewIds[group])
                     startTrial(group, set, entries[base].line, entries[proposed].line,
                         entries[base].values[view] >> 3, entries[proposed].values[view] >> 3);
@@ -689,6 +737,57 @@ class Observer final : public CacheObservationSink {
             if (worse_ineligible)
                 add(&Samples::only_ineligible_worse, 1);
         }
+        return proposed;
+    }
+
+    void probeProtected(std::size_t set, const CacheLine* lines, std::size_t base, std::size_t tie_only,
+                        ProtectedSamples& total, ProtectedSamples& pass) {
+        const auto add = [&](uint64_t ProtectedSamples::* field) {
+            ++(total.*field);
+            ++(pass.*field);
+        };
+        add(&ProtectedSamples::count);
+        const Shadow* entries = shadow_.data() + set * ways_;
+        if (state(entries[base], kForwardedDelivered) != State::LIVE)
+            return;
+        add(&ProtectedSamples::live_base);
+        if (tie_only != base)
+            add(&ProtectedSamples::tie_choices);
+        const auto worse = [&](std::size_t left, std::size_t right) {
+            const uint64_t a = entries[left].values[kForwardedDelivered];
+            const uint64_t b = entries[right].values[kForwardedDelivered];
+            return profile_.poorerRetention(b, a, watermark_, pass_base_);
+        };
+        std::array<bool, 7> available{};
+        std::size_t proposed = tie_only;
+        for (std::size_t way = 0; way < ways_; ++way) {
+            if (lines[way].rrpv >= 7 || state(entries[way], kForwardedDelivered) != State::LIVE)
+                continue;
+            if (worse(base, way))
+                available[lines[way].rrpv] = true;
+            if (lines[way].rrpv == kProtectedRrpv && worse(proposed, way))
+                proposed = way;
+        }
+        for (std::size_t rank = 0; rank < available.size(); ++rank) {
+            total.worse_by_rrpv[rank] += available[rank];
+            pass.worse_by_rrpv[rank] += available[rank];
+        }
+        if (proposed != base)
+            add(&ProtectedSamples::expanded_choices);
+        if (proposed == tie_only)
+            return;
+        add(&ProtectedSamples::selected);
+        add(tie_only == base ? &ProtectedSamples::additional : &ProtectedSamples::retargeted);
+        if (lines[proposed].dirty == lines[base].dirty)
+            add(&ProtectedSamples::same_dirty);
+        else
+            add(lines[proposed].dirty ? &ProtectedSamples::extra_writeback : &ProtectedSamples::avoided_writeback);
+        const uint64_t prior = entries[tie_only].values[kForwardedDelivered];
+        const uint64_t chosen = entries[proposed].values[kForwardedDelivered];
+        add(profile_.distance(chosen, watermark_, pass_base_) > profile_.distance(prior, watermark_, pass_base_) ?
+            &ProtectedSamples::farther : &ProtectedSamples::weaker);
+        startTrial(kPublicationTrialViews, set, entries[base].line, entries[proposed].line,
+            entries[base].values[kForwardedDelivered] >> 3, chosen >> 3);
     }
 
     void startTrial(std::size_t group, std::size_t set, uint64_t base, uint64_t alternative,
@@ -784,6 +883,7 @@ class Observer final : public CacheObservationSink {
     std::array<Trial, kTrials * kTrialViews> trials_{};
     std::array<TrialStats, kTrialViews> trial_stats_{};
     std::array<Samples, kViews> samples_{};
+    ProtectedSamples protected_;
     ReadAssociation last_read_;
     ecg_record::StreamDigest demand_digest_, victim_digest_;
     uint64_t reserved_bytes_ = 0, constructed_known_ = 0, executed_known_ = 0;

@@ -280,13 +280,14 @@ def validate_window_observer(payload: dict[str, Any], options: argparse.Namespac
             payload["policy"] == "GRASP_PAPER" and payload["backend"] == "cache_sim" and
             isinstance(observer, dict) and observer.get("schema") in (
                 "ecg.window-eviction-observer.v1", "ecg.window-eviction-observer.v2",
-                "ecg.window-eviction-observer.v3") and
+                "ecg.window-eviction-observer.v3", "ecg.window-eviction-observer.v4") and
             observer.get("mode") == options.window_observer and observer.get("active_policy_changed") is False and
             observer.get("diagnostic_costs_in_cache_counters") is False and
             observer.get("delivery_model") == "uncoalesced-eight-access-steps-serialized-markers" and
             _integer(payload["metrics"], "prefetch_fills") == 0,
             "window observer changed policy or omitted its diagnostic limitations")
-    paired = observer["schema"] == "ecg.window-eviction-observer.v3"
+    protected_probe = observer["schema"] == "ecg.window-eviction-observer.v4"
+    paired = protected_probe or observer["schema"] == "ecg.window-eviction-observer.v3"
     extended = paired or observer["schema"] == "ecg.window-eviction-observer.v2"
     views = ("immediate", "delivered", "preserved_immediate", "preserved_delivered") if extended else (
         "immediate", "delivered")
@@ -298,7 +299,7 @@ def validate_window_observer(payload: dict[str, Any], options: argparse.Namespac
     if extended:
         require(observer.get("write_survival_rule") == "published-only-pending-cancelled" and
                 observer.get("read_pair_window_scope") == "sampled-endpoints-not-live-state" and
-                _integer(observer, "trial_views") == (3 if paired else 2) and
+                _integer(observer, "trial_views") == (4 if protected_probe else 3 if paired else 2) and
                 sum(_integer(observer, key) for key in (
                     "writes_kept_live", "writes_cancelling_pending", "writes_without_live")) ==
                 _integer(observer, "ordinary_writes"),
@@ -364,14 +365,41 @@ def validate_window_observer(payload: dict[str, Any], options: argparse.Namespac
                     _integer(values, "live_base_no_eligible_depth") +
                     _integer(values, "live_base_eligible_without_live_hint") == values["live_base_without_alternative"],
                     "window observer candidate attribution does not partition live base victims")
+    protected_fields = ("samples", "live_base", "tie_only_choices", "expanded_choices",
+                        "protected_selected", "additional_choices", "retargeted_choices",
+                        "extra_immediate_writeback", "avoided_immediate_writeback", "same_dirty_state",
+                        "farther_window", "equal_distance_weaker")
+    if protected_probe:
+        probe = observer.get("protected_probe")
+        forwarded = observer["forwarded_delivered"]
+        require(isinstance(probe, dict) and probe.get("rule") == "one-step-RRPV6-strictly-worse" and
+                probe.get("reference") == "actual-GRASP-victim" and probe.get("view") == "forwarded_delivered" and
+                _integer(probe, "candidate_floor") == 6 and _integer(probe, "samples") == forwarded["samples"] and
+                _integer(probe, "live_base") == forwarded["base_states"][6] and
+                _integer(probe, "tie_only_choices") == forwarded["hypothetical_overrides"],
+                "protected probe changed its candidate or reference contract")
+        require(_integer(probe, "expanded_choices") == probe["tie_only_choices"] +
+                _integer(probe, "additional_choices") <= probe["live_base"] and
+                _integer(probe, "protected_selected") == probe["additional_choices"] +
+                _integer(probe, "retargeted_choices") and probe["retargeted_choices"] <= probe["tie_only_choices"] and
+                sum(_integer(probe, field) for field in protected_fields[7:10]) == probe["protected_selected"] and
+                _integer(probe, "farther_window") + _integer(probe, "equal_distance_weaker") == probe["protected_selected"],
+                "protected probe double-counts choices or dirty-line tradeoffs")
+        histogram = probe.get("worse_available_by_rrpv")
+        require(isinstance(histogram, list) and len(histogram) == 7 and
+                all(type(value) is int and 0 <= value <= probe["live_base"] for value in histogram) and
+                probe["protected_selected"] <= histogram[6],
+                "protected probe selected a deeper-protected or unavailable candidate")
     trial_views = (("trials", "delivered"), ("preserved_trials", "preserved_delivered")) if extended else (
         ("trials", "delivered"),)
     if paired:
         trial_views += (("forwarded_trials", "forwarded_delivered"),)
+    if protected_probe:
+        trial_views += (("protected_trials", "protected_probe"),)
     for trial_key, view in trial_views:
         trials = observer.get(trial_key)
         require(isinstance(trials, dict) and _integer(trials, "started") + _integer(trials, "capacity_dropped") ==
-                observer[view]["hypothetical_overrides"] and _integer(trials, "started") ==
+                observer[view]["protected_selected" if view == "protected_probe" else "hypothetical_overrides"] and _integer(trials, "started") ==
                 sum(_integer(trials, key) for key in ("base_first", "alternative_first", "censored_horizon", "censored_pass")) and
                 _integer(trials, "peak_pending") <= 256,
                 "window observer outcomes or censoring do not close")
@@ -393,6 +421,21 @@ def validate_window_observer(payload: dict[str, Any], options: argparse.Namespac
             require(all(isinstance(row.get(key), dict) for row in per_pass) and
                     sum(_integer(row[key], field) for row in per_pass) == observer[key][field],
                     "window observer per-pass samples do not sum to totals")
+    if protected_probe:
+        require(all(isinstance(row.get("protected_probe"), dict) for row in per_pass),
+                "missing per-pass protected attribution")
+        for field in protected_fields:
+            require(sum(_integer(row["protected_probe"], field) for row in per_pass) == observer["protected_probe"][field],
+                    "per-pass protected choices do not sum to totals")
+        require(all(isinstance(row["protected_probe"].get("worse_available_by_rrpv"), list) and
+                    len(row["protected_probe"]["worse_available_by_rrpv"]) == 7 and
+                    all(type(value) is int and 0 <= value <= row["protected_probe"]["live_base"]
+                        for value in row["protected_probe"]["worse_available_by_rrpv"]) for row in per_pass),
+                "missing per-pass protected-rank histogram")
+        for rank in range(7):
+            require(sum(row["protected_probe"]["worse_available_by_rrpv"][rank] for row in per_pass) ==
+                    observer["protected_probe"]["worse_available_by_rrpv"][rank],
+                    "per-pass protected ranks do not sum to totals")
     require(observer["markers"] <= (observer["bins_per_pass"] + 2) * work["passes"],
             "window observer invented markers for skipped bins")
     return observer
@@ -579,8 +622,8 @@ def run_cache_cell(
         row.update(validate_traffic_phases(payload))
         observer = validate_window_observer(payload, options)
         if observing:
-            require(observer["schema"] == "ecg.window-eviction-observer.v3",
-                    "new observer runs require checked read-store publication")
+            require(observer["schema"] == "ecg.window-eviction-observer.v4",
+                    "new observer runs require bounded protected-candidate attribution")
             row.update(window_observer=options.window_observer,
                        window_demand_digest=observer["demand_digest"], window_victim_digest=observer["victim_digest"])
         row.update({
