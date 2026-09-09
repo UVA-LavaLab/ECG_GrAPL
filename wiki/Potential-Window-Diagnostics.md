@@ -415,3 +415,63 @@ Keep active window replacement disabled until that rule and its costs are
 qualified. The 64-byte, single-read association slot is diagnostic software
 state; it does not prove a native pipeline implementation or compliance
 with the proposed hardware budget.
+
+## One-step protected-candidate observation
+
+The run `results/ecg_experiments/runs/window_protected_patents_b0466794`
+uses source `b0466794` and the same Patents/source-0/8-MiB condition.
+Both roles pass exact noninterference. All preceding window views,
+publication counters and read-order books reproduce their original
+values under the same demand/victim digests. The active kernel remains
+at 13,052,296 memory misses and 13,416,757 transfers.
+
+The RRPV-6 probe expands the hypothetical decision set:
+
+| Decision accounting | Count |
+|---|---:|
+| Existing RRPV-7 tie-only changes | 409 |
+| Additional changes where tie-only kept GRASP's victim | 718 |
+| Expanded changes in total | 1,127 |
+| Existing changes retargeted to an RRPV-6 way | 31 |
+| Selected protected candidates, including retargeting | 749 |
+
+Expanded choices are 2.635% of the 42,775 sampled decisions, versus
+0.956% for tie-only, a 2.76x increase in opportunity count. This is not
+a traffic-reduction estimate. The 31 retargeted decisions are already
+part of the 409 original changes and must not be added again.
+Of the 749 protected selections, 640 have a farther window than the
+previous hypothetical choice and 109 have equal distance but weaker
+structural strength. No RRPV-0-through-5 candidate is selected.
+
+| Protected pair versus the actual GRASP victim | Count |
+|---|---:|
+| Actual victim read first | 148 |
+| Protected alternative read first | 29 |
+| Horizon-censored | 572 |
+| Capacity drops / pass-end censoring | 0 / 0 |
+
+Of the 148 base-first reads, 146 reach the LLC and miss in memory; two
+hit privately. All 29 alternative-first reads reach the LLC and two miss
+in memory. There are 133 base-first reads before their own sampled
+endpoint and 132 before both endpoints; all 29 alternative-first reads
+precede their own endpoint and thirteen precede both.
+
+The resolved subset favors retaining the actual victim, but 76.37% of
+pairs are unresolved within the unchanged horizon. That subset cannot
+be called prediction accuracy or converted into saved misses. In
+retargeted cases the pair still compares the protected candidate with
+actual GRASP, not with the earlier hypothetical RRPV-7 alternative.
+
+Immediate dirty-state risk is small in these snapshots: seven protected
+selections would add a writeback, six would avoid one, and 736 have the
+same dirty state as the actual victim. The one-writeback net difference
+is not a total-traffic prediction; later cache contents and writebacks
+would change under an active policy.
+
+**Decision:** the narrow RRPV-6 candidate is worth a bounded, separately
+gated costed prototype, not deployment or further widening to RRPV 0-5.
+That prototype must use real encoded-record accesses and account for
+construction, publication and progress controls. The diagnostic's free
+side-table and shadow accesses must not become an uncharged active policy.
+Only an actual same-work comparison with transport, GRASP and P-OPT can
+establish whether this opportunity count produces a competitive gain.

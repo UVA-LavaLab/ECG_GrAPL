@@ -335,7 +335,9 @@ not a replacement for the performance comparisons above. Its
 shows that high access-time coverage need not produce many eligible
 victim differences. [Checked publication](Potential-Window-Diagnostics#checked-publication-observation)
 restores otherwise cancelled hints in the passive model, but candidate
-eligibility remains limiting and window replacement remains disabled.
+eligibility remains limiting. A [one-step protected-candidate probe](Potential-Window-Diagnostics#one-step-protected-candidate-observation)
+expands the observed opportunity set without changing GRASP; active
+window replacement and its performance benefit remain unestablished.
 
 The shared kernel functions define the access patterns independently of the
 selected preprocessing mode.
