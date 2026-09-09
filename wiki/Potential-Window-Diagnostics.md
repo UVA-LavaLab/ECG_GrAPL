@@ -135,7 +135,7 @@ choosing parameters from held-out results, or claiming superiority over
 ## Full Patents observation
 
 The run `results/ecg_experiments/runs/window_observer_patents_7cd262d5`
-uses source `7cd262d5`, stored BFS source 0, and the existing 8 MiB/16-way
+uses the original v1 observer at source `7cd262d5`, stored BFS source 0, and the existing 8 MiB/16-way
 LLC with 32 KiB L1D and 256 KiB L2, both eight-way. Both roles execute
 all seventeen levels and return depth digest `3865ba0b18ab9fe2`.
 
@@ -202,3 +202,93 @@ should distinguish preservation of graph-static potential after depth
 updates from restrictions in the base candidate set. Expanding property
 priority indiscriminately or claiming that more metadata bits solve the
 problem is not justified by this result.
+
+## Write-validity and candidate attribution
+
+The follow-up run
+`results/ecg_experiments/runs/window_validity_patents_30b9c31d` uses the same
+graph, source and cache condition with the v2 diagnostic. Both new roles
+pass exact noninterference. The original views also reproduce the prior
+sample counts and read-order outcomes under the same demand/victim
+digests. No active policy, token parameters, sample interval or read horizon
+was changed.
+
+### Discovery writes arrive before publication
+
+The conservative preserved-delivery view retains only an already-published
+window. The actual write observations are:
+
+| Discovery-write situation | Count |
+|---|---:|
+| Published live window available to retain | 0 |
+| Pending update cancelled by the newer write | 3,763,624 |
+| No live/pending resident window | 492 |
+| Total | 3,764,116 |
+
+Thus 99.987% of discovery writes cancel a pending hint. In this BFS loop,
+the depth probe is followed by its conditional discovery store before the
+eight-step shadow delivery can publish the hint. The write advances the
+ordering cutoff, so the older queued observation is rejected.
+Pending updates can carry UNKNOWN as well as known tokens; this is not a
+count of lost useful windows. Also, a new designated read replaces usable
+delivered state with PENDING in this conservative model. A line may have had
+an earlier published window, but the pilot does not keep a second copy
+available through PENDING.
+
+This clarifies the initial latency finding: almost no pending state is
+visible *at eviction*, but an earlier load/store interaction has already
+removed the information. Low pending occupancy at eviction does not rule
+out timing-dependent information loss earlier in the operation.
+
+| View | Live base victims / 42,775 samples | Hypothetical different victims |
+|---|---:|---:|
+| Original delivered | 6,431 (15.03%) | 204 (0.477%) |
+| Preserve published, delayed | 6,431 (15.03%) | 204 (0.477%) |
+| Preserve potential, zero-delay diagnostic | 11,405 (26.66%) | 409 (0.956%) |
+
+Preserving already-delivered state cannot help when no such state exists
+at the write. The zero-delay view is an information-availability
+diagnostic, not an implementable latency assumption or a measured cache
+gain. Even it changes fewer than 1% of sampled decisions under the fixed
+tie-only consumer.
+
+### Candidate eligibility is more restrictive than equal ranks
+
+The 6,431 live base victims in the delayed view partition as follows:
+
+| Reason for the reference choice | Samples | Share of live base victims |
+|---|---:|---:|
+| No other eligible depth way | 4,470 | 69.51% |
+| Other eligible depth ways lack live hints | 1,379 | 21.44% |
+| All live eligible alternatives have the same rank | 78 | 1.21% |
+| Base already has the poorest retention rank | 300 | 4.66% |
+| Strictly worse-ranked eligible alternative exists | 204 | 3.17% |
+
+In 2,539 no-change decisions, a worse-ranked live depth way exists outside
+GRASP's final eligible set. This overlaps the no-change categories above;
+it is not another set of safe swaps or a savings estimate. Those protected
+ways were never selected by the observer. Only six of 9,585 live eligible
+candidate instances have saturated structural strength, so count saturation
+is not the dominant explanation for lost choices in this sample.
+
+Both delayed views have the same 204 read-order pairs: 54 base-first,
+13 alternative-first and 137 horizon-censored, with no capacity drops.
+All 67 resolved first reads precede that line's sampled endpoint; 52
+base-first and seven alternative-first reads precede both endpoints.
+These endpoint comparisons do not prove that the same hint remained valid
+through all intervening accesses or predict counterfactual cache behavior.
+
+### Next design decision
+
+The next publication contract to examine is a single checked edge operation
+covering the depth probe and its conditional write, or equivalent
+store-associated forwarding of the immutable graph hint under the store's
+new event identity. It must prove matching record, target, profile, pass and
+generation, preserve later-event precedence, and never resurrect an
+arbitrary old queued hint. No such mechanism is implemented by this study.
+
+Publication and victim eligibility are separate problems: fixing the former
+alone does not remove the tie-only bottleneck. Any broader candidate rule
+must be evaluated explicitly rather than silently weakening GRASP's
+protection. Window replacement remains disabled, and the joint native
+hint/ordering storage contract remains unqualified.
