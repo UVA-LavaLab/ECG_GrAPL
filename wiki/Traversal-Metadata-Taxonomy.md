@@ -333,7 +333,9 @@ measures information at unchanged GRASP decisions. It is diagnostic-only,
 not a replacement for the performance comparisons above. Its
 [Patents result](Potential-Window-Diagnostics#full-patents-observation)
 shows that high access-time coverage need not produce many eligible
-victim differences; window replacement remains disabled.
+victim differences. [Checked publication](Potential-Window-Diagnostics#checked-publication-observation)
+restores otherwise cancelled hints in the passive model, but candidate
+eligibility remains limiting and window replacement remains disabled.
 
 The shared kernel functions define the access patterns independently of the
 selected preprocessing mode.

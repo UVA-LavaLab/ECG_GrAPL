@@ -319,3 +319,71 @@ alone does not remove the tie-only bottleneck. Any broader candidate rule
 must be evaluated explicitly rather than silently weakening GRASP's
 protection. Window replacement remains disabled, and the joint native
 hint/ordering storage contract remains unqualified.
+
+## Checked publication observation
+
+`results/ecg_experiments/runs/window_publication_patents_7939207d` evaluates
+the forwarded view at source `7939207d` on the same Patents/source-0/8-MiB
+condition. Both roles pass exact noninterference. The original four views,
+two pair books, cache counters and demand/victim digests also reproduce
+the preceding observation; only the additional view changes interpretation.
+
+All 3,764,116 discovery stores match their checked read, with no rejected
+associations. The observer forwards the captured absolute window under the
+store event, not by accepting the superseded load update.
+
+| Store-associated publication | Updates |
+|---|---:|
+| Issued | 3,764,116 |
+| Issued with a known token | 3,432,888 |
+| Applied while resident and current | 3,762,587 |
+| Applied with a known token | 3,431,536 |
+| Superseded by a newer observation | 654 |
+| Target not resident at delivery | 875 |
+
+Applied, superseded and absent updates sum to issued updates; the known-token
+rows are subsets, not additional dispositions. UNKNOWN publications remain
+UNKNOWN. There are still 36,787,596 queue events and a peak occupancy of
+five: the new view changes the meaning of the existing write event rather
+than adding another event. Native association/tag transport is not thereby
+free or already implemented.
+
+The delayed views retain eight-step per-update latency; comparison with
+the zero-delay reference is:
+
+| View | Live base victims / 42,775 samples | Hypothetical different victims |
+|---|---:|---:|
+| Original delivered | 6,431 (15.03%) | 204 (0.477%) |
+| Preserve published, delayed | 6,431 (15.03%) | 204 (0.477%) |
+| Checked store publication, delayed | 11,405 (26.66%) | 409 (0.956%) |
+| Preserve potential, zero-delay diagnostic | 11,405 (26.66%) | 409 (0.956%) |
+
+Checked publication restores the sampled base-window availability and
+choices of the zero-delay reference without removing delivery latency or
+later-event precedence. It does not establish a cache-performance gain:
+GRASP still executes every actual victim choice.
+
+The 409 forwarded-view read-order pairs yield 96 base-first reads, 21
+alternative-first reads, and 292 horizon-censored pairs (71.39%), with no
+capacity drops and a peak of eight pending pairs. All resolved reads reach
+the LLC; the 96 base-first reads and three alternative-first reads miss in
+memory. Of these, 94 base-first reads precede their own sampled endpoint
+and 89 precede both endpoints; all 21 alternative-first reads precede
+their own endpoint and twelve precede both. These remain retrospective
+observations, not 96 saved misses or an accuracy percentage.
+
+Candidate eligibility still limits this consumer. Of the 11,405 live base
+victims, 7,792 have no other eligible depth way and 2,287 have eligible depth
+ways without live hints. Only 154 are blocked solely by equal ranks; 763
+already have the poorest retention rank, leaving the 409 strict alternatives.
+Another 4,245 no-change decisions have a worse-ranked live way outside the
+eligible set. Those ways were not selected and must not be counted as safe
+evictions.
+
+**Decision:** the checked-publication semantics pass this passive gate.
+The next question is the risk and usefulness of a separately specified
+candidate rule, not additional token bits or accepting old updates.
+Keep active window replacement disabled until that rule and its costs are
+qualified. The 64-byte, single-read association slot is diagnostic software
+state; it does not prove a native pipeline implementation or compliance
+with the proposed hardware budget.
