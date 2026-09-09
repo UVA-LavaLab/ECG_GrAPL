@@ -82,6 +82,11 @@ class Observer final : public CacheObservationSink {
     static constexpr uint64_t kHorizon = 131072;
     static constexpr std::size_t kTrials = 256, kPasses = 128, kQueue = 16;
     static constexpr uint64_t kLatency = 8;
+    static constexpr std::size_t kImmediate = 0, kDelivered = 1;
+    static constexpr std::size_t kPreservedImmediate = 2, kPreservedDelivered = 3;
+    static constexpr std::size_t kViews = 4, kTrialViews = 2;
+    inline static constexpr std::array<const char*, kViews> kViewNames{
+        "immediate", "delivered", "preserved_immediate", "preserved_delivered"};
 
     Observer(const ecg_algorithm::GraphView& graph, uint64_t property_base,
              std::size_t sets, std::size_t ways, bool windows, uint64_t maximum_bytes)
@@ -95,7 +100,7 @@ class Observer final : public CacheObservationSink {
         if (!ecg_record::checkedMultiply(graph.records, sizeof(uint16_t), tokens) ||
             !ecg_record::checkedMultiply(sets, ways, shadows) ||
             !ecg_record::checkedMultiply(shadows, sizeof(Shadow), shadows) ||
-            !ecg_record::checkedMultiply(sets, sizeof(int32_t), heads) ||
+            !ecg_record::checkedMultiply(sets, sizeof(int32_t) * kTrialViews, heads) ||
             !ecg_record::checkedAdd(tokens, shadows, total) ||
             !ecg_record::checkedAdd(total, heads, total) ||
             !ecg_record::checkedAdd(total, lines * 8 + sizeof(*this), total))
@@ -106,7 +111,7 @@ class Observer final : public CacheObservationSink {
         if (windows_) {
             buildTokens(lines);
             shadow_.resize(sets * ways);
-            trial_heads_.assign(sets, -1);
+            trial_heads_.assign(sets * kTrialViews, -1);
             if (tokens_.capacity() * sizeof(uint16_t) + shadow_.capacity() * sizeof(Shadow) +
                 trial_heads_.capacity() * sizeof(int32_t) + sizeof(*this) > reserved_bytes_)
                 throw std::length_error("window-observer-allocation-exceeds-reservation");
@@ -137,8 +142,8 @@ class Observer final : public CacheObservationSink {
                 ++pass_evictions_;
                 ++passes_[pass_count_ - 1].evictions;
                 if (windows_ && pass_evictions_ % kSamplePeriod == 0) {
-                    sample(set, lines, victim, false, immediate_, passes_[pass_count_ - 1].immediate);
-                    sample(set, lines, victim, true, delivered_, passes_[pass_count_ - 1].delivered);
+                    for (std::size_t view = 0; view < kViews; ++view)
+                        sample(set, lines, victim, view, samples_[view], passes_[pass_count_ - 1].samples[view]);
                 }
             }
         }
@@ -207,12 +212,24 @@ class Observer final : public CacheObservationSink {
                 if (write) ++ordinary_writes_;
                 else ++ordinary_reads_;
             }
-            if (auto* line = resident(address)) {
+            auto* line = resident(address);
+            if (!expected_ && write) {
+                if (line && state(*line, kPreservedDelivered) == State::LIVE)
+                    ++writes_kept_live_;
+                else if (line && line->states[kPreservedDelivered] == State::PENDING)
+                    ++writes_cancelling_pending_;
+                else
+                    ++writes_without_live_;
+            }
+            if (line) {
                 line->order = order_;
-                line->delayed_state = expected_ ? State::PENDING : State::INVALIDATED;
-                if (!expected_) {
-                    line->immediate_state = State::INVALIDATED;
-                    line->immediate = 0;
+                if (expected_) {
+                    for (std::size_t view : {kDelivered, kPreservedDelivered}) {
+                        line->states[view] = State::PENDING;
+                        line->values[view] = 0;
+                    }
+                } else {
+                    invalidateOrdinary(*line, write);
                 }
             }
         }
@@ -227,17 +244,23 @@ class Observer final : public CacheObservationSink {
             if (expected_) {
                 if (auto* line = resident(address)) {
                     line->order = order_;
-                    line->immediate = expected_value_;
-                    line->immediate_state = expected_value_ ? State::LIVE : State::UNKNOWN;
-                    line->delayed_state = State::PENDING;
+                    for (std::size_t view : {kImmediate, kPreservedImmediate}) {
+                        line->values[view] = expected_value_;
+                        line->states[view] = expected_value_ ? State::LIVE : State::UNKNOWN;
+                    }
+                    for (std::size_t view : {kDelivered, kPreservedDelivered}) {
+                        line->states[view] = State::PENDING;
+                        line->values[view] = 0;
+                    }
                 } else {
                     ++nonresident_observations_;
                 }
             } else if (auto* line = resident(address)) {
                 line->order = order_;
-                line->immediate_state = line->delayed_state = State::INVALIDATED;
+                invalidateOrdinary(*line, write);
             }
-            enqueue(address & ~uint64_t{63}, expected_ ? expected_value_ : 0, !expected_);
+            enqueue(address & ~uint64_t{63}, expected_ ? expected_value_ : 0,
+                expected_ ? UpdateKind::HINT : write ? UpdateKind::WRITE_BARRIER : UpdateKind::INVALIDATE_READ);
             if (!write)
                 observeReuse(address & ~uint64_t{63}, at_llc, memory_miss);
         }
@@ -259,20 +282,28 @@ class Observer final : public CacheObservationSink {
         if (open_ || expected_ || in_access_ || actual_records != designated_)
             throw std::logic_error("window-observer-incomplete-work");
         drain();
-        if (active_trials_)
-            throw std::logic_error("window-observer-uncensored-trials");
         if (enqueued_ != dispatched_ || dispatched_ != applied_ + stale_ + absent_ ||
-            trials_started_ != base_first_ + alternative_first_ + censored_horizon_ + censored_pass_ ||
-            trials_started_ + trials_dropped_ != delivered_.overrides)
+            ordinary_writes_ != writes_kept_live_ + writes_cancelling_pending_ + writes_without_live_)
             throw std::logic_error("window-observer-incomplete-accounting");
+        for (std::size_t group = 0; group < kTrialViews; ++group) {
+            const auto& trials = trial_stats_[group];
+            const auto& samples = samples_[group == 0 ? kDelivered : kPreservedDelivered];
+            if (trials.active || trials.started != trials.base_first + trials.alternative_first +
+                trials.censored_horizon + trials.censored_pass ||
+                trials.started + trials.dropped != samples.overrides)
+                throw std::logic_error("window-observer-incomplete-trial-accounting");
+        }
     }
 
     void write(std::ostream& output) const {
-        output << "{\"schema\":\"ecg.window-eviction-observer.v1\",\"mode\":\""
+        output << "{\"schema\":\"ecg.window-eviction-observer.v2\",\"mode\":\""
                << (windows_ ? "window" : "control")
                << "\",\"active_policy_changed\":false,\"diagnostic_costs_in_cache_counters\":false,"
                << "\"delivery_model\":\"uncoalesced-eight-access-steps-serialized-markers\","
+               << "\"write_survival_rule\":\"published-only-pending-cancelled\","
+               << "\"read_pair_window_scope\":\"sampled-endpoints-not-live-state\","
                << "\"sample_period\":" << kSamplePeriod << ",\"trial_capacity\":" << kTrials
+               << ",\"trial_views\":" << kTrialViews
                << ",\"trial_horizon_requests\":" << kHorizon << ",\"latency_steps\":" << kLatency
                << ",\"cohort_rows\":" << profile_.cohort_rows << ",\"bin_rows\":" << profile_.bin_rows
                << ",\"bins_per_pass\":" << profile_.bins << ",\"reserved_bytes\":" << reserved_bytes_
@@ -291,6 +322,9 @@ class Observer final : public CacheObservationSink {
                << ",\"queue_absent\":" << absent_ << ",\"queue_pending\":" << queued_
                << ",\"queue_peak\":" << queue_peak_ << ",\"ordinary_reads\":" << ordinary_reads_
                << ",\"ordinary_writes\":" << ordinary_writes_
+               << ",\"writes_kept_live\":" << writes_kept_live_
+               << ",\"writes_cancelling_pending\":" << writes_cancelling_pending_
+               << ",\"writes_without_live\":" << writes_without_live_
                << ",\"nonresident_observations\":" << nonresident_observations_
                << ",\"diagnostic_graph_read_bytes\":" << graph_read_bytes_
                << ",\"sample_state_order\":[\"unseen\",\"unknown\",\"pending\",\"invalidated\","
@@ -305,26 +339,24 @@ class Observer final : public CacheObservationSink {
         hash(demand_digest_.value());
         output << ",\"victim_digest\":";
         hash(victim_digest_.value());
-        output << ",\"immediate\":";
-        immediate_.write(output);
-        output << ",\"delivered\":";
-        delivered_.write(output);
-        output << ",\"trials\":{\"started\":" << trials_started_ << ",\"capacity_dropped\":" << trials_dropped_
-               << ",\"base_first\":" << base_first_ << ",\"alternative_first\":" << alternative_first_
-               << ",\"base_first_llc\":" << base_first_llc_ << ",\"alternative_first_llc\":" << alternative_first_llc_
-               << ",\"base_first_memory\":" << base_first_memory_
-               << ",\"alternative_first_memory\":" << alternative_first_memory_
-               << ",\"censored_horizon\":" << censored_horizon_ << ",\"censored_pass\":" << censored_pass_
-               << ",\"peak_pending\":" << trials_peak_ << "},\"per_pass\":[";
+        for (std::size_t view = 0; view < kViews; ++view) {
+            output << ",\"" << kViewNames[view] << "\":";
+            samples_[view].write(output);
+        }
+        output << ",\"trials\":";
+        trial_stats_[0].write(output);
+        output << ",\"preserved_trials\":";
+        trial_stats_[1].write(output);
+        output << ",\"per_pass\":[";
         for (std::size_t pass = 0; pass < pass_count_; ++pass) {
             if (pass) output << ',';
             const auto& stats = passes_[pass];
             output << "{\"pass\":" << pass << ",\"vertices\":" << stats.vertices
-                   << ",\"designated_reads\":" << stats.designated << ",\"evictions\":" << stats.evictions
-                   << ",\"immediate\":";
-            stats.immediate.write(output);
-            output << ",\"delivered\":";
-            stats.delivered.write(output);
+                   << ",\"designated_reads\":" << stats.designated << ",\"evictions\":" << stats.evictions;
+            for (std::size_t view = 0; view < kViews; ++view) {
+                output << ",\"" << kViewNames[view] << "\":";
+                stats.samples[view].write(output);
+            }
             output << '}';
         }
         output << "]}";
@@ -333,16 +365,30 @@ class Observer final : public CacheObservationSink {
   private:
     enum class State : uint8_t { UNSEEN, UNKNOWN, PENDING, INVALIDATED, EXPIRED, OLD_PASS, LIVE, NON_PROPERTY };
     struct Shadow {
-        uint64_t line = UINT64_MAX, immediate = 0, delayed = 0, order = 0;
-        State immediate_state = State::UNSEEN, delayed_state = State::UNSEEN;
+        uint64_t line = UINT64_MAX, order = 0;
+        std::array<uint64_t, kViews> values{};
+        std::array<State, kViews> states{};
     };
     struct Samples {
         uint64_t count = 0, eligible = 0, live_eligible = 0, overrides = 0;
+        uint64_t live_base_without_alternative = 0, live_base_equal_ranks = 0;
+        uint64_t live_base_already_worst = 0, only_ineligible_worse = 0;
+        uint64_t live_current_cohort = 0, live_saturated_strength = 0;
+        uint64_t live_base_no_eligible_depth = 0, live_base_eligible_without_live_hint = 0;
         std::array<uint64_t, 8> base_states{};
         void write(std::ostream& output) const {
             output << "{\"samples\":" << count << ",\"eligible_candidates\":" << eligible
                    << ",\"live_eligible_candidates\":" << live_eligible
-                   << ",\"hypothetical_overrides\":" << overrides << ",\"base_states\":[";
+                   << ",\"hypothetical_overrides\":" << overrides
+                   << ",\"live_base_without_alternative\":" << live_base_without_alternative
+                   << ",\"live_base_equal_ranks\":" << live_base_equal_ranks
+                   << ",\"live_base_already_worst\":" << live_base_already_worst
+                   << ",\"only_ineligible_worse\":" << only_ineligible_worse
+                   << ",\"live_current_cohort\":" << live_current_cohort
+                   << ",\"live_saturated_strength\":" << live_saturated_strength
+                   << ",\"live_base_no_eligible_depth\":" << live_base_no_eligible_depth
+                   << ",\"live_base_eligible_without_live_hint\":" << live_base_eligible_without_live_hint
+                   << ",\"base_states\":[";
             for (std::size_t index = 0; index < base_states.size(); ++index) {
                 if (index) output << ',';
                 output << base_states[index];
@@ -352,16 +398,41 @@ class Observer final : public CacheObservationSink {
     };
     struct PassStats {
         uint64_t vertices = 0, designated = 0, evictions = 0;
-        Samples immediate, delivered;
+        std::array<Samples, kViews> samples;
     };
+    enum class UpdateKind : uint8_t { HINT, INVALIDATE_READ, WRITE_BARRIER };
     struct Update {
         uint64_t line = 0, value = 0, order = 0, ready = 0;
-        bool invalidate = false;
+        UpdateKind kind = UpdateKind::HINT;
     };
     struct Trial {
         uint64_t base = 0, alternative = 0, start = 0, expires = 0;
+        uint64_t base_end = 0, alternative_end = 0;
         int32_t next = -1;
         bool active = false;
+    };
+    struct TrialStats {
+        uint64_t started = 0, dropped = 0, base_first = 0, alternative_first = 0;
+        uint64_t base_first_llc = 0, alternative_first_llc = 0;
+        uint64_t base_first_memory = 0, alternative_first_memory = 0;
+        uint64_t base_first_before_endpoint = 0, alternative_first_before_endpoint = 0;
+        uint64_t base_first_before_both_endpoints = 0, alternative_first_before_both_endpoints = 0;
+        uint64_t censored_horizon = 0, censored_pass = 0;
+        std::size_t active = 0, peak = 0;
+        void write(std::ostream& output) const {
+            output << "{\"started\":" << started << ",\"capacity_dropped\":" << dropped
+                   << ",\"base_first\":" << base_first << ",\"alternative_first\":" << alternative_first
+                   << ",\"base_first_llc\":" << base_first_llc
+                   << ",\"alternative_first_llc\":" << alternative_first_llc
+                   << ",\"base_first_memory\":" << base_first_memory
+                   << ",\"alternative_first_memory\":" << alternative_first_memory
+                   << ",\"base_first_before_endpoint\":" << base_first_before_endpoint
+                   << ",\"alternative_first_before_endpoint\":" << alternative_first_before_endpoint
+                   << ",\"base_first_before_both_endpoints\":" << base_first_before_both_endpoints
+                   << ",\"alternative_first_before_both_endpoints\":" << alternative_first_before_both_endpoints
+                   << ",\"censored_horizon\":" << censored_horizon
+                   << ",\"censored_pass\":" << censored_pass << ",\"peak_pending\":" << peak << '}';
+        }
     };
     struct BuildAccess {
         Observer& observer;
@@ -402,13 +473,29 @@ class Observer final : public CacheObservationSink {
                 return &shadow_[start + way];
         return nullptr;
     }
-    State state(const Shadow& line, bool delayed) const {
+    void invalidateOrdinary(Shadow& line, bool write) {
+        for (std::size_t view : {kImmediate, kDelivered}) {
+            line.states[view] = State::INVALIDATED;
+            line.values[view] = 0;
+        }
+        // A write advances every view's order cutoff, but cannot resurrect pending evidence.
+        if (!write) {
+            for (std::size_t view : {kPreservedImmediate, kPreservedDelivered}) {
+                line.states[view] = State::INVALIDATED;
+                line.values[view] = 0;
+            }
+        } else if (line.states[kPreservedDelivered] == State::PENDING) {
+            line.states[kPreservedDelivered] = State::INVALIDATED;
+            line.values[kPreservedDelivered] = 0;
+        }
+    }
+    State state(const Shadow& line, std::size_t view) const {
         if (!isProperty(line.line))
             return State::NON_PROPERTY;
-        const State raw = delayed ? line.delayed_state : line.immediate_state;
+        const State raw = line.states[view];
         if (raw != State::LIVE)
             return raw;
-        const uint64_t end = (delayed ? line.delayed : line.immediate) >> 3;
+        const uint64_t end = line.values[view] >> 3;
         if (end <= pass_base_ || end - pass_base_ > profile_.bins)
             return State::OLD_PASS;
         return end <= watermark_ ? State::EXPIRED : State::LIVE;
@@ -428,16 +515,21 @@ class Observer final : public CacheObservationSink {
         } else if (line->order != update.order) {
             ++stale_;
         } else {
-            line->delayed = update.value;
-            line->delayed_state = update.invalidate ? State::INVALIDATED :
+            line->values[kDelivered] = update.value;
+            line->states[kDelivered] = update.kind != UpdateKind::HINT ? State::INVALIDATED :
                 update.value ? State::LIVE : State::UNKNOWN;
+            if (update.kind != UpdateKind::WRITE_BARRIER) {
+                line->values[kPreservedDelivered] = update.value;
+                line->states[kPreservedDelivered] = update.kind == UpdateKind::INVALIDATE_READ ?
+                    State::INVALIDATED : update.value ? State::LIVE : State::UNKNOWN;
+            }
             ++applied_;
         }
     }
-    void enqueue(uint64_t line, uint64_t value, bool invalidate) {
+    void enqueue(uint64_t line, uint64_t value, UpdateKind kind) {
         if (queued_ == kQueue || step_ > UINT64_MAX - kLatency)
             throw std::length_error("window-observer-required-update-overflow");
-        queue_[(queue_head_ + queued_) % kQueue] = {line, value, order_, step_ + kLatency, invalidate};
+        queue_[(queue_head_ + queued_) % kQueue] = {line, value, order_, step_ + kLatency, kind};
         ++queued_;
         ++enqueued_;
         queue_peak_ = std::max(queue_peak_, queued_);
@@ -455,7 +547,7 @@ class Observer final : public CacheObservationSink {
         ++markers_;
     }
 
-    void sample(std::size_t set, const CacheLine* lines, std::size_t base, bool delayed,
+    void sample(std::size_t set, const CacheLine* lines, std::size_t base, std::size_t view,
                 Samples& total, Samples& pass) {
         if (lines[base].rrpv < 7)
             throw std::logic_error("window-observer-non-GRASP-eviction-candidate");
@@ -465,99 +557,145 @@ class Observer final : public CacheObservationSink {
         };
         add(&Samples::count, 1);
         const Shadow* entries = shadow_.data() + set * ways_;
-        const State base_state = state(entries[base], delayed);
+        const State base_state = state(entries[base], view);
         ++total.base_states[static_cast<std::size_t>(base_state)];
         ++pass.base_states[static_cast<std::size_t>(base_state)];
         std::size_t proposed = base;
+        uint64_t alternatives = 0, equal_ranks = 0, eligible_alternatives = 0;
+        bool worse_ineligible = false;
         for (std::size_t way = 0; way < ways_; ++way) {
             if (!lines[way].valid || entries[way].line != lines[way].line_addr)
                 throw std::logic_error("window-observer-residency-mismatch");
-            if (lines[way].rrpv < 7 || !isProperty(lines[way].line_addr))
+            if (!isProperty(lines[way].line_addr))
                 continue;
-            add(&Samples::eligible, 1);
-            if (state(entries[way], delayed) != State::LIVE)
+            const bool eligible = lines[way].rrpv >= 7;
+            if (eligible) {
+                add(&Samples::eligible, 1);
+                if (way != base)
+                    ++eligible_alternatives;
+            }
+            if (state(entries[way], view) != State::LIVE)
                 continue;
-            add(&Samples::live_eligible, 1);
-            if (base_state != State::LIVE)
-                continue;
-            const uint64_t a = delayed ? entries[proposed].delayed : entries[proposed].immediate;
-            const uint64_t b = delayed ? entries[way].delayed : entries[way].immediate;
-            const uint64_t da = profile_.distance(a, watermark_, pass_base_);
+            const uint64_t b = entries[way].values[view];
             const uint64_t db = profile_.distance(b, watermark_, pass_base_);
+            if (eligible) {
+                add(&Samples::live_eligible, 1);
+                if (db == 0) add(&Samples::live_current_cohort, 1);
+                if ((b & 7) == 7) add(&Samples::live_saturated_strength, 1);
+            }
+            if (base_state != State::LIVE || way == base)
+                continue;
+            const uint64_t original = entries[base].values[view];
+            const uint64_t original_distance = profile_.distance(original, watermark_, pass_base_);
+            if (!eligible) {
+                worse_ineligible = worse_ineligible || db > original_distance ||
+                    (db == original_distance && (b & 7) < (original & 7));
+                continue;
+            }
+            ++alternatives;
+            if (db == original_distance && (b & 7) == (original & 7))
+                ++equal_ranks;
+            const uint64_t a = entries[proposed].values[view];
+            const uint64_t da = profile_.distance(a, watermark_, pass_base_);
             if (db > da || (db == da && (b & 7) < (a & 7)))
                 proposed = way;
         }
         if (proposed != base) {
             add(&Samples::overrides, 1);
-            if (delayed)
-                startTrial(set, entries[base].line, entries[proposed].line);
+            if (view == kDelivered || view == kPreservedDelivered)
+                startTrial(view == kDelivered ? 0 : 1, set, entries[base].line, entries[proposed].line,
+                    entries[base].values[view] >> 3, entries[proposed].values[view] >> 3);
+        } else if (base_state == State::LIVE) {
+            if (!alternatives) {
+                add(&Samples::live_base_without_alternative, 1);
+                add(eligible_alternatives ? &Samples::live_base_eligible_without_live_hint :
+                    &Samples::live_base_no_eligible_depth, 1);
+            } else if (equal_ranks == alternatives)
+                add(&Samples::live_base_equal_ranks, 1);
+            else
+                add(&Samples::live_base_already_worst, 1);
+            if (worse_ineligible)
+                add(&Samples::only_ineligible_worse, 1);
         }
     }
 
-    void startTrial(std::size_t set, uint64_t base, uint64_t alternative) {
+    void startTrial(std::size_t group, std::size_t set, uint64_t base, uint64_t alternative,
+                    uint64_t base_end, uint64_t alternative_end) {
         if (requests_ > UINT64_MAX - kHorizon)
             throw std::overflow_error("window-observer-trial-horizon-overflow");
-        if (active_trials_ == kTrials)
+        auto& stats = trial_stats_[group];
+        if (stats.active == kTrials)
             expireTrials(false);
-        if (active_trials_ == kTrials) {
-            ++trials_dropped_;
+        if (stats.active == kTrials) {
+            ++stats.dropped;
             return;
         }
-        for (std::size_t index = 0; index < trials_.size(); ++index) {
+        for (std::size_t index = group * kTrials; index < (group + 1) * kTrials; ++index) {
             auto& trial = trials_[index];
             if (trial.active)
                 continue;
-            trial = {base, alternative, requests_, requests_ + kHorizon, trial_heads_[set], true};
-            trial_heads_[set] = static_cast<int32_t>(index);
-            ++trials_started_;
-            ++active_trials_;
-            trials_peak_ = std::max(trials_peak_, active_trials_);
+            auto& head = trial_heads_[group * sets_ + set];
+            trial = {base, alternative, requests_, requests_ + kHorizon, base_end, alternative_end, head, true};
+            head = static_cast<int32_t>(index);
+            ++stats.started;
+            ++stats.active;
+            stats.peak = std::max(stats.peak, stats.active);
             return;
         }
         throw std::logic_error("window-observer-trial-accounting");
     }
     void removeTrial(std::size_t index) {
         auto& trial = trials_[index];
-        int32_t* link = &trial_heads_[(trial.base / 64) % sets_];
+        const std::size_t group = index / kTrials;
+        int32_t* link = &trial_heads_[group * sets_ + (trial.base / 64) % sets_];
         while (*link >= 0 && static_cast<std::size_t>(*link) != index)
             link = &trials_[*link].next;
         if (*link < 0 || !trial.active)
             throw std::logic_error("window-observer-trial-link");
         *link = trial.next;
         trial.active = false;
-        --active_trials_;
+        --trial_stats_[group].active;
     }
     void expireTrials(bool close) {
         for (std::size_t index = 0; index < trials_.size(); ++index) {
             const auto& trial = trials_[index];
             if (trial.active && (close || requests_ >= trial.expires)) {
-                if (requests_ >= trial.expires) ++censored_horizon_;
-                else ++censored_pass_;
+                auto& stats = trial_stats_[index / kTrials];
+                if (requests_ >= trial.expires) ++stats.censored_horizon;
+                else ++stats.censored_pass;
                 removeTrial(index);
             }
         }
     }
     void observeReuse(uint64_t line, bool at_llc, bool memory_miss) {
-        int32_t index = trial_heads_[(line / 64) % sets_];
-        while (index >= 0) {
-            const auto trial = trials_[index];
-            const int32_t next = trial.next;
-            if (requests_ >= trial.expires) {
-                ++censored_horizon_;
-                removeTrial(static_cast<std::size_t>(index));
-            } else if (requests_ > trial.start && (line == trial.base || line == trial.alternative)) {
-                if (line == trial.base) {
-                    ++base_first_;
-                    base_first_llc_ += at_llc;
-                    base_first_memory_ += memory_miss;
-                } else {
-                    ++alternative_first_;
-                    alternative_first_llc_ += at_llc;
-                    alternative_first_memory_ += memory_miss;
+        for (std::size_t group = 0; group < kTrialViews; ++group) {
+            auto& stats = trial_stats_[group];
+            int32_t index = trial_heads_[group * sets_ + (line / 64) % sets_];
+            while (index >= 0) {
+                const auto trial = trials_[index];
+                const int32_t next = trial.next;
+                if (requests_ >= trial.expires) {
+                    ++stats.censored_horizon;
+                    removeTrial(static_cast<std::size_t>(index));
+                } else if (requests_ > trial.start && (line == trial.base || line == trial.alternative)) {
+                    const bool before_both = watermark_ < trial.base_end && watermark_ < trial.alternative_end;
+                    if (line == trial.base) {
+                        ++stats.base_first;
+                        stats.base_first_llc += at_llc;
+                        stats.base_first_memory += memory_miss;
+                        stats.base_first_before_endpoint += watermark_ < trial.base_end;
+                        stats.base_first_before_both_endpoints += before_both;
+                    } else {
+                        ++stats.alternative_first;
+                        stats.alternative_first_llc += at_llc;
+                        stats.alternative_first_memory += memory_miss;
+                        stats.alternative_first_before_endpoint += watermark_ < trial.alternative_end;
+                        stats.alternative_first_before_both_endpoints += before_both;
+                    }
+                    removeTrial(static_cast<std::size_t>(index));
                 }
-                removeTrial(static_cast<std::size_t>(index));
+                index = next;
             }
-            index = next;
         }
     }
 
@@ -571,22 +709,19 @@ class Observer final : public CacheObservationSink {
     std::vector<int32_t> trial_heads_;
     std::array<PassStats, kPasses> passes_{};
     std::array<Update, kQueue> queue_{};
-    std::array<Trial, kTrials> trials_{};
-    Samples immediate_, delivered_;
+    std::array<Trial, kTrials * kTrialViews> trials_{};
+    std::array<TrialStats, kTrialViews> trial_stats_{};
+    std::array<Samples, kViews> samples_{};
     ecg_record::StreamDigest demand_digest_, victim_digest_;
     uint64_t reserved_bytes_ = 0, constructed_known_ = 0, executed_known_ = 0;
     uint64_t graph_read_bytes_ = 0, requests_ = 0, fills_ = 0, evictions_ = 0, pass_evictions_ = 0;
     uint64_t pass_count_ = 0, pass_base_ = 0, watermark_ = 0, source_ = UINT64_MAX;
     uint64_t row_first_ = 0, row_last_ = 0, expected_address_ = 0, expected_value_ = 0;
     uint64_t designated_ = 0, ordinary_reads_ = 0, ordinary_writes_ = 0, nonresident_observations_ = 0;
+    uint64_t writes_kept_live_ = 0, writes_cancelling_pending_ = 0, writes_without_live_ = 0;
     uint64_t step_ = 0, order_ = 0, markers_ = 0, drain_steps_ = 0;
     uint64_t enqueued_ = 0, dispatched_ = 0, applied_ = 0, stale_ = 0, absent_ = 0;
     std::size_t queued_ = 0, queue_head_ = 0, queue_peak_ = 0;
-    uint64_t trials_started_ = 0, trials_dropped_ = 0, base_first_ = 0, alternative_first_ = 0;
-    uint64_t base_first_llc_ = 0, alternative_first_llc_ = 0;
-    uint64_t base_first_memory_ = 0, alternative_first_memory_ = 0;
-    uint64_t censored_horizon_ = 0, censored_pass_ = 0;
-    std::size_t active_trials_ = 0, trials_peak_ = 0;
     bool open_ = false, expected_ = false, in_access_ = false, current_property_ = false;
 };
 

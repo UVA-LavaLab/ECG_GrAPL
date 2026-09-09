@@ -34,14 +34,22 @@ callback observes the actual victim and final RRIP candidate set after
 GRASP has aged it exactly once. The callback cannot return a replacement
 victim or modify any cache-line state.
 
-Two cache-sized shadow views are retained:
+The current diagnostic retains four cache-sized shadow views. The first two
+preserve the original observation as a reference:
 
 | View | Meaning |
 |---|---|
 | Immediate | Window available immediately after an actual designated access, if its line is resident in the LLC |
 | Delivered | Eight access-step update delay, one output per step, sixteen bounded entries, no coalescing; newer observations hide pending/older information |
+| Preserved immediate | Zero-delay reference in which a depth write does not discard existing graph-static potential |
+| Preserved delivered | Retain only already-published potential across a depth write; pending hints are cancelled, never restored |
 
-Ordinary depth reads and writes invalidate both views. Filling or evicting
+Ordinary depth reads and writes invalidate the first two views. Ordinary
+reads still invalidate the preserved views. Every write advances the
+event-order cutoff in all views: a delayed older hint cannot overwrite or
+revive a newer observation. Keeping a published window does not refresh its
+endpoint, recency or strength, and does not revive an expired or old-pass
+window. Filling or evicting
 a real line updates shadow residency, so metadata cannot survive a lost
 residency or apply to a different line occupying the same way. Expiry and
 pass changes are checked lazily; unknown, invalidated, pending, expired
@@ -61,14 +69,24 @@ The observer asks whether compatible live windows would distinguish the
 actual base victim from another property way already at GRASP's eviction
 RRPV. Farther cohorts and then weaker structural strength are poorer
 retention candidates; ties and unrankable base victims retain GRASP's choice.
+For a live base victim, the diagnostic separates absence of another eligible
+depth way, eligible ways lacking live hints, equal window ranks, an already
+worse-ranked base victim, and a strictly worse eligible alternative.
+It also counts a worse-ranked live way outside the eligible set without
+turning that way into a legal victim.
 
 For a delivered-view disagreement, the observer records only that pair of
-line addresses. There are at most 256 outstanding pairs. The first later
+line addresses and its sampled endpoints. Each delivered view has its own
+256-pair capacity, so adding the preserved view cannot displace reference
+pairs. The first later
 read to either line is observed during normal execution, with an explicit
 131,072-memory-request horizon and pass-end censoring. Capacity drops,
 censoring and unresolved outcomes are not counted as victories.
 Private-cache reads, LLC-reaching reads and memory misses are distinguished.
 Writes still invalidate window state, but do not resolve a read-order pair.
+The preserved views use their explicit write rule instead. Counts of reads
+before the sampled endpoint(s) do not imply that the same hint remained
+live throughout the intervening execution.
 
 These outcomes are not counterfactual miss savings. Changing a victim would
 change later cache history, and a later read can hit a private cache. No
@@ -103,6 +121,11 @@ policy labels. Diagnostic storage is separately bounded at 128 MiB
 by default, inside the algorithm's workspace reservation. The raw report
 contains aggregate and per-pass sample counts, state histograms, bounded
 queue/trial accounting and immutable-stream digests.
+Schema `ecg.window-eviction-observer.v2` adds write-survival and candidate
+attribution; the first run below retains its original v1 receipts.
+The extra shadow values and ordering state are diagnostic storage, not
+proof that simultaneous hint retention and an order cutoff fit the proposed
+67-bit native payload. That hardware contract remains unqualified.
 
 Passing noninterference establishes trustworthy observation of this one
 baseline history. It does not authorize enabling the window policy,

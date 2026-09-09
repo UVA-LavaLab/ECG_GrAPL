@@ -260,6 +260,7 @@ def test_window_observer_does_not_change_grasp_or_bfs(tmp_path):
         assert payload["diagnostic_only"] is True
         assert payload["measurement_scope"] == "observation-only-unchanged-grasp"
         observer = payload["window_observer"]
+        assert observer["schema"] == "ecg.window-eviction-observer.v2"
         assert observer["mode"] == mode and observer["active_policy_changed"] is False
         assert observer["diagnostic_costs_in_cache_counters"] is False
         assert observer["passes"] == payload["workload"]["passes"]
@@ -286,6 +287,19 @@ def test_window_observer_does_not_change_grasp_or_bfs(tmp_path):
     forged = copy.deepcopy(b)
     forged["window_observer"]["queue_stale"] += 1
     with pytest.raises(RecordReceiptError, match="queue"):
+        validate_window_observer(forged, options)
+    forged = copy.deepcopy(b)
+    forged["window_observer"]["preserved_delivered"]["live_base_without_alternative"] += 1
+    with pytest.raises(RecordReceiptError, match="attribution"):
+        validate_window_observer(forged, options)
+    forged = copy.deepcopy(b)
+    forged["window_observer"]["write_survival_rule"] = "allow-stale-updates"
+    with pytest.raises(RecordReceiptError, match="write-survival"):
+        validate_window_observer(forged, options)
+    forged = copy.deepcopy(b)
+    forged["window_observer"]["preserved_trials"]["base_first_before_both_endpoints"] += (
+        forged["window_observer"]["preserved_trials"]["base_first"] + 1)
+    with pytest.raises(RecordReceiptError, match="sampled endpoints"):
         validate_window_observer(forged, options)
     from scripts.experiments.ecg.flows.experiment_run import validate_window_observer_pairs
     jobs = []

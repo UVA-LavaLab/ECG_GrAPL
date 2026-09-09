@@ -330,6 +330,121 @@ void testWindowObservationCallbacks() {
     check(rejected, "diagnostic storage is rejected before exceeding its explicit reservation");
 }
 
+void testWindowPublishedWriteSurvival() {
+    using cache_sim::window_observation::Observer;
+    const Fixture graph(128, true, {{0, 0, 1}, {0, 16, 1}, {1, 0, 1}, {16, 16, 1}});
+    for (unsigned scenario = 0; scenario < 6; ++scenario) {
+        Observer observer(graph.view(), 0x1000, 1, 3, true, 1 << 20);
+        std::vector<cache_sim::CacheLine> lines(3);
+        for (std::size_t way = 0; way < lines.size(); ++way) {
+            lines[way].line_addr = way < 2 ? 0x1000 + way * 64 : 0x2000;
+            lines[way].valid = true;
+            lines[way].rrpv = 7;
+        }
+        observer.initialSet(0, lines.data(), lines.size());
+        observer.beginPass();
+        observer.visitVertex(0);
+        for (uint32_t index = 0; index < 2; ++index) {
+            observer.designated(index, index * 16);
+            observer.beforeAccess(0x1000 + index * 64, false);
+            observer.afterAccess(0x1000 + index * 64, false, false, false);
+        }
+        if (scenario != 1)
+            for (unsigned step = 0; step < Observer::kLatency; ++step) {
+                observer.beforeAccess(0x2000, false);
+                observer.afterAccess(0x2000, false, false, false);
+            }
+        if (scenario == 2)
+            observer.visitVertex(8);
+        if (scenario == 5) {
+            observer.endPass();
+            observer.beginPass();
+            observer.visitVertex(0);
+        }
+        const bool write = scenario != 3;
+        observer.beforeAccess(0x1000, write);
+        observer.afterAccess(0x1000, write, false, false);
+        if (scenario == 4) {
+            observer.visitVertex(1);
+            observer.designated(2, 0);
+            observer.beforeAccess(0x1000, false);
+            observer.afterAccess(0x1000, false, false, false);
+        }
+        for (uint64_t event = 0; event < Observer::kSamplePeriod; ++event) {
+            const std::size_t victim = event + 1 == Observer::kSamplePeriod ? 0 : 2;
+            const uint64_t incoming = 0x4000 + event * 64;
+            observer.beforeAccess(incoming, false);
+            observer.insertion(0, lines.data(), lines.size(), victim, incoming);
+            lines[victim].line_addr = incoming;
+            observer.afterAccess(incoming, false, true, true);
+        }
+        observer.endPass();
+        observer.finish(scenario == 4 ? 3 : 2);
+        std::ostringstream report;
+        observer.write(report);
+        const auto text = report.str();
+        const auto start = text.find("\"preserved_delivered\":");
+        const auto section = start == std::string::npos ? "" : text.substr(start, text.find('}', start) - start);
+        check(section.find(std::string("\"hypothetical_overrides\":") + (scenario == 0 ? "1" : "0")) !=
+                  std::string::npos,
+              "write survival cannot revive pending, expired, read-invalidated, superseded or prior-pass evidence");
+        if (scenario == 1)
+            check(text.find("\"writes_cancelling_pending\":1") != std::string::npos,
+                  "a discovery write keeps the newer-event cutoff and cancels an undelivered hint");
+    }
+}
+
+void testWindowCandidateAttribution() {
+    using cache_sim::window_observation::Observer;
+    const char* expected[] = {"\"only_ineligible_worse\":1", "\"live_base_equal_ranks\":1",
+                              "\"live_base_already_worst\":1", "\"hypothetical_overrides\":1",
+                              "\"live_base_eligible_without_live_hint\":1"};
+    for (unsigned scenario = 0; scenario < 5; ++scenario) {
+        const uint32_t future_a = scenario == 1 || scenario == 2 ? 16 : 1;
+        const uint32_t future_b = scenario == 1 ? 17 : scenario == 2 ? 1 : 16;
+        std::vector<std::tuple<uint32_t, uint32_t, int32_t>> edges{
+            {0, 0, 1}, {0, 16, 1}, {future_a, 0, 1}};
+        if (scenario != 4)
+            edges.emplace_back(future_b, 16, 1);
+        const Fixture graph(128, true, edges);
+        Observer observer(graph.view(), 0x1000, 1, 3, true, 1 << 20);
+        std::vector<cache_sim::CacheLine> lines(3);
+        for (std::size_t way = 0; way < lines.size(); ++way) {
+            lines[way].line_addr = way < 2 ? 0x1000 + way * 64 : 0x2000;
+            lines[way].valid = true;
+            lines[way].rrpv = scenario == 0 && way == 1 ? 6 : 7;
+        }
+        observer.initialSet(0, lines.data(), lines.size());
+        observer.beginPass();
+        observer.visitVertex(0);
+        for (uint32_t index = 0; index < 2; ++index) {
+            observer.designated(index, index * 16);
+            observer.beforeAccess(0x1000 + index * 64, false);
+            observer.afterAccess(0x1000 + index * 64, false, false, false);
+        }
+        for (uint64_t event = 0; event < Observer::kSamplePeriod; ++event) {
+            const std::size_t victim = event + 1 == Observer::kSamplePeriod ? 0 : 2;
+            const uint64_t incoming = 0x4000 + event * 64;
+            observer.beforeAccess(incoming, false);
+            observer.insertion(0, lines.data(), lines.size(), victim, incoming);
+            lines[victim].line_addr = incoming;
+            observer.afterAccess(incoming, false, true, true);
+        }
+        observer.endPass();
+        observer.finish(2);
+        std::ostringstream report;
+        observer.write(report);
+        const auto text = report.str();
+        const auto start = text.find("\"delivered\":");
+        const auto section = text.substr(start, text.find('}', start) - start);
+        check(section.find(expected[scenario]) != std::string::npos,
+              "candidate attribution distinguishes protected, equal-rank, already-worst and actionable cases");
+        if (scenario == 0)
+            check(section.find("\"hypothetical_overrides\":0") != std::string::npos,
+                  "an ineligible worse-ranked line is diagnostic evidence, not a legal replacement candidate");
+    }
+}
+
 void testUnboundRecordPreparation() {
     using namespace ecg_algorithm;
     testWindowObservationProfile();
@@ -447,6 +562,8 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testWindowCandidateAttribution();
+    testWindowPublishedWriteSurvival();
     testWindowObservationCallbacks();
     testPoptDirectMatrix();
     testUnboundRecordPreparation();

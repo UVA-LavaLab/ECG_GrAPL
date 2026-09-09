@@ -278,12 +278,27 @@ def validate_window_observer(payload: dict[str, Any], options: argparse.Namespac
     work = payload["workload"]
     require(work["algorithm"] == "bfs" and work["carrier"] == "csr" and work["bfs_direction"] == "td" and
             payload["policy"] == "GRASP_PAPER" and payload["backend"] == "cache_sim" and
-            isinstance(observer, dict) and observer.get("schema") == "ecg.window-eviction-observer.v1" and
+            isinstance(observer, dict) and observer.get("schema") in (
+                "ecg.window-eviction-observer.v1", "ecg.window-eviction-observer.v2") and
             observer.get("mode") == options.window_observer and observer.get("active_policy_changed") is False and
             observer.get("diagnostic_costs_in_cache_counters") is False and
             observer.get("delivery_model") == "uncoalesced-eight-access-steps-serialized-markers" and
             _integer(payload["metrics"], "prefetch_fills") == 0,
             "window observer changed policy or omitted its diagnostic limitations")
+    extended = observer["schema"] == "ecg.window-eviction-observer.v2"
+    views = ("immediate", "delivered", "preserved_immediate", "preserved_delivered") if extended else (
+        "immediate", "delivered")
+    attribution = ("live_base_without_alternative", "live_base_equal_ranks", "live_base_already_worst",
+                   "only_ineligible_worse", "live_current_cohort", "live_saturated_strength",
+                   "live_base_no_eligible_depth", "live_base_eligible_without_live_hint")
+    if extended:
+        require(observer.get("write_survival_rule") == "published-only-pending-cancelled" and
+                observer.get("read_pair_window_scope") == "sampled-endpoints-not-live-state" and
+                _integer(observer, "trial_views") == 2 and
+                sum(_integer(observer, key) for key in (
+                    "writes_kept_live", "writes_cancelling_pending", "writes_without_live")) ==
+                _integer(observer, "ordinary_writes"),
+                "window observer write-survival contract or accounting mismatch")
     minimum = max(8, (work["vertices"] + 255) // 256)
     cohort = 1 << (minimum - 1).bit_length()
     require(_integer(observer, "cohort_rows") == cohort and _integer(observer, "bin_rows") == cohort // 8 and
@@ -314,7 +329,7 @@ def validate_window_observer(payload: dict[str, Any], options: argparse.Namespac
         "window observer status interpretation changed")
     for key in ("demand_digest", "victim_digest"):
         require(bool(re.fullmatch("[0-9a-f]{16}", str(observer.get(key, "")))), "missing observer noninterference digest")
-    for key in ("immediate", "delivered"):
+    for key in views:
         values = observer.get(key)
         require(isinstance(values, dict) and isinstance(values.get("base_states"), list) and
                 len(values["base_states"]) == 8 and all(type(v) is int and v >= 0 for v in values["base_states"]) and
@@ -323,22 +338,39 @@ def validate_window_observer(payload: dict[str, Any], options: argparse.Namespac
                 _integer(values, "hypothetical_overrides") <= values["base_states"][6] and
                 _integer(values, "live_eligible_candidates") <= _integer(values, "eligible_candidates"),
                 "window observer sample accounting mismatch")
-    trials = observer.get("trials")
-    require(isinstance(trials, dict) and _integer(trials, "started") + _integer(trials, "capacity_dropped") ==
-            observer["delivered"]["hypothetical_overrides"] and _integer(trials, "started") ==
-            sum(_integer(trials, key) for key in ("base_first", "alternative_first", "censored_horizon", "censored_pass")) and
-            _integer(trials, "peak_pending") <= 256,
-            "window observer outcomes or censoring do not close")
-    for side in ("base", "alternative"):
-        require(_integer(trials, side + "_first_memory") <= _integer(trials, side + "_first_llc") <=
-                _integer(trials, side + "_first"), "window observer confuses private reuse with LLC demand")
+        if extended:
+            require(sum(_integer(values, field) for field in attribution[:3]) +
+                    values["hypothetical_overrides"] == values["base_states"][6] and
+                    _integer(values, "only_ineligible_worse") <= values["base_states"][6] - values["hypothetical_overrides"] and
+                    _integer(values, "live_current_cohort") <= values["live_eligible_candidates"] and
+                    _integer(values, "live_saturated_strength") <= values["live_eligible_candidates"] and
+                    _integer(values, "live_base_no_eligible_depth") +
+                    _integer(values, "live_base_eligible_without_live_hint") == values["live_base_without_alternative"],
+                    "window observer candidate attribution does not partition live base victims")
+    trial_views = (("trials", "delivered"), ("preserved_trials", "preserved_delivered")) if extended else (
+        ("trials", "delivered"),)
+    for trial_key, view in trial_views:
+        trials = observer.get(trial_key)
+        require(isinstance(trials, dict) and _integer(trials, "started") + _integer(trials, "capacity_dropped") ==
+                observer[view]["hypothetical_overrides"] and _integer(trials, "started") ==
+                sum(_integer(trials, key) for key in ("base_first", "alternative_first", "censored_horizon", "censored_pass")) and
+                _integer(trials, "peak_pending") <= 256,
+                "window observer outcomes or censoring do not close")
+        for side in ("base", "alternative"):
+            require(_integer(trials, side + "_first_memory") <= _integer(trials, side + "_first_llc") <=
+                    _integer(trials, side + "_first"), "window observer confuses private reuse with LLC demand")
+            if extended:
+                require(_integer(trials, side + "_first_before_both_endpoints") <=
+                        _integer(trials, side + "_first_before_endpoint") <= trials[side + "_first"],
+                        "window observer overcounts reads within sampled endpoints")
     per_pass = observer.get("per_pass")
     require(isinstance(per_pass, list) and len(per_pass) == work["passes"] <= 128 and
             sum(_integer(row, "designated_reads") for row in per_pass) == work["actual_records"] and
             sum(_integer(row, "evictions") for row in per_pass) == observer["pass_evictions"],
             "window observer pass accounting mismatch")
-    for key in ("immediate", "delivered"):
-        for field in ("samples", "eligible_candidates", "live_eligible_candidates", "hypothetical_overrides"):
+    for key in views:
+        for field in ("samples", "eligible_candidates", "live_eligible_candidates", "hypothetical_overrides") + (
+                attribution if extended else ()):
             require(all(isinstance(row.get(key), dict) for row in per_pass) and
                     sum(_integer(row[key], field) for row in per_pass) == observer[key][field],
                     "window observer per-pass samples do not sum to totals")
@@ -528,6 +560,8 @@ def run_cache_cell(
         row.update(validate_traffic_phases(payload))
         observer = validate_window_observer(payload, options)
         if observing:
+            require(observer["schema"] == "ecg.window-eviction-observer.v2",
+                    "new observer runs require write-survival attribution")
             row.update(window_observer=options.window_observer,
                        window_demand_digest=observer["demand_digest"], window_victim_digest=observer["victim_digest"])
         row.update({
