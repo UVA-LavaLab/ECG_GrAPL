@@ -3,6 +3,7 @@
 from pathlib import Path
 import importlib.util
 import copy
+import csv
 import json
 import os
 import shutil
@@ -227,6 +228,128 @@ def test_direction_optimized_cli_uses_real_incoming_csr(tmp_path):
         assert work["bfs_bu_transport"] == "ordinary-bitmap"
         assert work["passes"] == work["bfs_td_levels"]
         assert work["levels"] == work["bfs_td_levels"] + work["bfs_bu_levels"]
+
+
+def test_window_observer_does_not_change_grasp_or_bfs(tmp_path):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    payloads = []
+    for mode in ("off", "control", "window"):
+        # Different output-path allocations can change small CSR cache coloring.
+        output = tmp_path / "same-output.json"
+        command = [
+            str(binary), "--algorithm", "bfs", "--graph", str(graph),
+            "--policy", "GRASP_PAPER", "--window-observer", mode, "--evidence", "--values",
+            "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256", "--l2-ways", "2",
+            "--llc-bytes", "1024", "--llc-ways", "2", "--output", str(output),
+        ]
+        ran = subprocess.run(
+            ["setarch", os.uname().machine, "-R", *command],
+            env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+            capture_output=True, text=True, timeout=30, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        payload = json.loads(output.read_text())
+        if mode == "off":
+            assert payload["diagnostic_only"] is False and payload["window_observer"] is None
+            payloads.append(payload)
+            continue
+        assert payload["diagnostic_only"] is True
+        assert payload["measurement_scope"] == "observation-only-unchanged-grasp"
+        observer = payload["window_observer"]
+        assert observer["mode"] == mode and observer["active_policy_changed"] is False
+        assert observer["diagnostic_costs_in_cache_counters"] is False
+        assert observer["passes"] == payload["workload"]["passes"]
+        assert observer["designated_reads"] == payload["workload"]["actual_records"]
+        from scripts.experiments.ecg.algorithm_matrix import parse_options, validate_window_observer
+        options = parse_options(f"--graph {graph} --window-observer {mode}")
+        validate_window_observer(payload, options)
+        payloads.append(payload)
+    off, a, b = payloads
+    assert off["workload"] == a["workload"] == b["workload"]
+    assert off["metrics"] == a["metrics"] == b["metrics"]
+    assert off["traffic_phases"] == a["traffic_phases"] == b["traffic_phases"]
+    for key in ("demand_digest", "victim_digest", "memory_requests", "llc_fills", "llc_evictions"):
+        assert a["window_observer"][key] == b["window_observer"][key], key
+    assert b["window_observer"]["constructed_records"] == b["workload"]["source_edges"]
+    assert b["window_observer"]["queue_pending"] == 0
+    from scripts.experiments.ecg.algorithm_matrix import verify_window_noninterference
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    verify_window_noninterference(a, b)
+    forged = copy.deepcopy(b)
+    forged["window_observer"]["victim_digest"] = "0000000000000000"
+    with pytest.raises(RecordReceiptError, match="noninterference"):
+        verify_window_noninterference(a, forged)
+    forged = copy.deepcopy(b)
+    forged["window_observer"]["queue_stale"] += 1
+    with pytest.raises(RecordReceiptError, match="queue"):
+        validate_window_observer(forged, options)
+    from scripts.experiments.ecg.flows.experiment_run import validate_window_observer_pairs
+    jobs = []
+    for mode, payload in (("control", a), ("window", b)):
+        data_path, csv_path = tmp_path / f"{mode}-saved.json", tmp_path / f"{mode}-saved.csv"
+        data_path.write_text(json.dumps(payload))
+        with csv_path.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=[
+                "status", "json_path", "graph_sha256", "benchmark_binary_sha256",
+                "algorithm_source", "l3_size", "l3_ways"])
+            writer.writeheader()
+            writer.writerow(dict(status="ok", json_path=str(data_path), graph_sha256="a" * 64,
+                                 benchmark_binary_sha256="b" * 64, algorithm_source=0, l3_size="1kB", l3_ways=2))
+        jobs.append(SimpleNamespace(output_csv=csv_path, metadata={"window_observer": mode}))
+    assert validate_window_observer_pairs(jobs)[0] is True
+    assert validate_window_observer_pairs(jobs[:1])[0] is False
+    assert validate_window_observer_pairs([*jobs, jobs[0]])[0] is False
+
+
+@pytest.mark.parametrize("extra", [
+    ["--algorithm", "sssp"], ["--policy", "LRU"], ["--mode", "replacement"],
+    ["--bfs-direction", "do"], ["--record-preprocess", "traversal"],
+])
+def test_window_observer_rejects_incompatible_paths_before_graph_loading(tmp_path, extra):
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    ran = subprocess.run([
+        str(binary), "--algorithm", "bfs", "--graph", str(tmp_path / "not-read.sg"),
+        "--policy", "GRASP_PAPER", "--window-observer", "window", *extra,
+    ], capture_output=True, text=True, timeout=10, check=False)
+    assert ran.returncode == 2
+    assert "window observer requires" in ran.stderr or "current-record-modes-own" in ran.stderr
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_window_observer_rejects_native_runners(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--current-algorithms", "--ecg-equivalence", "--benchmark", "bfs",
+        "--options", f"--graph {tmp_path / 'not-read.sg'} --window-observer window",
+        "--prefetcher", "none", "--flowthrough", "off",
+    ])
+    services = SimpleNamespace(parse_size_bytes=roi_matrix.parse_size_bytes)
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("GRASP_PAPER"), "8MB", backend, services)
+    assert rows[0]["status"] == "error" and rows[0]["error"] == "window observer is cache_sim-only"
+
+
+def test_window_observer_profile_is_one_paired_condition(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.algorithm_matrix import parse_options
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    args = experiment_run.parse_args(["--profile", "ecg_window_observer", "--list"])
+    jobs = experiment_run.expand_jobs(args, manifest, tmp_path)
+    assert len(jobs) == 2
+    assert {parse_options(job.metadata["options"]).window_observer for job in jobs} == {"control", "window"}
+    assert {tuple(job.metadata["expected_policy_labels"]) for job in jobs} == {
+        ("GRASP_PAPER_OBS_CONTROL",), ("GRASP_PAPER_OBS_WINDOW",)}
+    for job in jobs:
+        assert job.metadata["benchmark"] == "bfs" and job.metadata["policies"] == ["GRASP_PAPER"]
+        assert parse_options(job.metadata["options"]).bfs_direction == "td"
+        assert job.command[job.command.index("--l3-sizes") + 1] == "8MB"
+        assert job.command[job.command.index("--cache-sim-omp-threads") + 1] == "1"
 
 
 @pytest.mark.parametrize("width", [4, 8])

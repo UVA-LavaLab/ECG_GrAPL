@@ -6842,8 +6842,8 @@ def write_outputs(out_dir: Path, rows: list[dict[str, Any]]) -> None:
 
 def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -> list[str]:
     if getattr(args, "current_algorithms", False):
-        return algorithm_matrix.policy_labels(
-            policies, algorithm_matrix.parse_options(args.options).record_base_policy)
+        options = algorithm_matrix.parse_options(args.options)
+        return algorithm_matrix.policy_labels(policies, options.record_base_policy, options.window_observer)
     return [spec.label for spec in policies]
 
 

@@ -233,8 +233,106 @@ void testPoptDirectMatrix() {
           "P-OPT uses the correct typed bank and excludes source-only streamed output");
 }
 
+void testWindowObservationProfile() {
+    using cache_sim::window_observation::Profile;
+    const Profile profile(64, 32);
+    uint64_t entry = 0;
+    check(profile.reverse(entry, 26) == 0 && profile.reverse(entry, 18) == 0x206 &&
+          profile.reverse(entry, 12) == 0x20e && profile.reverse(entry, 12) == 0x20e &&
+          (entry >> 49) == 0,
+          "window observer freezes same-row line hints and counts only future distinct rows");
+    check(profile.decode(0x20e, 12, 0) == 0x39 &&
+          profile.decode(0x20e, 12, 32) == ((uint64_t{39} << 3) | 1),
+          "window observer captures an absolute endpoint in the original pass");
+    entry = 0;
+    check(profile.reverse(entry, 40) == 0 && profile.reverse(entry, 12) == 0x242 &&
+          profile.reverse(entry, 12) == 0x242 && profile.decode(0x242, 12, 0) == 0x58,
+          "same-row duplicates preserve the frozen next-cohort token");
+    entry = 0;
+    check(profile.reverse(entry, 32) == 0 && profile.reverse(entry, 31) == 0x240 &&
+          profile.reverse(entry, 30) == 0x207,
+          "the selected cohort does not gain an invented successor at its boundary");
+    const Profile partial(35, 32);
+    check(partial.decode(0x240, 12, 0) == (uint64_t{9} << 3),
+          "a partial final cohort ends at the final logical bin");
+    for (uint16_t token : {uint16_t{1}, uint16_t{0x241}, uint16_t{0x400}}) {
+        bool rejected = false;
+        try { partial.decode(token, 12, 0); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        check(rejected, "window observer rejects noncanonical or outside-domain tokens");
+    }
+    const Profile distant(320, 32);
+    entry = 0;
+    check(distant.reverse(entry, 256) == 0 && distant.reverse(entry, 12) == 0,
+          "cohort gap overflow becomes UNKNOWN, never a nearer false window");
+    entry = 0;
+    for (uint32_t row = 12; row > 0; --row)
+        profile.reverse(entry, row);
+    check(profile.reverse(entry, 0) == 0x23b,
+          "window structural strength saturates without becoming a probability");
+    const Profile patents(3774768);
+    check(patents.cohort_rows == 16384 && patents.bin_rows == 2048 && patents.bins == 1844,
+          "the fixed structural sizing rule agrees with the Patents contract");
+}
+
+void testWindowObservationCallbacks() {
+    using cache_sim::window_observation::Observer;
+    const Fixture graph(128, true, {{0, 0, 1}, {0, 1, 1}, {0, 16, 1}, {1, 0, 1}, {16, 16, 1}});
+    Observer observer(graph.view(), 0x1000, 1, 3, true, 1 << 20);
+    std::vector<cache_sim::CacheLine> lines(3);
+    for (std::size_t way = 0; way < lines.size(); ++way) {
+        lines[way].line_addr = way < 2 ? 0x1000 + way * 64 : 0x2000;
+        lines[way].valid = true;
+        lines[way].rrpv = 7;
+    }
+    observer.initialSet(0, lines.data(), lines.size());
+    observer.beginPass();
+    observer.visitVertex(0);
+    for (uint32_t index = 0; index < 3; ++index) {
+        const uint32_t target = index == 2 ? 16 : index;
+        observer.designated(index, target);
+        observer.beforeAccess(0x1000 + target * 4, false);
+        observer.afterAccess(0x1000 + target * 4, false, false, false);
+    }
+    for (uint64_t event = 0; event < Observer::kSamplePeriod; ++event) {
+        const std::size_t victim = event + 1 == Observer::kSamplePeriod ? 0 : 2;
+        const uint64_t incoming = 0x4000 + event * 64;
+        observer.beforeAccess(incoming, false);
+        const auto before = lines;
+        observer.insertion(0, lines.data(), lines.size(), victim, incoming);
+        for (std::size_t way = 0; way < lines.size(); ++way)
+            check(lines[way].line_addr == before[way].line_addr && lines[way].rrpv == before[way].rrpv &&
+                  lines[way].valid == before[way].valid && lines[way].dirty == before[way].dirty,
+                  "observer receives read-only candidates and never changes the active victim state");
+        lines[victim].line_addr = incoming;
+        observer.afterAccess(incoming, false, true, true);
+    }
+    observer.beforeAccess(0x1000, false);
+    observer.insertion(0, lines.data(), lines.size(), 0, 0x1000);
+    lines[0].line_addr = 0x1000;
+    observer.afterAccess(0x1000, false, true, true);
+    observer.endPass();
+    observer.finish(3);
+    std::ostringstream report;
+    observer.write(report);
+    const auto text = report.str();
+    check(text.find("\"hypothetical_overrides\":1") != std::string::npos &&
+          text.find("\"base_first\":1") != std::string::npos &&
+          text.find("\"base_first_llc\":1") != std::string::npos &&
+          text.find("\"base_first_memory\":1") != std::string::npos,
+          "a sampled disagreement observes later real demand without enacting its hypothetical victim");
+    check(text.find("\"queue_stale\":1") != std::string::npos &&
+          text.find("\"queue_pending\":0") != std::string::npos,
+          "older delivered hints cannot overwrite the newer same-line observation");
+    bool rejected = false;
+    try { Observer too_large(graph.view(), 0x1000, 1, 3, true, 1); }
+    catch (const std::length_error&) { rejected = true; }
+    check(rejected, "diagnostic storage is rejected before exceeding its explicit reservation");
+}
+
 void testUnboundRecordPreparation() {
     using namespace ecg_algorithm;
+    testWindowObservationProfile();
     const Fixture graph(32, true, {{0, 1, 1}});
     uint64_t expected = 0;
     for (const auto mechanism : {ecg_record::Mechanism::TRANSPORT,
@@ -349,6 +447,7 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testWindowObservationCallbacks();
     testPoptDirectMatrix();
     testUnboundRecordPreparation();
     testTraversalPreprocessing();

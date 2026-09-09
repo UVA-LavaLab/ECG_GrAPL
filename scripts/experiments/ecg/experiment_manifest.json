@@ -12,6 +12,7 @@
     "ecg_preprocessing_8mb_cache",
     "ecg_grasp_8mb_cache",
     "ecg_competitive_8mb_cache",
+    "ecg_window_observer",
     "ecg_algorithm_equivalence_gem5",
     "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
@@ -47,6 +48,7 @@
     "no_build": true
   },
   "profiles": {
+    "ecg_window_observer": "One Patents TD-BFS case with an audit control and a passive window observer, both using unchanged CSR GRASP at 8 MiB. No window policy or CPU-speed claim.",
     "ecg_competitive_8mb_cache": "Forty-two serial full-Patents cells: six shared kernels, LRU/GRASP/full-capacity P-OPT, and matched ECG T/R on explicit LRU and GRASP bases. All construction is visible.",
     "ecg_grasp_8mb_cache": "Six matched full-Patents GRASP cells plus fresh LRU/T/R controls for SpMV and TC. Existing dynamic-algorithm controls may be joined only after exact binary/input/work matching.",
     "ecg_preprocessing_8mb_cache": "Twenty serial full-Patents BFS/SSSP/CC/BC cache cells at 8 MiB: current CSR preprocessing versus opt-in static phase/row preprocessing, with matched LRU/T/R controls.",
@@ -110,6 +112,11 @@
     "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
+    "ecg_window_observer": {
+      "status": "ready",
+      "reason": "Bounded observation-only comparison; diagnostic table/shadow costs excluded from active cache state, not an executable window-policy evaluation.",
+      "require_clean_worktree": true
+    },
     "ecg_competitive_8mb_cache": {
       "status": "ready",
       "reason": "Same-work cache-only comparison; P-OPT keeps full data capacity and free runtime matrix lookup as a favorable control. No CPU speedup or universal win is authorized.",
@@ -968,6 +975,32 @@
     ]
   },
   "stages": [
+    {
+      "name": "171_window_observer_control", "kind": "roi_matrix",
+      "profiles": ["ecg_window_observer"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["bfs"], "policies": ["GRASP_PAPER"],
+      "current_algorithms": true, "algorithm_window_observer": "control",
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "171_window_observer_control"
+    },
+    {
+      "name": "172_window_observer_passive", "kind": "roi_matrix",
+      "profiles": ["ecg_window_observer"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["bfs"], "policies": ["GRASP_PAPER"],
+      "current_algorithms": true, "algorithm_window_observer": "window",
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "172_window_observer_passive"
+    },
     {
       "name": "168_competitive_baselines_8mb", "kind": "roi_matrix",
       "profiles": ["ecg_competitive_8mb_cache"],

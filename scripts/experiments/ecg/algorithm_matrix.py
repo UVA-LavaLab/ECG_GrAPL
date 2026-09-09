@@ -52,11 +52,14 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--max-passes", type=int, default=1000000)
     parser.add_argument("--record-preprocess", choices=("csr", "traversal"), default="csr")
     parser.add_argument("--record-base-policy", choices=("LRU", "GRASP_PAPER"), default="LRU")
+    parser.add_argument("--window-observer", choices=("off", "control", "window"), default="off")
+    parser.add_argument("--window-observer-bytes", type=int, default=128 << 20)
     parser.add_argument("--bfs-direction", choices=("td", "do"), default="td")
     parser.add_argument("--bfs-alpha", type=int, default=15)
     parser.add_argument("--bfs-beta", type=int, default=18)
     parsed = parser.parse_args(shlex.split(text))
-    if min(parsed.repeat, parsed.delta, parsed.max_passes, parsed.bfs_alpha, parsed.bfs_beta) <= 0 or parsed.source < 0:
+    if min(parsed.repeat, parsed.delta, parsed.max_passes, parsed.bfs_alpha, parsed.bfs_beta,
+           parsed.window_observer_bytes) <= 0 or parsed.source < 0:
         raise RecordResourceError("invalid current algorithm parameters")
     parsed.source_list = []
     if parsed.sources:
@@ -79,8 +82,12 @@ def record_policy_label(label: str, mode: str, base_policy: str) -> str:
     return f"{label}_BASE_{base_policy}"
 
 
-def policy_labels(policies, base_policy: str = "LRU") -> list[str]:
-    return [record_policy_label(spec.label, spec.record_mechanism or "csr", base_policy)
+def observer_policy_label(label: str, observer: str) -> str:
+    return label if observer == "off" else f"{label}_OBS_{observer.upper()}"
+
+
+def policy_labels(policies, base_policy: str = "LRU", observer: str = "off") -> list[str]:
+    return [observer_policy_label(record_policy_label(spec.label, spec.record_mechanism or "csr", base_policy), observer)
             for spec in policies]
 
 
@@ -97,7 +104,11 @@ def validate_payload(
     expected_base = options.record_base_policy if mode != "csr" else "LRU"
     require(payload.get("record_base_policy") == expected_base,
             "algorithm record base-policy receipt mismatch")
+    observing = options.window_observer != "off"
+    require(payload.get("diagnostic_only", False) is observing,
+            "algorithm diagnostic scope mismatch")
     require(payload.get("measurement_scope") == (
+                "observation-only-unchanged-grasp" if observing else
                 "algorithm-data-traffic-including-construction" if backend == "cache_sim"
                 else "algorithm-setup-kernel-drain"),
             "algorithm costs do not cover construction")
@@ -259,6 +270,97 @@ def validate_payload(
     return work
 
 
+def validate_window_observer(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
+    observer = payload.get("window_observer")
+    if options.window_observer == "off":
+        require(observer is None, "unrequested window observer")
+        return {}
+    work = payload["workload"]
+    require(work["algorithm"] == "bfs" and work["carrier"] == "csr" and work["bfs_direction"] == "td" and
+            payload["policy"] == "GRASP_PAPER" and payload["backend"] == "cache_sim" and
+            isinstance(observer, dict) and observer.get("schema") == "ecg.window-eviction-observer.v1" and
+            observer.get("mode") == options.window_observer and observer.get("active_policy_changed") is False and
+            observer.get("diagnostic_costs_in_cache_counters") is False and
+            observer.get("delivery_model") == "uncoalesced-eight-access-steps-serialized-markers" and
+            _integer(payload["metrics"], "prefetch_fills") == 0,
+            "window observer changed policy or omitted its diagnostic limitations")
+    minimum = max(8, (work["vertices"] + 255) // 256)
+    cohort = 1 << (minimum - 1).bit_length()
+    require(_integer(observer, "cohort_rows") == cohort and _integer(observer, "bin_rows") == cohort // 8 and
+            _integer(observer, "bins_per_pass") == (work["vertices"] + cohort // 8 - 1) // (cohort // 8) and
+            _integer(observer, "sample_period") == 256 and _integer(observer, "trial_capacity") == 256 and
+            _integer(observer, "trial_horizon_requests") == 131072 and _integer(observer, "latency_steps") == 8,
+            "window observer parameters changed")
+    require(_integer(observer, "passes") == work["passes"] and
+            _integer(observer, "designated_reads") == work["actual_records"] and
+            _integer(observer, "memory_requests") == payload["traffic_phases"]["kernel"]["total_accesses"] and
+            _integer(observer, "reserved_bytes") <= options.window_observer_bytes and
+            _integer(observer, "queue_pending") == 0 and _integer(observer, "queue_peak") <= 16 and
+            _integer(observer, "queue_enqueued") == _integer(observer, "queue_delivered") ==
+            sum(_integer(observer, "queue_" + key) for key in ("applied", "stale", "absent")),
+            "window observer work, storage or queue does not close")
+    windows = options.window_observer == "window"
+    require(_integer(observer, "constructed_records") == (work["source_edges"] if windows else 0) and
+            _integer(observer, "annotation_bytes") == 2 * _integer(observer, "constructed_records") and
+            _integer(observer, "constructed_known") <= _integer(observer, "constructed_records") and
+            _integer(observer, "executed_known") <= work["actual_records"] and
+            _integer(observer, "marker_control_bytes") == _integer(observer, "markers") * 48,
+            "window observer annotation or marker accounting mismatch")
+    require(_integer(observer, "queue_enqueued") == (work["actual_records"] +
+            _integer(observer, "ordinary_reads") + _integer(observer, "ordinary_writes") if windows else 0),
+            "window observer omitted required shadow updates")
+    require(observer.get("sample_state_order") == [
+        "unseen", "unknown", "pending", "invalidated", "expired", "old-pass", "live", "non-property"],
+        "window observer status interpretation changed")
+    for key in ("demand_digest", "victim_digest"):
+        require(bool(re.fullmatch("[0-9a-f]{16}", str(observer.get(key, "")))), "missing observer noninterference digest")
+    for key in ("immediate", "delivered"):
+        values = observer.get(key)
+        require(isinstance(values, dict) and isinstance(values.get("base_states"), list) and
+                len(values["base_states"]) == 8 and all(type(v) is int and v >= 0 for v in values["base_states"]) and
+                sum(values["base_states"]) == _integer(values, "samples") ==
+                (observer["pass_evictions"] // 256 if windows else 0) and
+                _integer(values, "hypothetical_overrides") <= values["base_states"][6] and
+                _integer(values, "live_eligible_candidates") <= _integer(values, "eligible_candidates"),
+                "window observer sample accounting mismatch")
+    trials = observer.get("trials")
+    require(isinstance(trials, dict) and _integer(trials, "started") + _integer(trials, "capacity_dropped") ==
+            observer["delivered"]["hypothetical_overrides"] and _integer(trials, "started") ==
+            sum(_integer(trials, key) for key in ("base_first", "alternative_first", "censored_horizon", "censored_pass")) and
+            _integer(trials, "peak_pending") <= 256,
+            "window observer outcomes or censoring do not close")
+    for side in ("base", "alternative"):
+        require(_integer(trials, side + "_first_memory") <= _integer(trials, side + "_first_llc") <=
+                _integer(trials, side + "_first"), "window observer confuses private reuse with LLC demand")
+    per_pass = observer.get("per_pass")
+    require(isinstance(per_pass, list) and len(per_pass) == work["passes"] <= 128 and
+            sum(_integer(row, "designated_reads") for row in per_pass) == work["actual_records"] and
+            sum(_integer(row, "evictions") for row in per_pass) == observer["pass_evictions"],
+            "window observer pass accounting mismatch")
+    for key in ("immediate", "delivered"):
+        for field in ("samples", "eligible_candidates", "live_eligible_candidates", "hypothetical_overrides"):
+            require(all(isinstance(row.get(key), dict) for row in per_pass) and
+                    sum(_integer(row[key], field) for row in per_pass) == observer[key][field],
+                    "window observer per-pass samples do not sum to totals")
+    require(observer["markers"] <= (observer["bins_per_pass"] + 2) * work["passes"],
+            "window observer invented markers for skipped bins")
+    return observer
+
+
+def verify_window_noninterference(control: dict[str, Any], window: dict[str, Any]) -> None:
+    require(control.get("diagnostic_only") is True and window.get("diagnostic_only") is True and
+            control.get("policy") == window.get("policy") == "GRASP_PAPER",
+            "window noninterference requires two unchanged-policy diagnostics")
+    a, b = control.get("window_observer"), window.get("window_observer")
+    require(isinstance(a, dict) and isinstance(b, dict) and a.get("mode") == "control" and b.get("mode") == "window",
+            "window noninterference pair is incomplete")
+    for key in ("workload", "metrics", "traffic_phases", "setup_cache_policy", "record_base_policy"):
+        require(control.get(key) == window.get(key), f"window observer altered {key}")
+    for key in ("demand_digest", "victim_digest", "memory_requests", "llc_fills", "llc_evictions"):
+        require(a.get(key) is not None and a.get(key) == b.get(key),
+                f"window observer noninterference mismatch: {key}")
+
+
 def _file_hash(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -322,11 +424,17 @@ def run_cache_cell(
         require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED")),
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
+        observing = options.window_observer != "off"
+        require(not observing or args.benchmark == "bfs" and mode == "csr" and policy == "GRASP_PAPER" and
+                options.bfs_direction == "td" and options.record_preprocess == "csr",
+                "window observer requires CSR TD BFS and unchanged GRASP_PAPER")
         require(mode != "csr" or options.record_base_policy == "LRU",
                 "record base policy requires a current record mode")
         row["record_base_policy"] = options.record_base_policy
-        row["policy_label"] = record_policy_label(
-            spec.label, mode, options.record_base_policy)
+        row["policy_label"] = observer_policy_label(record_policy_label(
+            spec.label, mode, options.record_base_policy), options.window_observer)
+        if observing:
+            row.update(diagnostic_only="1", measurement_scope="observation-only-unchanged-grasp")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
         require(options.source < graph.vertices and all(source < graph.vertices for source in options.source_list),
                 "algorithm source is outside the graph")
@@ -341,10 +449,14 @@ def run_cache_cell(
             carrier_limit=args.ecg_record_max_carrier_bytes, auxiliary_limit=args.ecg_record_max_auxiliary_bytes,
             rss_mib=args.cache_record_rss_mib, bfs_direction_optimizing=options.bfs_direction == "do",
             preprocessing=options.record_preprocess, popt_full_capacity=policy == "POPT_UNCHARGED")
+        if observing:
+            require(not graph.weighted and plan["array_bytes"] + options.window_observer_bytes <=
+                    args.algorithm_workspace_bytes, "window observer exceeds its workspace or target scope")
         binary = ROOT / "bench/bin_sim/algorithms"
         base_suffix = "" if options.record_base_policy == "LRU" else (
             "_BASE_" + options.record_base_policy)
-        label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}"
+        observer_suffix = "" if not observing else "_OBS_" + options.window_observer.upper()
+        label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{observer_suffix}"
                  f"_L3{parse_size_bytes(l3_size)}")
         data_path = out_dir / "cache_sim" / f"{label}.json"
         log_path = out_dir / "logs" / f"{label}.log"
@@ -368,6 +480,9 @@ def run_cache_cell(
         ]
         if options.sources:
             command.extend(("--sources", options.sources))
+        if observing:
+            command.extend(("--window-observer", options.window_observer,
+                            "--window-observer-bytes", str(options.window_observer_bytes)))
         if args.benchmark == "bfs":
             command.extend(("--bfs-direction", options.bfs_direction,
                             "--bfs-alpha", str(options.bfs_alpha), "--bfs-beta", str(options.bfs_beta)))
@@ -411,6 +526,10 @@ def run_cache_cell(
         traffic = _integer(metrics, "total_offchip_traffic")
         misses, hits = _integer(metrics["L3"], "misses"), _integer(metrics["L3"], "hits")
         row.update(validate_traffic_phases(payload))
+        observer = validate_window_observer(payload, options)
+        if observing:
+            row.update(window_observer=options.window_observer,
+                       window_demand_digest=observer["demand_digest"], window_victim_digest=observer["victim_digest"])
         row.update({
             "status": "ok", "json_path": str(data_path), "log_path": str(log_path),
             "setup_cache_policy": payload["setup_cache_policy"],

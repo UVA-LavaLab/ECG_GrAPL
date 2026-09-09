@@ -766,6 +766,11 @@ def make_roi_job(
         if not settings.get("current_algorithms") or base not in ("LRU", "GRASP_PAPER"):
             raise SystemExit("invalid current record base policy")
         options += " --record-base-policy " + base
+    if "algorithm_window_observer" in settings:
+        observer = str(settings["algorithm_window_observer"])
+        if not settings.get("current_algorithms") or observer not in ("control", "window"):
+            raise SystemExit("invalid current window observer mode")
+        options += " --window-observer " + observer
     core_tag = str(settings.get("_core_tag", ""))
     scaling_series_id = sanitize(
         f"{settings['name']}_{graph_name}_{benchmark}")
@@ -1046,10 +1051,12 @@ def make_roi_job(
     config_hash = hashlib.sha256(json.dumps(
         {"command": command, "env": material_env, "inputs": inputs},
         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    record_base = algorithm_matrix.parse_options(options).record_base_policy if (
-        settings.get("current_algorithms")) else "LRU"
+    record_base, observer = "LRU", "off"
+    if settings.get("current_algorithms"):
+        parsed_algorithm = algorithm_matrix.parse_options(options)
+        record_base, observer = parsed_algorithm.record_base_policy, parsed_algorithm.window_observer
     expected_policy_labels = algorithm_matrix.policy_labels(
-        [parse_policy_spec(policy) for policy in all_policies], record_base)
+        [parse_policy_spec(policy) for policy in all_policies], record_base, observer)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
@@ -1126,6 +1133,7 @@ def make_roi_job(
             "policies": policies,
             "expected_policy_labels": expected_policy_labels,
             "record_base_policy": record_base,
+            "window_observer": observer,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1158,7 +1166,7 @@ def make_roi_job(
 def csv_status(
         path: Path,
         expected_policies: list[str] | None = None,
-        record_base_policy: str = "LRU") -> tuple[str, str]:
+        record_base_policy: str = "LRU", window_observer: str = "off") -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1171,8 +1179,8 @@ def csv_status(
     if statuses == {"ok"}:
         if expected_policies:
             expected = ({policy_output_label(policy) for policy in expected_policies}
-                        if record_base_policy == "LRU" else set(algorithm_matrix.policy_labels(
-                            [parse_policy_spec(policy) for policy in expected_policies], record_base_policy)))
+                        if record_base_policy == "LRU" and window_observer == "off" else set(algorithm_matrix.policy_labels(
+                            [parse_policy_spec(policy) for policy in expected_policies], record_base_policy, window_observer)))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1192,7 +1200,8 @@ def job_csv_status(job: Job) -> tuple[str, str]:
     expected = [
         str(policy) for policy in job.metadata.get("policies", [])]
     record_base = str(job.metadata.get("record_base_policy", "LRU"))
-    status, detail = csv_status(job.output_csv, expected, record_base)
+    observer = str(job.metadata.get("window_observer", "off"))
+    status, detail = csv_status(job.output_csv, expected, record_base, observer)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
@@ -1227,9 +1236,9 @@ def job_csv_status(job: Job) -> tuple[str, str]:
             payload.get("all_rows_ok") is not True):
         return "partial", "completion marker is not successful"
 
-    expected_labels = ([policy_output_label(policy) for policy in expected] if record_base == "LRU"
+    expected_labels = ([policy_output_label(policy) for policy in expected] if record_base == "LRU" and observer == "off"
                        else algorithm_matrix.policy_labels(
-                           [parse_policy_spec(policy) for policy in expected], record_base))
+                           [parse_policy_spec(policy) for policy in expected], record_base, observer))
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),
@@ -1728,6 +1737,34 @@ def validate_cross_job_guest_hashes(
     return True, expected_hash
 
 
+def validate_window_observer_pairs(jobs: list[Job]) -> tuple[bool, str]:
+    relevant = [job for job in jobs if job.metadata.get("window_observer", "off") != "off"]
+    if not relevant:
+        return True, "not-applicable"
+    pairs: dict[tuple[str, ...], dict[str, dict[str, Any]]] = {}
+    try:
+        for job in relevant:
+            with job.output_csv.open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            if len(rows) != 1 or rows[0].get("status") != "ok":
+                return False, "window observer pair has an incomplete cell"
+            row = rows[0]
+            key = tuple(str(row.get(field, "")) for field in (
+                "graph_sha256", "benchmark_binary_sha256", "algorithm_source", "l3_size", "l3_ways"))
+            mode = str(job.metadata["window_observer"])
+            group = pairs.setdefault(key, {})
+            if mode in group:
+                return False, "duplicate window observer role"
+            group[mode] = json.loads(Path(row["json_path"]).read_text())
+        for group in pairs.values():
+            if set(group) != {"control", "window"}:
+                return False, "window observer requires its matching audit-control cell"
+            algorithm_matrix.verify_window_noninterference(group["control"], group["window"])
+    except (OSError, json.JSONDecodeError, algorithm_matrix.RecordReceiptError) as error:
+        return False, f"window observer noninterference failed: {error}"
+    return True, f"{len(pairs)} unchanged-policy window observer pair(s)"
+
+
 def write_run_completion(
         run_dir: Path, jobs: list[Job], successful: bool) -> bool:
     statuses = {
@@ -1739,8 +1776,9 @@ def write_run_completion(
     }
     semantic_ok, semantic_detail = validate_cross_stage_pr_receipts(jobs)
     guest_ok, guest_detail = validate_cross_job_guest_hashes(jobs)
+    observer_ok, observer_detail = validate_window_observer_pairs(jobs)
     complete = (
-        successful and semantic_ok and guest_ok and bool(statuses) and
+        successful and semantic_ok and guest_ok and observer_ok and bool(statuses) and
         all(value["status"] == "ok" for value in statuses.values()))
     marker = run_dir / "run.complete.json"
     temp = run_dir / "run.complete.json.tmp"
@@ -1768,12 +1806,15 @@ def write_run_completion(
             "ok": guest_ok,
             "detail": guest_detail,
         },
+        "window_observer_gate": {"ok": observer_ok, "detail": observer_detail},
     }, indent=2, sort_keys=True) + "\n")
     temp.replace(marker)
     if not semantic_ok:
         print(f"[error] {semantic_detail}", file=sys.stderr)
     if not guest_ok:
         print(f"[error] {guest_detail}", file=sys.stderr)
+    if not observer_ok:
+        print(f"[error] {observer_detail}", file=sys.stderr)
     return complete
 
 

@@ -48,6 +48,7 @@
   "backend_source_paths": {
     "cache-sim": [
       "bench/include/cache_sim/ecg_algorithm.h",
+      "bench/include/cache_sim/ecg_window_observer.h",
       "bench/include/cache_sim/cache_sim.h",
       "bench/include/cache_sim/graph_cache_context.h",
       "bench/include/popt_rereference.h",

@@ -88,6 +88,13 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value != "csr" && value != "traversal")
                 throw std::invalid_argument("record-preprocess-must-be-csr-or-traversal");
             command.options.traversal_preprocessing = value == "traversal";
+        } else if (argument == "--window-observer") {
+            if (value == "off") command.options.window_observer = WindowObserverMode::OFF;
+            else if (value == "control") command.options.window_observer = WindowObserverMode::CONTROL;
+            else if (value == "window") command.options.window_observer = WindowObserverMode::WINDOW;
+            else throw std::invalid_argument("window-observer-must-be-off-control-or-window");
+        } else if (argument == "--window-observer-bytes") {
+            command.options.maximum_window_observer_bytes = unsignedOption(value);
         } else if (argument == "--source") {
             const uint64_t source = unsignedOption(value);
             if (source > INT32_MAX)
@@ -141,6 +148,11 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
     if (!command.options.records &&
         command.options.record_base_policy != RecordBasePolicy::LRU)
         throw std::invalid_argument("record-base-policy-requires-record-mode");
+    if (command.options.window_observer != WindowObserverMode::OFF &&
+        (command.options.algorithm != Algorithm::BFS || command.options.records ||
+         command.policy != "GRASP_PAPER" || command.options.bfs_direction_optimizing ||
+         command.options.traversal_preprocessing))
+        throw std::invalid_argument("window observer requires CSR TD BFS and unchanged GRASP_PAPER");
     for (const auto& geometry : {
             std::pair<uint64_t, uint64_t>{command.l1_bytes, command.l1_ways},
             {command.l2_bytes, command.l2_ways}, {command.llc_bytes, command.llc_ways}}) {
@@ -275,9 +287,11 @@ int invokeGraph(const Graph& graph, const CommandLine& command, Invoke invoke) {
 template<class Invoke>
 int applicationMain(
         int argc, char** argv, Invoke invoke, bool allow_popt = false,
-        bool allow_grasp_record_base = false) {
+        bool allow_grasp_record_base = false, bool allow_window_observer = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        if (command.options.window_observer != WindowObserverMode::OFF && !allow_window_observer)
+            throw std::invalid_argument("window observer is cache_sim-only");
         if (command.policy == "POPT_UNCHARGED" && !allow_popt)
             throw std::invalid_argument("current P-OPT is cache_sim-only");
         if (command.options.record_base_policy == RecordBasePolicy::GRASP_PAPER &&

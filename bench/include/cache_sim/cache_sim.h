@@ -583,6 +583,14 @@ struct CacheLine {
     bool pin = false;            // PIN policy: line is pinned in cache (high-reuse region)
 };
 
+class CacheObservationSink {
+  public:
+    virtual ~CacheObservationSink() = default;
+    virtual void initialSet(std::size_t set, const CacheLine* lines, std::size_t count) = 0;
+    virtual void insertion(std::size_t set, const CacheLine* lines, std::size_t count,
+                           std::size_t victim, uint64_t incoming) = 0;
+};
+
 enum class Ref32UpdateResult : uint8_t {
     APPLIED = 0,
     NOT_RESIDENT = 1,
@@ -1306,6 +1314,9 @@ public:
 
         // PIN bypass: all ways pinned, do not insert (miss already counted).
         if (victim_idx == SIZE_MAX) return;
+        if (observation_sink_)
+            observation_sink_->insertion(set_idx, set.data(), set.size(), victim_idx,
+                address & ~(uint64_t(line_size_ - 1)));
 
         // Evict if necessary
         if (set[victim_idx].valid) {
@@ -1771,6 +1782,17 @@ public:
     size_t selectVictimForTest(std::vector<CacheLine>& set) { return findVictim(set); }
     size_t setIndexForAddress(uint64_t address) const {
         return getSetIndex(address);
+    }
+
+    void observe(CacheObservationSink* sink) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (sink && (observation_sink_ || record_prepared_ || policy_ != EvictionPolicy::GRASP ||
+                     line_size_ != 64 || associativity_ > 64))
+            throw std::invalid_argument("cache observation requires ordinary GRASP");
+        if (sink)
+            for (std::size_t index = 0; index < cache_.size(); ++index)
+                sink->initialSet(index, cache_[index].data(), cache_[index].size());
+        observation_sink_ = sink;
     }
 
     void prepareRecord(EvictionPolicy base_policy = EvictionPolicy::LRU) {
@@ -3265,6 +3287,7 @@ private:
     EvictionPolicy policy_;
     
     std::vector<std::vector<CacheLine>> cache_;
+    CacheObservationSink* observation_sink_ = nullptr;
     CacheStats stats_;
     uint64_t global_time_ = 0;
     std::mt19937 rng_;
@@ -4516,6 +4539,9 @@ public:
     uint64_t getTotalAccesses() const { return total_accesses_; }
     uint64_t getMemoryAccesses() const { return memory_accesses_; }
     const CacheStats& getL3Stats() const { return l3_->getStats(); }
+    std::size_t getL3Sets() const { return l3_->getNumSets(); }
+    std::size_t getL3Ways() const { return l3_->getAssociativity(); }
+    void observeLastLevel(CacheObservationSink* sink) { l3_->observe(sink); }
     uint64_t getStructuralFlowThroughAccesses() const {
         return structural_flowthrough_accesses_;
     }

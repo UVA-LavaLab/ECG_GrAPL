@@ -22,6 +22,7 @@ enum class Algorithm : uint8_t { SPMV, BFS, SSSP, CC, BC, TC };
 enum class MemoryKind : uint8_t { INDEX, EDGE, WEIGHT, PROPERTY, AUXILIARY, CONSTRUCTION };
 enum class ReferencePattern : uint8_t { NEIGHBOR, VERTEX, NEIGHBOR_AND_VERTEX };
 enum class RecordBasePolicy : uint8_t { LRU, GRASP_PAPER };
+enum class WindowObserverMode : uint8_t { OFF, CONTROL, WINDOW };
 
 inline const char* recordBasePolicyName(RecordBasePolicy policy) {
     switch (policy) {
@@ -61,6 +62,8 @@ struct Options {
     bool evidence = false;
     bool capture_values = false;
     bool traversal_preprocessing = false;
+    WindowObserverMode window_observer = WindowObserverMode::OFF;
+    uint64_t maximum_window_observer_bytes = uint64_t{128} << 20;
     uint8_t record_bytes = 0;
     uint8_t minimum_mantissa_bits = 0;
     uint32_t source = 0;
@@ -579,6 +582,8 @@ class Engine {
             positions_.add(destination);
             positions_.add(cursor_.sequence());
         }
+        if constexpr (Backend::models_memory)
+            backend_.designatedProperty(index, destination);
         touch(property.data() + destination, sizeof(T), false, MemoryKind::PROPERTY,
             property.token(), destination, true, !options.records);
         if (result.memory_counts_measured)

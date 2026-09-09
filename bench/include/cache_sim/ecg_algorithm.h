@@ -3,6 +3,7 @@
 
 #include "cache_sim.h"
 #include "../ecg_algorithms.h"
+#include "ecg_window_observer.h"
 
 namespace cache_sim {
 
@@ -48,11 +49,24 @@ class AlgorithmBackend {
         : cache_(cache), options_(options), llc_bytes_(llc_bytes), grasp_paper_(grasp_paper),
           popt_full_capacity_(popt_full_capacity) {}
 
+    ~AlgorithmBackend() {
+        if (window_observer_)
+            cache_.observeLastLevel(nullptr);
+    }
+
     void start(const ecg_algorithm::GraphView& graph) {
         if (graph.vertices == 0 || graph.vertices > INT32_MAX)
             throw std::invalid_argument("invalid-algorithm-cache-domain");
         if (popt_full_capacity_ && (options_.records || options_.bfs_direction_optimizing))
             throw std::invalid_argument("current-popt-requires-csr-scalar-graph-passes");
+        if (options_.window_observer != ecg_algorithm::WindowObserverMode::OFF &&
+            (options_.algorithm != ecg_algorithm::Algorithm::BFS || options_.records ||
+             options_.bfs_direction_optimizing || graph.weights || !grasp_paper_ || popt_full_capacity_))
+            throw std::invalid_argument("window observer requires unweighted CSR TD BFS with GRASP_PAPER");
+        if (options_.window_observer != ecg_algorithm::WindowObserverMode::OFF &&
+            (graph.vertices * 12 > options_.maximum_workspace_bytes ||
+             options_.maximum_window_observer_bytes > options_.maximum_workspace_bytes - graph.vertices * 12))
+            throw std::length_error("window observer exceeds algorithm workspace reservation");
         // These policies use region bounds, not an uncharged degree/oracle prepass.
         context_.topology.num_vertices = static_cast<uint32_t>(graph.vertices);
         context_.topology.num_edges = graph.records;
@@ -69,7 +83,20 @@ class AlgorithmBackend {
         if (!ecg_record::checkedAdd(address, bytes - 1, last))
             throw std::overflow_error("algorithm-memory-range-overflow");
         for (;;) {
+            uint64_t llc_before = 0, misses_before = 0;
+            if (window_observer_) {
+                window_observer_->beforeAccess(address, write);
+                const auto& stats = cache_.getL3Stats();
+                llc_before = stats.hits.load() + stats.misses.load();
+                misses_before = cache_.getMemoryAccesses();
+            }
             cache_.access(address, write);
+            if (window_observer_) {
+                const auto& stats = cache_.getL3Stats();
+                window_observer_->afterAccess(address, write,
+                    stats.hits.load() + stats.misses.load() != llc_before,
+                    cache_.getMemoryAccesses() != misses_before);
+            }
             const uint64_t line = address / 64;
             if (line == last / 64)
                 break;
@@ -109,11 +136,23 @@ class AlgorithmBackend {
             throw std::invalid_argument("unregistered-algorithm-property");
         if (popt_full_capacity_)
             preparePopt(graph);
+        if (options_.window_observer != ecg_algorithm::WindowObserverMode::OFF) {
+            if (window_observer_ || property.kind != ecg_record::PropertyKind::U32 ||
+                property.stride_bytes != 4 || property.traversal != ecg_record::TraversalMode::ORDERED_FILTERED)
+                throw std::invalid_argument("window observer requires one U32 depth binding");
+            window_observer_ = std::make_unique<window_observation::Observer>(
+                graph, reinterpret_cast<uint64_t>(base), cache_.getL3Sets(), cache_.getL3Ways(),
+                options_.window_observer == ecg_algorithm::WindowObserverMode::WINDOW,
+                options_.maximum_window_observer_bytes);
+            cache_.observeLastLevel(window_observer_.get());
+        }
         if (!options_.records || graph.records == 0)
             beginKernel();
     }
 
     void beginGraphPass() {
+        if (window_observer_)
+            window_observer_->beginPass();
         if (!popt_full_capacity_)
             return;
         if (!popt_ready_ || popt_live_)
@@ -124,6 +163,8 @@ class AlgorithmBackend {
         ++popt_passes_;
     }
     void visitVertex(uint64_t vertex) {
+        if (window_observer_)
+            window_observer_->visitVertex(vertex);
         if (!popt_full_capacity_)
             return;
         if (!popt_live_ || vertex >= popt_graph_.vertices)
@@ -138,7 +179,13 @@ class AlgorithmBackend {
             throw std::logic_error("popt-property-read-has-no-vertex-progress");
         ++popt_governed_;
     }
+    void designatedProperty(uint64_t index, uint32_t destination) {
+        if (window_observer_)
+            window_observer_->designated(index, destination);
+    }
     void endGraphPass() {
+        if (window_observer_)
+            window_observer_->endPass();
         if (!popt_full_capacity_)
             return;
         if (!popt_live_)
@@ -180,6 +227,10 @@ class AlgorithmBackend {
             cache_.drainRecord();
     }
     void finish(uint64_t actual_records) {
+        if (window_observer_) {
+            window_observer_->finish(actual_records);
+            cache_.observeLastLevel(nullptr);
+        }
         if (popt_full_capacity_ && (popt_live_ || !popt_ready_ || popt_governed_ != actual_records))
             throw std::logic_error("incomplete-popt-graph-work");
         if (active_)
@@ -195,6 +246,13 @@ class AlgorithmBackend {
     }
 
     AlgorithmTraffic kernelTraffic() const { return traffic().since(setupTraffic()); }
+
+    void writeWindowObserver(std::ostream& output) const {
+        if (window_observer_)
+            window_observer_->write(output);
+        else
+            output << "null";
+    }
 
     void writePopt(std::ostream& output) const {
         if (!popt_full_capacity_) {
@@ -333,6 +391,7 @@ class AlgorithmBackend {
     bool active_ = false;
     AlgorithmTraffic setup_traffic_;
     bool kernel_started_ = false;
+    std::unique_ptr<window_observation::Observer> window_observer_;
     popt_reref::FullMatrix popt_matrix_;
     ecg_algorithm::GraphView popt_graph_;
     std::vector<PoptBank> banks_;

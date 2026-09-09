@@ -328,6 +328,10 @@ amortization. Native runtime and hardware cost remain separate measurements.
 
 ## Code anchors
 
+The separate [potential-window observer](Potential-Window-Diagnostics)
+measures information at unchanged GRASP decisions. It is diagnostic-only,
+not a replacement for the performance comparisons above.
+
 The shared kernel functions define the access patterns independently of the
 selected preprocessing mode.
 

@@ -5,6 +5,7 @@ int main(int argc, char** argv) {
     return ecg_algorithm::applicationMain(argc, argv,
         [](const ecg_algorithm::GraphView& graph, const ecg_algorithm::CommandLine& command) {
             const bool popt = command.policy == "POPT_UNCHARGED";
+            const bool observing = command.options.window_observer != ecg_algorithm::WindowObserverMode::OFF;
             const bool replacement = command.options.records &&
                 (command.options.mechanism == ecg_record::Mechanism::REPLACEMENT ||
                  command.options.mechanism == ecg_record::Mechanism::REPLACEMENT_PREFETCH);
@@ -35,7 +36,9 @@ int main(int argc, char** argv) {
             const auto report = [&](std::ostream& output) {
                 output << "{\"schema\":\"ecg.algorithm-result.v1\",\"backend\":\"cache_sim\","
                        << "\"timing_valid_for_speedup\":false,"
-                       << "\"measurement_scope\":\"algorithm-data-traffic-including-construction\","
+                       << "\"diagnostic_only\":" << (observing ? "true" : "false") << ','
+                       << "\"measurement_scope\":\"" << (observing ? "observation-only-unchanged-grasp" :
+                            "algorithm-data-traffic-including-construction") << "\","
                        << "\"mode\":\"" << (command.options.records ?
                             ecg_record::mechanismName(command.options.mechanism) : "csr")
                        << "\",\"policy\":\"" << command.policy
@@ -58,6 +61,8 @@ int main(int argc, char** argv) {
                 backend.kernelTraffic().write(output);
                 output << "},\"popt\":";
                 backend.writePopt(output);
+                output << ",\"window_observer\":";
+                backend.writeWindowObserver(output);
                 output << "}\n";
             };
             if (command.output_path.empty()) {
@@ -70,5 +75,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        }, true, true);
+        }, true, true, true);
 }
