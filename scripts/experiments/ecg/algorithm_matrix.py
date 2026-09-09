@@ -279,26 +279,43 @@ def validate_window_observer(payload: dict[str, Any], options: argparse.Namespac
     require(work["algorithm"] == "bfs" and work["carrier"] == "csr" and work["bfs_direction"] == "td" and
             payload["policy"] == "GRASP_PAPER" and payload["backend"] == "cache_sim" and
             isinstance(observer, dict) and observer.get("schema") in (
-                "ecg.window-eviction-observer.v1", "ecg.window-eviction-observer.v2") and
+                "ecg.window-eviction-observer.v1", "ecg.window-eviction-observer.v2",
+                "ecg.window-eviction-observer.v3") and
             observer.get("mode") == options.window_observer and observer.get("active_policy_changed") is False and
             observer.get("diagnostic_costs_in_cache_counters") is False and
             observer.get("delivery_model") == "uncoalesced-eight-access-steps-serialized-markers" and
             _integer(payload["metrics"], "prefetch_fills") == 0,
             "window observer changed policy or omitted its diagnostic limitations")
-    extended = observer["schema"] == "ecg.window-eviction-observer.v2"
+    paired = observer["schema"] == "ecg.window-eviction-observer.v3"
+    extended = paired or observer["schema"] == "ecg.window-eviction-observer.v2"
     views = ("immediate", "delivered", "preserved_immediate", "preserved_delivered") if extended else (
         "immediate", "delivered")
+    if paired:
+        views += ("forwarded_delivered",)
     attribution = ("live_base_without_alternative", "live_base_equal_ranks", "live_base_already_worst",
                    "only_ineligible_worse", "live_current_cohort", "live_saturated_strength",
                    "live_base_no_eligible_depth", "live_base_eligible_without_live_hint")
     if extended:
         require(observer.get("write_survival_rule") == "published-only-pending-cancelled" and
                 observer.get("read_pair_window_scope") == "sampled-endpoints-not-live-state" and
-                _integer(observer, "trial_views") == 2 and
+                _integer(observer, "trial_views") == (3 if paired else 2) and
                 sum(_integer(observer, key) for key in (
                     "writes_kept_live", "writes_cancelling_pending", "writes_without_live")) ==
                 _integer(observer, "ordinary_writes"),
                 "window observer write-survival contract or accounting mismatch")
+    if paired:
+        require(observer.get("publication_rule") == "checked-read-store-new-event" and
+                observer.get("association_rule") == "exact-index-element-binding-source-pass-adjacent-access" and
+                _integer(observer, "association_requests") == _integer(observer, "ordinary_writes") ==
+                _integer(observer, "association_accepted") == _integer(observer, "forwarded_store_updates") and
+                _integer(observer, "association_rejected") == 0 and
+                sum(_integer(observer, "forwarded_" + key) for key in ("applied", "stale", "absent")) ==
+                observer["forwarded_store_updates"] and
+                _integer(observer, "forwarded_known_updates") <= observer["forwarded_store_updates"] and
+                _integer(observer, "forwarded_known_applied") <= min(observer["forwarded_known_updates"],
+                                                                   observer["forwarded_applied"]) and
+                0 < _integer(observer, "association_slot_bytes") <= 128,
+                "window observer paired-store identity or publication accounting mismatch")
     minimum = max(8, (work["vertices"] + 255) // 256)
     cohort = 1 << (minimum - 1).bit_length()
     require(_integer(observer, "cohort_rows") == cohort and _integer(observer, "bin_rows") == cohort // 8 and
@@ -349,6 +366,8 @@ def validate_window_observer(payload: dict[str, Any], options: argparse.Namespac
                     "window observer candidate attribution does not partition live base victims")
     trial_views = (("trials", "delivered"), ("preserved_trials", "preserved_delivered")) if extended else (
         ("trials", "delivered"),)
+    if paired:
+        trial_views += (("forwarded_trials", "forwarded_delivered"),)
     for trial_key, view in trial_views:
         trials = observer.get(trial_key)
         require(isinstance(trials, dict) and _integer(trials, "started") + _integer(trials, "capacity_dropped") ==
@@ -560,8 +579,8 @@ def run_cache_cell(
         row.update(validate_traffic_phases(payload))
         observer = validate_window_observer(payload, options)
         if observing:
-            require(observer["schema"] == "ecg.window-eviction-observer.v2",
-                    "new observer runs require write-survival attribution")
+            require(observer["schema"] == "ecg.window-eviction-observer.v3",
+                    "new observer runs require checked read-store publication")
             row.update(window_observer=options.window_observer,
                        window_demand_digest=observer["demand_digest"], window_victim_digest=observer["victim_digest"])
         row.update({

@@ -34,7 +34,7 @@ callback observes the actual victim and final RRIP candidate set after
 GRASP has aged it exactly once. The callback cannot return a replacement
 victim or modify any cache-line state.
 
-The current diagnostic retains four cache-sized shadow views. The first two
+The current diagnostic retains five cache-sized shadow views. The first two
 preserve the original observation as a reference:
 
 | View | Meaning |
@@ -43,6 +43,7 @@ preserve the original observation as a reference:
 | Delivered | Eight access-step update delay, one output per step, sixteen bounded entries, no coalescing; newer observations hide pending/older information |
 | Preserved immediate | Zero-delay reference in which a depth write does not discard existing graph-static potential |
 | Preserved delivered | Retain only already-published potential across a depth write; pending hints are cancelled, never restored |
+| Forwarded delivered | The immutable hint from an explicitly matched depth read is published under its conditional store's newer event order |
 
 Ordinary depth reads and writes invalidate the first two views. Ordinary
 reads still invalidate the preserved views. Every write advances the
@@ -54,6 +55,26 @@ a real line updates shadow residency, so metadata cannot survive a lost
 residency or apply to a different line occupying the same way. Expiry and
 pass changes are checked lazily; unknown, invalidated, pending, expired
 and old-pass states are reported separately.
+
+The forwarded view uses an explicit checked-write hook in the BFS edge
+operation. It must match the read's structural index, exact element address,
+U32 binding/width, source row and pass, with no intervening modeled memory
+access. Matching just a cache line is insufficient. An unmatched or
+unrelated write keeps the original invalidation behavior; a supported BFS
+run fails its receipt gate if a requested association is rejected.
+
+The old load update is still superseded. Only the matching store event
+carries the captured, absolute window payload under its newer order.
+Another observation, including UNKNOWN, can supersede that store update
+before delivery. Source/pass changes clear the one outstanding read
+association. The prototype has one immutable depth binding, so cross-binding
+associations are rejected rather than assuming a free generation change.
+No-store edges retain their ordinary read publication.
+
+There is still one queue event per actual property access: the store event
+is a write barrier in the reference views and a paired publication only in
+the forwarded view. This does not replay an old event, refresh an endpoint,
+or change any algorithm value, memory request or GRASP decision.
 
 Source-bin markers drain the shadow queue and add eight shadow service
 steps; begin/close and jumps are counted. They never stall or change the
@@ -122,10 +143,15 @@ by default, inside the algorithm's workspace reservation. The raw report
 contains aggregate and per-pass sample counts, state histograms, bounded
 queue/trial accounting and immutable-stream digests.
 Schema `ecg.window-eviction-observer.v2` adds write-survival and candidate
-attribution; the first run below retains its original v1 receipts.
+attribution; v3 adds checked store publication and a third independent
+256-pair book. The earlier runs retain their original receipts.
 The extra shadow values and ordering state are diagnostic storage, not
 proof that simultaneous hint retention and an order cutoff fit the proposed
 67-bit native payload. That hardware contract remains unqualified.
+Likewise, the one-slot read/store association is a diagnostic software
+contract, not proof of native speculative-execution, translation, retirement
+or store-buffer association. Those costs and failure paths need a separate
+interface qualification before a real implementation is admitted.
 
 Passing noninterference establishes trustworthy observation of this one
 baseline history. It does not authorize enabling the window policy,
@@ -285,7 +311,8 @@ covering the depth probe and its conditional write, or equivalent
 store-associated forwarding of the immutable graph hint under the store's
 new event identity. It must prove matching record, target, profile, pass and
 generation, preserve later-event precedence, and never resurrect an
-arbitrary old queued hint. No such mechanism is implemented by this study.
+arbitrary old queued hint. The forwarded passive view models this checked
+association; no native publication interface is implemented by this study.
 
 Publication and victim eligibility are separate problems: fixing the former
 alone does not remove the tie-only bottleneck. Any broader candidate rule

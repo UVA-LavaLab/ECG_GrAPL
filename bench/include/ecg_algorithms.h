@@ -558,6 +558,13 @@ class Engine {
     }
 
     template<class T>
+    void writeNeighbor(uint64_t index, Buffer<T>& property, uint32_t destination, T value) {
+        if constexpr (Backend::models_memory)
+            backend_.associateNeighborWrite(index, destination, property.data(), sizeof(T));
+        property.set(destination, value);
+    }
+
+    template<class T>
     std::pair<uint32_t, T> neighbor(uint64_t index, Buffer<T>& property) {
         if (!pass_open_ || cursor_.consume(index) != ecg_record::Status::OK)
             throw std::logic_error("nonmonotone-governed-reference");
@@ -797,7 +804,7 @@ BfsStep bfsTopDownLevel(
             const auto item = access.neighbor(index, depth);
             ++access.result.bfs_td_edges;
             if (item.second == UINT32_MAX) {
-                depth.set(item.first, level + 1);
+                access.writeNeighbor(index, depth, item.first, level + 1);
                 next.set(step.size++, item.first);
                 ++access.result.reached;
                 if (count_scouts) {

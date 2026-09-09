@@ -84,9 +84,14 @@ class Observer final : public CacheObservationSink {
     static constexpr uint64_t kLatency = 8;
     static constexpr std::size_t kImmediate = 0, kDelivered = 1;
     static constexpr std::size_t kPreservedImmediate = 2, kPreservedDelivered = 3;
-    static constexpr std::size_t kViews = 4, kTrialViews = 2;
+    static constexpr std::size_t kForwardedDelivered = 4;
+    static constexpr std::size_t kViews = 5, kTrialViews = 3;
     inline static constexpr std::array<const char*, kViews> kViewNames{
-        "immediate", "delivered", "preserved_immediate", "preserved_delivered"};
+        "immediate", "delivered", "preserved_immediate", "preserved_delivered", "forwarded_delivered"};
+    inline static constexpr std::array<std::size_t, kTrialViews> kTrialViewIds{
+        kDelivered, kPreservedDelivered, kForwardedDelivered};
+    inline static constexpr std::array<const char*, kTrialViews> kTrialNames{
+        "trials", "preserved_trials", "forwarded_trials"};
 
     Observer(const ecg_algorithm::GraphView& graph, uint64_t property_base,
              std::size_t sets, std::size_t ways, bool windows, uint64_t maximum_bytes)
@@ -152,8 +157,9 @@ class Observer final : public CacheObservationSink {
     }
 
     void beginPass() {
-        if (open_ || expected_ || pass_count_ == kPasses)
+        if (open_ || expected_ || store_authorized_ || pass_count_ == kPasses)
             throw std::logic_error("window-observer-pass-limit-or-order");
+        last_read_.valid = false;
         pass_base_ = pass_count_ * profile_.bins;
         watermark_ = pass_base_;
         source_ = UINT64_MAX;
@@ -163,9 +169,10 @@ class Observer final : public CacheObservationSink {
     }
 
     void visitVertex(uint64_t source) {
-        if (!open_ || expected_ || source >= profile_.vertices ||
+        if (!open_ || expected_ || store_authorized_ || source >= profile_.vertices ||
             (source_ != UINT64_MAX && source <= source_))
             throw std::logic_error("window-observer-nonmonotone-source");
+        last_read_.valid = false;
         const uint64_t next = pass_base_ + source / profile_.bin_rows;
         if (source_ == UINT64_MAX || next != watermark_) {
             marker();
@@ -183,10 +190,11 @@ class Observer final : public CacheObservationSink {
     }
 
     void designated(uint64_t index, uint32_t destination) {
-        if (!open_ || source_ == UINT64_MAX || expected_ || destination >= profile_.vertices ||
+        if (!open_ || source_ == UINT64_MAX || expected_ || store_authorized_ || destination >= profile_.vertices ||
             (windows_ && (index < row_first_ || index >= row_last_)))
             throw std::logic_error("window-observer-invalid-record-association");
         expected_ = true;
+        expected_index_ = index;
         expected_address_ = property_base_ + uint64_t(destination) * 4;
         expected_value_ = windows_ ? profile_.decode(tokens_.at(index), source_, pass_base_) : 0;
         ++designated_;
@@ -195,9 +203,33 @@ class Observer final : public CacheObservationSink {
             ++executed_known_;
     }
 
+    void associateStore(uint64_t index, uint32_t destination, uint64_t base, uint64_t bytes) {
+        if (!windows_)
+            return;
+        if (expected_ || in_access_ || store_authorized_)
+            throw std::logic_error("window-observer-store-association-order");
+        ++association_requests_;
+        if (!open_ || !last_read_.valid || base != property_base_ || bytes != 4 ||
+            destination >= profile_.vertices || index != last_read_.index ||
+            property_base_ + uint64_t(destination) * 4 != last_read_.address ||
+            last_read_.pass != pass_count_ || last_read_.source != source_ ||
+            last_read_.request != requests_ || last_read_.order != order_) {
+            ++association_rejected_;
+            last_read_.valid = false;
+            return;
+        }
+        ++association_accepted_;
+        store_authorized_ = true;
+    }
+
     void beforeAccess(uint64_t address, bool write) {
-        if (in_access_ || (expected_ && (write || address != expected_address_)))
+        if (in_access_ || (expected_ && (write || address != expected_address_)) ||
+            (store_authorized_ && (!write || !last_read_.valid || address != last_read_.address)))
             throw std::logic_error("window-observer-memory-association");
+        forwarding_store_ = store_authorized_;
+        forwarded_value_ = forwarding_store_ ? last_read_.value : 0;
+        store_authorized_ = false;
+        last_read_.valid = false;
         if (!ecg_record::checkedAdd(requests_, 1, requests_))
             throw std::overflow_error("window-observer-request-order-overflow");
         in_access_ = true;
@@ -224,7 +256,7 @@ class Observer final : public CacheObservationSink {
             if (line) {
                 line->order = order_;
                 if (expected_) {
-                    for (std::size_t view : {kDelivered, kPreservedDelivered}) {
+                    for (std::size_t view : kTrialViewIds) {
                         line->states[view] = State::PENDING;
                         line->values[view] = 0;
                     }
@@ -248,7 +280,7 @@ class Observer final : public CacheObservationSink {
                         line->values[view] = expected_value_;
                         line->states[view] = expected_value_ ? State::LIVE : State::UNKNOWN;
                     }
-                    for (std::size_t view : {kDelivered, kPreservedDelivered}) {
+                    for (std::size_t view : kTrialViewIds) {
                         line->states[view] = State::PENDING;
                         line->values[view] = 0;
                     }
@@ -259,18 +291,28 @@ class Observer final : public CacheObservationSink {
                 line->order = order_;
                 invalidateOrdinary(*line, write);
             }
-            enqueue(address & ~uint64_t{63}, expected_ ? expected_value_ : 0,
-                expected_ ? UpdateKind::HINT : write ? UpdateKind::WRITE_BARRIER : UpdateKind::INVALIDATE_READ);
+            enqueue(address & ~uint64_t{63}, expected_ ? expected_value_ : forwarded_value_,
+                expected_ ? UpdateKind::HINT : forwarding_store_ ? UpdateKind::FORWARDED_WRITE :
+                write ? UpdateKind::WRITE_BARRIER : UpdateKind::INVALIDATE_READ);
+            if (forwarding_store_) {
+                ++forwarded_updates_;
+                forwarded_known_ += forwarded_value_ != 0;
+            }
+            if (expected_)
+                last_read_ = {expected_index_, expected_address_, expected_value_,
+                    order_, requests_, source_, pass_count_, true};
             if (!write)
                 observeReuse(address & ~uint64_t{63}, at_llc, memory_miss);
         }
         expected_ = false;
         in_access_ = false;
+        forwarding_store_ = false;
     }
 
     void endPass() {
-        if (!open_ || expected_ || in_access_)
+        if (!open_ || expected_ || in_access_ || store_authorized_)
             throw std::logic_error("window-observer-invalid-pass-close");
+        last_read_.valid = false;
         marker();
         watermark_ = pass_base_ + profile_.bins;
         if (windows_)
@@ -279,15 +321,18 @@ class Observer final : public CacheObservationSink {
     }
 
     void finish(uint64_t actual_records) {
-        if (open_ || expected_ || in_access_ || actual_records != designated_)
+        if (open_ || expected_ || in_access_ || store_authorized_ || actual_records != designated_)
             throw std::logic_error("window-observer-incomplete-work");
         drain();
         if (enqueued_ != dispatched_ || dispatched_ != applied_ + stale_ + absent_ ||
-            ordinary_writes_ != writes_kept_live_ + writes_cancelling_pending_ + writes_without_live_)
+            ordinary_writes_ != writes_kept_live_ + writes_cancelling_pending_ + writes_without_live_ ||
+            association_requests_ != association_accepted_ + association_rejected_ ||
+            association_accepted_ != forwarded_updates_ ||
+            forwarded_updates_ != forwarded_applied_ + forwarded_stale_ + forwarded_absent_)
             throw std::logic_error("window-observer-incomplete-accounting");
         for (std::size_t group = 0; group < kTrialViews; ++group) {
             const auto& trials = trial_stats_[group];
-            const auto& samples = samples_[group == 0 ? kDelivered : kPreservedDelivered];
+            const auto& samples = samples_[kTrialViewIds[group]];
             if (trials.active || trials.started != trials.base_first + trials.alternative_first +
                 trials.censored_horizon + trials.censored_pass ||
                 trials.started + trials.dropped != samples.overrides)
@@ -296,11 +341,13 @@ class Observer final : public CacheObservationSink {
     }
 
     void write(std::ostream& output) const {
-        output << "{\"schema\":\"ecg.window-eviction-observer.v2\",\"mode\":\""
+        output << "{\"schema\":\"ecg.window-eviction-observer.v3\",\"mode\":\""
                << (windows_ ? "window" : "control")
                << "\",\"active_policy_changed\":false,\"diagnostic_costs_in_cache_counters\":false,"
                << "\"delivery_model\":\"uncoalesced-eight-access-steps-serialized-markers\","
                << "\"write_survival_rule\":\"published-only-pending-cancelled\","
+               << "\"publication_rule\":\"checked-read-store-new-event\","
+               << "\"association_rule\":\"exact-index-element-binding-source-pass-adjacent-access\","
                << "\"read_pair_window_scope\":\"sampled-endpoints-not-live-state\","
                << "\"sample_period\":" << kSamplePeriod << ",\"trial_capacity\":" << kTrials
                << ",\"trial_views\":" << kTrialViews
@@ -325,6 +372,16 @@ class Observer final : public CacheObservationSink {
                << ",\"writes_kept_live\":" << writes_kept_live_
                << ",\"writes_cancelling_pending\":" << writes_cancelling_pending_
                << ",\"writes_without_live\":" << writes_without_live_
+               << ",\"association_requests\":" << association_requests_
+               << ",\"association_accepted\":" << association_accepted_
+               << ",\"association_rejected\":" << association_rejected_
+               << ",\"association_slot_bytes\":" << sizeof(ReadAssociation)
+               << ",\"forwarded_store_updates\":" << forwarded_updates_
+               << ",\"forwarded_known_updates\":" << forwarded_known_
+               << ",\"forwarded_applied\":" << forwarded_applied_
+               << ",\"forwarded_known_applied\":" << forwarded_known_applied_
+               << ",\"forwarded_stale\":" << forwarded_stale_
+               << ",\"forwarded_absent\":" << forwarded_absent_
                << ",\"nonresident_observations\":" << nonresident_observations_
                << ",\"diagnostic_graph_read_bytes\":" << graph_read_bytes_
                << ",\"sample_state_order\":[\"unseen\",\"unknown\",\"pending\",\"invalidated\","
@@ -343,10 +400,10 @@ class Observer final : public CacheObservationSink {
             output << ",\"" << kViewNames[view] << "\":";
             samples_[view].write(output);
         }
-        output << ",\"trials\":";
-        trial_stats_[0].write(output);
-        output << ",\"preserved_trials\":";
-        trial_stats_[1].write(output);
+        for (std::size_t group = 0; group < kTrialViews; ++group) {
+            output << ",\"" << kTrialNames[group] << "\":";
+            trial_stats_[group].write(output);
+        }
         output << ",\"per_pass\":[";
         for (std::size_t pass = 0; pass < pass_count_; ++pass) {
             if (pass) output << ',';
@@ -400,10 +457,14 @@ class Observer final : public CacheObservationSink {
         uint64_t vertices = 0, designated = 0, evictions = 0;
         std::array<Samples, kViews> samples;
     };
-    enum class UpdateKind : uint8_t { HINT, INVALIDATE_READ, WRITE_BARRIER };
+    enum class UpdateKind : uint8_t { HINT, INVALIDATE_READ, WRITE_BARRIER, FORWARDED_WRITE };
     struct Update {
         uint64_t line = 0, value = 0, order = 0, ready = 0;
         UpdateKind kind = UpdateKind::HINT;
+    };
+    struct ReadAssociation {
+        uint64_t index = 0, address = 0, value = 0, order = 0, request = 0, source = 0, pass = 0;
+        bool valid = false;
     };
     struct Trial {
         uint64_t base = 0, alternative = 0, start = 0, expires = 0;
@@ -488,6 +549,8 @@ class Observer final : public CacheObservationSink {
             line.states[kPreservedDelivered] = State::INVALIDATED;
             line.values[kPreservedDelivered] = 0;
         }
+        line.states[kForwardedDelivered] = forwarding_store_ ? State::PENDING : State::INVALIDATED;
+        line.values[kForwardedDelivered] = 0;
     }
     State state(const Shadow& line, std::size_t view) const {
         if (!isProperty(line.line))
@@ -510,20 +573,28 @@ class Observer final : public CacheObservationSink {
         --queued_;
         ++dispatched_;
         auto* line = resident(update.line);
+        const bool forwarded = update.kind == UpdateKind::FORWARDED_WRITE;
         if (!line) {
             ++absent_;
+            forwarded_absent_ += forwarded;
         } else if (line->order != update.order) {
             ++stale_;
+            forwarded_stale_ += forwarded;
         } else {
-            line->values[kDelivered] = update.value;
+            line->values[kDelivered] = update.kind == UpdateKind::HINT ? update.value : 0;
             line->states[kDelivered] = update.kind != UpdateKind::HINT ? State::INVALIDATED :
                 update.value ? State::LIVE : State::UNKNOWN;
-            if (update.kind != UpdateKind::WRITE_BARRIER) {
+            if (update.kind == UpdateKind::HINT || update.kind == UpdateKind::INVALIDATE_READ) {
                 line->values[kPreservedDelivered] = update.value;
                 line->states[kPreservedDelivered] = update.kind == UpdateKind::INVALIDATE_READ ?
                     State::INVALIDATED : update.value ? State::LIVE : State::UNKNOWN;
             }
+            line->values[kForwardedDelivered] = update.kind == UpdateKind::HINT || forwarded ? update.value : 0;
+            line->states[kForwardedDelivered] = update.kind == UpdateKind::HINT || forwarded ?
+                (update.value ? State::LIVE : State::UNKNOWN) : State::INVALIDATED;
             ++applied_;
+            forwarded_applied_ += forwarded;
+            forwarded_known_applied_ += forwarded && update.value != 0;
         }
     }
     void enqueue(uint64_t line, uint64_t value, UpdateKind kind) {
@@ -602,9 +673,10 @@ class Observer final : public CacheObservationSink {
         }
         if (proposed != base) {
             add(&Samples::overrides, 1);
-            if (view == kDelivered || view == kPreservedDelivered)
-                startTrial(view == kDelivered ? 0 : 1, set, entries[base].line, entries[proposed].line,
-                    entries[base].values[view] >> 3, entries[proposed].values[view] >> 3);
+            for (std::size_t group = 0; group < kTrialViews; ++group)
+                if (view == kTrialViewIds[group])
+                    startTrial(group, set, entries[base].line, entries[proposed].line,
+                        entries[base].values[view] >> 3, entries[proposed].values[view] >> 3);
         } else if (base_state == State::LIVE) {
             if (!alternatives) {
                 add(&Samples::live_base_without_alternative, 1);
@@ -712,17 +784,23 @@ class Observer final : public CacheObservationSink {
     std::array<Trial, kTrials * kTrialViews> trials_{};
     std::array<TrialStats, kTrialViews> trial_stats_{};
     std::array<Samples, kViews> samples_{};
+    ReadAssociation last_read_;
     ecg_record::StreamDigest demand_digest_, victim_digest_;
     uint64_t reserved_bytes_ = 0, constructed_known_ = 0, executed_known_ = 0;
     uint64_t graph_read_bytes_ = 0, requests_ = 0, fills_ = 0, evictions_ = 0, pass_evictions_ = 0;
     uint64_t pass_count_ = 0, pass_base_ = 0, watermark_ = 0, source_ = UINT64_MAX;
     uint64_t row_first_ = 0, row_last_ = 0, expected_address_ = 0, expected_value_ = 0;
+    uint64_t expected_index_ = 0, forwarded_value_ = 0;
     uint64_t designated_ = 0, ordinary_reads_ = 0, ordinary_writes_ = 0, nonresident_observations_ = 0;
     uint64_t writes_kept_live_ = 0, writes_cancelling_pending_ = 0, writes_without_live_ = 0;
+    uint64_t association_requests_ = 0, association_accepted_ = 0, association_rejected_ = 0;
+    uint64_t forwarded_updates_ = 0, forwarded_known_ = 0, forwarded_applied_ = 0;
+    uint64_t forwarded_known_applied_ = 0, forwarded_stale_ = 0, forwarded_absent_ = 0;
     uint64_t step_ = 0, order_ = 0, markers_ = 0, drain_steps_ = 0;
     uint64_t enqueued_ = 0, dispatched_ = 0, applied_ = 0, stale_ = 0, absent_ = 0;
     std::size_t queued_ = 0, queue_head_ = 0, queue_peak_ = 0;
     bool open_ = false, expected_ = false, in_access_ = false, current_property_ = false;
+    bool store_authorized_ = false, forwarding_store_ = false;
 };
 
 }  // namespace window_observation

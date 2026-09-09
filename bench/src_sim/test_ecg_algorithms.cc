@@ -445,6 +445,78 @@ void testWindowCandidateAttribution() {
     }
 }
 
+void testWindowCheckedStorePublication() {
+    using cache_sim::window_observation::Observer;
+    const Fixture graph(4096, true, {{0, 0, 1}, {0, 16, 1}, {1, 16, 1}, {32, 0, 1}});
+    for (unsigned scenario = 0; scenario < 10; ++scenario) {
+        Observer observer(graph.view(), 0x1000, 1, 3, true, 1 << 20);
+        std::vector<cache_sim::CacheLine> lines(3);
+        for (std::size_t way = 0; way < lines.size(); ++way) {
+            lines[way].line_addr = way == 0 ? 0x1040 : way == 1 ? 0x1000 : 0x100000;
+            lines[way].valid = true;
+            lines[way].rrpv = 7;
+        }
+        observer.initialSet(0, lines.data(), lines.size());
+        observer.beginPass();
+        observer.visitVertex(0);
+        for (uint32_t index = 0; index < 2; ++index) {
+            observer.designated(index, index * 16);
+            observer.beforeAccess(0x1000 + index * 64, false);
+            observer.afterAccess(0x1000 + index * 64, false, false, false);
+        }
+        if (scenario == 4) {
+            observer.beforeAccess(0x100000, false);
+            observer.afterAccess(0x100000, false, false, false);
+        }
+        if (scenario == 5) {
+            observer.endPass();
+            observer.beginPass();
+            observer.visitVertex(0);
+        }
+        if (scenario == 9)
+            observer.visitVertex(1);
+        if (scenario != 1)
+            observer.associateStore(scenario == 2 ? 0 : 1,
+                scenario == 3 ? 17 : scenario == 7 ? 1040 : 16,
+                scenario == 7 ? 0 : 0x1000, scenario == 8 ? 8 : 4);
+        const uint64_t write_address = scenario == 3 ? 0x1044 : 0x1040;
+        observer.beforeAccess(write_address, true);
+        observer.afterAccess(write_address, true, false, false);
+        if (scenario == 6) {
+            observer.visitVertex(1);
+            observer.designated(2, 16);
+            observer.beforeAccess(0x1040, false);
+            observer.afterAccess(0x1040, false, false, false);
+        }
+        for (uint64_t event = 0; event < Observer::kSamplePeriod; ++event) {
+            const std::size_t victim = event + 1 == Observer::kSamplePeriod ? 0 : 2;
+            const uint64_t incoming = 0x200000 + event * 64;
+            observer.beforeAccess(incoming, false);
+            observer.insertion(0, lines.data(), lines.size(), victim, incoming);
+            lines[victim].line_addr = incoming;
+            observer.afterAccess(incoming, false, true, true);
+        }
+        observer.endPass();
+        observer.finish(scenario == 6 ? 3 : 2);
+        std::ostringstream report;
+        observer.write(report);
+        const auto text = report.str();
+        const auto start = text.find("\"forwarded_delivered\":");
+        const auto section = start == std::string::npos ? "" : text.substr(start, text.find('}', start) - start);
+        check(section.find(std::string("\"hypothetical_overrides\":") + (scenario == 0 ? "1" : "0")) !=
+                  std::string::npos,
+              "only an exact paired store may publish a current hint under its newer event identity");
+        const bool paired = scenario == 0 || scenario == 6;
+        check(text.find(std::string("\"forwarded_store_updates\":") + (paired ? "1" : "0")) !=
+                  std::string::npos,
+              "unpaired, wrong-index/element/binding/width, intervening and cross-pass stores cannot borrow hints");
+        if (scenario == 6)
+            check(text.find("\"forwarded_stale\":1") != std::string::npos &&
+                  text.find("\"forwarded_applied\":0") != std::string::npos,
+                  "a newer UNKNOWN observation supersedes an undelivered paired-store publication");
+    }
+}
+
 void testUnboundRecordPreparation() {
     using namespace ecg_algorithm;
     testWindowObservationProfile();
@@ -562,6 +634,7 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testWindowCheckedStorePublication();
     testWindowCandidateAttribution();
     testWindowPublishedWriteSurvival();
     testWindowObservationCallbacks();

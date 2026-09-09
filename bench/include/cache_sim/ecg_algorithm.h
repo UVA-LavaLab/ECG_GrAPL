@@ -183,6 +183,10 @@ class AlgorithmBackend {
         if (window_observer_)
             window_observer_->designated(index, destination);
     }
+    void associateNeighborWrite(uint64_t index, uint32_t destination, const void* base, uint64_t bytes) {
+        if (window_observer_)
+            window_observer_->associateStore(index, destination, reinterpret_cast<uint64_t>(base), bytes);
+    }
     void endGraphPass() {
         if (window_observer_)
             window_observer_->endPass();

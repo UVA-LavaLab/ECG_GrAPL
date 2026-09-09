@@ -260,7 +260,11 @@ def test_window_observer_does_not_change_grasp_or_bfs(tmp_path):
         assert payload["diagnostic_only"] is True
         assert payload["measurement_scope"] == "observation-only-unchanged-grasp"
         observer = payload["window_observer"]
-        assert observer["schema"] == "ecg.window-eviction-observer.v2"
+        assert observer["schema"] == "ecg.window-eviction-observer.v3"
+        assert observer["publication_rule"] == "checked-read-store-new-event"
+        assert observer["association_rejected"] == 0
+        if mode == "window":
+            assert observer["forwarded_store_updates"] == payload["workload"]["reached"] - 1
         assert observer["mode"] == mode and observer["active_policy_changed"] is False
         assert observer["diagnostic_costs_in_cache_counters"] is False
         assert observer["passes"] == payload["workload"]["passes"]
@@ -300,6 +304,14 @@ def test_window_observer_does_not_change_grasp_or_bfs(tmp_path):
     forged["window_observer"]["preserved_trials"]["base_first_before_both_endpoints"] += (
         forged["window_observer"]["preserved_trials"]["base_first"] + 1)
     with pytest.raises(RecordReceiptError, match="sampled endpoints"):
+        validate_window_observer(forged, options)
+    forged = copy.deepcopy(b)
+    forged["window_observer"]["association_accepted"] += 1
+    with pytest.raises(RecordReceiptError, match="paired-store"):
+        validate_window_observer(forged, options)
+    forged = copy.deepcopy(b)
+    forged["window_observer"]["association_rule"] = "same-cache-line-only"
+    with pytest.raises(RecordReceiptError, match="paired-store"):
         validate_window_observer(forged, options)
     from scripts.experiments.ecg.flows.experiment_run import validate_window_observer_pairs
     jobs = []
