@@ -337,7 +337,9 @@ victim differences. [Checked publication](Potential-Window-Diagnostics#checked-p
 restores otherwise cancelled hints in the passive model, but candidate
 eligibility remains limiting. A [one-step protected-candidate probe](Potential-Window-Diagnostics#one-step-protected-candidate-observation)
 expands the observed opportunity set without changing GRASP; active
-window replacement and its performance benefit remain unestablished.
+replacement is evaluated separately by the opt-in
+[costed cache-only prototype](Potential-Window-Prototype). Neither the
+observer nor the prototype establishes native performance or a suite-wide win.
 
 The shared kernel functions define the access patterns independently of the
 selected preprocessing mode.

@@ -475,3 +475,7 @@ construction, publication and progress controls. The diagnostic's free
 side-table and shadow accesses must not become an uncharged active policy.
 Only an actual same-work comparison with transport, GRASP and P-OPT can
 establish whether this opportunity count produces a competitive gain.
+
+The separate [costed cache-only prototype](Potential-Window-Prototype)
+implements real record transport and a functional cost ledger. The
+observer itself remains read-only and is not used as its runtime policy.

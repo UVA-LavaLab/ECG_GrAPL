@@ -8,79 +8,12 @@
 
 #include "cache_sim.h"
 #include "../ecg_algorithms.h"
+#include "../ecg_window.h"
 
 namespace cache_sim {
 namespace window_observation {
 
-struct Profile {
-    uint64_t vertices, cohort_rows = 8, bin_rows = 1, bins = 0;
-
-    explicit Profile(uint64_t count, uint64_t fixture_cohort = 0) : vertices(count) {
-        if (!count || count > UINT32_MAX)
-            throw std::invalid_argument("window-observer-source-domain");
-        while (cohort_rows < (count + 255) / 256)
-            cohort_rows *= 2;
-        if (fixture_cohort)
-            cohort_rows = fixture_cohort;
-        if (cohort_rows < 8 || (cohort_rows & (cohort_rows - 1)))
-            throw std::invalid_argument("window-observer-cohort");
-        bin_rows = cohort_rows / 8;
-        bins = (count + bin_rows - 1) / bin_rows;
-    }
-
-    uint16_t reverse(uint64_t& entry, uint32_t row) const {
-        constexpr uint64_t valid = uint64_t{1} << 48;
-        if (row >= vertices)
-            throw std::invalid_argument("window-observer-row");
-        uint16_t token = 0;
-        uint64_t endpoint = (row % cohort_rows) / bin_rows, strength = 0;
-        if (entry & valid) {
-            const uint32_t previous = static_cast<uint32_t>(entry);
-            if (row > previous)
-                throw std::logic_error("window-observer-reverse-order");
-            if (row == previous)
-                return static_cast<uint16_t>((entry >> 38) & 1023);
-            const uint64_t gap = previous / cohort_rows - row / cohort_rows;
-            if (gap <= 7)
-                token = static_cast<uint16_t>(512 | (gap << 6) |
-                    (((entry >> 35) & 7) << 3) | ((entry >> 32) & 7));
-            if (gap == 0) {
-                endpoint = (entry >> 32) & 7;
-                strength = std::min<uint64_t>(7, ((entry >> 35) & 7) + 1);
-            }
-        }
-        entry = valid | row | (endpoint << 32) | (strength << 35) | (uint64_t(token) << 38);
-        return token;
-    }
-
-    uint64_t decode(uint16_t token, uint64_t row, uint64_t pass_base) const {
-        if (!token)
-            return 0;
-        if (token > 1023 || !(token & 512) || row >= vertices)
-            throw std::invalid_argument("window-observer-token");
-        const uint64_t selected = row / cohort_rows + ((token >> 6) & 7);
-        const uint64_t local_end = selected * 8 + (token & 7) + 1;
-        uint64_t end = 0;
-        if (selected * 8 >= bins || local_end > bins || local_end <= row / bin_rows ||
-            !ecg_record::checkedAdd(pass_base, local_end, end) || end > (UINT64_MAX >> 3))
-            throw std::invalid_argument("window-observer-endpoint");
-        return (end << 3) | ((token >> 3) & 7);
-    }
-
-    uint64_t distance(uint64_t payload, uint64_t watermark, uint64_t pass_base) const {
-        const uint64_t end = payload >> 3;
-        if (!end || end <= watermark || end <= pass_base || end - pass_base > bins)
-            throw std::logic_error("window-observer-invalid-live-window");
-        const uint64_t start = pass_base + ((end - 1 - pass_base) / 8) * 8;
-        return start > watermark ? start - watermark : 0;
-    }
-
-    bool poorerRetention(uint64_t candidate, uint64_t reference, uint64_t watermark, uint64_t pass_base) const {
-        const uint64_t a = distance(candidate, watermark, pass_base);
-        const uint64_t b = distance(reference, watermark, pass_base);
-        return a > b || (a == b && (candidate & 7) < (reference & 7));
-    }
-};
+using Profile = ecg_window::Profile;
 
 class Observer final : public CacheObservationSink {
   public:

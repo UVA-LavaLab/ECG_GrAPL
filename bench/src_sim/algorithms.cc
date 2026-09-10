@@ -63,6 +63,8 @@ int main(int argc, char** argv) {
                 backend.writePopt(output);
                 output << ",\"window_observer\":";
                 backend.writeWindowObserver(output);
+                output << ",\"window_runtime\":";
+                backend.writeWindowRuntime(output);
                 output << "}\n";
             };
             if (command.output_path.empty()) {
@@ -75,5 +77,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        }, true, true, true);
+        }, true, true, true, true);
 }

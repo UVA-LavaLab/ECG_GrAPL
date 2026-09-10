@@ -587,6 +587,197 @@ void testProtectedWindowProbe() {
     }
 }
 
+void testActiveWindowCodecAndCache() {
+    using ecg_window::Layout;
+    using ecg_window::Profile;
+    check(Layout::select((uint64_t{1} << 22) - 1, 0).record_bytes == 4 &&
+          Layout::select(uint64_t{1} << 22, 0).record_bytes == 8 &&
+          Layout::select(UINT32_MAX, 0).id_bits == 32,
+          "window records select width from actual VID headroom and ten token bits");
+    bool rejected = false;
+    try { Layout::select(uint64_t{1} << 22, 4); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    check(rejected, "window records cannot silently discard metadata to force four bytes");
+    const Profile profile(64, 32);
+    const Fixture graph(64, true, {{12, 0, 1}, {12, 1, 1}, {18, 2, 1}, {26, 3, 1}});
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        const auto layout = Layout::select(3, width);
+        uint64_t read_bytes = 0, write_bytes = 0;
+        const auto stream = ecg_window::build(profile, graph.edges.size(), layout, ecg_record::BuildLimits{},
+            [&](uint64_t row) { return std::pair<uint64_t,uint64_t>{graph.offsets[row], graph.offsets[row + 1]}; },
+            [&](uint64_t index) { read_bytes += 4; return static_cast<uint32_t>(graph.edges[index].id); },
+            [&](const void*, uint64_t bytes, bool write) { (write ? write_bytes : read_bytes) += bytes; });
+        check(stream.known_records == 3 && (stream.word(0) >> layout.id_bits) == 0x20e &&
+              (stream.word(1) >> layout.id_bits) == 0x20e && layout.id(stream.word(1), 64) == 1 &&
+              stream.stats.carrier_payload_bytes == 4 * width && stream.stats.auxiliary_peak_bytes == 32 &&
+              read_bytes > 0 && write_bytes >= 4 * width + 32,
+              "actual window records preserve IDs, frozen duplicate hints and observed construction");
+        rejected = false;
+        try { layout.id(stream.word(0) | (uint64_t{1} << 63), 64); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        check(rejected, "actual window records reject noncanonical unused upper bits");
+    }
+    ecg_record::LineMetadata metadata;
+    ecg_window::observe(metadata, 10);
+    check(!ecg_window::apply(metadata, 9, 16) && ecg_window::apply(metadata, 10, 16) &&
+          !ecg_window::apply(metadata, 10, 24),
+          "window delivery requires its matching pending observation, not any live line");
+    ecg_window::observe(metadata, 11);
+    check(!ecg_window::apply(metadata, 10, 16) && ecg_window::apply(metadata, 11, 0) &&
+          metadata.state == ecg_record::LineState::UNKNOWN && metadata.value == 11,
+          "newer unknown publication retains its ordering cutoff");
+
+    for (uint8_t floor : {uint8_t{6}, uint8_t{7}}) {
+        cache_sim::GraphCacheContext context;
+        context.topology.num_vertices = 128;
+        context.registerPropertyArray(reinterpret_cast<const void*>(0x1000), 128, 4, 192, 0.5);
+        cache_sim::CacheLevel cache("L3", 192, 64, 3, cache_sim::EvictionPolicy::GRASP);
+        cache.initGraphContext(&context);
+        cache.prepareRecord(cache_sim::EvictionPolicy::GRASP);
+        const Profile active_profile(128);
+        cache.configureWindow(active_profile, 0x1000, true, floor);
+        cache.windowProgress(0, 0, true);
+        std::vector<cache_sim::CacheLine> ways(3);
+        for (std::size_t way = 0; way < ways.size(); ++way) {
+            ways[way].valid = true;
+            ways[way].line_addr = 0x1000 + way * 64;
+            ways[way].rrpv = way == 1 ? 6 : 7;
+        }
+        ways[0].record_metadata.state = ways[1].record_metadata.state = ecg_record::LineState::FINITE;
+        ways[0].record_metadata.value = uint64_t{2} << 3;
+        ways[1].record_metadata.value = uint64_t{17} << 3;
+        check(cache.selectVictimForTest(ways) == (floor == 6 ? 1 : 0),
+              "active window policy changes only its declared RRPV6/7 candidate set");
+        ways[0].record_metadata.state = ecg_record::LineState::UNKNOWN;
+        check(cache.selectVictimForTest(ways) == 0,
+              "an unrankable window base victim preserves actual GRASP");
+        ways[0].record_metadata.state = ecg_record::LineState::FINITE;
+        cache.insert(0x1000, false);
+        check(cache.observeWindow(0x1000, 10) &&
+              cache.applyWindow(0x1000, 10, uint64_t{2} << 3) == ecg_record::ApplyResult::APPLIED &&
+              cache.observeWindow(0x1000, 11) &&
+              cache.applyWindow(0x1000, 10, uint64_t{2} << 3) == ecg_record::ApplyResult::STALE &&
+              cache.applyWindow(0x1000, 11, 0) == ecg_record::ApplyResult::APPLIED,
+              "resident window delivery respects matching observation order and newer UNKNOWN");
+        cache.windowProgress(128, 128, true);
+        check(cache.selectVictimForTest(ways) == 0, "previous-pass windows cannot revive after progress resets");
+        check(cache.observeWindow(0x1000, 12) &&
+              cache.applyWindow(0x1000, 12, uint64_t{2} << 3) == ecg_record::ApplyResult::EXPIRED &&
+              cache.applyWindow(0x1040, 12, uint64_t{129} << 3) == ecg_record::ApplyResult::NOT_RESIDENT,
+              "old-pass and nonresident window updates cannot allocate or revive data");
+        rejected = false;
+        try { cache.windowProgress(0, 0, true); }
+        catch (const std::logic_error&) { rejected = true; }
+        check(rejected, "window receiver rejects backward absolute progress");
+    }
+}
+
+void testActiveWindowAssociation() {
+    const Fixture graph(32, true, {{0, 16, 1}, {0, 17, 1}, {1, 16, 1}});
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        const ecg_window::Profile profile(32);
+        const auto layout = ecg_window::Layout::select(17, width);
+        auto stream = ecg_window::build(profile, graph.edges.size(), layout, ecg_record::BuildLimits{},
+            [&](uint64_t row) { return std::pair<uint64_t,uint64_t>{graph.offsets[row], graph.offsets[row + 1]}; },
+            [&](uint64_t index) { return static_cast<uint32_t>(graph.edges[index].id); },
+            [](const void*, uint64_t, bool) {});
+        alignas(64) uint32_t depth[32]{};
+        const uint64_t base = reinterpret_cast<uint64_t>(depth);
+        cache_sim::GraphCacheContext context;
+        context.topology.num_vertices = 32;
+        context.registerPropertyArray(depth, 32, 4, 128, 0.5);
+        cache_sim::CacheHierarchy cache(64, 1, 64, 1, 128, 2, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::GRASP);
+        cache.initGraphContext(&context);
+        cache.prepareRecord(cache_sim::EvictionPolicy::GRASP);
+        cache_sim::WindowRuntime runtime(cache, stream, 32, base, true, 6);
+        runtime.beginPass();
+        runtime.visitVertex(0);
+        runtime.rowContext(0, 0, 2);
+        const uint64_t word = runtime.recordLoad(0);
+        check(word == stream.word(0), "window transport returns the actual loaded record word");
+        bool rejected = false;
+        try { runtime.property(0, word ^ 1, base); }
+        catch (const std::logic_error&) { rejected = true; }
+        check(rejected, "property operands cannot substitute a synthesized record word");
+        check(runtime.property(0, word, base) == 16,
+              "window property access uses the real record's unmodified destination");
+        rejected = false;
+        try { runtime.associateStore(0, 17, base, 4); }
+        catch (const std::logic_error&) { rejected = true; }
+        check(rejected, "window publication requires the exact element, not another VID on its line");
+        runtime.associateStore(0, 16, base, 4);
+        runtime.memory(base + 16 * 4, true);
+        runtime.closePass();
+        runtime.finish(1);
+        std::ostringstream report;
+        runtime.write(report);
+        check(report.str().find("\"forwarded_stores\":1") != std::string::npos &&
+              report.str().find("\"pending\":0") != std::string::npos &&
+              report.str().find("\"skipped_positions\":2") != std::string::npos,
+              "window runtime closes real filtered work and drains its paired store publication");
+        rejected = false;
+        try { runtime.recordLoad(1); }
+        catch (const std::logic_error&) { rejected = true; }
+        check(rejected, "finished window bindings cannot access released carriers");
+    }
+}
+
+void testWindowTransportMatchesGrasp() {
+    std::vector<std::tuple<uint32_t,uint32_t,int32_t>> edges;
+    for (uint32_t source = 0; source < 64; ++source)
+        for (uint32_t offset : {1u, 17u, 33u})
+            edges.emplace_back(source, (source + offset) % 64, 1);
+    const Fixture graph(64, true, edges);
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        const auto layout = ecg_window::Layout::select(63, width);
+        auto stream = ecg_window::build(ecg_window::Profile(64), graph.edges.size(), layout,
+            ecg_record::BuildLimits{},
+            [&](uint64_t row) { return std::pair<uint64_t,uint64_t>{graph.offsets[row], graph.offsets[row + 1]}; },
+            [&](uint64_t index) { return static_cast<uint32_t>(graph.edges[index].id); },
+            [](const void*, uint64_t, bool) {});
+        alignas(64) uint32_t depth[64]{};
+        const uint64_t base = reinterpret_cast<uint64_t>(depth);
+        cache_sim::GraphCacheContext context;
+        context.topology.num_vertices = 64;
+        context.registerPropertyArray(depth, 64, 4, 128, 0.5);
+        cache_sim::CacheHierarchy actual(64,1,64,1,128,2,64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::GRASP);
+        cache_sim::CacheHierarchy reference(64,1,64,1,128,2,64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::GRASP);
+        actual.initGraphContext(&context);
+        reference.initGraphContext(&context);
+        actual.prepareRecord(cache_sim::EvictionPolicy::GRASP);
+        cache_sim::WindowRuntime runtime(actual, stream, 64, base, false, 6);
+        runtime.beginPass();
+        for (uint64_t source = 0; source < 64; ++source) {
+            runtime.visitVertex(source);
+            for (uint64_t offset : {source, source + 1}) {
+                const uint64_t address = reinterpret_cast<uint64_t>(&graph.offsets[offset]);
+                runtime.memory(address, false);
+                reference.access(address, false);
+            }
+            runtime.rowContext(source, graph.offsets[source], graph.offsets[source + 1]);
+            for (uint64_t index = graph.offsets[source]; index < graph.offsets[source + 1]; ++index) {
+                const auto word = runtime.recordLoad(index);
+                reference.access(reinterpret_cast<uint64_t>(stream.data()) + index * width, false);
+                const uint32_t id = runtime.property(index, word, base);
+                reference.access(base + uint64_t(id) * 4, false);
+                runtime.associateStore(index, id, base, 4);
+                runtime.memory(base + uint64_t(id) * 4, true);
+                reference.access(base + uint64_t(id) * 4, true);
+            }
+        }
+        runtime.closePass();
+        runtime.finish(graph.edges.size());
+        check(actual.getMemoryAccesses() == reference.getMemoryAccesses() &&
+              actual.getWritebackTraffic() == reference.getWritebackTraffic() &&
+              actual.getL3Stats().hits.load() == reference.getL3Stats().hits.load() &&
+              actual.windowStats().overrides == 0,
+              "window transport has exact GRASP behavior on the same real encoded data stream");
+    }
+}
+
 void testUnboundRecordPreparation() {
     using namespace ecg_algorithm;
     testWindowObservationProfile();
@@ -704,6 +895,9 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testWindowTransportMatchesGrasp();
+    testActiveWindowAssociation();
+    testActiveWindowCodecAndCache();
     testProtectedWindowProbe();
     testWindowCheckedStorePublication();
     testWindowCandidateAttribution();

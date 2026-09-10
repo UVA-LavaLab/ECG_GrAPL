@@ -36,6 +36,7 @@
 #include "../ecg_record_runtime.h"
 #include "../ecg_record_stream.h"
 #include "../ecg_record_window.h"
+#include "../ecg_window.h"
 
 namespace cache_sim {
 
@@ -1633,6 +1634,7 @@ public:
     size_t getNumSets() const { return num_sets_; }
     EvictionPolicy getPolicy() const { return policy_; }
     std::string getEcgMode() const {
+        if (window_used_) return "POTENTIAL_WINDOW";
         if (record_mode_snapshot_) return "RECORD";
         if (policy_ != EvictionPolicy::ECG) return "";
         return ECGModeToString(ecg_mode_snapshot_);
@@ -1817,7 +1819,7 @@ public:
         ecg_record::Layout layout;
         ecg_record::PropertyDescriptor property;
         const bool managed = configuration.control & ecg_record::kNativeManagedPasses;
-        if (record_configured_ || !graph_ctx_ || line_size_ != 64 || associativity_ > 64 ||
+        if (record_configured_ || window_used_ || !graph_ctx_ || line_size_ != 64 || associativity_ > 64 ||
             ecg_record::validateNativeConfiguration(configuration, layout) != ecg_record::Status::OK ||
             ecg_record::unpackProperty(configuration.property_descriptor, property) !=
                 ecg_record::Status::OK ||
@@ -1853,6 +1855,72 @@ public:
         record_configured_ = false;
         record_receiver_.disable();
     }
+
+    void configureWindow(const ecg_window::Profile& profile, uint64_t property_base,
+                         bool replacement, uint8_t candidate_floor) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        const auto* region = graph_ctx_ ? graph_ctx_->findRegion(property_base) : nullptr;
+        if (window_used_ || record_configured_ || observation_sink_ || !record_prepared_ ||
+            record_base_policy_ != EvictionPolicy::GRASP || policy_ != EvictionPolicy::GRASP ||
+            !region || region->base_address != property_base || region->elem_size != 4 ||
+            region->num_elements != profile.vertices || property_base % 64 ||
+            (candidate_floor != 6 && candidate_floor != 7) ||
+            !ecg_record::checkedAdd(property_base, profile.vertices * 4, window_property_end_))
+            throw std::invalid_argument("invalid-window-cache-configuration");
+        window_profile_ = &profile;
+        window_property_base_ = property_base;
+        window_replacement_ = replacement;
+        window_floor_ = candidate_floor;
+        window_used_ = true;
+    }
+
+    void windowProgress(uint64_t base, uint64_t watermark, bool open) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        uint64_t end = 0;
+        if (!window_profile_ || !ecg_record::checkedAdd(base, window_profile_->bins, end) ||
+            watermark < base || watermark > end || watermark < window_watermark_ ||
+            base < window_pass_base_ || (open && watermark == end))
+            throw std::logic_error("invalid-window-progress");
+        window_pass_base_ = base;
+        window_watermark_ = watermark;
+        window_open_ = open;
+    }
+
+    bool observeWindow(uint64_t address, uint64_t order) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!window_profile_ || address % 4 || address < window_property_base_ || address >= window_property_end_)
+            throw std::logic_error("invalid-window-observation-address");
+        for (auto& line : cache_[getSetIndex(address)])
+            if (line.valid && line.tag == getTag(address)) {
+                ecg_window::observe(line.record_metadata, order);
+                return true;
+            }
+        return false;
+    }
+
+    ecg_record::ApplyResult applyWindow(uint64_t address, uint64_t order, uint64_t payload) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!window_profile_ || address % 64 || address < window_property_base_ || address >= window_property_end_ || !order)
+            throw std::logic_error("invalid-window-delivery");
+        for (auto& line : cache_[getSetIndex(address)]) {
+            if (!line.valid || line.tag != getTag(address))
+                continue;
+            if (line.record_metadata.state != ecg_record::LineState::PENDING || line.record_metadata.value != order)
+                return ecg_record::ApplyResult::STALE;
+            const bool expired = payload && !window_profile_->live(payload, window_watermark_, window_pass_base_);
+            ecg_window::apply(line.record_metadata, order, expired ? 0 : payload);
+            return expired ? ecg_record::ApplyResult::EXPIRED : ecg_record::ApplyResult::APPLIED;
+        }
+        return ecg_record::ApplyResult::NOT_RESIDENT;
+    }
+
+    void disableWindow() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        window_open_ = false;
+        window_profile_ = nullptr;
+    }
+
+    const ecg_window::PolicyStats& windowStats() const { return window_stats_; }
 
     void invalidateRecordSet(std::size_t index) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -1937,6 +2005,12 @@ private:
     ecg_record::NativeConfiguration record_configuration_;
     ecg_record::Receiver record_receiver_;
     bool record_configured_ = false;
+    const ecg_window::Profile* window_profile_ = nullptr;
+    uint64_t window_property_base_ = 0, window_property_end_ = 0;
+    uint64_t window_pass_base_ = 0, window_watermark_ = 0;
+    bool window_used_ = false, window_open_ = false, window_replacement_ = false;
+    uint8_t window_floor_ = 7;
+    ecg_window::PolicyStats window_stats_;
     bool record_prepared_ = false;
     bool record_replacement_ = false;
     EvictionPolicy record_base_policy_ = EvictionPolicy::LRU;
@@ -2277,6 +2351,33 @@ private:
             for (size_t i = 0; i < associativity_; i++) {
                 if (!set[i].valid) return i;
             }
+        }
+        if (window_profile_) {
+            const std::size_t base = findVictimGRASP(set);
+            if (!window_replacement_ || !window_open_)
+                return base;
+            ++window_stats_.decisions;
+            const auto live = [&](std::size_t way) {
+                const auto& line = set[way];
+                return line.line_addr >= window_property_base_ && line.line_addr < window_property_end_ &&
+                    line.record_metadata.state == ecg_record::LineState::FINITE &&
+                    window_profile_->live(line.record_metadata.value, window_watermark_, window_pass_base_);
+            };
+            if (!live(base))
+                return base;
+            ++window_stats_.live_base;
+            std::size_t selected = base;
+            for (int rank = 7; rank >= window_floor_; --rank)
+                for (std::size_t way = 0; way < set.size(); ++way)
+                    if (set[way].rrpv == rank && live(way) &&
+                        window_profile_->poorerRetention(set[way].record_metadata.value,
+                            set[selected].record_metadata.value, window_watermark_, window_pass_base_))
+                        selected = way;
+            if (selected != base) {
+                ++window_stats_.overrides;
+                window_stats_.protected_overrides += set[selected].rrpv == 6;
+            }
+            return selected;
         }
         if (record_configured_) {
             if (!record_replacement_)
@@ -4542,6 +4643,18 @@ public:
     std::size_t getL3Sets() const { return l3_->getNumSets(); }
     std::size_t getL3Ways() const { return l3_->getAssociativity(); }
     void observeLastLevel(CacheObservationSink* sink) { l3_->observe(sink); }
+    void configureWindow(const ecg_window::Profile& profile, uint64_t base, bool replacement, uint8_t floor) {
+        if (record_model_ || ref32_commit_channel_ || ref32_prefetch_enabled_ || refresh_exact_stamp_)
+            throw std::invalid_argument("window transport cannot share another record model");
+        l3_->configureWindow(profile, base, replacement, floor);
+    }
+    void windowProgress(uint64_t base, uint64_t watermark, bool open) { l3_->windowProgress(base, watermark, open); }
+    bool observeWindow(uint64_t address, uint64_t order) { return l3_->observeWindow(address, order); }
+    ecg_record::ApplyResult applyWindow(uint64_t address, uint64_t order, uint64_t payload) {
+        return l3_->applyWindow(address, order, payload);
+    }
+    void disableWindow() { l3_->disableWindow(); }
+    const ecg_window::PolicyStats& windowStats() const { return l3_->windowStats(); }
     uint64_t getStructuralFlowThroughAccesses() const {
         return structural_flowthrough_accesses_;
     }

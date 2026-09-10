@@ -387,6 +387,160 @@ def test_window_observer_profile_is_one_paired_condition(tmp_path):
         assert job.command[job.command.index("--cache-sim-omp-threads") + 1] == "1"
 
 
+def test_active_window_records_preserve_bfs_and_charge_controls(tmp_path):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    from scripts.experiments.ecg import algorithm_matrix
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    results = []
+    baseline_output = tmp_path / "csr-reference.json"
+    baseline_run = subprocess.run([
+        str(binary), "--algorithm", "bfs", "--graph", str(graph), "--mode", "csr",
+        "--policy", "GRASP_PAPER", "--delta", "8", "--evidence", "--values",
+        "--output", str(baseline_output),
+    ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+        capture_output=True, text=True, timeout=30, check=False)
+    assert baseline_run.returncode == 0, baseline_run.stdout + baseline_run.stderr
+    baseline = json.loads(baseline_output.read_text())["workload"]
+    for width in (4, 8):
+        for mode, floor in (("transport", 6), ("replacement", 7), ("replacement", 6)):
+            output = tmp_path / "window-result.json"
+            ran = subprocess.run([
+                "setarch", os.uname().machine, "-R", str(binary),
+                "--algorithm", "bfs", "--graph", str(graph), "--mode", mode,
+                "--delta", "8",
+                "--record-model", "window", "--window-candidate-rrpv", str(floor),
+                "--record-base-policy", "GRASP_PAPER", "--record-bytes", str(width),
+                "--evidence", "--values", "--l1-bytes", "128", "--l1-ways", "2",
+                "--l2-bytes", "256", "--l2-ways", "2", "--llc-bytes", "1024", "--llc-ways", "2",
+                "--output", str(output),
+            ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+                capture_output=True, text=True, timeout=30, check=False)
+            assert ran.returncode == 0, ran.stdout + ran.stderr
+            p = json.loads(output.read_text())
+            options = algorithm_matrix.parse_options(
+                f"--graph {graph} --record-model window --record-base-policy GRASP_PAPER --window-candidate-rrpv {floor}")
+            algorithm_matrix.validate_payload(
+                p, ran.stdout + ran.stderr, algorithm="bfs", mode=mode, policy="LRU",
+                graph=algorithm_matrix.graph_info(graph, allow_weighted=True, traversal="out"),
+                graph_path=graph, options=options, requested_bytes=width,
+                minimum_mantissa_bits=0, evidence=True, llc_sets=8)
+            algorithm_matrix.validate_traffic_phases(p)
+            assert p["diagnostic_only"] is False and p["window_observer"] is None
+            assert p["workload"]["record_model"] == "window"
+            w = p["window_runtime"]
+            assert w["schema"] == "ecg.window-runtime.v1"
+            assert w["record_loads"] == p["workload"]["actual_records"] == w["property_reads"]
+            assert w["record_read_bytes"] == width * w["record_loads"]
+            assert w["enqueued"] == w["delivered"] and w["pending"] == 0
+            assert w["markers"] > 0 and w["marker_steps"] == 16 * w["markers"]
+            assert w["observation_steps"] > 0 and w["row_context_steps"] > 0
+            assert w["association_steps"] == w["forwarded_stores"] == p["workload"]["reached"] - 1
+            assert w["control_bytes"] == 48 * (w["markers"] + 1)
+            assert w["metadata_payload_bits_per_line"] == 67
+            assert w["unmodeled_runtime_table_bytes"] == 0
+            if mode == "transport":
+                assert w["victim_overrides"] == 0
+            if floor == 7:
+                assert w["protected_overrides"] == 0
+            results.append(p)
+    for key in ("result_digest", "work_trace_digest", "position_trace_digest", "actual_records", "values_u32"):
+        assert all(p["workload"][key] == baseline[key] for p in results)
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    broken = copy.deepcopy(results[-1])
+    broken["window_runtime"]["marker_steps"] = 0
+    with pytest.raises(RecordReceiptError, match="control/lookup"):
+        algorithm_matrix.validate_window_runtime(broken, options)
+
+
+def test_window_runtime_profile_and_resource_limits(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.algorithm_matrix import parse_options
+    from scripts.experiments.ecg.record_resources import GraphInfo, plan_algorithm_resources, RecordResourceError
+    m = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    jobs = experiment_run.expand_jobs(
+        experiment_run.parse_args(["--profile", "ecg_window_costed_cache", "--list"]), m, tmp_path)
+    assert len(jobs) == 3 and sum(len(job.metadata["policies"]) for job in jobs) == 6
+    for job in jobs:
+        options = parse_options(job.metadata["options"])
+        assert job.metadata["benchmark"] == "bfs" and options.bfs_direction == "td"
+        if options.record_model == "window":
+            assert options.record_base_policy == "GRASP_PAPER"
+            assert all(f"_MODEL_WINDOW_RRPV{options.window_candidate_rrpv}" in label
+                       for label in job.metadata["expected_policy_labels"])
+    graph = GraphInfo(False, 512, 3968, 495, 37913, "a" * 64)
+    args = dict(algorithm="bfs", records=True, requested_bytes=4, minimum_mantissa_bits=0,
+                traversals=1, sources=1, workspace_limit=1 << 20, carrier_limit=1 << 20,
+                auxiliary_limit=1 << 20, rss_mib=1024, record_model="window")
+    plan = plan_algorithm_resources(graph, **args)
+    assert plan["construction_auxiliary_bytes_upper"] == 32 * 8
+    assert plan["carrier_payload_bytes_upper"] == 3968 * 4
+    with pytest.raises(RecordResourceError, match="window model"):
+        plan_algorithm_resources(graph, **{**args, "backend": "gem5"})
+    with pytest.raises(RecordResourceError, match="explicit limits"):
+        plan_algorithm_resources(graph, **{**args, "auxiliary_limit": 255})
+
+
+def test_active_window_runner_uses_distinct_model_labels(tmp_path):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    from scripts.experiments.ecg.flows.experiment_run import csv_status
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "matrix"
+    ran = subprocess.run([
+        "python3", str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "cache-sim", "--current-algorithms", "--benchmark", "bfs",
+        "--options", f"--graph {graph} --record-model window --record-base-policy GRASP_PAPER --window-candidate-rrpv 6",
+        "--policies", "ECG:transport", "ECG:replacement", "--ecg-equivalence",
+        "--algorithm-workspace-bytes", str(32 << 20), "--cache-record-rss-mib", "512",
+        "--l1d-size", "128B", "--l1d-ways", "2", "--l2-size", "256B", "--l2-ways", "2",
+        "--l3-sizes", "1kB", "--l3-ways", "2", "--no-build", "--out-dir", str(output),
+    ], capture_output=True, text=True, timeout=60, check=False)
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    policies = ["ECG:transport", "ECG:replacement"]
+    assert csv_status(output / "roi_matrix.csv", policies, "GRASP_PAPER", "off", "window", 6)[0] == "ok"
+    assert csv_status(output / "roi_matrix.csv", policies, "GRASP_PAPER")[0] == "partial"
+    marker = json.loads((output / "roi_matrix.complete.json").read_text())
+    assert all("_MODEL_WINDOW_RRPV6" in label for label in marker["policy_labels"])
+    rows = json.loads((output / "roi_matrix.json").read_text())
+    assert all(row["window_unmodeled_runtime_table_bytes"] == 0 for row in rows)
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_window_model_is_rejected_before_native_graph_loading(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--current-algorithms", "--ecg-equivalence", "--benchmark", "bfs",
+        "--options", f"--graph {tmp_path / 'not-read.sg'} --record-model window --record-base-policy GRASP_PAPER",
+        "--prefetcher", "none", "--flowthrough", "off",
+    ])
+    services = SimpleNamespace(parse_size_bytes=roi_matrix.parse_size_bytes)
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "8MB", backend, services)
+    assert rows[0]["status"] == "error" and rows[0]["error"] == "window model is cache_sim-only"
+
+
+@pytest.mark.parametrize("extra", [
+    ["--algorithm", "sssp"], ["--record-base-policy", "LRU"], ["--mode", "replacement-prefetch"],
+    ["--bfs-direction", "do"], ["--record-preprocess", "traversal"],
+    ["--window-observer", "window"], ["--minimum-mantissa-bits", "1"],
+    ["--window-candidate-rrpv", "5"],
+])
+def test_window_model_rejects_unsupported_options(tmp_path, extra):
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    ran = subprocess.run([
+        str(binary), "--algorithm", "bfs", "--graph", str(tmp_path / "not-read.sg"),
+        "--mode", "replacement", "--record-base-policy", "GRASP_PAPER",
+        "--record-model", "window", *extra,
+    ], capture_output=True, text=True, timeout=10, check=False)
+    assert ran.returncode == 2 and "window" in ran.stderr
+
+
 @pytest.mark.parametrize("width", [4, 8])
 @pytest.mark.parametrize("mode", ["transport", "replacement", "prefetch", "replacement-prefetch"])
 def test_traversal_preprocessing_preserves_algorithm_work(tmp_path, width, mode):

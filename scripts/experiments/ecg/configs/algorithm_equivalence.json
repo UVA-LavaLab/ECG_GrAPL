@@ -33,6 +33,7 @@
     "bench/include/ecg_record_native.h",
     "bench/include/ecg_record_runtime.h",
     "bench/include/ecg_record_stream.h",
+    "bench/include/ecg_window.h",
     "bench/include/ecg_record_window.h",
     "bench/include/ecg_record_evidence.h",
     "bench/include/ecg_ref32_commit.h",
@@ -49,6 +50,7 @@
     "cache-sim": [
       "bench/include/cache_sim/ecg_algorithm.h",
       "bench/include/cache_sim/ecg_window_observer.h",
+      "bench/include/cache_sim/ecg_window_runtime.h",
       "bench/include/cache_sim/cache_sim.h",
       "bench/include/cache_sim/graph_cache_context.h",
       "bench/include/popt_rereference.h",

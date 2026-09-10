@@ -15,6 +15,7 @@
 
 #include "ecg_record_evidence.h"
 #include "ecg_record_native.h"
+#include "ecg_window.h"
 
 namespace ecg_algorithm {
 
@@ -23,6 +24,7 @@ enum class MemoryKind : uint8_t { INDEX, EDGE, WEIGHT, PROPERTY, AUXILIARY, CONS
 enum class ReferencePattern : uint8_t { NEIGHBOR, VERTEX, NEIGHBOR_AND_VERTEX };
 enum class RecordBasePolicy : uint8_t { LRU, GRASP_PAPER };
 enum class WindowObserverMode : uint8_t { OFF, CONTROL, WINDOW };
+enum class RecordModel : uint8_t { NEXT, WINDOW };
 
 inline const char* recordBasePolicyName(RecordBasePolicy policy) {
     switch (policy) {
@@ -62,6 +64,8 @@ struct Options {
     bool evidence = false;
     bool capture_values = false;
     bool traversal_preprocessing = false;
+    RecordModel record_model = RecordModel::NEXT;
+    uint8_t window_candidate_rrpv = 6;
     WindowObserverMode window_observer = WindowObserverMode::OFF;
     uint64_t maximum_window_observer_bytes = uint64_t{128} << 20;
     uint8_t record_bytes = 0;
@@ -82,6 +86,8 @@ struct Options {
 inline const char* recordReuseScope(const Options& options) {
     if (!options.records)
         return "none";
+    if (options.record_model == RecordModel::WINDOW)
+        return "source-cohort-window";
     if (options.traversal_preprocessing) {
         switch (options.algorithm) {
           case Algorithm::SSSP: return "light-heavy";
@@ -113,6 +119,8 @@ struct Result {
     uint64_t source_list_digest = 0;
     uint64_t maximum_encoded_id = 0;
     ecg_record::Layout layout;
+    ecg_window::Layout window_layout;
+    uint64_t window_known_records = 0;
     bool weighted = false, records = false, evidence = false, memory_counts_measured = false;
     std::vector<uint32_t> values_u32;
     std::vector<uint64_t> values_u64;
@@ -409,6 +417,56 @@ class Engine {
             return;
         backend_.drain();
         const uint64_t base = reinterpret_cast<uint64_t>(property.data());
+        if (options.record_model == RecordModel::WINDOW) {
+            if constexpr (Backend::models_memory) {
+                if (window_stream_ || kind != ecg_record::PropertyKind::U32 || sizeof(T) != 4 ||
+                    mode != ecg_record::TraversalMode::ORDERED_FILTERED || base % 64)
+                    throw std::invalid_argument("window model requires one aligned U32 binding");
+                uint64_t maximum = 0, payload = 0;
+                for (uint64_t index = 0; index < graph.records; ++index)
+                    maximum = std::max<uint64_t>(maximum,
+                        graph.id(*this, index, MemoryKind::CONSTRUCTION, false));
+                const auto layout = ecg_window::Layout::select(maximum, options.record_bytes);
+                if (!ecg_record::checkedMultiply(graph.records, layout.record_bytes, payload) ||
+                    payload > options.maximum_workspace_bytes - workspace_)
+                    throw std::length_error("window-carrier-workspace-limit");
+                auto limits = options.build_limits;
+                limits.maximum_auxiliary_bytes = std::min(limits.maximum_auxiliary_bytes,
+                    options.maximum_workspace_bytes - workspace_ - payload);
+                window_stream_ = std::make_unique<ecg_window::RecordStream>(ecg_window::build(
+                    ecg_window::Profile(graph.vertices), graph.records, layout, limits,
+                    [&](uint64_t row) {
+                        const uint64_t first = graph.offset(*this, row, MemoryKind::CONSTRUCTION, false);
+                        const uint64_t last = graph.offset(*this, row + 1, MemoryKind::CONSTRUCTION, false);
+                        return std::pair<uint64_t, uint64_t>{first, last};
+                    },
+                    [&](uint64_t index) { return graph.id(*this, index, MemoryKind::CONSTRUCTION, false); },
+                    [&](const void* address, uint64_t bytes, bool write) {
+                        touch(address, bytes, write, MemoryKind::CONSTRUCTION, 0, 0, false);
+                    }));
+                const auto& stats = window_stream_->stats;
+                result.workspace_peak_bytes = std::max(result.workspace_peak_bytes,
+                    workspace_ + stats.carrier_allocation_bytes + stats.auxiliary_peak_bytes);
+                reserve(stats.carrier_allocation_bytes);
+                result.carrier_bytes = stats.carrier_allocation_bytes;
+                result.construction_auxiliary_peak_bytes = stats.auxiliary_peak_bytes;
+                result.maximum_encoded_id = maximum;
+                result.window_layout = layout;
+                result.window_known_records = window_stream_->known_records;
+                result.constructed_unknown_records = graph.records - window_stream_->known_records;
+                id_mask_ = layout.idMask();
+                if (options.evidence) {
+                    records_.add(0x57494e444f573031ULL);
+                    records_.add(layout.record_bytes);
+                    records_.add(layout.id_bits);
+                    records_.add(graph.records);
+                }
+                backend_.bindWindow(*window_stream_, graph.vertices, base);
+                return;
+            } else {
+                throw std::invalid_argument("window model is cache_sim-only");
+            }
+        }
         Carrier* carrier = nullptr;
         for (const auto& prepared : carriers_) {
             if (prepared->columns == graph.columns && prepared->records == graph.records &&
@@ -556,6 +614,10 @@ class Engine {
         if constexpr (Backend::models_memory)
             backend_.visitVertex(vertex);
     }
+    void rowContext(uint64_t vertex, uint64_t first, uint64_t last) {
+        if constexpr (Backend::models_memory)
+            backend_.rowContext(vertex, first, last);
+    }
 
     template<class T>
     void writeNeighbor(uint64_t index, Buffer<T>& property, uint32_t destination, T value) {
@@ -598,17 +660,27 @@ class Engine {
         const T value = options.records
             ? backend_.template property<T>(index, word, property.data()) : property.data()[destination];
         if (options.records && options.evidence) {
-            ecg_record::NativeLoadResult observed;
-            if (ecg_record::nativePropertyAccess(configuration_,
-                    reinterpret_cast<uint64_t>(property.data()), word,
-                    configuration_.record_base + index * stream_->layout.record_bytes, observed) !=
-                    ecg_record::Status::OK)
-                throw std::logic_error("invalid-observed-record-semantics");
-            records_.add(word);
-            records_.add(index);
-            records_.add(observed.sequence);
-            records_.add(static_cast<uint64_t>(observed.state));
-            records_.add(observed.deadline);
+            if (options.record_model == RecordModel::WINDOW) {
+                if constexpr (Backend::models_memory) {
+                    records_.add(word);
+                    records_.add(index);
+                    records_.add(cursor_.sequence());
+                    records_.add(backend_.windowTraceSource());
+                    records_.add(backend_.windowTraceValue());
+                }
+            } else {
+                ecg_record::NativeLoadResult observed;
+                if (ecg_record::nativePropertyAccess(configuration_,
+                        reinterpret_cast<uint64_t>(property.data()), word,
+                        configuration_.record_base + index * stream_->layout.record_bytes, observed) !=
+                        ecg_record::Status::OK)
+                    throw std::logic_error("invalid-observed-record-semantics");
+                records_.add(word);
+                records_.add(index);
+                records_.add(observed.sequence);
+                records_.add(static_cast<uint64_t>(observed.state));
+                records_.add(observed.deadline);
+            }
         }
         ++result.actual_records;
         ++pass_records_;
@@ -678,6 +750,7 @@ class Engine {
     ecg_record::NativeConfiguration configuration_;
     ecg_record::PassCursor cursor_;
     const ecg_record::RecordStream* stream_ = nullptr;
+    std::unique_ptr<ecg_window::RecordStream> window_stream_;
     std::vector<std::unique_ptr<Carrier>> carriers_;
     ecg_record::StreamDigest work_, positions_, records_;
     uint64_t workspace_ = 0, next_token_ = 3, pass_records_ = 0, id_mask_ = 0;
@@ -800,6 +873,7 @@ BfsStep bfsTopDownLevel(
         const uint32_t vertex = frontier.get(position);
         access.visitVertex(vertex);
         const auto row = graph.row(access, vertex);
+        access.rowContext(vertex, row.first, row.second);
         for (uint64_t index = row.first; index < row.second; ++index) {
             const auto item = access.neighbor(index, depth);
             ++access.result.bfs_td_edges;

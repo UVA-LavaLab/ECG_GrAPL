@@ -4,6 +4,7 @@
 #include "cache_sim.h"
 #include "../ecg_algorithms.h"
 #include "ecg_window_observer.h"
+#include "ecg_window_runtime.h"
 
 namespace cache_sim {
 
@@ -46,7 +47,9 @@ class AlgorithmBackend {
     AlgorithmBackend(CacheHierarchy& cache, const ecg_algorithm::Options& options,
                      uint64_t llc_bytes = 8 * 1024 * 1024, bool grasp_paper = false,
                      bool popt_full_capacity = false)
-        : cache_(cache), options_(options), llc_bytes_(llc_bytes), grasp_paper_(grasp_paper),
+        : cache_(cache), options_(options), llc_bytes_(llc_bytes),
+          grasp_paper_(grasp_paper || (options.records &&
+              options.record_base_policy == ecg_algorithm::RecordBasePolicy::GRASP_PAPER)),
           popt_full_capacity_(popt_full_capacity) {}
 
     ~AlgorithmBackend() {
@@ -59,6 +62,14 @@ class AlgorithmBackend {
             throw std::invalid_argument("invalid-algorithm-cache-domain");
         if (popt_full_capacity_ && (options_.records || options_.bfs_direction_optimizing))
             throw std::invalid_argument("current-popt-requires-csr-scalar-graph-passes");
+        if (options_.record_model == ecg_algorithm::RecordModel::WINDOW &&
+            (options_.algorithm != ecg_algorithm::Algorithm::BFS || !options_.records || !graph.records ||
+             graph.weights || options_.bfs_direction_optimizing || options_.traversal_preprocessing ||
+             options_.window_observer != ecg_algorithm::WindowObserverMode::OFF ||
+             options_.minimum_mantissa_bits || options_.record_base_policy != ecg_algorithm::RecordBasePolicy::GRASP_PAPER ||
+             (options_.mechanism != ecg_record::Mechanism::TRANSPORT &&
+              options_.mechanism != ecg_record::Mechanism::REPLACEMENT)))
+            throw std::invalid_argument("window model requires unweighted TD BFS, GRASP base and T/R only");
         if (options_.window_observer != ecg_algorithm::WindowObserverMode::OFF &&
             (options_.algorithm != ecg_algorithm::Algorithm::BFS || options_.records ||
              options_.bfs_direction_optimizing || graph.weights || !grasp_paper_ || popt_full_capacity_))
@@ -90,7 +101,10 @@ class AlgorithmBackend {
                 llc_before = stats.hits.load() + stats.misses.load();
                 misses_before = cache_.getMemoryAccesses();
             }
-            cache_.access(address, write);
+            if (window_runtime_)
+                window_runtime_->memory(address, write);
+            else
+                cache_.access(address, write);
             if (window_observer_) {
                 const auto& stats = cache_.getL3Stats();
                 window_observer_->afterAccess(address, write,
@@ -163,6 +177,8 @@ class AlgorithmBackend {
         ++popt_passes_;
     }
     void visitVertex(uint64_t vertex) {
+        if (window_runtime_)
+            window_runtime_->visitVertex(vertex);
         if (window_observer_)
             window_observer_->visitVertex(vertex);
         if (!popt_full_capacity_)
@@ -171,6 +187,10 @@ class AlgorithmBackend {
             throw std::logic_error("invalid-popt-vertex-progress");
         cache_.setCurrentVertex(static_cast<uint32_t>(vertex));
         ++popt_vertices_;
+    }
+    void rowContext(uint64_t vertex, uint64_t first, uint64_t last) {
+        if (window_runtime_)
+            window_runtime_->rowContext(vertex, first, last);
     }
     void governedReference() {
         if (!popt_full_capacity_)
@@ -184,6 +204,8 @@ class AlgorithmBackend {
             window_observer_->designated(index, destination);
     }
     void associateNeighborWrite(uint64_t index, uint32_t destination, const void* base, uint64_t bytes) {
+        if (window_runtime_)
+            window_runtime_->associateStore(index, destination, reinterpret_cast<uint64_t>(base), bytes);
         if (window_observer_)
             window_observer_->associateStore(index, destination, reinterpret_cast<uint64_t>(base), bytes);
     }
@@ -211,12 +233,35 @@ class AlgorithmBackend {
         configuration_ = configuration;
         beginKernel();
     }
-    void beginPass(bool has_next) { cache_.recordBeginPass(has_next); }
-    void closePass() { cache_.recordClosePass(); }
-    uint64_t recordLoad(uint64_t index) { return cache_.recordLoad(index); }
+    void bindWindow(const ecg_window::RecordStream& stream, uint64_t vertices, uint64_t base) {
+        if (active_ || window_runtime_ || window_observer_ || popt_full_capacity_)
+            throw std::logic_error("window model cannot rebind or share an active runtime");
+        window_runtime_ = std::make_unique<WindowRuntime>(cache_, stream, vertices, base,
+            options_.mechanism == ecg_record::Mechanism::REPLACEMENT, options_.window_candidate_rrpv);
+        beginKernel();
+    }
+    void beginPass(bool has_next) {
+        if (window_runtime_) window_runtime_->beginPass();
+        else cache_.recordBeginPass(has_next);
+    }
+    void closePass() {
+        if (window_runtime_) window_runtime_->closePass();
+        else cache_.recordClosePass();
+    }
+    uint64_t recordLoad(uint64_t index) {
+        return window_runtime_ ? window_runtime_->recordLoad(index) : cache_.recordLoad(index);
+    }
+    uint64_t windowTraceValue() const { return window_runtime_->traceValue(); }
+    uint64_t windowTraceSource() const { return window_runtime_->traceSource(); }
 
     template<class T>
     T property(uint64_t index, uint64_t word, const T* base) {
+        if (window_runtime_) {
+            if constexpr (std::is_same<T, uint32_t>::value)
+                return base[window_runtime_->property(index, word, reinterpret_cast<uint64_t>(base))];
+            else
+                throw std::logic_error("window property must be U32");
+        }
         ecg_record::PropertyDescriptor property;
         if (reinterpret_cast<uint64_t>(base) != configuration_.property_base ||
             ecg_record::unpackProperty(configuration_.property_descriptor, property) !=
@@ -227,10 +272,14 @@ class AlgorithmBackend {
     }
 
     void drain() {
+        if (window_runtime_)
+            window_runtime_->drain();
         if (active_)
             cache_.drainRecord();
     }
     void finish(uint64_t actual_records) {
+        if (window_runtime_)
+            window_runtime_->finish(actual_records);
         if (window_observer_) {
             window_observer_->finish(actual_records);
             cache_.observeLastLevel(nullptr);
@@ -256,6 +305,10 @@ class AlgorithmBackend {
             window_observer_->write(output);
         else
             output << "null";
+    }
+    void writeWindowRuntime(std::ostream& output) const {
+        if (window_runtime_) window_runtime_->write(output);
+        else output << "null";
     }
 
     void writePopt(std::ostream& output) const {
@@ -396,6 +449,7 @@ class AlgorithmBackend {
     AlgorithmTraffic setup_traffic_;
     bool kernel_started_ = false;
     std::unique_ptr<window_observation::Observer> window_observer_;
+    std::unique_ptr<WindowRuntime> window_runtime_;
     popt_reref::FullMatrix popt_matrix_;
     ecg_algorithm::GraphView popt_graph_;
     std::vector<PoptBank> banks_;

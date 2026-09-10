@@ -36,6 +36,7 @@ inline uint64_t unsignedOption(const std::string& text) {
 inline CommandLine parseCommandLine(int argc, char** argv) {
     CommandLine command;
     bool algorithm_seen = false;
+    bool window_floor_seen = false;
     for (int index = 1; index < argc; ++index) {
         const std::string argument(argv[index]);
         if (argument == "--evidence") {
@@ -88,6 +89,16 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value != "csr" && value != "traversal")
                 throw std::invalid_argument("record-preprocess-must-be-csr-or-traversal");
             command.options.traversal_preprocessing = value == "traversal";
+        } else if (argument == "--record-model") {
+            if (value == "next") command.options.record_model = RecordModel::NEXT;
+            else if (value == "window") command.options.record_model = RecordModel::WINDOW;
+            else throw std::invalid_argument("record-model-must-be-next-or-window");
+        } else if (argument == "--window-candidate-rrpv") {
+            const uint64_t rank = unsignedOption(value);
+            if (rank != 6 && rank != 7)
+                throw std::invalid_argument("window-candidate-rrpv-must-be-6-or-7");
+            command.options.window_candidate_rrpv = static_cast<uint8_t>(rank);
+            window_floor_seen = true;
         } else if (argument == "--window-observer") {
             if (value == "off") command.options.window_observer = WindowObserverMode::OFF;
             else if (value == "control") command.options.window_observer = WindowObserverMode::CONTROL;
@@ -148,6 +159,16 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
     if (!command.options.records &&
         command.options.record_base_policy != RecordBasePolicy::LRU)
         throw std::invalid_argument("record-base-policy-requires-record-mode");
+    if (window_floor_seen && command.options.record_model != RecordModel::WINDOW)
+        throw std::invalid_argument("window-candidate-rrpv-requires-window-model");
+    if (command.options.record_model == RecordModel::WINDOW &&
+        (command.options.algorithm != Algorithm::BFS || !command.options.records ||
+         command.options.record_base_policy != RecordBasePolicy::GRASP_PAPER ||
+         command.options.bfs_direction_optimizing || command.options.traversal_preprocessing ||
+         command.options.minimum_mantissa_bits || command.options.window_observer != WindowObserverMode::OFF ||
+         (command.options.mechanism != ecg_record::Mechanism::TRANSPORT &&
+          command.options.mechanism != ecg_record::Mechanism::REPLACEMENT)))
+        throw std::invalid_argument("window model requires TD BFS, GRASP base and T/R only");
     if (command.options.window_observer != WindowObserverMode::OFF &&
         (command.options.algorithm != Algorithm::BFS || command.options.records ||
          command.policy != "GRASP_PAPER" || command.options.bfs_direction_optimizing ||
@@ -173,14 +194,17 @@ inline void writeHash(std::ostream& output, uint64_t value) {
 
 inline void writeResult(std::ostream& output, const Result& result, const Options& options) {
     const bool exact = result.algorithm == Algorithm::SPMV || result.algorithm == Algorithm::TC;
+    const bool window = options.record_model == RecordModel::WINDOW;
     output << "{\"schema\":\"ecg.algorithm-workload.v1\",\"algorithm\":\"" << name(result.algorithm)
            << "\",\"variant\":\"" << (options.bfs_direction_optimizing
                 ? "sorted-direction-optimizing-td-records-bu-bitmap" : variant(result.algorithm))
            << "\",\"prediction_semantics\":\""
-           << (exact ? "dense-actual-designated-read" : "next-potential-designated-read")
+           << (window ? "source-cohort-potential-read" :
+               exact ? "dense-actual-designated-read" : "next-potential-designated-read")
            << "\",\"carrier\":\"" << (result.records ? "record" : "csr")
            << "\",\"record_base_policy\":\""
            << recordBasePolicyName(options.record_base_policy)
+           << "\",\"record_model\":\"" << (window ? "window" : "next")
            << "\",\"record_preprocess\":\"" << (options.traversal_preprocessing ? "traversal" : "csr")
            << "\",\"record_reuse_scope\":\"" << recordReuseScope(options) << '"';
     const auto field = [&](const char* key, uint64_t value) { output << ",\"" << key << "\":" << value; };
@@ -238,10 +262,15 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
     field("intersection_comparisons", result.intersection_comparisons);
     field("bindings", result.bindings);
     field("maximum_encoded_id", result.maximum_encoded_id);
-    field("record_bytes", result.layout.record_bytes);
-    field("id_bits", result.layout.id_bits);
-    field("metadata_bits", result.layout.metadata_bits);
-    field("mantissa_bits", result.layout.mantissa_bits);
+    field("record_bytes", window ? result.window_layout.record_bytes : result.layout.record_bytes);
+    field("id_bits", window ? result.window_layout.id_bits : result.layout.id_bits);
+    field("metadata_bits", window ? result.window_layout.metadata_bits : result.layout.metadata_bits);
+    field("mantissa_bits", window ? 0 : result.layout.mantissa_bits);
+    if (window) {
+        field("window_token_bits", ecg_window::Layout::token_bits);
+        field("window_known_records", result.window_known_records);
+        field("window_candidate_rrpv", options.window_candidate_rrpv);
+    }
     for (const auto& entry : {
             std::pair<const char*, uint64_t>{"result_digest", result.result_digest},
             {"work_trace_digest", result.work_digest}, {"position_trace_digest", result.position_digest},
@@ -287,9 +316,12 @@ int invokeGraph(const Graph& graph, const CommandLine& command, Invoke invoke) {
 template<class Invoke>
 int applicationMain(
         int argc, char** argv, Invoke invoke, bool allow_popt = false,
-        bool allow_grasp_record_base = false, bool allow_window_observer = false) {
+        bool allow_grasp_record_base = false, bool allow_window_observer = false,
+        bool allow_window_model = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        if (command.options.record_model == RecordModel::WINDOW && !allow_window_model)
+            throw std::invalid_argument("window model is cache_sim-only");
         if (command.options.window_observer != WindowObserverMode::OFF && !allow_window_observer)
             throw std::invalid_argument("window observer is cache_sim-only");
         if (command.policy == "POPT_UNCHARGED" && !allow_popt)
@@ -299,6 +331,8 @@ int applicationMain(
             throw std::invalid_argument("GRASP_PAPER record base is cache_sim-only");
         const auto dot = command.graph_path.rfind('.');
         const std::string suffix = dot == std::string::npos ? "" : command.graph_path.substr(dot);
+        if (command.options.record_model == RecordModel::WINDOW && suffix != ".sg")
+            throw std::invalid_argument("window model requires an unweighted .sg input");
         if (suffix == ".wsg") {
             Reader<int32_t, NodeWeight<int32_t, int32_t>> reader(command.graph_path);
             auto graph = reader.ReadSerializedGraph(true, command.maximum_graph_bytes);

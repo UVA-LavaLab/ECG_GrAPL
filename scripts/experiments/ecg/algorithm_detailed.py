@@ -205,6 +205,7 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
         require(mode in algorithms.MODES or spec.label in ("LRU", "SRRIP", "GRASP_PAPER"),
                 "unsupported detailed algorithm policy")
         options = algorithms.parse_options(args.options)
+        require(options.record_model == "next", "window model is cache_sim-only")
         require(options.window_observer == "off", "window observer is cache_sim-only")
         require(options.record_base_policy == "LRU",
                 "GRASP_PAPER record base is cache_sim-only")

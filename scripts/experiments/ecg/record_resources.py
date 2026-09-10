@@ -178,6 +178,16 @@ def popt_matrix_lines(algorithm: str, vertices: int) -> int:
     return sum((vertices * width + 63) // 64 for width in widths[algorithm])
 
 
+def window_layout(maximum_id: int, requested_bytes: int) -> dict[str, int]:
+    if not 0 <= maximum_id <= (1 << 32) - 1 or requested_bytes not in (0, 4, 8):
+        raise RecordResourceError("invalid window record layout")
+    ids = max(1, maximum_id.bit_length())
+    width = requested_bytes or (4 if ids + 10 <= 32 else 8)
+    if ids + 10 > width * 8:
+        raise RecordResourceError("window token does not fit requested record")
+    return {"record_bytes": width, "id_bits": ids, "metadata_bits": width * 8 - ids, "mantissa_bits": 0}
+
+
 def plan_algorithm_resources(
     graph: GraphInfo, *, algorithm: str, records: bool,
     requested_bytes: int, minimum_mantissa_bits: int,
@@ -187,6 +197,7 @@ def plan_algorithm_resources(
     bfs_direction_optimizing: bool = False,
     preprocessing: str = "csr",
     popt_full_capacity: bool = False,
+    record_model: str = "next",
 ) -> dict[str, int | str | bool | None]:
     coefficients = {"spmv": 8, "bfs": 12, "sssp": 25, "cc": 12, "bc": 40, "tc": 24}
     if algorithm not in coefficients or min(
@@ -196,6 +207,12 @@ def plan_algorithm_resources(
         raise RecordResourceError("invalid algorithm record layout request")
     if preprocessing not in ("csr", "traversal"):
         raise RecordResourceError("invalid algorithm preprocessing")
+    if record_model not in ("next", "window"):
+        raise RecordResourceError("invalid record model")
+    window = record_model == "window"
+    if window and (not records or algorithm != "bfs" or graph.weighted or not graph.records or
+                   bfs_direction_optimizing or preprocessing != "csr" or minimum_mantissa_bits or backend != "cache_sim"):
+        raise RecordResourceError("window model requires unweighted cache-only TD BFS records")
     if popt_full_capacity and (records or bfs_direction_optimizing or backend != "cache_sim"):
         raise RecordResourceError("current P-OPT requires cache-only CSR scalar graph passes")
     if algorithm in ("cc", "tc") and (graph.directed or graph.records % 2):
@@ -214,7 +231,9 @@ def plan_algorithm_resources(
     if algorithm == "tc":
         arrays += 8 + 4 * carrier_records
     layout = {}
-    if records and algorithm != "tc":
+    if window:
+        layout = window_layout(graph.maximum_id, requested_bytes)
+    elif records and algorithm != "tc":
         try:
             layout = resolve_layout(
                 records=carrier_records, vertices=graph.vertices, maximum_id=graph.maximum_id,
@@ -231,6 +250,8 @@ def plan_algorithm_resources(
     filtered = algorithm not in ("spmv", "tc")
     scratch = (min(lines * 8 * partitions, slots * (8 + 8 * partitions)) if filtered
                else slots * (8 + 16 * partitions)) if records else 0
+    if window:
+        scratch = lines * 8
     popt_lines = popt_matrix_lines(algorithm, graph.vertices) if popt_full_capacity else 0
     popt_bytes = popt_lines * 256
     if popt_full_capacity:
@@ -255,6 +276,7 @@ def plan_algorithm_resources(
         "carrier_payload_bytes_upper": carrier, "array_bytes": arrays,
         "construction_auxiliary_bytes_upper": scratch, "graph_loader_bytes_upper": graph_peak,
         "record_preprocess": preprocessing, "construction_partitions": partitions,
+        "record_model": record_model,
         "popt_matrix_lines": popt_lines, "popt_matrix_bytes_upper": popt_bytes,
         "workspace_limit_bytes": workspace_limit, "planned_host_bytes": host,
         "planned_target_bytes": planned, "rss_limit_mib": rss_mib,

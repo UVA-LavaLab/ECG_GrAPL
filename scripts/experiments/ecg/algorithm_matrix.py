@@ -15,10 +15,10 @@ from typing import Any, Callable
 
 if __package__:
     from .record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned
-    from .record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines
+    from .record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, window_layout
 else:
     from record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned
-    from record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines
+    from record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, window_layout
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -52,6 +52,8 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--max-passes", type=int, default=1000000)
     parser.add_argument("--record-preprocess", choices=("csr", "traversal"), default="csr")
     parser.add_argument("--record-base-policy", choices=("LRU", "GRASP_PAPER"), default="LRU")
+    parser.add_argument("--record-model", choices=("next", "window"), default="next")
+    parser.add_argument("--window-candidate-rrpv", choices=(6, 7), type=int, default=6)
     parser.add_argument("--window-observer", choices=("off", "control", "window"), default="off")
     parser.add_argument("--window-observer-bytes", type=int, default=128 << 20)
     parser.add_argument("--bfs-direction", choices=("td", "do"), default="td")
@@ -76,18 +78,20 @@ def _integer(fields: dict[str, Any], name: str) -> int:
     return value
 
 
-def record_policy_label(label: str, mode: str, base_policy: str) -> str:
-    if mode == "csr" or base_policy == "LRU":
-        return label
-    return f"{label}_BASE_{base_policy}"
+def record_policy_label(label: str, mode: str, base_policy: str, record_model: str = "next",
+                        candidate_rrpv: int = 6) -> str:
+    result = label if mode == "csr" or base_policy == "LRU" else f"{label}_BASE_{base_policy}"
+    return result if record_model == "next" else f"{result}_MODEL_WINDOW_RRPV{candidate_rrpv}"
 
 
 def observer_policy_label(label: str, observer: str) -> str:
     return label if observer == "off" else f"{label}_OBS_{observer.upper()}"
 
 
-def policy_labels(policies, base_policy: str = "LRU", observer: str = "off") -> list[str]:
-    return [observer_policy_label(record_policy_label(spec.label, spec.record_mechanism or "csr", base_policy), observer)
+def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
+                  record_model: str = "next", candidate_rrpv: int = 6) -> list[str]:
+    return [observer_policy_label(record_policy_label(
+                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv), observer)
             for spec in policies]
 
 
@@ -115,12 +119,15 @@ def validate_payload(
     work = payload.get("workload")
     require(isinstance(work, dict), "missing algorithm workload")
     specification = contract()["algorithms"][algorithm]
+    window = options.record_model == "window"
+    require(work.get("record_model", "next") == options.record_model, "algorithm record model mismatch")
     direction_optimizing = options.bfs_direction == "do"
     require(not direction_optimizing or algorithm == "bfs", "direction optimization requires BFS")
     expected_variant = "sorted-direction-optimizing-td-records-bu-bitmap" if direction_optimizing else specification["variant"]
     require(work.get("schema") == "ecg.algorithm-workload.v1" and
             work.get("algorithm") == algorithm and work.get("variant") == expected_variant and
-            work.get("prediction_semantics") == specification["semantics"] and
+            work.get("prediction_semantics") == (
+                "source-cohort-potential-read" if window else specification["semantics"]) and
             work.get("record_base_policy") == expected_base,
             "algorithm variant or prediction semantics mismatch")
     records = mode != "csr"
@@ -128,6 +135,8 @@ def validate_payload(
                    .get(algorithm, "full-csr") if options.record_preprocess == "traversal" else "full-csr")
     if not records:
         reuse_scope = "none"
+    if window:
+        reuse_scope = "source-cohort-window"
     require(work.get("record_preprocess", "csr") == options.record_preprocess and
             (("record_preprocess" not in work and options.record_preprocess == "csr") or
              work.get("record_reuse_scope") == reuse_scope),
@@ -175,7 +184,7 @@ def validate_payload(
                 work["position_trace_digest"] != "0000000000000000", "empty algorithm evidence")
         if records:
             require(work["record_trace_digest"] != "0000000000000000", "empty actual-record semantic evidence")
-    if records:
+    if records and not window:
         maximum = _integer(work, "maximum_encoded_id")
         require(maximum <= graph.maximum_id and (algorithm == "tc" or maximum == graph.maximum_id),
                 "encoded VID bound disagrees with the actual OUT stream")
@@ -241,8 +250,29 @@ def validate_payload(
         replacement = mode in ("replacement", "replacement-prefetch")
         require(unsigned(runtime, "generated") == (actual + unsigned(runtime, "ordinary_invalidations")
                 if replacement else 0), "ordinary governed-region invalidations are unaccounted")
-    else:
+    elif not records:
         require(_integer(work, "carrier_allocation_bytes") == 0, "CSR baseline built an ECG carrier")
+    if window:
+        require(algorithm == "bfs" and records and not graph.weighted and backend == "cache_sim" and
+                not direction_optimizing and options.record_base_policy == "GRASP_PAPER" and
+                options.record_preprocess == "csr" and options.window_observer == "off" and
+                mode in ("transport", "replacement") and minimum_mantissa_bits == 0,
+                "window runtime scope is not supported")
+        require(_integer(work, "maximum_encoded_id") == graph.maximum_id,
+                "window layout did not use the actual encoded VID bound")
+        layout = window_layout(graph.maximum_id, requested_bytes)
+        for key, value in layout.items():
+            require(_integer(work, key) == value, f"window layout mismatch: {key}")
+        require(_integer(work, "carrier_allocation_bytes") == graph.records * layout["record_bytes"] and
+                _integer(work, "construction_read_bytes") > 0 and _integer(work, "construction_write_bytes") > 0 and
+                _integer(work, "window_known_records") <= graph.records and
+                _integer(work, "window_token_bits") == 10 and
+                _integer(work, "window_known_records") + _integer(work, "constructed_unknown_records") == graph.records and
+                _integer(work, "constructed_finite_records") == _integer(work, "constructed_wrap_records") == 0,
+                "window carrier construction is not accounted")
+        validate_window_runtime(payload, options)
+    else:
+        require(payload.get("window_runtime") is None, "unrequested window runtime")
     if policy == "POPT_UNCHARGED":
         popt = payload.get("popt")
         require(backend == "cache_sim" and mode == "csr" and not direction_optimizing and
@@ -268,6 +298,56 @@ def validate_payload(
             if key != "graph":
                 require(work.get(key) == expected, f"independent {algorithm} reference failed: {key}")
     return work
+
+
+def validate_window_runtime(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
+    w, work = payload.get("window_runtime"), payload["workload"]
+    require(isinstance(w, dict) and w.get("schema") == "ecg.window-runtime.v1" and
+            w.get("record_model") == "potential-window-u32" and
+            w.get("cost_unit") == "functional-steps-not-CPU-cycles" and
+            w.get("replacement") is (payload["mode"] == "replacement"),
+            "window runtime model or evidence boundary mismatch")
+    require(_integer(w, "candidate_floor") == options.window_candidate_rrpv ==
+            _integer(work, "window_candidate_rrpv") and
+            _integer(w, "record_bytes") == work["record_bytes"] and _integer(w, "token_bits") == 10,
+            "window runtime layout or victim-rule mismatch")
+    minimum = max(8, (work["vertices"] + 255) // 256)
+    cohort = 1 << (minimum - 1).bit_length()
+    require(_integer(w, "cohort_rows") == cohort and _integer(w, "bin_rows") == cohort // 8 and
+            _integer(w, "bins_per_pass") == (work["vertices"] + cohort // 8 - 1) // (cohort // 8),
+            "window runtime cohort rule changed")
+    require(_integer(w, "record_loads") == _integer(w, "property_reads") == work["actual_records"] and
+            _integer(w, "record_read_bytes") == work["actual_records"] * work["record_bytes"] and
+            _integer(w, "passes") == work["passes"] and
+            _integer(w, "structural_positions") == work["structural_positions"] and
+            _integer(w, "skipped_positions") == work["skipped_positions"] and
+            _integer(w, "row_context_steps") == _integer(w, "source_rows") == work["reached"] and
+            _integer(w, "forwarded_stores") == _integer(w, "association_steps") == work["reached"] - 1,
+            "window runtime did not observe complete real BFS work")
+    require(_integer(w, "enqueued") == _integer(w, "delivered") ==
+            w["property_reads"] + w["forwarded_stores"] + _integer(w, "ordinary_invalidations") and
+            w["delivered"] == sum(_integer(w, key) for key in ("applied", "stale", "absent", "expired")) and
+            _integer(w, "pending") == 0 and _integer(w, "queue_capacity") == 16 and
+            _integer(w, "queue_peak") <= 16 and _integer(w, "latency_steps") == 8,
+            "window publication queue did not close")
+    require(_integer(w, "configuration_steps") == 16 and
+            _integer(w, "marker_steps") == 16 * _integer(w, "markers") and
+            _integer(w, "control_bytes") == 48 * (w["markers"] + 1) and
+            2 * w["passes"] <= w["markers"] <= (w["bins_per_pass"] + 2) * w["passes"] and
+            _integer(w, "steps") == sum(_integer(w, key) for key in (
+                "memory_steps", "row_context_steps", "association_steps", "observation_steps",
+                "observation_wait_steps", "configuration_steps", "marker_steps", "drain_steps")) and
+            w["memory_steps"] == payload["traffic_phases"]["kernel"]["total_accesses"],
+            "window control/lookup work is missing or double-counted")
+    require(_integer(w, "metadata_payload_bits_per_line") == 67 and
+            _integer(w, "unmodeled_runtime_table_bytes") == 0 and
+            0 < _integer(w, "controller_object_bytes") <= 4096 and
+            _integer(w, "protected_overrides") <= _integer(w, "victim_overrides") <=
+            _integer(w, "live_base_victims") <= _integer(w, "victim_decisions") and
+            (options.window_candidate_rrpv == 6 or w["protected_overrides"] == 0) and
+            (payload["mode"] == "replacement" or w["victim_overrides"] == 0),
+            "window state or candidate budget is not respected")
+    return w
 
 
 def validate_window_observer(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
@@ -518,6 +598,10 @@ def run_cache_cell(
         require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED")),
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
+        require(options.record_model != "window" or args.benchmark == "bfs" and mode in (
+            "transport", "replacement") and options.record_base_policy == "GRASP_PAPER" and
+            options.window_observer == "off" and options.bfs_direction == "td" and options.record_preprocess == "csr",
+            "window model requires TD BFS records, GRASP base and T/R only")
         observing = options.window_observer != "off"
         require(not observing or args.benchmark == "bfs" and mode == "csr" and policy == "GRASP_PAPER" and
                 options.bfs_direction == "td" and options.record_preprocess == "csr",
@@ -526,7 +610,8 @@ def run_cache_cell(
                 "record base policy requires a current record mode")
         row["record_base_policy"] = options.record_base_policy
         row["policy_label"] = observer_policy_label(record_policy_label(
-            spec.label, mode, options.record_base_policy), options.window_observer)
+            spec.label, mode, options.record_base_policy, options.record_model, options.window_candidate_rrpv),
+            options.window_observer)
         if observing:
             row.update(diagnostic_only="1", measurement_scope="observation-only-unchanged-grasp")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
@@ -542,7 +627,8 @@ def run_cache_cell(
             workspace_limit=args.algorithm_workspace_bytes,
             carrier_limit=args.ecg_record_max_carrier_bytes, auxiliary_limit=args.ecg_record_max_auxiliary_bytes,
             rss_mib=args.cache_record_rss_mib, bfs_direction_optimizing=options.bfs_direction == "do",
-            preprocessing=options.record_preprocess, popt_full_capacity=policy == "POPT_UNCHARGED")
+            preprocessing=options.record_preprocess, popt_full_capacity=policy == "POPT_UNCHARGED",
+            record_model=options.record_model)
         if observing:
             require(not graph.weighted and plan["array_bytes"] + options.window_observer_bytes <=
                     args.algorithm_workspace_bytes, "window observer exceeds its workspace or target scope")
@@ -550,7 +636,8 @@ def run_cache_cell(
         base_suffix = "" if options.record_base_policy == "LRU" else (
             "_BASE_" + options.record_base_policy)
         observer_suffix = "" if not observing else "_OBS_" + options.window_observer.upper()
-        label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{observer_suffix}"
+        model_suffix = "" if options.record_model == "next" else f"_MODEL_WINDOW_RRPV{options.window_candidate_rrpv}"
+        label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{model_suffix}{observer_suffix}"
                  f"_L3{parse_size_bytes(l3_size)}")
         data_path = out_dir / "cache_sim" / f"{label}.json"
         log_path = out_dir / "logs" / f"{label}.log"
@@ -574,6 +661,8 @@ def run_cache_cell(
         ]
         if options.sources:
             command.extend(("--sources", options.sources))
+        if options.record_model == "window":
+            command.extend(("--record-model", "window", "--window-candidate-rrpv", str(options.window_candidate_rrpv)))
         if observing:
             command.extend(("--window-observer", options.window_observer,
                             "--window-observer-bytes", str(options.window_observer_bytes)))
@@ -620,6 +709,8 @@ def run_cache_cell(
         traffic = _integer(metrics, "total_offchip_traffic")
         misses, hits = _integer(metrics["L3"], "misses"), _integer(metrics["L3"], "hits")
         row.update(validate_traffic_phases(payload))
+        if options.record_model == "window":
+            row.update({"window_" + key: value for key, value in payload["window_runtime"].items()})
         observer = validate_window_observer(payload, options)
         if observing:
             require(observer["schema"] == "ecg.window-eviction-observer.v4",
@@ -677,7 +768,8 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
         for row in good:
             transport_label = record_policy_label(
                 "ECG_TRANSPORT", "transport",
-                str(row.get("record_base_policy", "LRU")))
+                str(row.get("record_base_policy", "LRU")), str(row.get("algorithm_record_model", "next")),
+                int(row.get("algorithm_window_candidate_rrpv", 6)))
             for label, column in (("LRU", "traffic_ratio_vs_csr_lru"),
                                   (transport_label, "traffic_ratio_vs_transport")):
                 baseline = baselines.get(label)

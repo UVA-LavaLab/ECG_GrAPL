@@ -17,6 +17,7 @@ PUBLIC_PAGES = (
     ROOT / "wiki/ReusePlan-FlowThrough.md",
     ROOT / "wiki/Traversal-Metadata-Taxonomy.md",
     ROOT / "wiki/Potential-Window-Diagnostics.md",
+    ROOT / "wiki/Potential-Window-Prototype.md",
     ROOT / "wiki/RISC-V-Instruction-Path.md",
     ROOT / "wiki/Property-to-Cache-Walkthrough.md",
     ROOT / "wiki/Evaluation-Methodology.md",
