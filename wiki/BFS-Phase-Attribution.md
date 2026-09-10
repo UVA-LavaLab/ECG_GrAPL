@@ -158,4 +158,6 @@ baseline is not established by this experiment.
 The [phased window follow-up](Potential-Window-Prototype) shares this
 victim-selection scope with real window transport and replacement.
 Window markers carry its phase changes, avoiding a duplicate control
-charge. Its results are separate from the CSR baseline improvement above.
+charge. Its [matched result](Potential-Window-Prototype#matched-phase-policy-result)
+still finds no incremental window gain; that negative result is separate
+from the successful CSR baseline improvement above.

@@ -217,3 +217,45 @@ non-depth-data gap and an explicitly scoped GRASP baseline before further
 changes to window metadata. Its [Patents result](BFS-Phase-Attribution#patents-result)
 shows a 15.09% kernel-traffic reduction from the baseline's phase policy,
 not from window masks; future comparisons must not claim that gain as ECG.
+
+## Matched phase-policy result
+
+The follow-up `results/ecg_experiments/runs/window_phased_patents_4b139fd5`
+uses source `4b139fd5`. All window arms and the CSR GRASP baseline now
+use GRASP in graph passes and LRU outside. P-OPT is unchanged. Graph,
+source, cache geometry, algorithm output/work and the window token/ranking
+rules match the preceding experiments.
+
+| Role | Kernel memory misses | Kernel transfers | Setup + kernel transfers |
+|---|---:|---:|---:|
+| Phase-scoped CSR GRASP | 11,027,736 | 11,391,656 | 14,269,149 |
+| Favorable full-capacity P-OPT | 10,617,749 | 10,852,949 | 20,146,460 |
+| Phased window transport | 11,096,563 | 11,424,266 | 27,360,678 |
+| Phased window replacement, floor 7 | 11,106,012 | 11,433,695 | 27,370,107 |
+| Phased window replacement, floor 6 | 11,110,742 | 11,438,345 | 27,374,757 |
+
+The fair phase treatment does not change the gain decision. Floor 6 uses
+0.123% more kernel traffic than its own transport, 0.410% more than
+phase-scoped GRASP, and 5.394% more than P-OPT. Floor 7 also increases
+traffic over transport, by 0.083%. The much larger improvement over
+always-on GRASP is shared baseline behavior, not a window contribution.
+
+Floor 6 performs 198,848 victim overrides, including 131,005 protected
+RRPV-6 choices. Compared with transport it adds 14,544 depth misses,
+saves 365 other-data misses and saves 100 dirty writebacks, for a net
+increase of 14,079 transfers. The remaining regression is therefore
+visible in the governed property data, not hidden frontier-sort traffic.
+
+All window arms have identical 15,936,412-transfer setup costs. Their
+744,384 control bytes and 248,112 marker steps include the shared phase
+boundaries exactly once; no separate CSR phase-control charge is added.
+Floor 6 totals 491,562,714 functional steps, not CPU cycles. Including
+modeled setup, its traffic is 91.85% above phase-scoped GRASP and
+35.88% above the single-query P-OPT control.
+
+**Decision:** retain the successful common phase treatment, but do not
+promote the current window-ranking candidate. It fails against its own
+transport under both baseline scopes. Setup amortization alone cannot
+turn this measured negative kernel contribution into a positive one.
+Any new prediction/ranking hypothesis needs separate justification before
+more parameter changes or broader/native evaluation.
