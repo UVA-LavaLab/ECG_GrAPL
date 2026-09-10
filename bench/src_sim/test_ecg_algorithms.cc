@@ -778,6 +778,36 @@ void testWindowTransportMatchesGrasp() {
     }
 }
 
+void testScopedGraspKeepsCacheState() {
+    cache_sim::GraphCacheContext context;
+    context.topology.num_vertices = 64;
+    context.registerPropertyArray(reinterpret_cast<const void*>(0x1000), 64, 4, 192, 0.5);
+    cache_sim::CacheLevel cache("L3", 192, 64, 3, cache_sim::EvictionPolicy::GRASP);
+    cache.initGraphContext(&context);
+    cache.insert(0x1000, true);
+    cache_sim::CacheLine before, after;
+    check(cache.lineSnapshotForTest(0x1000, before), "GRASP setup inserts actual data");
+    cache.configureGraspPhases();
+    check(cache.lineSnapshotForTest(0x1000, after) && before.tag == after.tag &&
+          before.dirty == after.dirty && before.rrpv == after.rrpv && before.last_access == after.last_access,
+          "phase-scoped GRASP configuration does not reset cached data or replacement history");
+    std::vector<cache_sim::CacheLine> ways(3);
+    for (auto& way : ways) way.valid = true;
+    ways[0].last_access = 10; ways[0].rrpv = 0;
+    ways[1].last_access = 20; ways[1].rrpv = 7;
+    ways[2].last_access = 5; ways[2].rrpv = 1;
+    check(cache.selectVictimForTest(ways) == 2 && ways[0].rrpv == 0 && ways[1].rrpv == 7 && ways[2].rrpv == 1,
+          "outside graph passes selects true LRU without ageing GRASP metadata");
+    cache.graspGraphPass(true);
+    check(cache.selectVictimForTest(ways) == 1, "graph passes select the ordinary GRASP victim");
+    cache.graspGraphPass(false);
+    check(cache.selectVictimForTest(ways) == 2, "leaving the pass restores LRU without a cache walk");
+    bool rejected = false;
+    try { cache.graspGraphPass(false); }
+    catch (const std::logic_error&) { rejected = true; }
+    check(rejected, "phase transitions cannot silently duplicate or skip state");
+}
+
 void testUnboundRecordPreparation() {
     using namespace ecg_algorithm;
     testWindowObservationProfile();
@@ -895,6 +925,7 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testScopedGraspKeepsCacheState();
     testWindowTransportMatchesGrasp();
     testActiveWindowAssociation();
     testActiveWindowCodecAndCache();

@@ -93,6 +93,14 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value == "next") command.options.record_model = RecordModel::NEXT;
             else if (value == "window") command.options.record_model = RecordModel::WINDOW;
             else throw std::invalid_argument("record-model-must-be-next-or-window");
+        } else if (argument == "--grasp-scope") {
+            if (value != "all" && value != "graph-passes")
+                throw std::invalid_argument("grasp-scope-must-be-all-or-graph-passes");
+            command.options.grasp_graph_passes = value == "graph-passes";
+        } else if (argument == "--bfs-traffic-phases") {
+            if (value != "on" && value != "off")
+                throw std::invalid_argument("bfs-traffic-phases-must-be-on-or-off");
+            command.options.bfs_traffic_phases = value == "on";
         } else if (argument == "--window-candidate-rrpv") {
             const uint64_t rank = unsignedOption(value);
             if (rank != 6 && rank != 7)
@@ -159,6 +167,11 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
     if (!command.options.records &&
         command.options.record_base_policy != RecordBasePolicy::LRU)
         throw std::invalid_argument("record-base-policy-requires-record-mode");
+    if ((command.options.bfs_traffic_phases || command.options.grasp_graph_passes) &&
+        (command.options.algorithm != Algorithm::BFS || command.options.records ||
+         command.options.bfs_direction_optimizing || command.options.window_observer != WindowObserverMode::OFF ||
+         (command.options.grasp_graph_passes && command.policy != "GRASP_PAPER")))
+        throw std::invalid_argument("BFS phase controls require CSR TD BFS and a compatible baseline");
     if (window_floor_seen && command.options.record_model != RecordModel::WINDOW)
         throw std::invalid_argument("window-candidate-rrpv-requires-window-model");
     if (command.options.record_model == RecordModel::WINDOW &&
@@ -317,9 +330,11 @@ template<class Invoke>
 int applicationMain(
         int argc, char** argv, Invoke invoke, bool allow_popt = false,
         bool allow_grasp_record_base = false, bool allow_window_observer = false,
-        bool allow_window_model = false) {
+        bool allow_window_model = false, bool allow_bfs_phases = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        if ((command.options.bfs_traffic_phases || command.options.grasp_graph_passes) && !allow_bfs_phases)
+            throw std::invalid_argument("BFS phase controls are cache_sim-only");
         if (command.options.record_model == RecordModel::WINDOW && !allow_window_model)
             throw std::invalid_argument("window model is cache_sim-only");
         if (command.options.window_observer != WindowObserverMode::OFF && !allow_window_observer)

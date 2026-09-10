@@ -191,3 +191,7 @@ as an explicit experimental option and preserve the existing default.
 Do not expand this candidate to more algorithms/native hardware or widen
 the RRPV rule simply to manufacture a win. A new hypothesis about useful
 reuse prediction or policy interaction must precede another candidate.
+
+[BFS phase attribution](BFS-Phase-Attribution) investigates the larger
+non-depth-data gap and an explicitly scoped GRASP baseline before further
+changes to window metadata.

@@ -53,6 +53,8 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--record-preprocess", choices=("csr", "traversal"), default="csr")
     parser.add_argument("--record-base-policy", choices=("LRU", "GRASP_PAPER"), default="LRU")
     parser.add_argument("--record-model", choices=("next", "window"), default="next")
+    parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
+    parser.add_argument("--bfs-traffic-phases", choices=("on", "off"), default="off")
     parser.add_argument("--window-candidate-rrpv", choices=(6, 7), type=int, default=6)
     parser.add_argument("--window-observer", choices=("off", "control", "window"), default="off")
     parser.add_argument("--window-observer-bytes", type=int, default=128 << 20)
@@ -88,10 +90,14 @@ def observer_policy_label(label: str, observer: str) -> str:
     return label if observer == "off" else f"{label}_OBS_{observer.upper()}"
 
 
+def grasp_scope_label(label: str, scope: str) -> str:
+    return label if scope == "all" else f"{label}_GRAPH_PASSES"
+
+
 def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
-                  record_model: str = "next", candidate_rrpv: int = 6) -> list[str]:
-    return [observer_policy_label(record_policy_label(
-                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv), observer)
+                  record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all") -> list[str]:
+    return [grasp_scope_label(observer_policy_label(record_policy_label(
+                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv), observer), grasp_scope)
             for spec in policies]
 
 
@@ -105,6 +111,7 @@ def validate_payload(
             payload.get("backend") == backend and payload.get("mode") == mode and
             payload.get("policy") == policy and payload.get("timing_valid_for_speedup") is False,
             "algorithm backend/mode/policy receipt mismatch")
+    require(payload.get("grasp_scope", "all") == options.grasp_scope, "GRASP phase-scope receipt mismatch")
     expected_base = options.record_base_policy if mode != "csr" else "LRU"
     require(payload.get("record_base_policy") == expected_base,
             "algorithm record base-policy receipt mismatch")
@@ -298,6 +305,57 @@ def validate_payload(
             if key != "graph":
                 require(work.get(key) == expected, f"independent {algorithm} reference failed: {key}")
     return work
+
+
+def validate_bfs_phases(payload: dict[str, Any], options: argparse.Namespace) -> None:
+    work = payload["workload"]
+    control = payload.get("grasp_phase_control")
+    if options.grasp_scope == "graph-passes":
+        require(payload["backend"] == "cache_sim" and payload["policy"] == "GRASP_PAPER" and
+                work["algorithm"] == "bfs" and work["carrier"] == "csr" and work["bfs_direction"] == "td" and
+                isinstance(control, dict) and control.get("schema") == "ecg.grasp-phase-control.v1" and
+                control.get("enabled") is True and control.get("setup_policy") == "GRASP_PAPER" and
+                control.get("cache_reset") is False and control.get("rrpv_history_maintained") is True and
+                control.get("cost_unit") == "functional-steps-not-CPU-cycles" and
+                _integer(control, "passes") == work["passes"] and
+                _integer(control, "transitions") == 2 * work["passes"] and
+                _integer(control, "functional_steps") == 16 * (control["transitions"] + 1) and
+                _integer(control, "control_bytes") == 48 * (control["transitions"] + 1),
+                "GRASP phase transitions or state preservation are unaccounted")
+    else:
+        require(control is None, "unrequested GRASP phase control")
+    attribution = payload.get("bfs_traffic_phases")
+    if options.bfs_traffic_phases == "off":
+        require(attribution is None, "unrequested BFS traffic attribution")
+        return
+    require(payload["backend"] == "cache_sim" and work["algorithm"] == "bfs" and work["carrier"] == "csr" and
+            work["bfs_direction"] == "td" and isinstance(attribution, dict) and
+            attribution.get("schema") == "ecg.bfs-traffic-phases.v1" and
+            attribution.get("writeback_attribution") == "triggering-access-not-victim-owner" and
+            attribution.get("cache_state_preserved") is True,
+            "BFS attribution scope or writeback interpretation mismatch")
+    phases = attribution.get("phases")
+    names = ("setup", "edge-probe", "frontier-build", "frontier-sort", "between-passes")
+    roles = {"csr-index", "csr-edge", "weight", "depth", "frontier-work", "construction"}
+    require(isinstance(phases, list) and tuple(p.get("phase") for p in phases) == names,
+            "BFS phase roster mismatch")
+    keys = ("total_accesses", "memory_accesses", "prefetch_fills", "llc_writebacks",
+            "llc_hits", "llc_misses", "llc_property_hits", "llc_property_misses", "total_offchip_traffic")
+    for phase in phases:
+        require(isinstance(phase.get("roles"), dict) and set(phase["roles"]) == roles and
+                isinstance(phase.get("total"), dict), "BFS role roster mismatch")
+        for key in keys:
+            require(sum(_integer(row, key) for row in phase["roles"].values()) == _integer(phase["total"], key),
+                    f"BFS role counters do not close: {phase['phase']}/{key}")
+    for key in keys:
+        require(phases[0]["total"][key] == payload["traffic_phases"]["setup"][key] and
+                sum(phase["total"][key] for phase in phases[1:]) == payload["traffic_phases"]["kernel"][key],
+                f"BFS setup/kernel phase counters do not close: {key}")
+    by_phase = {phase["phase"]: phase for phase in phases}
+    require(by_phase["frontier-build"]["roles"]["frontier-work"]["total_accesses"] == work["reached"] - 1 and
+            all(by_phase["frontier-sort"]["roles"][role]["total_accesses"] == 0 for role in roles - {"frontier-work"}) and
+            by_phase["between-passes"]["total"]["total_accesses"] == 0,
+            "BFS construction/sorting attribution is inconsistent with current work")
 
 
 def validate_window_runtime(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
@@ -598,6 +656,11 @@ def run_cache_cell(
         require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED")),
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
+        phase_modes = options.bfs_traffic_phases == "on" or options.grasp_scope != "all"
+        require(not phase_modes or args.benchmark == "bfs" and mode == "csr" and
+                options.bfs_direction == "td" and options.window_observer == "off" and
+                (options.grasp_scope == "all" or policy == "GRASP_PAPER"),
+                "BFS phase controls require CSR TD BFS and a compatible baseline")
         require(options.record_model != "window" or args.benchmark == "bfs" and mode in (
             "transport", "replacement") and options.record_base_policy == "GRASP_PAPER" and
             options.window_observer == "off" and options.bfs_direction == "td" and options.record_preprocess == "csr",
@@ -609,9 +672,10 @@ def run_cache_cell(
         require(mode != "csr" or options.record_base_policy == "LRU",
                 "record base policy requires a current record mode")
         row["record_base_policy"] = options.record_base_policy
-        row["policy_label"] = observer_policy_label(record_policy_label(
+        row["grasp_scope"] = options.grasp_scope
+        row["policy_label"] = grasp_scope_label(observer_policy_label(record_policy_label(
             spec.label, mode, options.record_base_policy, options.record_model, options.window_candidate_rrpv),
-            options.window_observer)
+            options.window_observer), options.grasp_scope)
         if observing:
             row.update(diagnostic_only="1", measurement_scope="observation-only-unchanged-grasp")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
@@ -637,7 +701,8 @@ def run_cache_cell(
             "_BASE_" + options.record_base_policy)
         observer_suffix = "" if not observing else "_OBS_" + options.window_observer.upper()
         model_suffix = "" if options.record_model == "next" else f"_MODEL_WINDOW_RRPV{options.window_candidate_rrpv}"
-        label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{model_suffix}{observer_suffix}"
+        phase_suffix = "" if options.grasp_scope == "all" else "_GRAPH_PASSES"
+        label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{model_suffix}{observer_suffix}{phase_suffix}"
                  f"_L3{parse_size_bytes(l3_size)}")
         data_path = out_dir / "cache_sim" / f"{label}.json"
         log_path = out_dir / "logs" / f"{label}.log"
@@ -661,6 +726,8 @@ def run_cache_cell(
         ]
         if options.sources:
             command.extend(("--sources", options.sources))
+        if phase_modes:
+            command.extend(("--grasp-scope", options.grasp_scope, "--bfs-traffic-phases", options.bfs_traffic_phases))
         if options.record_model == "window":
             command.extend(("--record-model", "window", "--window-candidate-rrpv", str(options.window_candidate_rrpv)))
         if observing:
@@ -709,6 +776,13 @@ def run_cache_cell(
         traffic = _integer(metrics, "total_offchip_traffic")
         misses, hits = _integer(metrics["L3"], "misses"), _integer(metrics["L3"], "hits")
         row.update(validate_traffic_phases(payload))
+        validate_bfs_phases(payload, options)
+        if options.bfs_traffic_phases == "on":
+            for phase in payload["bfs_traffic_phases"]["phases"]:
+                for key, value in phase["total"].items():
+                    row["bfs_phase_" + phase["phase"].replace("-", "_") + "_" + key] = value
+        if options.grasp_scope != "all":
+            row.update({"grasp_phase_" + key: value for key, value in payload["grasp_phase_control"].items()})
         if options.record_model == "window":
             row.update({"window_" + key: value for key, value in payload["window_runtime"].items()})
         observer = validate_window_observer(payload, options)

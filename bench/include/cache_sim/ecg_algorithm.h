@@ -17,6 +17,15 @@ struct AlgorithmTraffic {
 
     uint64_t offchip() const { return memory_accesses + prefetch_fills + llc_writebacks; }
 
+    void accumulate(const AlgorithmTraffic& other) {
+        for (auto field : {&AlgorithmTraffic::total_accesses, &AlgorithmTraffic::memory_accesses,
+                &AlgorithmTraffic::prefetch_fills, &AlgorithmTraffic::llc_writebacks,
+                &AlgorithmTraffic::llc_hits, &AlgorithmTraffic::llc_misses,
+                &AlgorithmTraffic::llc_property_hits, &AlgorithmTraffic::llc_property_misses})
+            if (!ecg_record::checkedAdd(this->*field, other.*field, this->*field))
+                throw std::overflow_error("BFS traffic attribution overflow");
+    }
+
     AlgorithmTraffic since(const AlgorithmTraffic& before) const {
         if (total_accesses < before.total_accesses || memory_accesses < before.memory_accesses ||
             prefetch_fills < before.prefetch_fills || llc_writebacks < before.llc_writebacks ||
@@ -62,6 +71,11 @@ class AlgorithmBackend {
             throw std::invalid_argument("invalid-algorithm-cache-domain");
         if (popt_full_capacity_ && (options_.records || options_.bfs_direction_optimizing))
             throw std::invalid_argument("current-popt-requires-csr-scalar-graph-passes");
+        if ((options_.bfs_traffic_phases || options_.grasp_graph_passes) &&
+            (options_.algorithm != ecg_algorithm::Algorithm::BFS || options_.records ||
+             options_.bfs_direction_optimizing || options_.window_observer != ecg_algorithm::WindowObserverMode::OFF ||
+             (options_.grasp_graph_passes && (!grasp_paper_ || popt_full_capacity_))))
+            throw std::invalid_argument("BFS phase controls require CSR TD BFS and a compatible baseline");
         if (options_.record_model == ecg_algorithm::RecordModel::WINDOW &&
             (options_.algorithm != ecg_algorithm::Algorithm::BFS || !options_.records || !graph.records ||
              graph.weights || options_.bfs_direction_optimizing || options_.traversal_preprocessing ||
@@ -88,6 +102,12 @@ class AlgorithmBackend {
     }
 
     void memory(const void* pointer, uint64_t bytes, bool write) {
+        memoryKind(pointer, bytes, write, ecg_algorithm::MemoryKind::CONSTRUCTION);
+    }
+
+    void memoryKind(const void* pointer, uint64_t bytes, bool write, ecg_algorithm::MemoryKind kind) {
+        if (options_.bfs_traffic_phases && static_cast<std::size_t>(kind) >= bfs_traffic_[0].size())
+            throw std::invalid_argument("invalid-BFS-memory-role");
         if (bytes == 0)
             return;
         uint64_t address = reinterpret_cast<uint64_t>(pointer), last = 0;
@@ -95,6 +115,7 @@ class AlgorithmBackend {
             throw std::overflow_error("algorithm-memory-range-overflow");
         for (;;) {
             uint64_t llc_before = 0, misses_before = 0;
+            const AlgorithmTraffic before = options_.bfs_traffic_phases ? traffic() : AlgorithmTraffic{};
             if (window_observer_) {
                 window_observer_->beforeAccess(address, write);
                 const auto& stats = cache_.getL3Stats();
@@ -111,6 +132,9 @@ class AlgorithmBackend {
                     stats.hits.load() + stats.misses.load() != llc_before,
                     cache_.getMemoryAccesses() != misses_before);
             }
+            if (options_.bfs_traffic_phases)
+                bfs_traffic_[static_cast<std::size_t>(bfs_phase_)][static_cast<std::size_t>(kind)].accumulate(
+                    traffic().since(before));
             const uint64_t line = address / 64;
             if (line == last / 64)
                 break;
@@ -165,6 +189,16 @@ class AlgorithmBackend {
     }
 
     void beginGraphPass() {
+        if (options_.bfs_traffic_phases)
+            transitionBfsPhase(BfsPhase::BETWEEN, BfsPhase::PROBE);
+        if (options_.grasp_graph_passes) {
+            if (!grasp_phase_configured_ || grasp_pass_open_)
+                throw std::logic_error("invalid-scoped-GRASP-pass-begin");
+            cache_.graspGraphPass(true);
+            grasp_pass_open_ = true;
+            ++grasp_transitions_;
+            ++grasp_passes_;
+        }
         if (window_observer_)
             window_observer_->beginPass();
         if (!popt_full_capacity_)
@@ -210,6 +244,15 @@ class AlgorithmBackend {
             window_observer_->associateStore(index, destination, reinterpret_cast<uint64_t>(base), bytes);
     }
     void endGraphPass() {
+        if (options_.bfs_traffic_phases)
+            transitionBfsPhase(BfsPhase::PROBE, BfsPhase::BETWEEN);
+        if (options_.grasp_graph_passes) {
+            if (!grasp_pass_open_)
+                throw std::logic_error("invalid-scoped-GRASP-pass-close");
+            cache_.graspGraphPass(false);
+            grasp_pass_open_ = false;
+            ++grasp_transitions_;
+        }
         if (window_observer_)
             window_observer_->endPass();
         if (!popt_full_capacity_)
@@ -219,6 +262,17 @@ class AlgorithmBackend {
         context_.rereference.matrix = nullptr;
         context_.setCurrentVertices(UINT32_MAX, UINT32_MAX);
         popt_live_ = false;
+    }
+
+    void frontierBuild(bool entering) {
+        if (options_.bfs_traffic_phases)
+            transitionBfsPhase(entering ? BfsPhase::PROBE : BfsPhase::BUILD,
+                               entering ? BfsPhase::BUILD : BfsPhase::PROBE);
+    }
+    void frontierSort(bool entering) {
+        if (options_.bfs_traffic_phases)
+            transitionBfsPhase(entering ? BfsPhase::BETWEEN : BfsPhase::SORT,
+                               entering ? BfsPhase::SORT : BfsPhase::BETWEEN);
     }
 
     void bind(const ecg_record::NativeConfiguration& configuration,
@@ -278,6 +332,11 @@ class AlgorithmBackend {
             cache_.drainRecord();
     }
     void finish(uint64_t actual_records) {
+        if (options_.bfs_traffic_phases && bfs_phase_ != BfsPhase::BETWEEN)
+            throw std::logic_error("BFS traffic attribution did not close");
+        if (options_.grasp_graph_passes && (!grasp_phase_configured_ || grasp_pass_open_ ||
+            grasp_transitions_ != 2 * grasp_passes_))
+            throw std::logic_error("scoped GRASP did not close its control stream");
         if (window_runtime_)
             window_runtime_->finish(actual_records);
         if (window_observer_) {
@@ -331,7 +390,53 @@ class AlgorithmBackend {
                << ",\"lookup_calls\":" << context_.popt_lookup_count << '}';
     }
 
+    void writeBfsTraffic(std::ostream& output) const {
+        if (!options_.bfs_traffic_phases) {
+            output << "null";
+            return;
+        }
+        static constexpr const char* phases[] = {"setup", "edge-probe", "frontier-build", "frontier-sort", "between-passes"};
+        static constexpr const char* roles[] = {"csr-index", "csr-edge", "weight", "depth", "frontier-work", "construction"};
+        output << "{\"schema\":\"ecg.bfs-traffic-phases.v1\","
+               << "\"writeback_attribution\":\"triggering-access-not-victim-owner\","
+               << "\"cache_state_preserved\":true,\"phases\":[";
+        for (std::size_t phase = 0; phase < bfs_traffic_.size(); ++phase) {
+            if (phase) output << ',';
+            AlgorithmTraffic total;
+            for (const auto& cell : bfs_traffic_[phase]) total.accumulate(cell);
+            output << "{\"phase\":\"" << phases[phase] << "\",\"total\":";
+            total.write(output);
+            output << ",\"roles\":{";
+            for (std::size_t role = 0; role < bfs_traffic_[phase].size(); ++role) {
+                if (role) output << ',';
+                output << '"' << roles[role] << "\":";
+                bfs_traffic_[phase][role].write(output);
+            }
+            output << "}}";
+        }
+        output << "]}";
+    }
+
+    void writeGraspPhaseControl(std::ostream& output) const {
+        if (!options_.grasp_graph_passes) {
+            output << "null";
+            return;
+        }
+        output << "{\"schema\":\"ecg.grasp-phase-control.v1\",\"enabled\":true,"
+               << "\"setup_policy\":\"GRASP_PAPER\",\"cache_reset\":false,"
+               << "\"rrpv_history_maintained\":true,\"cost_unit\":\"functional-steps-not-CPU-cycles\","
+               << "\"passes\":" << grasp_passes_ << ",\"transitions\":" << grasp_transitions_
+               << ",\"functional_steps\":" << (grasp_transitions_ + (grasp_phase_configured_ ? 1 : 0)) * 16
+               << ",\"control_bytes\":" << (grasp_transitions_ + (grasp_phase_configured_ ? 1 : 0)) * 48 << '}';
+    }
+
   private:
+    enum class BfsPhase : uint8_t { SETUP, PROBE, BUILD, SORT, BETWEEN };
+    void transitionBfsPhase(BfsPhase expected, BfsPhase next) {
+        if (bfs_phase_ != expected)
+            throw std::logic_error("invalid-BFS-traffic-phase-order");
+        bfs_phase_ = next;
+    }
     struct PoptBank {
         uint32_t bytes, offset, lines;
         ecg_algorithm::ReferencePattern pattern;
@@ -433,8 +538,14 @@ class AlgorithmBackend {
     }
     void beginKernel() {
         if (!kernel_started_) {
+            if (options_.grasp_graph_passes) {
+                cache_.configureGraspPhases();
+                grasp_phase_configured_ = true;
+            }
             setup_traffic_ = traffic();
             kernel_started_ = true;
+            if (options_.bfs_traffic_phases)
+                transitionBfsPhase(BfsPhase::SETUP, BfsPhase::BETWEEN);
         }
     }
 
@@ -448,6 +559,10 @@ class AlgorithmBackend {
     bool active_ = false;
     AlgorithmTraffic setup_traffic_;
     bool kernel_started_ = false;
+    BfsPhase bfs_phase_ = BfsPhase::SETUP;
+    std::array<std::array<AlgorithmTraffic, 6>, 5> bfs_traffic_{};
+    bool grasp_phase_configured_ = false, grasp_pass_open_ = false;
+    uint64_t grasp_transitions_ = 0, grasp_passes_ = 0;
     std::unique_ptr<window_observation::Observer> window_observer_;
     std::unique_ptr<WindowRuntime> window_runtime_;
     popt_reref::FullMatrix popt_matrix_;

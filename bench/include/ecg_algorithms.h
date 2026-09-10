@@ -64,6 +64,8 @@ struct Options {
     bool evidence = false;
     bool capture_values = false;
     bool traversal_preprocessing = false;
+    bool bfs_traffic_phases = false;
+    bool grasp_graph_passes = false;
     RecordModel record_model = RecordModel::NEXT;
     uint8_t window_candidate_rrpv = 6;
     WindowObserverMode window_observer = WindowObserverMode::OFF;
@@ -356,8 +358,12 @@ class Engine {
 
     void touch(const void* address, uint64_t bytes, bool write, MemoryKind kind,
                uint64_t token = 0, uint64_t index = 0, bool trace = true, bool model = true) {
-        if (model)
-            backend_.memory(address, bytes, write);
+        if (model) {
+            if constexpr (Backend::models_memory)
+                backend_.memoryKind(address, bytes, write, kind);
+            else
+                backend_.memory(address, bytes, write);
+        }
         if (!result.memory_counts_measured)
             return;
         switch (kind) {
@@ -626,6 +632,19 @@ class Engine {
         property.set(destination, value);
     }
 
+    void appendFrontier(Buffer<uint32_t>& frontier, uint64_t index, uint32_t vertex) {
+        if constexpr (Backend::models_memory)
+            backend_.frontierBuild(true);
+        frontier.set(index, vertex);
+        if constexpr (Backend::models_memory)
+            backend_.frontierBuild(false);
+    }
+
+    void frontierSort(bool entering) {
+        if constexpr (Backend::models_memory)
+            backend_.frontierSort(entering);
+    }
+
     template<class T>
     std::pair<uint32_t, T> neighbor(uint64_t index, Buffer<T>& property) {
         if (!pass_open_ || cursor_.consume(index) != ecg_record::Status::OK)
@@ -879,7 +898,7 @@ BfsStep bfsTopDownLevel(
             ++access.result.bfs_td_edges;
             if (item.second == UINT32_MAX) {
                 access.writeNeighbor(index, depth, item.first, level + 1);
-                next.set(step.size++, item.first);
+                access.appendFrontier(next, step.size++, item.first);
                 ++access.result.reached;
                 if (count_scouts) {
                     const auto target_row = graph.row(access, item.first);
@@ -1008,7 +1027,9 @@ void bfs(const GraphView& graph, Access& access) {
     access.bind(graph, depth, ecg_record::TraversalMode::ORDERED_FILTERED);
     while (size != 0) {
         const auto step = bfsTopDownLevel(graph, access, depth, frontier, next, size, level, false);
+        access.frontierSort(true);
         sortPrefix(next, step.size);
+        access.frontierSort(false);
         frontier.swap(next);
         size = step.size;
         access.result.bfs_frontier_peak = std::max(access.result.bfs_frontier_peak, size);

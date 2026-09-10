@@ -42,6 +42,7 @@ int main(int argc, char** argv) {
                        << "\"mode\":\"" << (command.options.records ?
                             ecg_record::mechanismName(command.options.mechanism) : "csr")
                        << "\",\"policy\":\"" << command.policy
+                       << "\",\"grasp_scope\":\"" << (command.options.grasp_graph_passes ? "graph-passes" : "all")
                        << "\",\"record_base_policy\":\""
                        << ecg_algorithm::recordBasePolicyName(
                             command.options.record_base_policy)
@@ -65,6 +66,10 @@ int main(int argc, char** argv) {
                 backend.writeWindowObserver(output);
                 output << ",\"window_runtime\":";
                 backend.writeWindowRuntime(output);
+                output << ",\"bfs_traffic_phases\":";
+                backend.writeBfsTraffic(output);
+                output << ",\"grasp_phase_control\":";
+                backend.writeGraspPhaseControl(output);
                 output << "}\n";
             };
             if (command.output_path.empty()) {
@@ -77,5 +82,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        }, true, true, true, true);
+        }, true, true, true, true, true);
 }

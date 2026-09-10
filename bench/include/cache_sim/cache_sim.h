@@ -1788,7 +1788,7 @@ public:
 
     void observe(CacheObservationSink* sink) {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (sink && (observation_sink_ || record_prepared_ || policy_ != EvictionPolicy::GRASP ||
+        if (sink && (observation_sink_ || record_prepared_ || grasp_phase_scoped_ || policy_ != EvictionPolicy::GRASP ||
                      line_size_ != 64 || associativity_ > 64))
             throw std::invalid_argument("cache observation requires ordinary GRASP");
         if (sink)
@@ -1799,7 +1799,7 @@ public:
 
     void prepareRecord(EvictionPolicy base_policy = EvictionPolicy::LRU) {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (record_prepared_ || record_configured_ || !graph_ctx_ || line_size_ != 64 ||
+        if (record_prepared_ || record_configured_ || grasp_phase_scoped_ || !graph_ctx_ || line_size_ != 64 ||
             associativity_ > 64 || set_dueling_ ||
             (base_policy != EvictionPolicy::LRU && base_policy != EvictionPolicy::GRASP) ||
             (base_policy == EvictionPolicy::LRU &&
@@ -1819,7 +1819,7 @@ public:
         ecg_record::Layout layout;
         ecg_record::PropertyDescriptor property;
         const bool managed = configuration.control & ecg_record::kNativeManagedPasses;
-        if (record_configured_ || window_used_ || !graph_ctx_ || line_size_ != 64 || associativity_ > 64 ||
+        if (record_configured_ || window_used_ || grasp_phase_scoped_ || !graph_ctx_ || line_size_ != 64 || associativity_ > 64 ||
             ecg_record::validateNativeConfiguration(configuration, layout) != ecg_record::Status::OK ||
             ecg_record::unpackProperty(configuration.property_descriptor, property) !=
                 ecg_record::Status::OK ||
@@ -1922,6 +1922,22 @@ public:
 
     const ecg_window::PolicyStats& windowStats() const { return window_stats_; }
 
+    void configureGraspPhases() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (policy_ != EvictionPolicy::GRASP || grasp_phase_scoped_ || record_prepared_ ||
+            record_configured_ || window_used_ || observation_sink_ || !graph_ctx_)
+            throw std::invalid_argument("invalid-phased-GRASP-configuration");
+        grasp_phase_scoped_ = true;
+        grasp_graph_pass_ = false;
+    }
+
+    void graspGraphPass(bool active) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!grasp_phase_scoped_ || active == grasp_graph_pass_)
+            throw std::logic_error("invalid-GRASP-phase-transition");
+        grasp_graph_pass_ = active;
+    }
+
     void invalidateRecordSet(std::size_t index) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!record_configured_ || index >= cache_.size())
@@ -2011,6 +2027,7 @@ private:
     bool window_used_ = false, window_open_ = false, window_replacement_ = false;
     uint8_t window_floor_ = 7;
     ecg_window::PolicyStats window_stats_;
+    bool grasp_phase_scoped_ = false, grasp_graph_pass_ = false;
     bool record_prepared_ = false;
     bool record_replacement_ = false;
     EvictionPolicy record_base_policy_ = EvictionPolicy::LRU;
@@ -2352,6 +2369,8 @@ private:
                 if (!set[i].valid) return i;
             }
         }
+        if (grasp_phase_scoped_ && !grasp_graph_pass_)
+            return findVictimLRU(set);
         if (window_profile_) {
             const std::size_t base = findVictimGRASP(set);
             if (!window_replacement_ || !window_open_)
@@ -4655,6 +4674,8 @@ public:
     }
     void disableWindow() { l3_->disableWindow(); }
     const ecg_window::PolicyStats& windowStats() const { return l3_->windowStats(); }
+    void configureGraspPhases() { l3_->configureGraspPhases(); }
+    void graspGraphPass(bool active) { l3_->graspGraphPass(active); }
     uint64_t getStructuralFlowThroughAccesses() const {
         return structural_flowthrough_accesses_;
     }

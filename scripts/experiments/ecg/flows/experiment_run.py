@@ -777,6 +777,15 @@ def make_roi_job(
         if not settings.get("current_algorithms") or model != "window" or floor not in (6, 7):
             raise SystemExit("invalid current window model")
         options += f" --record-model window --window-candidate-rrpv {floor}"
+    if settings.get("bfs_traffic_phases"):
+        if not settings.get("current_algorithms") or benchmark != "bfs":
+            raise SystemExit("BFS phase attribution requires the current BFS kernel")
+        options += " --bfs-traffic-phases on"
+    if "algorithm_grasp_scope" in settings:
+        scope = str(settings["algorithm_grasp_scope"])
+        if not settings.get("current_algorithms") or scope not in ("all", "graph-passes"):
+            raise SystemExit("invalid GRASP phase scope")
+        options += " --grasp-scope " + scope
     core_tag = str(settings.get("_core_tag", ""))
     scaling_series_id = sanitize(
         f"{settings['name']}_{graph_name}_{benchmark}")
@@ -1057,13 +1066,14 @@ def make_roi_job(
     config_hash = hashlib.sha256(json.dumps(
         {"command": command, "env": material_env, "inputs": inputs},
         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    record_base, observer, record_model, candidate_rrpv = "LRU", "off", "next", 6
+    record_base, observer, record_model, candidate_rrpv, grasp_scope = "LRU", "off", "next", 6, "all"
     if settings.get("current_algorithms"):
         parsed_algorithm = algorithm_matrix.parse_options(options)
         record_base, observer = parsed_algorithm.record_base_policy, parsed_algorithm.window_observer
         record_model, candidate_rrpv = parsed_algorithm.record_model, parsed_algorithm.window_candidate_rrpv
+        grasp_scope = parsed_algorithm.grasp_scope
     expected_policy_labels = algorithm_matrix.policy_labels(
-        [parse_policy_spec(policy) for policy in all_policies], record_base, observer, record_model, candidate_rrpv)
+        [parse_policy_spec(policy) for policy in all_policies], record_base, observer, record_model, candidate_rrpv, grasp_scope)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
@@ -1143,6 +1153,7 @@ def make_roi_job(
             "window_observer": observer,
             "record_model": record_model,
             "window_candidate_rrpv": candidate_rrpv,
+            "grasp_scope": grasp_scope,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1176,7 +1187,7 @@ def csv_status(
         path: Path,
         expected_policies: list[str] | None = None,
         record_base_policy: str = "LRU", window_observer: str = "off",
-        record_model: str = "next", candidate_rrpv: int = 6) -> tuple[str, str]:
+        record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all") -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1189,10 +1200,10 @@ def csv_status(
     if statuses == {"ok"}:
         if expected_policies:
             expected = ({policy_output_label(policy) for policy in expected_policies}
-                        if record_base_policy == "LRU" and window_observer == "off" and record_model == "next"
+                        if record_base_policy == "LRU" and window_observer == "off" and record_model == "next" and grasp_scope == "all"
                         else set(algorithm_matrix.policy_labels(
                             [parse_policy_spec(policy) for policy in expected_policies], record_base_policy,
-                            window_observer, record_model, candidate_rrpv)))
+                            window_observer, record_model, candidate_rrpv, grasp_scope)))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1215,7 +1226,8 @@ def job_csv_status(job: Job) -> tuple[str, str]:
     observer = str(job.metadata.get("window_observer", "off"))
     model = str(job.metadata.get("record_model", "next"))
     floor = int(job.metadata.get("window_candidate_rrpv", 6))
-    status, detail = csv_status(job.output_csv, expected, record_base, observer, model, floor)
+    scope = str(job.metadata.get("grasp_scope", "all"))
+    status, detail = csv_status(job.output_csv, expected, record_base, observer, model, floor, scope)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
@@ -1251,9 +1263,9 @@ def job_csv_status(job: Job) -> tuple[str, str]:
         return "partial", "completion marker is not successful"
 
     expected_labels = ([policy_output_label(policy) for policy in expected]
-                       if record_base == "LRU" and observer == "off" and model == "next"
+                       if record_base == "LRU" and observer == "off" and model == "next" and scope == "all"
                        else algorithm_matrix.policy_labels(
-                           [parse_policy_spec(policy) for policy in expected], record_base, observer, model, floor))
+                           [parse_policy_spec(policy) for policy in expected], record_base, observer, model, floor, scope))
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),

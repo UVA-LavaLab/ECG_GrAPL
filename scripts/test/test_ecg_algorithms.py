@@ -509,6 +509,113 @@ def test_active_window_runner_uses_distinct_model_labels(tmp_path):
     assert all(row["window_unmodeled_runtime_table_bytes"] == 0 for row in rows)
 
 
+def test_bfs_phase_attribution_preserves_work_and_cache_state(tmp_path):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    from scripts.experiments.ecg.algorithm_matrix import parse_options, validate_bfs_phases
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "same-result.json"
+    payloads = []
+    for scope, attribution in (("all", "off"), ("all", "on"), ("graph-passes", "on")):
+        ran = subprocess.run([
+            "setarch", os.uname().machine, "-R", str(binary),
+            "--algorithm", "bfs", "--graph", str(graph), "--policy", "GRASP_PAPER",
+            "--grasp-scope", scope, "--bfs-traffic-phases", attribution,
+            "--delta", "8", "--values", "--evidence", "--output", str(output),
+            "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256",
+            "--l2-ways", "2", "--llc-bytes", "1024", "--llc-ways", "2",
+        ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+            capture_output=True, text=True, timeout=30, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        payload = json.loads(output.read_text())
+        validate_bfs_phases(payload, parse_options(
+            f"--graph {graph} --grasp-scope {scope} --bfs-traffic-phases {attribution}"))
+        payloads.append(payload)
+    plain, attributed, scoped = payloads
+    assert plain["metrics"] == attributed["metrics"]
+    assert plain["workload"] == attributed["workload"] == scoped["workload"]
+    assert attributed["traffic_phases"]["setup"] == scoped["traffic_phases"]["setup"]
+    assert scoped["grasp_phase_control"]["transitions"] == 2 * scoped["workload"]["passes"]
+    assert scoped["grasp_phase_control"]["cache_reset"] is False
+    assert scoped["grasp_phase_control"]["functional_steps"] == (
+        16 * (scoped["grasp_phase_control"]["transitions"] + 1))
+    for payload in (attributed, scoped):
+        phases = payload["bfs_traffic_phases"]
+        assert phases["writeback_attribution"] == "triggering-access-not-victim-owner"
+        for key in ("total_accesses", "memory_accesses", "llc_writebacks", "total_offchip_traffic"):
+            assert sum(phase["total"][key] for phase in phases["phases"]) == payload["metrics"][key]
+        sorting = next(phase for phase in phases["phases"] if phase["phase"] == "frontier-sort")
+        assert sorting["roles"]["frontier-work"]["total_accesses"] > 0
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    forged = copy.deepcopy(scoped)
+    forged["grasp_phase_control"]["cache_reset"] = True
+    with pytest.raises(RecordReceiptError, match="preservation"):
+        validate_bfs_phases(forged, parse_options(f"--graph {graph} --grasp-scope graph-passes --bfs-traffic-phases on"))
+    forged = copy.deepcopy(attributed)
+    forged["bfs_traffic_phases"]["phases"][1]["roles"]["depth"]["memory_accesses"] += 1
+    with pytest.raises(RecordReceiptError, match="do not close"):
+        validate_bfs_phases(forged, parse_options(f"--graph {graph} --bfs-traffic-phases on"))
+
+
+def test_bfs_phase_profile_keeps_popt_and_baseline_policy_intact(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.algorithm_matrix import parse_options
+    m = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    jobs = experiment_run.expand_jobs(
+        experiment_run.parse_args(["--profile", "ecg_bfs_phase_cache", "--list"]), m, tmp_path)
+    assert len(jobs) == 2 and sum(len(job.metadata["policies"]) for job in jobs) == 3
+    for job in jobs:
+        options = parse_options(job.metadata["options"])
+        assert options.bfs_traffic_phases == "on" and options.bfs_direction == "td"
+        if options.grasp_scope == "all":
+            assert job.metadata["policies"] == ["GRASP_PAPER", "POPT:UNCHARGED"]
+            assert job.metadata["expected_policy_labels"] == ["GRASP_PAPER", "POPT_UNCHARGED"]
+        else:
+            assert job.metadata["expected_policy_labels"] == ["GRASP_PAPER_GRAPH_PASSES"]
+
+
+def test_popt_phase_attribution_is_observation_only(tmp_path):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    from scripts.experiments.ecg.algorithm_matrix import parse_options, validate_bfs_phases
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph, output = tmp_path / "pressure512.sg", tmp_path / "same-result.json"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    results = []
+    for enabled in ("off", "on"):
+        ran = subprocess.run([
+            "setarch", os.uname().machine, "-R", str(binary), "--algorithm", "bfs",
+            "--graph", str(graph), "--policy", "POPT_UNCHARGED", "--bfs-traffic-phases", enabled,
+            "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256", "--l2-ways", "2",
+            "--llc-bytes", "1024", "--llc-ways", "2", "--values", "--evidence", "--output", str(output),
+        ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+            capture_output=True, text=True, timeout=30, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        payload = json.loads(output.read_text())
+        validate_bfs_phases(payload, parse_options(f"--graph {graph} --bfs-traffic-phases {enabled}"))
+        results.append(payload)
+    for key in ("metrics", "workload", "traffic_phases", "popt"):
+        assert results[0][key] == results[1][key], key
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_bfs_phase_controls_reject_native_paths(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--current-algorithms", "--ecg-equivalence", "--benchmark", "bfs",
+        "--options", f"--graph {tmp_path / 'not-read.sg'} --bfs-traffic-phases on",
+        "--prefetcher", "none", "--flowthrough", "off",
+    ])
+    services = SimpleNamespace(parse_size_bytes=roi_matrix.parse_size_bytes)
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("GRASP_PAPER"), "8MB", backend, services)
+    assert rows[0]["status"] == "error" and rows[0]["error"] == "BFS phase controls are cache_sim-only"
+
+
 @pytest.mark.parametrize("backend", ["gem5", "sniper"])
 def test_window_model_is_rejected_before_native_graph_loading(tmp_path, backend):
     from scripts.experiments.ecg import algorithm_detailed, roi_matrix
