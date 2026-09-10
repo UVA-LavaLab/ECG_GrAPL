@@ -154,3 +154,8 @@ comparisons should receive the same applicable phase treatment and
 compare against this stronger baseline and unchanged P-OPT. The
 window candidate remains unpromoted; its benefit under the stronger
 baseline is not established by this experiment.
+
+The [phased window follow-up](Potential-Window-Prototype) shares this
+victim-selection scope with real window transport and replacement.
+Window markers carry its phase changes, avoiding a duplicate control
+charge. Its results are separate from the CSR baseline improvement above.

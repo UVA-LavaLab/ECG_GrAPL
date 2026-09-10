@@ -1857,7 +1857,7 @@ public:
     }
 
     void configureWindow(const ecg_window::Profile& profile, uint64_t property_base,
-                         bool replacement, uint8_t candidate_floor) {
+                         bool replacement, uint8_t candidate_floor, bool lru_outside = false) {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto* region = graph_ctx_ ? graph_ctx_->findRegion(property_base) : nullptr;
         if (window_used_ || record_configured_ || observation_sink_ || !record_prepared_ ||
@@ -1871,6 +1871,7 @@ public:
         window_property_base_ = property_base;
         window_replacement_ = replacement;
         window_floor_ = candidate_floor;
+        window_lru_outside_ = lru_outside;
         window_used_ = true;
     }
 
@@ -2025,6 +2026,7 @@ private:
     uint64_t window_property_base_ = 0, window_property_end_ = 0;
     uint64_t window_pass_base_ = 0, window_watermark_ = 0;
     bool window_used_ = false, window_open_ = false, window_replacement_ = false;
+    bool window_lru_outside_ = false;
     uint8_t window_floor_ = 7;
     ecg_window::PolicyStats window_stats_;
     bool grasp_phase_scoped_ = false, grasp_graph_pass_ = false;
@@ -2372,7 +2374,8 @@ private:
         if (grasp_phase_scoped_ && !grasp_graph_pass_)
             return findVictimLRU(set);
         if (window_profile_) {
-            const std::size_t base = findVictimGRASP(set);
+            const std::size_t base = window_lru_outside_ && !window_open_ ?
+                findVictimLRU(set) : findVictimGRASP(set);
             if (!window_replacement_ || !window_open_)
                 return base;
             ++window_stats_.decisions;
@@ -4662,10 +4665,11 @@ public:
     std::size_t getL3Sets() const { return l3_->getNumSets(); }
     std::size_t getL3Ways() const { return l3_->getAssociativity(); }
     void observeLastLevel(CacheObservationSink* sink) { l3_->observe(sink); }
-    void configureWindow(const ecg_window::Profile& profile, uint64_t base, bool replacement, uint8_t floor) {
+    void configureWindow(const ecg_window::Profile& profile, uint64_t base, bool replacement, uint8_t floor,
+                         bool lru_outside = false) {
         if (record_model_ || ref32_commit_channel_ || ref32_prefetch_enabled_ || refresh_exact_stamp_)
             throw std::invalid_argument("window transport cannot share another record model");
-        l3_->configureWindow(profile, base, replacement, floor);
+        l3_->configureWindow(profile, base, replacement, floor, lru_outside);
     }
     void windowProgress(uint64_t base, uint64_t watermark, bool open) { l3_->windowProgress(base, watermark, open); }
     bool observeWindow(uint64_t address, uint64_t order) { return l3_->observeWindow(address, order); }

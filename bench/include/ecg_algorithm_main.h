@@ -168,10 +168,11 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
         command.options.record_base_policy != RecordBasePolicy::LRU)
         throw std::invalid_argument("record-base-policy-requires-record-mode");
     if ((command.options.bfs_traffic_phases || command.options.grasp_graph_passes) &&
-        (command.options.algorithm != Algorithm::BFS || command.options.records ||
+        (command.options.algorithm != Algorithm::BFS ||
+         (command.options.records && (command.options.bfs_traffic_phases || command.options.record_model != RecordModel::WINDOW)) ||
          command.options.bfs_direction_optimizing || command.options.window_observer != WindowObserverMode::OFF ||
-         (command.options.grasp_graph_passes && command.policy != "GRASP_PAPER")))
-        throw std::invalid_argument("BFS phase controls require CSR TD BFS and a compatible baseline");
+         (command.options.grasp_graph_passes && !command.options.records && command.policy != "GRASP_PAPER")))
+        throw std::invalid_argument("BFS phase controls require TD BFS and a compatible baseline/model");
     if (window_floor_seen && command.options.record_model != RecordModel::WINDOW)
         throw std::invalid_argument("window-candidate-rrpv-requires-window-model");
     if (command.options.record_model == RecordModel::WINDOW &&

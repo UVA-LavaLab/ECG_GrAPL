@@ -15,6 +15,7 @@
     "ecg_window_observer",
     "ecg_window_costed_cache",
     "ecg_bfs_phase_cache",
+    "ecg_window_phased_cache",
     "ecg_algorithm_equivalence_gem5",
     "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
@@ -50,6 +51,7 @@
     "no_build": true
   },
   "profiles": {
+    "ecg_window_phased_cache": "Five serial Patents BFS8MiB cells: phased GRASP and unchanged favorableP-OPT versus windowT/R6/R7 with the same outside-pass LRU treatment. Window controls are not double-charged.",
     "ecg_bfs_phase_cache": "Three serial same-work Patents BFS8MiB cells with phase/role attribution: unchanged GRASP, unchanged favorable P-OPT, and GRASP in graph passes/LRU outside. No masks or traversal changes.",
     "ecg_window_costed_cache": "Six serial Patents BFS8MiB cells: CSR LRU/GRASP/favorableP-OPT and real-window transport/RRPV7/RRPV6. Construction and functional control/publication work are counted; not native timing.",
     "ecg_window_observer": "One Patents TD-BFS case with an audit control and a passive window observer, both using unchanged CSR GRASP at 8 MiB. No window policy or CPU-speed claim.",
@@ -116,6 +118,11 @@
     "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
+    "ecg_window_phased_cache": {
+      "status": "ready",
+      "reason": "Same-work window evaluation against the stronger phased baseline; no new masks, native timing or automatic promotion.",
+      "require_clean_worktree": true
+    },
     "ecg_bfs_phase_cache": {
       "status": "ready",
       "reason": "Bounded CSR-only phase-policy hypothesis; identical GRASP setup, retained data/recency/RRPV state and explicit switching cost.",
@@ -989,6 +996,62 @@
     ]
   },
   "stages": [
+    {
+      "name": "178_window_phased_grasp", "kind": "roi_matrix",
+      "profiles": ["ecg_window_phased_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["bfs"], "policies": ["GRASP_PAPER"],
+      "current_algorithms": true, "algorithm_grasp_scope": "graph-passes", "bfs_traffic_phases": true,
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "178_window_phased_grasp"
+    },
+    {
+      "name": "179_window_phased_popt", "kind": "roi_matrix",
+      "profiles": ["ecg_window_phased_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["bfs"], "policies": ["POPT:UNCHARGED"],
+      "current_algorithms": true, "bfs_traffic_phases": true,
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "179_window_phased_popt"
+    },
+    {
+      "name": "180_window_phased_rrpv6", "kind": "roi_matrix",
+      "profiles": ["ecg_window_phased_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["bfs"], "policies": ["ECG:transport", "ECG:replacement"],
+      "current_algorithms": true, "algorithm_record_model": "window",
+      "algorithm_record_base_policy": "GRASP_PAPER", "window_candidate_rrpv": 6,
+      "algorithm_grasp_scope": "graph-passes",
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "180_window_phased_rrpv6"
+    },
+    {
+      "name": "181_window_phased_rrpv7", "kind": "roi_matrix",
+      "profiles": ["ecg_window_phased_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["bfs"], "policies": ["ECG:replacement"],
+      "current_algorithms": true, "algorithm_record_model": "window",
+      "algorithm_record_base_policy": "GRASP_PAPER", "window_candidate_rrpv": 7,
+      "algorithm_grasp_scope": "graph-passes",
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "181_window_phased_rrpv7"
+    },
     {
       "name": "176_bfs_phase_baselines", "kind": "roi_matrix",
       "profiles": ["ecg_bfs_phase_cache"],

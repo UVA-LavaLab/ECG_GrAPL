@@ -15,16 +15,18 @@ class WindowRuntime {
     static constexpr uint64_t kLatency = 8, kControlSteps = 16;
 
     WindowRuntime(CacheHierarchy& cache, const ecg_window::RecordStream& stream,
-                  uint64_t vertices, uint64_t property_base, bool replacement, uint8_t floor)
+                  uint64_t vertices, uint64_t property_base, bool replacement, uint8_t floor,
+                  bool lru_outside = false)
         : cache_(cache), profile_(vertices), layout_(stream.layout), records_(stream.size()),
-          record_base_(stream.data()), property_base_(property_base), replacement_(replacement), floor_(floor) {
+          record_base_(stream.data()), property_base_(property_base), replacement_(replacement),
+          lru_outside_(lru_outside), floor_(floor) {
         layout_.validate();
         if (!records_ || stream.vertices != vertices || stream.cohort_rows != profile_.cohort_rows ||
             !record_base_ || reinterpret_cast<uint64_t>(record_base_) % layout_.record_bytes ||
             property_base % 64 || !ecg_record::checkedAdd(property_base, vertices * 4, property_end_) ||
             cursor_.configure(records_, ecg_record::TraversalMode::ORDERED_FILTERED) != ecg_record::Status::OK)
             throw std::invalid_argument("invalid-window-runtime-binding");
-        cache_.configureWindow(profile_, property_base, replacement, floor);
+        cache_.configureWindow(profile_, property_base, replacement, floor, lru_outside);
         control(0, 0, false);
     }
     ~WindowRuntime() { cache_.disableWindow(); }
@@ -195,6 +197,8 @@ class WindowRuntime {
         const auto& policy = cache_.windowStats();
         output << "{\"schema\":\"ecg.window-runtime.v1\",\"record_model\":\"potential-window-u32\","
                << "\"cost_unit\":\"functional-steps-not-CPU-cycles\","
+               << "\"grasp_scope\":\"" << (lru_outside_ ? "graph-passes" : "all") << "\","
+               << "\"phase_control_accounting\":\"" << (lru_outside_ ? "shared-window-markers" : "not-requested") << "\","
                << "\"replacement\":" << (replacement_ ? "true" : "false")
                << ",\"candidate_floor\":" << unsigned(floor_)
                << ",\"record_bytes\":" << unsigned(layout_.record_bytes)
@@ -267,7 +271,7 @@ class WindowRuntime {
     uint64_t records_;
     const uint8_t* record_base_;
     uint64_t property_base_, property_end_ = 0;
-    bool replacement_;
+    bool replacement_, lru_outside_;
     uint8_t floor_;
     ecg_record::PassCursor cursor_;
     std::array<Update, kQueue> queue_{};

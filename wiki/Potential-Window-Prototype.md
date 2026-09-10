@@ -79,6 +79,20 @@ The window transport arm performs the same record, control and publication
 work but never applies the metadata to victim selection. It is not the
 older next-reference transport arm with a different name.
 
+To match the [stronger phase-scoped baseline](BFS-Phase-Attribution), add
+`--grasp-scope graph-passes`. All window arms then use GRASP in graph
+passes and LRU outside, retaining ordinary recency and GRASP history.
+Construction still uses the declared GRASP setup policy. The default
+scope remains `all`.
+
+Window BEGIN/CLOSE controls already carry the pass-open state. The scoped
+window path reuses those paid controls rather than adding a second phase
+channel. Its `window_runtime.phase_control_accounting` is
+`shared-window-markers`; the separate CSR `grasp_phase_control` object is
+absent. Charging both would double-count the same boundary operation.
+The observer, native paths and other record models remain outside this
+combined scope.
+
 ## Functional cost ledger
 
 | Operation | Accounted cost |
@@ -122,6 +136,12 @@ output/work and complete queue/position accounting are prerequisites.
 A passive opportunity count is not a substitute for these measurements;
 no default or native admission changes follow automatically from the
 prototype's existence.
+
+`ecg_window_phased_cache` is the matched follow-up: five serial cells with
+phase-scoped CSR GRASP, unchanged favorable P-OPT, and window transport/
+floor-7/floor-6 using the same outside-pass LRU treatment. It is intended
+to isolate the window contribution after correcting the auxiliary-phase
+baseline; the baseline's phase gain must not be attributed to ECG.
 
 ## Full Patents result
 

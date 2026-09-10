@@ -72,10 +72,11 @@ class AlgorithmBackend {
         if (popt_full_capacity_ && (options_.records || options_.bfs_direction_optimizing))
             throw std::invalid_argument("current-popt-requires-csr-scalar-graph-passes");
         if ((options_.bfs_traffic_phases || options_.grasp_graph_passes) &&
-            (options_.algorithm != ecg_algorithm::Algorithm::BFS || options_.records ||
+            (options_.algorithm != ecg_algorithm::Algorithm::BFS ||
+             (options_.records && (options_.bfs_traffic_phases || options_.record_model != ecg_algorithm::RecordModel::WINDOW)) ||
              options_.bfs_direction_optimizing || options_.window_observer != ecg_algorithm::WindowObserverMode::OFF ||
              (options_.grasp_graph_passes && (!grasp_paper_ || popt_full_capacity_))))
-            throw std::invalid_argument("BFS phase controls require CSR TD BFS and a compatible baseline");
+            throw std::invalid_argument("BFS phase controls require TD BFS and a compatible baseline/model");
         if (options_.record_model == ecg_algorithm::RecordModel::WINDOW &&
             (options_.algorithm != ecg_algorithm::Algorithm::BFS || !options_.records || !graph.records ||
              graph.weights || options_.bfs_direction_optimizing || options_.traversal_preprocessing ||
@@ -191,7 +192,7 @@ class AlgorithmBackend {
     void beginGraphPass() {
         if (options_.bfs_traffic_phases)
             transitionBfsPhase(BfsPhase::BETWEEN, BfsPhase::PROBE);
-        if (options_.grasp_graph_passes) {
+        if (options_.grasp_graph_passes && !window_runtime_) {
             if (!grasp_phase_configured_ || grasp_pass_open_)
                 throw std::logic_error("invalid-scoped-GRASP-pass-begin");
             cache_.graspGraphPass(true);
@@ -246,7 +247,7 @@ class AlgorithmBackend {
     void endGraphPass() {
         if (options_.bfs_traffic_phases)
             transitionBfsPhase(BfsPhase::PROBE, BfsPhase::BETWEEN);
-        if (options_.grasp_graph_passes) {
+        if (options_.grasp_graph_passes && !window_runtime_) {
             if (!grasp_pass_open_)
                 throw std::logic_error("invalid-scoped-GRASP-pass-close");
             cache_.graspGraphPass(false);
@@ -291,7 +292,8 @@ class AlgorithmBackend {
         if (active_ || window_runtime_ || window_observer_ || popt_full_capacity_)
             throw std::logic_error("window model cannot rebind or share an active runtime");
         window_runtime_ = std::make_unique<WindowRuntime>(cache_, stream, vertices, base,
-            options_.mechanism == ecg_record::Mechanism::REPLACEMENT, options_.window_candidate_rrpv);
+            options_.mechanism == ecg_record::Mechanism::REPLACEMENT, options_.window_candidate_rrpv,
+            options_.grasp_graph_passes);
         beginKernel();
     }
     void beginPass(bool has_next) {
@@ -334,7 +336,7 @@ class AlgorithmBackend {
     void finish(uint64_t actual_records) {
         if (options_.bfs_traffic_phases && bfs_phase_ != BfsPhase::BETWEEN)
             throw std::logic_error("BFS traffic attribution did not close");
-        if (options_.grasp_graph_passes && (!grasp_phase_configured_ || grasp_pass_open_ ||
+        if (options_.grasp_graph_passes && !window_runtime_ && (!grasp_phase_configured_ || grasp_pass_open_ ||
             grasp_transitions_ != 2 * grasp_passes_))
             throw std::logic_error("scoped GRASP did not close its control stream");
         if (window_runtime_)
@@ -418,7 +420,7 @@ class AlgorithmBackend {
     }
 
     void writeGraspPhaseControl(std::ostream& output) const {
-        if (!options_.grasp_graph_passes) {
+        if (!options_.grasp_graph_passes || window_runtime_) {
             output << "null";
             return;
         }
@@ -538,7 +540,7 @@ class AlgorithmBackend {
     }
     void beginKernel() {
         if (!kernel_started_) {
-            if (options_.grasp_graph_passes) {
+            if (options_.grasp_graph_passes && !window_runtime_) {
                 cache_.configureGraspPhases();
                 grasp_phase_configured_ = true;
             }

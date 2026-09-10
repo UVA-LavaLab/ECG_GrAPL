@@ -729,7 +729,10 @@ void testWindowTransportMatchesGrasp() {
         for (uint32_t offset : {1u, 17u, 33u})
             edges.emplace_back(source, (source + offset) % 64, 1);
     const Fixture graph(64, true, edges);
-    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+    for (const auto& settings : {
+            std::pair<uint8_t, bool>{4, false}, {8, false}, {4, true}, {8, true}}) {
+        const auto width = settings.first;
+        const bool phased = settings.second;
         const auto layout = ecg_window::Layout::select(63, width);
         auto stream = ecg_window::build(ecg_window::Profile(64), graph.edges.size(), layout,
             ecg_record::BuildLimits{},
@@ -748,8 +751,12 @@ void testWindowTransportMatchesGrasp() {
         actual.initGraphContext(&context);
         reference.initGraphContext(&context);
         actual.prepareRecord(cache_sim::EvictionPolicy::GRASP);
-        cache_sim::WindowRuntime runtime(actual, stream, 64, base, false, 6);
+        if (phased)
+            reference.configureGraspPhases();
+        cache_sim::WindowRuntime runtime(actual, stream, 64, base, false, 6, phased);
         runtime.beginPass();
+        if (phased)
+            reference.graspGraphPass(true);
         for (uint64_t source = 0; source < 64; ++source) {
             runtime.visitVertex(source);
             for (uint64_t offset : {source, source + 1}) {
@@ -769,12 +776,19 @@ void testWindowTransportMatchesGrasp() {
             }
         }
         runtime.closePass();
+        if (phased)
+            reference.graspGraphPass(false);
+        for (uint64_t index = 0; index < 128; ++index) {
+            const uint64_t address = index % 3 ? 0x1000000 + (index % 16) * 64 : base + (index % 64) * 4;
+            runtime.memory(address, false);
+            reference.access(address, false);
+        }
         runtime.finish(graph.edges.size());
         check(actual.getMemoryAccesses() == reference.getMemoryAccesses() &&
               actual.getWritebackTraffic() == reference.getWritebackTraffic() &&
               actual.getL3Stats().hits.load() == reference.getL3Stats().hits.load() &&
               actual.windowStats().overrides == 0,
-              "window transport has exact GRASP behavior on the same real encoded data stream");
+              "window transport matches its declared all-phase or phase-scoped GRASP data behavior");
     }
 }
 

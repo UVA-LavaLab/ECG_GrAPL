@@ -310,7 +310,13 @@ def validate_payload(
 def validate_bfs_phases(payload: dict[str, Any], options: argparse.Namespace) -> None:
     work = payload["workload"]
     control = payload.get("grasp_phase_control")
-    if options.grasp_scope == "graph-passes":
+    if options.grasp_scope == "graph-passes" and options.record_model == "window":
+        runtime = payload.get("window_runtime")
+        require(control is None and isinstance(runtime, dict) and
+                runtime.get("grasp_scope") == "graph-passes" and
+                runtime.get("phase_control_accounting") == "shared-window-markers",
+                "window phase control must use its existing paid markers exactly once")
+    elif options.grasp_scope == "graph-passes":
         require(payload["backend"] == "cache_sim" and payload["policy"] == "GRASP_PAPER" and
                 work["algorithm"] == "bfs" and work["carrier"] == "csr" and work["bfs_direction"] == "td" and
                 isinstance(control, dict) and control.get("schema") == "ecg.grasp-phase-control.v1" and
@@ -365,6 +371,9 @@ def validate_window_runtime(payload: dict[str, Any], options: argparse.Namespace
             w.get("cost_unit") == "functional-steps-not-CPU-cycles" and
             w.get("replacement") is (payload["mode"] == "replacement"),
             "window runtime model or evidence boundary mismatch")
+    require(w.get("grasp_scope", "all") == options.grasp_scope and
+            (options.grasp_scope == "all" or w.get("phase_control_accounting") == "shared-window-markers"),
+            "window outside-pass policy or control accounting mismatch")
     require(_integer(w, "candidate_floor") == options.window_candidate_rrpv ==
             _integer(work, "window_candidate_rrpv") and
             _integer(w, "record_bytes") == work["record_bytes"] and _integer(w, "token_bits") == 10,
@@ -657,10 +666,12 @@ def run_cache_cell(
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
         phase_modes = options.bfs_traffic_phases == "on" or options.grasp_scope != "all"
-        require(not phase_modes or args.benchmark == "bfs" and mode == "csr" and
+        require(not phase_modes or args.benchmark == "bfs" and
+                (mode == "csr" or options.record_model == "window" and options.bfs_traffic_phases == "off") and
                 options.bfs_direction == "td" and options.window_observer == "off" and
-                (options.grasp_scope == "all" or policy == "GRASP_PAPER"),
-                "BFS phase controls require CSR TD BFS and a compatible baseline")
+                (options.grasp_scope == "all" or policy == "GRASP_PAPER" or
+                 options.record_model == "window" and options.record_base_policy == "GRASP_PAPER"),
+                "BFS phase controls require TD BFS and a compatible baseline/model")
         require(options.record_model != "window" or args.benchmark == "bfs" and mode in (
             "transport", "replacement") and options.record_base_policy == "GRASP_PAPER" and
             options.window_observer == "off" and options.bfs_direction == "td" and options.record_preprocess == "csr",
@@ -781,7 +792,7 @@ def run_cache_cell(
             for phase in payload["bfs_traffic_phases"]["phases"]:
                 for key, value in phase["total"].items():
                     row["bfs_phase_" + phase["phase"].replace("-", "_") + "_" + key] = value
-        if options.grasp_scope != "all":
+        if options.grasp_scope != "all" and payload.get("grasp_phase_control") is not None:
             row.update({"grasp_phase_" + key: value for key, value in payload["grasp_phase_control"].items()})
         if options.record_model == "window":
             row.update({"window_" + key: value for key, value in payload["window_runtime"].items()})

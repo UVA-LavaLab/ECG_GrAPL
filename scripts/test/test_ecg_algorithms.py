@@ -387,7 +387,8 @@ def test_window_observer_profile_is_one_paired_condition(tmp_path):
         assert job.command[job.command.index("--cache-sim-omp-threads") + 1] == "1"
 
 
-def test_active_window_records_preserve_bfs_and_charge_controls(tmp_path):
+@pytest.mark.parametrize("scope", ["all", "graph-passes"])
+def test_active_window_records_preserve_bfs_and_charge_controls(tmp_path, scope):
     from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
     from scripts.experiments.ecg import algorithm_matrix
     binary = ROOT / "bench/bin_sim/algorithms"
@@ -413,6 +414,7 @@ def test_active_window_records_preserve_bfs_and_charge_controls(tmp_path):
                 "--algorithm", "bfs", "--graph", str(graph), "--mode", mode,
                 "--delta", "8",
                 "--record-model", "window", "--window-candidate-rrpv", str(floor),
+                "--grasp-scope", scope,
                 "--record-base-policy", "GRASP_PAPER", "--record-bytes", str(width),
                 "--evidence", "--values", "--l1-bytes", "128", "--l1-ways", "2",
                 "--l2-bytes", "256", "--l2-ways", "2", "--llc-bytes", "1024", "--llc-ways", "2",
@@ -422,16 +424,19 @@ def test_active_window_records_preserve_bfs_and_charge_controls(tmp_path):
             assert ran.returncode == 0, ran.stdout + ran.stderr
             p = json.loads(output.read_text())
             options = algorithm_matrix.parse_options(
-                f"--graph {graph} --record-model window --record-base-policy GRASP_PAPER --window-candidate-rrpv {floor}")
+                f"--graph {graph} --record-model window --record-base-policy GRASP_PAPER --window-candidate-rrpv {floor} --grasp-scope {scope}")
             algorithm_matrix.validate_payload(
                 p, ran.stdout + ran.stderr, algorithm="bfs", mode=mode, policy="LRU",
                 graph=algorithm_matrix.graph_info(graph, allow_weighted=True, traversal="out"),
                 graph_path=graph, options=options, requested_bytes=width,
                 minimum_mantissa_bits=0, evidence=True, llc_sets=8)
             algorithm_matrix.validate_traffic_phases(p)
+            algorithm_matrix.validate_bfs_phases(p, options)
             assert p["diagnostic_only"] is False and p["window_observer"] is None
             assert p["workload"]["record_model"] == "window"
             w = p["window_runtime"]
+            assert w["grasp_scope"] == scope
+            assert p["grasp_phase_control"] is None
             assert w["schema"] == "ecg.window-runtime.v1"
             assert w["record_loads"] == p["workload"]["actual_records"] == w["property_reads"]
             assert w["record_read_bytes"] == width * w["record_loads"]
@@ -454,6 +459,11 @@ def test_active_window_records_preserve_bfs_and_charge_controls(tmp_path):
     broken["window_runtime"]["marker_steps"] = 0
     with pytest.raises(RecordReceiptError, match="control/lookup"):
         algorithm_matrix.validate_window_runtime(broken, options)
+    if scope == "graph-passes":
+        broken = copy.deepcopy(results[-1])
+        broken["grasp_phase_control"] = {"functional_steps": 560}
+        with pytest.raises(RecordReceiptError, match="exactly once"):
+            algorithm_matrix.validate_bfs_phases(broken, options)
 
 
 def test_window_runtime_profile_and_resource_limits(tmp_path):
@@ -482,6 +492,26 @@ def test_window_runtime_profile_and_resource_limits(tmp_path):
         plan_algorithm_resources(graph, **{**args, "backend": "gem5"})
     with pytest.raises(RecordResourceError, match="explicit limits"):
         plan_algorithm_resources(graph, **{**args, "auxiliary_limit": 255})
+
+
+def test_phased_window_profile_preserves_stronger_controls(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.algorithm_matrix import parse_options
+    m = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    jobs = experiment_run.expand_jobs(
+        experiment_run.parse_args(["--profile", "ecg_window_phased_cache", "--list"]), m, tmp_path)
+    assert len(jobs) == 4 and sum(len(job.metadata["policies"]) for job in jobs) == 5
+    for job in jobs:
+        options = parse_options(job.metadata["options"])
+        assert job.metadata["benchmark"] == "bfs" and options.bfs_direction == "td"
+        if job.metadata["policies"] == ["POPT:UNCHARGED"]:
+            assert options.grasp_scope == "all" and options.record_model == "next"
+        else:
+            assert options.grasp_scope == "graph-passes"
+            assert all(label.endswith("_GRAPH_PASSES") for label in job.metadata["expected_policy_labels"])
+        if options.record_model == "window":
+            assert options.bfs_traffic_phases == "off" and options.record_base_policy == "GRASP_PAPER"
+            assert options.window_candidate_rrpv in (6, 7)
 
 
 def test_active_window_runner_uses_distinct_model_labels(tmp_path):
