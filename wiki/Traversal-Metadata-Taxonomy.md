@@ -340,6 +340,8 @@ expands the observed opportunity set without changing GRASP; active
 replacement is evaluated separately by the opt-in
 [costed cache-only prototype](Potential-Window-Prototype). Neither the
 observer nor the prototype establishes native performance or a suite-wide win.
+The [first active window result](Potential-Window-Prototype#full-patents-result)
+fails the traffic-gain test even against its own transport control.
 
 The shared kernel functions define the access patterns independently of the
 selected preprocessing mode.

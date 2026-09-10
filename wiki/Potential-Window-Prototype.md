@@ -122,3 +122,72 @@ output/work and complete queue/position accounting are prerequisites.
 A passive opportunity count is not a substitute for these measurements;
 no default or native admission changes follow automatically from the
 prototype's existence.
+
+## Full Patents result
+
+`results/ecg_experiments/runs/window_costed_patents_97d07d5c` contains all
+six completed cells at source `97d07d5c`. Every role returns the same BFS
+depth digest `3865ba0b18ab9fe2` and completes the same source/frontier work.
+All window arms select ID22 plus ten metadata bits in a real four-byte
+record. Their setup counters and construction footprints are identical.
+
+| Role | Kernel memory misses | Kernel transfers | Setup transfers | Setup + kernel transfers |
+|---|---:|---:|---:|---:|
+| CSR LRU | 16,452,278 | 16,817,818 | 2,877,495 | 19,695,313 |
+| CSR GRASP | 13,052,296 | 13,416,757 | 2,877,493 | 16,294,250 |
+| Favorable full-capacity P-OPT | 10,617,749 | 10,852,949 | 9,293,511 | 20,146,460 |
+| Window transport / GRASP base | 13,129,087 | 13,457,393 | 15,936,412 | 29,393,805 |
+| Window replacement, floor 7 | 13,134,704 | 13,462,971 | 15,936,412 | 29,399,383 |
+| Window replacement, floor 6 | 13,149,532 | 13,477,759 | 15,936,412 | 29,414,171 |
+
+Transfers count demand fills and dirty writebacks; prefetching is disabled.
+For floor 6, kernel traffic is 0.151% above its transport control, 0.455%
+above GRASP and 24.185% above favorable P-OPT. Including modeled setup,
+it is 80.519% above GRASP and 46.002% above P-OPT.
+Floor 7 also fails to improve its transport control, by 0.041%.
+
+The reduction versus CSR LRU comes from the GRASP base, not a successful
+window refinement: plain GRASP already uses less traffic than either
+window replacement arm. No source-specific or post-hoc winning-arm
+selection is presented as a deployable policy.
+
+### The mechanism runs, but its choices do not save traffic
+
+Floor 6 makes 261,890 actual victim overrides, including 170,904 RRPV-6
+choices. Relative to its own transport, it incurs 27,065 more depth-array
+misses and 6,620 fewer other-data misses: a net increase of 20,445 demand
+misses. It saves only 79 dirty writebacks, leaving 20,366 more transfers.
+This is not a disabled-mechanism result or solely a construction penalty.
+
+The passive read-order pairs were never counterfactual miss estimates:
+most were horizon-censored, changing a victim changes later residency,
+and this implementation has real record placement and explicit control/
+observation work. The active comparison is the deciding evidence.
+
+### Measured cost ledger
+
+Each window arm retains a 132,151,576-byte carrier and uses 1,887,384
+bytes of construction scratch. Modeled construction performs 589,002,592
+read bytes and 530,204,224 write bytes. The input graph remains allocated.
+Serialized file loading and host runner hashing are not included in these
+cache-model traffic counters.
+
+The floor-6 run consumes 33,023,480 actual records and reads exactly
+132,093,920 record bytes. It forwards 3,764,116 checked discovery stores.
+All 36,787,596 metadata events drain, with peak queue occupancy three.
+There are 15,507 source/pass markers, 248,112 marker steps and 744,384
+configuration/control-link bytes including initial configuration.
+
+The 491,900,413 total functional steps close over:
+438,095,550 data-request steps, 3,764,117 row-context steps, 3,764,116
+association steps, 41,771,558 observation steps, 4,152,378 observation
+wait steps, 248,112 marker steps, sixteen configuration steps and
+104,566 drain steps. These counts are not a CPU-time or energy result.
+The controller object is 1,032 bytes in this functional implementation;
+no graph-sized runtime metadata table or diagnostic shadow is used.
+
+**Decision: the gain gate fails on this workload.** Retain the implementation
+as an explicit experimental option and preserve the existing default.
+Do not expand this candidate to more algorithms/native hardware or widen
+the RRPV rule simply to manufacture a win. A new hypothesis about useful
+reuse prediction or policy interaction must precede another candidate.

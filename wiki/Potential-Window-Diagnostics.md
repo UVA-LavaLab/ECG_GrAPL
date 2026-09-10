@@ -479,3 +479,6 @@ establish whether this opportunity count produces a competitive gain.
 The separate [costed cache-only prototype](Potential-Window-Prototype)
 implements real record transport and a functional cost ledger. The
 observer itself remains read-only and is not used as its runtime policy.
+Its [active Patents comparison](Potential-Window-Prototype#full-patents-result)
+does not turn the passive opportunities into net savings: both window
+replacement arms slightly increase traffic over their transport control.
