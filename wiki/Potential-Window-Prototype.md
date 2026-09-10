@@ -194,4 +194,6 @@ reuse prediction or policy interaction must precede another candidate.
 
 [BFS phase attribution](BFS-Phase-Attribution) investigates the larger
 non-depth-data gap and an explicitly scoped GRASP baseline before further
-changes to window metadata.
+changes to window metadata. Its [Patents result](BFS-Phase-Attribution#patents-result)
+shows a 15.09% kernel-traffic reduction from the baseline's phase policy,
+not from window masks; future comparisons must not claim that gain as ECG.

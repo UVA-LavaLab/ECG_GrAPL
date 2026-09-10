@@ -87,3 +87,70 @@ closure, control accounting and equal GRASP setup counters are required.
 If auxiliary-phase policy explains the gap, the stronger baseline must
 also be available in future ECG comparisons. If it does not, the
 hypothesis must be rejected rather than relabeled as a mask improvement.
+
+## Patents result
+
+`results/ecg_experiments/runs/bfs_phases_patents_aaba1978` contains the
+three completed cells at source `aaba1978`. All roles return depth digest
+`3865ba0b18ab9fe2`, execute 438,095,550 kernel requests and complete the
+same seventeen BFS levels. Both GRASP arms have identical setup counters
+and 2,877,493 setup transfers.
+
+| Role | Kernel memory misses | Kernel transfers | Setup + kernel transfers |
+|---|---:|---:|---:|
+| GRASP throughout | 13,052,296 | 13,416,757 | 16,294,250 |
+| GRASP in passes, LRU outside | 11,027,736 | 11,391,656 | 14,269,149 |
+| Favorable full-capacity P-OPT | 10,617,749 | 10,852,949 | 20,146,460 |
+
+Phase scoping reduces misses by 15.51%, kernel traffic by 15.09%, and
+setup-inclusive modeled traffic by 12.43% versus ordinary GRASP.
+It closes 78.99% of GRASP's kernel-traffic gap to P-OPT. It still uses
+4.96% more kernel traffic than P-OPT; the 29.17% lower setup-inclusive
+traffic is a single-query result with P-OPT construction counted, not
+a claim about amortized multi-query use or CPU performance.
+
+### The missing locality was mostly in frontier sorting
+
+| Phase | GRASP misses | Scoped GRASP misses | P-OPT misses |
+|---|---:|---:|---:|
+| Edge probe | 10,716,023 | 10,559,487 | 10,148,424 |
+| Frontier build | 234,574 | 234,452 | 234,909 |
+| Frontier sort | 2,101,699 | 233,797 | 234,416 |
+
+Sorting performs the same 353,228,007 frontier-array requests in every
+role, with no depth-array requests. Scoped GRASP reduces its sorting
+misses by 88.88%, nearly matching P-OPT's outside-pass LRU behavior.
+Sorting accounts for 76.70% of the original P-OPT/GRASP demand-miss gap.
+The experiment therefore supports the auxiliary-phase policy hypothesis
+on this graph/source: graph-property priority was persisting through a
+phase that was using only frontier data.
+
+State changes also affect later graph passes; the result is not merely
+the sum of isolated phase simulations. No cache contents are reset.
+For example, scoped GRASP's depth misses decrease from 4,881,206 to
+4,721,503 even though its in-pass policy remains GRASP.
+
+The residual miss gap to P-OPT is now 435,477 depth misses, offset by
+25,490 fewer other-data misses under scoped GRASP. P-OPT additionally
+has 128,720 fewer kernel writebacks. This is a much narrower remaining
+problem than the original aggregate non-depth gap.
+
+### Costs and interpretation
+
+The scoped run reports one configuration and 34 begin/close transitions:
+560 functional control steps and 1,680 logical control bytes.
+The recency/RRPV state is maintained throughout, and no data/tag/metadata
+walk is performed at transitions. These are explicit cache-model
+control costs, not measured native instruction, latency or area costs.
+
+Writebacks move between phases: sorting triggers 61,880 under scoped
+GRASP versus 33,313 under ordinary GRASP, while the overall kernel
+writeback count falls slightly, from 364,461 to 363,920. Phase-local
+writeback movement must not be mistaken for the total traffic outcome.
+
+**Decision:** retain phase-scoped GRASP as a stronger, explicitly named
+baseline for this workload. This is not an ECG mask win. Future ECG
+comparisons should receive the same applicable phase treatment and
+compare against this stronger baseline and unchanged P-OPT. The
+window candidate remains unpromoted; its benefit under the stronger
+baseline is not established by this experiment.
