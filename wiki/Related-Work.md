@@ -52,6 +52,10 @@ The [matched results](Traversal-Metadata-Taxonomy#matched-grasp-and-p-opt-compar
 retain both wins and losses; they do not establish suite-wide ECG superiority.
 The [future-rank attribution study](P-OPT-Rank-Attribution) keeps that real
 control intact and labels its constant-rank region/RRIP ablation separately.
+On the fixed Patents sentinels, future ranking saves 26.97% SpMV and 9.56%
+BFS kernel traffic versus that ablation; P-OPT still loses to strong GRASP
+on setup-inclusive traffic. These are information-attribution results,
+not wins for either new ECG mask proposal.
 
 ## General replacement and admission foundations
 
