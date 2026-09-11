@@ -75,3 +75,6 @@ current shared kernels and adapters across all three, with bounded detailed
 qualification distinct from final-workload timing. See the
 [per-algorithm table](Evaluation-Methodology#per-algorithm-performance)
 before attributing this implementation's results to another algorithm.
+
+The [P-OPT rank-attribution study](P-OPT-Rank-Attribution) isolates future
+information from existing region/RRIP mechanics before new masking work.

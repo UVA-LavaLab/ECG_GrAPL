@@ -16,6 +16,7 @@
     "ecg_window_costed_cache",
     "ecg_bfs_phase_cache",
     "ecg_window_phased_cache",
+    "ecg_popt_rank_attribution",
     "ecg_algorithm_equivalence_gem5",
     "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
@@ -51,6 +52,7 @@
     "no_build": true
   },
   "profiles": {
+    "ecg_popt_rank_attribution": "Six serial full-Patents SpMV/TD-BFS8MiB cells: strong applicable GRASP, intact favorable P-OPT, and explicitly labeled constant-rank P-OPT diagnostics. No new mask, runtime lookup charge, capacity reduction or native timing claim.",
     "ecg_window_phased_cache": "Five serial Patents BFS8MiB cells: phased GRASP and unchanged favorableP-OPT versus windowT/R6/R7 with the same outside-pass LRU treatment. Window controls are not double-charged.",
     "ecg_bfs_phase_cache": "Three serial same-work Patents BFS8MiB cells with phase/role attribution: unchanged GRASP, unchanged favorable P-OPT, and GRASP in graph passes/LRU outside. No masks or traversal changes.",
     "ecg_window_costed_cache": "Six serial Patents BFS8MiB cells: CSR LRU/GRASP/favorableP-OPT and real-window transport/RRPV7/RRPV6. Construction and functional control/publication work are counted; not native timing.",
@@ -118,6 +120,17 @@
     "reuse_plan_twitter_scale_stress": "Optional billion-edge Twitter-2010 cache-only stress profile."
   },
   "profile_controls": {
+    "ecg_popt_rank_attribution": {
+      "status": "ready",
+      "reason": "Information-versus-policy attribution only; matrix preparation, lookups and all non-rank P-OPT mechanics are retained. A 2% kernel-traffic information margin is a development-budget gate, not superiority or authorization for a broader campaign.",
+      "require_clean_worktree": true,
+      "development_gate": {
+        "metric": "kernel_total_offchip_traffic",
+        "formula": "(constant_rank - ranked_popt) / constant_rank",
+        "minimum_margin": 0.02,
+        "scope": "per-kernel development sentinel; not held-out evidence or automatic mask implementation"
+      }
+    },
     "ecg_window_phased_cache": {
       "status": "ready",
       "reason": "Same-work window evaluation against the stronger phased baseline; no new masks, native timing or automatic promotion.",
@@ -996,6 +1009,71 @@
     ]
   },
   "stages": [
+    {
+      "name": "182_rank_spmv_baselines", "kind": "roi_matrix",
+      "profiles": ["ecg_popt_rank_attribution"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv"], "policies": ["GRASP_PAPER", "POPT:UNCHARGED"],
+      "current_algorithms": true, "algorithm_popt_rank_mode": "future",
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "182_rank_spmv_baselines"
+    },
+    {
+      "name": "183_rank_spmv_constant", "kind": "roi_matrix",
+      "profiles": ["ecg_popt_rank_attribution"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv"], "policies": ["POPT:UNCHARGED"],
+      "current_algorithms": true, "algorithm_popt_rank_mode": "constant",
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "183_rank_spmv_constant"
+    },
+    {
+      "name": "184_rank_bfs_grasp", "kind": "roi_matrix",
+      "profiles": ["ecg_popt_rank_attribution"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["bfs"], "policies": ["GRASP_PAPER"],
+      "current_algorithms": true, "algorithm_grasp_scope": "graph-passes", "bfs_traffic_phases": true,
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "184_rank_bfs_grasp"
+    },
+    {
+      "name": "185_rank_bfs_future", "kind": "roi_matrix",
+      "profiles": ["ecg_popt_rank_attribution"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["bfs"], "policies": ["POPT:UNCHARGED"],
+      "current_algorithms": true, "algorithm_popt_rank_mode": "future", "bfs_traffic_phases": true,
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "185_rank_bfs_future"
+    },
+    {
+      "name": "186_rank_bfs_constant", "kind": "roi_matrix",
+      "profiles": ["ecg_popt_rank_attribution"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["bfs"], "policies": ["POPT:UNCHARGED"],
+      "current_algorithms": true, "algorithm_popt_rank_mode": "constant", "bfs_traffic_phases": true,
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "186_rank_bfs_constant"
+    },
     {
       "name": "178_window_phased_grasp", "kind": "roi_matrix",
       "profiles": ["ecg_window_phased_cache"],

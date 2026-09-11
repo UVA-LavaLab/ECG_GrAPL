@@ -105,6 +105,7 @@ class FullMatrix {
                             ++distance[lane];
                         }
                     }
+                    digest_ = (digest_ ^ entry) * 1099511628211ULL;
                 }
             }
         }
@@ -117,6 +118,11 @@ class FullMatrix {
         return entries_.data();
     }
     uint64_t bytes() const { return entries_.capacity(); }
+    uint64_t digest() const {
+        if (!ready_)
+            throw std::logic_error("popt-matrix-is-not-ready");
+        return digest_;
+    }
     uint32_t lines() const { return lines_; }
     uint32_t epochSize() const { return epoch_size_; }
     uint32_t subEpochSize() const { return sub_epoch_size_; }
@@ -124,6 +130,7 @@ class FullMatrix {
   private:
     std::vector<uint8_t> entries_;
     uint32_t vertices_ = 0, lines_ = 0, epoch_size_ = 0, sub_epoch_size_ = 0;
+    uint64_t digest_ = 1469598103934665603ULL;
     bool ready_ = false;
 };
 

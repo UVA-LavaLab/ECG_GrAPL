@@ -53,6 +53,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--record-preprocess", choices=("csr", "traversal"), default="csr")
     parser.add_argument("--record-base-policy", choices=("LRU", "GRASP_PAPER"), default="LRU")
     parser.add_argument("--record-model", choices=("next", "window"), default="next")
+    parser.add_argument("--popt-rank-mode", choices=("future", "constant"), default="future")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
     parser.add_argument("--bfs-traffic-phases", choices=("on", "off"), default="off")
     parser.add_argument("--window-candidate-rrpv", choices=(6, 7), type=int, default=6)
@@ -94,10 +95,20 @@ def grasp_scope_label(label: str, scope: str) -> str:
     return label if scope == "all" else f"{label}_GRAPH_PASSES"
 
 
+def popt_rank_label(label: str, rank_mode: str) -> str:
+    if rank_mode == "future":
+        return label
+    require(rank_mode == "constant" and label == "POPT_UNCHARGED",
+            "constant ranks require the current POPT_UNCHARGED diagnostic")
+    return "POPT_UNCHARGED_CONST_RANK"
+
+
 def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
-                  record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all") -> list[str]:
-    return [grasp_scope_label(observer_policy_label(record_policy_label(
-                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv), observer), grasp_scope)
+                  record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
+                  popt_rank_mode: str = "future") -> list[str]:
+    return [popt_rank_label(grasp_scope_label(observer_policy_label(record_policy_label(
+                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv), observer),
+                grasp_scope), popt_rank_mode)
             for spec in policies]
 
 
@@ -112,6 +123,11 @@ def validate_payload(
             payload.get("policy") == policy and payload.get("timing_valid_for_speedup") is False,
             "algorithm backend/mode/policy receipt mismatch")
     require(payload.get("grasp_scope", "all") == options.grasp_scope, "GRASP phase-scope receipt mismatch")
+    constant_ranks = options.popt_rank_mode == "constant"
+    require(payload.get("policy_ablation", False) is constant_ranks and
+            (not constant_ranks or backend == "cache_sim" and policy == "POPT_UNCHARGED" and
+             mode == "csr" and algorithm in ("spmv", "bfs") and options.bfs_direction == "td"),
+            "P-OPT rank-ablation receipt mismatch")
     expected_base = options.record_base_policy if mode != "csr" else "LRU"
     require(payload.get("record_base_policy") == expected_base,
             "algorithm record base-policy receipt mismatch")
@@ -297,6 +313,15 @@ def validate_payload(
                 _integer(popt, "construction_read_bytes") > 0 and
                 _integer(popt, "construction_write_bytes") > 0,
                 "P-OPT matrix coverage, construction or progress mismatch")
+        if "rank_mode" in popt or constant_ranks:
+            require(popt.get("rank_mode") == options.popt_rank_mode and popt.get("role") == (
+                        "policy-ablation" if constant_ranks else "favorable-quality-control") and
+                    _integer(popt, "constant_rank") == 0 and
+                    _integer(popt, "constant_rank_lookups") == (
+                        _integer(popt, "lookup_calls") if constant_ranks else 0),
+                    "P-OPT future-rank selection was not isolated or labeled")
+            _integer(popt, "original_rank_sum")
+            _integer(popt, "matrix_digest")
     reference = contract()["references"][algorithm]
     if evidence and graph_path.name == reference["graph"] and options.source == 0 and not options.source_list:
         require(graph.sha256 == contract()["graphs"][reference["graph"]]["sha256"],
@@ -665,6 +690,9 @@ def run_cache_cell(
         require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED")),
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
+        require(options.popt_rank_mode == "future" or policy == "POPT_UNCHARGED" and
+                mode == "csr" and args.benchmark in ("spmv", "bfs") and options.bfs_direction == "td",
+                "constant P-OPT ranks require CSR SpMV or TD BFS with POPT_UNCHARGED")
         phase_modes = options.bfs_traffic_phases == "on" or options.grasp_scope != "all"
         require(not phase_modes or args.benchmark == "bfs" and
                 (mode == "csr" or options.record_model == "window" and options.bfs_traffic_phases == "off") and
@@ -684,9 +712,9 @@ def run_cache_cell(
                 "record base policy requires a current record mode")
         row["record_base_policy"] = options.record_base_policy
         row["grasp_scope"] = options.grasp_scope
-        row["policy_label"] = grasp_scope_label(observer_policy_label(record_policy_label(
-            spec.label, mode, options.record_base_policy, options.record_model, options.window_candidate_rrpv),
-            options.window_observer), options.grasp_scope)
+        row["policy_ablation"] = "1" if options.popt_rank_mode == "constant" else "0"
+        row["policy_label"] = policy_labels([spec], options.record_base_policy, options.window_observer,
+            options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode)[0]
         if observing:
             row.update(diagnostic_only="1", measurement_scope="observation-only-unchanged-grasp")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
@@ -713,8 +741,9 @@ def run_cache_cell(
         observer_suffix = "" if not observing else "_OBS_" + options.window_observer.upper()
         model_suffix = "" if options.record_model == "next" else f"_MODEL_WINDOW_RRPV{options.window_candidate_rrpv}"
         phase_suffix = "" if options.grasp_scope == "all" else "_GRAPH_PASSES"
+        rank_suffix = "" if options.popt_rank_mode == "future" else "_CONST_RANK"
         label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{model_suffix}{observer_suffix}{phase_suffix}"
-                 f"_L3{parse_size_bytes(l3_size)}")
+                 f"{rank_suffix}_L3{parse_size_bytes(l3_size)}")
         data_path = out_dir / "cache_sim" / f"{label}.json"
         log_path = out_dir / "logs" / f"{label}.log"
         data_path.parent.mkdir(parents=True, exist_ok=True)
@@ -737,6 +766,8 @@ def run_cache_cell(
         ]
         if options.sources:
             command.extend(("--sources", options.sources))
+        if policy == "POPT_UNCHARGED":
+            command.extend(("--popt-rank-mode", options.popt_rank_mode))
         if phase_modes:
             command.extend(("--grasp-scope", options.grasp_scope, "--bfs-traffic-phases", options.bfs_traffic_phases))
         if options.record_model == "window":

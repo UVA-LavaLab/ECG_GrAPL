@@ -2626,7 +2626,7 @@ private:
             uint64_t la = set[i].line_addr;
             uint32_t dist;
             if (graph_ctx_) {
-                dist = graph_ctx_->findNextRef(la);
+                dist = graph_ctx_->poptVictimRank(la);
             } else {
                 uint32_t cline_id = static_cast<uint32_t>(
                     (la - popt_state_.irreg_base) / line_size_);

@@ -233,6 +233,64 @@ void testPoptDirectMatrix() {
           "P-OPT uses the correct typed bank and excludes source-only streamed output");
 }
 
+void testPoptConstantRanksPreserveOtherMechanics() {
+    popt_reref::FullMatrix matrix;
+    matrix.configure(64, 4, 4 * 256);
+    matrix.reference(0, 1);
+    matrix.reference(1, 10);
+    matrix.reference(2, 5);
+    matrix.finish();
+    for (bool constant : {false, true}) {
+        cache_sim::GraphCacheContext context;
+        context.topology.num_vertices = 64;
+        context.registerPropertyArray(reinterpret_cast<const void*>(0x1000), 64, 4, 192, 0.5);
+        context.regions[0].popt_line_offset = 0;
+        context.compound_popt = true;
+        context.popt_constant_rank = constant;
+        context.initRereference(matrix.data(), 4, 256, 64, 64);
+        context.setCurrentVertices(0, 0);
+        cache_sim::CacheLevel cache("L3", 192, 64, 3, cache_sim::EvictionPolicy::POPT);
+        cache.initGraphContext(&context);
+        std::vector<cache_sim::CacheLine> ways(3);
+        for (std::size_t way = 0; way < ways.size(); ++way) {
+            ways[way].valid = true;
+            ways[way].line_addr = 0x1000 + way * 64;
+            ways[way].last_access = 10 + way;
+            ways[way].rrpv = 0;
+        }
+        ways[0].rrpv = 7;
+        check(cache.selectVictimForTest(ways) == (constant ? 0 : 1) &&
+              ways[1].rrpv == (constant ? 0 : 7),
+              "constant ranks change only future ordering and the resulting RRIP tie set");
+        check(context.popt_lookup_count == 3 && context.popt_original_rank_sum == 16 &&
+              context.popt_constant_rank_lookups == (constant ? 3 : 0),
+              "the ablation still computes every original matrix rank before withholding it");
+        const auto lookups = context.popt_lookup_count;
+        ways[2].valid = false;
+        check(cache.selectVictimForTest(ways) == 2 && context.popt_lookup_count == lookups,
+              "both rank modes fill invalid ways without unnecessary future lookups");
+        ways[2].valid = true;
+        ways[2].line_addr = 0x3000;
+        check(cache.selectVictimForTest(ways) == 2 && context.popt_lookup_count == lookups,
+              "constant ranks preserve P-OPT non-property victim precedence");
+        ways[2].line_addr = 0x1080;
+        context.setCurrentVertices(UINT32_MAX, UINT32_MAX);
+        check(cache.selectVictimForTest(ways) == 0 && context.popt_lookup_count == lookups,
+              "both modes retain the current P-OPT outside-pass LRU fallback");
+        context.setCurrentVertices(0, 0);
+        cache.insert(0x1000, true);
+        cache_sim::CacheLine snapshot;
+        check(cache.lineSnapshotForTest(0x1000, snapshot) && snapshot.rrpv == 6 && snapshot.dirty,
+              "the ablation preserves ordinary P-OPT insertion state");
+        check(cache.access(0x1000, false) && cache.lineSnapshotForTest(0x1000, snapshot) &&
+              snapshot.rrpv == 0 && snapshot.dirty,
+              "the ablation preserves ordinary P-OPT hit promotion and dirty state");
+        context.compound_popt = false;
+        check(context.poptVictimRank(0x1000) == 1,
+              "the diagnostic flag cannot change archived non-compound P-OPT ranks");
+    }
+}
+
 void testWindowObservationProfile() {
     using cache_sim::window_observation::Profile;
     const Profile profile(64, 32);
@@ -939,6 +997,7 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testPoptConstantRanksPreserveOtherMechanics();
     testScopedGraspKeepsCacheState();
     testWindowTransportMatchesGrasp();
     testActiveWindowAssociation();

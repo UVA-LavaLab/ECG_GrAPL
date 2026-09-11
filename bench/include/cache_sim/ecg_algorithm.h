@@ -71,6 +71,10 @@ class AlgorithmBackend {
             throw std::invalid_argument("invalid-algorithm-cache-domain");
         if (popt_full_capacity_ && (options_.records || options_.bfs_direction_optimizing))
             throw std::invalid_argument("current-popt-requires-csr-scalar-graph-passes");
+        if (options_.popt_constant_rank && (!popt_full_capacity_ ||
+            (options_.algorithm != ecg_algorithm::Algorithm::BFS &&
+             options_.algorithm != ecg_algorithm::Algorithm::SPMV)))
+            throw std::invalid_argument("constant P-OPT ranks require the current BFS or SpMV P-OPT control");
         if ((options_.bfs_traffic_phases || options_.grasp_graph_passes) &&
             (options_.algorithm != ecg_algorithm::Algorithm::BFS ||
              (options_.records && (options_.bfs_traffic_phases || options_.record_model != ecg_algorithm::RecordModel::WINDOW)) ||
@@ -97,6 +101,7 @@ class AlgorithmBackend {
         context_.topology.num_vertices = static_cast<uint32_t>(graph.vertices);
         context_.topology.num_edges = graph.records;
         context_.topology.directed = graph.directed;
+        context_.popt_constant_rank = options_.popt_constant_rank;
         cache_.initGraphContext(&context_);
         if (options_.records)
             cache_.prepareRecord(recordBasePolicy());
@@ -379,6 +384,11 @@ class AlgorithmBackend {
         }
         output << "{\"encoding\":\"full\",\"scope\":\"graph-pass-irregular-regions\","
                << "\"full_data_capacity\":true,\"runtime_matrix_traffic_charged\":false,"
+               << "\"rank_mode\":\"" << (options_.popt_constant_rank ? "constant" : "future")
+               << "\",\"role\":\"" << (options_.popt_constant_rank ? "policy-ablation" : "favorable-quality-control")
+               << "\",\"constant_rank\":0,\"matrix_digest\":" << popt_matrix_.digest()
+               << ",\"original_rank_sum\":" << context_.popt_original_rank_sum
+               << ",\"constant_rank_lookups\":" << context_.popt_constant_rank_lookups << ','
                << "\"matrix_bytes\":" << popt_matrix_.bytes()
                << ",\"matrix_lines\":" << popt_matrix_.lines()
                << ",\"epochs\":256,\"banks\":" << banks_.size()

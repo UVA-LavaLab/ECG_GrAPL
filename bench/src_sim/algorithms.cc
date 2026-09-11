@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
             const auto report = [&](std::ostream& output) {
                 output << "{\"schema\":\"ecg.algorithm-result.v1\",\"backend\":\"cache_sim\","
                        << "\"timing_valid_for_speedup\":false,"
+                       << "\"policy_ablation\":" << (command.options.popt_constant_rank ? "true" : "false") << ','
                        << "\"diagnostic_only\":" << (observing ? "true" : "false") << ','
                        << "\"measurement_scope\":\"" << (observing ? "observation-only-unchanged-grasp" :
                             "algorithm-data-traffic-including-construction") << "\","

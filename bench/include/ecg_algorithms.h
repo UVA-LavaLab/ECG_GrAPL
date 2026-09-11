@@ -66,6 +66,7 @@ struct Options {
     bool traversal_preprocessing = false;
     bool bfs_traffic_phases = false;
     bool grasp_graph_passes = false;
+    bool popt_constant_rank = false;
     RecordModel record_model = RecordModel::NEXT;
     uint8_t window_candidate_rrpv = 6;
     WindowObserverMode window_observer = WindowObserverMode::OFF;

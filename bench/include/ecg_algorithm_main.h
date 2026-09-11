@@ -93,6 +93,10 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value == "next") command.options.record_model = RecordModel::NEXT;
             else if (value == "window") command.options.record_model = RecordModel::WINDOW;
             else throw std::invalid_argument("record-model-must-be-next-or-window");
+        } else if (argument == "--popt-rank-mode") {
+            if (value != "future" && value != "constant")
+                throw std::invalid_argument("popt-rank-mode-must-be-future-or-constant");
+            command.options.popt_constant_rank = value == "constant";
         } else if (argument == "--grasp-scope") {
             if (value != "all" && value != "graph-passes")
                 throw std::invalid_argument("grasp-scope-must-be-all-or-graph-passes");
@@ -167,6 +171,11 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
     if (!command.options.records &&
         command.options.record_base_policy != RecordBasePolicy::LRU)
         throw std::invalid_argument("record-base-policy-requires-record-mode");
+    if (command.options.popt_constant_rank &&
+        (command.policy != "POPT_UNCHARGED" || command.options.records ||
+         (command.options.algorithm != Algorithm::SPMV && command.options.algorithm != Algorithm::BFS) ||
+         command.options.bfs_direction_optimizing))
+        throw std::invalid_argument("constant P-OPT ranks require CSR SpMV or TD BFS with POPT_UNCHARGED");
     if ((command.options.bfs_traffic_phases || command.options.grasp_graph_passes) &&
         (command.options.algorithm != Algorithm::BFS ||
          (command.options.records && (command.options.bfs_traffic_phases || command.options.record_model != RecordModel::WINDOW)) ||

@@ -50,6 +50,8 @@ mechanics on the current kernels, not a claim to reproduce the authors'
 different application implementations or native runtimes.
 The [matched results](Traversal-Metadata-Taxonomy#matched-grasp-and-p-opt-comparison)
 retain both wins and losses; they do not establish suite-wide ECG superiority.
+The [future-rank attribution study](P-OPT-Rank-Attribution) keeps that real
+control intact and labels its constant-rank region/RRIP ablation separately.
 
 ## General replacement and admission foundations
 

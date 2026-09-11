@@ -1002,7 +1002,9 @@ struct GraphCacheContext {
     // --- Rereference Matrix (P-OPT) ---
     RereferenceConfig rereference;
     bool compound_popt = false;
+    bool popt_constant_rank = false;
     mutable uint64_t popt_lookup_count = 0;
+    mutable uint64_t popt_original_rank_sum = 0, popt_constant_rank_lookups = 0;
 
     // --- Exact position-indexed next-reference (ECG per-edge idea) ---
     // The per-edge mask is traversed in order, so the CURRENT vertex (src) is
@@ -2024,6 +2026,23 @@ struct GraphCacheContext {
             ++popt_lookup_count;
         }
         return rereference.findNextRef(cline_id, hints_for_thread().current_src);
+    }
+
+    uint32_t poptVictimRank(uint64_t line_addr) const {
+        const uint32_t rank = findNextRef(line_addr);
+        if (!compound_popt)
+            return rank;
+        if (popt_original_rank_sum > UINT64_MAX - rank)
+            throw std::overflow_error("popt-rank-sum-overflow");
+        // Keep the real lookup observable even when its rank is withheld from selection.
+        popt_original_rank_sum += rank;
+        if (popt_constant_rank) {
+            if (popt_constant_rank_lookups == UINT64_MAX)
+                throw std::overflow_error("popt-rank-lookup-overflow");
+            ++popt_constant_rank_lookups;
+            return 0;
+        }
+        return rank;
     }
 
     // ================================================================

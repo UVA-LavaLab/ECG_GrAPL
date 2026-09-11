@@ -103,9 +103,10 @@ def test_current_grasp_record_base_preserves_program_work_and_provenance(tmp_pat
     for width in (4, 8):
         for mode in ("transport", "replacement"):
             for base in ("LRU", "GRASP_PAPER"):
-                output = tmp_path / f"{width}-{mode}-{base}.json"
+                output = tmp_path / "same-result.json"
                 ran = subprocess.run([
-                    str(binary), "--algorithm", "spmv", "--graph", str(graph),
+                    "setarch", os.uname().machine, "-R", str(binary),
+                    "--algorithm", "spmv", "--graph", str(graph),
                     "--repeat", "2", "--delta", "8", "--mode", mode,
                     "--record-bytes", str(width),
                     "--record-base-policy", base, "--values", "--evidence",
@@ -203,6 +204,156 @@ def test_current_popt_full_capacity_preserves_work_and_declares_coverage(tmp_pat
         for key in ("result_digest", "work_trace_digest", "position_trace_digest",
                     "actual_records", "passes", "bindings", "values_u32", "values_u64", "values_f32"):
             assert outputs[0][key] == outputs[1][key], (algorithm, key)
+
+
+@pytest.mark.parametrize("algorithm", ["spmv", "bfs"])
+def test_popt_rank_ablation_retains_matrix_setup_and_work(tmp_path, algorithm):
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "same-result.json"
+    results = []
+    for rank_mode in ("future", "constant"):
+        ran = subprocess.run([
+            "setarch", os.uname().machine, "-R", str(binary),
+            "--algorithm", algorithm, "--graph", str(graph), "--policy", "POPT_UNCHARGED",
+            "--popt-rank-mode", rank_mode, "--delta", "8",
+            "--repeat", "2" if algorithm == "spmv" else "1", "--values", "--evidence",
+            "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256", "--l2-ways", "2",
+            "--llc-bytes", "1024", "--llc-ways", "2", "--output", str(output),
+        ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+            capture_output=True, text=True, timeout=30, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        payload = json.loads(output.read_text())
+        popt = payload["popt"]
+        assert popt["rank_mode"] == rank_mode
+        assert payload["policy_ablation"] is (rank_mode == "constant")
+        assert popt["role"] == ("policy-ablation" if rank_mode == "constant" else "favorable-quality-control")
+        assert popt["lookup_calls"] > 0 and popt["original_rank_sum"] > 0
+        assert popt["constant_rank_lookups"] == (popt["lookup_calls"] if rank_mode == "constant" else 0)
+        assert popt["full_data_capacity"] is True and popt["runtime_matrix_traffic_charged"] is False
+        assert payload["metrics"]["L3"]["size_bytes"] == 1024 and payload["metrics"]["L3"]["ways"] == 2
+        options = algorithm_matrix.parse_options(
+            f"--graph {graph} --repeat {'2' if algorithm == 'spmv' else '1'} --popt-rank-mode {rank_mode}")
+        validation = dict(algorithm=algorithm, mode="csr", policy="POPT_UNCHARGED",
+            graph=algorithm_matrix.graph_info(graph, allow_weighted=True, traversal="out"), graph_path=graph,
+            options=options, requested_bytes=0, minimum_mantissa_bits=0, evidence=True, llc_sets=8)
+        algorithm_matrix.validate_payload(payload, ran.stdout, **validation)
+        forged = json.loads(json.dumps(payload))
+        forged["popt"]["rank_mode"] = "constant" if rank_mode == "future" else "future"
+        with pytest.raises(RecordReceiptError, match="future-rank"):
+            algorithm_matrix.validate_payload(forged, ran.stdout, **validation)
+        forged = json.loads(json.dumps(payload))
+        forged["policy_ablation"] = rank_mode != "constant"
+        with pytest.raises(RecordReceiptError, match="rank-ablation"):
+            algorithm_matrix.validate_payload(forged, ran.stdout, **validation)
+        results.append(payload)
+    future, constant = results
+    assert future["workload"] == constant["workload"]
+    assert future["traffic_phases"]["setup"] == constant["traffic_phases"]["setup"]
+    for key in ("matrix_digest", "matrix_bytes", "matrix_lines", "epochs", "banks", "covered_regions",
+                "construction_read_bytes", "construction_write_bytes", "passes", "vertices", "governed_reads"):
+        assert future["popt"][key] == constant["popt"][key], key
+
+
+@pytest.mark.parametrize("extra", [
+    [], ["--policy", "GRASP_PAPER"], ["--policy", "POPT_UNCHARGED", "--algorithm", "sssp"],
+    ["--policy", "POPT_UNCHARGED", "--bfs-direction", "do"],
+    ["--policy", "POPT_UNCHARGED", "--mode", "transport"],
+    ["--policy", "POPT_UNCHARGED", "--popt-rank-mode", "invalid"],
+])
+def test_popt_rank_ablation_rejects_unsupported_cli_combinations(tmp_path, extra):
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    ran = subprocess.run([
+        str(binary), "--algorithm", "bfs", "--graph", str(tmp_path / "not-read.sg"),
+        "--popt-rank-mode", "constant", *extra,
+    ], capture_output=True, text=True, timeout=10, check=False)
+    assert ran.returncode == 2 and "ECG-ALGORITHM-ERROR" in ran.stderr
+    assert "not-read.sg" not in ran.stderr
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_popt_rank_ablation_rejects_native_runners(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--current-algorithms", "--ecg-equivalence", "--benchmark", "bfs",
+        "--options", f"--graph {tmp_path / 'not-read.sg'} --popt-rank-mode constant",
+    ])
+    services = SimpleNamespace(parse_size_bytes=roi_matrix.parse_size_bytes)
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("LRU"), "8MB", backend, services)
+    assert rows[0]["status"] == "error" and rows[0]["error"] == "P-OPT rank ablation is cache_sim-only"
+
+
+def test_popt_rank_profile_is_six_fixed_information_attribution_cells(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.algorithm_matrix import parse_options
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    jobs = experiment_run.expand_jobs(experiment_run.parse_args(
+        ["--profile", "ecg_popt_rank_attribution", "--list"]), manifest, tmp_path)
+    assert len(jobs) == 5 and sum(len(job.metadata["policies"]) for job in jobs) == 6
+    assert manifest["profile_controls"]["ecg_popt_rank_attribution"]["development_gate"]["minimum_margin"] == 0.02
+    cells = set()
+    for job in jobs:
+        options = parse_options(job.metadata["options"])
+        assert options.graph.name == "cit-Patents-dbg.sg"
+        assert options.source == 0 and options.record_model == "next" and options.window_observer == "off"
+        assert options.bfs_direction == "td" and options.record_preprocess == "csr"
+        assert job.metadata["l3_sizes"] == ["8MB"]
+        assert job.command[job.command.index("--l3-ways") + 1] == "16"
+        assert job.command[job.command.index("--cache-sim-omp-threads") + 1] == "1"
+        assert job.command[job.command.index("--prefetcher") + 1] == "none"
+        benchmark = job.metadata["benchmark"]
+        assert options.repeat == (2 if benchmark == "spmv" else 1)
+        assert options.bfs_traffic_phases == ("on" if benchmark == "bfs" else "off")
+        for label in job.metadata["expected_policy_labels"]:
+            assert options.grasp_scope == (
+                "graph-passes" if label == "GRASP_PAPER_GRAPH_PASSES" else "all")
+            assert options.popt_rank_mode == ("constant" if label.endswith("_CONST_RANK") else "future")
+            cells.add((benchmark, label))
+    assert cells == {
+        ("spmv", "GRASP_PAPER"), ("bfs", "GRASP_PAPER_GRAPH_PASSES"),
+        ("spmv", "POPT_UNCHARGED"), ("bfs", "POPT_UNCHARGED"),
+        ("spmv", "POPT_UNCHARGED_CONST_RANK"), ("bfs", "POPT_UNCHARGED_CONST_RANK"),
+    }
+
+
+@pytest.mark.parametrize("rank_mode", ["future", "constant"])
+def test_popt_rank_runner_receipts_cannot_alias_the_real_baseline(tmp_path, rank_mode):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    from scripts.experiments.ecg.flows.experiment_run import csv_status
+    if not (ROOT / "bench/bin_sim/algorithms").is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "matrix"
+    ran = subprocess.run([
+        "python3", str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "cache-sim", "--current-algorithms", "--benchmark", "spmv",
+        "--options", f"--graph {graph} --repeat 2 --popt-rank-mode {rank_mode}",
+        "--policies", "POPT:UNCHARGED", "--ecg-equivalence",
+        "--algorithm-workspace-bytes", str(32 << 20), "--cache-record-rss-mib", "512",
+        "--l1d-size", "128B", "--l1d-ways", "2", "--l2-size", "256B", "--l2-ways", "2",
+        "--l3-sizes", "1024B", "--l3-ways", "2", "--no-build", "--out-dir", str(output),
+    ], capture_output=True, text=True, timeout=60, check=False)
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    rows = json.loads((output / "roi_matrix.json").read_text())
+    completion = json.loads((output / "roi_matrix.complete.json").read_text())
+    label = "POPT_UNCHARGED_CONST_RANK" if rank_mode == "constant" else "POPT_UNCHARGED"
+    assert len(rows) == 1 and rows[0]["policy_label"] == label
+    assert rows[0]["popt_rank_mode"] == rank_mode
+    assert rows[0]["policy_ablation"] == ("1" if rank_mode == "constant" else "0")
+    assert completion["policy_labels"] == completion["expected_policy_labels"] == [label]
+    assert csv_status(output / "roi_matrix.csv", ["POPT:UNCHARGED"], popt_rank_mode=rank_mode)[0] == "ok"
+    other = "constant" if rank_mode == "future" else "future"
+    assert csv_status(output / "roi_matrix.csv", ["POPT:UNCHARGED"], popt_rank_mode=other)[0] == "partial"
 
 
 def test_direction_optimized_cli_uses_real_incoming_csr(tmp_path):
