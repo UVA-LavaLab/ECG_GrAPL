@@ -231,3 +231,6 @@ The tags are opaque ownership fixtures, not generated PASS_RANK hints.
 Neither the production batch runner, real PASS_RANK producer nor its
 rank-first victim policy is implemented by this qualification. The existing
 performance results and both closed full-graph budgets remain unchanged.
+The subsequent [reusable SpMV query interface](Reusable-SpMV-Queries)
+implements raw-CSR batches and real P-OPT matrix reuse separately; it still
+does not enable PASS_RANK.

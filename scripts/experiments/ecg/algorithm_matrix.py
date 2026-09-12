@@ -48,6 +48,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--source", type=int, default=0)
     parser.add_argument("--sources", default="")
     parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--queries", type=int, default=1)
     parser.add_argument("--delta", type=int, default=8)
     parser.add_argument("--max-passes", type=int, default=1000000)
     parser.add_argument("--record-preprocess", choices=("csr", "traversal"), default="csr")
@@ -66,6 +67,8 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--bfs-beta", type=int, default=18)
     tokens = shlex.split(text)
     parsed = parser.parse_args(tokens)
+    if not 1 <= parsed.queries <= 64:
+        raise RecordResourceError("queries must be 1 through 64")
     if parsed.record_model != "frontier" and any(
             token == "--frontier-gating" or token.startswith("--frontier-gating=") for token in tokens):
         raise RecordResourceError("frontier gating requires the frontier model")
@@ -119,13 +122,21 @@ def grasp_reference_label(label: str, mode: str) -> str:
     return "DIAG_GRASP_REFERENCE_" + mode.upper()
 
 
+def query_policy_label(label: str, queries: int) -> str:
+    if queries == 1:
+        return label
+    require(1 < queries <= 64 and label in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED"),
+            "independent queries require CSR SpMV baselines")
+    return f"{label}_QUERIES{queries}"
+
+
 def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
                   popt_rank_mode: str = "future", frontier_gating: str = "enabled",
-                  grasp_reference: str = "off") -> list[str]:
-    return [grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(record_policy_label(
+                  grasp_reference: str = "off", queries: int = 1) -> list[str]:
+    return [query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(record_policy_label(
                 spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), observer),
-                grasp_scope), popt_rank_mode), grasp_reference)
+                grasp_scope), popt_rank_mode), grasp_reference), queries)
             for spec in policies]
 
 
@@ -134,6 +145,7 @@ def validate_payload(
     graph: GraphInfo, graph_path: Path, options: argparse.Namespace, requested_bytes: int,
     minimum_mantissa_bits: int, evidence: bool, llc_sets: int,
     backend: str = "cache_sim",
+    allow_reused_popt: bool = False,
 ) -> dict[str, Any]:
     require(payload.get("schema") == "ecg.algorithm-result.v1" and
             payload.get("backend") == backend and payload.get("mode") == mode and
@@ -339,14 +351,19 @@ def validate_payload(
                 popt.get("full_data_capacity") is True and
                 popt.get("runtime_matrix_traffic_charged") is False,
                 "P-OPT must declare its favorable full-capacity graph-pass scope")
+        reused = popt.get("reused", False)
+        require(type(reused) is bool and (not reused or allow_reused_popt),
+                "unrequested P-OPT matrix reuse")
         lines = popt_matrix_lines(algorithm, graph.vertices)
         require(_integer(popt, "matrix_lines") == lines and
                 _integer(popt, "matrix_bytes") == lines * 256 and _integer(popt, "epochs") == 256 and
                 _integer(popt, "banks") == (3 if algorithm == "bc" else 1) and
                 _integer(popt, "covered_regions") == (3 if algorithm == "bc" else 1) and
                 _integer(popt, "passes") == passes and _integer(popt, "governed_reads") == actual and
-                _integer(popt, "construction_read_bytes") > 0 and
-                _integer(popt, "construction_write_bytes") > 0,
+                (_integer(popt, "construction_read_bytes") == 0 if reused else
+                 _integer(popt, "construction_read_bytes") > 0) and
+                (_integer(popt, "construction_write_bytes") == 0 if reused else
+                 _integer(popt, "construction_write_bytes") > 0),
                 "P-OPT matrix coverage, construction or progress mismatch")
         if "rank_mode" in popt or rank_constant or reference:
             require(popt.get("rank_mode") == ("constant" if rank_constant else "future") and popt.get("role") == (
@@ -784,6 +801,13 @@ def run_cache_cell(
         require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED")),
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
+        batch = options.queries > 1
+        require(not batch or args.benchmark == "spmv" and mode == "csr" and
+                options.record_model == "next" and options.record_preprocess == "csr" and
+                options.grasp_reference == "off" and options.popt_rank_mode == "future" and
+                options.grasp_scope == "all" and options.bfs_traffic_phases == "off" and
+                options.window_observer == "off" and options.bfs_direction == "td" and not options.source_list,
+                "independent queries require unmodified CSR SpMV baselines")
         reference = options.grasp_reference != "off"
         require(not reference or args.benchmark == "spmv" and mode == "csr" and policy == "GRASP_PAPER" and
                 options.popt_rank_mode == "future" and options.record_preprocess == "csr" and
@@ -820,14 +844,16 @@ def run_cache_cell(
         row["policy_ablation"] = "1" if options.popt_rank_mode == "constant" or options.grasp_reference == "flat" or (
             options.record_model == "frontier" and options.frontier_gating == "ignored") else "0"
         row["frontier_gating"] = options.frontier_gating
+        row["query_count"] = options.queries
         row["policy_label"] = policy_labels([spec], options.record_base_policy, options.window_observer,
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
-            options.frontier_gating, options.grasp_reference)[0]
+            options.frontier_gating, options.grasp_reference, options.queries)[0]
         if reference:
             row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:
             row.update(diagnostic_only="1", measurement_scope="observation-only-unchanged-grasp")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
+        require(not batch or not graph.weighted, "independent queries require unweighted SpMV")
         require(options.source < graph.vertices and all(source < graph.vertices for source in options.source_list),
                 "algorithm source is outside the graph")
         require(args.benchmark == "bc" or not options.source_list, "source list requires BC")
@@ -841,7 +867,7 @@ def run_cache_cell(
             carrier_limit=args.ecg_record_max_carrier_bytes, auxiliary_limit=args.ecg_record_max_auxiliary_bytes,
             rss_mib=args.cache_record_rss_mib, bfs_direction_optimizing=options.bfs_direction == "do",
             preprocessing=options.record_preprocess, popt_full_capacity=policy == "POPT_UNCHARGED" or reference,
-            record_model=options.record_model)
+            record_model=options.record_model, queries=options.queries)
         if observing:
             require(not graph.weighted and plan["array_bytes"] + options.window_observer_bytes <=
                     args.algorithm_workspace_bytes, "window observer exceeds its workspace or target scope")
@@ -858,6 +884,8 @@ def run_cache_cell(
                  f"{rank_suffix}_L3{parse_size_bytes(l3_size)}")
         if reference:
             label = f"cache_sim_{args.benchmark}_{row['policy_label']}_L3{parse_size_bytes(l3_size)}"
+        if batch:
+            label += f"_QUERIES{options.queries}"
         data_path = out_dir / "cache_sim" / f"{label}.json"
         log_path = out_dir / "logs" / f"{label}.log"
         data_path.parent.mkdir(parents=True, exist_ok=True)
@@ -880,6 +908,8 @@ def run_cache_cell(
         ]
         if options.sources:
             command.extend(("--sources", options.sources))
+        if batch:
+            command.extend(("--queries", str(options.queries)))
         if policy == "POPT_UNCHARGED":
             command.extend(("--popt-rank-mode", options.popt_rank_mode))
         if reference:
@@ -917,6 +947,19 @@ def run_cache_cell(
         require(graph_info(options.graph, allow_weighted=True, traversal="out").sha256 == graph.sha256,
                 "algorithm input changed while executing")
         payload = json.loads(data_path.read_text())
+        if batch:
+            if __package__:
+                from .spmv_queries import validate_batch
+            else:
+                from spmv_queries import validate_batch
+            row.update(validate_batch(payload, log_path.read_text(), graph=graph, options=options,
+                policy=policy, evidence=args.ecg_equivalence, llc_bytes=parse_size_bytes(l3_size),
+                llc_ways=int(args.l3_ways)))
+            row.update(status="ok", json_path=str(data_path), log_path=str(log_path),
+                graph_sha256=graph.sha256, benchmark_binary_sha256=before,
+                algorithm_workload_verified="1", planned_host_bytes=plan["planned_host_bytes"],
+                resource_scope=plan["memory_plan"])
+            return [row]
         require(payload.get("setup_cache_policy") == (
                     options.record_base_policy if mode != "csr"
                     else "LRU" if policy == "POPT_UNCHARGED" else policy),
@@ -995,7 +1038,8 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
     )
     for group in groups.values():
         good = [row for row in group if row.get("status") == "ok"]
-        signatures = {tuple(str(row.get("algorithm_" + field, "")) for field in comparable) for row in good}
+        signatures = {(str(row.get("query_count", "") or 1), *(
+            str(row.get("algorithm_" + field, "")) for field in comparable)) for row in good}
         record_signatures = {str(row.get("algorithm_record_trace_digest", "")) for row in good
                              if row.get("algorithm_carrier") == "record"}
         if len(signatures) != 1 or len(record_signatures) > 1:
@@ -1008,7 +1052,7 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
                 "ECG_TRANSPORT", "transport",
                 str(row.get("record_base_policy", "LRU")), str(row.get("algorithm_record_model", "next")),
                 int(row.get("algorithm_window_candidate_rrpv", 6)), str(row.get("frontier_gating", "enabled")))
-            for label, column in (("LRU", "traffic_ratio_vs_csr_lru"),
+            for label, column in ((query_policy_label("LRU", int(row.get("query_count", "") or 1)), "traffic_ratio_vs_csr_lru"),
                                   (transport_label, "traffic_ratio_vs_transport")):
                 baseline = baselines.get(label)
                 if baseline is not None and baseline.get("total_offchip_traffic") is not None and int(baseline["total_offchip_traffic"]) > 0:

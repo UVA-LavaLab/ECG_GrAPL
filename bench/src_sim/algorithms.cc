@@ -1,5 +1,6 @@
 #include "cache_sim/ecg_algorithm.h"
 #include "ecg_algorithm_main.h"
+#include "cache_sim/ecg_spmv_queries.h"
 
 int main(int argc, char** argv) {
     return ecg_algorithm::applicationMain(argc, argv,
@@ -28,6 +29,18 @@ int main(int argc, char** argv) {
             cache_sim::CacheHierarchy cache(command.l1_bytes, command.l1_ways,
                 command.l2_bytes, command.l2_ways, command.llc_bytes, command.llc_ways, 64,
                 cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, policy);
+            if (command.queries > 1) {
+                if (command.output_path.empty()) {
+                    cache_sim::runSpmvQueries(graph, command, cache, std::cout);
+                } else {
+                    std::ofstream output;
+                    output.exceptions(std::ios::badbit | std::ios::failbit);
+                    output.open(command.output_path);
+                    cache_sim::runSpmvQueries(graph, command, cache, output);
+                    output.close();
+                }
+                return 0;
+            }
             cache_sim::AlgorithmBackend backend(cache, command.options, command.llc_bytes,
                 grasp_paper, popt);
             const auto start = std::chrono::steady_clock::now();
@@ -92,5 +105,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        }, true, true, true, true, true, true, true);
+        }, true, true, true, true, true, true, true, true);
 }

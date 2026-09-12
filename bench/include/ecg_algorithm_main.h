@@ -20,6 +20,7 @@ struct CommandLine {
     std::string graph_path;
     std::string output_path;
     std::string policy = "LRU";
+    uint64_t queries = 1;
     uint64_t maximum_graph_bytes = uint64_t{512} << 20;
     uint64_t l1_bytes = 32 * 1024, l2_bytes = 256 * 1024, llc_bytes = 8 * 1024 * 1024;
     uint64_t l1_ways = 8, l2_ways = 4, llc_ways = 16;
@@ -155,7 +156,8 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
                     break;
                 first = comma + 1;
             }
-        } else if (argument == "--repeat") command.options.repetitions = unsignedOption(value);
+        } else if (argument == "--queries") command.queries = unsignedOption(value);
+        else if (argument == "--repeat") command.options.repetitions = unsignedOption(value);
         else if (argument == "--delta") command.options.delta = unsignedOption(value);
         else if (argument == "--bfs-direction") {
             if (value != "td" && value != "do")
@@ -178,6 +180,15 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
     }
     if (!algorithm_seen || command.graph_path.empty())
         throw std::invalid_argument("required: --algorithm spmv|bfs|sssp|cc|bc|tc --graph path.sg|path.wsg");
+    if (!command.queries || command.queries > 64)
+        throw std::invalid_argument("queries-must-be-1-through-64");
+    if (command.queries > 1 && (command.options.algorithm != Algorithm::SPMV || command.options.records ||
+        command.options.record_model != RecordModel::NEXT || command.options.traversal_preprocessing ||
+        command.options.grasp_reference != GraspReferenceMode::OFF || command.options.popt_constant_rank ||
+        command.options.grasp_graph_passes || command.options.bfs_traffic_phases ||
+        command.options.window_observer != WindowObserverMode::OFF ||
+        command.options.bfs_direction_optimizing || !command.options.sources.empty()))
+        throw std::invalid_argument("independent queries require unmodified CSR SpMV baselines");
     if (command.options.grasp_reference != GraspReferenceMode::OFF &&
         (command.policy != "GRASP_PAPER" || command.options.algorithm != Algorithm::SPMV ||
          command.options.records || command.options.popt_constant_rank ||
@@ -376,9 +387,11 @@ int applicationMain(
         int argc, char** argv, Invoke invoke, bool allow_popt = false,
         bool allow_grasp_record_base = false, bool allow_window_observer = false,
         bool allow_window_model = false, bool allow_bfs_phases = false, bool allow_frontier_model = false,
-        bool allow_grasp_reference = false) {
+        bool allow_grasp_reference = false, bool allow_spmv_queries = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        if (command.queries > 1 && !allow_spmv_queries)
+            throw std::invalid_argument("independent SpMV queries are cache_sim-only");
         if (command.options.grasp_reference != GraspReferenceMode::OFF && !allow_grasp_reference)
             throw std::invalid_argument("GRASP reference diagnostic is cache_sim-only");
         if (command.options.record_model == RecordModel::FRONTIER && !allow_frontier_model)

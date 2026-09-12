@@ -198,11 +198,15 @@ def plan_algorithm_resources(
     preprocessing: str = "csr",
     popt_full_capacity: bool = False,
     record_model: str = "next",
+    queries: int = 1,
 ) -> dict[str, int | str | bool | None]:
     coefficients = {"spmv": 8, "bfs": 12, "sssp": 25, "cc": 12, "bc": 40, "tc": 24}
     if algorithm not in coefficients or min(
             traversals, sources, workspace_limit, carrier_limit, auxiliary_limit, rss_mib) <= 0:
         raise RecordResourceError("invalid algorithm or resource limits")
+    if not 1 <= queries <= 64 or (queries > 1 and
+            (algorithm != "spmv" or records or graph.weighted or backend != "cache_sim")):
+        raise RecordResourceError("independent queries require unweighted cache-only CSR SpMV")
     if requested_bytes not in (0, 4, 8) or not 0 <= minimum_mantissa_bits <= 61:
         raise RecordResourceError("invalid algorithm record layout request")
     if preprocessing not in ("csr", "traversal"):
@@ -257,6 +261,8 @@ def plan_algorithm_resources(
     popt_bytes = popt_lines * 256
     if popt_full_capacity:
         scratch += 192
+    shared_owner = 512 if popt_full_capacity and queries > 1 else 0
+    scratch += shared_owner
     if carrier > carrier_limit or scratch + popt_bytes > auxiliary_limit or (
             arrays + carrier + scratch + popt_bytes + context_bytes > workspace_limit):
         raise RecordResourceError("algorithm arrays/carrier/construction exceed their explicit limits")
@@ -279,6 +285,7 @@ def plan_algorithm_resources(
         "record_preprocess": preprocessing, "construction_partitions": partitions,
         "record_model": record_model,
         "frontier_runtime_budget_bytes": context_bytes,
+        "queries": queries, "shared_preparation_bytes_upper": shared_owner,
         "popt_matrix_lines": popt_lines, "popt_matrix_bytes_upper": popt_bytes,
         "workspace_limit_bytes": workspace_limit, "planned_host_bytes": host,
         "planned_target_bytes": planned, "rss_limit_mib": rss_mib,

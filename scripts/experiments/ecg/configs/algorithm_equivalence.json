@@ -41,6 +41,7 @@
     "bench/include/external/gapbs/graph.h",
     "bench/include/external/gapbs/reader.h",
     "scripts/experiments/ecg/algorithm_matrix.py",
+    "scripts/experiments/ecg/spmv_queries.py",
     "scripts/experiments/ecg/record_resources.py",
     "scripts/experiments/ecg/roi_matrix.py",
     "scripts/experiments/ecg/flows/experiment_run.py",
@@ -50,6 +51,7 @@
   "backend_source_paths": {
     "cache-sim": [
       "bench/include/cache_sim/ecg_algorithm.h",
+      "bench/include/cache_sim/ecg_spmv_queries.h",
       "bench/include/cache_sim/ecg_window_observer.h",
       "bench/include/cache_sim/ecg_window_runtime.h",
       "bench/include/cache_sim/cache_sim.h",

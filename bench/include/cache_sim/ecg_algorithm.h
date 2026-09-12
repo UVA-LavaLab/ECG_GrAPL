@@ -17,6 +17,13 @@ struct AlgorithmTraffic {
 
     uint64_t offchip() const { return memory_accesses + prefetch_fills + llc_writebacks; }
 
+    static AlgorithmTraffic snapshot(const CacheHierarchy& cache) {
+        const auto& llc = cache.getL3Stats();
+        return {cache.getTotalAccesses(), cache.getMemoryAccesses(), cache.getPrefetchFills(),
+            cache.getWritebackTraffic(), llc.hits.load(), llc.misses.load(),
+            llc.prop_hits.load(), llc.prop_misses.load()};
+    }
+
     void accumulate(const AlgorithmTraffic& other) {
         for (auto field : {&AlgorithmTraffic::total_accesses, &AlgorithmTraffic::memory_accesses,
                 &AlgorithmTraffic::prefetch_fills, &AlgorithmTraffic::llc_writebacks,
@@ -50,25 +57,61 @@ struct AlgorithmTraffic {
     }
 };
 
+// Sequential query ownership; the immutable source graph must outlive this preparation.
+class PreparedSpmvMatrix {
+  public:
+    static constexpr uint64_t kOwnerReservation = 512;
+    PreparedSpmvMatrix() = default;
+    PreparedSpmvMatrix(const PreparedSpmvMatrix&) = delete;
+    PreparedSpmvMatrix& operator=(const PreparedSpmvMatrix&) = delete;
+    uint64_t constructions() const { return constructions_; }
+    uint64_t bytes() const { return matrix_.bytes(); }
+
+  private:
+    friend class AlgorithmBackend;
+    popt_reref::FullMatrix matrix_;
+    ecg_algorithm::GraphView graph_;
+    uint64_t constructions_ = 0;
+    bool ready_ = false, borrowed_ = false, poisoned_ = false;
+};
+
 class AlgorithmBackend {
   public:
     static constexpr bool models_memory = true;
     AlgorithmBackend(CacheHierarchy& cache, const ecg_algorithm::Options& options,
                      uint64_t llc_bytes = 8 * 1024 * 1024, bool grasp_paper = false,
-                     bool popt_full_capacity = false)
+                     bool popt_full_capacity = false,
+                     std::shared_ptr<PreparedSpmvMatrix> prepared = {})
         : cache_(cache), options_(options), llc_bytes_(llc_bytes),
           grasp_paper_(grasp_paper || (options.records &&
               options.record_base_policy == ecg_algorithm::RecordBasePolicy::GRASP_PAPER)),
-          popt_full_capacity_(popt_full_capacity) {}
+          popt_full_capacity_(popt_full_capacity), shared_popt_(std::move(prepared)),
+          popt_matrix_(shared_popt_ ? shared_popt_->matrix_ : local_popt_matrix_) {}
 
     ~AlgorithmBackend() {
         if (window_observer_)
             cache_.observeLastLevel(nullptr);
+        if (shared_borrowed_) {
+            cache_.initGraphContext(nullptr);
+            shared_popt_->borrowed_ = false;
+            shared_popt_->poisoned_ = true;
+        }
     }
 
     void start(const ecg_algorithm::GraphView& graph) {
         if (graph.vertices == 0 || graph.vertices > INT32_MAX)
             throw std::invalid_argument("invalid-algorithm-cache-domain");
+        if (shared_popt_) {
+            if (!popt_full_capacity_ || options_.algorithm != ecg_algorithm::Algorithm::SPMV ||
+                options_.records || graph.weights || graph.encoded_id_bits || referenceConsumer() ||
+                options_.popt_constant_rank || shared_popt_->borrowed_ || shared_popt_->poisoned_ ||
+                sizeof(PreparedSpmvMatrix) > PreparedSpmvMatrix::kOwnerReservation)
+                throw std::invalid_argument("invalid shared SpMV matrix borrow");
+            if (shared_popt_->ready_ && !sameGraph(graph, shared_popt_->graph_))
+                throw std::invalid_argument("shared SpMV matrix graph changed");
+            shared_popt_->borrowed_ = shared_borrowed_ = true;
+        }
+        query_start_traffic_ = traffic();
         if (referenceConsumer() && (popt_full_capacity_ || !grasp_paper_ || options_.records ||
             options_.algorithm != ecg_algorithm::Algorithm::SPMV || options_.popt_constant_rank ||
             options_.record_model != ecg_algorithm::RecordModel::NEXT || options_.traversal_preprocessing ||
@@ -193,8 +236,11 @@ class AlgorithmBackend {
         if (!region || region->elem_size != ecg_record::propertyBytes(property.kind) ||
             property.stride_bytes != region->elem_size)
             throw std::invalid_argument("unregistered-algorithm-property");
-        if (usesPoptMatrix())
+        if (usesPoptMatrix()) {
+            const AlgorithmTraffic before = traffic();
             preparePopt(graph);
+            preparation_traffic_.accumulate(traffic().since(before));
+        }
         if (options_.window_observer != ecg_algorithm::WindowObserverMode::OFF) {
             if (window_observer_ || property.kind != ecg_record::PropertyKind::U32 ||
                 property.stride_bytes != 4 || property.traversal != ecg_record::TraversalMode::ORDERED_FILTERED)
@@ -402,15 +448,26 @@ class AlgorithmBackend {
             cache_.finishRecord(actual_records);
         else
             cache_.initGraphContext(nullptr);
+        if (shared_borrowed_) {
+            shared_popt_->borrowed_ = false;
+            shared_borrowed_ = false;
+        }
     }
 
     AlgorithmTraffic setupTraffic() const {
         if (!kernel_started_)
             throw std::logic_error("algorithm kernel boundary was not observed");
-        return setup_traffic_;
+        return setup_traffic_.since(query_start_traffic_);
     }
 
-    AlgorithmTraffic kernelTraffic() const { return traffic().since(setupTraffic()); }
+    AlgorithmTraffic kernelTraffic() const {
+        if (!kernel_started_)
+            throw std::logic_error("algorithm kernel boundary was not observed");
+        return traffic().since(setup_traffic_);
+    }
+    AlgorithmTraffic queryTraffic() const { return traffic().since(query_start_traffic_); }
+    AlgorithmTraffic preparationTraffic() const { return preparation_traffic_; }
+    AlgorithmTraffic querySetupTraffic() const { return setupTraffic().since(preparation_traffic_); }
 
     void writeWindowObserver(std::ostream& output) const {
         if (window_observer_)
@@ -448,10 +505,16 @@ class AlgorithmBackend {
                << ",\"construction_read_bytes\":" << popt_reads_
                << ",\"construction_write_bytes\":" << popt_writes_
                << ",\"workspace_peak_bytes\":" << array_bytes_ + popt_matrix_.bytes() +
-                    64 + banks_.capacity() * sizeof(PoptBank)
+                    64 + banks_.capacity() * sizeof(PoptBank) +
+                    (shared_popt_ ? PreparedSpmvMatrix::kOwnerReservation : 0)
                << ",\"passes\":" << popt_passes_ << ",\"vertices\":" << popt_vertices_
                << ",\"governed_reads\":" << popt_governed_
-               << ",\"lookup_calls\":" << context_.popt_lookup_count << '}';
+               << ",\"lookup_calls\":" << context_.popt_lookup_count;
+        if (shared_popt_)
+            output << ",\"reused\":" << (popt_reused_ ? "true" : "false")
+                   << ",\"construction_count\":" << shared_popt_->constructions_
+                   << ",\"owner_reservation_bytes\":" << PreparedSpmvMatrix::kOwnerReservation;
+        output << '}';
     }
 
     void writeGraspReference(std::ostream& output) const {
@@ -516,6 +579,14 @@ class AlgorithmBackend {
     }
     bool usesPoptMatrix() const { return popt_full_capacity_ || referenceConsumer(); }
 
+    static bool sameGraph(const ecg_algorithm::GraphView& a, const ecg_algorithm::GraphView& b) {
+        return a.vertices == b.vertices && a.records == b.records && a.directed == b.directed &&
+            a.offsets == b.offsets && a.columns == b.columns && a.weights == b.weights &&
+            a.edge_stride == b.edge_stride && a.pointer_offsets == b.pointer_offsets &&
+            a.in_offsets == b.in_offsets && a.in_columns == b.in_columns &&
+            a.encoded_id_bits == b.encoded_id_bits;
+    }
+
     enum class BfsPhase : uint8_t { SETUP, PROBE, BUILD, SORT, BETWEEN };
     void transitionBfsPhase(BfsPhase expected, BfsPhase next) {
         if (bfs_phase_ != expected)
@@ -575,7 +646,8 @@ class AlgorithmBackend {
             }
             ++popt_regions_;
         }
-        const uint64_t scratch = 64 + banks_.capacity() * sizeof(PoptBank);
+        const uint64_t scratch = 64 + banks_.capacity() * sizeof(PoptBank) +
+            (shared_popt_ ? PreparedSpmvMatrix::kOwnerReservation : 0);
         if (array_bytes_ > options_.maximum_workspace_bytes ||
             scratch > options_.maximum_workspace_bytes - array_bytes_ ||
             scratch > options_.build_limits.maximum_auxiliary_bytes)
@@ -583,24 +655,37 @@ class AlgorithmBackend {
         const auto observe = [&](const void* pointer, uint64_t bytes, bool write) {
             matrixMemory(pointer, bytes, write);
         };
-        popt_matrix_.configure(static_cast<uint32_t>(graph.vertices), static_cast<uint32_t>(lines),
-            std::min(options_.maximum_workspace_bytes - array_bytes_ - scratch,
-                     options_.build_limits.maximum_auxiliary_bytes - scratch), observe);
-        BuildAccess access{*this};
-        for (uint64_t source = 0; source < graph.vertices; ++source) {
-            const auto row = graph.row(access, source);
-            for (const auto& bank : banks_)
-                if (bank.pattern == ecg_algorithm::ReferencePattern::NEIGHBOR_AND_VERTEX)
-                    popt_matrix_.reference(bank.offset + source / (64 / bank.bytes),
-                        static_cast<uint32_t>(source), observe);
-            for (uint64_t index = row.first; index < row.second; ++index) {
-                const uint32_t target = graph.id(access, index);
+        const uint64_t budget = std::min(options_.maximum_workspace_bytes - array_bytes_ - scratch,
+                                        options_.build_limits.maximum_auxiliary_bytes - scratch);
+        if (shared_popt_ && shared_popt_->ready_) {
+            if (!sameGraph(graph, shared_popt_->graph_) || banks_.size() != 1 ||
+                banks_[0].bytes != 4 || banks_[0].pattern != ecg_algorithm::ReferencePattern::NEIGHBOR ||
+                popt_regions_ != 1 || popt_matrix_.lines() != lines || popt_matrix_.bytes() > budget)
+                throw std::invalid_argument("shared SpMV matrix mapping or budget changed");
+            popt_reused_ = true;
+        } else {
+            popt_matrix_.configure(static_cast<uint32_t>(graph.vertices), static_cast<uint32_t>(lines), budget, observe);
+            BuildAccess access{*this};
+            for (uint64_t source = 0; source < graph.vertices; ++source) {
+                const auto row = graph.row(access, source);
                 for (const auto& bank : banks_)
-                    popt_matrix_.reference(bank.offset + target / (64 / bank.bytes),
-                        static_cast<uint32_t>(source), observe);
+                    if (bank.pattern == ecg_algorithm::ReferencePattern::NEIGHBOR_AND_VERTEX)
+                        popt_matrix_.reference(bank.offset + source / (64 / bank.bytes),
+                            static_cast<uint32_t>(source), observe);
+                for (uint64_t index = row.first; index < row.second; ++index) {
+                    const uint32_t target = graph.id(access, index);
+                    for (const auto& bank : banks_)
+                        popt_matrix_.reference(bank.offset + target / (64 / bank.bytes),
+                            static_cast<uint32_t>(source), observe);
+                }
+            }
+            popt_matrix_.finish(observe);
+            if (shared_popt_) {
+                shared_popt_->graph_ = graph;
+                shared_popt_->ready_ = true;
+                ++shared_popt_->constructions_;
             }
         }
-        popt_matrix_.finish(observe);
         context_.compound_popt = true;
         context_.initRereference(popt_matrix_.data(), popt_matrix_.lines(), 256,
             static_cast<uint32_t>(graph.vertices), 64, popt_reref::Encoding::Full);
@@ -616,10 +701,7 @@ class AlgorithmBackend {
     }
 
     AlgorithmTraffic traffic() const {
-        const auto& llc = cache_.getL3Stats();
-        return {cache_.getTotalAccesses(), cache_.getMemoryAccesses(),
-                cache_.getPrefetchFills(), cache_.getWritebackTraffic(),
-                llc.hits.load(), llc.misses.load(), llc.prop_hits.load(), llc.prop_misses.load()};
+        return AlgorithmTraffic::snapshot(cache_);
     }
     void beginKernel() {
         if (!kernel_started_) {
@@ -643,6 +725,7 @@ class AlgorithmBackend {
     ecg_record::NativeConfiguration configuration_;
     bool active_ = false;
     AlgorithmTraffic setup_traffic_;
+    AlgorithmTraffic query_start_traffic_, preparation_traffic_;
     bool kernel_started_ = false;
     BfsPhase bfs_phase_ = BfsPhase::SETUP;
     std::array<std::array<AlgorithmTraffic, 6>, 5> bfs_traffic_{};
@@ -651,7 +734,10 @@ class AlgorithmBackend {
     std::unique_ptr<window_observation::Observer> window_observer_;
     std::unique_ptr<WindowRuntime> window_runtime_;
     std::unique_ptr<FrontierRuntime> frontier_runtime_;
-    popt_reref::FullMatrix popt_matrix_;
+    popt_reref::FullMatrix local_popt_matrix_;
+    std::shared_ptr<PreparedSpmvMatrix> shared_popt_;
+    popt_reref::FullMatrix& popt_matrix_;
+    bool shared_borrowed_ = false, popt_reused_ = false;
     ecg_algorithm::GraphView popt_graph_;
     std::vector<PoptBank> banks_;
     std::array<ecg_algorithm::ReferencePattern, MAX_PROPERTY_REGIONS> patterns_{};

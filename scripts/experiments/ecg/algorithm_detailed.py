@@ -43,6 +43,7 @@ def normalize_sniper_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
 
 
 def guest_options(args, options, plan, spec, size_bytes, l3_size: str, output: Path) -> list[str]:
+    require(options.queries == 1, "independent SpMV queries are cache_sim-only")
     values = [
         "--algorithm", args.benchmark, "--graph", str(options.graph),
         "--mode", spec.record_mechanism or "csr",
@@ -205,6 +206,7 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
         require(mode in algorithms.MODES or spec.label in ("LRU", "SRRIP", "GRASP_PAPER"),
                 "unsupported detailed algorithm policy")
         options = algorithms.parse_options(args.options)
+        require(options.queries == 1, "independent SpMV queries are cache_sim-only")
         require(options.grasp_reference == "off", "GRASP reference diagnostic is cache_sim-only")
         require(options.popt_rank_mode == "future", "P-OPT rank ablation is cache_sim-only")
         require(options.grasp_scope == "all" and options.bfs_traffic_phases == "off",

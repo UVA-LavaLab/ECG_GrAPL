@@ -805,6 +805,11 @@ def make_roi_job(
         if not settings.get("current_algorithms") or reference not in ("off", "full", "flat"):
             raise SystemExit("invalid current GRASP reference diagnostic")
         options += " --grasp-reference " + reference
+    if "algorithm_queries" in settings:
+        queries = int(settings["algorithm_queries"])
+        if not settings.get("current_algorithms") or benchmark != "spmv" or not 1 <= queries <= 64:
+            raise SystemExit("invalid independent SpMV query count")
+        options += " --queries " + str(queries)
     core_tag = str(settings.get("_core_tag", ""))
     scaling_series_id = sanitize(
         f"{settings['name']}_{graph_name}_{benchmark}")
@@ -1089,6 +1094,7 @@ def make_roi_job(
     popt_rank_mode = "future"
     frontier_gating = "enabled"
     grasp_reference = "off"
+    query_count = 1
     if settings.get("current_algorithms"):
         parsed_algorithm = algorithm_matrix.parse_options(options)
         record_base, observer = parsed_algorithm.record_base_policy, parsed_algorithm.window_observer
@@ -1097,9 +1103,10 @@ def make_roi_job(
         popt_rank_mode = parsed_algorithm.popt_rank_mode
         frontier_gating = parsed_algorithm.frontier_gating
         grasp_reference = parsed_algorithm.grasp_reference
+        query_count = parsed_algorithm.queries
     expected_policy_labels = algorithm_matrix.policy_labels(
         [parse_policy_spec(policy) for policy in all_policies], record_base, observer, record_model,
-        candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating, grasp_reference)
+        candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating, grasp_reference, query_count)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
@@ -1183,6 +1190,7 @@ def make_roi_job(
             "popt_rank_mode": popt_rank_mode,
             "frontier_gating": frontier_gating,
             "grasp_reference": grasp_reference,
+            "query_count": query_count,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1218,7 +1226,7 @@ def csv_status(
         record_base_policy: str = "LRU", window_observer: str = "off",
         record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
         popt_rank_mode: str = "future", frontier_gating: str = "enabled",
-        grasp_reference: str = "off") -> tuple[str, str]:
+        grasp_reference: str = "off", query_count: int = 1) -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1232,11 +1240,11 @@ def csv_status(
         if expected_policies:
             expected = ({policy_output_label(policy) for policy in expected_policies}
                         if record_base_policy == "LRU" and window_observer == "off" and record_model == "next" and
-                        grasp_scope == "all" and popt_rank_mode == "future" and grasp_reference == "off"
+                        grasp_scope == "all" and popt_rank_mode == "future" and grasp_reference == "off" and query_count == 1
                         else set(algorithm_matrix.policy_labels(
                             [parse_policy_spec(policy) for policy in expected_policies], record_base_policy,
                             window_observer, record_model, candidate_rrpv, grasp_scope, popt_rank_mode,
-                            frontier_gating, grasp_reference)))
+                            frontier_gating, grasp_reference, query_count)))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1263,7 +1271,8 @@ def job_csv_status(job: Job) -> tuple[str, str]:
     rank_mode = str(job.metadata.get("popt_rank_mode", "future"))
     gating = str(job.metadata.get("frontier_gating", "enabled"))
     reference = str(job.metadata.get("grasp_reference", "off"))
-    status, detail = csv_status(job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode, gating, reference)
+    queries = int(job.metadata.get("query_count", 1))
+    status, detail = csv_status(job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode, gating, reference, queries)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
@@ -1300,10 +1309,10 @@ def job_csv_status(job: Job) -> tuple[str, str]:
 
     expected_labels = ([policy_output_label(policy) for policy in expected]
                        if record_base == "LRU" and observer == "off" and model == "next" and
-                       scope == "all" and rank_mode == "future" and reference == "off"
+                       scope == "all" and rank_mode == "future" and reference == "off" and queries == 1
                        else algorithm_matrix.policy_labels(
                            [parse_policy_spec(policy) for policy in expected], record_base, observer,
-                           model, floor, scope, rank_mode, gating, reference))
+                           model, floor, scope, rank_mode, gating, reference, queries))
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),

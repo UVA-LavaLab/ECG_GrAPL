@@ -369,6 +369,73 @@ void testGraspReferenceConsumer() {
     }
 }
 
+void testPreparedPoptQueryReuse() {
+    using namespace ecg_algorithm;
+    const Fixture fixture(64, false, {{0, 16, 1}, {0, 32, 1}, {16, 32, 1}});
+    const auto graph = fixture.view();
+    Options options;
+    options.algorithm = Algorithm::SPMV;
+    options.repetitions = 2;
+    options.evidence = options.capture_values = true;
+    setenv("POPT_MATRIX_STREAM_SIM", "0", 1);
+    cache_sim::CacheHierarchy cache(128, 2, 256, 2, 1024, 2, 64,
+        cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::POPT);
+    auto prepared = std::make_shared<cache_sim::PreparedSpmvMatrix>();
+    Result first;
+    uint64_t previous_accesses = 0;
+    for (unsigned query = 0; query < 2; ++query) {
+        cache_sim::AlgorithmBackend backend(cache, options, 1024, false, true, prepared);
+        const auto result = ecg_algorithm::run(graph, options, backend);
+        if (!query) first = result;
+        check(result.values_f32 == first.values_f32 && result.work_digest == first.work_digest &&
+              result.property_writes == 192 && result.actual_records == 12,
+              "real P-OPT queries independently initialize and execute the same shared SpMV work");
+        check(prepared->constructions() == 1 && prepared->bytes() == 1024 &&
+              (query ? backend.preparationTraffic().total_accesses == 0 :
+                       backend.preparationTraffic().total_accesses > 0),
+              "the actual cache backend constructs the FULL matrix once and then borrows it");
+        auto total = backend.preparationTraffic();
+        total.accumulate(backend.querySetupTraffic());
+        total.accumulate(backend.kernelTraffic());
+        check(total.total_accesses == cache.getTotalAccesses() - previous_accesses &&
+              total.offchip() == backend.queryTraffic().offchip(),
+              "query-local snapshots do not include previous queries or duplicate preparation");
+        previous_accesses = cache.getTotalAccesses();
+    }
+    const Fixture other(64, false, {{0, 16, 1}, {0, 32, 1}, {16, 32, 1}});
+    bool rejected = false;
+    try {
+        cache_sim::AlgorithmBackend backend(cache, options, 1024, false, true, prepared);
+        backend.start(other.view());
+    } catch (const std::invalid_argument&) { rejected = true; }
+    check(rejected, "shared matrix reuse rejects a different graph owner");
+    auto interrupted = std::make_shared<cache_sim::PreparedSpmvMatrix>();
+    {
+        cache_sim::AlgorithmBackend first_borrow(cache, options, 1024, false, true, interrupted);
+        first_borrow.start(graph);
+        rejected = false;
+        try {
+            cache_sim::AlgorithmBackend overlap(cache, options, 1024, false, true, interrupted);
+            overlap.start(graph);
+        } catch (const std::invalid_argument&) { rejected = true; }
+        check(rejected, "shared preparation cannot have overlapping active queries");
+    }
+    rejected = false;
+    try {
+        cache_sim::AlgorithmBackend poisoned(cache, options, 1024, false, true, interrupted);
+        poisoned.start(graph);
+    } catch (const std::invalid_argument&) { rejected = true; }
+    check(rejected, "an interrupted prepared query detaches and cannot be silently resumed");
+    Options too_small = options;
+    too_small.build_limits.maximum_auxiliary_bytes = 16;
+    rejected = false;
+    try {
+        cache_sim::AlgorithmBackend limited(cache, too_small, 1024, false, true, prepared);
+        ecg_algorithm::run(graph, too_small, limited);
+    } catch (const std::length_error&) { rejected = true; }
+    check(rejected, "a reused matrix remains subject to the query's explicit resource limits");
+}
+
 void testFrontierProducerAndCounts() {
     static_assert(!std::is_same<ecg_frontier::RecordStream, ecg_window::RecordStream>::value,
                   "frontier and window streams must not alias");
@@ -1223,6 +1290,7 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testPreparedPoptQueryReuse();
     testGraspReferenceConsumer();
     testFrontierProducerAndCounts();
     testFrontierVictimAndContext();
