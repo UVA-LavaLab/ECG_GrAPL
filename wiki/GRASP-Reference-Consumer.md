@@ -112,3 +112,92 @@ reference-consumer direction, not all possible graph-aware policies.
 Success would justify freezing one cost/delivery-constrained design,
 not automatically implementing A or claiming competitiveness. No
 additional full-graph campaign is authorized by either outcome.
+
+## Measured Patents result
+
+The four cells completed at implementation commit `a5b58c82` in
+`results/ecg_experiments/runs/grasp_reference_patents_a5b58c82`.
+All four workload/result receipts agree. FULL and FLAT have identical
+complete setup counters and the same matrix as intact P-OPT:
+60,396,288 bytes, 235,923 lines, digest `3683564403557561320`,
+and 328,708,247 / 191,849,776 construction read/write bytes.
+
+| Policy | Property misses (`x` + `y`) | Other misses | Writebacks | Kernel transfers |
+|---|---:|---:|---:|---:|
+| Ordinary GRASP | 9,847,988 | 5,073,432 | 535,510 | 15,456,930 |
+| Intact favorable P-OPT | 6,855,000 | 5,073,432 | 469,984 | 12,398,416 |
+| Reference FLAT | 9,955,163 | 5,073,432 | 470,370 | 15,498,965 |
+| Reference FULL | 9,014,195 | 5,073,432 | 469,374 | 14,557,001 |
+
+FULL saves **941,964 kernel transfers (6.08%) versus FLAT**:
+940,968 registered-property misses and 996 writebacks. Other misses are
+unchanged. It also saves **899,929 transfers (5.82%) versus ordinary
+GRASP**. Both preregistered development requirements pass.
+
+However, FULL still uses **2,158,585 more kernel transfers (17.41%) than
+intact P-OPT**, despite ideal rank availability and no RRPV candidate
+restriction. It closes only **29.42% of the ordinary-GRASP-to-P-OPT
+kernel gap**. The experiment therefore does not establish that replacing
+the matrix with a compact encoding is sufficient to compete with P-OPT
+on kernel traffic.
+
+The diagnostic was active: FULL made **5,388,956 victim refinements**,
+including 4,502,489 selecting a way with post-base-aging RRPV below 7.
+FLAT made zero refinements, as required. FULL/FLAT performed
+117,675,386 / 145,813,708 real matrix lookups. These are observed
+mechanism counts, not independent miss-savings attributions.
+
+FLAT's kernel differs slightly from ordinary GRASP even though it never
+refines a victim: FLAT still prepares the full matrix and enters the
+kernel with that preparation's cache state. It is not interchangeable
+with the no-matrix GRASP baseline. FULL versus FLAT is the clean
+information comparison; neither is intact P-OPT.
+
+### Setup and the tighter cost target
+
+| Policy | Setup transfers | Setup + kernel transfers |
+|---|---:|---:|
+| Ordinary GRASP | 2,877,491 | 18,334,421 |
+| Intact favorable P-OPT | 9,293,507 | 21,691,923 |
+| Reference FLAT | 9,373,437 | 24,872,402 |
+| Reference FULL | 9,373,437 | 23,930,438 |
+
+FULL loses setup-inclusive traffic by **30.52% versus GRASP** and
+**10.32% versus P-OPT**, even with free runtime lookup. Its matrix
+construction uses the same byte operations as P-OPT, but retains its
+declared GRASP setup rather than P-OPT's LRU setup.
+
+At FULL's *measured* kernel quality, a candidate would need total setup
+below **3,777,420 transfers** to beat the cold GRASP workload, or less
+than **899,929 extra setup transfers** above ordinary GRASP. The earlier
+3,058,514-transfer incremental budget assumed matching P-OPT's kernel;
+this diagnostic does not attain that quality. These are conditional
+traffic targets, not lower bounds or measured amortized/native results.
+
+### Decision and provenance
+
+**Useful graph information helps this fixed GRASP-based consumer, but
+the combination is not competitive with P-OPT or on cold total traffic.**
+The positive gate justifies a concrete cost/delivery-constrained design
+discussion. It does not approve a large producer, claim that information
+availability is the only remaining problem, or establish that compression
+alone closes the residual quality gap.
+
+Do not infer that any more compact or different predictor is mathematically
+bounded by this one diagnostic. Conversely, do not assume it improves
+past the reference result without a specific hypothesis. The comparison
+does not isolate P-OPT's individual insertion, region-priority and
+rank-before-aging contributions.
+
+The audit replays three job markers, all four raw receipts, and 111 input
+fingerprints across 34 distinct files. Its own completion marker binds the
+raw JSON/log/watchdog files and the unchanged original CSV. No additional
+full-graph executions or parameter choices were used. The new four-run
+budget is closed; the previous twelve-run campaign remains closed, and
+WINDOW/B stay negative controls. A is still unimplemented.
+
+| Artifact | SHA256 |
+|---|---|
+| `combined_roi_matrix.csv` | `ce26b81e7b15eb2215d99cc4564cf008fac0bee413b42f033e701bab2fd6992c` |
+| Shared executable | `6e9d9aa1c442d96a82167a2c2a9ad49806cd43d9a81bd808b93de2abb8cc991b` |
+| `audit/audit.complete.json` | `b545a7ae6267d593dd58f13e97ffca8a50eccaa95b259013fe0af6c8599ac805` |

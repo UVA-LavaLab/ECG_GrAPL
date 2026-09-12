@@ -65,6 +65,9 @@ The [GRASP reference-consumer diagnostic](GRASP-Reference-Consumer) isolates
 FULL versus constant graph ranks under a specified GRASP-base selector,
 with complete counted matrix construction and explicitly ideal lookup
 availability. It is not a low-overhead ECG implementation.
+On fixed Patents SpMV it saves 6.08% kernel traffic over its FLAT control
+and 5.82% over GRASP, but remains 17.41% above intact P-OPT and loses
+setup-inclusive traffic to both baselines.
 
 ## General replacement and admission foundations
 
