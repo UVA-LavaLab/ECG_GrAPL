@@ -201,3 +201,33 @@ WINDOW/B stay negative controls. A is still unimplemented.
 | `combined_roi_matrix.csv` | `ce26b81e7b15eb2215d99cc4564cf008fac0bee413b42f033e701bab2fd6992c` |
 | Shared executable | `6e9d9aa1c442d96a82167a2c2a9ad49806cd43d9a81bd808b93de2abb8cc991b` |
 | `audit/audit.complete.json` | `b545a7ae6267d593dd58f13e97ffca8a50eccaa95b259013fe0af6c8599ac805` |
+
+## Bounded prepared-graph ownership follow-on
+
+`scripts/test/test_ecg_prepared_spmv.py` qualifies a **test-only** ownership
+prototype on a 64-vertex, six-adjacency fixture. It moves the real CSR
+owner, tags its existing ID32 words in place, and executes the unchanged
+shared SpMV kernel twice with fresh `x` initialization. The tagged view
+decodes IDs without a second edge buffer; raw signed decoding still rejects
+the deliberately high-bit-set words. The internal `encoded_id_bits` view
+is restricted to unweighted ID32 CSR SpMV, without existing record modes.
+No serialized-format or CLI admission is added.
+
+The fixture also retains one actual FULL matrix across two query bindings,
+checking stable storage/digest and canonical reference lookups. Borrowed
+ownership survives release of the outer handle; overlap, abandoned-query
+reuse, unsafe closure and clock overflow are rejected. Constructed
+old-FINITE/terminal-range and PENDING-order cases check stale-query
+rejection. These are lifetime predicates and existing update primitives,
+not an integrated asynchronous PASS_RANK receiver.
+
+Preparation bytes and per-query shared-kernel bytes are separate. Each
+query observes 3,208 read bytes and 768 write bytes, including 64 fresh
+input stores and the existing per-query graph validation. Fixture loading,
+verification reads and matrix binding probes are outside those counters.
+They are **logical byte receipts, not cache traffic or native timings**.
+
+The tags are opaque ownership fixtures, not generated PASS_RANK hints.
+Neither the production batch runner, real PASS_RANK producer nor its
+rank-first victim policy is implemented by this qualification. The existing
+performance results and both closed full-graph budgets remain unchanged.

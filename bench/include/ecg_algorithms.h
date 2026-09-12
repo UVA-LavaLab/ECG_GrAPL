@@ -156,10 +156,14 @@ struct GraphView {
     bool pointer_offsets = false;
     const void* in_offsets = nullptr;
     const void* in_columns = nullptr;
+    // A borrowed canonical ID32 view; upper-bit hint semantics are not inferred here.
+    uint8_t encoded_id_bits = 0;
 
     GraphView incoming() const {
         if (!directed)
             return *this;
+        if (encoded_id_bits)
+            throw std::invalid_argument("encoded graph view is OUT-only");
         if (!in_offsets || (records && !in_columns))
             throw std::invalid_argument("direction-optimized BFS requires incoming CSR");
         return {vertices, records, true, in_offsets, in_columns, nullptr, edge_stride,
@@ -201,10 +205,16 @@ struct GraphView {
         if (index >= records)
             throw std::out_of_range("csr-edge");
         const auto* address = static_cast<const uint8_t*>(columns) + index * edge_stride;
-        const int32_t value = access.template read<int32_t>(address, kind, 1, index, trace);
-        if (value < 0 || uint64_t(value) >= vertices)
+        const int32_t raw = access.template read<int32_t>(address, kind, 1, index, trace);
+        uint32_t value = static_cast<uint32_t>(raw);
+        if (encoded_id_bits) {
+            if (encoded_id_bits > 31 || weights || edge_stride != 4)
+                throw std::invalid_argument("invalid-encoded-ID32-view");
+            value &= static_cast<uint32_t>(ecg_record::lowMask(encoded_id_bits));
+        }
+        if (uint64_t(value) >= vertices)
             throw std::invalid_argument("invalid-neighbor-id");
-        return static_cast<uint32_t>(value);
+        return value;
     }
 
     template<class Access>
@@ -817,7 +827,8 @@ template<class Access>
 void validateGraph(const GraphView& graph, Access& access, bool simple) {
     if (graph.vertices == 0 || graph.vertices > INT32_MAX || !graph.offsets ||
         (graph.records && !graph.columns) || graph.edge_stride < sizeof(int32_t) ||
-        graph.edge_stride % sizeof(int32_t) != 0)
+        graph.edge_stride % sizeof(int32_t) != 0 || graph.encoded_id_bits > 31 ||
+        (graph.encoded_id_bits && (graph.weights || graph.edge_stride != 4)))
         throw std::invalid_argument("invalid-graph-domain");
     if (simple && graph.directed)
         throw std::invalid_argument("requires-simple-undirected");
@@ -1493,6 +1504,8 @@ void tc(const GraphView& graph, Access& access) {
 template<class Backend>
 Result run(const GraphView& graph, const Options& options, Backend& backend) {
     name(options.algorithm);
+    if (graph.encoded_id_bits && (options.algorithm != Algorithm::SPMV || options.records))
+        throw std::invalid_argument("encoded graph qualification requires CSR SpMV");
     if (options.repetitions == 0 || options.delta == 0 || options.maximum_passes == 0 ||
         options.bfs_alpha == 0 || options.bfs_beta == 0 ||
         (options.algorithm != Algorithm::BFS && options.bfs_direction_optimizing) ||
