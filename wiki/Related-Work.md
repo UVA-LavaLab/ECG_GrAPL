@@ -61,6 +61,10 @@ tests one BFS-specific eligibility hypothesis with a cost-matched ungated
 control. Its fixed-case gating benefit is only four transfers, and the
 candidate loses to both intact baselines; it is retained as a negative
 result, without novelty or native-performance claims.
+The [GRASP reference-consumer diagnostic](GRASP-Reference-Consumer) isolates
+FULL versus constant graph ranks under a specified GRASP-base selector,
+with complete counted matrix construction and explicitly ideal lookup
+availability. It is not a low-overhead ECG implementation.
 
 ## General replacement and admission foundations
 

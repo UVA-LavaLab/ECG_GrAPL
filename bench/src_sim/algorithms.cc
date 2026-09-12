@@ -5,6 +5,7 @@ int main(int argc, char** argv) {
     return ecg_algorithm::applicationMain(argc, argv,
         [](const ecg_algorithm::GraphView& graph, const ecg_algorithm::CommandLine& command) {
             const bool popt = command.policy == "POPT_UNCHARGED";
+            const bool reference = command.options.grasp_reference != ecg_algorithm::GraspReferenceMode::OFF;
             const bool observing = command.options.window_observer != ecg_algorithm::WindowObserverMode::OFF;
             const bool replacement = command.options.records &&
                 (command.options.mechanism == ecg_record::Mechanism::REPLACEMENT ||
@@ -22,7 +23,7 @@ int main(int argc, char** argv) {
                 command.policy == "GRASP_PAPER" || grasp_record_base;
             if (setenv("GRASP_BOUNDARY_MODE", grasp_paper ? "capacity" : "vertex", 1) != 0)
                 throw std::system_error(errno, std::generic_category(), "GRASP boundary configuration");
-            if (popt && setenv("POPT_MATRIX_STREAM_SIM", "0", 1) != 0)
+            if ((popt || reference) && setenv("POPT_MATRIX_STREAM_SIM", "0", 1) != 0)
                 throw std::system_error(errno, std::generic_category(), "P-OPT full-capacity configuration");
             cache_sim::CacheHierarchy cache(command.l1_bytes, command.l1_ways,
                 command.l2_bytes, command.l2_ways, command.llc_bytes, command.llc_ways, 64,
@@ -37,10 +38,12 @@ int main(int argc, char** argv) {
                 output << "{\"schema\":\"ecg.algorithm-result.v1\",\"backend\":\"cache_sim\","
                        << "\"timing_valid_for_speedup\":false,"
                        << "\"policy_ablation\":" << (command.options.popt_constant_rank ||
+                            command.options.grasp_reference == ecg_algorithm::GraspReferenceMode::FLAT ||
                             (command.options.record_model == ecg_algorithm::RecordModel::FRONTIER &&
                              !command.options.frontier_gating) ? "true" : "false") << ','
-                       << "\"diagnostic_only\":" << (observing ? "true" : "false") << ','
-                       << "\"measurement_scope\":\"" << (observing ? "observation-only-unchanged-grasp" :
+                       << "\"diagnostic_only\":" << (observing || reference ? "true" : "false") << ','
+                       << "\"measurement_scope\":\"" << (reference ? "ideal-availability-reference-consumer" :
+                            observing ? "observation-only-unchanged-grasp" :
                             "algorithm-data-traffic-including-construction") << "\","
                        << "\"mode\":\"" << (command.options.records ?
                             ecg_record::mechanismName(command.options.mechanism) : "csr")
@@ -65,6 +68,8 @@ int main(int argc, char** argv) {
                 backend.kernelTraffic().write(output);
                 output << "},\"popt\":";
                 backend.writePopt(output);
+                output << ",\"grasp_reference\":";
+                backend.writeGraspReference(output);
                 output << ",\"window_observer\":";
                 backend.writeWindowObserver(output);
                 output << ",\"window_runtime\":";
@@ -87,5 +92,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        }, true, true, true, true, true, true);
+        }, true, true, true, true, true, true, true);
 }

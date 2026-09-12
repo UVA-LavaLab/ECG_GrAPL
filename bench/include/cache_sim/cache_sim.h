@@ -2531,7 +2531,8 @@ private:
             case EvictionPolicy::PIN:
                 return findVictimPIN(set);
             case EvictionPolicy::GRASP:
-                return findVictimGRASP(set);
+                return graph_ctx_ && graph_ctx_->grasp_reference_consumer
+                    ? findVictimGraspReference(set) : findVictimGRASP(set);
             case EvictionPolicy::POPT:
                 return findVictimPOPT(set);
             case EvictionPolicy::ECG:
@@ -2671,6 +2672,34 @@ private:
                 if (set[i].rrpv < M_RRIP) set[i].rrpv++;
             }
         }
+    }
+
+    size_t findVictimGraspReference(std::vector<CacheLine>& set) {
+        const std::size_t base = findVictimGRASP(set);
+        if (!graph_ctx_->rereference.matrix || graph_ctx_->hints_for_thread().current_src == UINT32_MAX)
+            return base;
+        if (!graph_ctx_->compound_popt || graph_ctx_->rereference.encoding != popt_reref::Encoding::Full)
+            throw std::logic_error("GRASP reference consumer requires the current FULL matrix");
+        ++graph_ctx_->grasp_reference_decisions;
+        if (!graph_ctx_->isPoptData(set[base].line_addr))
+            return base;
+        ++graph_ctx_->grasp_reference_covered_bases;
+        std::size_t selected = base;
+        uint32_t farthest = graph_ctx_->poptVictimRank(set[base].line_addr);
+        for (std::size_t way = 0; way < set.size(); ++way) {
+            if (way == base || !graph_ctx_->isPoptData(set[way].line_addr))
+                continue;
+            const uint32_t rank = graph_ctx_->poptVictimRank(set[way].line_addr);
+            if (rank > farthest) {
+                selected = way;
+                farthest = rank;
+            }
+        }
+        if (selected != base) {
+            ++graph_ctx_->grasp_reference_overrides;
+            graph_ctx_->grasp_reference_lower_rrpv_overrides += set[selected].rrpv < 7;
+        }
+        return selected;
     }
 
     // ================================================================

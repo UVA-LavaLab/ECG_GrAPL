@@ -1003,6 +1003,9 @@ struct GraphCacheContext {
     RereferenceConfig rereference;
     bool compound_popt = false;
     bool popt_constant_rank = false;
+    bool grasp_reference_consumer = false;
+    mutable uint64_t grasp_reference_decisions = 0, grasp_reference_covered_bases = 0;
+    mutable uint64_t grasp_reference_overrides = 0, grasp_reference_lower_rrpv_overrides = 0;
     mutable uint64_t popt_lookup_count = 0;
     mutable uint64_t popt_original_rank_sum = 0, popt_constant_rank_lookups = 0;
 

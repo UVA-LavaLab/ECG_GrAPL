@@ -104,6 +104,11 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value != "future" && value != "constant")
                 throw std::invalid_argument("popt-rank-mode-must-be-future-or-constant");
             command.options.popt_constant_rank = value == "constant";
+        } else if (argument == "--grasp-reference") {
+            if (value == "off") command.options.grasp_reference = GraspReferenceMode::OFF;
+            else if (value == "full") command.options.grasp_reference = GraspReferenceMode::FULL;
+            else if (value == "flat") command.options.grasp_reference = GraspReferenceMode::FLAT;
+            else throw std::invalid_argument("grasp-reference-must-be-off-full-or-flat");
         } else if (argument == "--grasp-scope") {
             if (value != "all" && value != "graph-passes")
                 throw std::invalid_argument("grasp-scope-must-be-all-or-graph-passes");
@@ -173,6 +178,14 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
     }
     if (!algorithm_seen || command.graph_path.empty())
         throw std::invalid_argument("required: --algorithm spmv|bfs|sssp|cc|bc|tc --graph path.sg|path.wsg");
+    if (command.options.grasp_reference != GraspReferenceMode::OFF &&
+        (command.policy != "GRASP_PAPER" || command.options.algorithm != Algorithm::SPMV ||
+         command.options.records || command.options.popt_constant_rank ||
+         command.options.record_model != RecordModel::NEXT || command.options.traversal_preprocessing ||
+         command.options.bfs_direction_optimizing || command.options.grasp_graph_passes ||
+         command.options.bfs_traffic_phases || command.options.window_observer != WindowObserverMode::OFF ||
+         !command.options.sources.empty()))
+        throw std::invalid_argument("GRASP reference diagnostic requires CSR SpMV with ordinary GRASP_PAPER");
     if (command.options.records && command.policy != "LRU")
         throw std::invalid_argument("current-record-modes-own-their-replacement-policy");
     if (!command.options.records &&
@@ -362,9 +375,12 @@ template<class Invoke>
 int applicationMain(
         int argc, char** argv, Invoke invoke, bool allow_popt = false,
         bool allow_grasp_record_base = false, bool allow_window_observer = false,
-        bool allow_window_model = false, bool allow_bfs_phases = false, bool allow_frontier_model = false) {
+        bool allow_window_model = false, bool allow_bfs_phases = false, bool allow_frontier_model = false,
+        bool allow_grasp_reference = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        if (command.options.grasp_reference != GraspReferenceMode::OFF && !allow_grasp_reference)
+            throw std::invalid_argument("GRASP reference diagnostic is cache_sim-only");
         if (command.options.record_model == RecordModel::FRONTIER && !allow_frontier_model)
             throw std::invalid_argument("frontier model is cache_sim-only");
         if ((command.options.bfs_traffic_phases || command.options.grasp_graph_passes) && !allow_bfs_phases)

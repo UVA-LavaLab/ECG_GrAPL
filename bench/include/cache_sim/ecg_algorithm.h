@@ -69,6 +69,12 @@ class AlgorithmBackend {
     void start(const ecg_algorithm::GraphView& graph) {
         if (graph.vertices == 0 || graph.vertices > INT32_MAX)
             throw std::invalid_argument("invalid-algorithm-cache-domain");
+        if (referenceConsumer() && (popt_full_capacity_ || !grasp_paper_ || options_.records ||
+            options_.algorithm != ecg_algorithm::Algorithm::SPMV || options_.popt_constant_rank ||
+            options_.record_model != ecg_algorithm::RecordModel::NEXT || options_.traversal_preprocessing ||
+            options_.bfs_direction_optimizing || options_.grasp_graph_passes || options_.bfs_traffic_phases ||
+            options_.window_observer != ecg_algorithm::WindowObserverMode::OFF || !options_.sources.empty()))
+            throw std::invalid_argument("GRASP reference diagnostic requires CSR SpMV with ordinary GRASP_PAPER");
         if (popt_full_capacity_ && (options_.records || options_.bfs_direction_optimizing))
             throw std::invalid_argument("current-popt-requires-csr-scalar-graph-passes");
         if (options_.popt_constant_rank && (!popt_full_capacity_ ||
@@ -106,7 +112,9 @@ class AlgorithmBackend {
         context_.topology.num_vertices = static_cast<uint32_t>(graph.vertices);
         context_.topology.num_edges = graph.records;
         context_.topology.directed = graph.directed;
-        context_.popt_constant_rank = options_.popt_constant_rank;
+        context_.popt_constant_rank = options_.popt_constant_rank ||
+            options_.grasp_reference == ecg_algorithm::GraspReferenceMode::FLAT;
+        context_.grasp_reference_consumer = referenceConsumer();
         cache_.initGraphContext(&context_);
         if (options_.records)
             cache_.prepareRecord(recordBasePolicy());
@@ -156,7 +164,7 @@ class AlgorithmBackend {
     }
 
     void region(const char*, const void* base, uint64_t count, uint8_t bytes, bool property) {
-        if (popt_full_capacity_) {
+        if (usesPoptMatrix()) {
             uint64_t allocation = 0;
             if (!ecg_record::checkedMultiply(count, bytes, allocation) ||
                 !ecg_record::checkedAdd(array_bytes_, allocation, array_bytes_))
@@ -171,7 +179,7 @@ class AlgorithmBackend {
     }
 
     void propertyReferences(const void* base, ecg_algorithm::ReferencePattern pattern) {
-        if (!popt_full_capacity_)
+        if (!usesPoptMatrix())
             return;
         const auto* region = context_.findRegion(reinterpret_cast<uint64_t>(base));
         if (!region || popt_ready_)
@@ -185,7 +193,7 @@ class AlgorithmBackend {
         if (!region || region->elem_size != ecg_record::propertyBytes(property.kind) ||
             property.stride_bytes != region->elem_size)
             throw std::invalid_argument("unregistered-algorithm-property");
-        if (popt_full_capacity_)
+        if (usesPoptMatrix())
             preparePopt(graph);
         if (options_.window_observer != ecg_algorithm::WindowObserverMode::OFF) {
             if (window_observer_ || property.kind != ecg_record::PropertyKind::U32 ||
@@ -214,7 +222,7 @@ class AlgorithmBackend {
         }
         if (window_observer_)
             window_observer_->beginPass();
-        if (!popt_full_capacity_)
+        if (!usesPoptMatrix())
             return;
         if (!popt_ready_ || popt_live_)
             throw std::logic_error("invalid-popt-pass-begin");
@@ -230,7 +238,7 @@ class AlgorithmBackend {
             window_runtime_->visitVertex(vertex);
         if (window_observer_)
             window_observer_->visitVertex(vertex);
-        if (!popt_full_capacity_)
+        if (!usesPoptMatrix())
             return;
         if (!popt_live_ || vertex >= popt_graph_.vertices)
             throw std::logic_error("invalid-popt-vertex-progress");
@@ -244,7 +252,7 @@ class AlgorithmBackend {
             window_runtime_->rowContext(vertex, first, last);
     }
     void governedReference() {
-        if (!popt_full_capacity_)
+        if (!usesPoptMatrix())
             return;
         if (!popt_live_ || context_.hints_for_thread().current_src == UINT32_MAX)
             throw std::logic_error("popt-property-read-has-no-vertex-progress");
@@ -274,7 +282,7 @@ class AlgorithmBackend {
         }
         if (window_observer_)
             window_observer_->endPass();
-        if (!popt_full_capacity_)
+        if (!usesPoptMatrix())
             return;
         if (!popt_live_)
             throw std::logic_error("invalid-popt-pass-close");
@@ -316,7 +324,7 @@ class AlgorithmBackend {
         beginKernel();
     }
     void bindWindow(const ecg_window::RecordStream& stream, uint64_t vertices, uint64_t base) {
-        if (active_ || window_runtime_ || frontier_runtime_ || window_observer_ || popt_full_capacity_)
+        if (active_ || window_runtime_ || frontier_runtime_ || window_observer_ || usesPoptMatrix())
             throw std::logic_error("window model cannot rebind or share an active runtime");
         window_runtime_ = std::make_unique<WindowRuntime>(cache_, stream, vertices, base,
             options_.mechanism == ecg_record::Mechanism::REPLACEMENT, options_.window_candidate_rrpv,
@@ -324,7 +332,7 @@ class AlgorithmBackend {
         beginKernel();
     }
     void bindFrontier(const ecg_frontier::RecordStream& stream, uint64_t vertices, uint64_t base) {
-        if (active_ || window_runtime_ || frontier_runtime_ || window_observer_ || popt_full_capacity_)
+        if (active_ || window_runtime_ || frontier_runtime_ || window_observer_ || usesPoptMatrix())
             throw std::logic_error("frontier model cannot rebind or share an active runtime");
         frontier_runtime_ = std::make_unique<FrontierRuntime>(cache_, stream, vertices, base,
             options_.mechanism == ecg_record::Mechanism::REPLACEMENT, 7, true,
@@ -388,7 +396,7 @@ class AlgorithmBackend {
             window_observer_->finish(actual_records);
             cache_.observeLastLevel(nullptr);
         }
-        if (popt_full_capacity_ && (popt_live_ || !popt_ready_ || popt_governed_ != actual_records))
+        if (usesPoptMatrix() && (popt_live_ || !popt_ready_ || popt_governed_ != actual_records))
             throw std::logic_error("incomplete-popt-graph-work");
         if (active_)
             cache_.finishRecord(actual_records);
@@ -420,14 +428,16 @@ class AlgorithmBackend {
     }
 
     void writePopt(std::ostream& output) const {
-        if (!popt_full_capacity_) {
+        if (!usesPoptMatrix()) {
             output << "null";
             return;
         }
         output << "{\"encoding\":\"full\",\"scope\":\"graph-pass-irregular-regions\","
                << "\"full_data_capacity\":true,\"runtime_matrix_traffic_charged\":false,"
-               << "\"rank_mode\":\"" << (options_.popt_constant_rank ? "constant" : "future")
-               << "\",\"role\":\"" << (options_.popt_constant_rank ? "policy-ablation" : "favorable-quality-control")
+               << "\"rank_mode\":\"" << (context_.popt_constant_rank ? "constant" : "future")
+               << "\",\"consumer\":\"" << (referenceConsumer() ? "GRASP-reference" : "POPT")
+               << "\",\"role\":\"" << (referenceConsumer() ? "reference-consumer-diagnostic" :
+                    options_.popt_constant_rank ? "policy-ablation" : "favorable-quality-control")
                << "\",\"constant_rank\":0,\"matrix_digest\":" << popt_matrix_.digest()
                << ",\"original_rank_sum\":" << context_.popt_original_rank_sum
                << ",\"constant_rank_lookups\":" << context_.popt_constant_rank_lookups << ','
@@ -442,6 +452,22 @@ class AlgorithmBackend {
                << ",\"passes\":" << popt_passes_ << ",\"vertices\":" << popt_vertices_
                << ",\"governed_reads\":" << popt_governed_
                << ",\"lookup_calls\":" << context_.popt_lookup_count << '}';
+    }
+
+    void writeGraspReference(std::ostream& output) const {
+        if (!referenceConsumer()) {
+            output << "null";
+            return;
+        }
+        output << "{\"schema\":\"ecg.grasp-reference.v1\",\"mode\":\""
+               << ecg_algorithm::graspReferenceName(options_.grasp_reference)
+               << "\",\"availability\":\"ideal-matrix-at-victim-selection\","
+               << "\"base_policy\":\"GRASP_PAPER\",\"outside_pass_policy\":\"GRASP_PAPER\","
+               << "\"candidate_rrpv_filter\":false,\"strictly_farther_only\":true,"
+               << "\"victim_decisions\":" << context_.grasp_reference_decisions
+               << ",\"covered_base_victims\":" << context_.grasp_reference_covered_bases
+               << ",\"victim_overrides\":" << context_.grasp_reference_overrides
+               << ",\"lower_rrpv_overrides\":" << context_.grasp_reference_lower_rrpv_overrides << '}';
     }
 
     void writeBfsTraffic(std::ostream& output) const {
@@ -485,6 +511,11 @@ class AlgorithmBackend {
     }
 
   private:
+    bool referenceConsumer() const {
+        return options_.grasp_reference != ecg_algorithm::GraspReferenceMode::OFF;
+    }
+    bool usesPoptMatrix() const { return popt_full_capacity_ || referenceConsumer(); }
+
     enum class BfsPhase : uint8_t { SETUP, PROBE, BUILD, SORT, BETWEEN };
     void transitionBfsPhase(BfsPhase expected, BfsPhase next) {
         if (bfs_phase_ != expected)

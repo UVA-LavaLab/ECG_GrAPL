@@ -291,6 +291,84 @@ void testPoptConstantRanksPreserveOtherMechanics() {
     }
 }
 
+void testGraspReferenceConsumer() {
+    popt_reref::FullMatrix matrix;
+    matrix.configure(64, 4, 4 * 256);
+    matrix.reference(0, 1);
+    matrix.reference(1, 10);
+    matrix.reference(2, 1);
+    matrix.finish();
+    for (bool flat : {false, true}) {
+        cache_sim::GraphCacheContext context, ordinary_context;
+        for (auto* c : {&context, &ordinary_context}) {
+            c->topology.num_vertices = 64;
+            c->registerPropertyArray(reinterpret_cast<const void*>(0x1000), 64, 4, 192, 0.5);
+            c->registerPropertyArray(reinterpret_cast<const void*>(0x2000), 64, 4, 192, 0.5);
+        }
+        context.regions[0].popt_line_offset = 0;
+        context.compound_popt = true;
+        context.popt_constant_rank = flat;
+        context.grasp_reference_consumer = true;
+        context.initRereference(matrix.data(), 4, 256, 64, 64);
+        context.setCurrentVertices(0, 0);
+        cache_sim::CacheLevel cache("L3", 192, 64, 3, cache_sim::EvictionPolicy::GRASP);
+        cache_sim::CacheLevel ordinary("L3", 192, 64, 3, cache_sim::EvictionPolicy::GRASP);
+        cache.initGraphContext(&context);
+        ordinary.initGraphContext(&ordinary_context);
+        std::vector<cache_sim::CacheLine> ways(3);
+        for (std::size_t way = 0; way < ways.size(); ++way) {
+            ways[way].valid = true;
+            ways[way].line_addr = way == 2 ? 0x2000 : 0x1000 + way * 64;
+            ways[way].last_access = way == 2 ? 0 : 10 + way;
+            ways[way].rrpv = way == 1 ? 0 : 7;
+        }
+        check(cache.selectVictimForTest(ways) == (flat ? 0 : 1) && ways[1].rrpv == 0 &&
+              ways[0].rrpv == 7 && ways[2].rrpv == 7,
+              "reference ranks refine GRASP across RRPVs without non-property priority or extra aging");
+        check(context.popt_lookup_count == 2 && context.popt_original_rank_sum == 11 &&
+              context.popt_constant_rank_lookups == (flat ? 2 : 0) &&
+              context.grasp_reference_lower_rrpv_overrides == (flat ? 0 : 1),
+              "both diagnostic modes compute covered matrix ranks, excluding streamed output");
+        const uint64_t lookups = context.popt_lookup_count;
+        ways[2].valid = false;
+        check(cache.selectVictimForTest(ways) == 2 && context.popt_lookup_count == lookups,
+              "reference diagnostics preserve invalid-way precedence without speculative lookups");
+        ways[2].valid = true;
+        ways[0].line_addr = 0x2000;
+        check(cache.selectVictimForTest(ways) == 0 && context.popt_lookup_count == lookups,
+              "uncovered GRASP base victims cannot be replaced by property priority");
+        ways[0].line_addr = 0x1000;
+        context.setCurrentVertices(UINT32_MAX, UINT32_MAX);
+        check(cache.selectVictimForTest(ways) == 0 && context.popt_lookup_count == lookups,
+              "missing source progress retains GRASP rather than P-OPT's LRU fallback");
+        context.setCurrentVertices(0, 0);
+        context.rereference.matrix = nullptr;
+        check(cache.selectVictimForTest(ways) == 0 && context.popt_lookup_count == lookups,
+              "unbound and outside-pass reference behavior is ordinary GRASP");
+        context.rereference.matrix = matrix.data();
+        ways[1].line_addr = 0x1080;
+        ways[0].rrpv = 6;
+        ways[1].rrpv = 0;
+        ways[2].rrpv = 5;
+        auto expected = ways;
+        const auto base = ordinary.selectVictimForTest(expected);
+        check(cache.selectVictimForTest(ways) == base &&
+              ways[0].rrpv == expected[0].rrpv && ways[1].rrpv == expected[1].rrpv &&
+              ways[2].rrpv == expected[2].rrpv,
+              "equal reference ranks retain the first GRASP victim and exactly its original aging");
+        cache.insert(0x1000, true);
+        ordinary.insert(0x1000, true);
+        cache_sim::CacheLine a, b;
+        check(cache.lineSnapshotForTest(0x1000, a) && ordinary.lineSnapshotForTest(0x1000, b) &&
+              a.rrpv == b.rrpv && a.dirty == b.dirty,
+              "reference diagnostics preserve ordinary GRASP insertion and dirty state");
+        check(cache.access(0x1000, false) && ordinary.access(0x1000, false) &&
+              cache.lineSnapshotForTest(0x1000, a) && ordinary.lineSnapshotForTest(0x1000, b) &&
+              a.rrpv == b.rrpv && a.dirty == b.dirty,
+              "reference diagnostics preserve ordinary GRASP hit promotion");
+    }
+}
+
 void testFrontierProducerAndCounts() {
     static_assert(!std::is_same<ecg_frontier::RecordStream, ecg_window::RecordStream>::value,
                   "frontier and window streams must not alias");
@@ -1145,6 +1223,7 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testGraspReferenceConsumer();
     testFrontierProducerAndCounts();
     testFrontierVictimAndContext();
     testPoptConstantRanksPreserveOtherMechanics();

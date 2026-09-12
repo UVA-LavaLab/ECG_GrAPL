@@ -6846,7 +6846,7 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
         return algorithm_matrix.policy_labels(
             policies, options.record_base_policy, options.window_observer,
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
-            options.frontier_gating)
+            options.frontier_gating, options.grasp_reference)
     return [spec.label for spec in policies]
 
 

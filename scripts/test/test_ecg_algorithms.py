@@ -356,6 +356,202 @@ def test_popt_rank_runner_receipts_cannot_alias_the_real_baseline(tmp_path, rank
     assert csv_status(output / "roi_matrix.csv", ["POPT:UNCHARGED"], popt_rank_mode=other)[0] == "partial"
 
 
+def test_grasp_reference_retains_matrix_setup_and_program_work(tmp_path):
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "same-result.json"
+    results = []
+    for mode in ("flat", "full"):
+        ran = subprocess.run([
+            "setarch", os.uname().machine, "-R", str(binary),
+            "--algorithm", "spmv", "--graph", str(graph), "--policy", "GRASP_PAPER",
+            "--grasp-reference", mode, "--repeat", "2", "--delta", "8", "--values", "--evidence",
+            "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256", "--l2-ways", "2",
+            "--llc-bytes", "1024", "--llc-ways", "2", "--output", str(output),
+        ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0",
+                "POPT_MATRIX_STREAM_SIM": "1"}, capture_output=True, text=True, timeout=30, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        payload = json.loads(output.read_text())
+        reference, matrix = payload["grasp_reference"], payload["popt"]
+        assert reference["schema"] == "ecg.grasp-reference.v1" and reference["mode"] == mode
+        assert reference["availability"] == "ideal-matrix-at-victim-selection"
+        assert reference["base_policy"] == reference["outside_pass_policy"] == "GRASP_PAPER"
+        assert reference["candidate_rrpv_filter"] is False and reference["strictly_farther_only"] is True
+        assert reference["covered_base_victims"] > 0 and matrix["lookup_calls"] > 0
+        assert matrix["original_rank_sum"] > 0
+        assert matrix["rank_mode"] == ("constant" if mode == "flat" else "future")
+        assert matrix["constant_rank_lookups"] == (matrix["lookup_calls"] if mode == "flat" else 0)
+        assert matrix["consumer"] == "GRASP-reference" and matrix["role"] == "reference-consumer-diagnostic"
+        assert payload["setup_cache_policy"] == "GRASP_PAPER" and payload["diagnostic_only"] is True
+        assert payload["policy_ablation"] is (mode == "flat")
+        assert payload["measurement_scope"] == "ideal-availability-reference-consumer"
+        assert payload["metrics"]["L3"]["size_bytes"] == 1024 and payload["metrics"]["L3"]["ways"] == 2
+        assert payload["metrics"]["popt_matrix_stream_lines_simulated"] == 0
+        assert payload["workload"]["carrier_allocation_bytes"] == 0
+        if mode == "flat":
+            assert reference["victim_overrides"] == reference["lower_rrpv_overrides"] == 0
+        options = algorithm_matrix.parse_options(f"--graph {graph} --repeat 2 --grasp-reference {mode}")
+        validation = dict(algorithm="spmv", mode="csr", policy="GRASP_PAPER",
+            graph=algorithm_matrix.graph_info(graph, allow_weighted=True, traversal="out"), graph_path=graph,
+            options=options, requested_bytes=0, minimum_mantissa_bits=0, evidence=True, llc_sets=8)
+        algorithm_matrix.validate_payload(payload, ran.stdout, **validation)
+        algorithm_matrix.validate_traffic_phases(payload)
+        for section, field, value in (
+            ("grasp_reference", "mode", "off"), ("grasp_reference", "candidate_rrpv_filter", True),
+            ("grasp_reference", "strictly_farther_only", False), ("grasp_reference", "outside_pass_policy", "LRU"),
+            ("grasp_reference", "covered_base_victims", 0), ("popt", "matrix_bytes", 0),
+            ("popt", "rank_mode", "future" if mode == "flat" else "constant"),
+            ("popt", "consumer", "POPT"), ("popt", "role", "favorable-quality-control"),
+            ("popt", "runtime_matrix_traffic_charged", True),
+        ):
+            forged = json.loads(json.dumps(payload))
+            forged[section][field] = value
+            if field == "covered_base_victims":
+                forged["grasp_reference"]["victim_overrides"] = 1
+            with pytest.raises(RecordReceiptError):
+                algorithm_matrix.validate_payload(forged, ran.stdout, **validation)
+        results.append(payload)
+    flat, full = results
+    assert flat["workload"] == full["workload"]
+    assert flat["traffic_phases"]["setup"] == full["traffic_phases"]["setup"]
+    for key in ("matrix_digest", "matrix_bytes", "matrix_lines", "epochs", "banks", "covered_regions",
+                "construction_read_bytes", "construction_write_bytes", "workspace_peak_bytes",
+                "passes", "vertices", "governed_reads"):
+        assert flat["popt"][key] == full["popt"][key], key
+
+
+@pytest.mark.parametrize("extra", [
+    ["--algorithm", "bfs"], ["--policy", "LRU"], ["--policy", "POPT_UNCHARGED"],
+    ["--mode", "transport"], ["--popt-rank-mode", "constant"], ["--grasp-scope", "graph-passes"],
+    ["--bfs-direction", "do"], ["--record-model", "window"], ["--record-model", "frontier"],
+    ["--window-observer", "control"], ["--bfs-traffic-phases", "on"],
+    ["--record-preprocess", "traversal"], ["--sources", "0,1"], ["--grasp-reference", "invalid"],
+])
+def test_grasp_reference_rejects_unsupported_cli_before_loading(tmp_path, extra):
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    ran = subprocess.run([
+        str(binary), "--algorithm", "spmv", "--graph", str(tmp_path / "not-read.sg"),
+        "--policy", "GRASP_PAPER", "--grasp-reference", "full", *extra,
+    ], capture_output=True, text=True, timeout=10, check=False)
+    assert ran.returncode == 2 and "ECG-ALGORITHM-ERROR" in ran.stderr
+    assert "not-read.sg" not in ran.stderr
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_grasp_reference_rejects_native_paths(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--current-algorithms", "--ecg-equivalence", "--benchmark", "spmv",
+        "--options", f"--graph {tmp_path / 'not-read.sg'} --grasp-reference full",
+    ])
+    services = SimpleNamespace(parse_size_bytes=roi_matrix.parse_size_bytes)
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("GRASP_PAPER"), "8MB", backend, services)
+    assert rows[0]["status"] == "error" and rows[0]["error"] == "GRASP reference diagnostic is cache_sim-only"
+
+
+def test_grasp_reference_off_preserves_ordinary_grasp(tmp_path):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "same-result.json"
+    results = []
+    controls = (["--record-preprocess", "csr"], ["--grasp-reference", "off"])
+    padding = max(sum(len(value) for value in extra) for extra in controls)
+    for extra in controls:
+        # Hold launcher size and allocation class fixed for this real-address cache fixture.
+        env = {**os.environ, "GRAPHBREW_TEST_ARGV_PADDING": "x" * (padding - sum(len(value) for value in extra))}
+        ran = subprocess.run([
+            "setarch", os.uname().machine, "-R", str(binary), "--algorithm", "spmv",
+            "--graph", str(graph), "--policy", "GRASP_PAPER", "--repeat", "2", "--values", "--evidence",
+            "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256", "--l2-ways", "2",
+            "--llc-bytes", "1024", "--llc-ways", "2", "--output", str(output), *extra,
+        ], env=env, capture_output=True, text=True, timeout=30, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        payload = json.loads(output.read_text())
+        assert payload["popt"] is None and payload["grasp_reference"] is None
+        assert payload["diagnostic_only"] is False
+        results.append(payload)
+    for field in ("workload", "metrics", "traffic_phases"):
+        assert results[0][field] == results[1][field]
+
+
+def test_grasp_reference_profile_is_four_same_work_cells(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg import algorithm_matrix
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    jobs = experiment_run.expand_jobs(experiment_run.parse_args(
+        ["--profile", "ecg_grasp_reference_cache", "--list"]), manifest, tmp_path)
+    assert len(jobs) == 3 and sum(len(j.metadata["policies"]) for j in jobs) == 4
+    gate = manifest["profile_controls"]["ecg_grasp_reference_cache"]["development_gate"]
+    assert gate["minimum_margin"] == 0.02 and gate["full_graph_runs"] == 4
+    assert gate["no_automatic_follow_on"] is True
+    labels = set()
+    diagnostics = []
+    for job in jobs:
+        options = algorithm_matrix.parse_options(job.metadata["options"])
+        assert job.metadata["benchmark"] == "spmv" and options.graph.name == "cit-Patents-dbg.sg"
+        assert options.repeat == 2 and options.record_model == "next" and options.record_preprocess == "csr"
+        assert options.grasp_scope == "all" and options.window_observer == "off" and options.popt_rank_mode == "future"
+        assert job.metadata["l3_sizes"] == ["8MB"]
+        for flag, value in (("--l1d-size", "32kB"), ("--l1d-ways", "8"), ("--l2-size", "256kB"),
+                            ("--l2-ways", "8"), ("--l3-ways", "16"), ("--cache-sim-omp-threads", "1"),
+                            ("--cache-record-rss-mib", "2048"), ("--prefetcher", "none")):
+            assert job.command[job.command.index(flag) + 1] == value
+        labels.update(job.metadata["expected_policy_labels"])
+        if options.grasp_reference != "off":
+            assert job.metadata["policies"] == ["GRASP_PAPER"]
+            diagnostics.append(job)
+    assert labels == {"GRASP_PAPER", "POPT_UNCHARGED", "DIAG_GRASP_REFERENCE_FULL", "DIAG_GRASP_REFERENCE_FLAT"}
+    assert len(diagnostics) == 2
+    assert [len(a) for a in diagnostics[0].command] == [len(a) for a in diagnostics[1].command]
+    assert {k: len(v) for k, v in diagnostics[0].metadata["env"].items()} == {
+        k: len(v) for k, v in diagnostics[1].metadata["env"].items()}
+
+
+@pytest.mark.parametrize("mode", ["flat", "full"])
+def test_grasp_reference_runner_distinguishes_diagnostic_from_baselines(tmp_path, mode):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    from scripts.experiments.ecg.flows.experiment_run import csv_status
+    if not (ROOT / "bench/bin_sim/algorithms").is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "matrix"
+    ran = subprocess.run([
+        "python3", str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "cache-sim", "--current-algorithms", "--benchmark", "spmv",
+        "--options", f"--graph {graph} --repeat 2 --grasp-reference {mode}",
+        "--policies", "GRASP_PAPER", "--ecg-equivalence",
+        "--algorithm-workspace-bytes", str(32 << 20), "--cache-record-rss-mib", "512",
+        "--l1d-size", "128B", "--l1d-ways", "2", "--l2-size", "256B", "--l2-ways", "2",
+        "--l3-sizes", "1024B", "--l3-ways", "2", "--no-build", "--out-dir", str(output),
+    ], capture_output=True, text=True, timeout=60, check=False)
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    rows = json.loads((output / "roi_matrix.json").read_text())
+    marker = json.loads((output / "roi_matrix.complete.json").read_text())
+    assert len(rows) == 1 and rows[0]["policy_label"] == f"DIAG_GRASP_REFERENCE_{mode.upper()}"
+    assert marker["policy_labels"] == marker["expected_policy_labels"] == [rows[0]["policy_label"]]
+    assert rows[0]["popt_matrix_bytes"] == 8192 and rows[0]["popt_consumer"] == "GRASP-reference"
+    assert rows[0]["grasp_reference_mode"] == mode and rows[0]["setup_cache_policy"] == "GRASP_PAPER"
+    assert rows[0]["diagnostic_only"] == "1" and rows[0]["policy_ablation"] == ("1" if mode == "flat" else "0")
+    assert csv_status(output / "roi_matrix.csv", ["GRASP_PAPER"], grasp_reference=mode)[0] == "ok"
+    assert csv_status(output / "roi_matrix.csv", ["GRASP_PAPER"])[0] == "partial"
+    other = "full" if mode == "flat" else "flat"
+    assert csv_status(output / "roi_matrix.csv", ["GRASP_PAPER"], grasp_reference=other)[0] == "partial"
+
+
 @pytest.mark.parametrize("width", [4, 8])
 def test_frontier_mask_cost_matched_enabled_and_ignored(tmp_path, width):
     from scripts.experiments.ecg import algorithm_matrix

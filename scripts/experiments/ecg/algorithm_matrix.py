@@ -55,6 +55,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--record-model", choices=("next", "window", "frontier"), default="next")
     parser.add_argument("--frontier-gating", choices=("enabled", "ignored"), default="enabled")
     parser.add_argument("--popt-rank-mode", choices=("future", "constant"), default="future")
+    parser.add_argument("--grasp-reference", choices=("off", "full", "flat"), default="off")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
     parser.add_argument("--bfs-traffic-phases", choices=("on", "off"), default="off")
     parser.add_argument("--window-candidate-rrpv", choices=(6, 7), type=int, default=6)
@@ -110,12 +111,21 @@ def popt_rank_label(label: str, rank_mode: str) -> str:
     return "POPT_UNCHARGED_CONST_RANK"
 
 
+def grasp_reference_label(label: str, mode: str) -> str:
+    if mode == "off":
+        return label
+    require(mode in ("full", "flat") and label == "GRASP_PAPER",
+            "reference consumer requires the ordinary GRASP_PAPER diagnostic")
+    return "DIAG_GRASP_REFERENCE_" + mode.upper()
+
+
 def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
-                  popt_rank_mode: str = "future", frontier_gating: str = "enabled") -> list[str]:
-    return [popt_rank_label(grasp_scope_label(observer_policy_label(record_policy_label(
+                  popt_rank_mode: str = "future", frontier_gating: str = "enabled",
+                  grasp_reference: str = "off") -> list[str]:
+    return [grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(record_policy_label(
                 spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), observer),
-                grasp_scope), popt_rank_mode)
+                grasp_scope), popt_rank_mode), grasp_reference)
             for spec in policies]
 
 
@@ -131,8 +141,10 @@ def validate_payload(
             "algorithm backend/mode/policy receipt mismatch")
     require(payload.get("grasp_scope", "all") == options.grasp_scope, "GRASP phase-scope receipt mismatch")
     constant_ranks = options.popt_rank_mode == "constant"
+    reference = options.grasp_reference != "off"
+    rank_constant = constant_ranks or options.grasp_reference == "flat"
     frontier = options.record_model == "frontier"
-    ablation = constant_ranks or frontier and options.frontier_gating == "ignored"
+    ablation = rank_constant or frontier and options.frontier_gating == "ignored"
     require(payload.get("policy_ablation", False) is ablation and
             (not constant_ranks or backend == "cache_sim" and policy == "POPT_UNCHARGED" and
              mode == "csr" and algorithm in ("spmv", "bfs") and options.bfs_direction == "td"),
@@ -141,9 +153,10 @@ def validate_payload(
     require(payload.get("record_base_policy") == expected_base,
             "algorithm record base-policy receipt mismatch")
     observing = options.window_observer != "off"
-    require(payload.get("diagnostic_only", False) is observing,
+    require(payload.get("diagnostic_only", False) is (observing or reference),
             "algorithm diagnostic scope mismatch")
     require(payload.get("measurement_scope") == (
+                "ideal-availability-reference-consumer" if reference else
                 "observation-only-unchanged-grasp" if observing else
                 "algorithm-data-traffic-including-construction" if backend == "cache_sim"
                 else "algorithm-setup-kernel-drain"),
@@ -318,7 +331,7 @@ def validate_payload(
         require(payload.get("window_runtime") is None, "unrequested window runtime")
     if not frontier:
         require(payload.get("frontier_runtime") is None, "unrequested frontier runtime")
-    if policy == "POPT_UNCHARGED":
+    if policy == "POPT_UNCHARGED" or reference:
         popt = payload.get("popt")
         require(backend == "cache_sim" and mode == "csr" and not direction_optimizing and
                 isinstance(popt, dict) and popt.get("encoding") == "full" and
@@ -335,23 +348,52 @@ def validate_payload(
                 _integer(popt, "construction_read_bytes") > 0 and
                 _integer(popt, "construction_write_bytes") > 0,
                 "P-OPT matrix coverage, construction or progress mismatch")
-        if "rank_mode" in popt or constant_ranks:
-            require(popt.get("rank_mode") == options.popt_rank_mode and popt.get("role") == (
-                        "policy-ablation" if constant_ranks else "favorable-quality-control") and
+        if "rank_mode" in popt or rank_constant or reference:
+            require(popt.get("rank_mode") == ("constant" if rank_constant else "future") and popt.get("role") == (
+                        "reference-consumer-diagnostic" if reference else
+                        "policy-ablation" if rank_constant else "favorable-quality-control") and
+                    popt.get("consumer", "POPT") == ("GRASP-reference" if reference else "POPT") and
                     _integer(popt, "constant_rank") == 0 and
                     _integer(popt, "constant_rank_lookups") == (
-                        _integer(popt, "lookup_calls") if constant_ranks else 0),
+                        _integer(popt, "lookup_calls") if rank_constant else 0),
                     "P-OPT future-rank selection was not isolated or labeled")
             _integer(popt, "original_rank_sum")
             _integer(popt, "matrix_digest")
-    reference = contract()["references"][algorithm]
-    if evidence and graph_path.name == reference["graph"] and options.source == 0 and not options.source_list:
-        require(graph.sha256 == contract()["graphs"][reference["graph"]]["sha256"],
+    else:
+        require(payload.get("popt") is None, "unrequested graph-reference matrix")
+    if reference:
+        require(backend == "cache_sim" and algorithm == "spmv" and mode == "csr" and policy == "GRASP_PAPER" and
+                not constant_ranks and options.grasp_scope == "all" and options.bfs_traffic_phases == "off" and
+                options.record_preprocess == "csr" and options.record_model == "next" and not options.source_list and
+                not observing and payload.get("setup_cache_policy") == "GRASP_PAPER",
+                "GRASP reference diagnostic scope mismatch")
+        validate_grasp_reference(payload, options)
+    else:
+        require(payload.get("grasp_reference") is None, "unrequested GRASP reference consumer")
+    expected_result = contract()["references"][algorithm]
+    if evidence and graph_path.name == expected_result["graph"] and options.source == 0 and not options.source_list:
+        require(graph.sha256 == contract()["graphs"][expected_result["graph"]]["sha256"],
                 "reference fixture name has changed contents")
-        for key, expected in reference.items():
+        for key, expected in expected_result.items():
             if key != "graph":
                 require(work.get(key) == expected, f"independent {algorithm} reference failed: {key}")
     return work
+
+
+def validate_grasp_reference(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
+    reference = payload.get("grasp_reference")
+    require(isinstance(reference, dict) and reference.get("schema") == "ecg.grasp-reference.v1" and
+            reference.get("mode") == options.grasp_reference and
+            reference.get("availability") == "ideal-matrix-at-victim-selection" and
+            reference.get("base_policy") == reference.get("outside_pass_policy") == "GRASP_PAPER" and
+            reference.get("candidate_rrpv_filter") is False and reference.get("strictly_farther_only") is True,
+            "GRASP reference consumer mechanics or label mismatch")
+    require(_integer(reference, "lower_rrpv_overrides") <= _integer(reference, "victim_overrides") <=
+            _integer(reference, "covered_base_victims") <= _integer(reference, "victim_decisions") and
+            _integer(payload["popt"], "lookup_calls") >= reference["covered_base_victims"] and
+            (options.grasp_reference != "flat" or reference["victim_overrides"] == 0),
+            "GRASP reference victim or lookup accounting mismatch")
+    return reference
 
 
 def validate_bfs_phases(payload: dict[str, Any], options: argparse.Namespace) -> None:
@@ -742,6 +784,13 @@ def run_cache_cell(
         require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED")),
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
+        reference = options.grasp_reference != "off"
+        require(not reference or args.benchmark == "spmv" and mode == "csr" and policy == "GRASP_PAPER" and
+                options.popt_rank_mode == "future" and options.record_preprocess == "csr" and
+                options.record_model == "next" and options.grasp_scope == "all" and
+                options.bfs_traffic_phases == "off" and options.window_observer == "off" and
+                options.bfs_direction == "td" and not options.source_list,
+                "GRASP reference diagnostic requires CSR SpMV with ordinary GRASP_PAPER")
         require(options.popt_rank_mode == "future" or policy == "POPT_UNCHARGED" and
                 mode == "csr" and args.benchmark in ("spmv", "bfs") and options.bfs_direction == "td",
                 "constant P-OPT ranks require CSR SpMV or TD BFS with POPT_UNCHARGED")
@@ -768,12 +817,14 @@ def run_cache_cell(
                 "record base policy requires a current record mode")
         row["record_base_policy"] = options.record_base_policy
         row["grasp_scope"] = options.grasp_scope
-        row["policy_ablation"] = "1" if options.popt_rank_mode == "constant" or (
+        row["policy_ablation"] = "1" if options.popt_rank_mode == "constant" or options.grasp_reference == "flat" or (
             options.record_model == "frontier" and options.frontier_gating == "ignored") else "0"
         row["frontier_gating"] = options.frontier_gating
         row["policy_label"] = policy_labels([spec], options.record_base_policy, options.window_observer,
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
-            options.frontier_gating)[0]
+            options.frontier_gating, options.grasp_reference)[0]
+        if reference:
+            row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:
             row.update(diagnostic_only="1", measurement_scope="observation-only-unchanged-grasp")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
@@ -789,7 +840,7 @@ def run_cache_cell(
             workspace_limit=args.algorithm_workspace_bytes,
             carrier_limit=args.ecg_record_max_carrier_bytes, auxiliary_limit=args.ecg_record_max_auxiliary_bytes,
             rss_mib=args.cache_record_rss_mib, bfs_direction_optimizing=options.bfs_direction == "do",
-            preprocessing=options.record_preprocess, popt_full_capacity=policy == "POPT_UNCHARGED",
+            preprocessing=options.record_preprocess, popt_full_capacity=policy == "POPT_UNCHARGED" or reference,
             record_model=options.record_model)
         if observing:
             require(not graph.weighted and plan["array_bytes"] + options.window_observer_bytes <=
@@ -805,6 +856,8 @@ def run_cache_cell(
         rank_suffix = "" if options.popt_rank_mode == "future" else "_CONST_RANK"
         label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{model_suffix}{observer_suffix}{phase_suffix}"
                  f"{rank_suffix}_L3{parse_size_bytes(l3_size)}")
+        if reference:
+            label = f"cache_sim_{args.benchmark}_{row['policy_label']}_L3{parse_size_bytes(l3_size)}"
         data_path = out_dir / "cache_sim" / f"{label}.json"
         log_path = out_dir / "logs" / f"{label}.log"
         data_path.parent.mkdir(parents=True, exist_ok=True)
@@ -829,6 +882,8 @@ def run_cache_cell(
             command.extend(("--sources", options.sources))
         if policy == "POPT_UNCHARGED":
             command.extend(("--popt-rank-mode", options.popt_rank_mode))
+        if reference:
+            command.extend(("--grasp-reference", options.grasp_reference))
         if phase_modes:
             command.extend(("--grasp-scope", options.grasp_scope, "--bfs-traffic-phases", options.bfs_traffic_phases))
         if options.record_model == "window":
@@ -873,11 +928,13 @@ def run_cache_cell(
         metrics = payload.get("metrics")
         require(isinstance(metrics, dict) and isinstance(metrics.get("L3"), dict),
                 "algorithm cache metrics are missing")
-        if policy == "POPT_UNCHARGED":
+        if policy == "POPT_UNCHARGED" or reference:
             require(_integer(metrics["L3"], "size_bytes") == parse_size_bytes(l3_size) and
                     _integer(metrics["L3"], "ways") == int(args.l3_ways),
                     "P-OPT full-capacity control lost data capacity")
             row.update({"popt_" + key: value for key, value in payload["popt"].items()})
+        if reference:
+            row.update({"grasp_reference_" + key: value for key, value in payload["grasp_reference"].items()})
         traffic = _integer(metrics, "total_offchip_traffic")
         misses, hits = _integer(metrics["L3"], "misses"), _integer(metrics["L3"], "hits")
         row.update(validate_traffic_phases(payload))

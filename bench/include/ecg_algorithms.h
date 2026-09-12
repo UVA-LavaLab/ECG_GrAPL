@@ -26,6 +26,16 @@ enum class ReferencePattern : uint8_t { NEIGHBOR, VERTEX, NEIGHBOR_AND_VERTEX };
 enum class RecordBasePolicy : uint8_t { LRU, GRASP_PAPER };
 enum class WindowObserverMode : uint8_t { OFF, CONTROL, WINDOW };
 enum class RecordModel : uint8_t { NEXT, WINDOW, FRONTIER };
+enum class GraspReferenceMode : uint8_t { OFF, FULL, FLAT };
+
+inline const char* graspReferenceName(GraspReferenceMode mode) {
+    switch (mode) {
+      case GraspReferenceMode::OFF: return "off";
+      case GraspReferenceMode::FULL: return "full";
+      case GraspReferenceMode::FLAT: return "flat";
+    }
+    throw std::invalid_argument("invalid-GRASP-reference-mode");
+}
 
 inline const char* recordBasePolicyName(RecordBasePolicy policy) {
     switch (policy) {
@@ -68,6 +78,7 @@ struct Options {
     bool bfs_traffic_phases = false;
     bool grasp_graph_passes = false;
     bool popt_constant_rank = false;
+    GraspReferenceMode grasp_reference = GraspReferenceMode::OFF;
     RecordModel record_model = RecordModel::NEXT;
     bool frontier_gating = true;
     uint8_t window_candidate_rrpv = 6;
