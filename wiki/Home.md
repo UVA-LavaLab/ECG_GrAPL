@@ -78,3 +78,5 @@ before attributing this implementation's results to another algorithm.
 
 The [P-OPT rank-attribution study](P-OPT-Rank-Attribution) isolates future
 information from existing region/RRIP mechanics before new masking work.
+The subsequent [frontier-conditioned mask prototype](Frontier-Cohort-Mask)
+tests one BFS-specific design with real records and paid causal context.

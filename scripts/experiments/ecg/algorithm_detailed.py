@@ -208,7 +208,7 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
         require(options.popt_rank_mode == "future", "P-OPT rank ablation is cache_sim-only")
         require(options.grasp_scope == "all" and options.bfs_traffic_phases == "off",
                 "BFS phase controls are cache_sim-only")
-        require(options.record_model == "next", "window model is cache_sim-only")
+        require(options.record_model == "next", f"{options.record_model} model is cache_sim-only")
         require(options.window_observer == "off", "window observer is cache_sim-only")
         require(options.record_base_policy == "LRU",
                 "GRASP_PAPER record base is cache_sim-only")

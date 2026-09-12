@@ -12,6 +12,8 @@
 namespace ecg_window {
 
 struct Profile {
+    static constexpr bool fingerprint_carrier = false;
+    static constexpr uint64_t maximum_anchor = UINT64_MAX >> 3;
     uint64_t vertices, cohort_rows = 8, bin_rows = 1, bins = 0;
 
     explicit Profile(uint64_t count, uint64_t fixture_cohort = 0) : vertices(count) {
@@ -121,13 +123,15 @@ struct Layout {
     }
 };
 
-struct RecordStream {
+template<class SourceProfile>
+struct PotentialRecordStream {
     Layout layout;
     ecg_record::BuildStats stats;
     uint64_t vertices = 0, cohort_rows = 0;
     std::vector<uint32_t> words32;
     std::vector<uint64_t> words64;
     uint64_t known_records = 0;
+    uint64_t carrier_digest = 1469598103934665603ULL;
     uint64_t size() const { return layout.record_bytes == 4 ? words32.size() : words64.size(); }
     const uint8_t* data() const {
         return layout.record_bytes == 4 ? reinterpret_cast<const uint8_t*>(words32.data()) :
@@ -138,8 +142,10 @@ struct RecordStream {
     }
 };
 
-template<class RowAt, class IdAt, class Observe>
-RecordStream build(const Profile& profile, uint64_t records, const Layout& layout,
+using RecordStream = PotentialRecordStream<Profile>;
+
+template<class SourceProfile, class RowAt, class IdAt, class Observe>
+PotentialRecordStream<SourceProfile> build(const SourceProfile& profile, uint64_t records, const Layout& layout,
                    const ecg_record::BuildLimits& limits, RowAt row_at, IdAt id_at, Observe observe) {
     layout.validate();
     if (limits.source_id_bytes != 4)
@@ -150,7 +156,7 @@ RecordStream build(const Profile& profile, uint64_t records, const Layout& layou
         !ecg_record::checkedMultiply(records, 4, source_bytes) ||
         payload > limits.maximum_carrier_bytes || lines * 8 > limits.maximum_auxiliary_bytes)
         throw std::length_error("window-construction-budget");
-    RecordStream stream;
+    PotentialRecordStream<SourceProfile> stream;
     stream.layout = layout;
     stream.vertices = profile.vertices;
     stream.cohort_rows = profile.cohort_rows;
@@ -189,7 +195,7 @@ RecordStream build(const Profile& profile, uint64_t records, const Layout& layou
             observe(&entry, sizeof(entry), false);
             const uint64_t before = entry;
             const uint16_t token = profile.reverse(entry, static_cast<uint32_t>(row));
-            if (!(before & (uint64_t{1} << 48)))
+            if (!before)
                 ++stream.stats.property_lines;
             if (entry != before)
                 observe(&entry, sizeof(entry), true);
@@ -200,6 +206,8 @@ RecordStream build(const Profile& profile, uint64_t records, const Layout& layou
             else
                 stream.words64[index] = word;
             stream.known_records += token != 0;
+            if constexpr (SourceProfile::fingerprint_carrier)
+                stream.carrier_digest = (stream.carrier_digest ^ word) * 1099511628211ULL;
         }
         next = bounds.first;
     }

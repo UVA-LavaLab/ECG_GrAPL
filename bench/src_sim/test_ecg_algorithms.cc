@@ -291,6 +291,154 @@ void testPoptConstantRanksPreserveOtherMechanics() {
     }
 }
 
+void testFrontierProducerAndCounts() {
+    static_assert(!std::is_same<ecg_frontier::RecordStream, ecg_window::RecordStream>::value,
+                  "frontier and window streams must not alias");
+    static_assert(!std::is_constructible<cache_sim::WindowRuntime, cache_sim::CacheHierarchy&,
+                  const ecg_frontier::RecordStream&, uint64_t, uint64_t, bool, uint8_t>::value,
+                  "frontier records cannot enter the window decoder");
+    const ecg_frontier::Profile profile(128);
+    const std::array<uint32_t, 14> rows{{0, 1, 7, 8, 15, 16, 31, 40, 63, 64, 65, 80, 120, 127}};
+    bool equal = true;
+    for (uint32_t selected = 1; selected < (1u << rows.size()); ++selected) {
+        uint64_t state = 0;
+        for (std::size_t index = rows.size(); index-- > 0;) {
+            if (!(selected & (1u << index)))
+                continue;
+            const uint32_t row = rows[index];
+            uint16_t expected = 512;
+            for (std::size_t later = index + 1; later < rows.size(); ++later) {
+                if (!(selected & (1u << later)))
+                    continue;
+                const uint32_t gap = rows[later] / 8 - row / 8;
+                expected |= gap < 8 ? uint16_t{1} << gap : 256;
+            }
+            const uint16_t actual = profile.reverse(state, row);
+            const uint64_t frozen = state;
+            equal = equal && actual == expected && state < (uint64_t{1} << 52) &&
+                profile.reverse(state, row) == actual && state == frozen &&
+                profile.decode(actual, row, 16) == ((16 + row / 8) << 10 | actual);
+        }
+    }
+    check(equal, "all consumer subsets preserve exact cohort presence, overflow and frozen row duplicates");
+    ecg_frontier::Bitmap active{{uint64_t{1} << 5, 0, 0, 0}};
+    uint64_t first = 0;
+    const auto hint = profile.decode(0x224, 0, 0);
+    check(profile.rank(hint, 0, 0, active, true, first) && first == 5 &&
+          profile.rank(hint, 0, 0, active, false, first) && first == 2 &&
+          !profile.rank(profile.decode(0x200, 0, 0), 0, 0, active, true, first) &&
+          !profile.rank(profile.decode(0x300, 0, 0), 0, 0, active, true, first) &&
+          !profile.rank(hint, 16, 16, active, false, first),
+          "frontier ranking distinguishes usable intersections from empty, beyond-only and old-pass data");
+    bool rejected = false;
+    try { profile.decode(0x280, 127, 0); }
+    catch (const std::invalid_argument&) { rejected = true; }
+    check(rejected, "frontier tokens cannot invent consumers outside the graph");
+
+    const Fixture graph(128, true, {{0, 0, 1}, {0, 1, 1}, {8, 1, 1}, {40, 2, 1}, {80, 3, 1}, {127, 0, 1}});
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        const auto layout = ecg_frontier::Layout::select(3, width);
+        const auto stream = ecg_window::build(profile, graph.edges.size(), layout, ecg_record::BuildLimits{},
+            [&](uint64_t row) { return std::pair<uint64_t, uint64_t>{graph.offsets[row], graph.offsets[row + 1]}; },
+            [&](uint64_t index) { return static_cast<uint32_t>(graph.edges[index].id); },
+            [](const void*, uint64_t, bool) {});
+        check(stream.known_records == 6 && stream.stats.property_lines == 1 &&
+              stream.stats.auxiliary_peak_bytes == 64 &&
+              stream.stats.carrier_payload_bytes == 6 * width &&
+              stream.word(0) >> layout.id_bits == 0x322 &&
+              stream.word(1) >> layout.id_bits == 0x322 && layout.id(stream.word(1), 128) == 1,
+              "typed frontier carriers preserve IDs, known-empty words and graph-only construction");
+    }
+
+    ecg_frontier::Counts counts;
+    uint64_t reads = 0, writes = 0, steps = 0;
+    const auto memory = [&](const void*, uint64_t bytes, bool write) { (write ? writes : reads) += bytes; };
+    const auto step = [&] { ++steps; };
+    counts.initialize(profile, 0, memory, step);
+    check(counts.begin(memory, step)[0] == 1 && counts.consume(0, memory, step),
+          "consuming the seed clears its current cohort before its property accesses");
+    counts.append(0, 16, memory, step);
+    counts.append(1, 17, memory, step);
+    counts.append(2, 40, memory, step);
+    check(counts.remaining() == 0 && counts.next() == 3,
+          "discoveries belong to the next frontier, not current eligibility");
+    counts.close();
+    rejected = false;
+    try { counts.swap(2, step); }
+    catch (const std::logic_error&) { rejected = true; }
+    check(rejected, "frontier context rejects an incorrect algorithm frontier length");
+    counts.swap(3, step);
+    check(counts.begin(memory, step)[0] == ((uint64_t{1} << 2) | (uint64_t{1} << 5)) &&
+          !counts.consume(16, memory, step) && counts.consume(17, memory, step) &&
+          counts.consume(40, memory, step),
+          "a cohort clears only after its last remaining source, not its first source");
+    rejected = false;
+    try { counts.consume(40, memory, step); }
+    catch (const std::logic_error&) { rejected = true; }
+    check(rejected, "frontier context cannot underflow");
+    counts.close();
+    counts.swap(0, step);
+    counts.finish();
+    check(reads == counts.read_bytes && writes == counts.write_bytes &&
+          steps == counts.arithmetic_steps + counts.scan_steps + counts.swaps &&
+          reads == 4 * (8 + 2 * profile.bins) && writes == 2048 + 4 * 8,
+          "all source counter reads, writes, arithmetic, scans and swaps are charged");
+}
+
+void testFrontierVictimAndContext() {
+    const ecg_frontier::Profile profile(128);
+    const ecg_frontier::Bitmap current{{(uint64_t{1} << 4) | (uint64_t{1} << 5), 0, 0, 0}};
+    for (bool gating : {false, true}) {
+        cache_sim::GraphCacheContext context;
+        context.topology.num_vertices = 128;
+        context.registerPropertyArray(reinterpret_cast<const void*>(0x1000), 128, 4, 192, 0.5);
+        cache_sim::CacheLevel cache("L3", 192, 64, 3, cache_sim::EvictionPolicy::GRASP);
+        cache.initGraphContext(&context);
+        cache.prepareRecord(cache_sim::EvictionPolicy::GRASP);
+        cache.configureFrontier(profile, 0x1000, true, gating);
+        cache.windowProgress(0, 0, true);
+        cache.frontierContext(0, current);
+        std::vector<cache_sim::CacheLine> ways(3);
+        for (std::size_t way = 0; way < ways.size(); ++way) {
+            ways[way].valid = true;
+            ways[way].line_addr = 0x1000 + way * 64;
+            ways[way].rrpv = 7;
+            ways[way].last_access = way == 2 ? 0 : 10 + way;
+        }
+        ways[0].record_metadata.state = ways[1].record_metadata.state = ecg_record::LineState::FINITE;
+        ways[0].record_metadata.value = profile.decode(0x224, 0, 0);
+        ways[1].record_metadata.value = profile.decode(0x210, 0, 0);
+        check(cache.selectVictimForTest(ways) == (gating ? 0 : 1),
+              "frontier gating alone changes the first-cohort ranking of eligible victims");
+        ways[1].rrpv = 6;
+        check(cache.selectVictimForTest(ways) == 0, "frontier ranking cannot steal RRPV6 capacity");
+        ways[1].rrpv = 7;
+        ways[0].record_metadata.value = profile.decode(0x200, 0, 0);
+        check(cache.selectVictimForTest(ways) == 0, "known-empty frontier data remains neutral, not DEAD");
+        ways[0].record_metadata.value = profile.decode(0x224, 0, 0);
+        bool rejected = false;
+        try { cache.windowProgress(0, 5, true); }
+        catch (const std::logic_error&) { rejected = true; }
+        check(rejected, "cache source progress cannot skip a remaining frontier cohort");
+        cache.windowProgress(0, 4, true);
+        cache.clearFrontierCohort(0, 4);
+        cache.windowProgress(0, 5, true);
+        cache.clearFrontierCohort(0, 5);
+        cache.windowProgress(0, 16, false);
+        check(cache.selectVictimForTest(ways) == 2, "frontier pass closure uses LRU with intact recency");
+        cache.windowProgress(16, 16, true);
+        cache.frontierContext(16, current);
+        check(cache.selectVictimForTest(ways) == 0, "old-pass frontier words cannot revive after a new bitmap");
+        cache.insert(0x1000, false);
+        check(cache.observeWindow(0x1000, 10) &&
+              cache.applyWindow(0x1000, 10, profile.decode(0x224, 0, 0)) == ecg_record::ApplyResult::EXPIRED &&
+              cache.observeWindow(0x1000, 11) &&
+              cache.applyWindow(0x1000, 10, profile.decode(0x224, 0, 16)) == ecg_record::ApplyResult::STALE &&
+              cache.applyWindow(0x1000, 11, 0) == ecg_record::ApplyResult::APPLIED,
+              "frontier delivery preserves old-pass expiry, event cutoffs and newer UNKNOWN publication");
+    }
+}
+
 void testWindowObservationProfile() {
     using cache_sim::window_observation::Profile;
     const Profile profile(64, 32);
@@ -997,6 +1145,8 @@ void testTraversalPreprocessing() {
 
 int main() {
     using namespace ecg_algorithm;
+    testFrontierProducerAndCounts();
+    testFrontierVictimAndContext();
     testPoptConstantRanksPreserveOtherMechanics();
     testScopedGraspKeepsCacheState();
     testWindowTransportMatchesGrasp();

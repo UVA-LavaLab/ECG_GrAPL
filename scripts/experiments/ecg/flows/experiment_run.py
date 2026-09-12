@@ -774,9 +774,18 @@ def make_roi_job(
     if "algorithm_record_model" in settings:
         model = str(settings["algorithm_record_model"])
         floor = int(settings.get("window_candidate_rrpv", 6))
-        if not settings.get("current_algorithms") or model != "window" or floor not in (6, 7):
+        if not settings.get("current_algorithms") or model not in ("window", "frontier") or floor not in (6, 7):
             raise SystemExit("invalid current window model")
-        options += f" --record-model window --window-candidate-rrpv {floor}"
+        options += f" --record-model {model}"
+        if model == "window":
+            options += f" --window-candidate-rrpv {floor}"
+        elif "window_candidate_rrpv" in settings:
+            raise SystemExit("frontier model has fixed RRPV7 eligibility")
+    if "algorithm_frontier_gating" in settings:
+        gating = str(settings["algorithm_frontier_gating"])
+        if settings.get("algorithm_record_model") != "frontier" or gating not in ("enabled", "ignored"):
+            raise SystemExit("invalid current frontier gating")
+        options += " --frontier-gating " + gating
     if settings.get("bfs_traffic_phases"):
         if not settings.get("current_algorithms") or benchmark != "bfs":
             raise SystemExit("BFS phase attribution requires the current BFS kernel")
@@ -1073,15 +1082,17 @@ def make_roi_job(
         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     record_base, observer, record_model, candidate_rrpv, grasp_scope = "LRU", "off", "next", 6, "all"
     popt_rank_mode = "future"
+    frontier_gating = "enabled"
     if settings.get("current_algorithms"):
         parsed_algorithm = algorithm_matrix.parse_options(options)
         record_base, observer = parsed_algorithm.record_base_policy, parsed_algorithm.window_observer
         record_model, candidate_rrpv = parsed_algorithm.record_model, parsed_algorithm.window_candidate_rrpv
         grasp_scope = parsed_algorithm.grasp_scope
         popt_rank_mode = parsed_algorithm.popt_rank_mode
+        frontier_gating = parsed_algorithm.frontier_gating
     expected_policy_labels = algorithm_matrix.policy_labels(
         [parse_policy_spec(policy) for policy in all_policies], record_base, observer, record_model,
-        candidate_rrpv, grasp_scope, popt_rank_mode)
+        candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
@@ -1163,6 +1174,7 @@ def make_roi_job(
             "window_candidate_rrpv": candidate_rrpv,
             "grasp_scope": grasp_scope,
             "popt_rank_mode": popt_rank_mode,
+            "frontier_gating": frontier_gating,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1197,7 +1209,7 @@ def csv_status(
         expected_policies: list[str] | None = None,
         record_base_policy: str = "LRU", window_observer: str = "off",
         record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
-        popt_rank_mode: str = "future") -> tuple[str, str]:
+        popt_rank_mode: str = "future", frontier_gating: str = "enabled") -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1214,7 +1226,7 @@ def csv_status(
                         grasp_scope == "all" and popt_rank_mode == "future"
                         else set(algorithm_matrix.policy_labels(
                             [parse_policy_spec(policy) for policy in expected_policies], record_base_policy,
-                            window_observer, record_model, candidate_rrpv, grasp_scope, popt_rank_mode)))
+                            window_observer, record_model, candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating)))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1239,7 +1251,8 @@ def job_csv_status(job: Job) -> tuple[str, str]:
     floor = int(job.metadata.get("window_candidate_rrpv", 6))
     scope = str(job.metadata.get("grasp_scope", "all"))
     rank_mode = str(job.metadata.get("popt_rank_mode", "future"))
-    status, detail = csv_status(job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode)
+    gating = str(job.metadata.get("frontier_gating", "enabled"))
+    status, detail = csv_status(job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode, gating)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
@@ -1279,7 +1292,7 @@ def job_csv_status(job: Job) -> tuple[str, str]:
                        scope == "all" and rank_mode == "future"
                        else algorithm_matrix.policy_labels(
                            [parse_policy_spec(policy) for policy in expected], record_base, observer,
-                           model, floor, scope, rank_mode))
+                           model, floor, scope, rank_mode, gating))
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),

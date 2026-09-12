@@ -37,6 +37,7 @@
 #include "../ecg_record_stream.h"
 #include "../ecg_record_window.h"
 #include "../ecg_window.h"
+#include "../ecg_frontier.h"
 
 namespace cache_sim {
 
@@ -1856,8 +1857,10 @@ public:
         record_receiver_.disable();
     }
 
-    void configureWindow(const ecg_window::Profile& profile, uint64_t property_base,
-                         bool replacement, uint8_t candidate_floor, bool lru_outside = false) {
+    template<class Profile>
+    void configurePotential(const Profile& profile, uint64_t property_base,
+                            bool replacement, uint8_t candidate_floor, bool lru_outside,
+                            bool frontier_gating = true) {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto* region = graph_ctx_ ? graph_ctx_->findRegion(property_base) : nullptr;
         if (window_used_ || record_configured_ || observation_sink_ || !record_prepared_ ||
@@ -1867,7 +1870,15 @@ public:
             (candidate_floor != 6 && candidate_floor != 7) ||
             !ecg_record::checkedAdd(property_base, profile.vertices * 4, window_property_end_))
             throw std::invalid_argument("invalid-window-cache-configuration");
-        window_profile_ = &profile;
+        if constexpr (std::is_same<Profile, ecg_frontier::Profile>::value) {
+            if (candidate_floor != 7 || !lru_outside)
+                throw std::invalid_argument("frontier-requires-phased-GRASP-and-RRPV7");
+            frontier_profile_ = &profile;
+            frontier_gating_ = frontier_gating;
+        } else {
+            static_assert(std::is_same<Profile, ecg_window::Profile>::value, "unknown potential profile");
+            window_profile_ = &profile;
+        }
         window_property_base_ = property_base;
         window_replacement_ = replacement;
         window_floor_ = candidate_floor;
@@ -1875,21 +1886,75 @@ public:
         window_used_ = true;
     }
 
+    void configureWindow(const ecg_window::Profile& profile, uint64_t property_base,
+                         bool replacement, uint8_t candidate_floor, bool lru_outside = false) {
+        configurePotential(profile, property_base, replacement, candidate_floor, lru_outside);
+    }
+
+    void configureFrontier(const ecg_frontier::Profile& profile, uint64_t property_base,
+                           bool replacement, bool gating) {
+        configurePotential(profile, property_base, replacement, 7, true, gating);
+    }
+
     void windowProgress(uint64_t base, uint64_t watermark, bool open) {
         std::lock_guard<std::mutex> lock(mutex_);
         uint64_t end = 0;
-        if (!window_profile_ || !ecg_record::checkedAdd(base, window_profile_->bins, end) ||
+        const uint64_t bins = frontier_profile_ ? frontier_profile_->bins : window_profile_ ? window_profile_->bins : 0;
+        if (!bins || !ecg_record::checkedAdd(base, bins, end) ||
             watermark < base || watermark > end || watermark < window_watermark_ ||
             base < window_pass_base_ || (open && watermark == end))
             throw std::logic_error("invalid-window-progress");
+        if (frontier_profile_ && frontier_context_valid_) {
+            if (base != window_pass_base_)
+                throw std::logic_error("frontier-context-replaced-before-close");
+            for (uint64_t word = 0; word < frontier_current_.size(); ++word) {
+                const uint64_t passed = std::min<uint64_t>(64,
+                    watermark - base > word * 64 ? watermark - base - word * 64 : 0);
+                if (frontier_current_[word] & ecg_record::lowMask(passed))
+                    throw std::logic_error("frontier-progress-skips-remaining-work");
+            }
+        }
+        if (!open || base != window_pass_base_)
+            frontier_context_valid_ = false;
         window_pass_base_ = base;
         window_watermark_ = watermark;
         window_open_ = open;
     }
 
+    void frontierContext(uint64_t base, const ecg_frontier::Bitmap& bitmap) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!frontier_profile_ || !window_open_ || base != window_pass_base_ ||
+            window_watermark_ != base || frontier_context_valid_)
+            throw std::logic_error("invalid-frontier-context-installation");
+        bool any = false;
+        for (uint64_t word = 0; word < bitmap.size(); ++word) {
+            const uint64_t bits = std::min<uint64_t>(64,
+                frontier_profile_->bins > word * 64 ? frontier_profile_->bins - word * 64 : 0);
+            if (bitmap[word] & ~ecg_record::lowMask(bits))
+                throw std::invalid_argument("frontier-context-outside-domain");
+            any = any || bitmap[word];
+        }
+        if (!any)
+            throw std::logic_error("empty-frontier-pass-context");
+        frontier_current_ = bitmap;
+        frontier_context_valid_ = true;
+    }
+
+    void clearFrontierCohort(uint64_t base, uint64_t cohort) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!frontier_profile_ || !window_open_ || !frontier_context_valid_ ||
+            base != window_pass_base_ || cohort >= frontier_profile_->bins ||
+            cohort != window_watermark_ - base ||
+            !(frontier_current_[cohort / 64] & (uint64_t{1} << (cohort % 64))))
+            throw std::logic_error("invalid-frontier-context-clear");
+        frontier_current_[cohort / 64] &= ~(uint64_t{1} << (cohort % 64));
+    }
+
     bool observeWindow(uint64_t address, uint64_t order) {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!window_profile_ || address % 4 || address < window_property_base_ || address >= window_property_end_)
+        if ((!window_profile_ && !frontier_profile_) || address % 4 ||
+            address < window_property_base_ || address >= window_property_end_ ||
+            (frontier_profile_ && window_open_ && !frontier_context_valid_))
             throw std::logic_error("invalid-window-observation-address");
         for (auto& line : cache_[getSetIndex(address)])
             if (line.valid && line.tag == getTag(address)) {
@@ -1901,14 +1966,17 @@ public:
 
     ecg_record::ApplyResult applyWindow(uint64_t address, uint64_t order, uint64_t payload) {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (!window_profile_ || address % 64 || address < window_property_base_ || address >= window_property_end_ || !order)
+        if ((!window_profile_ && !frontier_profile_) || address % 64 ||
+            address < window_property_base_ || address >= window_property_end_ || !order)
             throw std::logic_error("invalid-window-delivery");
         for (auto& line : cache_[getSetIndex(address)]) {
             if (!line.valid || line.tag != getTag(address))
                 continue;
             if (line.record_metadata.state != ecg_record::LineState::PENDING || line.record_metadata.value != order)
                 return ecg_record::ApplyResult::STALE;
-            const bool expired = payload && !window_profile_->live(payload, window_watermark_, window_pass_base_);
+            const bool expired = payload && !(frontier_profile_ ?
+                frontier_profile_->live(payload, window_watermark_, window_pass_base_) :
+                window_profile_->live(payload, window_watermark_, window_pass_base_));
             ecg_window::apply(line.record_metadata, order, expired ? 0 : payload);
             return expired ? ecg_record::ApplyResult::EXPIRED : ecg_record::ApplyResult::APPLIED;
         }
@@ -1919,6 +1987,8 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         window_open_ = false;
         window_profile_ = nullptr;
+        frontier_profile_ = nullptr;
+        frontier_context_valid_ = false;
     }
 
     const ecg_window::PolicyStats& windowStats() const { return window_stats_; }
@@ -2023,6 +2093,9 @@ private:
     ecg_record::Receiver record_receiver_;
     bool record_configured_ = false;
     const ecg_window::Profile* window_profile_ = nullptr;
+    const ecg_frontier::Profile* frontier_profile_ = nullptr;
+    ecg_frontier::Bitmap frontier_current_{};
+    bool frontier_gating_ = true, frontier_context_valid_ = false;
     uint64_t window_property_base_ = 0, window_property_end_ = 0;
     uint64_t window_pass_base_ = 0, window_watermark_ = 0;
     bool window_used_ = false, window_open_ = false, window_replacement_ = false;
@@ -2373,27 +2446,42 @@ private:
         }
         if (grasp_phase_scoped_ && !grasp_graph_pass_)
             return findVictimLRU(set);
-        if (window_profile_) {
+        if (window_profile_ || frontier_profile_) {
             const std::size_t base = window_lru_outside_ && !window_open_ ?
                 findVictimLRU(set) : findVictimGRASP(set);
             if (!window_replacement_ || !window_open_)
                 return base;
+            if (frontier_profile_ && !frontier_context_valid_)
+                throw std::logic_error("frontier-selection-before-context");
             ++window_stats_.decisions;
             const auto live = [&](std::size_t way) {
                 const auto& line = set[way];
+                uint64_t first = 0;
                 return line.line_addr >= window_property_base_ && line.line_addr < window_property_end_ &&
                     line.record_metadata.state == ecg_record::LineState::FINITE &&
-                    window_profile_->live(line.record_metadata.value, window_watermark_, window_pass_base_);
+                    (frontier_profile_ ? frontier_profile_->rank(line.record_metadata.value,
+                        window_watermark_, window_pass_base_, frontier_current_, frontier_gating_, first) :
+                        window_profile_->live(line.record_metadata.value, window_watermark_, window_pass_base_));
             };
             if (!live(base))
                 return base;
             ++window_stats_.live_base;
             std::size_t selected = base;
+            const auto poorer = [&](std::size_t way) {
+                if (!frontier_profile_)
+                    return window_profile_->poorerRetention(set[way].record_metadata.value,
+                        set[selected].record_metadata.value, window_watermark_, window_pass_base_);
+                uint64_t candidate = 0, reference = 0;
+                if (!frontier_profile_->rank(set[way].record_metadata.value, window_watermark_, window_pass_base_,
+                        frontier_current_, frontier_gating_, candidate) ||
+                    !frontier_profile_->rank(set[selected].record_metadata.value, window_watermark_, window_pass_base_,
+                        frontier_current_, frontier_gating_, reference))
+                    throw std::logic_error("unrankable-frontier-candidate");
+                return candidate > reference;
+            };
             for (int rank = 7; rank >= window_floor_; --rank)
                 for (std::size_t way = 0; way < set.size(); ++way)
-                    if (set[way].rrpv == rank && live(way) &&
-                        window_profile_->poorerRetention(set[way].record_metadata.value,
-                            set[selected].record_metadata.value, window_watermark_, window_pass_base_))
+                    if (set[way].rrpv == rank && live(way) && poorer(way))
                         selected = way;
             if (selected != base) {
                 ++window_stats_.overrides;
@@ -4671,6 +4759,13 @@ public:
             throw std::invalid_argument("window transport cannot share another record model");
         l3_->configureWindow(profile, base, replacement, floor, lru_outside);
     }
+    void configureFrontier(const ecg_frontier::Profile& profile, uint64_t base, bool replacement, bool gating) {
+        if (record_model_ || ref32_commit_channel_ || ref32_prefetch_enabled_ || refresh_exact_stamp_)
+            throw std::invalid_argument("frontier transport cannot share another record model");
+        l3_->configureFrontier(profile, base, replacement, gating);
+    }
+    void frontierContext(uint64_t base, const ecg_frontier::Bitmap& bitmap) { l3_->frontierContext(base, bitmap); }
+    void clearFrontierCohort(uint64_t base, uint64_t cohort) { l3_->clearFrontierCohort(base, cohort); }
     void windowProgress(uint64_t base, uint64_t watermark, bool open) { l3_->windowProgress(base, watermark, open); }
     bool observeWindow(uint64_t address, uint64_t order) { return l3_->observeWindow(address, order); }
     ecg_record::ApplyResult applyWindow(uint64_t address, uint64_t order, uint64_t payload) {

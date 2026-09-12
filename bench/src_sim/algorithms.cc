@@ -36,7 +36,9 @@ int main(int argc, char** argv) {
             const auto report = [&](std::ostream& output) {
                 output << "{\"schema\":\"ecg.algorithm-result.v1\",\"backend\":\"cache_sim\","
                        << "\"timing_valid_for_speedup\":false,"
-                       << "\"policy_ablation\":" << (command.options.popt_constant_rank ? "true" : "false") << ','
+                       << "\"policy_ablation\":" << (command.options.popt_constant_rank ||
+                            (command.options.record_model == ecg_algorithm::RecordModel::FRONTIER &&
+                             !command.options.frontier_gating) ? "true" : "false") << ','
                        << "\"diagnostic_only\":" << (observing ? "true" : "false") << ','
                        << "\"measurement_scope\":\"" << (observing ? "observation-only-unchanged-grasp" :
                             "algorithm-data-traffic-including-construction") << "\","
@@ -67,6 +69,8 @@ int main(int argc, char** argv) {
                 backend.writeWindowObserver(output);
                 output << ",\"window_runtime\":";
                 backend.writeWindowRuntime(output);
+                output << ",\"frontier_runtime\":";
+                backend.writeFrontierRuntime(output);
                 output << ",\"bfs_traffic_phases\":";
                 backend.writeBfsTraffic(output);
                 output << ",\"grasp_phase_control\":";
@@ -83,5 +87,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        }, true, true, true, true, true);
+        }, true, true, true, true, true, true);
 }

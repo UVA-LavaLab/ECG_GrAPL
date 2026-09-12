@@ -77,11 +77,11 @@ class AlgorithmBackend {
             throw std::invalid_argument("constant P-OPT ranks require the current BFS or SpMV P-OPT control");
         if ((options_.bfs_traffic_phases || options_.grasp_graph_passes) &&
             (options_.algorithm != ecg_algorithm::Algorithm::BFS ||
-             (options_.records && (options_.bfs_traffic_phases || options_.record_model != ecg_algorithm::RecordModel::WINDOW)) ||
+             (options_.records && (options_.bfs_traffic_phases || options_.record_model == ecg_algorithm::RecordModel::NEXT)) ||
              options_.bfs_direction_optimizing || options_.window_observer != ecg_algorithm::WindowObserverMode::OFF ||
              (options_.grasp_graph_passes && (!grasp_paper_ || popt_full_capacity_))))
             throw std::invalid_argument("BFS phase controls require TD BFS and a compatible baseline/model");
-        if (options_.record_model == ecg_algorithm::RecordModel::WINDOW &&
+        if (options_.record_model != ecg_algorithm::RecordModel::NEXT &&
             (options_.algorithm != ecg_algorithm::Algorithm::BFS || !options_.records || !graph.records ||
              graph.weights || options_.bfs_direction_optimizing || options_.traversal_preprocessing ||
              options_.window_observer != ecg_algorithm::WindowObserverMode::OFF ||
@@ -89,6 +89,11 @@ class AlgorithmBackend {
              (options_.mechanism != ecg_record::Mechanism::TRANSPORT &&
               options_.mechanism != ecg_record::Mechanism::REPLACEMENT)))
             throw std::invalid_argument("window model requires unweighted TD BFS, GRASP base and T/R only");
+        if (options_.record_model == ecg_algorithm::RecordModel::FRONTIER && !options_.grasp_graph_passes)
+            throw std::invalid_argument("frontier model requires graph-pass GRASP scope");
+        if (options_.record_model == ecg_algorithm::RecordModel::FRONTIER &&
+            (!options_.sources.empty() || options_.repetitions != 1))
+            throw std::invalid_argument("frontier model requires a single BFS source and query");
         if (options_.window_observer != ecg_algorithm::WindowObserverMode::OFF &&
             (options_.algorithm != ecg_algorithm::Algorithm::BFS || options_.records ||
              options_.bfs_direction_optimizing || graph.weights || !grasp_paper_ || popt_full_capacity_))
@@ -128,7 +133,9 @@ class AlgorithmBackend {
                 llc_before = stats.hits.load() + stats.misses.load();
                 misses_before = cache_.getMemoryAccesses();
             }
-            if (window_runtime_)
+            if (frontier_runtime_)
+                frontier_runtime_->memory(address, write);
+            else if (window_runtime_)
                 window_runtime_->memory(address, write);
             else
                 cache_.access(address, write);
@@ -197,7 +204,7 @@ class AlgorithmBackend {
     void beginGraphPass() {
         if (options_.bfs_traffic_phases)
             transitionBfsPhase(BfsPhase::BETWEEN, BfsPhase::PROBE);
-        if (options_.grasp_graph_passes && !window_runtime_) {
+        if (options_.grasp_graph_passes && !window_runtime_ && !frontier_runtime_) {
             if (!grasp_phase_configured_ || grasp_pass_open_)
                 throw std::logic_error("invalid-scoped-GRASP-pass-begin");
             cache_.graspGraphPass(true);
@@ -217,6 +224,8 @@ class AlgorithmBackend {
         ++popt_passes_;
     }
     void visitVertex(uint64_t vertex) {
+        if (frontier_runtime_)
+            frontier_runtime_->visitVertex(vertex);
         if (window_runtime_)
             window_runtime_->visitVertex(vertex);
         if (window_observer_)
@@ -229,6 +238,8 @@ class AlgorithmBackend {
         ++popt_vertices_;
     }
     void rowContext(uint64_t vertex, uint64_t first, uint64_t last) {
+        if (frontier_runtime_)
+            frontier_runtime_->rowContext(vertex, first, last);
         if (window_runtime_)
             window_runtime_->rowContext(vertex, first, last);
     }
@@ -244,6 +255,8 @@ class AlgorithmBackend {
             window_observer_->designated(index, destination);
     }
     void associateNeighborWrite(uint64_t index, uint32_t destination, const void* base, uint64_t bytes) {
+        if (frontier_runtime_)
+            frontier_runtime_->associateStore(index, destination, reinterpret_cast<uint64_t>(base), bytes);
         if (window_runtime_)
             window_runtime_->associateStore(index, destination, reinterpret_cast<uint64_t>(base), bytes);
         if (window_observer_)
@@ -252,7 +265,7 @@ class AlgorithmBackend {
     void endGraphPass() {
         if (options_.bfs_traffic_phases)
             transitionBfsPhase(BfsPhase::PROBE, BfsPhase::BETWEEN);
-        if (options_.grasp_graph_passes && !window_runtime_) {
+        if (options_.grasp_graph_passes && !window_runtime_ && !frontier_runtime_) {
             if (!grasp_pass_open_)
                 throw std::logic_error("invalid-scoped-GRASP-pass-close");
             cache_.graspGraphPass(false);
@@ -281,6 +294,15 @@ class AlgorithmBackend {
                                entering ? BfsPhase::SORT : BfsPhase::BETWEEN);
     }
 
+    void appendFrontierContext(uint64_t index, uint32_t vertex) {
+        if (frontier_runtime_)
+            frontier_runtime_->appendFrontier(index, vertex);
+    }
+    void swapFrontierContext(uint64_t count) {
+        if (frontier_runtime_)
+            frontier_runtime_->swapFrontier(count);
+    }
+
     void bind(const ecg_record::NativeConfiguration& configuration,
               const ecg_record::RecordStream& stream) {
         if (!active_) {
@@ -294,32 +316,44 @@ class AlgorithmBackend {
         beginKernel();
     }
     void bindWindow(const ecg_window::RecordStream& stream, uint64_t vertices, uint64_t base) {
-        if (active_ || window_runtime_ || window_observer_ || popt_full_capacity_)
+        if (active_ || window_runtime_ || frontier_runtime_ || window_observer_ || popt_full_capacity_)
             throw std::logic_error("window model cannot rebind or share an active runtime");
         window_runtime_ = std::make_unique<WindowRuntime>(cache_, stream, vertices, base,
             options_.mechanism == ecg_record::Mechanism::REPLACEMENT, options_.window_candidate_rrpv,
             options_.grasp_graph_passes);
         beginKernel();
     }
+    void bindFrontier(const ecg_frontier::RecordStream& stream, uint64_t vertices, uint64_t base) {
+        if (active_ || window_runtime_ || frontier_runtime_ || window_observer_ || popt_full_capacity_)
+            throw std::logic_error("frontier model cannot rebind or share an active runtime");
+        frontier_runtime_ = std::make_unique<FrontierRuntime>(cache_, stream, vertices, base,
+            options_.mechanism == ecg_record::Mechanism::REPLACEMENT, 7, true,
+            options_.frontier_gating, options_.source);
+        beginKernel();
+    }
     void beginPass(bool has_next) {
-        if (window_runtime_) window_runtime_->beginPass();
+        if (frontier_runtime_) frontier_runtime_->beginPass();
+        else if (window_runtime_) window_runtime_->beginPass();
         else cache_.recordBeginPass(has_next);
     }
     void closePass() {
-        if (window_runtime_) window_runtime_->closePass();
+        if (frontier_runtime_) frontier_runtime_->closePass();
+        else if (window_runtime_) window_runtime_->closePass();
         else cache_.recordClosePass();
     }
     uint64_t recordLoad(uint64_t index) {
-        return window_runtime_ ? window_runtime_->recordLoad(index) : cache_.recordLoad(index);
+        return frontier_runtime_ ? frontier_runtime_->recordLoad(index) :
+            window_runtime_ ? window_runtime_->recordLoad(index) : cache_.recordLoad(index);
     }
-    uint64_t windowTraceValue() const { return window_runtime_->traceValue(); }
-    uint64_t windowTraceSource() const { return window_runtime_->traceSource(); }
+    uint64_t windowTraceValue() const { return frontier_runtime_ ? frontier_runtime_->traceValue() : window_runtime_->traceValue(); }
+    uint64_t windowTraceSource() const { return frontier_runtime_ ? frontier_runtime_->traceSource() : window_runtime_->traceSource(); }
 
     template<class T>
     T property(uint64_t index, uint64_t word, const T* base) {
-        if (window_runtime_) {
+        if (window_runtime_ || frontier_runtime_) {
             if constexpr (std::is_same<T, uint32_t>::value)
-                return base[window_runtime_->property(index, word, reinterpret_cast<uint64_t>(base))];
+                return base[frontier_runtime_ ? frontier_runtime_->property(index, word, reinterpret_cast<uint64_t>(base)) :
+                    window_runtime_->property(index, word, reinterpret_cast<uint64_t>(base))];
             else
                 throw std::logic_error("window property must be U32");
         }
@@ -333,6 +367,8 @@ class AlgorithmBackend {
     }
 
     void drain() {
+        if (frontier_runtime_)
+            frontier_runtime_->drain();
         if (window_runtime_)
             window_runtime_->drain();
         if (active_)
@@ -341,9 +377,11 @@ class AlgorithmBackend {
     void finish(uint64_t actual_records) {
         if (options_.bfs_traffic_phases && bfs_phase_ != BfsPhase::BETWEEN)
             throw std::logic_error("BFS traffic attribution did not close");
-        if (options_.grasp_graph_passes && !window_runtime_ && (!grasp_phase_configured_ || grasp_pass_open_ ||
+        if (options_.grasp_graph_passes && !window_runtime_ && !frontier_runtime_ && (!grasp_phase_configured_ || grasp_pass_open_ ||
             grasp_transitions_ != 2 * grasp_passes_))
             throw std::logic_error("scoped GRASP did not close its control stream");
+        if (frontier_runtime_)
+            frontier_runtime_->finish(actual_records);
         if (window_runtime_)
             window_runtime_->finish(actual_records);
         if (window_observer_) {
@@ -374,6 +412,10 @@ class AlgorithmBackend {
     }
     void writeWindowRuntime(std::ostream& output) const {
         if (window_runtime_) window_runtime_->write(output);
+        else output << "null";
+    }
+    void writeFrontierRuntime(std::ostream& output) const {
+        if (frontier_runtime_) frontier_runtime_->write(output);
         else output << "null";
     }
 
@@ -430,7 +472,7 @@ class AlgorithmBackend {
     }
 
     void writeGraspPhaseControl(std::ostream& output) const {
-        if (!options_.grasp_graph_passes || window_runtime_) {
+        if (!options_.grasp_graph_passes || window_runtime_ || frontier_runtime_) {
             output << "null";
             return;
         }
@@ -550,7 +592,7 @@ class AlgorithmBackend {
     }
     void beginKernel() {
         if (!kernel_started_) {
-            if (options_.grasp_graph_passes && !window_runtime_) {
+            if (options_.grasp_graph_passes && !window_runtime_ && !frontier_runtime_) {
                 cache_.configureGraspPhases();
                 grasp_phase_configured_ = true;
             }
@@ -577,6 +619,7 @@ class AlgorithmBackend {
     uint64_t grasp_transitions_ = 0, grasp_passes_ = 0;
     std::unique_ptr<window_observation::Observer> window_observer_;
     std::unique_ptr<WindowRuntime> window_runtime_;
+    std::unique_ptr<FrontierRuntime> frontier_runtime_;
     popt_reref::FullMatrix popt_matrix_;
     ecg_algorithm::GraphView popt_graph_;
     std::vector<PoptBank> banks_;

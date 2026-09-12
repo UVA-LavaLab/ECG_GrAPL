@@ -52,7 +52,8 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--max-passes", type=int, default=1000000)
     parser.add_argument("--record-preprocess", choices=("csr", "traversal"), default="csr")
     parser.add_argument("--record-base-policy", choices=("LRU", "GRASP_PAPER"), default="LRU")
-    parser.add_argument("--record-model", choices=("next", "window"), default="next")
+    parser.add_argument("--record-model", choices=("next", "window", "frontier"), default="next")
+    parser.add_argument("--frontier-gating", choices=("enabled", "ignored"), default="enabled")
     parser.add_argument("--popt-rank-mode", choices=("future", "constant"), default="future")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
     parser.add_argument("--bfs-traffic-phases", choices=("on", "off"), default="off")
@@ -62,7 +63,11 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--bfs-direction", choices=("td", "do"), default="td")
     parser.add_argument("--bfs-alpha", type=int, default=15)
     parser.add_argument("--bfs-beta", type=int, default=18)
-    parsed = parser.parse_args(shlex.split(text))
+    tokens = shlex.split(text)
+    parsed = parser.parse_args(tokens)
+    if parsed.record_model != "frontier" and any(
+            token == "--frontier-gating" or token.startswith("--frontier-gating=") for token in tokens):
+        raise RecordResourceError("frontier gating requires the frontier model")
     if min(parsed.repeat, parsed.delta, parsed.max_passes, parsed.bfs_alpha, parsed.bfs_beta,
            parsed.window_observer_bytes) <= 0 or parsed.source < 0:
         raise RecordResourceError("invalid current algorithm parameters")
@@ -82,8 +87,10 @@ def _integer(fields: dict[str, Any], name: str) -> int:
 
 
 def record_policy_label(label: str, mode: str, base_policy: str, record_model: str = "next",
-                        candidate_rrpv: int = 6) -> str:
+                        candidate_rrpv: int = 6, frontier_gating: str = "enabled") -> str:
     result = label if mode == "csr" or base_policy == "LRU" else f"{label}_BASE_{base_policy}"
+    if record_model == "frontier":
+        return f"{result}_MODEL_FRONTIER_RRPV7_GATING_{frontier_gating.upper()}"
     return result if record_model == "next" else f"{result}_MODEL_WINDOW_RRPV{candidate_rrpv}"
 
 
@@ -105,9 +112,9 @@ def popt_rank_label(label: str, rank_mode: str) -> str:
 
 def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
-                  popt_rank_mode: str = "future") -> list[str]:
+                  popt_rank_mode: str = "future", frontier_gating: str = "enabled") -> list[str]:
     return [popt_rank_label(grasp_scope_label(observer_policy_label(record_policy_label(
-                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv), observer),
+                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), observer),
                 grasp_scope), popt_rank_mode)
             for spec in policies]
 
@@ -124,7 +131,9 @@ def validate_payload(
             "algorithm backend/mode/policy receipt mismatch")
     require(payload.get("grasp_scope", "all") == options.grasp_scope, "GRASP phase-scope receipt mismatch")
     constant_ranks = options.popt_rank_mode == "constant"
-    require(payload.get("policy_ablation", False) is constant_ranks and
+    frontier = options.record_model == "frontier"
+    ablation = constant_ranks or frontier and options.frontier_gating == "ignored"
+    require(payload.get("policy_ablation", False) is ablation and
             (not constant_ranks or backend == "cache_sim" and policy == "POPT_UNCHARGED" and
              mode == "csr" and algorithm in ("spmv", "bfs") and options.bfs_direction == "td"),
             "P-OPT rank-ablation receipt mismatch")
@@ -150,6 +159,7 @@ def validate_payload(
     require(work.get("schema") == "ecg.algorithm-workload.v1" and
             work.get("algorithm") == algorithm and work.get("variant") == expected_variant and
             work.get("prediction_semantics") == (
+                "consumer-cohort-potential-read" if frontier else
                 "source-cohort-potential-read" if window else specification["semantics"]) and
             work.get("record_base_policy") == expected_base,
             "algorithm variant or prediction semantics mismatch")
@@ -160,6 +170,8 @@ def validate_payload(
         reuse_scope = "none"
     if window:
         reuse_scope = "source-cohort-window"
+    if frontier:
+        reuse_scope = "consumer-cohort-mask"
     require(work.get("record_preprocess", "csr") == options.record_preprocess and
             (("record_preprocess" not in work and options.record_preprocess == "csr") or
              work.get("record_reuse_scope") == reuse_scope),
@@ -207,7 +219,7 @@ def validate_payload(
                 work["position_trace_digest"] != "0000000000000000", "empty algorithm evidence")
         if records:
             require(work["record_trace_digest"] != "0000000000000000", "empty actual-record semantic evidence")
-    if records and not window:
+    if records and not (window or frontier):
         maximum = _integer(work, "maximum_encoded_id")
         require(maximum <= graph.maximum_id and (algorithm == "tc" or maximum == graph.maximum_id),
                 "encoded VID bound disagrees with the actual OUT stream")
@@ -275,7 +287,7 @@ def validate_payload(
                 if replacement else 0), "ordinary governed-region invalidations are unaccounted")
     elif not records:
         require(_integer(work, "carrier_allocation_bytes") == 0, "CSR baseline built an ECG carrier")
-    if window:
+    if window or frontier:
         require(algorithm == "bfs" and records and not graph.weighted and backend == "cache_sim" and
                 not direction_optimizing and options.record_base_policy == "GRASP_PAPER" and
                 options.record_preprocess == "csr" and options.window_observer == "off" and
@@ -286,16 +298,26 @@ def validate_payload(
         layout = window_layout(graph.maximum_id, requested_bytes)
         for key, value in layout.items():
             require(_integer(work, key) == value, f"window layout mismatch: {key}")
+        prefix = "frontier" if frontier else "window"
         require(_integer(work, "carrier_allocation_bytes") == graph.records * layout["record_bytes"] and
                 _integer(work, "construction_read_bytes") > 0 and _integer(work, "construction_write_bytes") > 0 and
-                _integer(work, "window_known_records") <= graph.records and
-                _integer(work, "window_token_bits") == 10 and
-                _integer(work, "window_known_records") + _integer(work, "constructed_unknown_records") == graph.records and
+                _integer(work, prefix + "_known_records") <= graph.records and
+                _integer(work, prefix + "_token_bits") == 10 and
+                _integer(work, prefix + "_known_records") + _integer(work, "constructed_unknown_records") == graph.records and
                 _integer(work, "constructed_finite_records") == _integer(work, "constructed_wrap_records") == 0,
                 "window carrier construction is not accounted")
-        validate_window_runtime(payload, options)
-    else:
+        if frontier:
+            require(options.grasp_scope == "graph-passes" and not options.source_list and options.repeat == 1 and
+                    _integer(work, "frontier_known_records") == graph.records and
+                    bool(re.fullmatch(r"[0-9a-f]{16}", str(work.get("frontier_carrier_digest", "")))),
+                    "frontier source scope or immutable carrier receipt mismatch")
+            validate_frontier_runtime(payload, options)
+        else:
+            validate_window_runtime(payload, options)
+    if not window:
         require(payload.get("window_runtime") is None, "unrequested window runtime")
+    if not frontier:
+        require(payload.get("frontier_runtime") is None, "unrequested frontier runtime")
     if policy == "POPT_UNCHARGED":
         popt = payload.get("popt")
         require(backend == "cache_sim" and mode == "csr" and not direction_optimizing and
@@ -335,11 +357,11 @@ def validate_payload(
 def validate_bfs_phases(payload: dict[str, Any], options: argparse.Namespace) -> None:
     work = payload["workload"]
     control = payload.get("grasp_phase_control")
-    if options.grasp_scope == "graph-passes" and options.record_model == "window":
-        runtime = payload.get("window_runtime")
+    if options.grasp_scope == "graph-passes" and options.record_model in ("window", "frontier"):
+        runtime = payload.get(options.record_model + "_runtime")
         require(control is None and isinstance(runtime, dict) and
                 runtime.get("grasp_scope") == "graph-passes" and
-                runtime.get("phase_control_accounting") == "shared-window-markers",
+                runtime.get("phase_control_accounting") == f"shared-{options.record_model}-markers",
                 "window phase control must use its existing paid markers exactly once")
     elif options.grasp_scope == "graph-passes":
         require(payload["backend"] == "cache_sim" and payload["policy"] == "GRASP_PAPER" and
@@ -390,23 +412,34 @@ def validate_bfs_phases(payload: dict[str, Any], options: argparse.Namespace) ->
 
 
 def validate_window_runtime(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
-    w, work = payload.get("window_runtime"), payload["workload"]
-    require(isinstance(w, dict) and w.get("schema") == "ecg.window-runtime.v1" and
-            w.get("record_model") == "potential-window-u32" and
+    return validate_potential_runtime(payload, options, False)
+
+
+def validate_frontier_runtime(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
+    return validate_potential_runtime(payload, options, True)
+
+
+def validate_potential_runtime(payload: dict[str, Any], options: argparse.Namespace, frontier: bool) -> dict[str, Any]:
+    model = "frontier" if frontier else "window"
+    w, work = payload.get(model + "_runtime"), payload["workload"]
+    require(isinstance(w, dict) and w.get("schema") == f"ecg.{model}-runtime.v1" and
+            w.get("record_model") == ("consumer-cohort-mask-u32" if frontier else "potential-window-u32") and
             w.get("cost_unit") == "functional-steps-not-CPU-cycles" and
             w.get("replacement") is (payload["mode"] == "replacement"),
             "window runtime model or evidence boundary mismatch")
     require(w.get("grasp_scope", "all") == options.grasp_scope and
-            (options.grasp_scope == "all" or w.get("phase_control_accounting") == "shared-window-markers"),
+            (options.grasp_scope == "all" or w.get("phase_control_accounting") == f"shared-{model}-markers"),
             "window outside-pass policy or control accounting mismatch")
-    require(_integer(w, "candidate_floor") == options.window_candidate_rrpv ==
-            _integer(work, "window_candidate_rrpv") and
+    floor = 7 if frontier else options.window_candidate_rrpv
+    require(_integer(w, "candidate_floor") == floor and
+            (frontier or floor == _integer(work, "window_candidate_rrpv")) and
             _integer(w, "record_bytes") == work["record_bytes"] and _integer(w, "token_bits") == 10,
             "window runtime layout or victim-rule mismatch")
     minimum = max(8, (work["vertices"] + 255) // 256)
     cohort = 1 << (minimum - 1).bit_length()
-    require(_integer(w, "cohort_rows") == cohort and _integer(w, "bin_rows") == cohort // 8 and
-            _integer(w, "bins_per_pass") == (work["vertices"] + cohort // 8 - 1) // (cohort // 8),
+    bin_rows = cohort if frontier else cohort // 8
+    require(_integer(w, "cohort_rows") == cohort and _integer(w, "bin_rows") == bin_rows and
+            _integer(w, "bins_per_pass") == (work["vertices"] + bin_rows - 1) // bin_rows,
             "window runtime cohort rule changed")
     require(_integer(w, "record_loads") == _integer(w, "property_reads") == work["actual_records"] and
             _integer(w, "record_read_bytes") == work["actual_records"] * work["record_bytes"] and
@@ -422,21 +455,40 @@ def validate_window_runtime(payload: dict[str, Any], options: argparse.Namespace
             _integer(w, "pending") == 0 and _integer(w, "queue_capacity") == 16 and
             _integer(w, "queue_peak") <= 16 and _integer(w, "latency_steps") == 8,
             "window publication queue did not close")
+    local_steps = 0
+    if frontier:
+        updates = 2 * work["reached"]
+        require(w.get("gating") == options.frontier_gating and options.grasp_scope == "graph-passes" and
+                _integer(w, "counter_storage_bytes") == 2048 and _integer(w, "llc_bitmap_bytes") == 32 and
+                _integer(w, "source_staging_bytes") == 32 and _integer(w, "llc_context_budget_bytes") == 64 and
+                2048 <= _integer(w, "source_count_object_bytes") <= _integer(w, "controller_object_bytes") and
+                _integer(w, "counter_read_bytes") == 4 * (updates + w["passes"] * w["bins_per_pass"]) and
+                _integer(w, "counter_write_bytes") == 2048 + 4 * updates and
+                _integer(w, "counter_arithmetic_steps") == updates and
+                _integer(w, "counter_scan_steps") == w["passes"] * w["bins_per_pass"] and
+                _integer(w, "counter_initialization_memory_steps") == 514 and
+                _integer(w, "frontier_appends") == work["reached"] - 1 and
+                _integer(w, "frontier_swaps") == w["passes"] and
+                w["passes"] <= _integer(w, "frontier_clears") <= w["passes"] * w["bins_per_pass"] and
+                _integer(w, "markers") >= 2 * w["passes"] + w["frontier_clears"] and
+                _integer(w, "remaining_current") == _integer(w, "remaining_next") == 0,
+                "frontier causal counts, complete source costs or gating scope mismatch")
+        local_steps = w["counter_arithmetic_steps"] + w["counter_scan_steps"] + w["frontier_swaps"]
     require(_integer(w, "configuration_steps") == 16 and
-            _integer(w, "marker_steps") == 16 * _integer(w, "markers") and
-            _integer(w, "control_bytes") == 48 * (w["markers"] + 1) and
-            2 * w["passes"] <= w["markers"] <= (w["bins_per_pass"] + 2) * w["passes"] and
+            _integer(w, "marker_steps") == 16 * _integer(w, "markers") + (8 * w["passes"] if frontier else 0) and
+            _integer(w, "control_bytes") == 48 * (w["markers"] + 1) + (32 * w["passes"] if frontier else 0) and
+            2 * w["passes"] <= w["markers"] <= ((2 if frontier else 1) * w["bins_per_pass"] + 2) * w["passes"] and
             _integer(w, "steps") == sum(_integer(w, key) for key in (
                 "memory_steps", "row_context_steps", "association_steps", "observation_steps",
-                "observation_wait_steps", "configuration_steps", "marker_steps", "drain_steps")) and
-            w["memory_steps"] == payload["traffic_phases"]["kernel"]["total_accesses"],
+                "observation_wait_steps", "configuration_steps", "marker_steps", "drain_steps")) + local_steps and
+            w["memory_steps"] == payload["traffic_phases"]["kernel"]["total_accesses"] + (514 if frontier else 0),
             "window control/lookup work is missing or double-counted")
     require(_integer(w, "metadata_payload_bits_per_line") == 67 and
             _integer(w, "unmodeled_runtime_table_bytes") == 0 and
-            0 < _integer(w, "controller_object_bytes") <= 4096 and
+            0 < _integer(w, "controller_object_bytes") <= 4096 - (96 if frontier else 0) and
             _integer(w, "protected_overrides") <= _integer(w, "victim_overrides") <=
             _integer(w, "live_base_victims") <= _integer(w, "victim_decisions") and
-            (options.window_candidate_rrpv == 6 or w["protected_overrides"] == 0) and
+            (floor == 6 or w["protected_overrides"] == 0) and
             (payload["mode"] == "replacement" or w["victim_overrides"] == 0),
             "window state or candidate budget is not respected")
     return w
@@ -694,16 +746,20 @@ def run_cache_cell(
                 mode == "csr" and args.benchmark in ("spmv", "bfs") and options.bfs_direction == "td",
                 "constant P-OPT ranks require CSR SpMV or TD BFS with POPT_UNCHARGED")
         phase_modes = options.bfs_traffic_phases == "on" or options.grasp_scope != "all"
+        potential = options.record_model in ("window", "frontier")
         require(not phase_modes or args.benchmark == "bfs" and
-                (mode == "csr" or options.record_model == "window" and options.bfs_traffic_phases == "off") and
+                (mode == "csr" or potential and options.bfs_traffic_phases == "off") and
                 options.bfs_direction == "td" and options.window_observer == "off" and
                 (options.grasp_scope == "all" or policy == "GRASP_PAPER" or
-                 options.record_model == "window" and options.record_base_policy == "GRASP_PAPER"),
+                 potential and options.record_base_policy == "GRASP_PAPER"),
                 "BFS phase controls require TD BFS and a compatible baseline/model")
-        require(options.record_model != "window" or args.benchmark == "bfs" and mode in (
+        require(not potential or args.benchmark == "bfs" and mode in (
             "transport", "replacement") and options.record_base_policy == "GRASP_PAPER" and
             options.window_observer == "off" and options.bfs_direction == "td" and options.record_preprocess == "csr",
             "window model requires TD BFS records, GRASP base and T/R only")
+        require(options.record_model != "frontier" or options.grasp_scope == "graph-passes" and
+                not options.source_list and options.repeat == 1,
+                "frontier model requires single-source TD BFS and graph-pass GRASP")
         observing = options.window_observer != "off"
         require(not observing or args.benchmark == "bfs" and mode == "csr" and policy == "GRASP_PAPER" and
                 options.bfs_direction == "td" and options.record_preprocess == "csr",
@@ -712,9 +768,12 @@ def run_cache_cell(
                 "record base policy requires a current record mode")
         row["record_base_policy"] = options.record_base_policy
         row["grasp_scope"] = options.grasp_scope
-        row["policy_ablation"] = "1" if options.popt_rank_mode == "constant" else "0"
+        row["policy_ablation"] = "1" if options.popt_rank_mode == "constant" or (
+            options.record_model == "frontier" and options.frontier_gating == "ignored") else "0"
+        row["frontier_gating"] = options.frontier_gating
         row["policy_label"] = policy_labels([spec], options.record_base_policy, options.window_observer,
-            options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode)[0]
+            options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
+            options.frontier_gating)[0]
         if observing:
             row.update(diagnostic_only="1", measurement_scope="observation-only-unchanged-grasp")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")
@@ -740,6 +799,8 @@ def run_cache_cell(
             "_BASE_" + options.record_base_policy)
         observer_suffix = "" if not observing else "_OBS_" + options.window_observer.upper()
         model_suffix = "" if options.record_model == "next" else f"_MODEL_WINDOW_RRPV{options.window_candidate_rrpv}"
+        if options.record_model == "frontier":
+            model_suffix = f"_MODEL_FRONTIER_RRPV7_GATING_{options.frontier_gating.upper()}"
         phase_suffix = "" if options.grasp_scope == "all" else "_GRAPH_PASSES"
         rank_suffix = "" if options.popt_rank_mode == "future" else "_CONST_RANK"
         label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{model_suffix}{observer_suffix}{phase_suffix}"
@@ -772,6 +833,8 @@ def run_cache_cell(
             command.extend(("--grasp-scope", options.grasp_scope, "--bfs-traffic-phases", options.bfs_traffic_phases))
         if options.record_model == "window":
             command.extend(("--record-model", "window", "--window-candidate-rrpv", str(options.window_candidate_rrpv)))
+        if options.record_model == "frontier":
+            command.extend(("--record-model", "frontier", "--frontier-gating", options.frontier_gating))
         if observing:
             command.extend(("--window-observer", options.window_observer,
                             "--window-observer-bytes", str(options.window_observer_bytes)))
@@ -827,6 +890,8 @@ def run_cache_cell(
             row.update({"grasp_phase_" + key: value for key, value in payload["grasp_phase_control"].items()})
         if options.record_model == "window":
             row.update({"window_" + key: value for key, value in payload["window_runtime"].items()})
+        if options.record_model == "frontier":
+            row.update({"frontier_" + key: value for key, value in payload["frontier_runtime"].items()})
         observer = validate_window_observer(payload, options)
         if observing:
             require(observer["schema"] == "ecg.window-eviction-observer.v4",
@@ -885,7 +950,7 @@ def certify_rows(rows: list[dict[str, Any]]) -> None:
             transport_label = record_policy_label(
                 "ECG_TRANSPORT", "transport",
                 str(row.get("record_base_policy", "LRU")), str(row.get("algorithm_record_model", "next")),
-                int(row.get("algorithm_window_candidate_rrpv", 6)))
+                int(row.get("algorithm_window_candidate_rrpv", 6)), str(row.get("frontier_gating", "enabled")))
             for label, column in (("LRU", "traffic_ratio_vs_csr_lru"),
                                   (transport_label, "traffic_ratio_vs_transport")):
                 baseline = baselines.get(label)

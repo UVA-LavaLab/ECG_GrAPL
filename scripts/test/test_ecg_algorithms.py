@@ -356,6 +356,232 @@ def test_popt_rank_runner_receipts_cannot_alias_the_real_baseline(tmp_path, rank
     assert csv_status(output / "roi_matrix.csv", ["POPT:UNCHARGED"], popt_rank_mode=other)[0] == "partial"
 
 
+@pytest.mark.parametrize("width", [4, 8])
+def test_frontier_mask_cost_matched_enabled_and_ignored(tmp_path, width):
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "same-result.json"
+    for mode in ("transport", "replacement"):
+        results = []
+        for gating in ("enabled", "ignored"):
+            ran = subprocess.run([
+                "setarch", os.uname().machine, "-R", str(binary),
+                "--algorithm", "bfs", "--graph", str(graph), "--mode", mode, "--delta", "8",
+                "--record-model", "frontier", "--frontier-gating", gating,
+                "--record-base-policy", "GRASP_PAPER", "--grasp-scope", "graph-passes",
+                "--record-bytes", str(width), "--evidence", "--values",
+                "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256", "--l2-ways", "2",
+                "--llc-bytes", "1024", "--llc-ways", "2", "--output", str(output),
+            ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+                capture_output=True, text=True, timeout=30, check=False)
+            assert ran.returncode == 0, ran.stdout + ran.stderr
+            payload = json.loads(output.read_text())
+            runtime = payload["frontier_runtime"]
+            assert payload["window_runtime"] is None and payload["popt"] is None
+            assert runtime["schema"] == "ecg.frontier-runtime.v1" and runtime["gating"] == gating
+            assert runtime["candidate_floor"] == 7 and runtime["protected_overrides"] == 0
+            assert runtime["counter_storage_bytes"] == 2048 and runtime["llc_bitmap_bytes"] == 32
+            assert runtime["metadata_payload_bits_per_line"] == 67
+            assert runtime["controller_object_bytes"] <= 4096
+            assert runtime["pending"] == 0 and runtime["remaining_current"] == runtime["remaining_next"] == 0
+            updates = 1 + runtime["frontier_appends"] + runtime["source_rows"]
+            assert runtime["counter_read_bytes"] == 4 * (updates + runtime["passes"] * runtime["bins_per_pass"])
+            assert runtime["counter_write_bytes"] == 2048 + 4 * updates
+            assert runtime["counter_arithmetic_steps"] == updates
+            assert runtime["counter_scan_steps"] == runtime["passes"] * runtime["bins_per_pass"]
+            assert runtime["frontier_swaps"] == runtime["passes"]
+            assert runtime["counter_initialization_memory_steps"] == 514
+            assert runtime["memory_steps"] == payload["traffic_phases"]["kernel"]["total_accesses"] + 514
+            assert payload["metrics"]["prefetch_fills"] == 0
+            options = algorithm_matrix.parse_options(
+                f"--graph {graph} --record-model frontier --frontier-gating {gating} "
+                "--record-base-policy GRASP_PAPER --grasp-scope graph-passes")
+            validation = dict(algorithm="bfs", mode=mode, policy="LRU",
+                graph=algorithm_matrix.graph_info(graph, allow_weighted=True, traversal="out"), graph_path=graph,
+                options=options, requested_bytes=width, minimum_mantissa_bits=0, evidence=True, llc_sets=8)
+            algorithm_matrix.validate_payload(payload, ran.stdout, **validation)
+            algorithm_matrix.validate_traffic_phases(payload)
+            algorithm_matrix.validate_bfs_phases(payload, options)
+            for field in ("counter_read_bytes", "counter_write_bytes", "counter_arithmetic_steps",
+                          "counter_scan_steps", "frontier_clears", "frontier_swaps", "control_bytes",
+                          "metadata_payload_bits_per_line"):
+                forged = json.loads(json.dumps(payload))
+                forged["frontier_runtime"][field] = 0
+                with pytest.raises(RecordReceiptError):
+                    algorithm_matrix.validate_payload(forged, ran.stdout, **validation)
+            forged = json.loads(json.dumps(payload))
+            forged["frontier_runtime"]["gating"] = "ignored" if gating == "enabled" else "enabled"
+            with pytest.raises(RecordReceiptError):
+                algorithm_matrix.validate_payload(forged, ran.stdout, **validation)
+            results.append(payload)
+        enabled, ignored = results
+        assert enabled["workload"] == ignored["workload"]
+        assert enabled["traffic_phases"]["setup"] == ignored["traffic_phases"]["setup"]
+        for key in ("record_loads", "record_read_bytes", "property_reads", "forwarded_stores",
+                    "passes", "source_rows", "counter_read_bytes", "counter_write_bytes", "markers",
+                    "marker_steps", "control_bytes", "counter_arithmetic_steps", "counter_scan_steps",
+                    "frontier_swaps", "frontier_appends", "frontier_clears"):
+            assert enabled["frontier_runtime"][key] == ignored["frontier_runtime"][key], key
+        if mode == "transport":
+            assert enabled["metrics"] == ignored["metrics"]
+            assert enabled["frontier_runtime"]["victim_overrides"] == 0
+
+
+@pytest.mark.parametrize("extra", [
+    ["--algorithm", "spmv"], ["--mode", "csr"], ["--mode", "replacement-prefetch"],
+    ["--record-base-policy", "LRU"], ["--grasp-scope", "all"], ["--bfs-direction", "do"],
+    ["--window-observer", "window"], ["--window-candidate-rrpv", "7"],
+    ["--record-preprocess", "traversal"], ["--minimum-mantissa-bits", "1"],
+    ["--sources", "0,1"], ["--repeat", "2"], ["--frontier-gating", "unknown"],
+    ["--record-model", "window"],
+])
+def test_frontier_model_rejects_unsupported_cli_before_loading(tmp_path, extra):
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    ran = subprocess.run([
+        str(binary), "--algorithm", "bfs", "--graph", str(tmp_path / "not-read.sg"),
+        "--mode", "replacement", "--record-model", "frontier", "--frontier-gating", "enabled",
+        "--record-base-policy", "GRASP_PAPER", "--grasp-scope", "graph-passes", *extra,
+    ], capture_output=True, text=True, timeout=10, check=False)
+    assert ran.returncode == 2 and "ECG-ALGORITHM-ERROR" in ran.stderr
+    assert "not-read.sg" not in ran.stderr
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_frontier_model_rejects_native_runners(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--current-algorithms", "--ecg-equivalence", "--benchmark", "bfs",
+        "--options", f"--graph {tmp_path / 'not-read.sg'} --record-model frontier",
+    ])
+    services = SimpleNamespace(parse_size_bytes=roi_matrix.parse_size_bytes)
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "8MB", backend, services)
+    assert rows[0]["status"] == "error" and rows[0]["error"] == "frontier model is cache_sim-only"
+
+
+@pytest.mark.parametrize("source", [0, 9])
+def test_frontier_model_preserves_bfs_answers_including_an_isolated_source(tmp_path, source):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "cliques-and-isolate.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    outputs = []
+    for arguments in ([], ["--mode", "replacement", "--record-model", "frontier",
+                          "--record-base-policy", "GRASP_PAPER", "--grasp-scope", "graph-passes"]):
+        output = tmp_path / "same-result.json"
+        ran = subprocess.run([
+            str(binary), "--algorithm", "bfs", "--source", str(source), "--graph", str(graph),
+            "--values", "--evidence", "--output", str(output), *arguments,
+        ], capture_output=True, text=True, timeout=20, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        outputs.append(json.loads(output.read_text())["workload"])
+    for field in ("values_u32", "result_digest", "work_trace_digest", "position_trace_digest",
+                  "passes", "actual_records", "reached", "levels", "ordinary_property_reads",
+                  "property_writes", "auxiliary_accesses"):
+        assert outputs[0][field] == outputs[1][field], field
+
+
+def test_frontier_profile_has_four_fixed_costed_cells(tmp_path):
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg import algorithm_matrix
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+    jobs = experiment_run.expand_jobs(experiment_run.parse_args(
+        ["--profile", "ecg_frontier_mask_cache", "--list"]), manifest, tmp_path)
+    assert len(jobs) == 4 and sum(len(j.metadata["policies"]) for j in jobs) == 4
+    gate = manifest["profile_controls"]["ecg_frontier_mask_cache"]["development_gate"]
+    assert gate["minimum_margin"] == 0.02 and gate["remaining_full_graph_runs"] == 4
+    assert gate["no_automatic_follow_on"] is True
+    masks = []
+    labels = set()
+    for job in jobs:
+        options = algorithm_matrix.parse_options(job.metadata["options"])
+        assert job.metadata["benchmark"] == "bfs" and options.graph.name == "cit-Patents-dbg.sg"
+        assert options.source == 0 and options.repeat == 1 and options.bfs_direction == "td"
+        assert options.window_observer == "off" and options.popt_rank_mode == "future"
+        assert job.metadata["l3_sizes"] == ["8MB"]
+        assert job.command[job.command.index("--l3-ways") + 1] == "16"
+        assert job.command[job.command.index("--cache-sim-omp-threads") + 1] == "1"
+        assert job.command[job.command.index("--cache-record-rss-mib") + 1] == "2048"
+        assert job.command[job.command.index("--prefetcher") + 1] == "none"
+        labels.update(job.metadata["expected_policy_labels"])
+        if options.record_model == "frontier":
+            assert options.grasp_scope == "graph-passes" and options.record_base_policy == "GRASP_PAPER"
+            assert options.bfs_traffic_phases == "off" and job.metadata["policies"] == ["ECG:replacement"]
+            masks.append(job)
+    assert labels == {"GRASP_PAPER_GRAPH_PASSES", "POPT_UNCHARGED",
+        "ECG_REPLACEMENT_BASE_GRASP_PAPER_MODEL_FRONTIER_RRPV7_GATING_ENABLED_GRAPH_PASSES",
+        "ECG_REPLACEMENT_BASE_GRASP_PAPER_MODEL_FRONTIER_RRPV7_GATING_IGNORED_GRAPH_PASSES"}
+    assert len(masks) == 2
+    assert [len(argument) for argument in masks[0].command] == [len(argument) for argument in masks[1].command]
+    assert {k: len(v) for k, v in masks[0].metadata["env"].items()} == {
+        k: len(v) for k, v in masks[1].metadata["env"].items()}
+
+
+def test_frontier_resources_include_the_runtime_and_reject_weighted_graphs(tmp_path):
+    from scripts.experiments.ecg.record_resources import graph_info, plan_algorithm_resources, RecordResourceError
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    for name in ("pressure512.sg", "weighted-diamond.wsg"):
+        (tmp_path / name).write_bytes(algorithm_outputs()[name][0])
+    graph = graph_info(tmp_path / "pressure512.sg", allow_weighted=True, traversal="out")
+    settings = dict(algorithm="bfs", records=True, requested_bytes=4, minimum_mantissa_bits=0,
+                    traversals=1, sources=1, carrier_limit=32 << 20, auxiliary_limit=32 << 20,
+                    rss_mib=512, record_model="frontier")
+    budget = 12 * graph.vertices + 4 * graph.records + 8 * ((graph.vertices + 15) // 16) + 4096
+    plan = plan_algorithm_resources(graph, workspace_limit=budget, **settings)
+    assert plan["frontier_runtime_budget_bytes"] == 4096
+    assert plan["construction_auxiliary_bytes_upper"] == 8 * ((graph.vertices + 15) // 16)
+    assert plan["popt_matrix_bytes_upper"] == 0 and plan["record_bytes"] == 4
+    with pytest.raises(RecordResourceError, match="explicit limits"):
+        plan_algorithm_resources(graph, workspace_limit=budget - 1, **settings)
+    weighted = graph_info(tmp_path / "weighted-diamond.wsg", allow_weighted=True, traversal="out")
+    with pytest.raises(RecordResourceError, match="unweighted"):
+        plan_algorithm_resources(weighted, workspace_limit=32 << 20, **settings)
+
+
+@pytest.mark.parametrize("gating", ["enabled", "ignored"])
+def test_frontier_runner_provenance_and_complete_costs(tmp_path, gating):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    from scripts.experiments.ecg.flows.experiment_run import csv_status
+    if not (ROOT / "bench/bin_sim/algorithms").is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "matrix"
+    ran = subprocess.run([
+        "python3", str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "cache-sim", "--current-algorithms", "--benchmark", "bfs",
+        "--options", f"--graph {graph} --record-model frontier --frontier-gating {gating} "
+                     "--record-base-policy GRASP_PAPER --grasp-scope graph-passes",
+        "--policies", "ECG:transport", "ECG:replacement", "--ecg-equivalence",
+        "--algorithm-workspace-bytes", str(32 << 20), "--cache-record-rss-mib", "512",
+        "--l1d-size", "128B", "--l1d-ways", "2", "--l2-size", "256B", "--l2-ways", "2",
+        "--l3-sizes", "1024B", "--l3-ways", "2", "--no-build", "--out-dir", str(output),
+    ], capture_output=True, text=True, timeout=60, check=False)
+    assert ran.returncode == 0, ran.stdout + ran.stderr
+    rows = json.loads((output / "roi_matrix.json").read_text())
+    completion = json.loads((output / "roi_matrix.complete.json").read_text())
+    labels = sorted(row["policy_label"] for row in rows)
+    assert sorted(completion["policy_labels"]) == sorted(completion["expected_policy_labels"]) == labels
+    assert all(f"_GATING_{gating.upper()}_GRAPH_PASSES" in label for label in labels)
+    assert all(row["frontier_gating"] == gating and row["frontier_counter_storage_bytes"] == 2048
+               and row["policy_ablation"] == ("1" if gating == "ignored" else "0") for row in rows)
+    arguments = dict(record_base_policy="GRASP_PAPER", record_model="frontier", grasp_scope="graph-passes")
+    policies = ["ECG:transport", "ECG:replacement"]
+    assert csv_status(output / "roi_matrix.csv", policies, **arguments, frontier_gating=gating)[0] == "ok"
+    other = "ignored" if gating == "enabled" else "enabled"
+    assert csv_status(output / "roi_matrix.csv", policies, **arguments, frontier_gating=other)[0] == "partial"
+
+
 def test_direction_optimized_cli_uses_real_incoming_csr(tmp_path):
     from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import serialized_graph
     binary = ROOT / "bench/bin_sim/algorithms"

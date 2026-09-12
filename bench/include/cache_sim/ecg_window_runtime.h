@@ -3,47 +3,62 @@
 
 #include <array>
 #include <cstring>
+#include <type_traits>
 
 #include "cache_sim.h"
 #include "../ecg_window.h"
 
 namespace cache_sim {
 
-class WindowRuntime {
+template<class Profile>
+class PotentialRuntime {
   public:
     static constexpr std::size_t kQueue = 16;
     static constexpr uint64_t kLatency = 8, kControlSteps = 16;
+    static constexpr bool frontier_mode = std::is_same<Profile, ecg_frontier::Profile>::value;
 
-    WindowRuntime(CacheHierarchy& cache, const ecg_window::RecordStream& stream,
+    PotentialRuntime(CacheHierarchy& cache, const ecg_window::PotentialRecordStream<Profile>& stream,
                   uint64_t vertices, uint64_t property_base, bool replacement, uint8_t floor,
-                  bool lru_outside = false)
+                  bool lru_outside = false, bool frontier_gating = true, uint32_t seed = 0)
         : cache_(cache), profile_(vertices), layout_(stream.layout), records_(stream.size()),
           record_base_(stream.data()), property_base_(property_base), replacement_(replacement),
-          lru_outside_(lru_outside), floor_(floor) {
+          lru_outside_(lru_outside), floor_(floor), frontier_gating_(frontier_gating) {
         layout_.validate();
         if (!records_ || stream.vertices != vertices || stream.cohort_rows != profile_.cohort_rows ||
             !record_base_ || reinterpret_cast<uint64_t>(record_base_) % layout_.record_bytes ||
             property_base % 64 || !ecg_record::checkedAdd(property_base, vertices * 4, property_end_) ||
             cursor_.configure(records_, ecg_record::TraversalMode::ORDERED_FILTERED) != ecg_record::Status::OK)
             throw std::invalid_argument("invalid-window-runtime-binding");
-        cache_.configureWindow(profile_, property_base, replacement, floor, lru_outside);
+        if constexpr (frontier_mode) {
+            if (floor != 7 || !lru_outside || sizeof(*this) + 32 + 64 > 4096)
+                throw std::invalid_argument("frontier-runtime-scope-or-state-budget");
+            counts_.initialize(profile_, seed, counterMemory(), [this] { tick(); });
+            cache_.configureFrontier(profile_, property_base, replacement, frontier_gating);
+        } else {
+            cache_.configureWindow(profile_, property_base, replacement, floor, lru_outside);
+        }
         control(0, 0, false);
     }
-    ~WindowRuntime() { cache_.disableWindow(); }
-    WindowRuntime(const WindowRuntime&) = delete;
-    WindowRuntime& operator=(const WindowRuntime&) = delete;
+    ~PotentialRuntime() { cache_.disableWindow(); }
+    PotentialRuntime(const PotentialRuntime&) = delete;
+    PotentialRuntime& operator=(const PotentialRuntime&) = delete;
 
     void beginPass() {
         if (finished_ || open_ || pending_record_ || store_authorized_ ||
             cursor_.begin() != ecg_record::Status::OK ||
             !ecg_record::checkedMultiply(passes_, profile_.bins, pass_base_) ||
-            pass_base_ > (UINT64_MAX >> 3) - profile_.bins)
+            pass_base_ > Profile::maximum_anchor - profile_.bins)
             throw std::logic_error("invalid-window-pass-begin");
         open_ = true;
         source_ = UINT64_MAX;
         previous_row_end_ = 0;
         row_ready_ = last_read_.valid = false;
-        control(pass_base_, pass_base_, true);
+        if constexpr (frontier_mode) {
+            const auto bitmap = counts_.begin(counterMemory(), [this] { tick(); });
+            control(pass_base_, pass_base_, true, &bitmap);
+        } else {
+            control(pass_base_, pass_base_, true);
+        }
         ++markers_;
     }
 
@@ -53,8 +68,11 @@ class WindowRuntime {
             throw std::logic_error("invalid-window-source-progress");
         last_read_.valid = row_ready_ = false;
         const uint64_t next = pass_base_ + source / profile_.bin_rows;
-        if (source_ == UINT64_MAX || next != watermark_) {
-            control(pass_base_, next, true);
+        bool clear = false;
+        if constexpr (frontier_mode)
+            clear = counts_.consume(static_cast<uint32_t>(source), counterMemory(), [this] { tick(); });
+        if (next != watermark_ || clear || (!frontier_mode && source_ == UINT64_MAX)) {
+            control(pass_base_, next, true, nullptr, clear ? source / profile_.cohort_rows : UINT64_MAX);
             ++markers_;
         }
         source_ = source;
@@ -163,10 +181,28 @@ class WindowRuntime {
             cursor_.close() != ecg_record::Status::OK)
             throw std::logic_error("incomplete-window-pass");
         last_read_.valid = false;
+        if constexpr (frontier_mode)
+            counts_.close();
         control(pass_base_, pass_base_ + profile_.bins, false);
         ++markers_;
         ++passes_;
         open_ = row_ready_ = false;
+    }
+
+    void appendFrontier(uint64_t index, uint32_t vertex) {
+        if constexpr (frontier_mode) {
+            if (!open_ || pending_record_ || store_authorized_ || in_memory_)
+                throw std::logic_error("invalid-frontier-append-order");
+            counts_.append(index, vertex, counterMemory(), [this] { tick(); });
+        }
+    }
+
+    void swapFrontier(uint64_t count) {
+        if constexpr (frontier_mode) {
+            if (open_ || pending_record_ || store_authorized_ || in_memory_)
+                throw std::logic_error("invalid-frontier-swap-order");
+            counts_.swap(count, [this] { tick(); });
+        }
     }
 
     void drain() {
@@ -185,6 +221,8 @@ class WindowRuntime {
             enqueued_ != property_reads_ + forwarded_ + ordinary_invalidations_ ||
             association_steps_ != forwarded_)
             throw std::logic_error("incomplete-window-accounting");
+        if constexpr (frontier_mode)
+            counts_.finish();
         finished_ = true;
         record_base_ = nullptr;
         cache_.disableWindow();
@@ -195,10 +233,12 @@ class WindowRuntime {
 
     void write(std::ostream& output) const {
         const auto& policy = cache_.windowStats();
-        output << "{\"schema\":\"ecg.window-runtime.v1\",\"record_model\":\"potential-window-u32\","
+        output << "{\"schema\":\"" << (frontier_mode ? "ecg.frontier-runtime.v1" : "ecg.window-runtime.v1")
+               << "\",\"record_model\":\"" << (frontier_mode ? "consumer-cohort-mask-u32" : "potential-window-u32") << "\","
                << "\"cost_unit\":\"functional-steps-not-CPU-cycles\","
                << "\"grasp_scope\":\"" << (lru_outside_ ? "graph-passes" : "all") << "\","
-               << "\"phase_control_accounting\":\"" << (lru_outside_ ? "shared-window-markers" : "not-requested") << "\","
+               << "\"phase_control_accounting\":\"" << (lru_outside_ ?
+                    frontier_mode ? "shared-frontier-markers" : "shared-window-markers" : "not-requested") << "\","
                << "\"replacement\":" << (replacement_ ? "true" : "false")
                << ",\"candidate_floor\":" << unsigned(floor_)
                << ",\"record_bytes\":" << unsigned(layout_.record_bytes)
@@ -213,8 +253,8 @@ class WindowRuntime {
                << ",\"row_context_steps\":" << row_context_steps_ << ",\"association_steps\":" << association_steps_
                << ",\"observation_steps\":" << observation_steps_ << ",\"observation_wait_steps\":" << observation_wait_steps_
                << ",\"configuration_steps\":" << kControlSteps
-               << ",\"markers\":" << markers_ << ",\"marker_steps\":" << markers_ * kControlSteps
-               << ",\"control_bytes\":" << (markers_ + 1) * 48 << ",\"drain_steps\":" << drain_steps_
+               << ",\"markers\":" << markers_ << ",\"marker_steps\":" << markers_ * kControlSteps + (frontier_mode ? passes_ * 8 : 0)
+               << ",\"control_bytes\":" << (markers_ + 1) * 48 + (frontier_mode ? passes_ * 32 : 0) << ",\"drain_steps\":" << drain_steps_
                << ",\"queue_capacity\":" << kQueue << ",\"latency_steps\":" << kLatency
                << ",\"enqueued\":" << enqueued_ << ",\"delivered\":" << delivered_
                << ",\"applied\":" << applied_ << ",\"stale\":" << stale_
@@ -223,7 +263,22 @@ class WindowRuntime {
                << ",\"victim_decisions\":" << policy.decisions << ",\"live_base_victims\":" << policy.live_base
                << ",\"victim_overrides\":" << policy.overrides << ",\"protected_overrides\":" << policy.protected_overrides
                << ",\"metadata_payload_bits_per_line\":67,\"controller_object_bytes\":" << sizeof(*this)
-               << ",\"unmodeled_runtime_table_bytes\":0}";
+               << ",\"unmodeled_runtime_table_bytes\":0";
+        if constexpr (frontier_mode) {
+            output << ",\"gating\":\"" << (frontier_gating_ ? "enabled" : "ignored")
+                   << "\",\"counter_storage_bytes\":" << ecg_frontier::Counts::storage_bytes
+                   << ",\"source_count_object_bytes\":" << sizeof(counts_)
+                   << ",\"source_staging_bytes\":32,\"llc_bitmap_bytes\":32,\"llc_context_budget_bytes\":64"
+                   << ",\"counter_read_bytes\":" << counts_.read_bytes
+                   << ",\"counter_write_bytes\":" << counts_.write_bytes
+                   << ",\"counter_arithmetic_steps\":" << counts_.arithmetic_steps
+                   << ",\"counter_scan_steps\":" << counts_.scan_steps
+                   << ",\"counter_initialization_memory_steps\":514"
+                   << ",\"frontier_appends\":" << counts_.appends << ",\"frontier_clears\":" << counts_.clears
+                   << ",\"frontier_swaps\":" << counts_.swaps
+                   << ",\"remaining_current\":" << counts_.remaining() << ",\"remaining_next\":" << counts_.next();
+        }
+        output << '}';
     }
 
   private:
@@ -255,24 +310,37 @@ class WindowRuntime {
             ++observation_wait_steps_;
         ++observation_steps_;
     }
-    void control(uint64_t base, uint64_t watermark, bool open) {
+    auto counterMemory() {
+        return [this](const void* address, uint64_t bytes, bool write) {
+            if (bytes != 4 || reinterpret_cast<uint64_t>(address) % 4)
+                throw std::logic_error("invalid-frontier-counter-access");
+            memory(reinterpret_cast<uint64_t>(address), write);
+        };
+    }
+    void control(uint64_t base, uint64_t watermark, bool open,
+                 const ecg_frontier::Bitmap* bitmap = nullptr, uint64_t clear = UINT64_MAX) {
         drain();
-        for (uint64_t step = 0; step < kLatency; ++step)
+        for (uint64_t step = 0; step < kLatency + (bitmap ? 8 : 0); ++step)
             tick();
         cache_.windowProgress(base, watermark, open);
+        if (bitmap)
+            cache_.frontierContext(base, *bitmap);
+        if (clear != UINT64_MAX)
+            cache_.clearFrontierCohort(base, clear);
         for (uint64_t step = 0; step < kLatency; ++step)
             tick();
         watermark_ = watermark;
     }
 
     CacheHierarchy& cache_;
-    ecg_window::Profile profile_;
+    Profile profile_;
     ecg_window::Layout layout_;
     uint64_t records_;
     const uint8_t* record_base_;
     uint64_t property_base_, property_end_ = 0;
     bool replacement_, lru_outside_;
     uint8_t floor_;
+    bool frontier_gating_;
     ecg_record::PassCursor cursor_;
     std::array<Update, kQueue> queue_{};
     Read last_read_;
@@ -288,7 +356,11 @@ class WindowRuntime {
     std::size_t head_ = 0, queued_ = 0, peak_ = 0;
     bool open_ = false, row_ready_ = false, pending_record_ = false, designated_ = false;
     bool store_authorized_ = false, in_memory_ = false, finished_ = false;
+    std::conditional_t<frontier_mode, ecg_frontier::Counts, ecg_frontier::NoCounts> counts_;
 };
+
+using WindowRuntime = PotentialRuntime<ecg_window::Profile>;
+using FrontierRuntime = PotentialRuntime<ecg_frontier::Profile>;
 
 }  // namespace cache_sim
 

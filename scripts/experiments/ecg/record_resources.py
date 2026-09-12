@@ -207,9 +207,10 @@ def plan_algorithm_resources(
         raise RecordResourceError("invalid algorithm record layout request")
     if preprocessing not in ("csr", "traversal"):
         raise RecordResourceError("invalid algorithm preprocessing")
-    if record_model not in ("next", "window"):
+    if record_model not in ("next", "window", "frontier"):
         raise RecordResourceError("invalid record model")
-    window = record_model == "window"
+    window = record_model in ("window", "frontier")
+    context_bytes = 4096 if record_model == "frontier" else 0
     if window and (not records or algorithm != "bfs" or graph.weighted or not graph.records or
                    bfs_direction_optimizing or preprocessing != "csr" or minimum_mantissa_bits or backend != "cache_sim"):
         raise RecordResourceError("window model requires unweighted cache-only TD BFS records")
@@ -257,7 +258,7 @@ def plan_algorithm_resources(
     if popt_full_capacity:
         scratch += 192
     if carrier > carrier_limit or scratch + popt_bytes > auxiliary_limit or (
-            arrays + carrier + scratch + popt_bytes > workspace_limit):
+            arrays + carrier + scratch + popt_bytes + context_bytes > workspace_limit):
         raise RecordResourceError("algorithm arrays/carrier/construction exceed their explicit limits")
     directions = 2 if graph.directed else 1
     graph_peak = (directions + 1) * 8 * (graph.vertices + 1) + 12 * graph.vertices + (
@@ -277,6 +278,7 @@ def plan_algorithm_resources(
         "construction_auxiliary_bytes_upper": scratch, "graph_loader_bytes_upper": graph_peak,
         "record_preprocess": preprocessing, "construction_partitions": partitions,
         "record_model": record_model,
+        "frontier_runtime_budget_bytes": context_bytes,
         "popt_matrix_lines": popt_lines, "popt_matrix_bytes_upper": popt_bytes,
         "workspace_limit_bytes": workspace_limit, "planned_host_bytes": host,
         "planned_target_bytes": planned, "rss_limit_mib": rss_mib,

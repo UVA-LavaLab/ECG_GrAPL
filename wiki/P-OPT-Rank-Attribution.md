@@ -177,3 +177,7 @@ count against the twelve-run ceiling. Eight runs have been used, leaving
 **at most four additional runs** without an explicit budget revision;
 the original six-cell A/B follow-on roster is no longer an executable
 default.
+
+The next bounded implementation is the
+[frontier-conditioned consumer-mask experiment](Frontier-Cohort-Mask),
+with fresh intact baselines and an explicitly cost-matched ungated arm.

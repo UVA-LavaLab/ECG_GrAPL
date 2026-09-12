@@ -34,6 +34,7 @@
     "bench/include/ecg_record_runtime.h",
     "bench/include/ecg_record_stream.h",
     "bench/include/ecg_window.h",
+    "bench/include/ecg_frontier.h",
     "bench/include/ecg_record_window.h",
     "bench/include/ecg_record_evidence.h",
     "bench/include/ecg_ref32_commit.h",

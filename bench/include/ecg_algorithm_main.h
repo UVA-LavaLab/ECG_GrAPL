@@ -37,6 +37,7 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
     CommandLine command;
     bool algorithm_seen = false;
     bool window_floor_seen = false;
+    bool frontier_gating_seen = false;
     for (int index = 1; index < argc; ++index) {
         const std::string argument(argv[index]);
         if (argument == "--evidence") {
@@ -92,7 +93,13 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
         } else if (argument == "--record-model") {
             if (value == "next") command.options.record_model = RecordModel::NEXT;
             else if (value == "window") command.options.record_model = RecordModel::WINDOW;
-            else throw std::invalid_argument("record-model-must-be-next-or-window");
+            else if (value == "frontier") command.options.record_model = RecordModel::FRONTIER;
+            else throw std::invalid_argument("record-model-must-be-next-window-or-frontier");
+        } else if (argument == "--frontier-gating") {
+            if (value != "enabled" && value != "ignored")
+                throw std::invalid_argument("frontier-gating-must-be-enabled-or-ignored");
+            command.options.frontier_gating = value == "enabled";
+            frontier_gating_seen = true;
         } else if (argument == "--popt-rank-mode") {
             if (value != "future" && value != "constant")
                 throw std::invalid_argument("popt-rank-mode-must-be-future-or-constant");
@@ -178,13 +185,20 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
         throw std::invalid_argument("constant P-OPT ranks require CSR SpMV or TD BFS with POPT_UNCHARGED");
     if ((command.options.bfs_traffic_phases || command.options.grasp_graph_passes) &&
         (command.options.algorithm != Algorithm::BFS ||
-         (command.options.records && (command.options.bfs_traffic_phases || command.options.record_model != RecordModel::WINDOW)) ||
+         (command.options.records && (command.options.bfs_traffic_phases || command.options.record_model == RecordModel::NEXT)) ||
          command.options.bfs_direction_optimizing || command.options.window_observer != WindowObserverMode::OFF ||
          (command.options.grasp_graph_passes && !command.options.records && command.policy != "GRASP_PAPER")))
         throw std::invalid_argument("BFS phase controls require TD BFS and a compatible baseline/model");
     if (window_floor_seen && command.options.record_model != RecordModel::WINDOW)
         throw std::invalid_argument("window-candidate-rrpv-requires-window-model");
-    if (command.options.record_model == RecordModel::WINDOW &&
+    if (frontier_gating_seen && command.options.record_model != RecordModel::FRONTIER)
+        throw std::invalid_argument("frontier-gating-requires-frontier-model");
+    if (command.options.record_model == RecordModel::FRONTIER && !command.options.grasp_graph_passes)
+        throw std::invalid_argument("frontier model requires graph-pass GRASP scope");
+    if (command.options.record_model == RecordModel::FRONTIER &&
+        (!command.options.sources.empty() || command.options.repetitions != 1))
+        throw std::invalid_argument("frontier model requires a single BFS source and query");
+    if (command.options.record_model != RecordModel::NEXT &&
         (command.options.algorithm != Algorithm::BFS || !command.options.records ||
          command.options.record_base_policy != RecordBasePolicy::GRASP_PAPER ||
          command.options.bfs_direction_optimizing || command.options.traversal_preprocessing ||
@@ -218,16 +232,18 @@ inline void writeHash(std::ostream& output, uint64_t value) {
 inline void writeResult(std::ostream& output, const Result& result, const Options& options) {
     const bool exact = result.algorithm == Algorithm::SPMV || result.algorithm == Algorithm::TC;
     const bool window = options.record_model == RecordModel::WINDOW;
+    const bool frontier = options.record_model == RecordModel::FRONTIER;
+    const bool potential = window || frontier;
     output << "{\"schema\":\"ecg.algorithm-workload.v1\",\"algorithm\":\"" << name(result.algorithm)
            << "\",\"variant\":\"" << (options.bfs_direction_optimizing
                 ? "sorted-direction-optimizing-td-records-bu-bitmap" : variant(result.algorithm))
            << "\",\"prediction_semantics\":\""
-           << (window ? "source-cohort-potential-read" :
+           << (frontier ? "consumer-cohort-potential-read" : window ? "source-cohort-potential-read" :
                exact ? "dense-actual-designated-read" : "next-potential-designated-read")
            << "\",\"carrier\":\"" << (result.records ? "record" : "csr")
            << "\",\"record_base_policy\":\""
            << recordBasePolicyName(options.record_base_policy)
-           << "\",\"record_model\":\"" << (window ? "window" : "next")
+           << "\",\"record_model\":\"" << (frontier ? "frontier" : window ? "window" : "next")
            << "\",\"record_preprocess\":\"" << (options.traversal_preprocessing ? "traversal" : "csr")
            << "\",\"record_reuse_scope\":\"" << recordReuseScope(options) << '"';
     const auto field = [&](const char* key, uint64_t value) { output << ",\"" << key << "\":" << value; };
@@ -285,14 +301,20 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
     field("intersection_comparisons", result.intersection_comparisons);
     field("bindings", result.bindings);
     field("maximum_encoded_id", result.maximum_encoded_id);
-    field("record_bytes", window ? result.window_layout.record_bytes : result.layout.record_bytes);
-    field("id_bits", window ? result.window_layout.id_bits : result.layout.id_bits);
-    field("metadata_bits", window ? result.window_layout.metadata_bits : result.layout.metadata_bits);
-    field("mantissa_bits", window ? 0 : result.layout.mantissa_bits);
+    field("record_bytes", potential ? result.window_layout.record_bytes : result.layout.record_bytes);
+    field("id_bits", potential ? result.window_layout.id_bits : result.layout.id_bits);
+    field("metadata_bits", potential ? result.window_layout.metadata_bits : result.layout.metadata_bits);
+    field("mantissa_bits", potential ? 0 : result.layout.mantissa_bits);
     if (window) {
         field("window_token_bits", ecg_window::Layout::token_bits);
         field("window_known_records", result.window_known_records);
         field("window_candidate_rrpv", options.window_candidate_rrpv);
+    }
+    if (frontier) {
+        field("frontier_token_bits", ecg_frontier::Layout::token_bits);
+        field("frontier_known_records", result.window_known_records);
+        output << ",\"frontier_carrier_digest\":";
+        writeHash(output, result.frontier_carrier_digest);
     }
     for (const auto& entry : {
             std::pair<const char*, uint64_t>{"result_digest", result.result_digest},
@@ -340,9 +362,11 @@ template<class Invoke>
 int applicationMain(
         int argc, char** argv, Invoke invoke, bool allow_popt = false,
         bool allow_grasp_record_base = false, bool allow_window_observer = false,
-        bool allow_window_model = false, bool allow_bfs_phases = false) {
+        bool allow_window_model = false, bool allow_bfs_phases = false, bool allow_frontier_model = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        if (command.options.record_model == RecordModel::FRONTIER && !allow_frontier_model)
+            throw std::invalid_argument("frontier model is cache_sim-only");
         if ((command.options.bfs_traffic_phases || command.options.grasp_graph_passes) && !allow_bfs_phases)
             throw std::invalid_argument("BFS phase controls are cache_sim-only");
         if (command.options.record_model == RecordModel::WINDOW && !allow_window_model)

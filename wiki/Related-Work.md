@@ -56,6 +56,9 @@ On the fixed Patents sentinels, future ranking saves 26.97% SpMV and 9.56%
 BFS kernel traffic versus that ablation; P-OPT still loses to strong GRASP
 on setup-inclusive traffic. These are information-attribution results,
 not wins for either new ECG mask proposal.
+The subsequent [frontier-conditioned mask prototype](Frontier-Cohort-Mask)
+tests one BFS-specific eligibility hypothesis with a cost-matched ungated
+control; it makes no novelty or native-performance claim.
 
 ## General replacement and admission foundations
 
