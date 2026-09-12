@@ -3,7 +3,8 @@
 This is the cache-only BFS candidate B following the
 [P-OPT information ablation](P-OPT-Rank-Attribution). It is not the failed
 [potential-window codec](Potential-Window-Prototype), a learned predictor,
-or a demonstrated performance win. The default next-reference mechanism
+or a demonstrated performance win: **B failed its frozen Patents gate**,
+as reported [below](#measured-patents-result). The default next-reference mechanism
 and the window negative control remain available with their original
 semantics.
 
@@ -162,3 +163,89 @@ runs exhaust the remaining twelve-run development budget. Failure freezes
 this candidate; it does not authorize new cohorts, wider eligibility,
 more graphs, or an A/B combination. No novelty or deployment claim is
 made by this prototype.
+
+## Measured Patents result
+
+The four cells completed at implementation commit `c69c44aa` in
+`results/ecg_experiments/runs/frontier_mask_patents_c69c44aa`.
+All use the same executable and prepared graph, source 0 and cache
+geometry. Core BFS work and output agree across all four arms.
+The two B arms have identical complete workload/carrier receipts, setup
+counters and fixed source/context costs. No additional full-graph run
+or parameter adjustment was used.
+
+| Policy | Depth misses | Other misses | Writebacks | Kernel transfers |
+|---|---:|---:|---:|---:|
+| Phase-scoped GRASP | 4,721,503 | 6,306,233 | 363,920 | 11,391,656 |
+| Intact favorable P-OPT | 4,286,026 | 6,331,723 | 235,200 | 10,852,949 |
+| B, gating ignored | 4,814,475 | 6,308,127 | 327,697 | 11,450,299 |
+| B, gating enabled | 4,814,471 | 6,308,127 | 327,697 | 11,450,295 |
+
+Frontier gating saves **four depth misses/transfers, or 0.000035%**
+relative to its cost-matched control, nowhere near the frozen 2% gate.
+Enabled B has **0.515% more kernel traffic than phase-scoped GRASP**
+and **5.504% more than intact P-OPT**. Relative to GRASP it adds 92,968
+depth misses and 1,894 other misses while avoiding 36,223 writebacks:
+the net result is 58,639 additional transfers.
+
+This was not an inactive policy: enabled B made **151,947 actual victim
+overrides**, versus 151,948 with gating ignored. Both applied 32,984,669
+metadata updates and delivered all 36,787,596 queued events, with a queue
+peak of three and no pending events at completion. Aggregate override
+counts are not paired victim identities; their one-count difference must
+not be presented as proof that only one individual decision changed.
+
+### Cost and state receipts
+
+| Policy | Setup transfers | Setup + kernel transfers |
+|---|---:|---:|
+| Phase-scoped GRASP | 2,877,493 | 14,269,149 |
+| Intact favorable P-OPT | 9,293,511 | 20,146,460 |
+| B, gating ignored | 15,936,444 | 27,386,743 |
+| B, gating enabled | 15,936,444 | 27,386,739 |
+
+Enabled B loses setup-inclusive traffic by **91.93% versus GRASP** and
+**35.94% versus P-OPT**. The footprint and costs were not waived:
+
+| B resource/work | Matched amount |
+|---|---:|
+| Actual carrier, 22 ID bits + 10 metadata bits | 132,151,576 bytes, four bytes per record |
+| Temporary producer allocation | 1,887,384 bytes |
+| Producer modeled reads / writes | 589,002,592 / 530,204,224 bytes |
+| Constructor word digest | `22b6b4acf0b43138` |
+| Counter modeled reads / writes, including initialization and scans | 30,128,644 / 30,114,984 bytes |
+| Counter arithmetic / scan / swap steps | 7,528,234 / 3,927 / 17 |
+| Source rows / successful appends | 3,764,117 / 3,764,116 |
+| Cohort clears / total markers | 2,281 / 4,425 |
+| Control bytes, including configuration and full snapshots | 212,992 |
+| Proxy object, including its 2 KiB counter banks | 3,264 bytes |
+| Proxy + source staging + conservative LLC context budget | 3,360 bytes, below the frozen 4 KiB ceiling |
+| Logical resident metadata | 67 bits per line |
+
+Modeled memory bytes are not necessarily off-chip bytes; they can hit
+the private caches. Do not add the counter-byte totals to DRAM transfers.
+The fixed costs match, while realized observation-port work can change
+with cache residency: enabled/ignored total controller steps are
+512,761,583 / 512,761,595, not native CPU cycles.
+
+The audit replays four completion markers and 148 input fingerprints
+across 34 distinct files. It binds raw JSON, logs, watchdogs and the
+unchanged original result CSV in `audit/audit.complete.json`.
+Successful execution markers do not mean a performance gate passed:
+`audit/receipt.json` records all three performance gates as false.
+
+| Artifact | SHA256 |
+|---|---|
+| `combined_roi_matrix.csv` | `d066e8e8339ebd483173e37e5799434e7a80ce8f98174b7a91f60798e98d5709` |
+| Shared executable | `af6b7965eaa97dbd0ba01f9c814e2a576786ee8ccd772bed40aed5ffea98aac1` |
+| `audit/audit.complete.json` | `bac798ef1a8b479b0469833af20a7e81fadd26f8342604f857f5771ff2b89617` |
+
+**Decision: freeze B as a negative result.** Current-frontier conditioning
+adds negligible traffic value to this coarse-cohort/RRPV-7 design.
+This experiment does not establish which of granularity, false positives
+or consumer restrictions is the dominant limitation, nor does it overturn
+the earlier P-OPT result that useful future information can matter.
+Do not rescue B by widening RRPV eligibility or tuning its cohorts after
+this result. A remains unimplemented. All twelve development runs are now
+used; further full-graph work requires an explicit regrouping and budget
+revision.

@@ -58,7 +58,9 @@ on setup-inclusive traffic. These are information-attribution results,
 not wins for either new ECG mask proposal.
 The subsequent [frontier-conditioned mask prototype](Frontier-Cohort-Mask)
 tests one BFS-specific eligibility hypothesis with a cost-matched ungated
-control; it makes no novelty or native-performance claim.
+control. Its fixed-case gating benefit is only four transfers, and the
+candidate loses to both intact baselines; it is retained as a negative
+result, without novelty or native-performance claims.
 
 ## General replacement and admission foundations
 

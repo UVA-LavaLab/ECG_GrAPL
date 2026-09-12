@@ -173,11 +173,12 @@ this result; each still needs a frozen receiver/cost contract and its own
 cost-matched ablation before any competitiveness claim.
 
 For budget accounting, the two full-graph confirmation executions also
-count against the twelve-run ceiling. Eight runs have been used, leaving
-**at most four additional runs** without an explicit budget revision;
+count against the twelve-run ceiling. At this checkpoint eight runs had
+been used, leaving **at most four additional runs** without a budget revision;
 the original six-cell A/B follow-on roster is no longer an executable
 default.
 
-The next bounded implementation is the
-[frontier-conditioned consumer-mask experiment](Frontier-Cohort-Mask),
-with fresh intact baselines and an explicitly cost-matched ungated arm.
+Those four slots were subsequently used by the
+[frontier-conditioned consumer-mask experiment](Frontier-Cohort-Mask#measured-patents-result),
+with fresh intact baselines and a cost-matched ungated arm. B failed its
+information and competitive gates; the twelve-run budget is exhausted.
