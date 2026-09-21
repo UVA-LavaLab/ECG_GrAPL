@@ -153,3 +153,28 @@ def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm):
         "all", "future", "enabled", "off", 1, arm, "drop")
     assert status == "ok", (
         f"the completion check rejected the label the runner produces: {detail}")
+
+
+@pytest.mark.parametrize("arm", ["no", "on"])
+def test_every_expected_label_source_agrees(arm):
+    """All label deciders must agree, including the completion marker.
+
+    The expected-label expression existed in three copies inside the flow, each
+    with its own fast path for default-looking configurations. Six sites had to
+    be taught one option, and four of them were found only by spending a run.
+    They are now one helper; this pins that helper against what the runner
+    actually emits so a future copy cannot drift silently.
+    """
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+
+    produced = algorithm_matrix.policy_labels(
+        [__import__("scripts.experiments.ecg.policy_specs", fromlist=["x"])
+         .parse_policy_spec("ECG:replacement")],
+        "GRASP_PAPER", "off", "next", 6, "all", "future", "enabled", "off", 1,
+        arm, "drop")
+    expected = experiment_run.expected_labels_for(
+        ["ECG:replacement"], "GRASP_PAPER", "off", "next", 6, "all", "future",
+        "enabled", "off", 1, arm, "drop")
+    assert expected == produced, (
+        "the flow expects labels the runner does not produce")

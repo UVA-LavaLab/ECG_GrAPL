@@ -1249,6 +1249,34 @@ def make_roi_job(
     )
 
 
+def expected_labels_for(
+        expected_policies: list[str], record_base_policy: str = "LRU",
+        window_observer: str = "off", record_model: str = "next",
+        candidate_rrpv: int = 6, grasp_scope: str = "all",
+        popt_rank_mode: str = "future", frontier_gating: str = "enabled",
+        grasp_reference: str = "off", query_count: int = 1,
+        governed_first: str = "no", store_bound: str = "drop") -> list[str]:
+    """The one place that decides what output labels a job should produce.
+
+    This expression previously existed in three copies, each with its own
+    fast path for default-looking configurations. Adding an option that
+    changes a label meant teaching every copy, and a copy that was missed
+    rejected a correctly executed cell as a missing policy. Keep it single.
+    """
+    default_shape = (
+        record_base_policy == "LRU" and window_observer == "off" and
+        record_model == "next" and grasp_scope == "all" and
+        popt_rank_mode == "future" and grasp_reference == "off" and
+        query_count == 1 and governed_first == "no" and store_bound == "drop")
+    if default_shape:
+        return [policy_output_label(policy) for policy in expected_policies]
+    return algorithm_matrix.policy_labels(
+        [parse_policy_spec(policy) for policy in expected_policies],
+        record_base_policy, window_observer, record_model, candidate_rrpv,
+        grasp_scope, popt_rank_mode, frontier_gating, grasp_reference,
+        query_count, governed_first, store_bound)
+
+
 def csv_status(
         path: Path,
         expected_policies: list[str] | None = None,
@@ -1268,15 +1296,10 @@ def csv_status(
     statuses = {row.get("status", "") for row in rows}
     if statuses == {"ok"}:
         if expected_policies:
-            expected = ({policy_output_label(policy) for policy in expected_policies}
-                        if record_base_policy == "LRU" and window_observer == "off" and record_model == "next" and
-                        grasp_scope == "all" and popt_rank_mode == "future" and grasp_reference == "off" and
-                        query_count == 1 and governed_first == "no" and store_bound == "drop"
-                        else set(algorithm_matrix.policy_labels(
-                            [parse_policy_spec(policy) for policy in expected_policies], record_base_policy,
-                            window_observer, record_model, candidate_rrpv, grasp_scope, popt_rank_mode,
-                            frontier_gating, grasp_reference, query_count,
-                            governed_first, store_bound)))
+            expected = set(expected_labels_for(
+                expected_policies, record_base_policy, window_observer, record_model,
+                candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating,
+                grasp_reference, query_count, governed_first, store_bound))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1343,12 +1366,11 @@ def job_csv_status(job: Job) -> tuple[str, str]:
             payload.get("all_rows_ok") is not True):
         return "partial", "completion marker is not successful"
 
-    expected_labels = ([policy_output_label(policy) for policy in expected]
-                       if record_base == "LRU" and observer == "off" and model == "next" and
-                       scope == "all" and rank_mode == "future" and reference == "off" and queries == 1
-                       else algorithm_matrix.policy_labels(
-                           [parse_policy_spec(policy) for policy in expected], record_base, observer,
-                           model, floor, scope, rank_mode, gating, reference, queries))
+    expected_labels = expected_labels_for(
+        expected, record_base, observer, model, floor, scope, rank_mode, gating,
+        reference, queries,
+        str(job.metadata.get("record_governed_first", "no")),
+        str(job.metadata.get("record_store_bound", "drop")))
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),
