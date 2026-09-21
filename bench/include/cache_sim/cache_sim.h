@@ -1615,6 +1615,7 @@ public:
         ref32_governed_misses_ = 0;
         governed_property_hits_ = 0;
         governed_property_misses_ = 0;
+        record_victim_attribution_ = RecordVictimAttribution();
         ref32_dead_bypasses_ = 0;
         ref32_dead_victims_ = 0;
         ref32_non_property_victims_ = 0;
@@ -1664,6 +1665,24 @@ public:
     }
     uint64_t getGovernedPropertyMisses() const {
         return governed_property_misses_;
+    }
+    // Passive decision-path attribution for the current ECG record victim rule.
+    // Counting only; no field here is ever read back into a selection.
+    struct RecordVictimAttribution {
+        uint64_t decisions = 0;
+        uint64_t dead_first = 0;
+        uint64_t base_not_governed = 0;
+        uint64_t base_no_future = 0;
+        uint64_t base_kept = 0;
+        uint64_t overridden = 0;
+        // Census summed over decisions; divide by decisions for a per-eviction mean.
+        uint64_t census_governed = 0;
+        uint64_t census_finite = 0;
+        uint64_t census_dead = 0;
+        uint64_t census_unknown = 0;
+    };
+    const RecordVictimAttribution& getRecordVictimAttribution() const {
+        return record_victim_attribution_;
     }
     uint64_t getRef32DeadBypasses() const {
         return ref32_dead_bypasses_;
@@ -2501,11 +2520,13 @@ private:
                     ? findVictimGRASP(set) : findVictimLRU(set);
             };
             std::size_t victim = 0;
+            ecg_record::VictimTrace trace;
             if (ecg_record::selectVictim(
                     record_receiver_.layout(), ways.data(), set.size(),
-                    record_receiver_.watermark(), select_base, victim) !=
+                    record_receiver_.watermark(), select_base, victim, &trace) !=
                         ecg_record::Status::OK)
                 throw std::logic_error("Invalid current ECG victim selection");
+            recordVictimAttribution(trace);
             return victim;
         }
         if (record_prepared_)
@@ -3632,6 +3653,23 @@ private:
     uint64_t ref32_governed_misses_ = 0;
     uint64_t governed_property_hits_ = 0;
     uint64_t governed_property_misses_ = 0;
+    RecordVictimAttribution record_victim_attribution_;
+
+    void recordVictimAttribution(const ecg_record::VictimTrace& trace) {
+        auto& a = record_victim_attribution_;
+        ++a.decisions;
+        switch (trace.path) {
+          case ecg_record::VictimPath::DEAD_FIRST: ++a.dead_first; break;
+          case ecg_record::VictimPath::BASE_NOT_GOVERNED: ++a.base_not_governed; break;
+          case ecg_record::VictimPath::BASE_NO_FUTURE: ++a.base_no_future; break;
+          case ecg_record::VictimPath::BASE_KEPT: ++a.base_kept; break;
+          case ecg_record::VictimPath::OVERRIDDEN: ++a.overridden; break;
+        }
+        a.census_governed += trace.governed;
+        a.census_finite += trace.finite;
+        a.census_dead += trace.dead;
+        a.census_unknown += trace.unknown;
+    }
     uint64_t ref32_dead_bypasses_ = 0;
     uint64_t ref32_dead_victims_ = 0;
     uint64_t ref32_non_property_victims_ = 0;
@@ -4971,6 +5009,19 @@ public:
            << l3_->getGovernedPropertyHits() << ",\n";
         ss << "  \"governed_property_misses\": "
            << l3_->getGovernedPropertyMisses() << ",\n";
+        {
+            const auto& a = l3_->getRecordVictimAttribution();
+            ss << "  \"ecg_record_victim_decisions\": " << a.decisions << ",\n";
+            ss << "  \"ecg_record_victim_dead_first\": " << a.dead_first << ",\n";
+            ss << "  \"ecg_record_victim_base_not_governed\": " << a.base_not_governed << ",\n";
+            ss << "  \"ecg_record_victim_base_no_future\": " << a.base_no_future << ",\n";
+            ss << "  \"ecg_record_victim_base_kept\": " << a.base_kept << ",\n";
+            ss << "  \"ecg_record_victim_overridden\": " << a.overridden << ",\n";
+            ss << "  \"ecg_record_ways_governed\": " << a.census_governed << ",\n";
+            ss << "  \"ecg_record_ways_finite\": " << a.census_finite << ",\n";
+            ss << "  \"ecg_record_ways_dead\": " << a.census_dead << ",\n";
+            ss << "  \"ecg_record_ways_unknown\": " << a.census_unknown << ",\n";
+        }
         ss << "  \"ecg_ref32_dead_bypasses\": "
            << l3_->getRef32DeadBypasses() << ",\n";
         ss << "  \"ecg_ref32_dead_victims\": "

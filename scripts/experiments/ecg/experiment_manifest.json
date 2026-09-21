@@ -20,6 +20,7 @@
     "ecg_frontier_mask_cache",
     "ecg_grasp_reference_cache",
     "ecg_consumer_architecture_cache",
+    "ecg_victim_attribution_cache",
     "ecg_algorithm_equivalence_gem5",
     "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
@@ -56,6 +57,7 @@
   },
   "profiles": {
     "ecg_grasp_reference_cache": "Four serial SpMV Patents8MiB reference-consumer cells: fresh GRASP/intact favorable P-OPT, and GRASP-based FULL/FLAT diagnostics with identical complete matrix preparation and ideal runtime rank availability. Not an ECG mask or native-speed claim.",
+    "ecg_victim_attribution_cache": "Six serial Patents 8MiB cells reading the passive ECG record victim-path attribution instrument: SpMV, BFS, SSSP and BC on the GRASP record base, SSSP on the LRU record base, and PageRank. Instrument reading, not a candidate: it adds receipt fields only and must reproduce the existing competitive kernel totals.",
     "ecg_consumer_architecture_cache": "Four serial SpMV Patents8MiB consumer-architecture cells: fresh ordinary GRASP, fresh intact favorable P-OPT, and the GRASP-based FULL base-first and RANK rank-first diagnostics sharing one identical complete matrix and one identical engagement boundary. Isolates selection architecture, not information quality. Not an ECG mask, competitiveness or native-speed claim.",
     "ecg_frontier_mask_cache": "Four final serial Patents BFS8MiB budget cells: fresh phased GRASP and intact favorable P-OPT, plus B frontier masks with identical paid counters/context and gating ignored/enabled. RRPV7 only; no graph/source/threshold sweep or native claim.",
     "ecg_popt_rank_attribution": "Six serial full-Patents SpMV/TD-BFS8MiB cells: strong applicable GRASP, intact favorable P-OPT, and explicitly labeled constant-rank P-OPT diagnostics. No new mask, runtime lookup charge, capacity reduction or native timing claim.",
@@ -137,6 +139,19 @@
         "additional_requirement": "full strictly improves kernel transfers over fresh ordinary GRASP",
         "popt_comparison": "report against intact P-OPT separately without weakening it",
         "full_graph_runs": 4,
+        "no_automatic_follow_on": true
+      }
+    },
+    "ecg_victim_attribution_cache": {
+      "status": "ready",
+      "reason": "Passive decision-path attribution for ecg_record::selectVictim. The 42-cell competitive study at 074cbf75 shows each algorithm loses differently, but the receipts carry no branch counts, so the consumer-ceiling and coverage causes are inferred rather than measured. This reads them directly. The instrument is proven passive by a 20000-trial randomized unit test; it adds ten receipt fields and changes no selection.",
+      "require_clean_worktree": true,
+      "development_gate": {
+        "metric": "none",
+        "kind": "instrument-reading",
+        "gate": "no performance gate: this profile cannot promote, reject or rank any candidate",
+        "validity_check": "each cell must reproduce its competitive_8mb_patents_074cbf75 kernel and setup totals; a difference invalidates the reading rather than constituting a result",
+        "full_graph_runs": 6,
         "no_automatic_follow_on": true
       }
     },
@@ -1139,6 +1154,49 @@
       "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
       "policy_sharding_allowed": false, "timeout_cache": 1800,
       "out_subdir": "196_consumer_architecture_rankfirst"
+    },
+    {
+      "name": "197_victim_attribution_grasp_base", "kind": "roi_matrix",
+      "profiles": ["ecg_victim_attribution_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv", "bfs", "sssp", "bc"], "policies": ["ECG:replacement"],
+      "current_algorithms": true, "algorithm_record_base_policy": "GRASP_PAPER",
+      "algorithm_record_preprocess": {"spmv": "csr", "bfs": "csr", "sssp": "traversal", "bc": "csr"},
+      "ecg_record_bytes": 0,
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 4096,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "197_victim_attribution_grasp_base"
+    },
+    {
+      "name": "198_victim_attribution_lru_base", "kind": "roi_matrix",
+      "profiles": ["ecg_victim_attribution_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["sssp"], "policies": ["ECG:replacement"],
+      "current_algorithms": true, "algorithm_record_base_policy": "LRU",
+      "algorithm_record_preprocess": {"sssp": "traversal"},
+      "ecg_record_bytes": 0,
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 4096,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "198_victim_attribution_lru_base"
+    },
+    {
+      "name": "199_victim_attribution_pagerank", "kind": "roi_matrix",
+      "profiles": ["ecg_victim_attribution_cache"],
+      "suite": "cache-sim", "graph_set": "matched_8mb_patents",
+      "benchmarks": ["pr"], "policies": ["ECG:replacement"],
+      "current_pr_baselines": true,
+      "ecg_record_bytes": 0, "cache_record_rss_mib": 4096,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "199_victim_attribution_pagerank"
     },
     {
       "name": "187_frontier_grasp", "kind": "roi_matrix",

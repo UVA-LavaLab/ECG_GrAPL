@@ -994,6 +994,62 @@ void testFilteredQuantizedPassBoundary() {
 
 }  // namespace
 
+
+// The attribution trace must be write-only: collecting it may never change a
+// victim. Proven directly here, independent of any cache/memory layout, by
+// running identical way states through selectVictim with and without a trace.
+void testVictimTraceIsPassive() {
+    using namespace ecg_record;
+    auto req = requirements(1024);
+    req.record_count = 64;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK, "trace passivity fixture layout");
+    std::mt19937_64 rng(0xA77121B0);
+    const State states[4] = {State::UNKNOWN, State::FINITE, State::DEAD, State::WRAP};
+    int mismatches = 0, traced_paths[5] = {};
+    for (int trial = 0; trial < 20000; ++trial) {
+        const std::size_t count = 1 + (rng() % 16);
+        const uint64_t sequence = rng() % 64;
+        WayState ways[16];
+        for (std::size_t i = 0; i < count; ++i) {
+            ways[i].property = (rng() % 4) != 0;
+            ways[i].rrpv = static_cast<uint8_t>(rng() % 8);
+            ways[i].recency = rng() % 4096;
+            ways[i].grasp_tier = static_cast<uint8_t>(rng() % 3);
+            ways[i].state = states[rng() % 4];
+            ways[i].deadline = rng() % 128;
+        }
+        WayState copy_a[16], copy_b[16];
+        for (std::size_t i = 0; i < count; ++i) copy_a[i] = copy_b[i] = ways[i];
+        const std::size_t base_way = rng() % count;
+        const auto pick = [base_way]() { return base_way; };
+        std::size_t victim_untraced = 0, victim_traced = 0;
+        VictimTrace trace;
+        const Status s1 = selectVictim(
+            layout, copy_a, count, sequence, pick, victim_untraced, nullptr);
+        const Status s2 = selectVictim(
+            layout, copy_b, count, sequence, pick, victim_traced, &trace);
+        if (s1 != s2 || victim_untraced != victim_traced) ++mismatches;
+        // The rule must not mutate the ways it inspects either.
+        for (std::size_t i = 0; i < count; ++i)
+            if (copy_a[i].rrpv != ways[i].rrpv || copy_a[i].state != ways[i].state ||
+                copy_a[i].deadline != ways[i].deadline || copy_b[i].rrpv != ways[i].rrpv ||
+                copy_b[i].state != ways[i].state || copy_b[i].deadline != ways[i].deadline)
+                ++mismatches;
+        if (s2 == Status::OK) {
+            ++traced_paths[static_cast<int>(trace.path)];
+            const unsigned governed = trace.finite + trace.dead + trace.unknown;
+            if (governed != trace.governed || trace.governed > count || trace.ways != count)
+                ++mismatches;
+        }
+    }
+    check(mismatches == 0,
+          "collecting a victim trace never changes the victim, status or way state");
+    int covered = 0;
+    for (int i = 0; i < 5; ++i) covered += traced_paths[i] > 0;
+    check(covered == 5, "the passivity fixture exercises every attributed victim path");
+}
+
 int main() {
     testAdaptiveBudgets();
     testSixBitConfiguration();
@@ -1012,6 +1068,7 @@ int main() {
     testUnknownPredictionIsNeutralToLru();
     testSelectedBaseVictimRefinement();
     testFilteredQuantizedPassBoundary();
+    testVictimTraceIsPassive();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }

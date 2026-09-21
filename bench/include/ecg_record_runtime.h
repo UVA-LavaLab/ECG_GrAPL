@@ -346,16 +346,55 @@ struct WayState {
     uint64_t deadline = 0;
 };
 
+// Passive decision-path attribution. Which branch of the victim rule fired, and
+// what the governed ways held when it fired. Recording a trace never changes a
+// selection: every write below is to the caller's trace, never to `ways`.
+enum class VictimPath : uint8_t {
+    DEAD_FIRST,         // a governed DEAD way was evicted before the base policy ran
+    BASE_NOT_GOVERNED,  // the base victim is not governed, so the mask is never consulted
+    BASE_NO_FUTURE,     // the base victim is governed but carries no live bound
+    BASE_KEPT,          // the base victim is governed and live; no farther candidate existed
+    OVERRIDDEN,         // a farther live governed future replaced the base victim
+};
+
+struct VictimTrace {
+    VictimPath path = VictimPath::BASE_NOT_GOVERNED;
+    uint8_t ways = 0;
+    uint8_t governed = 0;   // ways holding governed property data
+    uint8_t finite = 0;     // governed ways carrying a live bound at this sequence
+    uint8_t dead = 0;       // governed ways known dead
+    uint8_t unknown = 0;    // governed ways with no usable bound, including expired
+};
+
 template<class SelectBaseVictim>
 inline Status selectVictim(
         const Layout& layout, const WayState* ways, std::size_t count,
         uint64_t sequence, SelectBaseVictim select_base_victim,
-        std::size_t& victim) {
+        std::size_t& victim, VictimTrace* trace = nullptr) {
     victim = std::numeric_limits<std::size_t>::max();
     if (validateLayout(layout) != Status::OK)
         return Status::INVALID_LAYOUT;
     if (!ways || count == 0 || count > 64)
         return Status::INVALID_COUNTS;
+    if (trace) {
+        *trace = VictimTrace();
+        trace->ways = static_cast<uint8_t>(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            if (!ways[index].property)
+                continue;
+            ++trace->governed;
+            if (ways[index].state == State::DEAD) {
+                ++trace->dead;
+                continue;
+            }
+            const auto future =
+                resolveFuture(ways[index].state, ways[index].deadline, sequence);
+            if (future.state == State::FINITE && future.remaining > 0)
+                ++trace->finite;
+            else
+                ++trace->unknown;
+        }
+    }
     std::size_t dead = count;
     for (std::size_t index = 0; index < count; ++index) {
         if (ways[index].property && ways[index].state == State::DEAD &&
@@ -364,15 +403,22 @@ inline Status selectVictim(
     }
     if (dead != count) {
         victim = dead;
+        if (trace)
+            trace->path = VictimPath::DEAD_FIRST;
         return Status::OK;
     }
     victim = select_base_victim();
     if (victim >= count)
         return Status::INVALID_COUNTS;
+    const std::size_t base = victim;
     EffectiveFuture best = resolveFuture(
         ways[victim].state, ways[victim].deadline, sequence);
-    if (!ways[victim].property || best.state != State::FINITE || best.remaining == 0)
+    if (!ways[victim].property || best.state != State::FINITE || best.remaining == 0) {
+        if (trace)
+            trace->path = ways[victim].property
+                ? VictimPath::BASE_NO_FUTURE : VictimPath::BASE_NOT_GOVERNED;
         return Status::OK;
+    }
     // Override the selected base only by comparing two live property futures;
     // UNKNOWN never pins a line or changes the base policy's decision.
     for (std::size_t index = 0; index < count; ++index) {
@@ -386,12 +432,14 @@ inline Status selectVictim(
             best = future;
         }
     }
+    if (trace)
+        trace->path = victim == base ? VictimPath::BASE_KEPT : VictimPath::OVERRIDDEN;
     return Status::OK;
 }
 
 inline Status selectVictim(
         const Layout& layout, const WayState* ways, std::size_t count,
-        uint64_t sequence, std::size_t& victim) {
+        uint64_t sequence, std::size_t& victim, VictimTrace* trace = nullptr) {
     const auto select_lru = [ways, count]() {
         std::size_t lru = 0;
         for (std::size_t index = 1; index < count; ++index)
@@ -400,7 +448,7 @@ inline Status selectVictim(
         return lru;
     };
     return selectVictim(
-        layout, ways, count, sequence, select_lru, victim);
+        layout, ways, count, sequence, select_lru, victim, trace);
 }
 
 template<class SelectBaseVictim>
