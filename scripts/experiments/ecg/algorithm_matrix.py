@@ -57,6 +57,8 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--frontier-gating", choices=("enabled", "ignored"), default="enabled")
     parser.add_argument("--popt-rank-mode", choices=("future", "constant"), default="future")
     parser.add_argument("--grasp-reference", choices=("off", "full", "flat", "rank"), default="off")
+    parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
+    parser.add_argument("--record-store-bound", choices=("drop", "keep"), default="drop")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
     parser.add_argument("--bfs-traffic-phases", choices=("on", "off"), default="off")
     parser.add_argument("--window-candidate-rrpv", choices=(6, 7), type=int, default=6)
@@ -114,6 +116,21 @@ def popt_rank_label(label: str, rank_mode: str) -> str:
     return "POPT_UNCHARGED_CONST_RANK"
 
 
+def store_bound_label(label: str, store_bound: str) -> str:
+    if store_bound == "drop":
+        return label
+    require(label.startswith("ECG_"), "store-bound retention requires a current ECG policy")
+    return label + "_STORE_BOUND"
+
+
+def governed_first_label(label: str, governed_first: str) -> str:
+    if governed_first == "no":
+        return label
+    require(label.startswith("ECG_") and "REPLACEMENT" in label,
+            "governed-first requires a current ECG replacement policy")
+    return label + "_GOVERNED_FIRST"
+
+
 def grasp_reference_label(label: str, mode: str) -> str:
     if mode == "off":
         return label
@@ -133,9 +150,10 @@ def query_policy_label(label: str, queries: int) -> str:
 def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
                   popt_rank_mode: str = "future", frontier_gating: str = "enabled",
-                  grasp_reference: str = "off", queries: int = 1) -> list[str]:
-    return [query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(record_policy_label(
-                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), observer),
+                  grasp_reference: str = "off", queries: int = 1,
+                  governed_first: str = "no", store_bound: str = "drop") -> list[str]:
+    return [query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(store_bound_label(governed_first_label(record_policy_label(
+                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), store_bound), observer),
                 grasp_scope), popt_rank_mode), grasp_reference), queries)
             for spec in policies]
 
@@ -387,6 +405,13 @@ def validate_payload(
         validate_grasp_reference(payload, options)
     else:
         require(payload.get("grasp_reference") is None, "unrequested GRASP reference consumer")
+    validate_victim_order(payload, options)
+    require(options.record_store_bound == "drop" or (
+                mode != "csr" and options.record_model == "next"),
+            "store-bound retention requires the current NEXT record model")
+    require(options.record_governed_first == "no" or (
+                mode != "csr" and options.record_model == "next"),
+            "governed-first requires the current NEXT record replacement rule")
     expected_result = contract()["references"][algorithm]
     if evidence and graph_path.name == expected_result["graph"] and options.source == 0 and not options.source_list:
         require(graph.sha256 == contract()["graphs"][expected_result["graph"]]["sha256"],
@@ -395,6 +420,14 @@ def validate_payload(
             if key != "graph":
                 require(work.get(key) == expected, f"independent {algorithm} reference failed: {key}")
     return work
+
+
+def validate_victim_order(payload: dict[str, Any], options: argparse.Namespace) -> None:
+    expected = "governed-first" if options.record_governed_first == "on" else "base-first"
+    require(payload["workload"].get("record_victim_order") == expected,
+            "record victim order does not match the requested arm")
+    require(payload["workload"].get("record_store_bound") == options.record_store_bound,
+            "record store-bound retention does not match the requested arm")
 
 
 def validate_grasp_reference(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:

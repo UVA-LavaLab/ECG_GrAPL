@@ -351,6 +351,7 @@ struct WayState {
 // selection: every write below is to the caller's trace, never to `ways`.
 enum class VictimPath : uint8_t {
     DEAD_FIRST,         // a governed DEAD way was evicted before the base policy ran
+    UNGOVERNED_FIRST,   // opt-in governed-first evicted a non-governed way
     BASE_NOT_GOVERNED,  // the base victim is not governed, so the mask is never consulted
     BASE_NO_FUTURE,     // the base victim is governed but carries no live bound
     BASE_KEPT,          // the base victim is governed and live; no farther candidate existed
@@ -364,13 +365,33 @@ struct VictimTrace {
     uint8_t finite = 0;     // governed ways carrying a live bound at this sequence
     uint8_t dead = 0;       // governed ways known dead
     uint8_t unknown = 0;    // governed ways with no usable bound, including expired
+    // Subset of `unknown` that still holds a FINITE bound whose deadline the
+    // current position has reached or passed. This separates expiry, where a
+    // bound was published and then overtaken, from invalidation or absence,
+    // where the line carries no bound at all. `unknown - expired` is the
+    // latter. `unknown` keeps its previous meaning so earlier readings stay
+    // comparable.
+    uint8_t expired = 0;
+};
+
+// Opt-in governed-first eviction. When set, a way holding data this traversal
+// does not govern is evicted before any governed property way, after the
+// explicit-DEAD scan. The repository's teaching fixture in
+// scripts/test/test_wiki_figures.py specifies this order ("explicit DEAD
+// precedes non-property", "non-property precedes ordinary property
+// candidates"); the default path does not provide it, so it is measured as a
+// candidate rather than enabled silently. Among non-governed ways the least
+// recently used is taken, so the rule carries no way-index bias.
+struct VictimOptions {
+    bool governed_first = false;
 };
 
 template<class SelectBaseVictim>
 inline Status selectVictim(
         const Layout& layout, const WayState* ways, std::size_t count,
         uint64_t sequence, SelectBaseVictim select_base_victim,
-        std::size_t& victim, VictimTrace* trace = nullptr) {
+        std::size_t& victim, VictimTrace* trace = nullptr,
+        VictimOptions options = VictimOptions()) {
     victim = std::numeric_limits<std::size_t>::max();
     if (validateLayout(layout) != Status::OK)
         return Status::INVALID_LAYOUT;
@@ -389,10 +410,13 @@ inline Status selectVictim(
             }
             const auto future =
                 resolveFuture(ways[index].state, ways[index].deadline, sequence);
-            if (future.state == State::FINITE && future.remaining > 0)
+            if (future.state == State::FINITE && future.remaining > 0) {
                 ++trace->finite;
-            else
+            } else {
                 ++trace->unknown;
+                if (ways[index].state == State::FINITE)
+                    ++trace->expired;
+            }
         }
     }
     std::size_t dead = count;
@@ -406,6 +430,20 @@ inline Status selectVictim(
         if (trace)
             trace->path = VictimPath::DEAD_FIRST;
         return Status::OK;
+    }
+    if (options.governed_first) {
+        std::size_t ungoverned = count;
+        for (std::size_t index = 0; index < count; ++index) {
+            if (!ways[index].property &&
+                (ungoverned == count || ways[index].recency < ways[ungoverned].recency))
+                ungoverned = index;
+        }
+        if (ungoverned != count) {
+            victim = ungoverned;
+            if (trace)
+                trace->path = VictimPath::UNGOVERNED_FIRST;
+            return Status::OK;
+        }
     }
     victim = select_base_victim();
     if (victim >= count)
@@ -439,7 +477,8 @@ inline Status selectVictim(
 
 inline Status selectVictim(
         const Layout& layout, const WayState* ways, std::size_t count,
-        uint64_t sequence, std::size_t& victim, VictimTrace* trace = nullptr) {
+        uint64_t sequence, std::size_t& victim, VictimTrace* trace = nullptr,
+        VictimOptions options = VictimOptions()) {
     const auto select_lru = [ways, count]() {
         std::size_t lru = 0;
         for (std::size_t index = 1; index < count; ++index)
@@ -448,7 +487,7 @@ inline Status selectVictim(
         return lru;
     };
     return selectVictim(
-        layout, ways, count, sequence, select_lru, victim, trace);
+        layout, ways, count, sequence, select_lru, victim, trace, options);
 }
 
 template<class SelectBaseVictim>

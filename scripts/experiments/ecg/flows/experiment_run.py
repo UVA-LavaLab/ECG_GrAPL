@@ -800,6 +800,16 @@ def make_roi_job(
         if not settings.get("current_algorithms") or rank_mode not in ("future", "constant"):
             raise SystemExit("invalid current P-OPT rank mode")
         options += " --popt-rank-mode " + rank_mode
+    if "algorithm_record_store_bound" in settings:
+        store_bound = str(settings["algorithm_record_store_bound"])
+        if not settings.get("current_algorithms") or store_bound not in ("drop", "keep"):
+            raise SystemExit("invalid current record store-bound selection")
+        options += " --record-store-bound " + store_bound
+    if "algorithm_record_governed_first" in settings:
+        governed = str(settings["algorithm_record_governed_first"])
+        if not settings.get("current_algorithms") or governed not in ("no", "on"):
+            raise SystemExit("invalid current governed-first record selection")
+        options += " --record-governed-first " + governed
     if "algorithm_grasp_reference" in settings:
         reference = str(settings["algorithm_grasp_reference"])
         if not settings.get("current_algorithms") or reference not in ("off", "full", "flat", "rank"):

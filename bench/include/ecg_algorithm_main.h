@@ -105,6 +105,14 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value != "future" && value != "constant")
                 throw std::invalid_argument("popt-rank-mode-must-be-future-or-constant");
             command.options.popt_constant_rank = value == "constant";
+        } else if (argument == "--record-store-bound") {
+            if (value != "keep" && value != "drop")
+                throw std::invalid_argument("record-store-bound-must-be-keep-or-drop");
+            command.options.record_store_keeps_bound = value == "keep";
+        } else if (argument == "--record-governed-first") {
+            if (value != "on" && value != "no")
+                throw std::invalid_argument("record-governed-first-must-be-on-or-no");
+            command.options.record_governed_first = value == "on";
         } else if (argument == "--grasp-reference") {
             if (value == "off") command.options.grasp_reference = GraspReferenceMode::OFF;
             else if (value == "full") command.options.grasp_reference = GraspReferenceMode::FULL;
@@ -198,6 +206,14 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
          command.options.bfs_traffic_phases || command.options.window_observer != WindowObserverMode::OFF ||
          !command.options.sources.empty()))
         throw std::invalid_argument("GRASP reference diagnostic requires CSR SpMV with ordinary GRASP_PAPER");
+    if (command.options.record_store_keeps_bound &&
+        (!command.options.records || command.options.record_model != RecordModel::NEXT))
+        throw std::invalid_argument("store-bound retention requires the current NEXT record model");
+    if (command.options.record_governed_first &&
+        (!command.options.records || command.options.record_model != RecordModel::NEXT ||
+         (command.options.mechanism != ecg_record::Mechanism::REPLACEMENT &&
+          command.options.mechanism != ecg_record::Mechanism::REPLACEMENT_PREFETCH)))
+        throw std::invalid_argument("governed-first requires the current NEXT record replacement rule");
     if (command.options.records && command.policy != "LRU")
         throw std::invalid_argument("current-record-modes-own-their-replacement-policy");
     if (!command.options.records &&
@@ -270,7 +286,11 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
            << recordBasePolicyName(options.record_base_policy)
            << "\",\"record_model\":\"" << (frontier ? "frontier" : window ? "window" : "next")
            << "\",\"record_preprocess\":\"" << (options.traversal_preprocessing ? "traversal" : "csr")
-           << "\",\"record_reuse_scope\":\"" << recordReuseScope(options) << '"';
+           << "\",\"record_reuse_scope\":\"" << recordReuseScope(options)
+           << "\",\"record_victim_order\":\""
+           << (options.record_governed_first ? "governed-first" : "base-first")
+           << "\",\"record_store_bound\":\""
+           << (options.record_store_keeps_bound ? "keep" : "drop") << '"';
     const auto field = [&](const char* key, uint64_t value) { output << ",\"" << key << "\":" << value; };
     field("weighted", result.weighted);
     field("evidence", result.evidence);

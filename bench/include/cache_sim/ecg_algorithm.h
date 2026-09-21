@@ -158,6 +158,8 @@ class AlgorithmBackend {
         context_.popt_constant_rank = options_.popt_constant_rank ||
             options_.grasp_reference == ecg_algorithm::GraspReferenceMode::FLAT;
         context_.grasp_reference_consumer = referenceConsumer();
+        cache_.setRecordGovernedFirst(options_.record_governed_first);
+        cache_.setRecordStoreKeepsBound(options_.record_store_keeps_bound);
         context_.grasp_reference_rank_first =
             options_.grasp_reference == ecg_algorithm::GraspReferenceMode::RANK;
         cache_.initGraphContext(&context_);

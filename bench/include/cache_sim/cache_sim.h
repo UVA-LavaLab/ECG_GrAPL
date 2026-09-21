@@ -1056,7 +1056,8 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         if (record)
             validateRecordObservation(address, is_write, *record);
-        else if (record_configured_ && record_receiver_.filtered() && recordProperty(address))
+        else if (record_configured_ && record_receiver_.filtered() && recordProperty(address) &&
+                 !(is_write && record_store_keeps_bound_))
             invalidateRecordObservationUnlocked(address, record_receiver_.watermark());
 
         // T-OPT: record the L3 input stream (post-L1/L2). Only the LLC level.
@@ -1671,6 +1672,7 @@ public:
     struct RecordVictimAttribution {
         uint64_t decisions = 0;
         uint64_t dead_first = 0;
+        uint64_t ungoverned_first = 0;
         uint64_t base_not_governed = 0;
         uint64_t base_no_future = 0;
         uint64_t base_kept = 0;
@@ -1680,6 +1682,18 @@ public:
         uint64_t census_finite = 0;
         uint64_t census_dead = 0;
         uint64_t census_unknown = 0;
+        uint64_t census_expired = 0;
+        // Stored line state for governed ways, read before victimState collapses
+        // PENDING into UNKNOWN. Separates a bound still in flight on the bounded
+        // update channel from one invalidated or never published.
+        uint64_t census_state_finite = 0;
+        uint64_t census_state_pending = 0;
+        uint64_t census_state_unknown = 0;
+        uint64_t census_state_dead = 0;
+        // Governed ways holding a stored FINITE bound that victimState collapses
+        // to UNKNOWN because filtered progress has reached or passed its deadline.
+        // This is expiry against skipped progress, counted before the collapse.
+        uint64_t census_expired_vs_progress = 0;
     };
     const RecordVictimAttribution& getRecordVictimAttribution() const {
         return record_victim_attribution_;
@@ -1869,6 +1883,19 @@ public:
         record_prepared_ = true;
         record_configured_ = true;
     }
+
+    void setRecordGovernedFirst(bool governed_first) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_victim_options_.governed_first = governed_first;
+    }
+
+    // C2c: a store does not change when a line is next read, so the bound
+    // stays a valid upper bound on the next potential designated read.
+    void setRecordStoreKeepsBound(bool keeps) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_store_keeps_bound_ = keeps;
+    }
+    bool recordStoreKeepsBound() const { return record_store_keeps_bound_; }
 
     void disableRecord() {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -2124,6 +2151,8 @@ private:
     bool grasp_phase_scoped_ = false, grasp_graph_pass_ = false;
     bool record_prepared_ = false;
     bool record_replacement_ = false;
+    ecg_record::VictimOptions record_victim_options_;
+    bool record_store_keeps_bound_ = false;
     EvictionPolicy record_base_policy_ = EvictionPolicy::LRU;
     bool record_mode_snapshot_ = false;
     uint64_t record_dead_bypasses_ = 0;
@@ -2513,8 +2542,21 @@ private:
                 return record_base_policy_ == EvictionPolicy::GRASP
                     ? findVictimGRASP(set) : findVictimLRU(set);
             std::array<ecg_record::WayState, 64> ways{};
-            for (std::size_t index = 0; index < set.size(); ++index)
+            for (std::size_t index = 0; index < set.size(); ++index) {
                 ways[index] = recordWay(set[index]);
+                if (!ways[index].property)
+                    continue;
+                switch (set[index].record_metadata.state) {
+                  case ecg_record::LineState::FINITE: ++record_victim_attribution_.census_state_finite; break;
+                  case ecg_record::LineState::PENDING: ++record_victim_attribution_.census_state_pending; break;
+                  case ecg_record::LineState::DEAD: ++record_victim_attribution_.census_state_dead; break;
+                  case ecg_record::LineState::UNKNOWN: ++record_victim_attribution_.census_state_unknown; break;
+                }
+                if (record_receiver_.filtered() &&
+                    set[index].record_metadata.state == ecg_record::LineState::FINITE &&
+                    set[index].record_metadata.value <= record_receiver_.watermark())
+                    ++record_victim_attribution_.census_expired_vs_progress;
+            }
             const auto select_base = [&]() {
                 return record_base_policy_ == EvictionPolicy::GRASP
                     ? findVictimGRASP(set) : findVictimLRU(set);
@@ -2523,7 +2565,8 @@ private:
             ecg_record::VictimTrace trace;
             if (ecg_record::selectVictim(
                     record_receiver_.layout(), ways.data(), set.size(),
-                    record_receiver_.watermark(), select_base, victim, &trace) !=
+                    record_receiver_.watermark(), select_base, victim, &trace,
+                    record_victim_options_) !=
                         ecg_record::Status::OK)
                 throw std::logic_error("Invalid current ECG victim selection");
             recordVictimAttribution(trace);
@@ -3660,6 +3703,7 @@ private:
         ++a.decisions;
         switch (trace.path) {
           case ecg_record::VictimPath::DEAD_FIRST: ++a.dead_first; break;
+          case ecg_record::VictimPath::UNGOVERNED_FIRST: ++a.ungoverned_first; break;
           case ecg_record::VictimPath::BASE_NOT_GOVERNED: ++a.base_not_governed; break;
           case ecg_record::VictimPath::BASE_NO_FUTURE: ++a.base_no_future; break;
           case ecg_record::VictimPath::BASE_KEPT: ++a.base_kept; break;
@@ -3669,6 +3713,7 @@ private:
         a.census_finite += trace.finite;
         a.census_dead += trace.dead;
         a.census_unknown += trace.unknown;
+        a.census_expired += trace.expired;
     }
     uint64_t ref32_dead_bypasses_ = 0;
     uint64_t ref32_dead_victims_ = 0;
@@ -3850,7 +3895,8 @@ public:
             }
             if (!record && record_replacement_ &&
                 record_property_.traversal == ecg_record::TraversalMode::ORDERED_FILTERED &&
-                ecg_record::nativePropertyLine(record_configuration_, address)) {
+                ecg_record::nativePropertyLine(record_configuration_, address) &&
+                !(is_write && l3_->recordStoreKeepsBound())) {
                 l3_->invalidateRecordObservation(address, record_sequence_);
                 ecg_record::CommitUpdate update;
                 update.physical_line = line_addr;
@@ -3979,6 +4025,14 @@ public:
         l1_->insert(address, is_write);
         if (ref32_prefetch_enabled_ && ref32_record_request)
             issueCurrentRef32Prefetch();
+    }
+
+    void setRecordGovernedFirst(bool governed_first) {
+        l3_->setRecordGovernedFirst(governed_first);
+    }
+
+    void setRecordStoreKeepsBound(bool keeps) {
+        l3_->setRecordStoreKeepsBound(keeps);
     }
 
     void prepareRecord(EvictionPolicy base_policy = EvictionPolicy::LRU) {
@@ -5013,6 +5067,7 @@ public:
             const auto& a = l3_->getRecordVictimAttribution();
             ss << "  \"ecg_record_victim_decisions\": " << a.decisions << ",\n";
             ss << "  \"ecg_record_victim_dead_first\": " << a.dead_first << ",\n";
+            ss << "  \"ecg_record_victim_ungoverned_first\": " << a.ungoverned_first << ",\n";
             ss << "  \"ecg_record_victim_base_not_governed\": " << a.base_not_governed << ",\n";
             ss << "  \"ecg_record_victim_base_no_future\": " << a.base_no_future << ",\n";
             ss << "  \"ecg_record_victim_base_kept\": " << a.base_kept << ",\n";
@@ -5021,6 +5076,12 @@ public:
             ss << "  \"ecg_record_ways_finite\": " << a.census_finite << ",\n";
             ss << "  \"ecg_record_ways_dead\": " << a.census_dead << ",\n";
             ss << "  \"ecg_record_ways_unknown\": " << a.census_unknown << ",\n";
+            ss << "  \"ecg_record_ways_expired\": " << a.census_expired << ",\n";
+            ss << "  \"ecg_record_state_finite\": " << a.census_state_finite << ",\n";
+            ss << "  \"ecg_record_state_pending\": " << a.census_state_pending << ",\n";
+            ss << "  \"ecg_record_state_unknown\": " << a.census_state_unknown << ",\n";
+            ss << "  \"ecg_record_state_dead\": " << a.census_state_dead << ",\n";
+            ss << "  \"ecg_record_expired_vs_progress\": " << a.census_expired_vs_progress << ",\n";
         }
         ss << "  \"ecg_ref32_dead_bypasses\": "
            << l3_->getRef32DeadBypasses() << ",\n";

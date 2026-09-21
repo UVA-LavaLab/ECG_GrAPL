@@ -82,6 +82,11 @@ struct Options {
     bool bfs_traffic_phases = false;
     bool grasp_graph_passes = false;
     bool popt_constant_rank = false;
+    // Opt-in governed-first eviction for the current record victim rule.
+    bool record_governed_first = false;
+    // Opt-in: an ordinary STORE to a governed line keeps its FINITE bound,
+    // because a store does not change when that line is next READ.
+    bool record_store_keeps_bound = false;
     GraspReferenceMode grasp_reference = GraspReferenceMode::OFF;
     RecordModel record_model = RecordModel::NEXT;
     bool frontier_gating = true;

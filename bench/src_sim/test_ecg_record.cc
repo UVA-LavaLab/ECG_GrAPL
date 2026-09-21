@@ -1006,7 +1006,7 @@ void testVictimTraceIsPassive() {
     check(selectLayout(req, layout) == Status::OK, "trace passivity fixture layout");
     std::mt19937_64 rng(0xA77121B0);
     const State states[4] = {State::UNKNOWN, State::FINITE, State::DEAD, State::WRAP};
-    int mismatches = 0, traced_paths[5] = {};
+    int mismatches = 0, traced_paths[6] = {};
     for (int trial = 0; trial < 20000; ++trial) {
         const std::size_t count = 1 + (rng() % 16);
         const uint64_t sequence = rng() % 64;
@@ -1039,15 +1039,83 @@ void testVictimTraceIsPassive() {
         if (s2 == Status::OK) {
             ++traced_paths[static_cast<int>(trace.path)];
             const unsigned governed = trace.finite + trace.dead + trace.unknown;
-            if (governed != trace.governed || trace.governed > count || trace.ways != count)
+            // `expired` is a subset of `unknown`, never an extra bucket.
+            if (governed != trace.governed || trace.governed > count || trace.ways != count ||
+                trace.expired > trace.unknown)
                 ++mismatches;
         }
     }
     check(mismatches == 0,
           "collecting a victim trace never changes the victim, status or way state");
+    // UNGOVERNED_FIRST is unreachable here: this fixture never enables the option.
     int covered = 0;
-    for (int i = 0; i < 5; ++i) covered += traced_paths[i] > 0;
-    check(covered == 5, "the passivity fixture exercises every attributed victim path");
+    for (int i = 0; i < 6; ++i)
+        if (i != static_cast<int>(VictimPath::UNGOVERNED_FIRST)) covered += traced_paths[i] > 0;
+    check(covered == 5 && traced_paths[static_cast<int>(VictimPath::UNGOVERNED_FIRST)] == 0,
+          "the passivity fixture exercises every default victim path and no other");
+}
+
+
+// Opt-in governed-first eviction. Pins the order the repository's teaching
+// fixture specifies, and re-proves passivity of the trace with the option on.
+void testGovernedFirstEviction() {
+    using namespace ecg_record;
+    auto req = requirements(32);
+    req.record_count = 34;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK, "governed-first fixture layout");
+    VictimOptions on; on.governed_first = true;
+    WayState ways[2];
+    ways[0].property = true;  ways[0].recency = 1; ways[0].state = State::FINITE; ways[0].deadline = 19 + 64;
+    ways[1].property = true;  ways[1].recency = 9; ways[1].state = State::FINITE; ways[1].deadline = 19 + 8;
+    std::size_t victim = 0;
+    check(selectVictim(layout, ways, 2, 19, victim) == Status::OK && victim == 0,
+          "default evicts the farther live governed future");
+    check(selectVictim(layout, ways, 2, 19, victim, nullptr, on) == Status::OK && victim == 0,
+          "governed-first leaves an all-governed set to the ordinary rule");
+    ways[1].property = false;
+    check(selectVictim(layout, ways, 2, 19, victim) == Status::OK && victim == 0,
+          "the default rule does not prefer non-governed data");
+    check(selectVictim(layout, ways, 2, 19, victim, nullptr, on) == Status::OK && victim == 1,
+          "governed-first evicts non-governed data before governed property");
+    ways[0].state = State::DEAD;
+    check(selectVictim(layout, ways, 2, 19, victim, nullptr, on) == Status::OK && victim == 0,
+          "explicit DEAD still precedes non-governed data");
+    // Two non-governed ways: the least recently used is taken, so the rule
+    // carries no way-index bias.
+    ways[0].property = false; ways[0].state = State::UNKNOWN; ways[0].recency = 7;
+    ways[1].recency = 3;
+    check(selectVictim(layout, ways, 2, 19, victim, nullptr, on) == Status::OK && victim == 1,
+          "governed-first takes the least recently used non-governed way");
+    // Passivity of the trace must still hold with the option enabled.
+    std::mt19937_64 rng(0x604E12D1);
+    const State states[4] = {State::UNKNOWN, State::FINITE, State::DEAD, State::WRAP};
+    int mismatches = 0, saw_ungoverned = 0;
+    for (int trial = 0; trial < 20000; ++trial) {
+        const std::size_t count = 1 + (rng() % 16);
+        const uint64_t sequence = rng() % 64;
+        WayState sample[16];
+        for (std::size_t i = 0; i < count; ++i) {
+            sample[i].property = (rng() % 4) != 0;
+            sample[i].rrpv = static_cast<uint8_t>(rng() % 8);
+            sample[i].recency = rng() % 4096;
+            sample[i].state = states[rng() % 4];
+            sample[i].deadline = rng() % 128;
+        }
+        const std::size_t base_way = rng() % count;
+        const auto pick = [base_way]() { return base_way; };
+        std::size_t a = 0, b = 0;
+        VictimTrace trace;
+        const Status s1 = selectVictim(layout, sample, count, sequence, pick, a, nullptr, on);
+        const Status s2 = selectVictim(layout, sample, count, sequence, pick, b, &trace, on);
+        if (s1 != s2 || a != b) ++mismatches;
+        if (s2 == Status::OK && trace.path == VictimPath::UNGOVERNED_FIRST) {
+            ++saw_ungoverned;
+            if (sample[b].property) ++mismatches;
+        }
+    }
+    check(mismatches == 0, "governed-first selection is unchanged by trace collection");
+    check(saw_ungoverned > 0, "the governed-first fixture exercises the non-governed path");
 }
 
 int main() {
@@ -1069,6 +1137,7 @@ int main() {
     testSelectedBaseVictimRefinement();
     testFilteredQuantizedPassBoundary();
     testVictimTraceIsPassive();
+    testGovernedFirstEviction();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }
