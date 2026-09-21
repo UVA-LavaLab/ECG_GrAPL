@@ -1218,6 +1218,8 @@ def make_roi_job(
             "frontier_gating": frontier_gating,
             "grasp_reference": grasp_reference,
             "query_count": query_count,
+            "record_governed_first": governed_first,
+            "record_store_bound": store_bound,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1253,7 +1255,8 @@ def csv_status(
         record_base_policy: str = "LRU", window_observer: str = "off",
         record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
         popt_rank_mode: str = "future", frontier_gating: str = "enabled",
-        grasp_reference: str = "off", query_count: int = 1) -> tuple[str, str]:
+        grasp_reference: str = "off", query_count: int = 1,
+        governed_first: str = "no", store_bound: str = "drop") -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1267,11 +1270,13 @@ def csv_status(
         if expected_policies:
             expected = ({policy_output_label(policy) for policy in expected_policies}
                         if record_base_policy == "LRU" and window_observer == "off" and record_model == "next" and
-                        grasp_scope == "all" and popt_rank_mode == "future" and grasp_reference == "off" and query_count == 1
+                        grasp_scope == "all" and popt_rank_mode == "future" and grasp_reference == "off" and
+                        query_count == 1 and governed_first == "no" and store_bound == "drop"
                         else set(algorithm_matrix.policy_labels(
                             [parse_policy_spec(policy) for policy in expected_policies], record_base_policy,
                             window_observer, record_model, candidate_rrpv, grasp_scope, popt_rank_mode,
-                            frontier_gating, grasp_reference, query_count)))
+                            frontier_gating, grasp_reference, query_count,
+                            governed_first, store_bound)))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1299,7 +1304,11 @@ def job_csv_status(job: Job) -> tuple[str, str]:
     gating = str(job.metadata.get("frontier_gating", "enabled"))
     reference = str(job.metadata.get("grasp_reference", "off"))
     queries = int(job.metadata.get("query_count", 1))
-    status, detail = csv_status(job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode, gating, reference, queries)
+    governed_first = str(job.metadata.get("record_governed_first", "no"))
+    store_bound = str(job.metadata.get("record_store_bound", "drop"))
+    status, detail = csv_status(
+        job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode,
+        gating, reference, queries, governed_first, store_bound)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
