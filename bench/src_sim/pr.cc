@@ -87,6 +87,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     }
     const char* mechanism_name = std::getenv("ECG_RECORD_MECHANISM");
     const bool record_mode = mechanism_name != nullptr;
+    if (!record_mode && recordOption("ECG_RECORD_GOVERNED_FIRST", 0, 1))
+        throw std::invalid_argument("ECG_RECORD_GOVERNED_FIRST requires a current ECG record mode");
     ecg_record::Mechanism mechanism = ecg_record::Mechanism::TRANSPORT;
     if (record_mode && ecg_record::parseMechanismName(mechanism_name, mechanism) !=
             ecg_record::Status::OK)
@@ -164,6 +166,15 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
             recordOption("ECG_RECORD_UPDATE_LATENCY", 8, 4096),
             recordOption("ECG_RECORD_PREFETCH_LATENCY", 8, 4096),
             recordOption("ECG_RECORD_PREFETCH_QUEUE", 16, 16));
+        // PageRank is configured by environment, not by the algorithms CLI, so
+        // the opt-in victim-order arm reaches it here. Default off, matching
+        // --record-governed-first no.
+        const uint64_t governed_first = recordOption("ECG_RECORD_GOVERNED_FIRST", 0, 1);
+        if (governed_first && (mechanism != ecg_record::Mechanism::REPLACEMENT &&
+                               mechanism != ecg_record::Mechanism::REPLACEMENT_PREFETCH))
+            throw std::invalid_argument(
+                "ECG_RECORD_GOVERNED_FIRST requires the replacement mechanism");
+        cache.setRecordGovernedFirst(governed_first != 0);
     }
     for (NodeID node = 0; node < graph.num_nodes(); ++node) {
         cache.readArray(scores.data(), node);

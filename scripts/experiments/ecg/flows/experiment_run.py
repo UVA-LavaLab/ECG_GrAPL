@@ -807,9 +807,14 @@ def make_roi_job(
         options += " --record-store-bound " + store_bound
     if "algorithm_record_governed_first" in settings:
         governed = str(settings["algorithm_record_governed_first"])
-        if not settings.get("current_algorithms") or governed not in ("no", "on"):
+        # PageRank runs through the separate pr kernel under
+        # current_pr_baselines, where the runner forwards the arm by
+        # environment; the algorithms CLI carries it for every other kernel.
+        if governed not in ("no", "on") or not (
+                settings.get("current_algorithms") or settings.get("current_pr_baselines")):
             raise SystemExit("invalid current governed-first record selection")
-        options += " --record-governed-first " + governed
+        if settings.get("current_algorithms"):
+            options += " --record-governed-first " + governed
     if "algorithm_grasp_reference" in settings:
         reference = str(settings["algorithm_grasp_reference"])
         if not settings.get("current_algorithms") or reference not in ("off", "full", "flat", "rank"):
@@ -882,6 +887,9 @@ def make_roi_job(
             settings.get("current_pr_baselines") or settings.get("current_algorithms"))
     if settings.get("current_pr_baselines"):
         command.append("--current-pr-baselines")
+        if "algorithm_record_governed_first" in settings:
+            command.extend(("--record-governed-first",
+                            str(settings["algorithm_record_governed_first"])))
     if settings.get("current_algorithms"):
         command.extend(("--current-algorithms", "--algorithm-workspace-bytes",
                         str(settings.get("algorithm_workspace_bytes", 512 << 20))))

@@ -1606,6 +1606,10 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             "ECG_RECORD_MAX_CARRIER_BYTES": str(getattr(args, "ecg_record_max_carrier_bytes", 256 << 20)),
             "ECG_RECORD_MAX_AUXILIARY_BYTES": str(getattr(args, "ecg_record_max_auxiliary_bytes", 256 << 20)),
             "ECG_RECORD_EQUIVALENCE": str(int(getattr(args, "ecg_equivalence", False))),
+            # PageRank takes its ECG settings from the environment rather than
+            # the algorithms CLI, so the opt-in victim-order arm travels here.
+            "ECG_RECORD_GOVERNED_FIRST": str(int(
+                getattr(args, "record_governed_first", "no") == "on")),
         })
     if spec.ecg_mode:
         env["ECG_MODE"] = spec.ecg_mode
@@ -7145,6 +7149,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="Current ECG precision floor; any necessary eight-byte carrier is fully charged.")
     parser.add_argument("--ecg-equivalence", action="store_true",
                         help="Observe actual record semantics on a bounded prepared graph; never speedup evidence.")
+    parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
     parser.add_argument("--current-pr-baselines", action="store_true",
                         help="Use the common fixed PageRank arithmetic and complete CSR access stream for cache_sim baselines.")
     parser.add_argument("--current-algorithms", action="store_true",
