@@ -105,6 +105,10 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value != "future" && value != "constant")
                 throw std::invalid_argument("popt-rank-mode-must-be-future-or-constant");
             command.options.popt_constant_rank = value == "constant";
+        } else if (argument == "--record-expiry-clock") {
+            if (value != "progress" && value != "delivery")
+                throw std::invalid_argument("record-expiry-clock-must-be-progress-or-delivery");
+            command.options.record_delivered_expiry_clock = value == "delivery";
         } else if (argument == "--record-store-bound") {
             if (value != "keep" && value != "drop")
                 throw std::invalid_argument("record-store-bound-must-be-keep-or-drop");
@@ -206,6 +210,9 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
          command.options.bfs_traffic_phases || command.options.window_observer != WindowObserverMode::OFF ||
          !command.options.sources.empty()))
         throw std::invalid_argument("GRASP reference diagnostic requires CSR SpMV with ordinary GRASP_PAPER");
+    if (command.options.record_delivered_expiry_clock &&
+        (!command.options.records || command.options.record_model != RecordModel::NEXT))
+        throw std::invalid_argument("the delivered expiry clock requires the current NEXT record model");
     if (command.options.record_store_keeps_bound &&
         (!command.options.records || command.options.record_model != RecordModel::NEXT))
         throw std::invalid_argument("store-bound retention requires the current NEXT record model");
@@ -290,7 +297,9 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
            << "\",\"record_victim_order\":\""
            << (options.record_governed_first ? "governed-first" : "base-first")
            << "\",\"record_store_bound\":\""
-           << (options.record_store_keeps_bound ? "keep" : "drop") << '"';
+           << (options.record_store_keeps_bound ? "keep" : "drop")
+           << "\",\"record_expiry_clock\":\""
+           << (options.record_delivered_expiry_clock ? "delivery" : "progress") << '"';
     const auto field = [&](const char* key, uint64_t value) { output << ",\"" << key << "\":" << value; };
     field("weighted", result.weighted);
     field("evidence", result.evidence);

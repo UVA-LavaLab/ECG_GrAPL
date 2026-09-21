@@ -805,6 +805,13 @@ def make_roi_job(
         if not settings.get("current_algorithms") or store_bound not in ("drop", "keep"):
             raise SystemExit("invalid current record store-bound selection")
         options += " --record-store-bound " + store_bound
+    if "algorithm_record_expiry_clock" in settings:
+        clock = str(settings["algorithm_record_expiry_clock"])
+        if clock not in ("progress", "delivery") or not (
+                settings.get("current_algorithms") or settings.get("current_pr_baselines")):
+            raise SystemExit("invalid current record expiry clock selection")
+        if settings.get("current_algorithms"):
+            options += " --record-expiry-clock " + clock
     if "algorithm_record_governed_first" in settings:
         governed = str(settings["algorithm_record_governed_first"])
         # PageRank runs through the separate pr kernel under
@@ -890,6 +897,9 @@ def make_roi_job(
         if "algorithm_record_governed_first" in settings:
             command.extend(("--record-governed-first",
                             str(settings["algorithm_record_governed_first"])))
+        if "algorithm_record_expiry_clock" in settings:
+            command.extend(("--record-expiry-clock",
+                            str(settings["algorithm_record_expiry_clock"])))
     if settings.get("current_algorithms"):
         command.extend(("--current-algorithms", "--algorithm-workspace-bytes",
                         str(settings.get("algorithm_workspace_bytes", 512 << 20))))
@@ -1119,6 +1129,7 @@ def make_roi_job(
     # algorithms options string.
     governed_first = str(settings.get("algorithm_record_governed_first", "no"))
     store_bound = str(settings.get("algorithm_record_store_bound", "drop"))
+    expiry_clock = str(settings.get("algorithm_record_expiry_clock", "progress"))
     if settings.get("current_algorithms"):
         parsed_algorithm = algorithm_matrix.parse_options(options)
         record_base, observer = parsed_algorithm.record_base_policy, parsed_algorithm.window_observer
@@ -1130,10 +1141,11 @@ def make_roi_job(
         query_count = parsed_algorithm.queries
         governed_first = parsed_algorithm.record_governed_first
         store_bound = parsed_algorithm.record_store_bound
+        expiry_clock = parsed_algorithm.record_expiry_clock
     expected_policy_labels = algorithm_matrix.policy_labels(
         [parse_policy_spec(policy) for policy in all_policies], record_base, observer, record_model,
         candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating, grasp_reference, query_count,
-        governed_first, store_bound)
+        governed_first, store_bound, expiry_clock)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
@@ -1220,6 +1232,7 @@ def make_roi_job(
             "query_count": query_count,
             "record_governed_first": governed_first,
             "record_store_bound": store_bound,
+            "record_expiry_clock": expiry_clock,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1255,7 +1268,8 @@ def expected_labels_for(
         candidate_rrpv: int = 6, grasp_scope: str = "all",
         popt_rank_mode: str = "future", frontier_gating: str = "enabled",
         grasp_reference: str = "off", query_count: int = 1,
-        governed_first: str = "no", store_bound: str = "drop") -> list[str]:
+        governed_first: str = "no", store_bound: str = "drop",
+        expiry_clock: str = "progress") -> list[str]:
     """The one place that decides what output labels a job should produce.
 
     This expression previously existed in three copies, each with its own
@@ -1267,14 +1281,15 @@ def expected_labels_for(
         record_base_policy == "LRU" and window_observer == "off" and
         record_model == "next" and grasp_scope == "all" and
         popt_rank_mode == "future" and grasp_reference == "off" and
-        query_count == 1 and governed_first == "no" and store_bound == "drop")
+        query_count == 1 and governed_first == "no" and store_bound == "drop" and
+        expiry_clock == "progress")
     if default_shape:
         return [policy_output_label(policy) for policy in expected_policies]
     return algorithm_matrix.policy_labels(
         [parse_policy_spec(policy) for policy in expected_policies],
         record_base_policy, window_observer, record_model, candidate_rrpv,
         grasp_scope, popt_rank_mode, frontier_gating, grasp_reference,
-        query_count, governed_first, store_bound)
+        query_count, governed_first, store_bound, expiry_clock)
 
 
 def csv_status(
@@ -1284,7 +1299,8 @@ def csv_status(
         record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
         popt_rank_mode: str = "future", frontier_gating: str = "enabled",
         grasp_reference: str = "off", query_count: int = 1,
-        governed_first: str = "no", store_bound: str = "drop") -> tuple[str, str]:
+        governed_first: str = "no", store_bound: str = "drop",
+        expiry_clock: str = "progress") -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1299,7 +1315,8 @@ def csv_status(
             expected = set(expected_labels_for(
                 expected_policies, record_base_policy, window_observer, record_model,
                 candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating,
-                grasp_reference, query_count, governed_first, store_bound))
+                grasp_reference, query_count, governed_first, store_bound,
+                expiry_clock))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1329,9 +1346,10 @@ def job_csv_status(job: Job) -> tuple[str, str]:
     queries = int(job.metadata.get("query_count", 1))
     governed_first = str(job.metadata.get("record_governed_first", "no"))
     store_bound = str(job.metadata.get("record_store_bound", "drop"))
+    expiry_clock = str(job.metadata.get("record_expiry_clock", "progress"))
     status, detail = csv_status(
         job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode,
-        gating, reference, queries, governed_first, store_bound)
+        gating, reference, queries, governed_first, store_bound, expiry_clock)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
@@ -1370,7 +1388,8 @@ def job_csv_status(job: Job) -> tuple[str, str]:
         expected, record_base, observer, model, floor, scope, rank_mode, gating,
         reference, queries,
         str(job.metadata.get("record_governed_first", "no")),
-        str(job.metadata.get("record_store_bound", "drop")))
+        str(job.metadata.get("record_store_bound", "drop")),
+        str(job.metadata.get("record_expiry_clock", "progress")))
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),

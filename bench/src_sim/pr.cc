@@ -175,6 +175,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
             throw std::invalid_argument(
                 "ECG_RECORD_GOVERNED_FIRST requires the replacement mechanism");
         cache.setRecordGovernedFirst(governed_first != 0);
+        cache.setRecordDeliveredExpiryClock(
+            recordOption("ECG_RECORD_DELIVERY_CLOCK", 0, 1) != 0);
     }
     for (NodeID node = 0; node < graph.num_nodes(); ++node) {
         cache.readArray(scores.data(), node);

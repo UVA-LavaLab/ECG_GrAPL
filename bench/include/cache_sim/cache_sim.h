@@ -1694,6 +1694,12 @@ public:
         // to UNKNOWN because filtered progress has reached or passed its deadline.
         // This is expiry against skipped progress, counted before the collapse.
         uint64_t census_expired_vs_progress = 0;
+        // How far behind the comparison clock an expired bound's deadline sits.
+        // A bound that is barely past could be rescued by a grace window; one
+        // that is far past means the predicted read simply never happened.
+        uint64_t census_expired_distance_sum = 0;
+        uint64_t census_expired_within_1k = 0;
+        uint64_t census_expired_within_1m = 0;
     };
     const RecordVictimAttribution& getRecordVictimAttribution() const {
         return record_victim_attribution_;
@@ -1894,6 +1900,11 @@ public:
     void setRecordStoreKeepsBound(bool keeps) {
         std::lock_guard<std::mutex> lock(mutex_);
         record_store_keeps_bound_ = keeps;
+    }
+
+    void setRecordDeliveredExpiryClock(bool delivered) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_receiver_.setDeliveredExpiryClock(delivered);
     }
     bool recordStoreKeepsBound() const { return record_store_keeps_bound_; }
 
@@ -2554,8 +2565,15 @@ private:
                 }
                 if (record_receiver_.filtered() &&
                     set[index].record_metadata.state == ecg_record::LineState::FINITE &&
-                    set[index].record_metadata.value <= record_receiver_.watermark())
+                    set[index].record_metadata.value <= record_receiver_.comparisonWatermark())
+                {
                     ++record_victim_attribution_.census_expired_vs_progress;
+                    const uint64_t behind = record_receiver_.comparisonWatermark() -
+                        set[index].record_metadata.value;
+                    record_victim_attribution_.census_expired_distance_sum += behind;
+                    record_victim_attribution_.census_expired_within_1k += behind <= 1024;
+                    record_victim_attribution_.census_expired_within_1m += behind <= 1048576;
+                }
             }
             const auto select_base = [&]() {
                 return record_base_policy_ == EvictionPolicy::GRASP
@@ -2565,7 +2583,7 @@ private:
             ecg_record::VictimTrace trace;
             if (ecg_record::selectVictim(
                     record_receiver_.layout(), ways.data(), set.size(),
-                    record_receiver_.watermark(), select_base, victim, &trace,
+                    record_receiver_.comparisonWatermark(), select_base, victim, &trace,
                     record_victim_options_) !=
                         ecg_record::Status::OK)
                 throw std::logic_error("Invalid current ECG victim selection");
@@ -4035,6 +4053,10 @@ public:
         l3_->setRecordStoreKeepsBound(keeps);
     }
 
+    void setRecordDeliveredExpiryClock(bool delivered) {
+        l3_->setRecordDeliveredExpiryClock(delivered);
+    }
+
     void prepareRecord(EvictionPolicy base_policy = EvictionPolicy::LRU) {
         if (record_model_ || record_loads_ != 0 || ref32_commit_channel_ ||
             ref32_prefetch_enabled_ || refresh_exact_stamp_ ||
@@ -5082,6 +5104,9 @@ public:
             ss << "  \"ecg_record_state_unknown\": " << a.census_state_unknown << ",\n";
             ss << "  \"ecg_record_state_dead\": " << a.census_state_dead << ",\n";
             ss << "  \"ecg_record_expired_vs_progress\": " << a.census_expired_vs_progress << ",\n";
+            ss << "  \"ecg_record_expired_distance_sum\": " << a.census_expired_distance_sum << ",\n";
+            ss << "  \"ecg_record_expired_within_1k\": " << a.census_expired_within_1k << ",\n";
+            ss << "  \"ecg_record_expired_within_1m\": " << a.census_expired_within_1m << ",\n";
         }
         ss << "  \"ecg_ref32_dead_bypasses\": "
            << l3_->getRef32DeadBypasses() << ",\n";

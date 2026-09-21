@@ -1610,6 +1610,8 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             # the algorithms CLI, so the opt-in victim-order arm travels here.
             "ECG_RECORD_GOVERNED_FIRST": str(int(
                 getattr(args, "record_governed_first", "no") == "on")),
+            "ECG_RECORD_DELIVERY_CLOCK": str(int(
+                getattr(args, "record_expiry_clock", "progress") == "delivery")),
         })
     if spec.ecg_mode:
         env["ECG_MODE"] = spec.ecg_mode
@@ -6851,7 +6853,8 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
             policies, options.record_base_policy, options.window_observer,
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
             options.frontier_gating, options.grasp_reference, options.queries,
-            options.record_governed_first, options.record_store_bound)
+            options.record_governed_first, options.record_store_bound,
+            options.record_expiry_clock)
     # PageRank runs through the separate pr kernel, so its labels never pass
     # through algorithm_matrix.policy_labels. Without this the opt-in arms and
     # their controls share one label and collide in the combined matrix.
@@ -6859,6 +6862,10 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
     governed_first = getattr(args, "record_governed_first", "no")
     if governed_first != "no":
         labels = [algorithm_matrix.governed_first_label(label, governed_first)
+                  for label in labels]
+    expiry_clock = getattr(args, "record_expiry_clock", "progress")
+    if expiry_clock != "progress":
+        labels = [algorithm_matrix.expiry_clock_label(label, expiry_clock)
                   for label in labels]
     return labels
 
@@ -7159,6 +7166,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--ecg-equivalence", action="store_true",
                         help="Observe actual record semantics on a bounded prepared graph; never speedup evidence.")
     parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
+    parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--current-pr-baselines", action="store_true",
                         help="Use the common fixed PageRank arithmetic and complete CSR access stream for cache_sim baselines.")
     parser.add_argument("--current-algorithms", action="store_true",

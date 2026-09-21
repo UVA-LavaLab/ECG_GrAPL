@@ -87,6 +87,9 @@ struct Options {
     // Opt-in: an ordinary STORE to a governed line keeps its FINITE bound,
     // because a store does not change when that line is next READ.
     bool record_store_keeps_bound = false;
+    // Opt-in: compare bounds against delivered reads instead of structural
+    // progress, so a bound is not expired by positions the frontier skipped.
+    bool record_delivered_expiry_clock = false;
     GraspReferenceMode grasp_reference = GraspReferenceMode::OFF;
     RecordModel record_model = RecordModel::NEXT;
     bool frontier_gating = true;

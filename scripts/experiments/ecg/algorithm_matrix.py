@@ -59,6 +59,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--grasp-reference", choices=("off", "full", "flat", "rank"), default="off")
     parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
     parser.add_argument("--record-store-bound", choices=("drop", "keep"), default="drop")
+    parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
     parser.add_argument("--bfs-traffic-phases", choices=("on", "off"), default="off")
     parser.add_argument("--window-candidate-rrpv", choices=(6, 7), type=int, default=6)
@@ -116,6 +117,13 @@ def popt_rank_label(label: str, rank_mode: str) -> str:
     return "POPT_UNCHARGED_CONST_RANK"
 
 
+def expiry_clock_label(label: str, expiry_clock: str) -> str:
+    if expiry_clock == "progress":
+        return label
+    require(label.startswith("ECG_"), "the delivered expiry clock requires a current ECG policy")
+    return label + "_DELIVERY_CLOCK"
+
+
 def store_bound_label(label: str, store_bound: str) -> str:
     if store_bound == "drop":
         return label
@@ -151,9 +159,10 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   record_model: str = "next", candidate_rrpv: int = 6, grasp_scope: str = "all",
                   popt_rank_mode: str = "future", frontier_gating: str = "enabled",
                   grasp_reference: str = "off", queries: int = 1,
-                  governed_first: str = "no", store_bound: str = "drop") -> list[str]:
-    return [query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(store_bound_label(governed_first_label(record_policy_label(
-                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), store_bound), observer),
+                  governed_first: str = "no", store_bound: str = "drop",
+                  expiry_clock: str = "progress") -> list[str]:
+    return [query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(governed_first_label(record_policy_label(
+                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), store_bound), expiry_clock), observer),
                 grasp_scope), popt_rank_mode), grasp_reference), queries)
             for spec in policies]
 
@@ -428,6 +437,8 @@ def validate_victim_order(payload: dict[str, Any], options: argparse.Namespace) 
             "record victim order does not match the requested arm")
     require(payload["workload"].get("record_store_bound") == options.record_store_bound,
             "record store-bound retention does not match the requested arm")
+    require(payload["workload"].get("record_expiry_clock") == options.record_expiry_clock,
+            "record expiry clock does not match the requested arm")
 
 
 def validate_grasp_reference(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
@@ -892,7 +903,8 @@ def run_cache_cell(
         row["policy_label"] = policy_labels([spec], options.record_base_policy, options.window_observer,
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
             options.frontier_gating, options.grasp_reference, options.queries,
-            options.record_governed_first, options.record_store_bound)[0]
+            options.record_governed_first, options.record_store_bound,
+            options.record_expiry_clock)[0]
         if reference:
             row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:
@@ -965,6 +977,8 @@ def run_cache_cell(
             command.extend(("--record-governed-first", options.record_governed_first))
         if options.record_store_bound != "drop":
             command.extend(("--record-store-bound", options.record_store_bound))
+        if options.record_expiry_clock != "progress":
+            command.extend(("--record-expiry-clock", options.record_expiry_clock))
         if phase_modes:
             command.extend(("--grasp-scope", options.grasp_scope, "--bfs-traffic-phases", options.bfs_traffic_phases))
         if options.record_model == "window":

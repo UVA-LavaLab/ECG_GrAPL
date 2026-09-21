@@ -153,6 +153,19 @@ class Receiver {
     bool watermarkValid() const { return filtered() ? progress_ != 0 : watermark_valid_; }
     uint64_t watermark() const { return filtered() ? progress_ : watermark_; }
     uint64_t deliveredWatermark() const { return watermark_; }
+
+    // Opt-in expiry clock. `watermark()` is structural progress, which in a
+    // filtered traversal advances over positions the frontier skipped, so a
+    // bound pointing at a skipped position expires without its read ever
+    // happening. The delivered clock advances only when a commit update is
+    // actually delivered, so bounds survive skipping. Both the victimState
+    // collapse and the sequence handed to selectVictim must read this one
+    // accessor, or a bound could pass one and expire in the other.
+    void setDeliveredExpiryClock(bool delivered) { delivered_clock_ = delivered; }
+    bool deliveredExpiryClock() const { return delivered_clock_; }
+    uint64_t comparisonWatermark() const {
+        return filtered() && delivered_clock_ ? watermark_ : watermark();
+    }
     bool filtered() const { return mode_ == TraversalMode::ORDERED_FILTERED; }
     uint64_t generation() const { return generation_; }
     uint16_t context() const { return context_; }
@@ -327,12 +340,13 @@ class Receiver {
     uint64_t delivery_order_ = 0;
     uint16_t context_ = 0;
     bool enabled_ = false;
+    bool delivered_clock_ = false;
     bool watermark_valid_ = false;
 };
 
 inline State victimState(const LineMetadata& line, const Receiver& receiver, bool enabled) {
     if (!receiver.watermarkValid() || (receiver.filtered() &&
-        line.state == LineState::FINITE && line.value <= receiver.watermark()))
+        line.state == LineState::FINITE && line.value <= receiver.comparisonWatermark()))
         return State::UNKNOWN;
     return victimState(line, enabled);
 }
