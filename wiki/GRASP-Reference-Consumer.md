@@ -178,6 +178,10 @@ traffic targets, not lower bounds or measured amortized/native results.
 
 **Useful graph information helps this fixed GRASP-based consumer, but
 the combination is not competitive with P-OPT or on cold total traffic.**
+The [consumer-architecture study](Consumer-Architecture) subsequently tested
+whether the remaining 17.41% is explained by base-first ordering, using this
+same matrix and engagement boundary. It is not: rank-first selection measured
+slightly worse.
 The positive gate justifies a concrete cost/delivery-constrained design
 discussion. It does not approve a large producer, claim that information
 availability is the only remaining problem, or establish that compression

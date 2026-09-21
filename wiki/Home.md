@@ -82,4 +82,7 @@ The subsequent [frontier-conditioned mask prototype](Frontier-Cohort-Mask)
 tests one BFS-specific design with real records and paid causal context.
 The [GRASP reference-consumer diagnostic](GRASP-Reference-Consumer) tests
 whether a fixed GRASP-based action can exploit graph ranks before another
-compact producer is designed.
+compact producer is designed. The
+[consumer-architecture study](Consumer-Architecture) then tests whether the
+order that consumer applies to its candidates explains the traffic it still
+loses to P-OPT; it does not.
