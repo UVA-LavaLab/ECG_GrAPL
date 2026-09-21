@@ -802,7 +802,7 @@ def make_roi_job(
         options += " --popt-rank-mode " + rank_mode
     if "algorithm_grasp_reference" in settings:
         reference = str(settings["algorithm_grasp_reference"])
-        if not settings.get("current_algorithms") or reference not in ("off", "full", "flat"):
+        if not settings.get("current_algorithms") or reference not in ("off", "full", "flat", "rank"):
             raise SystemExit("invalid current GRASP reference diagnostic")
         options += " --grasp-reference " + reference
     if "algorithm_queries" in settings:

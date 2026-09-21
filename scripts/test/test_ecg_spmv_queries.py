@@ -112,6 +112,7 @@ def test_spmv_queries_reuse_real_matrix_and_close_all_costs(tmp_path, policy):
     ["--queries", "0"], ["--queries", "65"], ["--algorithm", "bfs"],
     ["--mode", "transport"], ["--record-model", "frontier"], ["--record-model", "window"],
     ["--record-preprocess", "traversal"], ["--grasp-reference", "full"],
+    ["--grasp-reference", "rank"],
     ["--policy", "POPT_UNCHARGED", "--popt-rank-mode", "constant"],
     ["--grasp-scope", "graph-passes"], ["--sources", "0,1"],
 ])

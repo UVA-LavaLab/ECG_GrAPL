@@ -2684,6 +2684,14 @@ private:
         if (!graph_ctx_->isPoptData(set[base].line_addr))
             return base;
         ++graph_ctx_->grasp_reference_covered_bases;
+        return graph_ctx_->grasp_reference_rank_first
+            ? graspReferenceRankFirst(set, base)
+            : graspReferenceBaseFirst(set, base);
+    }
+
+    // Base-first refinement: keep the GRASP victim unless a covered way has a
+    // strictly farther rank. Equal ranks retain the existing order.
+    size_t graspReferenceBaseFirst(std::vector<CacheLine>& set, std::size_t base) {
         std::size_t selected = base;
         uint32_t farthest = graph_ctx_->poptVictimRank(set[base].line_addr);
         for (std::size_t way = 0; way < set.size(); ++way) {
@@ -2700,6 +2708,64 @@ private:
             graph_ctx_->grasp_reference_lower_rrpv_overrides += set[selected].rrpv < 7;
         }
         return selected;
+    }
+
+    // Rank-first selection among P-OPT-covered ways, with RRIP aging confined
+    // to the maximum-rank tie set (the findVictimPOPT phase-3 discipline).
+    //
+    // This arm deliberately does NOT introduce P-OPT's non-property eviction
+    // precedence: doing so would confound the selection-architecture question
+    // with the region rule. Insertion, hit promotion, recency, dirty state and
+    // invalid-way priority all remain ordinary GRASP. The engagement boundary
+    // is inherited unchanged from findVictimGraspReference, so this arm and the
+    // base-first arm see exactly the same sets, matrix and ranks.
+    //
+    // Ranks are compared raw, as the base-first arm compares them; findVictimPOPT
+    // clamps to 127 for its uint8_t table, and adopting that clamp here would be
+    // a second difference between the arms.
+    size_t graspReferenceRankFirst(std::vector<CacheLine>& set, std::size_t base) {
+        constexpr uint8_t M_RRPV = 7;
+        const std::size_t ways = set.size();
+        if (ways > 64)
+            throw std::logic_error("rank-first reference consumer supports at most 64 ways");
+        uint32_t ranks[64] = {};
+        bool covered[64] = {};
+        uint8_t entry_rrpv[64] = {};
+        uint32_t max_rank = 0;
+        for (std::size_t way = 0; way < ways; ++way) {
+            entry_rrpv[way] = set[way].rrpv;
+            if (!graph_ctx_->isPoptData(set[way].line_addr))
+                continue;
+            covered[way] = true;
+            ranks[way] = graph_ctx_->poptVictimRank(set[way].line_addr);
+            if (ranks[way] > max_rank)
+                max_rank = ranks[way];
+        }
+        // Diagnostic only: what the base-first rule would have selected here.
+        std::size_t base_first = base;
+        uint32_t farthest = ranks[base];
+        for (std::size_t way = 0; way < ways; ++way)
+            if (way != base && covered[way] && ranks[way] > farthest) {
+                base_first = way;
+                farthest = ranks[way];
+            }
+        for (std::size_t way = 0; way < ways; ++way)
+            graph_ctx_->grasp_reference_rank_ties += covered[way] && ranks[way] == max_rank;
+        while (true) {
+            for (std::size_t way = 0; way < ways; ++way) {
+                if (!covered[way] || ranks[way] != max_rank || set[way].rrpv < M_RRPV)
+                    continue;
+                if (way != base) {
+                    ++graph_ctx_->grasp_reference_overrides;
+                    graph_ctx_->grasp_reference_lower_rrpv_overrides += entry_rrpv[way] < M_RRPV;
+                }
+                graph_ctx_->grasp_reference_basefirst_divergence += way != base_first;
+                return way;
+            }
+            for (std::size_t way = 0; way < ways; ++way)
+                if (covered[way] && ranks[way] == max_rank && set[way].rrpv < M_RRPV)
+                    set[way].rrpv++;
+        }
     }
 
     // ================================================================

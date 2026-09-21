@@ -56,7 +56,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--record-model", choices=("next", "window", "frontier"), default="next")
     parser.add_argument("--frontier-gating", choices=("enabled", "ignored"), default="enabled")
     parser.add_argument("--popt-rank-mode", choices=("future", "constant"), default="future")
-    parser.add_argument("--grasp-reference", choices=("off", "full", "flat"), default="off")
+    parser.add_argument("--grasp-reference", choices=("off", "full", "flat", "rank"), default="off")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
     parser.add_argument("--bfs-traffic-phases", choices=("on", "off"), default="off")
     parser.add_argument("--window-candidate-rrpv", choices=(6, 7), type=int, default=6)
@@ -117,7 +117,7 @@ def popt_rank_label(label: str, rank_mode: str) -> str:
 def grasp_reference_label(label: str, mode: str) -> str:
     if mode == "off":
         return label
-    require(mode in ("full", "flat") and label == "GRASP_PAPER",
+    require(mode in ("full", "flat", "rank") and label == "GRASP_PAPER",
             "reference consumer requires the ordinary GRASP_PAPER diagnostic")
     return "DIAG_GRASP_REFERENCE_" + mode.upper()
 

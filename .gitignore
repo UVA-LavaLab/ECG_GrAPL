@@ -44,3 +44,7 @@ sniper.out/
 *.sg
 *.mtx
 .wiki_publish
+# Local Claude Code agent configuration and guidance (not part of the artifact)
+/.claude/
+/.claudeignore
+/CLAUDE.md

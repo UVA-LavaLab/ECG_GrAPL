@@ -158,6 +158,8 @@ class AlgorithmBackend {
         context_.popt_constant_rank = options_.popt_constant_rank ||
             options_.grasp_reference == ecg_algorithm::GraspReferenceMode::FLAT;
         context_.grasp_reference_consumer = referenceConsumer();
+        context_.grasp_reference_rank_first =
+            options_.grasp_reference == ecg_algorithm::GraspReferenceMode::RANK;
         cache_.initGraphContext(&context_);
         if (options_.records)
             cache_.prepareRecord(recordBasePolicy());
@@ -526,11 +528,15 @@ class AlgorithmBackend {
                << ecg_algorithm::graspReferenceName(options_.grasp_reference)
                << "\",\"availability\":\"ideal-matrix-at-victim-selection\","
                << "\"base_policy\":\"GRASP_PAPER\",\"outside_pass_policy\":\"GRASP_PAPER\","
-               << "\"candidate_rrpv_filter\":false,\"strictly_farther_only\":true,"
+               << "\"candidate_rrpv_filter\":false,\"strictly_farther_only\":"
+               << (context_.grasp_reference_rank_first ? "false," : "true,")
                << "\"victim_decisions\":" << context_.grasp_reference_decisions
                << ",\"covered_base_victims\":" << context_.grasp_reference_covered_bases
                << ",\"victim_overrides\":" << context_.grasp_reference_overrides
-               << ",\"lower_rrpv_overrides\":" << context_.grasp_reference_lower_rrpv_overrides << '}';
+               << ",\"lower_rrpv_overrides\":" << context_.grasp_reference_lower_rrpv_overrides
+               << ",\"rank_first\":" << (context_.grasp_reference_rank_first ? "true" : "false")
+               << ",\"max_rank_tie_population\":" << context_.grasp_reference_rank_ties
+               << ",\"basefirst_divergence\":" << context_.grasp_reference_basefirst_divergence << '}';
     }
 
     void writeBfsTraffic(std::ostream& output) const {

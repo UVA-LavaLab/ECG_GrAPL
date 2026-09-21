@@ -19,6 +19,7 @@
     "ecg_popt_rank_attribution",
     "ecg_frontier_mask_cache",
     "ecg_grasp_reference_cache",
+    "ecg_consumer_architecture_cache",
     "ecg_algorithm_equivalence_gem5",
     "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
@@ -55,6 +56,7 @@
   },
   "profiles": {
     "ecg_grasp_reference_cache": "Four serial SpMV Patents8MiB reference-consumer cells: fresh GRASP/intact favorable P-OPT, and GRASP-based FULL/FLAT diagnostics with identical complete matrix preparation and ideal runtime rank availability. Not an ECG mask or native-speed claim.",
+    "ecg_consumer_architecture_cache": "Four serial SpMV Patents8MiB consumer-architecture cells: fresh ordinary GRASP, fresh intact favorable P-OPT, and the GRASP-based FULL base-first and RANK rank-first diagnostics sharing one identical complete matrix and one identical engagement boundary. Isolates selection architecture, not information quality. Not an ECG mask, competitiveness or native-speed claim.",
     "ecg_frontier_mask_cache": "Four final serial Patents BFS8MiB budget cells: fresh phased GRASP and intact favorable P-OPT, plus B frontier masks with identical paid counters/context and gating ignored/enabled. RRPV7 only; no graph/source/threshold sweep or native claim.",
     "ecg_popt_rank_attribution": "Six serial full-Patents SpMV/TD-BFS8MiB cells: strong applicable GRASP, intact favorable P-OPT, and explicitly labeled constant-rank P-OPT diagnostics. No new mask, runtime lookup charge, capacity reduction or native timing claim.",
     "ecg_window_phased_cache": "Five serial Patents BFS8MiB cells: phased GRASP and unchanged favorableP-OPT versus windowT/R6/R7 with the same outside-pass LRU treatment. Window controls are not double-charged.",
@@ -133,6 +135,25 @@
         "formula": "(flat - full) / flat",
         "minimum_margin": 0.02,
         "additional_requirement": "full strictly improves kernel transfers over fresh ordinary GRASP",
+        "popt_comparison": "report against intact P-OPT separately without weakening it",
+        "full_graph_runs": 4,
+        "no_automatic_follow_on": true
+      }
+    },
+    "ecg_consumer_architecture_cache": {
+      "status": "ready",
+      "reason": "Separately approved four-run budget `consumer-architecture-4`. The reference study gave a GRASP-based consumer the byte-identical intact P-OPT matrix, digest 3683564403557561320, and it still closed only 29.42% of the ordinary-GRASP-to-P-OPT kernel gap, with the residual 100.03% property demand misses. This isolates whether the base-first refinement architecture rather than the information caps that gain. Does not reopen the closed 12/12 or 4/4 budgets and authorizes no follow-on.",
+      "require_clean_worktree": true,
+      "development_gate": {
+        "metric": "kernel_total_offchip_traffic",
+        "formula": "(full - rank) / (full - popt)",
+        "interpretation": "fraction of the FULL-to-intact-P-OPT kernel residual that rank-first selection alone recovers",
+        "minimum_margin": 0.5,
+        "partial_band": [0.2, 0.5],
+        "reject_below": 0.2,
+        "reject_meaning": "rank-first ordering and tie discipline do not explain the residual; PASS_RANK as specified should be rejected, not rescued by widening eligibility or adding bits",
+        "scope_caveat": "RANK shares FULL's engagement boundary, so it isolates ordering plus tie-set aging while holding fixed the early return when the GRASP victim is not covered property data. This is conservative and can only understate rank-first's value.",
+        "divergence_caveat": "basefirst_divergence understates the treatment: rank-first additionally ages only the maximum-rank tie set while base-first ages every line, so the arms can differ even at zero divergence. Report max_rank_tie_population alongside it.",
         "popt_comparison": "report against intact P-OPT separately without weakening it",
         "full_graph_runs": 4,
         "no_automatic_follow_on": true
@@ -1079,6 +1100,45 @@
       "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
       "policy_sharding_allowed": false, "timeout_cache": 1800,
       "out_subdir": "193_grasp_reference_full"
+    },
+    {
+      "name": "194_consumer_architecture_baselines", "kind": "roi_matrix",
+      "profiles": ["ecg_consumer_architecture_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv"], "policies": ["GRASP_PAPER", "POPT:UNCHARGED"],
+      "current_algorithms": true,
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "194_consumer_architecture_baselines"
+    },
+    {
+      "name": "195_consumer_architecture_basefirst", "kind": "roi_matrix",
+      "profiles": ["ecg_consumer_architecture_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv"], "policies": ["GRASP_PAPER"],
+      "current_algorithms": true, "algorithm_grasp_reference": "full",
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "195_consumer_architecture_basefirst"
+    },
+    {
+      "name": "196_consumer_architecture_rankfirst", "kind": "roi_matrix",
+      "profiles": ["ecg_consumer_architecture_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv"], "policies": ["GRASP_PAPER"],
+      "current_algorithms": true, "algorithm_grasp_reference": "rank",
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 2048,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "196_consumer_architecture_rankfirst"
     },
     {
       "name": "187_frontier_grasp", "kind": "roi_matrix",

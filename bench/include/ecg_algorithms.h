@@ -26,13 +26,17 @@ enum class ReferencePattern : uint8_t { NEIGHBOR, VERTEX, NEIGHBOR_AND_VERTEX };
 enum class RecordBasePolicy : uint8_t { LRU, GRASP_PAPER };
 enum class WindowObserverMode : uint8_t { OFF, CONTROL, WINDOW };
 enum class RecordModel : uint8_t { NEXT, WINDOW, FRONTIER };
-enum class GraspReferenceMode : uint8_t { OFF, FULL, FLAT };
+// RANK is the rank-first selection arm of the consumer-architecture study.
+// Its CLI value is deliberately four characters, matching "full" and "flat",
+// so the compared launch strings keep equal length.
+enum class GraspReferenceMode : uint8_t { OFF, FULL, FLAT, RANK };
 
 inline const char* graspReferenceName(GraspReferenceMode mode) {
     switch (mode) {
       case GraspReferenceMode::OFF: return "off";
       case GraspReferenceMode::FULL: return "full";
       case GraspReferenceMode::FLAT: return "flat";
+      case GraspReferenceMode::RANK: return "rank";
     }
     throw std::invalid_argument("invalid-GRASP-reference-mode");
 }

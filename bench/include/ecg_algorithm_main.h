@@ -109,7 +109,8 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value == "off") command.options.grasp_reference = GraspReferenceMode::OFF;
             else if (value == "full") command.options.grasp_reference = GraspReferenceMode::FULL;
             else if (value == "flat") command.options.grasp_reference = GraspReferenceMode::FLAT;
-            else throw std::invalid_argument("grasp-reference-must-be-off-full-or-flat");
+            else if (value == "rank") command.options.grasp_reference = GraspReferenceMode::RANK;
+            else throw std::invalid_argument("grasp-reference-must-be-off-full-flat-or-rank");
         } else if (argument == "--grasp-scope") {
             if (value != "all" && value != "graph-passes")
                 throw std::invalid_argument("grasp-scope-must-be-all-or-graph-passes");
