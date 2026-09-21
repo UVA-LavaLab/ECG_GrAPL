@@ -1,0 +1,88 @@
+"""The opt-in record victim arms must survive the runner, not just the kernel.
+
+Both `--record-governed-first` and `--record-store-bound` were once parsed by
+the runner and then dropped before the kernel argv was built, because the
+option was taught to the parser and to `policy_labels` but not to the command
+construction or to the positional `policy_labels` call sites. The kernel then
+ran its default arm, the receipt honestly said so, and only the receipt
+validator caught the mismatch.
+
+An earlier qualification missed this because it invoked the kernel binary
+directly and then called `validate_payload`, exercising the kernel and the
+validator while skipping the layer in between. These tests capture the argv the
+runner would actually execute, so the skipped layer is the one under test.
+"""
+from pathlib import Path
+from types import SimpleNamespace
+import sys
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+
+def _captured_command(tmp_path, extra_options):
+    from scripts.experiments.ecg import algorithm_matrix, roi_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    args = roi_matrix.parse_args([
+        "--suite", "cache-sim", "--benchmark", "spmv", "--current-algorithms",
+        "--options", f"--graph {graph} --repeat 2 --record-base-policy GRASP_PAPER "
+                     f"--record-preprocess csr {extra_options}",
+        "--policies", "ECG:replacement", "--l3-sizes", "8MB", "--l3-ways", "16",
+        "--out-dir", str(tmp_path), "--no-build",
+    ])
+    captured: list[list[str]] = []
+
+    def run_command(command, *rest, **kw):
+        captured.append([str(part) for part in command])
+        raise RuntimeError("stop after the argv is built")
+
+    try:
+        algorithm_matrix.run_cache_cell(
+            args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "8MB",
+            run_command, roi_matrix.parse_size_bytes)
+    except Exception:
+        pass
+    return captured[0] if captured else []
+
+
+@pytest.mark.parametrize("option,value,flag", [
+    ("--record-governed-first", "on", "--record-governed-first"),
+    ("--record-store-bound", "keep", "--record-store-bound"),
+])
+def test_requested_victim_arm_reaches_the_kernel_argv(tmp_path, option, value, flag):
+    command = _captured_command(tmp_path, f"{option} {value}")
+    assert command, "the cell never reached kernel command construction"
+    assert flag in command, f"{flag} was parsed by the runner but dropped before the kernel"
+    assert command[command.index(flag) + 1] == value
+
+
+@pytest.mark.parametrize("option,default", [
+    ("--record-governed-first", "no"),
+    ("--record-store-bound", "drop"),
+])
+def test_default_victim_arm_is_not_emitted(tmp_path, option, default):
+    command = _captured_command(tmp_path, f"{option} {default}")
+    assert command, "the cell never reached kernel command construction"
+    assert option not in command, (
+        f"{option} must stay off the kernel argv at its default so existing "
+        "commands and their configuration hashes are unchanged")
+
+
+def test_victim_arm_labels_are_distinct_and_suffixed():
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    spec = [parse_policy_spec("ECG:replacement")]
+    base = algorithm_matrix.policy_labels(spec, base_policy="GRASP_PAPER")[0]
+    governed = algorithm_matrix.policy_labels(
+        spec, base_policy="GRASP_PAPER", governed_first="on")[0]
+    stored = algorithm_matrix.policy_labels(
+        spec, base_policy="GRASP_PAPER", store_bound="keep")[0]
+    assert base == "ECG_REPLACEMENT_BASE_GRASP_PAPER"
+    assert governed == base + "_GOVERNED_FIRST"
+    assert stored == base + "_STORE_BOUND"
+    assert len({base, governed, stored}) == 3, (
+        "each arm needs a distinct output label or paired cells collide in one matrix")

@@ -891,7 +891,8 @@ def run_cache_cell(
         row["query_count"] = options.queries
         row["policy_label"] = policy_labels([spec], options.record_base_policy, options.window_observer,
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
-            options.frontier_gating, options.grasp_reference, options.queries)[0]
+            options.frontier_gating, options.grasp_reference, options.queries,
+            options.record_governed_first, options.record_store_bound)[0]
         if reference:
             row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:
@@ -958,6 +959,12 @@ def run_cache_cell(
             command.extend(("--popt-rank-mode", options.popt_rank_mode))
         if reference:
             command.extend(("--grasp-reference", options.grasp_reference))
+        # Opt-in record victim arms. The kernel defaults match the runner
+        # defaults, so these are emitted only when actually requested.
+        if options.record_governed_first != "no":
+            command.extend(("--record-governed-first", options.record_governed_first))
+        if options.record_store_bound != "drop":
+            command.extend(("--record-store-bound", options.record_store_bound))
         if phase_modes:
             command.extend(("--grasp-scope", options.grasp_scope, "--bfs-traffic-phases", options.bfs_traffic_phases))
         if options.record_model == "window":

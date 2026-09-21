@@ -6404,7 +6404,7 @@ def base_row(simulator: str, args: argparse.Namespace, spec: PolicySpec, l3_size
         "ecg_combined_admission": int(spec.ecg_combined_admission),
         "ecg_online_admission": int(spec.ecg_online_admission),
         "popt_reserve_model": args.popt_reserve_model,
-        "policy_label": spec.label,
+        "policy_label": output_policy_labels(args, [spec])[0],
         "policy": spec.policy,
         "ecg_mode": spec.ecg_mode or "",
         "ecg_variant_requested": (
@@ -6850,8 +6850,17 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
         return algorithm_matrix.policy_labels(
             policies, options.record_base_policy, options.window_observer,
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
-            options.frontier_gating, options.grasp_reference, options.queries)
-    return [spec.label for spec in policies]
+            options.frontier_gating, options.grasp_reference, options.queries,
+            options.record_governed_first, options.record_store_bound)
+    # PageRank runs through the separate pr kernel, so its labels never pass
+    # through algorithm_matrix.policy_labels. Without this the opt-in arms and
+    # their controls share one label and collide in the combined matrix.
+    labels = [spec.label for spec in policies]
+    governed_first = getattr(args, "record_governed_first", "no")
+    if governed_first != "no":
+        labels = [algorithm_matrix.governed_first_label(label, governed_first)
+                  for label in labels]
+    return labels
 
 
 def standalone_matrix_config_hash(
