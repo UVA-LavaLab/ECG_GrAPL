@@ -426,6 +426,63 @@ def test_grasp_reference_retains_matrix_setup_and_program_work(tmp_path):
         assert flat["popt"][key] == full["popt"][key], key
 
 
+def test_grasp_reference_rank_first_receipt_passes_the_runner_validator(tmp_path):
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    output = tmp_path / "same-result.json"
+    results = {}
+    # Four ways: with two, base-first refinement and rank-first selection coincide.
+    for mode in ("full", "rank"):
+        ran = subprocess.run([
+            "setarch", os.uname().machine, "-R", str(binary),
+            "--algorithm", "spmv", "--graph", str(graph), "--policy", "GRASP_PAPER",
+            "--grasp-reference", mode, "--repeat", "2", "--delta", "8", "--values", "--evidence",
+            "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256", "--l2-ways", "2",
+            "--llc-bytes", "2048", "--llc-ways", "4", "--output", str(output),
+        ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0",
+                "POPT_MATRIX_STREAM_SIM": "1"}, capture_output=True, text=True, timeout=30, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        payload = json.loads(output.read_text())
+        options = algorithm_matrix.parse_options(f"--graph {graph} --repeat 2 --grasp-reference {mode}")
+        validation = dict(algorithm="spmv", mode="csr", policy="GRASP_PAPER",
+            graph=algorithm_matrix.graph_info(graph, allow_weighted=True, traversal="out"), graph_path=graph,
+            options=options, requested_bytes=0, minimum_mantissa_bits=0, evidence=True, llc_sets=8)
+        algorithm_matrix.validate_payload(payload, ran.stdout, **validation)
+        reference = payload["grasp_reference"]
+        rank_first = mode == "rank"
+        assert reference["mode"] == mode and reference["rank_first"] is rank_first
+        assert reference["strictly_farther_only"] is (not rank_first)
+        assert payload["popt"]["rank_mode"] == "future" and payload["policy_ablation"] is False
+        if rank_first:
+            assert reference["max_rank_tie_population"] >= reference["covered_base_victims"] > 0
+        else:
+            assert reference["max_rank_tie_population"] == reference["basefirst_divergence"] == 0
+        for field, value in (
+            ("strictly_farther_only", rank_first), ("rank_first", not rank_first),
+            ("max_rank_tie_population", 0 if rank_first else 1),
+            ("basefirst_divergence", reference["covered_base_victims"] + 1 if rank_first else 1),
+        ):
+            forged = json.loads(json.dumps(payload))
+            forged["grasp_reference"][field] = value
+            with pytest.raises(RecordReceiptError):
+                algorithm_matrix.validate_payload(forged, ran.stdout, **validation)
+        assert algorithm_matrix.grasp_reference_label(
+            "GRASP_PAPER", mode) == "DIAG_GRASP_REFERENCE_" + mode.upper()
+        results[mode] = payload
+    full, rank = results["full"], results["rank"]
+    assert full["workload"] == rank["workload"]
+    assert full["traffic_phases"]["setup"] == rank["traffic_phases"]["setup"]
+    for key in ("matrix_digest", "matrix_bytes", "matrix_lines", "epochs", "construction_read_bytes",
+                "construction_write_bytes", "passes", "vertices", "governed_reads"):
+        assert full["popt"][key] == rank["popt"][key], key
+
+
 @pytest.mark.parametrize("extra", [
     ["--algorithm", "bfs"], ["--policy", "LRU"], ["--policy", "POPT_UNCHARGED"],
     ["--mode", "transport"], ["--popt-rank-mode", "constant"], ["--grasp-scope", "graph-passes"],

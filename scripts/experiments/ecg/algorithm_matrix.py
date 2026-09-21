@@ -399,17 +399,28 @@ def validate_payload(
 
 def validate_grasp_reference(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
     reference = payload.get("grasp_reference")
+    # The rank-first arm orders covered candidates by rank and ages only the
+    # maximum-rank tie set; the base-first arms refine one GRASP victim by a
+    # strictly farther rank. The receipt must describe the arm that ran.
+    rank_first = options.grasp_reference == "rank"
     require(isinstance(reference, dict) and reference.get("schema") == "ecg.grasp-reference.v1" and
             reference.get("mode") == options.grasp_reference and
             reference.get("availability") == "ideal-matrix-at-victim-selection" and
             reference.get("base_policy") == reference.get("outside_pass_policy") == "GRASP_PAPER" and
-            reference.get("candidate_rrpv_filter") is False and reference.get("strictly_farther_only") is True,
+            reference.get("candidate_rrpv_filter") is False and
+            reference.get("strictly_farther_only") is (not rank_first) and
+            reference.get("rank_first") is rank_first,
             "GRASP reference consumer mechanics or label mismatch")
     require(_integer(reference, "lower_rrpv_overrides") <= _integer(reference, "victim_overrides") <=
             _integer(reference, "covered_base_victims") <= _integer(reference, "victim_decisions") and
             _integer(payload["popt"], "lookup_calls") >= reference["covered_base_victims"] and
             (options.grasp_reference != "flat" or reference["victim_overrides"] == 0),
             "GRASP reference victim or lookup accounting mismatch")
+    ties, divergence = (_integer(reference, "max_rank_tie_population"),
+                        _integer(reference, "basefirst_divergence"))
+    require((ties >= reference["covered_base_victims"] and divergence <= reference["covered_base_victims"])
+            if rank_first else ties == divergence == 0,
+            "GRASP reference rank-first tie or divergence accounting mismatch")
     return reference
 
 
