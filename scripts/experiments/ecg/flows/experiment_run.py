@@ -1113,6 +1113,12 @@ def make_roi_job(
     frontier_gating = "enabled"
     grasp_reference = "off"
     query_count = 1
+    # The opt-in victim arms change the output label, so the expected-label
+    # list must know about them or a correctly-run arm is reported as a missing
+    # policy. PageRank carries the arm as a stage setting rather than in the
+    # algorithms options string.
+    governed_first = str(settings.get("algorithm_record_governed_first", "no"))
+    store_bound = str(settings.get("algorithm_record_store_bound", "drop"))
     if settings.get("current_algorithms"):
         parsed_algorithm = algorithm_matrix.parse_options(options)
         record_base, observer = parsed_algorithm.record_base_policy, parsed_algorithm.window_observer
@@ -1122,9 +1128,12 @@ def make_roi_job(
         frontier_gating = parsed_algorithm.frontier_gating
         grasp_reference = parsed_algorithm.grasp_reference
         query_count = parsed_algorithm.queries
+        governed_first = parsed_algorithm.record_governed_first
+        store_bound = parsed_algorithm.record_store_bound
     expected_policy_labels = algorithm_matrix.policy_labels(
         [parse_policy_spec(policy) for policy in all_policies], record_base, observer, record_model,
-        candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating, grasp_reference, query_count)
+        candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating, grasp_reference, query_count,
+        governed_first, store_bound)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
