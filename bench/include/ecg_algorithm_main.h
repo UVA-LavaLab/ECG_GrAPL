@@ -113,6 +113,10 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value != "keep" && value != "drop")
                 throw std::invalid_argument("record-store-bound-must-be-keep-or-drop");
             command.options.record_store_keeps_bound = value == "keep";
+        } else if (argument == "--record-pressure-gate") {
+            if (value != "no" && value != "on")
+                throw std::invalid_argument("record-pressure-gate-must-be-on-or-no");
+            command.options.record_pressure_gate = value == "on";
         } else if (argument == "--record-governed-first") {
             if (value != "on" && value != "no")
                 throw std::invalid_argument("record-governed-first-must-be-on-or-no");
@@ -216,6 +220,12 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
     if (command.options.record_store_keeps_bound &&
         (!command.options.records || command.options.record_model != RecordModel::NEXT))
         throw std::invalid_argument("store-bound retention requires the current NEXT record model");
+    if (command.options.record_pressure_gate &&
+        (!command.options.records || command.options.record_model != RecordModel::NEXT ||
+         (command.options.mechanism != ecg_record::Mechanism::REPLACEMENT &&
+          command.options.mechanism != ecg_record::Mechanism::REPLACEMENT_PREFETCH)))
+        throw std::invalid_argument(
+            "pressure-gate requires the current NEXT record replacement rule");
     if (command.options.record_governed_first &&
         (!command.options.records || command.options.record_model != RecordModel::NEXT ||
          (command.options.mechanism != ecg_record::Mechanism::REPLACEMENT &&
@@ -296,6 +306,8 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
            << "\",\"record_reuse_scope\":\"" << recordReuseScope(options)
            << "\",\"record_victim_order\":\""
            << (options.record_governed_first ? "governed-first" : "base-first")
+           << "\",\"record_pressure_gate\":\""
+           << (options.record_pressure_gate ? "on" : "no")
            << "\",\"record_store_bound\":\""
            << (options.record_store_keeps_bound ? "keep" : "drop")
            << "\",\"record_expiry_clock\":\""

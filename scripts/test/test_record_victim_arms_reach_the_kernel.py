@@ -52,6 +52,7 @@ def _captured_command(tmp_path, extra_options):
 @pytest.mark.parametrize("option,value,flag", [
     ("--record-governed-first", "on", "--record-governed-first"),
     ("--record-store-bound", "keep", "--record-store-bound"),
+    ("--record-pressure-gate", "on", "--record-pressure-gate"),
 ])
 def test_requested_victim_arm_reaches_the_kernel_argv(tmp_path, option, value, flag):
     command = _captured_command(tmp_path, f"{option} {value}")
@@ -63,6 +64,7 @@ def test_requested_victim_arm_reaches_the_kernel_argv(tmp_path, option, value, f
 @pytest.mark.parametrize("option,default", [
     ("--record-governed-first", "no"),
     ("--record-store-bound", "drop"),
+    ("--record-pressure-gate", "no"),
 ])
 def test_default_victim_arm_is_not_emitted(tmp_path, option, default):
     command = _captured_command(tmp_path, f"{option} {default}")
@@ -81,10 +83,18 @@ def test_victim_arm_labels_are_distinct_and_suffixed():
         spec, base_policy="GRASP_PAPER", governed_first="on")[0]
     stored = algorithm_matrix.policy_labels(
         spec, base_policy="GRASP_PAPER", store_bound="keep")[0]
+    gated = algorithm_matrix.policy_labels(
+        spec, base_policy="GRASP_PAPER", pressure_gate="on")[0]
     assert base == "ECG_REPLACEMENT_BASE_GRASP_PAPER"
     assert governed == base + "_GOVERNED_FIRST"
     assert stored == base + "_STORE_BOUND"
-    assert len({base, governed, stored}) == 3, (
+    assert gated == base + "_PRESSURE_GATE"
+    # The gate composes with governed-first, since the study that motivates it
+    # measures the two together and they would otherwise share one label.
+    both = algorithm_matrix.policy_labels(
+        spec, base_policy="GRASP_PAPER", governed_first="on", pressure_gate="on")[0]
+    assert both == base + "_GOVERNED_FIRST_PRESSURE_GATE"
+    assert len({base, governed, stored, gated, both}) == 5, (
         "each arm needs a distinct output label or paired cells collide in one matrix")
 
 
@@ -153,6 +163,33 @@ def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm):
         "all", "future", "enabled", "off", 1, arm, "drop")
     assert status == "ok", (
         f"the completion check rejected the label the runner produces: {detail}")
+
+
+@pytest.mark.parametrize("gate", ["no", "on"])
+@pytest.mark.parametrize("governed", ["no", "on"])
+def test_pressure_gate_label_agrees_across_every_decider(gate, governed):
+    """The gate is the fourth option to change a label; pin it like the others.
+
+    The `governed="no"` case is the one that matters and the one an earlier
+    version of this test missed. `expected_labels_for` has a fast path that
+    returns the bare label for configurations that look default, and a new
+    option must be added to that condition or the fast path silently ignores
+    it. Setting any *other* option to non-default leaves the fast path
+    unexercised, so the gate has to be tested as the only thing that differs.
+    """
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    produced = algorithm_matrix.policy_labels(
+        [parse_policy_spec("ECG:replacement")], "LRU", "off", "next", 6,
+        "all", "future", "enabled", "off", 1, governed, "drop", "progress", gate)
+    expected = experiment_run.expected_labels_for(
+        ["ECG:replacement"], "LRU", "off", "next", 6, "all", "future",
+        "enabled", "off", 1, governed, "drop", "progress", gate)
+    assert expected == produced, "the flow expects labels the runner does not produce"
+    if gate == "on":
+        assert produced[0].endswith("_PRESSURE_GATE"), (
+            "the gate must reach the label even when every other option is default")
 
 
 @pytest.mark.parametrize("arm", ["no", "on"])

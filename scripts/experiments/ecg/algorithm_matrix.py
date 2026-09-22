@@ -58,6 +58,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--popt-rank-mode", choices=("future", "constant"), default="future")
     parser.add_argument("--grasp-reference", choices=("off", "full", "flat", "rank"), default="off")
     parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
+    parser.add_argument("--record-pressure-gate", choices=("no", "on"), default="no")
     parser.add_argument("--record-store-bound", choices=("drop", "keep"), default="drop")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
@@ -131,6 +132,15 @@ def store_bound_label(label: str, store_bound: str) -> str:
     return label + "_STORE_BOUND"
 
 
+def pressure_gate_label(label: str, pressure_gate: str) -> str:
+    if pressure_gate == "no":
+        return label
+    if "ECG_REPLACEMENT" not in label:
+        raise SystemExit(
+            "pressure-gate requires a current ECG replacement policy")
+    return label + "_PRESSURE_GATE"
+
+
 def governed_first_label(label: str, governed_first: str) -> str:
     if governed_first == "no":
         return label
@@ -160,10 +170,11 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   popt_rank_mode: str = "future", frontier_gating: str = "enabled",
                   grasp_reference: str = "off", queries: int = 1,
                   governed_first: str = "no", store_bound: str = "drop",
-                  expiry_clock: str = "progress") -> list[str]:
-    return [query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(governed_first_label(record_policy_label(
+                  expiry_clock: str = "progress",
+                  pressure_gate: str = "no") -> list[str]:
+    return [pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(governed_first_label(record_policy_label(
                 spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), store_bound), expiry_clock), observer),
-                grasp_scope), popt_rank_mode), grasp_reference), queries)
+                grasp_scope), popt_rank_mode), grasp_reference), queries), pressure_gate)
             for spec in policies]
 
 
@@ -975,6 +986,8 @@ def run_cache_cell(
         # defaults, so these are emitted only when actually requested.
         if options.record_governed_first != "no":
             command.extend(("--record-governed-first", options.record_governed_first))
+        if options.record_pressure_gate != "no":
+            command.extend(("--record-pressure-gate", options.record_pressure_gate))
         if options.record_store_bound != "drop":
             command.extend(("--record-store-bound", options.record_store_bound))
         if options.record_expiry_clock != "progress":

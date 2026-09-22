@@ -365,12 +365,17 @@ struct WayState {
 // selection: every write below is to the caller's trace, never to `ways`.
 enum class VictimPath : uint8_t {
     DEAD_FIRST,         // a governed DEAD way was evicted before the base policy ran
+    UNPRESSURED,        // the set was not under pressure; the base victim stood unmodified
     UNGOVERNED_FIRST,   // opt-in governed-first evicted a non-governed way
     BASE_NOT_GOVERNED,  // the base victim is not governed, so the mask is never consulted
     BASE_NO_FUTURE,     // the base victim is governed but carries no live bound
     BASE_KEPT,          // the base victim is governed and live; no farther candidate existed
     OVERRIDDEN,         // a farther live governed future replaced the base victim
 };
+
+// Keep in step with VictimPath. Tests assert coverage against this rather than
+// a literal, so a new path cannot quietly narrow what they check.
+inline constexpr int kVictimPathCount = 7;
 
 struct VictimTrace {
     VictimPath path = VictimPath::BASE_NOT_GOVERNED;
@@ -398,6 +403,18 @@ struct VictimTrace {
 // recently used is taken, so the rule carries no way-index bias.
 struct VictimOptions {
     bool governed_first = false;
+    // Governed-first and the strictly-farther override both trade residency
+    // against a predicted future. That is the right trade when capacity is
+    // scarce and a pure loss when it is not: measured across 8, 16, 20 and 24
+    // MiB, both help under pressure and both lose to the ordinary base policy
+    // once the working set fits. `pressured` lets the caller say which regime
+    // a set is in; false relaxes to the base victim and skips both.
+    //
+    // The rule stays stateless. The caller owns the signal, because only the
+    // cache can observe its own miss behaviour, and keeping it out here means
+    // one rule still serves all three backends. Defaults true, so every
+    // existing caller and every recorded result is unchanged.
+    bool pressured = true;
 };
 
 template<class SelectBaseVictim>
@@ -443,6 +460,17 @@ inline Status selectVictim(
         victim = dead;
         if (trace)
             trace->path = VictimPath::DEAD_FIRST;
+        return Status::OK;
+    }
+    // Unpressured: take the base policy's victim untouched. DEAD is still
+    // honoured above, because a line known dead has no future to trade away and
+    // evicting it costs nothing at any capacity.
+    if (!options.pressured) {
+        victim = select_base_victim();
+        if (victim >= count)
+            return Status::INVALID_COUNTS;
+        if (trace)
+            trace->path = VictimPath::UNPRESSURED;
         return Status::OK;
     }
     if (options.governed_first) {

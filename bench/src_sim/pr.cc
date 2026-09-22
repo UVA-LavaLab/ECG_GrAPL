@@ -87,6 +87,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     }
     const char* mechanism_name = std::getenv("ECG_RECORD_MECHANISM");
     const bool record_mode = mechanism_name != nullptr;
+    if (!record_mode && recordOption("ECG_RECORD_PRESSURE_GATE", 0, 1))
+        throw std::invalid_argument("ECG_RECORD_PRESSURE_GATE requires a current ECG record mode");
     if (!record_mode && recordOption("ECG_RECORD_GOVERNED_FIRST", 0, 1))
         throw std::invalid_argument("ECG_RECORD_GOVERNED_FIRST requires a current ECG record mode");
     ecg_record::Mechanism mechanism = ecg_record::Mechanism::TRANSPORT;
@@ -175,6 +177,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
             throw std::invalid_argument(
                 "ECG_RECORD_GOVERNED_FIRST requires the replacement mechanism");
         cache.setRecordGovernedFirst(governed_first != 0);
+        cache.setRecordPressureGate(
+            recordOption("ECG_RECORD_PRESSURE_GATE", 0, 1) != 0);
         cache.setRecordDeliveredExpiryClock(
             recordOption("ECG_RECORD_DELIVERY_CLOCK", 0, 1) != 0);
     }

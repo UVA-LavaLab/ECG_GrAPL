@@ -1037,6 +1037,11 @@ public:
         for (auto& set : cache_) {
             set.resize(associativity);
         }
+        // One saturating pressure counter per set for the opt-in pressure gate.
+        // Four bits, initialised saturated so a cold cache begins pressured,
+        // which is both the conservative choice and what the ungated rule has
+        // always done. 4 bits x num_sets is 4 KiB at 8 MiB/16-way/64 B.
+        record_pressure_.assign(num_sets_, kRecordPressureMax);
         
         // Initialize random generator for RANDOM policy
         rng_.seed(42);
@@ -1084,8 +1089,11 @@ public:
                 // Hit!
                 stats_.hits++;
                 if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_hits++;
-                if (isGovernedProperty(address))
+                if (isGovernedProperty(address)) {
                     ++governed_property_hits_;
+                    if (record_pressure_gate_ && record_pressure_[set_idx] > 0)
+                        --record_pressure_[set_idx];
+                }
                 if (isRef32Governed(address))
                     ++ref32_governed_hits_;
                 updateOnHit(set, i, set_idx);
@@ -1102,8 +1110,12 @@ public:
         // Miss
         stats_.misses++;
         if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_misses++;
-        if (isGovernedProperty(address))
+        if (isGovernedProperty(address)) {
             ++governed_property_misses_;
+            if (record_pressure_gate_ &&
+                record_pressure_[set_idx] < kRecordPressureMax)
+                ++record_pressure_[set_idx];
+        }
         if (isRef32Governed(address))
             ++ref32_governed_misses_;
         recordAdmissionAccess(set_idx, true);
@@ -1672,6 +1684,7 @@ public:
     struct RecordVictimAttribution {
         uint64_t decisions = 0;
         uint64_t dead_first = 0;
+        uint64_t unpressured = 0;
         uint64_t ungoverned_first = 0;
         uint64_t base_not_governed = 0;
         uint64_t base_no_future = 0;
@@ -1889,6 +1902,13 @@ public:
         record_prepared_ = true;
         record_configured_ = true;
     }
+
+    void setRecordPressureGate(bool gate) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_pressure_gate_ = gate;
+        record_pressure_.assign(num_sets_, kRecordPressureMax);
+    }
+    bool recordPressureGate() const { return record_pressure_gate_; }
 
     void setRecordGovernedFirst(bool governed_first) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -2581,10 +2601,16 @@ private:
             };
             std::size_t victim = 0;
             ecg_record::VictimTrace trace;
+            // The rule is stateless, so the per-set signal is supplied here.
+            // With the gate off this stays true and the rule is unchanged.
+            ecg_record::VictimOptions options = record_victim_options_;
+            if (record_pressure_gate_)
+                options.pressured =
+                    record_pressure_[evicting_set_idx_] >= kRecordPressureThreshold;
             if (ecg_record::selectVictim(
                     record_receiver_.layout(), ways.data(), set.size(),
                     record_receiver_.comparisonWatermark(), select_base, victim, &trace,
-                    record_victim_options_) !=
+                    options) !=
                         ecg_record::Status::OK)
                 throw std::logic_error("Invalid current ECG victim selection");
             recordVictimAttribution(trace);
@@ -3668,6 +3694,14 @@ private:
     size_t size_bytes_;
     size_t line_size_;
     size_t associativity_;
+    // Pressure signal for the opt-in gate. A property miss to a set pushes the
+    // counter up and a property hit pushes it down, so it saturates high while
+    // the set's property working set does not fit and falls to zero once it
+    // does. No new ports: it is updated on accesses the cache already performs.
+    static constexpr uint8_t kRecordPressureMax = 15;
+    static constexpr uint8_t kRecordPressureThreshold = 8;
+    std::vector<uint8_t> record_pressure_;
+    bool record_pressure_gate_ = false;
     size_t num_sets_;
     size_t offset_bits_;
     size_t index_bits_;
@@ -3721,6 +3755,7 @@ private:
         ++a.decisions;
         switch (trace.path) {
           case ecg_record::VictimPath::DEAD_FIRST: ++a.dead_first; break;
+          case ecg_record::VictimPath::UNPRESSURED: ++a.unpressured; break;
           case ecg_record::VictimPath::UNGOVERNED_FIRST: ++a.ungoverned_first; break;
           case ecg_record::VictimPath::BASE_NOT_GOVERNED: ++a.base_not_governed; break;
           case ecg_record::VictimPath::BASE_NO_FUTURE: ++a.base_no_future; break;
@@ -4043,6 +4078,10 @@ public:
         l1_->insert(address, is_write);
         if (ref32_prefetch_enabled_ && ref32_record_request)
             issueCurrentRef32Prefetch();
+    }
+
+    void setRecordPressureGate(bool gate) {
+        l3_->setRecordPressureGate(gate);
     }
 
     void setRecordGovernedFirst(bool governed_first) {
@@ -5089,6 +5128,7 @@ public:
             const auto& a = l3_->getRecordVictimAttribution();
             ss << "  \"ecg_record_victim_decisions\": " << a.decisions << ",\n";
             ss << "  \"ecg_record_victim_dead_first\": " << a.dead_first << ",\n";
+            ss << "  \"ecg_record_victim_unpressured\": " << a.unpressured << ",\n";
             ss << "  \"ecg_record_victim_ungoverned_first\": " << a.ungoverned_first << ",\n";
             ss << "  \"ecg_record_victim_base_not_governed\": " << a.base_not_governed << ",\n";
             ss << "  \"ecg_record_victim_base_no_future\": " << a.base_no_future << ",\n";

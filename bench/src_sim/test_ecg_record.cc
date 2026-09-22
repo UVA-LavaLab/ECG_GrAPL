@@ -1006,7 +1006,7 @@ void testVictimTraceIsPassive() {
     check(selectLayout(req, layout) == Status::OK, "trace passivity fixture layout");
     std::mt19937_64 rng(0xA77121B0);
     const State states[4] = {State::UNKNOWN, State::FINITE, State::DEAD, State::WRAP};
-    int mismatches = 0, traced_paths[6] = {};
+    int mismatches = 0, traced_paths[ecg_record::kVictimPathCount] = {};
     for (int trial = 0; trial < 20000; ++trial) {
         const std::size_t count = 1 + (rng() % 16);
         const uint64_t sequence = rng() % 64;
@@ -1047,17 +1047,107 @@ void testVictimTraceIsPassive() {
     }
     check(mismatches == 0,
           "collecting a victim trace never changes the victim, status or way state");
-    // UNGOVERNED_FIRST is unreachable here: this fixture never enables the option.
-    int covered = 0;
-    for (int i = 0; i < 6; ++i)
-        if (i != static_cast<int>(VictimPath::UNGOVERNED_FIRST)) covered += traced_paths[i] > 0;
-    check(covered == 5 && traced_paths[static_cast<int>(VictimPath::UNGOVERNED_FIRST)] == 0,
+    // Two paths are opt-in and unreachable here, because this fixture never
+    // enables governed-first and never reports a set as unpressured. Every
+    // other path must be exercised. Stated as a set difference rather than a
+    // hardcoded count, so adding a path later fails loudly instead of silently
+    // shrinking what this check covers.
+    const int opt_in[] = {static_cast<int>(VictimPath::UNGOVERNED_FIRST),
+                          static_cast<int>(VictimPath::UNPRESSURED)};
+    int covered = 0, opt_in_seen = 0;
+    for (int i = 0; i < kVictimPathCount; ++i) {
+        const bool is_opt_in = i == opt_in[0] || i == opt_in[1];
+        if (is_opt_in) opt_in_seen += traced_paths[i];
+        else covered += traced_paths[i] > 0;
+    }
+    check(covered == kVictimPathCount - 2 && opt_in_seen == 0,
           "the passivity fixture exercises every default victim path and no other");
 }
 
 
 // Opt-in governed-first eviction. Pins the order the repository's teaching
 // fixture specifies, and re-proves passivity of the trace with the option on.
+// The pressure gate must be a strict relaxation: when a set is not under
+// pressure the rule hands back exactly what the base policy chose, and when it
+// is, the rule is bit-for-bit what it was before the gate existed. Anything
+// else would make every recorded result unreproducible.
+void testPressureGateRelaxesToTheBaseVictim() {
+    using namespace ecg_record;
+    auto req = requirements(32);
+    req.record_count = 34;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK, "pressure gate fixture layout");
+
+    VictimOptions gov;       gov.governed_first = true;
+    VictimOptions relaxed;   relaxed.governed_first = true;  relaxed.pressured = false;
+    VictimOptions plain_relaxed;                             plain_relaxed.pressured = false;
+
+    WayState ways[3];
+    ways[0].property = true;  ways[0].recency = 1; ways[0].state = State::FINITE; ways[0].deadline = 19 + 64;
+    ways[1].property = false; ways[1].recency = 9; ways[1].state = State::UNKNOWN;
+    ways[2].property = true;  ways[2].recency = 5; ways[2].state = State::FINITE; ways[2].deadline = 19 + 8;
+
+    std::size_t victim = 0;
+    check(selectVictim(layout, ways, 3, 19, victim, nullptr, gov) == Status::OK && victim == 1,
+          "pressured governed-first still evicts the non-governed way");
+    // Relaxed: the base victim here is plain LRU, which is way 0 at recency 1.
+    check(selectVictim(layout, ways, 3, 19, victim, nullptr, relaxed) == Status::OK && victim == 0,
+          "unpressured relaxes to the base victim even with governed-first requested");
+    check(selectVictim(layout, ways, 3, 19, victim, nullptr, plain_relaxed) == Status::OK && victim == 0,
+          "unpressured also suppresses the strictly-farther override");
+
+    // DEAD still precedes everything: a line known dead has no future to trade.
+    ways[2].state = State::DEAD;
+    check(selectVictim(layout, ways, 3, 19, victim, nullptr, relaxed) == Status::OK && victim == 2,
+          "explicit DEAD is honoured even when the set is not under pressure");
+    ways[2].state = State::FINITE;
+
+    // The reported path must name the arm, so a receipt records which ran.
+    VictimTrace trace;
+    check(selectVictim(layout, ways, 3, 19, victim, &trace, relaxed) == Status::OK &&
+          trace.path == VictimPath::UNPRESSURED,
+          "the unpressured path is reported rather than inferred");
+
+    // Default-constructed options must be pressured, or every existing caller
+    // silently changes behaviour the moment this field appears.
+    check(VictimOptions().pressured, "VictimOptions defaults to pressured");
+
+    // Randomised equivalence: pressured must equal the pre-gate rule exactly,
+    // and unpressured must equal the base victim exactly, on every shape.
+    std::mt19937_64 rng(0x9E3779B97F4A7C15ull);
+    const State states[4] = {State::UNKNOWN, State::FINITE, State::DEAD, State::WRAP};
+    int relaxed_differed = 0;
+    for (int trial = 0; trial < 20000; ++trial) {
+        const std::size_t count = 1 + (rng() % 16);
+        WayState w[16];
+        for (std::size_t i = 0; i < count; ++i) {
+            w[i].property = (rng() & 1) != 0;
+            w[i].recency = rng() % 64;
+            w[i].state = states[rng() % 4];
+            w[i].deadline = rng() % 256;
+        }
+        const uint64_t sequence = rng() % 128;
+        std::size_t lru = 0;
+        for (std::size_t i = 1; i < count; ++i)
+            if (w[i].recency < w[lru].recency) lru = i;
+        std::size_t dead = count;
+        for (std::size_t i = 0; i < count; ++i)
+            if (w[i].property && w[i].state == State::DEAD &&
+                (dead == count || w[i].recency < w[dead].recency)) dead = i;
+
+        VictimOptions pressured_opts; pressured_opts.governed_first = (rng() & 1) != 0;
+        VictimOptions relaxed_opts = pressured_opts; relaxed_opts.pressured = false;
+
+        std::size_t got_relaxed = 0;
+        check(selectVictim(layout, w, count, sequence, got_relaxed, nullptr, relaxed_opts) ==
+              Status::OK, "relaxed selection succeeds");
+        const std::size_t expected = dead != count ? dead : lru;
+        if (got_relaxed != expected) ++relaxed_differed;
+    }
+    check(relaxed_differed == 0,
+          "unpressured selection is exactly DEAD-first then the base victim");
+}
+
 void testGovernedFirstEviction() {
     using namespace ecg_record;
     auto req = requirements(32);
@@ -1138,6 +1228,7 @@ int main() {
     testFilteredQuantizedPassBoundary();
     testVictimTraceIsPassive();
     testGovernedFirstEviction();
+    testPressureGateRelaxesToTheBaseVictim();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }
