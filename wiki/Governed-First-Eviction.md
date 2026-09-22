@@ -9,9 +9,10 @@ governed property lines were displaced by a structural stream.
 **The arm won on both kernels at 8 MiB/16-way**, and the capacity qualifier is
 part of the result rather than a hedge. A second reading at 24 MiB, reported in
 [how the result depends on capacity](#how-the-result-depends-on-capacity),
-**loses to GRASP on both kernels and regresses on SpMV**. Every competitive
-statement on this page is therefore an 8 MiB statement, and the mitigation is
-known to be capacity-pressure dependent.
+**loses to GRASP on both kernels and regresses on SpMV**, and a four-point sweep
+places the crossover between 16 and 20 MiB. Every competitive statement on this
+page therefore holds up to roughly 16 MiB on this graph, and the mitigation is
+measured to be capacity-pressure dependent.
 
 The gated result is about `selectVictim` against its own previous ordering. It is
 not a timing result — `timing_valid_for_speedup` is `false` in every receipt
@@ -339,9 +340,22 @@ not a smaller carrier. No lower-cost construction mode is implemented today.
 
 ## How the result depends on capacity
 
-The comparison above was repeated at **24 MiB/16-way**, one capacity change and
-nothing else, on the same graph with the same argv. The gate and a prediction
-were frozen before the run. The result is negative and bounds the claim.
+The comparison was repeated at three further capacities, one change at a time,
+on the same graph with the same argv. Gates and predictions were frozen before
+each run, and the second and third capacities were chosen by a rule fixed before
+the first was read. The result bounds the claim.
+
+| Kernel transfers vs GRASP_PAPER | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---:|---:|---:|---:|
+| SpMV, ECG governed-first | **+20.49%** | **+8.22%** | −4.07% | −6.12% |
+| PageRank, ECG governed-first | **+18.56%** | **+10.85%** | −1.07% | −2.90% |
+
+**GRASP overtakes ECG between 16 and 20 MiB on both kernels.** That is reported
+as an interval between measured capacities and not interpolated, because four
+points do not license a fitted crossing. The competitive claim therefore holds
+up to somewhere between 16 and 20 MiB on this graph.
+
+The full comparison at the two ends:
 
 | SpMV | 8 MiB | 24 MiB |
 |---|---:|---:|
@@ -363,11 +377,31 @@ were frozen before the run. The result is negative and bounds the claim.
 | ECG vs P-OPT | +6.26% | **−0.54%** |
 | governed-first over base-first | +23.29% | +14.72% |
 
-At 24 MiB the arm leads neither baseline on PageRank and loses to GRASP on
-SpMV, so the competitive claim holds at 8 MiB and not at 24 MiB. **GRASP scales
-with capacity better than ECG does** — its transfers fall 62.8% between the two
-points where ECG's fall 50 to 53% — and that, rather than P-OPT, is what ends
-the claim. ECG still leads the favourable P-OPT control on SpMV at 24 MiB.
+**GRASP scales with capacity better than ECG does**, and that, rather than
+P-OPT, is what ends the claim. ECG still leads the favourable P-OPT control on
+SpMV at 24 MiB.
+
+### ECG has a traffic floor; GRASP does not
+
+| SpMV kernel transfers | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---:|---:|---:|---:|
+| ECG governed-first | 12,289,362 | 6,151,409 | 6,126,909 | **6,106,480** |
+| GRASP_PAPER | 15,456,930 | 6,702,419 | 5,887,025 | **5,754,248** |
+
+From 16 to 24 MiB, 50% more cache buys ECG **0.73%** and GRASP **14.15%**. ECG
+is effectively flat from 16 MiB onward and GRASP falls straight through its
+floor. Structural misses show where the floor comes from:
+
+| SpMV structural misses | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---:|---:|---:|---:|
+| GRASP_PAPER | 5,073,432 | 5,063,595 | 5,007,113 | 4,945,273 |
+| ECG governed-first | 5,072,792 | 5,072,792 | 5,064,601 | 5,072,792 |
+
+GRASP converts capacity into structural hits, falling 128,159 monotonically
+across the range. ECG's net change is **zero**, with a single 0.16% excursion, so
+it converts essentially none. That is the rule working as designed — governed-first
+evicts ungoverned lines first — and it is exactly right while the structural
+stream has no capturable reuse and exactly wrong once it does.
 
 ### The mechanism holds; the ledger flips
 
@@ -394,8 +428,17 @@ without it:
 The accurate statement of the mitigation is therefore narrower than a single
 capacity suggests: **governed-first buys misses and pays writebacks, and the
 trade is strongly favourable only while the cache is under capacity pressure.**
-PageRank still wins at 24 MiB because its property saving is an order of
-magnitude larger; SpMV does not.
+PageRank still beats its own base-first control at 24 MiB because its property
+saving is an order of magnitude larger; SpMV does not.
+
+Both effects have the same shape. Governed-first and the strictly-farther
+override each trade residency against a predicted future, which is the right
+trade when capacity is scarce and a pure loss when it is not. **They are
+pressure heuristics applied without a pressure signal.** Gating them on an
+occupancy or recent-miss signal per set, so the rule relaxes toward the base
+policy when the cache is not pressured, is the obvious mitigation and would cost
+a saturating counter per set. It is **not implemented and not measured**, and
+nothing here should be read as a result for it.
 
 One further reading worth keeping. At 24 MiB, ECG base-first incurs **more**
 property misses than plain GRASP — 565,607 against 472,501 — although GRASP is
