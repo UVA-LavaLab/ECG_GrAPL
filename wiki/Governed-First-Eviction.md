@@ -94,9 +94,9 @@ SpMV's setup-inclusive traffic is reported rather than gated: 34,111,950 to
 31,484,463, **+7.70%**, with the setup phase **byte-identical** at 19,195,101 in
 both arms, as it must be since the option only changes eviction during the
 kernel. PageRank's carrier is prepared outside the measured run, so its kernel
-figure is its whole figure. No matched GRASP or P-OPT PageRank cell has been
-run, so its gate is arm-to-arm and nothing about PageRank against either
-baseline is claimed on this page. Its number also needs the context in
+figure is its whole figure, and no policy's preprocessing appears in its rows.
+Its gate is arm-to-arm; the matched baselines are reported separately below, and
+its number needs the context in
 [what PageRank's margin is](#what-pageranks-margin-actually-is) to be read
 correctly.
 
@@ -150,6 +150,16 @@ Governed-first recovers **96.4%** of what the fix cost. So the honest statement
 is that it re-earns, through a rule that can be defended in hardware — evict a
 line the mechanism does not govern before one it does — most of a benefit that
 had previously come from a rule that cannot be defended at all.
+
+The matched baselines sharpen this further, and in ECG's disfavour. The
+`GRASP_PAPER` PageRank cell landed at 15,975,818 against 15,976,776 in the
+earlier cross-build run, a drift of 0.006%, so that run's figures are sound and
+the 12,865,017 above is a fair comparison point. It **already beat the matched
+`POPT:UNCHARGED` by 7.32%.** ECG's PageRank advantage over P-OPT therefore
+predates governed-first: the rule does not create that advantage, it *restores*
+it, arriving 1.14% short of the old figure while earning it legitimately. That
+is the claim this page makes, and it is smaller than the +23.29% arm-to-arm lift
+on its own would suggest.
 
 The census also explains why SpMV was almost untouched by that same fix, which
 is why its figures reproduce byte-identically across builds while PageRank's
@@ -221,8 +231,11 @@ to the window rule, and no change to what the producer publishes.
   its own study and its own gate.
 - **Nothing about insertion.** The record bound is still not used to place an
   incoming line. That remains the open candidate for the dense kernels.
-- **Nothing about PageRank versus a baseline**, which has never been measured
-  here, and nothing about another graph, another capacity or another base policy.
+- **No PageRank preprocessing accounting.** PageRank's rows omit it for every
+  policy, so no break-even can be derived there as it can for SpMV. That
+  accounting is an open item.
+- **Nothing about another graph, another capacity, another iteration count or
+  another base policy.** One configuration was measured.
 - **Nothing about timing.** These are functional cache results.
 
 ## Matched comparison against the named baselines
@@ -251,6 +264,33 @@ is `33b3620a...` for the ECG arms and for both baselines, and `graph_sha256` is
 | GRASP_PAPER | 2,877,491 | 0 | 15,456,930 | **+20.49%** |
 | `POPT:UNCHARGED` | 2,877,491 | 6,416,016 | 12,398,416 | **+0.88%** |
 | **ECG-R/G governed-first** | 2,877,491 | 16,317,610 | **12,289,362** | — |
+
+Matched PageRank baselines were then run the same way, on the same prepared
+graph with the same argv and the same unrebuilt kernel. PageRank receipts carry
+no setup phase for **any** policy, so this comparison counts no preprocessing at
+all — not the ECG carrier, and not P-OPT's matrix, which for PageRank reports
+`popt_matrix_bytes` of 0 and an `analytic` stream mode. P-OPT therefore receives
+its future information with no storage and no stream cost, the most favourable
+form available, and the ECG carrier cost is real but uncounted here.
+
+| PageRank, 8 MiB/16-way, 2 iterations | ROI kernel | ECG's ROI margin |
+|---|---:|---:|
+| GRASP_PAPER | 15,975,818 | **+18.56%** |
+| `POPT:UNCHARGED` | 13,880,532 | **+6.26%** |
+| ECG base-first (no governed-first) | 16,961,478 | −5.79% |
+| **ECG governed-first** | **13,011,200** | — |
+
+**On PageRank the rule is the difference between losing and leading.** Without
+it, ECG is 6.17% worse than GRASP and 22.20% worse than the favourable P-OPT
+control. With it, ECG leads both, and the P-OPT margin of 6.26% is seven times
+SpMV's.
+
+Structural misses are **5,073,432 for every PageRank policy** — GRASP, P-OPT and
+both ECG arms, identical to the digit. The structural stream is
+policy-invariant, which is a direct corroboration of the reuse-free-stream
+account above rather than a restatement of it: no replacement policy, however
+informed, extracts anything from that stream.
+
 
 Every policy pays a common 2,877,491 transfers before the kernel — loading the
 CSR and initializing the property array — and LRU and GRASP pay nothing beyond
