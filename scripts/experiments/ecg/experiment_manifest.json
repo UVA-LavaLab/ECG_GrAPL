@@ -23,6 +23,7 @@
     "ecg_victim_attribution_cache",
     "ecg_governed_first_cache",
     "ecg_expiry_attribution_cache",
+    "ecg_matched_baseline_cache",
     "ecg_algorithm_equivalence_gem5",
     "ecg_algorithm_equivalence_sniper",
     "ecg_local_release_cache",
@@ -61,6 +62,7 @@
     "ecg_grasp_reference_cache": "Four serial SpMV Patents8MiB reference-consumer cells: fresh GRASP/intact favorable P-OPT, and GRASP-based FULL/FLAT diagnostics with identical complete matrix preparation and ideal runtime rank availability. Not an ECG mask or native-speed claim.",
     "ecg_governed_first_cache": "Four serial Patents 8MiB cells isolating opt-in governed-first eviction on the current NEXT record replacement rule: SpMV and PageRank, each with the option off and on and everything else identical. The control is the same-build off arm. Not a competitiveness claim against GRASP or P-OPT.",
     "ecg_expiry_attribution_cache": "Six serial Patents 8MiB cells re-reading the six attribution cells with the expiry instrument: stored line state and bounds expired against filtered progress. Instrument reading with no performance gate.",
+    "ecg_matched_baseline_cache": "Two serial Patents 8MiB SpMV cells reproducing the GRASP_PAPER and POPT:UNCHARGED baselines at the current build, on the same graph and geometry as the governed-first cells. Confirmatory only: both baselines are already byte-identical across the 074cbf75, bb7689a9 and 2b00f213 studies, and this closes the one remaining cross-build link. Not itself a competitiveness claim.",
     "ecg_victim_attribution_cache": "Six serial Patents 8MiB cells reading the passive ECG record victim-path attribution instrument: SpMV, BFS, SSSP and BC on the GRASP record base, SSSP on the LRU record base, and PageRank. Instrument reading, not a candidate: it adds receipt fields only and must reproduce the existing competitive kernel totals.",
     "ecg_consumer_architecture_cache": "Four serial SpMV Patents8MiB consumer-architecture cells: fresh ordinary GRASP, fresh intact favorable P-OPT, and the GRASP-based FULL base-first and RANK rank-first diagnostics sharing one identical complete matrix and one identical engagement boundary. Isolates selection architecture, not information quality. Not an ECG mask, competitiveness or native-speed claim.",
     "ecg_frontier_mask_cache": "Four final serial Patents BFS8MiB budget cells: fresh phased GRASP and intact favorable P-OPT, plus B frontier masks with identical paid counters/context and gating ignored/enabled. RRPV7 only; no graph/source/threshold sweep or native claim.",
@@ -164,6 +166,21 @@
         "excluded": "bfs, sssp and bc are out of scope: at 8.9-26.6% live coverage their deficit is information at the moment of choice, which an ordering rule cannot supply",
         "full_graph_runs": 4,
         "no_automatic_follow_on": true
+      }
+    },
+    "ecg_matched_baseline_cache": {
+      "status": "ready",
+      "reason": "The governed-first result is gated arm-to-arm on kernel transfers and stands on its own. Its context against the named baselines is currently cross-study: the ECG control reproduces the 074cbf75 cell byte-identically on both phases, and GRASP_PAPER and POPT:UNCHARGED are byte-identical across three studies on three builds. The one untested link is whether those baselines still reproduce at the current build, which these two cells settle for about four minutes.",
+      "require_clean_worktree": true,
+      "development_gate": {
+        "metric": "kernel_total_offchip_traffic",
+        "formula": "reproduction check, not a lift",
+        "expected_grasp_paper": 15456930,
+        "expected_popt_uncharged": 12398416,
+        "tolerance": 0.005,
+        "confirm_meaning": "both baselines within 0.5 percent of the expected figure confirms the cross-study context recorded in NEXT.md section ab, and the comparison may then be stated as one matched build",
+        "reject_meaning": "either baseline drifting beyond 0.5 percent withdraws the cross-study context entirely; only the arm-to-arm gate in section aa stands, and the drift is reported as the finding",
+        "not_claimed": "no setup-inclusive competitiveness claim under any outcome, and beating a baseline on kernel transfers is not a claim about the complete design"
       }
     },
     "ecg_expiry_attribution_cache": {
@@ -1336,6 +1353,19 @@
       "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
       "policy_sharding_allowed": false, "timeout_cache": 1800,
       "out_subdir": "206_expiry_attribution_pagerank"
+    },
+    {
+      "name": "207_matched_baseline_spmv", "kind": "roi_matrix",
+      "profiles": ["ecg_matched_baseline_cache"],
+      "suite": "cache-sim", "graph_set": "algorithm_8mb_patents",
+      "benchmarks": ["spmv"], "policies": ["GRASP_PAPER", "POPT:UNCHARGED"],
+      "current_algorithms": true,
+      "algorithm_workspace_bytes": 536870912, "cache_record_rss_mib": 4096,
+      "cache_sim_omp_threads": 1, "l1d_size": "32kB", "l1d_ways": "8",
+      "l2_size": "256kB", "l2_ways": "8", "l3_sizes": ["8MB"], "l3_ways": "16",
+      "prefetcher": "none", "flowthrough": "off", "structure_prefetch_degree": 0,
+      "policy_sharding_allowed": false, "timeout_cache": 1800,
+      "out_subdir": "207_matched_baseline_spmv"
     },
     {
       "name": "187_frontier_grasp", "kind": "roi_matrix",
