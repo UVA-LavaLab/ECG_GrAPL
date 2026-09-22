@@ -334,8 +334,23 @@ not a smaller carrier. No lower-cost construction mode is implemented today.
 The rule is implemented, tested and off by default. Turning it on by default
 would change every existing ECG result in this repository, so it is a deliberate
 decision rather than a consequence of this measurement, and it has not been
-taken. The native gem5 and Sniper backends carry the same shared header and the
-same option, but no native cell has been run for it.
+taken.
+
+All three backends now reach the option through the one shared rule. cache_sim
+takes `--record-governed-first on`, gem5 takes `--ecg-record-governed-first on`
+through a `governed_first` policy parameter, and Sniper reads
+`SNIPER_ECG_RECORD_GOVERNED_FIRST`, its record path being configured by
+environment rather than by a command line. All three hand the same
+`comparisonWatermark()` sequence to the rule, so they cannot disagree about
+expiry if a non-default clock is ever selected.
+
+**No native cell has been run**, and the native binaries are not rebuilt, so
+nothing on this page is a timing result or a native measurement. The wiring
+exists so that a native comparison is a build and a run rather than a
+plumbing exercise, and it is pinned by
+`scripts/test/test_governed_first_reaches_every_backend.py`, which fails if any
+of the sites is reverted and which also checks that the installed simulator
+checkouts have not drifted from the overlays that own them.
 
 ## Reproducing
 
