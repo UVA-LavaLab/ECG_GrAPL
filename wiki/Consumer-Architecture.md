@@ -8,7 +8,11 @@ that graph ranks help that consumer but leave it well short of P-OPT.
 
 It is not a new edge encoding, a deployable ECG policy, or a native
 performance result. **The rank-first arm lost**, as reported
-[below](#measured-patents-result). The default next-reference mechanism and
+[below](#measured-patents-result). The explanation that did hold
+for these kernels was eviction precedence, not candidate order; see the
+[mask failure taxonomy](Mask-Failure-Taxonomy) and
+[governed-first eviction](Governed-First-Eviction).
+The default next-reference mechanism and
 the base-first diagnostic keep their original semantics.
 
 ## Why the residual could not be an information problem

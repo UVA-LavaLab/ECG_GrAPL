@@ -50,8 +50,8 @@ The earlier PR R/LRU ratio is 0.6844. See [competitive results](Traversal-Metada
 | BC | Level-synchronous Brandes over an explicit source list, sorted forward/reverse levels | U32 depth, then F32 dependency; ordered-filtered |
 | TC | Degree-order orientation and node-iterator intersections | Dedicated read-only U64 target-row start; dense exact |
 
-Ordered-filtered metadata means **next potential designated read**, not next actual reference.
-Skipped work, invalidation and paid transitions follow the [filtered contract](ReusePlan-FlowThrough#ordered-filtered-algorithm-passes).
+Ordered-filtered metadata means **next potential designated read**, not next actual reference. That boundary also predicts where the mechanism works: the [mask failure taxonomy](Mask-Failure-Taxonomy) measures dense-exact kernels holding a live bound at 98.5-99.9% of evictions and expiring 0.0% of it, against BFS/BC/SSSP reaching eviction with a live bound on 8.9-26.6% of governed ways because roughly 72% has expired, 17-40% of the record stream in the past; CC shares the contract but was not measured. Read the ordered-filtered ratios above as this producer's results under that staleness, not as a ceiling for the approach.
+Skipped work, invalidation and paid transitions follow the [filtered contract](ReusePlan-FlowThrough#ordered-filtered-algorithm-passes). Dense-exact losses are losses of action instead, one of which is [corrected](Governed-First-Eviction) with the setup cost shown there.
 
 Totals include initialization, scheduling, orientation and record construction.
 Kernel snapshots preserve cache contents; current cache_sim record setup uses LRU.

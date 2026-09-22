@@ -86,3 +86,11 @@ compact producer is designed. The
 [consumer-architecture study](Consumer-Architecture) then tests whether the
 order that consumer applies to its candidates explains the traffic it still
 loses to P-OPT; it does not.
+
+The [mask failure taxonomy](Mask-Failure-Taxonomy) collects what those studies
+established into two measured groups: the dense kernels hold a live bound and
+were acting on it badly, while the frontier-filtered kernels lose most of their
+bounds to staleness before the bound is ever consulted. The first of those is
+addressed by [governed-first eviction](Governed-First-Eviction), which gives
+reuse-free structural lines strict eviction precedence and recovers kernel
+transfers on SpMV and PageRank at no storage cost; it is off by default.
