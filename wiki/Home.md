@@ -93,4 +93,6 @@ were acting on it badly, while the frontier-filtered kernels lose most of their
 bounds to staleness before the bound is ever consulted. The first of those is
 addressed by [governed-first eviction](Governed-First-Eviction), which gives
 reuse-free structural lines strict eviction precedence and recovers kernel
-transfers on SpMV and PageRank at no storage cost; it is off by default.
+transfers on SpMV and PageRank at no storage cost. That result holds at 8
+MiB/16-way and is measured not to hold at 24 MiB, so the mitigation is
+capacity-pressure dependent. It is off by default.

@@ -6,11 +6,16 @@ of SpMV evictions and 34.7% of PageRank evictions the victim the record rule was
 handed was not a governed line at all, so the rule passed it through while
 governed property lines were displaced by a structural stream.
 
-**The arm won on both kernels**, which is unusual enough on this page's
-neighbours to state plainly up front. It is a result about `selectVictim`
-against its own previous ordering. It is **not** a competitiveness claim against
-GRASP or P-OPT, and it is not a timing result — `timing_valid_for_speedup` is
-`false` in every receipt quoted here.
+**The arm won on both kernels at 8 MiB/16-way**, and the capacity qualifier is
+part of the result rather than a hedge. A second reading at 24 MiB, reported in
+[how the result depends on capacity](#how-the-result-depends-on-capacity),
+**loses to GRASP on both kernels and regresses on SpMV**. Every competitive
+statement on this page is therefore an 8 MiB statement, and the mitigation is
+known to be capacity-pressure dependent.
+
+The gated result is about `selectVictim` against its own previous ordering. It is
+not a timing result — `timing_valid_for_speedup` is `false` in every receipt
+quoted here.
 
 The rule is off by default, as `--record-governed-first no`.
 
@@ -222,8 +227,11 @@ to the window rule, and no change to what the producer publishes.
 
 - **The frozen gate is arm-to-arm.** The matched baseline comparison in the
   next section was authorized and gated separately, as a reproduction check; it
-  is reported as a measured ROI comparison on SpMV at one capacity, not as a
-  general competitiveness claim for the complete design.
+  is reported as a measured ROI comparison at 8 MiB/16-way, not as a general
+  competitiveness claim for the complete design.
+- **Not capacity-general.** A preregistered reading at 24 MiB reverses the
+  comparison against GRASP on both kernels. See below; it is a measured
+  boundary, not an untested limit.
 - **Nothing about BFS, SSSP or BC.** They were excluded from the study because
   they lack a live bound at the moment of choice and an ordering rule cannot
   supply one. Governed-first may still pay there for the same reuse-free-stream
@@ -259,7 +267,7 @@ The comparison is therefore not a cross-study inference. `benchmark_binary_sha25
 is `33b3620a...` for the ECG arms and for both baselines, and `graph_sha256` is
 `991199a8...` for every row: **the same executable read the same graph bytes.**
 
-| SpMV, 8 MiB/16-way, 2 passes | Common setup | Mechanism prep | ROI kernel | ECG's ROI margin |
+| SpMV, **8 MiB**/16-way, 2 passes | Common setup | Mechanism prep | ROI kernel | ECG's ROI margin |
 |---|---:|---:|---:|---:|
 | GRASP_PAPER | 2,877,491 | 0 | 15,456,930 | **+20.49%** |
 | `POPT:UNCHARGED` | 2,877,491 | 6,416,016 | 12,398,416 | **+0.88%** |
@@ -273,17 +281,17 @@ all — not the ECG carrier, and not P-OPT's matrix, which for PageRank reports
 its future information with no storage and no stream cost, the most favourable
 form available, and the ECG carrier cost is real but uncounted here.
 
-| PageRank, 8 MiB/16-way, 2 iterations | ROI kernel | ECG's ROI margin |
+| PageRank, **8 MiB**/16-way, 2 iterations | ROI kernel | ECG's ROI margin |
 |---|---:|---:|
 | GRASP_PAPER | 15,975,818 | **+18.56%** |
 | `POPT:UNCHARGED` | 13,880,532 | **+6.26%** |
 | ECG base-first (no governed-first) | 16,961,478 | −5.79% |
 | **ECG governed-first** | **13,011,200** | — |
 
-**On PageRank the rule is the difference between losing and leading.** Without
-it, ECG is 6.17% worse than GRASP and 22.20% worse than the favourable P-OPT
-control. With it, ECG leads both, and the P-OPT margin of 6.26% is seven times
-SpMV's.
+**At this capacity, on PageRank, the rule is the difference between losing and
+leading.** Without it, ECG is 6.17% worse than GRASP and 22.20% worse than the
+favourable P-OPT control. With it, ECG leads both, and the P-OPT margin of 6.26%
+is seven times SpMV's. At 24 MiB it leads neither.
 
 Structural misses are **5,073,432 for every PageRank policy** — GRASP, P-OPT and
 both ECG arms, identical to the digit. The structural stream is
@@ -298,8 +306,8 @@ it. Above that floor sits each mechanism's own preprocessing: P-OPT's rank
 matrix costs 6,416,016 and the ECG record carrier costs 16,317,610, which is
 2.54 times P-OPT's.
 
-On the ROI the governed-first arm leads both baselines, including the
-**favourable** P-OPT control — full data capacity, no ways reserved for the rank
+On the ROI at this capacity the governed-first arm leads both baselines,
+including the **favourable** P-OPT control — full data capacity, no ways reserved for the rank
 matrix, matrix stream not replayed — which strengthens the reading rather than
 weakening it. But the P-OPT margin is 109,054 transfers, or **0.88%**: that is a
 crossing, not a comfortable lead, on one graph at one capacity, and it should be
@@ -328,6 +336,72 @@ Construction locality is where that deficit could shrink: construction reads the
 graph 3.93 times over at a 21% hit rate, while its writebacks are already within
 10% of the floor implied by the carrier's size. So the lever is the read path,
 not a smaller carrier. No lower-cost construction mode is implemented today.
+
+## How the result depends on capacity
+
+The comparison above was repeated at **24 MiB/16-way**, one capacity change and
+nothing else, on the same graph with the same argv. The gate and a prediction
+were frozen before the run. The result is negative and bounds the claim.
+
+| SpMV | 8 MiB | 24 MiB |
+|---|---:|---:|
+| GRASP_PAPER | 15,456,930 | 5,754,248 |
+| `POPT:UNCHARGED` | 12,398,416 | 6,249,737 |
+| ECG base-first | 14,916,849 | 6,035,369 |
+| **ECG governed-first** | **12,289,362** | **6,106,480** |
+| ECG vs GRASP | +20.49% | **−6.12%** |
+| ECG vs P-OPT | +0.88% | +2.29% |
+| governed-first over base-first | +17.61% | **−1.18%** |
+
+| PageRank | 8 MiB | 24 MiB |
+|---|---:|---:|
+| GRASP_PAPER | 15,975,818 | 5,946,046 |
+| `POPT:UNCHARGED` | 13,880,532 | 6,085,744 |
+| ECG base-first | 16,961,478 | 7,174,510 |
+| **ECG governed-first** | **13,011,200** | **6,118,682** |
+| ECG vs GRASP | +18.56% | **−2.90%** |
+| ECG vs P-OPT | +6.26% | **−0.54%** |
+| governed-first over base-first | +23.29% | +14.72% |
+
+At 24 MiB the arm leads neither baseline on PageRank and loses to GRASP on
+SpMV, so the competitive claim holds at 8 MiB and not at 24 MiB. **GRASP scales
+with capacity better than ECG does** — its transfers fall 62.8% between the two
+points where ECG's fall 50 to 53% — and that, rather than P-OPT, is what ends
+the claim. ECG still leads the favourable P-OPT control on SpMV at 24 MiB.
+
+### The mechanism holds; the ledger flips
+
+The reuse-free account is not what breaks. Structural misses are identical **to
+the digit** across arms at 24 MiB as well, and governed-first still cuts property
+misses, by 9.6% on SpMV and 64.6% on PageRank. What changes is the other side:
+
+| Governed-first vs base-first at 24 MiB | Property | Structural | Writebacks | Net |
+|---|---:|---:|---:|---:|
+| SpMV | −54,447 | 0 | **+125,558** | **+71,111** |
+| PageRank | −911,816 | 0 | −144,012 | −1,055,828 |
+
+Both reconcile to their totals exactly, so **the SpMV regression is entirely a
+writeback effect**. Keeping property lines resident longer means more of them
+are dirty when they finally leave, and SpMV writes `y[]` on each of its
+11,324,304 property writes. That cost is invisible under pressure and dominant
+without it:
+
+| SpMV writebacks, base-first → governed-first | Change |
+|---|---:|
+| 8 MiB: 476,029 → 477,388 | +0.29% |
+| 24 MiB: 396,970 → 522,528 | **+31.63%** |
+
+The accurate statement of the mitigation is therefore narrower than a single
+capacity suggests: **governed-first buys misses and pays writebacks, and the
+trade is strongly favourable only while the cache is under capacity pressure.**
+PageRank still wins at 24 MiB because its property saving is an order of
+magnitude larger; SpMV does not.
+
+One further reading worth keeping. At 24 MiB, ECG base-first incurs **more**
+property misses than plain GRASP — 565,607 against 472,501 — although GRASP is
+its own base victim. The strictly-farther override is itself harmful at ample
+capacity, independently of governed-first, which is a separate finding about the
+record rule rather than about this mitigation.
 
 ## Status and default
 
