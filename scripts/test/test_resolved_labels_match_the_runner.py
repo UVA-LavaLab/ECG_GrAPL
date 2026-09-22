@@ -61,20 +61,27 @@ def _runner_labels(metadata):
     # parser cannot read; its labels take the other branch entirely.
     if "--graph" in options_text:
         options = algorithm_matrix.parse_options(str(options_text))
+        # Every label-affecting option must be forwarded. This mirrored the
+        # runner with only two of the trailing options for a while, which left
+        # the expiry clock unchecked and would have let a pressure-gate
+        # mismatch through. Forward all of them.
         return algorithm_matrix.policy_labels(
             [parse_policy_spec(policy) for policy in policies],
             options.record_base_policy, options.window_observer,
             options.record_model, options.window_candidate_rrpv,
             options.grasp_scope, options.popt_rank_mode,
             options.frontier_gating, options.grasp_reference, options.queries,
-            options.record_governed_first, options.record_store_bound)
+            options.record_governed_first, options.record_store_bound,
+            options.record_expiry_clock, options.record_pressure_gate)
     # PageRank: a separate kernel configured by environment, labelled by its
     # own branch of output_policy_labels.
     from types import SimpleNamespace
     args = SimpleNamespace(
         current_algorithms=False, current_pr_baselines=True, options="",
         record_governed_first=str(metadata.get("record_governed_first", "no")),
-        record_store_bound=str(metadata.get("record_store_bound", "drop")))
+        record_store_bound=str(metadata.get("record_store_bound", "drop")),
+        record_expiry_clock=str(metadata.get("record_expiry_clock", "progress")),
+        record_pressure_gate=str(metadata.get("record_pressure_gate", "no")))
     return roi_matrix.output_policy_labels(
         args, [parse_policy_spec(policy) for policy in policies])
 
@@ -111,7 +118,9 @@ def test_resolved_expectations_match_what_the_runner_emits(tmp_path, profile):
             str(metadata.get("grasp_reference", "off")),
             int(metadata.get("query_count", 1)),
             str(metadata.get("record_governed_first", "no")),
-            str(metadata.get("record_store_bound", "drop")))
+            str(metadata.get("record_store_bound", "drop")),
+            str(metadata.get("record_expiry_clock", "progress")),
+            str(metadata.get("record_pressure_gate", "no")))
         assert sorted(gate) == sorted(produced), (
             f"{job.get('job_id', '?')}: the completion and marker checks expect "
             f"{gate} but the runner emits {produced}; a correctly executed cell "
