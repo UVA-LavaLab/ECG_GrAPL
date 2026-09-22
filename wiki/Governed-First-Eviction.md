@@ -94,10 +94,11 @@ SpMV's setup-inclusive traffic is reported rather than gated: 34,111,950 to
 31,484,463, **+7.70%**, with the setup phase **byte-identical** at 19,195,101 in
 both arms, as it must be since the option only changes eviction during the
 kernel. PageRank's carrier is prepared outside the measured run, so its kernel
-figure is its whole figure. PageRank also has **no baseline context at all** —
-neither this profile nor the 42-cell study carries a GRASP or P-OPT PageRank
-row — so its result is arm-to-arm only, and nothing about PageRank against
-either baseline is claimed anywhere on this page.
+figure is its whole figure. No matched GRASP or P-OPT PageRank cell has been
+run, so its gate is arm-to-arm and nothing about PageRank against either
+baseline is claimed on this page. Its number also needs the context in
+[what PageRank's margin is](#what-pageranks-margin-actually-is) to be read
+correctly.
 
 The arms compute the same answer. SpMV's `result_digest` is
 `55e3fc26a1027ddb` in both; PageRank's `pr_score_checksum` is
@@ -124,6 +125,37 @@ stream that gained nothing from residency.
 
 Stated as residency rather than traffic: governed ways per decision rise from
 13.21 of 16 to 15.39 of 16 on SpMV, and from 12.66 to 15.52 on PageRank.
+
+## What PageRank's margin actually is
+
+PageRank's +23.29% is correctly gated against its same-build control, but it is
+largely **not new benefit**, and reporting it without this would overstate it.
+
+The same PageRank configuration — same graph, 33,037,894 records, 177,448,792
+total accesses, `pr_score_checksum` `6249d06ef4cc2ed7`, identical structural
+misses — measured 12,865,017 kernel transfers in September builds and 16,961,478
+today. The cause is a deliberate correctness fix. Earlier, an `UNKNOWN` record
+ranked as infinity and so made its line effectively immortal: the mechanism
+protected lines it knew **nothing** about. That rule was removed, leaving the
+override to compare only two live property futures, and the cost is measurable
+at **+31.84%** on PageRank.
+
+| PageRank, same graph and geometry | Kernel transfers |
+|---|---:|
+| With `UNKNOWN` pinning lines (removed) | 12,865,017 |
+| With `UNKNOWN` LRU-neutral — today's control | 16,961,478 |
+| **With `UNKNOWN` LRU-neutral plus governed-first** | **13,011,200** |
+
+Governed-first recovers **96.4%** of what the fix cost. So the honest statement
+is that it re-earns, through a rule that can be defended in hardware — evict a
+line the mechanism does not govern before one it does — most of a benefit that
+had previously come from a rule that cannot be defended at all.
+
+The census also explains why SpMV was almost untouched by that same fix, which
+is why its figures reproduce byte-identically across builds while PageRank's
+did not: SpMV inspects 0.00114 unknown ways per eviction decision and PageRank
+inspects 0.18073, a factor of 159. The two observations corroborate rather than
+conflict.
 
 ## Decision split
 
