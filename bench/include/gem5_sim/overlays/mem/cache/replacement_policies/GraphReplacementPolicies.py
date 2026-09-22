@@ -116,6 +116,10 @@ class GraphEcgRecordRP(BaseReplacementPolicy):
     cxx_class = "gem5::replacement_policy::GraphEcgRecordRP"
 
     enable_replacement = Param.Bool(True, "False retains LRU for a prefetch-only control")
+    governed_first = Param.Bool(
+        False,
+        "True evicts the least recently used ungoverned way before consulting the "
+        "base victim. Off by default so the native path matches the historical rule.")
     hot_fraction = Param.Float(0.15, "Region-based GRASP fallback hot fraction")
     llc_size_bytes = Param.Unsigned(8388608, "Actual LLC data capacity")
     line_size = Param.Unsigned(64, "Cache-line size")

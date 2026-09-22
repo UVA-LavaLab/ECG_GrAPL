@@ -1610,6 +1610,10 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             # the algorithms CLI, so the opt-in victim-order arm travels here.
             "ECG_RECORD_GOVERNED_FIRST": str(int(
                 getattr(args, "record_governed_first", "no") == "on")),
+            # Sniper's record path reads SNIPER_-prefixed variables of its own,
+            # so the same arm has to be named twice or it silently stays off.
+            "SNIPER_ECG_RECORD_GOVERNED_FIRST": str(int(
+                getattr(args, "record_governed_first", "no") == "on")),
             "ECG_RECORD_DELIVERY_CLOCK": str(int(
                 getattr(args, "record_expiry_clock", "progress") == "delivery")),
         })
@@ -4214,6 +4218,10 @@ def run_gem5(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_size:
             "--ecg-minimum-mantissa-bits", str(args.ecg_record_minimum_mantissa_bits),
             "--mem-size", f"{parse_size_bytes(str(getattr(args, 'gem5_mem_size', '4GB')))}B",
         ])
+        # Emitted only when enabled, so every command recorded before the
+        # option existed keeps its exact argv and configuration hash.
+        if getattr(args, "record_governed_first", "no") == "on":
+            cmd.extend(["--ecg-record-governed-first", "on"])
         if getattr(args, "ecg_equivalence", False):
             cmd.append("--ecg-equivalence")
 

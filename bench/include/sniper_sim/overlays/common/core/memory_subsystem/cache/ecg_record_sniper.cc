@@ -103,6 +103,14 @@ void require(ecg_record::Status status, const char* operation)
     std::abort();
 }
 
+// Off unless explicitly enabled, so the native path reproduces the historical
+// rule by default. Fail-closed on anything that is not exactly 0 or 1, matching
+// envUnsigned rather than silently treating a typo as false.
+bool configuredGovernedFirst()
+{
+    return envUnsigned("SNIPER_ECG_RECORD_GOVERNED_FIRST", 0, 0, 1) != 0;
+}
+
 ecg_record::Mechanism configuredMechanism()
 {
     ecg_record::Mechanism mechanism;
@@ -477,8 +485,17 @@ receiverWatermark(
     if (!replacementActive(core_id) ||
         !core.runtime.watermarkValid())
         return false;
-    sequence = core.runtime.watermark();
+    // The same accessor cache_sim and gem5 use. At the default progress clock
+    // it equals watermark(); reading it here keeps the three backends from
+    // diverging if the delivered clock is ever enabled natively.
+    sequence = core.runtime.comparisonWatermark();
     return true;
+}
+
+bool
+recordGovernedFirst()
+{
+    return configuredGovernedFirst();
 }
 
 ecg_record::State

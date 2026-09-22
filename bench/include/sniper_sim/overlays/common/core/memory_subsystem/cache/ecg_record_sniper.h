@@ -100,6 +100,7 @@ uint64_t completedSequence(uint32_t core_id);
 bool receiverWatermark(
     uint32_t core_id, uint64_t& sequence,
     ecg_record::Layout& layout);
+bool recordGovernedFirst();
 ecg_record::State victimState(
     uint32_t core_id, const ecg_record::LineMetadata& metadata,
     bool enabled);

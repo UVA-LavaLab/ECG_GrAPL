@@ -292,6 +292,11 @@ def parse_args():
         help="Collect actual-load semantic fingerprints; diagnostic execution only.")
     parser.add_argument("--ecg-mechanism", default="replacement",
         choices=["transport", "replacement", "prefetch", "replacement-prefetch"])
+    parser.add_argument("--ecg-record-governed-first", default="no",
+        choices=["no", "on"],
+        help="On evicts the least recently used ungoverned way before the base "
+             "victim. Off by default so the native rule matches every result "
+             "recorded before the option existed.")
     parser.add_argument("--ecg-record-bytes", type=int, default=0, choices=[0, 4, 8],
         help="Zero selects the smallest sufficient graph-derived record.")
     parser.add_argument("--ecg-minimum-mantissa-bits", type=int, default=0)
@@ -391,6 +396,7 @@ def create_system(args):
         l3_policy_kwargs["native_record"] = record_native
         l3_policy_kwargs["enable_replacement"] = record_native and args.ecg_mechanism in (
             "replacement", "replacement-prefetch")
+        l3_policy_kwargs["governed_first"] = args.ecg_record_governed_first == "on"
     if args.policy in ("GRASP", "POPT", "ECG"):
         l3_policy_kwargs["num_buckets"] = 11
 

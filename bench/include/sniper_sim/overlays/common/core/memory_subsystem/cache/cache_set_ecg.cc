@@ -1243,10 +1243,13 @@ CacheSetECG::getReplacementIndex(CacheCntlr *cntlr)
             eligible_count > 0,
             "Sniper ECG record found no eligible replacement way");
          std::size_t victim = 0;
+         ecg_record::VictimOptions options;
+         options.governed_first =
+            graphbrew::sniper::record::recordGovernedFirst();
          LOG_ASSERT_ERROR(
             ecg_record::selectVictim(
                layout, ways.data(), eligible_count,
-               sequence, victim) == ecg_record::Status::OK,
+               sequence, victim, nullptr, options) == ecg_record::Status::OK,
             "Sniper ECG record victim selection failed");
          const UInt32 selected = eligible[victim];
          applyPendingInsertion(selected);

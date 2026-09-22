@@ -64,6 +64,7 @@ class GraphEcgRecordRP : public Base
     ecg_record::WayState way(const RecordReplData& data) const;
 
     const bool replacementEnabled;
+    const bool governedFirst;
     const uint64_t llcSize;
     const uint32_t lineSize;
     const double hotFraction;

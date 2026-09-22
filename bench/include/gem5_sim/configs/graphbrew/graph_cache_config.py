@@ -110,6 +110,7 @@ def make_replacement_policy(name, **kwargs):
         if kwargs.get("native_record", False):
             return GraphEcgRecordRP(
                 enable_replacement=kwargs.get("enable_replacement", True),
+                governed_first=kwargs.get("governed_first", False),
                 llc_size_bytes=kwargs.get("llc_size_bytes", 8388608),
                 sideband_path=sideband_path,
             )

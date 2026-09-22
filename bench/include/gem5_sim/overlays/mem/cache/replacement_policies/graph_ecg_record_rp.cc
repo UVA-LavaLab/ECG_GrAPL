@@ -16,6 +16,7 @@ namespace replacement_policy
 
 GraphEcgRecordRP::GraphEcgRecordRP(const Params& params)
     : Base(params), replacementEnabled(params.enable_replacement),
+      governedFirst(params.governed_first),
       llcSize(params.llc_size_bytes), lineSize(params.line_size),
       hotFraction(params.hot_fraction), sidebandPath(params.sideband_path)
 {
@@ -101,6 +102,7 @@ GraphEcgRecordRP::configureEcgRecord(const ecg_record::NativeConfiguration& valu
         std::cout << "[ECG-RECORD-RP ";
         ecg_record::writeLayoutFields(std::cout, layout);
         std::cout << " replacement=" << replacementEnabled
+                  << " governed_first=" << governedFirst
                   << " prediction_bits_per_line=67"
                   << " matrix_bytes=0]\n";
     }
@@ -273,8 +275,11 @@ GraphEcgRecordRP::getVictim(const ReplacementCandidates& candidates) const
         ways[index] = way(*std::static_pointer_cast<RecordReplData>(
             candidates[index]->replacementData));
     std::size_t victim = 0;
+    ecg_record::VictimOptions options;
+    options.governed_first = governedFirst;
     fatal_if(ecg_record::selectVictim(
-        receiver.layout(), ways.data(), candidates.size(), receiver.watermark(), victim) !=
+        receiver.layout(), ways.data(), candidates.size(),
+        receiver.comparisonWatermark(), victim, nullptr, options) !=
             ecg_record::Status::OK, "%s could not select an ECG victim", name());
     return candidates[victim];
 }
