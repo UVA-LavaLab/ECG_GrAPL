@@ -915,7 +915,7 @@ def run_cache_cell(
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
             options.frontier_gating, options.grasp_reference, options.queries,
             options.record_governed_first, options.record_store_bound,
-            options.record_expiry_clock)[0]
+            options.record_expiry_clock, options.record_pressure_gate)[0]
         if reference:
             row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:

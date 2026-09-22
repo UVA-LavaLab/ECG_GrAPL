@@ -74,6 +74,66 @@ def test_default_victim_arm_is_not_emitted(tmp_path, option, default):
         "commands and their configuration hashes are unchanged")
 
 
+def _row_label_from_the_real_cell(tmp_path, extra_options):
+    """The label `run_cache_cell` actually puts in the row.
+
+    Reconstructing the call is not enough and was the mistake that let this
+    through twice. `policy_labels` has several call sites — the row writer, the
+    outer `output_policy_labels`, and the flow's expectation helper — and each
+    was taught the options separately. A test that calls `policy_labels` itself
+    passes no matter what the row writer forwards.
+
+    So this invokes `run_cache_cell` and intercepts `policy_labels` to capture
+    what that site produced, which is the value that lands in the CSV.
+    """
+    from scripts.experiments.ecg import algorithm_matrix, roi_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    args = roi_matrix.parse_args([
+        "--suite", "cache-sim", "--benchmark", "spmv", "--current-algorithms",
+        "--options", f"--graph {graph} --repeat 2 --record-base-policy GRASP_PAPER "
+                     f"--record-preprocess csr {extra_options}",
+        "--policies", "ECG:replacement", "--l3-sizes", "8MB", "--l3-ways", "16",
+        "--out-dir", str(tmp_path), "--no-build",
+    ])
+    produced: list[str] = []
+    real = algorithm_matrix.policy_labels
+
+    def recording(*a, **kw):
+        labels = real(*a, **kw)
+        produced.extend(labels)
+        return labels
+
+    algorithm_matrix.policy_labels = recording
+    try:
+        algorithm_matrix.run_cache_cell(
+            args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "8MB",
+            lambda *a, **k: (_ for _ in ()).throw(RuntimeError("stop before simulating")),
+            roi_matrix.parse_size_bytes)
+    except Exception:
+        pass
+    finally:
+        algorithm_matrix.policy_labels = real
+    assert produced, "run_cache_cell never reached the row label site"
+    return produced[0]
+
+
+@pytest.mark.parametrize("extra,suffix", [
+    ("--record-governed-first on", "_GOVERNED_FIRST"),
+    ("--record-pressure-gate on", "_PRESSURE_GATE"),
+    ("--record-store-bound keep", "_STORE_BOUND"),
+    ("--record-governed-first on --record-pressure-gate on",
+     "_GOVERNED_FIRST_PRESSURE_GATE"),
+])
+def test_the_row_label_site_carries_every_arm(tmp_path, extra, suffix):
+    base = _row_label_from_the_real_cell(tmp_path, "")
+    assert base == "ECG_REPLACEMENT_BASE_GRASP_PAPER"
+    assert _row_label_from_the_real_cell(tmp_path, extra) == base + suffix, (
+        f"run_cache_cell's row label drops {extra!r}, so a correctly executed "
+        "cell is rejected as a missing policy")
+
+
 def test_victim_arm_labels_are_distinct_and_suffixed():
     from scripts.experiments.ecg import algorithm_matrix
     from scripts.experiments.ecg.policy_specs import parse_policy_spec
