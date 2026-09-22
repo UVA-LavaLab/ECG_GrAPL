@@ -94,7 +94,10 @@ SpMV's setup-inclusive traffic is reported rather than gated: 34,111,950 to
 31,484,463, **+7.70%**, with the setup phase **byte-identical** at 19,195,101 in
 both arms, as it must be since the option only changes eviction during the
 kernel. PageRank's carrier is prepared outside the measured run, so its kernel
-figure is its whole figure and it has no setup-inclusive counterpart.
+figure is its whole figure. PageRank also has **no baseline context at all** —
+neither this profile nor the 42-cell study carries a GRASP or P-OPT PageRank
+row — so its result is arm-to-arm only, and nothing about PageRank against
+either baseline is claimed anywhere on this page.
 
 The arms compute the same answer. SpMV's `result_digest` is
 `55e3fc26a1027ddb` in both; PageRank's `pr_score_checksum` is
@@ -175,10 +178,10 @@ to the window rule, and no change to what the producer publishes.
 
 ## What this result does not claim
 
-- **Not a competitiveness claim, and the setup line is why.** The gate is
-  arm-to-arm within one build. Context is given in the next section with both
-  halves of the accounting; the kernel-transfer half is favourable and the
-  setup-inclusive half is not, and neither is a preregistered claim.
+- **The frozen gate is arm-to-arm.** The matched baseline comparison in the
+  next section was authorized and gated separately, as a reproduction check; it
+  is reported as a measured ROI comparison on SpMV at one capacity, not as a
+  general competitiveness claim for the complete design.
 - **Nothing about BFS, SSSP or BC.** They were excluded from the study because
   they lack a live bound at the moment of choice and an ordering rule cannot
   supply one. Governed-first may still pay there for the same reuse-free-stream
@@ -186,50 +189,73 @@ to the window rule, and no change to what the producer publishes.
   its own study and its own gate.
 - **Nothing about insertion.** The record bound is still not used to place an
   incoming line. That remains the open candidate for the dense kernels.
+- **Nothing about PageRank versus a baseline**, which has never been measured
+  here, and nothing about another graph, another capacity or another base policy.
 - **Nothing about timing.** These are functional cache results.
 
-## Context against the named baselines, with setup shown
+## Matched comparison against the named baselines
 
-This context was **not** part of the frozen gate, and no threshold here was set
-before the result existed. It is reported because omitting it would be
-selective, and it is reported with its unfavourable half attached.
+The region of interest for this work is the **algorithm kernel**: the mask is
+what the cache consults while the kernel runs, and building the mask is
+preprocessing that precedes it. The receipts separate the two phases, the frozen
+gate above is on kernel transfers, and so is the comparison here. Construction
+is reported directly after, as a one-time cost with a break-even, because it is
+a real cost and hiding it would be dishonest — not because it is the metric the
+mechanism is judged on.
 
-The SpMV control reproduces the `ECG_REPLACEMENT_BASE_GRASP_PAPER` cell of the
-42-cell `competitive_8mb_patents_074cbf75` study **exactly on both phases** —
-kernel 14,916,849, setup 19,195,101, `result_digest` `55e3fc26a1027ddb`. A
-shared cell that reproduces byte-identically demonstrates a common footing for
-SpMV at this capacity rather than assuming one, which is what makes the
-surrounding rows worth printing at all.
+The `ecg_matched_baseline_cache` profile ran `GRASP_PAPER` and `POPT:UNCHARGED`
+on the same graph, repeat count and geometry as the governed-first cells. Its
+gate was a reproduction check frozen before the run — both baselines within
+0.5% of their recorded figures — and both reproduced at **zero drift**:
+15,456,930 and 12,398,416 exactly, setup 2,877,491 and 9,293,507 exactly,
+`result_digest` `55e3fc26a1027ddb` throughout.
 
-| SpMV, 8 MiB/16-way | Kernel | Setup | Setup+kernel |
-|---|---:|---:|---:|
-| LRU | 24,143,623 | 2,877,491 | 27,021,114 |
-| GRASP_PAPER | 15,456,930 | 2,877,491 | 18,334,421 |
-| `POPT:UNCHARGED` | 12,398,416 | 9,293,507 | 21,691,923 |
-| ECG-R/G base-first | 14,916,849 | 19,195,101 | 34,111,950 |
-| **ECG-R/G governed-first** | **12,289,362** | 19,195,101 | 31,484,463 |
+The comparison is therefore not a cross-study inference. `benchmark_binary_sha256`
+is `33b3620a...` for the ECG arms and for both baselines, and `graph_sha256` is
+`991199a8...` for every row: **the same executable read the same graph bytes.**
 
-On **kernel transfers** the governed-first arm crosses `POPT:UNCHARGED` by
-109,054, or 0.88%, and closes `(14,916,849 - 12,289,362) / (14,916,849 -
-12,398,416) = 1.0433` of the ECG-to-P-OPT kernel gap. `POPT:UNCHARGED` is the
-favourable P-OPT control: full data capacity, no ways reserved for its rank
-matrix, construction counted but the matrix stream not replayed.
+| SpMV, 8 MiB/16-way, 2 passes | Common setup | Mechanism prep | ROI kernel | ECG's ROI margin |
+|---|---:|---:|---:|---:|
+| GRASP_PAPER | 2,877,491 | 0 | 15,456,930 | **+20.49%** |
+| `POPT:UNCHARGED` | 2,877,491 | 6,416,016 | 12,398,416 | **+0.88%** |
+| **ECG-R/G governed-first** | 2,877,491 | 16,317,610 | **12,289,362** | — |
 
-On **setup-inclusive traffic the arm loses to every baseline in the table** — by
-45.14% against P-OPT and 71.72% against GRASP — because record construction
-costs 19,195,101 transfers where GRASP pays 2,877,491 and P-OPT pays 9,293,507.
-Construction would have to fall by 51.0%, to below 9,402,561 setup transfers,
-merely to tie `POPT:UNCHARGED` on the setup-inclusive total for a single SpMV
-pass. Against GRASP's 2,877,491 no plausible reduction closes it on one pass;
-that comparison requires reuse across passes or queries, which is measured
-separately in [reusable SpMV queries](Reusable-SpMV-Queries) and must not be
-obtained by relabelling a longer single run as independent work.
+Every policy pays a common 2,877,491 transfers before the kernel — loading the
+CSR and initializing the property array — and LRU and GRASP pay nothing beyond
+it. Above that floor sits each mechanism's own preprocessing: P-OPT's rank
+matrix costs 6,416,016 and the ECG record carrier costs 16,317,610, which is
+2.54 times P-OPT's.
 
-The honest reading is therefore narrow and specific. **Once the victim rule is
-right, the mechanism is competitive on the traffic it is meant to improve, and
-its remaining cost is in producing the carrier.** Confirming even that much
-needs `POPT:UNCHARGED` and `GRASP_PAPER` cells in this same profile and build,
-which have not been run.
+On the ROI the governed-first arm leads both baselines, including the
+**favourable** P-OPT control — full data capacity, no ways reserved for the rank
+matrix, matrix stream not replayed — which strengthens the reading rather than
+weakening it. But the P-OPT margin is 109,054 transfers, or **0.88%**: that is a
+crossing, not a comfortable lead, on one graph at one capacity, and it should be
+read as a crossing.
+
+### Construction as a one-time cost
+
+Because the carrier is built once and consulted by every subsequent kernel
+invocation, its cost amortizes, and the break-even is the honest way to state
+it:
+
+| | Prep deficit | ROI gain per measured kernel | Break-even |
+|---|---:|---:|---|
+| vs GRASP_PAPER | 16,317,610 | 3,167,568 | **~5 kernels** (~10 passes) |
+| vs `POPT:UNCHARGED` | 9,901,594 | 109,054 | **~91 kernels** (~182 passes) |
+
+ECG repays its carrier against GRASP in roughly ten SpMV passes; against P-OPT
+it needs roughly 182, because the ROI margin there is thin. Both figures are
+**linear extrapolations from a two-pass measurement, not measurements** — kernel
+traffic is not guaranteed linear in passes, since the first pass is cold and
+later ones warm. Measuring it is the job of
+[reusable SpMV queries](Reusable-SpMV-Queries), and it must not be approximated
+by enlarging `--repeat` and relabelling the result as independent queries.
+
+Construction locality is where that deficit could shrink: construction reads the
+graph 3.93 times over at a 21% hit rate, while its writebacks are already within
+10% of the floor implied by the carrier's size. So the lever is the read path,
+not a smaller carrier. No lower-cost construction mode is implemented today.
 
 ## Status and default
 
