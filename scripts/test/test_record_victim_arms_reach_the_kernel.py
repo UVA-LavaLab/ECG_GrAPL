@@ -53,6 +53,7 @@ def _captured_command(tmp_path, extra_options):
     ("--record-governed-first", "on", "--record-governed-first"),
     ("--record-store-bound", "keep", "--record-store-bound"),
     ("--record-pressure-gate", "on", "--record-pressure-gate"),
+    ("--record-pressure-gate", "duel", "--record-pressure-gate"),
 ])
 def test_requested_victim_arm_reaches_the_kernel_argv(tmp_path, option, value, flag):
     command = _captured_command(tmp_path, f"{option} {value}")
@@ -125,6 +126,9 @@ def _row_label_from_the_real_cell(tmp_path, extra_options):
     ("--record-store-bound keep", "_STORE_BOUND"),
     ("--record-governed-first on --record-pressure-gate on",
      "_GOVERNED_FIRST_PRESSURE_GATE"),
+    ("--record-pressure-gate duel", "_PRESSURE_DUEL"),
+    ("--record-governed-first on --record-pressure-gate duel",
+     "_GOVERNED_FIRST_PRESSURE_DUEL"),
 ])
 def test_the_row_label_site_carries_every_arm(tmp_path, extra, suffix):
     base = _row_label_from_the_real_cell(tmp_path, "")
@@ -154,7 +158,13 @@ def test_victim_arm_labels_are_distinct_and_suffixed():
     both = algorithm_matrix.policy_labels(
         spec, base_policy="GRASP_PAPER", governed_first="on", pressure_gate="on")[0]
     assert both == base + "_GOVERNED_FIRST_PRESSURE_GATE"
-    assert len({base, governed, stored, gated, both}) == 5, (
+    dueled = algorithm_matrix.policy_labels(
+        spec, base_policy="GRASP_PAPER", pressure_gate="duel")[0]
+    both_dueled = algorithm_matrix.policy_labels(
+        spec, base_policy="GRASP_PAPER", governed_first="on", pressure_gate="duel")[0]
+    assert dueled == base + "_PRESSURE_DUEL"
+    assert both_dueled == base + "_GOVERNED_FIRST_PRESSURE_DUEL"
+    assert len({base, governed, stored, gated, both, dueled, both_dueled}) == 7, (
         "each arm needs a distinct output label or paired cells collide in one matrix")
 
 
@@ -193,8 +203,9 @@ def test_pagerank_arms_do_not_collide():
         "the PageRank control and treatment would share one row label")
 
 
+@pytest.mark.parametrize("gate", ["no", "on", "duel"])
 @pytest.mark.parametrize("arm", ["no", "on"])
-def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm):
+def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm, gate):
     """The invariant that five diverging label sites all violated.
 
     Expected labels are computed in the flow's completion check, and actual
@@ -210,7 +221,7 @@ def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm):
 
     produced = algorithm_matrix.policy_labels(
         [parse_policy_spec("ECG:replacement")], "GRASP_PAPER", "off", "next", 6,
-        "all", "future", "enabled", "off", 1, arm, "drop")[0]
+        "all", "future", "enabled", "off", 1, arm, "drop", "progress", gate)[0]
 
     csv_path = tmp_path / "roi_matrix.csv"
     with csv_path.open("w", newline="") as handle:
@@ -220,12 +231,12 @@ def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm):
 
     status, detail = experiment_run.csv_status(
         csv_path, ["ECG:replacement"], "GRASP_PAPER", "off", "next", 6,
-        "all", "future", "enabled", "off", 1, arm, "drop")
+        "all", "future", "enabled", "off", 1, arm, "drop", "progress", gate)
     assert status == "ok", (
         f"the completion check rejected the label the runner produces: {detail}")
 
 
-@pytest.mark.parametrize("gate", ["no", "on"])
+@pytest.mark.parametrize("gate", ["no", "on", "duel"])
 @pytest.mark.parametrize("governed", ["no", "on"])
 def test_pressure_gate_label_agrees_across_every_decider(gate, governed):
     """The gate is the fourth option to change a label; pin it like the others.
@@ -247,9 +258,9 @@ def test_pressure_gate_label_agrees_across_every_decider(gate, governed):
         ["ECG:replacement"], "LRU", "off", "next", 6, "all", "future",
         "enabled", "off", 1, governed, "drop", "progress", gate)
     assert expected == produced, "the flow expects labels the runner does not produce"
-    if gate == "on":
-        assert produced[0].endswith("_PRESSURE_GATE"), (
-            "the gate must reach the label even when every other option is default")
+    suffix = {"no": "", "on": "_PRESSURE_GATE", "duel": "_PRESSURE_DUEL"}[gate]
+    assert produced[0].endswith(suffix) and produced[0].count("_PRESSURE_") == (gate != "no"), (
+        "the gate must reach the label even when every other option is default")
 
 
 @pytest.mark.parametrize("arm", ["no", "on"])
@@ -277,11 +288,11 @@ def test_every_expected_label_source_agrees(arm):
         "the flow expects labels the runner does not produce")
 
 
-def _runner_cell(tmp_path, extra_options):
+def _runner_cell(tmp_path, extra_options, l3_size="2048B", l3_ways="4"):
     """The argv and environment the runner would execute, at fixture geometry.
 
     The caches are small enough that the fixture evicts, since a victim rule
-    that never runs cannot be observed.
+    that never runs cannot be observed. The default LLC has eight sets.
     """
     from scripts.experiments.ecg import algorithm_matrix, roi_matrix
     from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
@@ -292,7 +303,7 @@ def _runner_cell(tmp_path, extra_options):
         "--options", f"--graph {graph} --repeat 2 --record-base-policy GRASP_PAPER "
                      f"--record-preprocess csr {extra_options}",
         "--policies", "ECG:replacement", "--l1d-size", "128B", "--l1d-ways", "2",
-        "--l2-size", "256B", "--l2-ways", "2", "--l3-sizes", "2048B", "--l3-ways", "4",
+        "--l2-size", "256B", "--l2-ways", "2", "--l3-sizes", l3_size, "--l3-ways", l3_ways,
         "--out-dir", str(tmp_path), "--no-build",
     ])
     captured: list[tuple[list[str], dict[str, str]]] = []
@@ -303,7 +314,7 @@ def _runner_cell(tmp_path, extra_options):
 
     try:
         algorithm_matrix.run_cache_cell(
-            args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "2048B",
+            args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), l3_size,
             run_command, roi_matrix.parse_size_bytes)
     except Exception:
         pass
@@ -353,3 +364,217 @@ def test_pressure_gate_counts_the_lines_the_record_rule_governs(tmp_path, gate):
             "the gate must both relax and hold on this fixture, or the comparison is vacuous")
     assert results["0"] == results["1"], (
         "the victim decisions follow a region selector the record rule never reads")
+
+
+def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", l3_ways="2"):
+    """The argv and environment the runner would execute for PageRank.
+
+    PageRank is a separate executable that reads its record settings from the
+    environment, so the gate reaches it through a different site than the
+    algorithms CLI. The default LLC has 64 sets, the smallest the duel allows.
+    """
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    args = roi_matrix.parse_args([
+        "--suite", "cache-sim", "--benchmark", "pr", "--current-pr-baselines",
+        "--record-governed-first", governed, "--record-pressure-gate", gate,
+        "--options", f"-f {graph} -o 0 -n 1 -i 2 -t 0",
+        "--policies", "ECG:replacement", "--l1d-size", "128B", "--l1d-ways", "2",
+        "--l2-size", "256B", "--l2-ways", "2", "--l3-sizes", l3_size, "--l3-ways", l3_ways,
+        "--out-dir", str(tmp_path), "--no-build",
+    ])
+    captured: list[tuple[list[str], dict[str, str]]] = []
+
+    def run_command(command, cwd, env, *rest, **kw):
+        captured.append(([str(part) for part in command], dict(env)))
+        raise RuntimeError("stop after the command is built")
+
+    monkeypatch.setattr(roi_matrix, "run_command", run_command)
+    try:
+        roi_matrix.run_cache_sim(
+            args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), l3_size)
+    except Exception:
+        pass
+    assert captured, "run_cache_sim never reached the PageRank command"
+    return captured[0]
+
+
+@pytest.mark.parametrize("gate,value", [("no", "0"), ("on", "1"), ("duel", "2")])
+def test_pagerank_environment_carries_the_pressure_gate(tmp_path, monkeypatch, gate, value):
+    _, env = _pagerank_cell(tmp_path, monkeypatch, gate)
+    assert env["ECG_RECORD_PRESSURE_GATE"] == value
+
+
+@pytest.mark.parametrize("gate,suffix", [
+    ("no", ""), ("on", "_PRESSURE_GATE"), ("duel", "_PRESSURE_DUEL")])
+@pytest.mark.parametrize("governed", ["no", "on"])
+def test_pagerank_branch_labels_carry_the_pressure_gate(governed, gate, suffix):
+    """The PageRank branch labels the gate, and the flow expects that label.
+
+    PageRank rows are labelled by output_policy_labels, while the completion
+    check computes what it expects through expected_labels_for. The two are
+    separate code, so each gate value is pinned across both.
+    """
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    args = SimpleNamespace(
+        current_algorithms=False, current_pr_baselines=True,
+        record_governed_first=governed, record_store_bound="drop",
+        record_expiry_clock="progress", record_pressure_gate=gate, options="")
+    produced = roi_matrix.output_policy_labels(args, [parse_policy_spec("ECG:replacement")])
+    governed_suffix = "_GOVERNED_FIRST" if governed == "on" else ""
+    assert produced == ["ECG_REPLACEMENT" + governed_suffix + suffix]
+    expected = experiment_run.expected_labels_for(
+        ["ECG:replacement"], "LRU", "off", "next", 6, "all", "future",
+        "enabled", "off", 1, governed, "drop", "progress", gate)
+    assert expected == produced, "the flow expects a PageRank label the runner does not produce"
+
+
+@pytest.mark.parametrize("suite,refused", [
+    ("cache-sim", False), ("gem5", True), ("sniper", True), ("both", True)])
+@pytest.mark.parametrize("gate", ["on", "duel"])
+def test_pressure_gate_is_refused_where_no_backend_implements_it(tmp_path, suite, refused, gate):
+    """Only cache_sim implements the gate, so only cache_sim may carry its label.
+
+    gem5's L3 is configured from its own arguments and never receives the gate,
+    and Sniper's record path reads no pressure variable. The runner once
+    accepted the gate on both and labelled the native PageRank row
+    ECG_REPLACEMENT_PRESSURE_*, while the cache ran the ungated rule.
+    """
+    import subprocess
+    ran = subprocess.run([
+        sys.executable, str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", suite, "--dry-run", "--benchmark", "pr",
+        "--policies", "ECG:replacement", "--record-pressure-gate", gate,
+        "--out-dir", str(tmp_path)], cwd=ROOT, capture_output=True, text=True,
+        timeout=300, check=False)
+    text = ran.stdout + ran.stderr
+    if refused:
+        assert ran.returncode != 0 and "record pressure gate is cache_sim-only" in text, text[-600:]
+    else:
+        assert ran.returncode == 0, text[-600:]
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_native_algorithm_cells_refuse_the_pressure_gate(tmp_path, backend):
+    """The native algorithms binary parses the gate, but the native cache has none.
+
+    The RV64 guest shares ecg_algorithm_main.h, so it accepts the option and
+    would report the gate in its workload while the simulated LLC ignores it.
+    """
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--benchmark", "spmv", "--current-algorithms", "--ecg-equivalence",
+        "--options", f"--graph {graph} --record-pressure-gate duel",
+        "--policies", "ECG:replacement", "--dry-run", "--out-dir", str(tmp_path)])
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "32kB", backend, roi_matrix)
+    assert rows and rows[0]["status"] == "error", rows
+    assert "record pressure gate is cache_sim-only" in rows[0].get("error", ""), rows[0].get("error")
+
+
+def _run_kernel(command, env, timeout=120):
+    import subprocess
+    return subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True,
+                          timeout=timeout, check=False)
+
+
+def test_pressure_duel_refuses_a_set_count_that_is_not_a_multiple_of_64(tmp_path, monkeypatch):
+    """Leaders are one set in every 64, so fewer or uneven sets fail closed.
+
+    Both kernels are checked through the runner, at the runner's eight-set
+    fixture LLC, so the refusal is the real binaries' and not a unit model's.
+    """
+    for binary in ("algorithms", "pr"):
+        if not (ROOT / "bench/bin_sim" / binary).is_file():
+            pytest.skip(f"current {binary} executable is not built")
+    (tmp_path / "spmv").mkdir()
+    command, env = _runner_cell(tmp_path / "spmv", "--record-pressure-gate duel")
+    ran = _run_kernel(command, env)
+    assert ran.returncode != 0 and "multiple of 64 LLC sets" in ran.stdout + ran.stderr
+    (tmp_path / "pr").mkdir()
+    command, env = _pagerank_cell(tmp_path / "pr", monkeypatch, "duel", l3_size="2048B", l3_ways="4")
+    ran = _run_kernel(command, env)
+    assert ran.returncode != 0 and "multiple of 64 LLC sets" in ran.stdout + ran.stderr
+
+
+@pytest.mark.parametrize("governed", ["no", "on"])
+def test_pressure_duel_trains_on_exactly_the_transfers_the_spmv_kernel_makes(tmp_path, governed):
+    """The selector counts LLC demand misses and dirty victims, nothing else.
+
+    Training starts when the record is configured, which is the kernel phase
+    boundary, so the duel's transfer count must equal the kernel's memory
+    accesses plus LLC writebacks with no prefetch fills. Both leader groups
+    must see traffic and the followers must take both sides, or the selector
+    never did anything and the comparison would be vacuous.
+    """
+    import json
+    if not (ROOT / "bench/bin_sim/algorithms").is_file():
+        pytest.skip("current algorithm executable is not built")
+    extra = "--record-governed-first on " if governed == "on" else ""
+    results = {}
+    for gate in ("no", "duel"):
+        work = tmp_path / gate
+        work.mkdir()
+        command, env = _runner_cell(work, extra + f"--record-pressure-gate {gate}",
+                                    l3_size="8192B", l3_ways="2")
+        ran = _run_kernel(command, env)
+        assert ran.returncode == 0, (ran.stdout + ran.stderr)[-600:]
+        results[gate] = json.loads(Path(command[command.index("--output") + 1]).read_text())
+    payload = results["duel"]
+    assert payload["workload"]["record_pressure_gate"] == "duel"
+    metrics, kernel = payload["metrics"], payload["traffic_phases"]["kernel"]
+    assert kernel["prefetch_fills"] == 0
+    assert metrics["ecg_record_duel_transfers"] == kernel["memory_accesses"] + kernel["llc_writebacks"]
+    assert metrics["ecg_record_duel_leader_transfers_rule"] > 0
+    assert metrics["ecg_record_duel_leader_transfers_base"] > 0
+    assert metrics["ecg_record_duel_follower_rule"] > 0
+    assert metrics["ecg_record_duel_follower_base"] > 0
+    assert metrics["ecg_record_duel_winner_changes"] > 0
+    control = results["no"]["metrics"]
+    assert control["ecg_record_duel_transfers"] == 0 and control["ecg_record_duel_selector"] == 511, (
+        "the duel must not train when it is off")
+
+
+@pytest.mark.parametrize("governed", ["no", "on"])
+def test_pressure_duel_trains_on_exactly_the_transfers_pagerank_makes(tmp_path, monkeypatch, governed):
+    """PageRank resets its statistics after a warm replay; the duel counts from there.
+
+    The selector keeps what the warm replay taught it, as the per-set counter
+    does, but its transfer count resets with the statistics, so it must equal
+    the reported memory accesses plus LLC writebacks. The ranking must not
+    change, because the gate only chooses which line leaves.
+    """
+    import json
+    import re
+    if not (ROOT / "bench/bin_sim/pr").is_file():
+        pytest.skip("current PageRank executable is not built")
+    results = {}
+    for gate in ("no", "duel"):
+        work = tmp_path / gate
+        work.mkdir()
+        command, env = _pagerank_cell(work, monkeypatch, gate, governed=governed)
+        ran = _run_kernel(command, env)
+        text = ran.stdout + ran.stderr
+        assert ran.returncode == 0, text[-600:]
+        checksum = re.search(r"\[ECG-PR-RESULT [^\]]*score_checksum=([0-9a-f]+)", text)
+        assert checksum, text[-600:]
+        results[gate] = (json.loads(Path(env["CACHE_OUTPUT_JSON"]).read_text()), checksum.group(1))
+    metrics, checksum = results["duel"]
+    assert checksum == results["no"][1], "the gate changed the PageRank result"
+    assert metrics["prefetch_fills"] == 0
+    assert metrics["ecg_record_duel_transfers"] == metrics["memory_accesses"] + metrics["llc_writebacks"]
+    assert metrics["ecg_record_duel_leader_transfers_rule"] > 0
+    assert metrics["ecg_record_duel_leader_transfers_base"] > 0
+    assert metrics["ecg_record_duel_follower_rule"] > 0
+    assert metrics["ecg_record_duel_follower_base"] > 0
+    assert metrics["ecg_record_duel_winner_changes"] > 0
+    control = results["no"][0]
+    assert control["ecg_record_duel_transfers"] == 0 and control["ecg_record_duel_selector"] == 511, (
+        "the duel must not train when it is off")

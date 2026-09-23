@@ -814,9 +814,12 @@ def make_roi_job(
             options += " --record-expiry-clock " + clock
     if "algorithm_record_pressure_gate" in settings:
         gate = str(settings["algorithm_record_pressure_gate"])
-        if gate not in ("no", "on"):
+        # As with governed-first below, PageRank takes the gate from the
+        # runner's environment; its GAPBS options must not carry this flag.
+        if gate not in ("no", "on", "duel") or not (
+                settings.get("current_algorithms") or settings.get("current_pr_baselines")):
             raise SystemExit("invalid current pressure-gate record selection")
-        if gate != "no":
+        if gate != "no" and settings.get("current_algorithms"):
             options += " --record-pressure-gate " + gate
     if "algorithm_record_governed_first" in settings:
         governed = str(settings["algorithm_record_governed_first"])

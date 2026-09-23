@@ -999,6 +999,11 @@ private:
     uint64_t evictions_;
 };
 
+// Opt-in pressure gate for the current record victim rule. COUNTER keeps a
+// four-bit counter per set; DUEL follows one selector trained by two leader
+// groups, one always under the rule and one always relaxed to the base.
+enum class RecordPressureGate : uint8_t { NO, COUNTER, DUEL };
+
 // ============================================================================
 // Single Cache Level (with locks - for shared caches)
 // ============================================================================
@@ -1091,8 +1096,8 @@ public:
                 if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_hits++;
                 if (isGovernedProperty(address))
                     ++governed_property_hits_;
-                if (record_pressure_gate_ && recordProperty(address) &&
-                    record_pressure_[set_idx] > 0)
+                if (record_pressure_gate_ == RecordPressureGate::COUNTER &&
+                    recordProperty(address) && record_pressure_[set_idx] > 0)
                     --record_pressure_[set_idx];
                 if (isRef32Governed(address))
                     ++ref32_governed_hits_;
@@ -1112,9 +1117,11 @@ public:
         if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_misses++;
         if (isGovernedProperty(address))
             ++governed_property_misses_;
-        if (record_pressure_gate_ && recordProperty(address) &&
-            record_pressure_[set_idx] < kRecordPressureMax)
+        if (record_pressure_gate_ == RecordPressureGate::COUNTER &&
+            recordProperty(address) && record_pressure_[set_idx] < kRecordPressureMax)
             ++record_pressure_[set_idx];
+        // Every LLC demand miss is one line read from memory.
+        recordDuelTransfer(set_idx);
         if (isRef32Governed(address))
             ++ref32_governed_misses_;
         recordAdmissionAccess(set_idx, true);
@@ -1343,9 +1350,10 @@ public:
             }
             if (set[victim_idx].dirty) {
                 stats_.writebacks++;
+                recordDuelTransfer(set_idx);
             }
         }
-        
+
         // Insert new line
         set[victim_idx].tag = tag;
         set[victim_idx].valid = true;
@@ -1712,6 +1720,15 @@ public:
         uint64_t census_expired_distance_sum = 0;
         uint64_t census_expired_within_1k = 0;
         uint64_t census_expired_within_1m = 0;
+        // Duel gate: off-chip transfers charged while the rule is active, over
+        // every set and per leader group; follower decisions by the arm the
+        // selector chose; and how often the selector's choice flipped.
+        uint64_t duel_transfers = 0;
+        uint64_t duel_leader_transfers_rule = 0;
+        uint64_t duel_leader_transfers_base = 0;
+        uint64_t duel_follower_rule = 0;
+        uint64_t duel_follower_base = 0;
+        uint64_t duel_winner_changes = 0;
     };
     const RecordVictimAttribution& getRecordVictimAttribution() const {
         return record_victim_attribution_;
@@ -1902,12 +1919,23 @@ public:
         record_configured_ = true;
     }
 
-    void setRecordPressureGate(bool gate) {
+    void setRecordPressureGate(RecordPressureGate gate) {
         std::lock_guard<std::mutex> lock(mutex_);
+        // Every leader slot must occur equally often, or one arm samples more
+        // sets than the other and the selector is biased before it trains.
+        if (gate == RecordPressureGate::DUEL &&
+            (num_sets_ < kRecordDuelSlots || num_sets_ % kRecordDuelSlots != 0))
+            throw std::invalid_argument(
+                "record pressure duel requires a multiple of 64 LLC sets");
         record_pressure_gate_ = gate;
         record_pressure_.assign(num_sets_, kRecordPressureMax);
+        record_duel_selector_ = kRecordDuelInitial;
     }
-    bool recordPressureGate() const { return record_pressure_gate_; }
+    RecordPressureGate recordPressureGate() const { return record_pressure_gate_; }
+    uint16_t getRecordDuelSelector() const { return record_duel_selector_; }
+    bool recordPressuredForTest(size_t set_idx) const {
+        return recordSetPressured(set_idx);
+    }
 
     void setRecordGovernedFirst(bool governed_first) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -2603,9 +2631,12 @@ private:
             // The rule is stateless, so the per-set signal is supplied here.
             // With the gate off this stays true and the rule is unchanged.
             ecg_record::VictimOptions options = record_victim_options_;
-            if (record_pressure_gate_)
-                options.pressured =
-                    record_pressure_[evicting_set_idx_] >= kRecordPressureThreshold;
+            if (record_pressure_gate_ != RecordPressureGate::NO)
+                options.pressured = recordSetPressured(evicting_set_idx_);
+            if (record_pressure_gate_ == RecordPressureGate::DUEL &&
+                recordDuelRole(evicting_set_idx_) == RecordDuelRole::FOLLOWER)
+                ++(options.pressured ? record_victim_attribution_.duel_follower_rule
+                                     : record_victim_attribution_.duel_follower_base);
             if (ecg_record::selectVictim(
                     record_receiver_.layout(), ways.data(), set.size(),
                     record_receiver_.comparisonWatermark(), select_base, victim, &trace,
@@ -3702,7 +3733,76 @@ private:
     static constexpr uint8_t kRecordPressureMax = 15;
     static constexpr uint8_t kRecordPressureThreshold = 8;
     std::vector<uint8_t> record_pressure_;
-    bool record_pressure_gate_ = false;
+    RecordPressureGate record_pressure_gate_ = RecordPressureGate::NO;
+    // Duel signal for the opt-in gate. Of every 64 consecutive sets, slot 16
+    // always runs the rule and slot 17 always relaxes to the base victim; the
+    // rest follow one ten-bit selector for the whole LLC. Each off-chip
+    // transfer in a rule leader counts up and each in a base leader counts
+    // down, so a set MSB means the base leaders moved fewer lines and the
+    // followers relax. A transfer is a demand miss or a dirty victim, the two
+    // events the traffic metric counts. It trains only while the rule is
+    // active, since before that both leader groups run the same base policy.
+    // Cost: ten bits per LLC, a six-bit compare of the set index, and one
+    // increment on a transfer the cache already performs.
+    enum class RecordDuelRole : uint8_t { FOLLOWER, RULE, BASE };
+    static constexpr size_t kRecordDuelSlots = 64;
+    static constexpr size_t kRecordDuelRuleLeader = 16;
+    static constexpr size_t kRecordDuelBaseLeader = 17;
+    static constexpr uint16_t kRecordDuelMax = 1023;
+    // Just below the MSB, so a cold cache follows the rule.
+    static constexpr uint16_t kRecordDuelInitial = 511;
+    static constexpr uint16_t kRecordDuelRelax = 512;
+    uint16_t record_duel_selector_ = kRecordDuelInitial;
+
+    static RecordDuelRole recordDuelRole(size_t set_idx) {
+        const size_t slot = set_idx & (kRecordDuelSlots - 1);
+        return slot == kRecordDuelRuleLeader ? RecordDuelRole::RULE
+             : slot == kRecordDuelBaseLeader ? RecordDuelRole::BASE
+             : RecordDuelRole::FOLLOWER;
+    }
+
+    // Whether the rule governs this set's next victim; false relaxes it.
+    bool recordSetPressured(size_t set_idx) const {
+        switch (record_pressure_gate_) {
+          case RecordPressureGate::NO:
+            return true;
+          case RecordPressureGate::COUNTER:
+            return record_pressure_[set_idx] >= kRecordPressureThreshold;
+          case RecordPressureGate::DUEL:
+            switch (recordDuelRole(set_idx)) {
+              case RecordDuelRole::RULE: return true;
+              case RecordDuelRole::BASE: return false;
+              case RecordDuelRole::FOLLOWER:
+                return record_duel_selector_ < kRecordDuelRelax;
+            }
+        }
+        throw std::logic_error("invalid record pressure gate");
+    }
+
+    void recordDuelTransfer(size_t set_idx) {
+        if (record_pressure_gate_ != RecordPressureGate::DUEL ||
+            !record_configured_ || !record_replacement_)
+            return;
+        auto& a = record_victim_attribution_;
+        ++a.duel_transfers;
+        const bool relaxed = record_duel_selector_ >= kRecordDuelRelax;
+        switch (recordDuelRole(set_idx)) {
+          case RecordDuelRole::RULE:
+            ++a.duel_leader_transfers_rule;
+            if (record_duel_selector_ < kRecordDuelMax)
+                ++record_duel_selector_;
+            break;
+          case RecordDuelRole::BASE:
+            ++a.duel_leader_transfers_base;
+            if (record_duel_selector_ > 0)
+                --record_duel_selector_;
+            break;
+          case RecordDuelRole::FOLLOWER:
+            return;
+        }
+        if ((record_duel_selector_ >= kRecordDuelRelax) != relaxed)
+            ++a.duel_winner_changes;
+    }
     size_t num_sets_;
     size_t offset_bits_;
     size_t index_bits_;
@@ -4081,7 +4181,7 @@ public:
             issueCurrentRef32Prefetch();
     }
 
-    void setRecordPressureGate(bool gate) {
+    void setRecordPressureGate(RecordPressureGate gate) {
         l3_->setRecordPressureGate(gate);
     }
 
@@ -5148,6 +5248,13 @@ public:
             ss << "  \"ecg_record_expired_distance_sum\": " << a.census_expired_distance_sum << ",\n";
             ss << "  \"ecg_record_expired_within_1k\": " << a.census_expired_within_1k << ",\n";
             ss << "  \"ecg_record_expired_within_1m\": " << a.census_expired_within_1m << ",\n";
+            ss << "  \"ecg_record_duel_transfers\": " << a.duel_transfers << ",\n";
+            ss << "  \"ecg_record_duel_leader_transfers_rule\": " << a.duel_leader_transfers_rule << ",\n";
+            ss << "  \"ecg_record_duel_leader_transfers_base\": " << a.duel_leader_transfers_base << ",\n";
+            ss << "  \"ecg_record_duel_follower_rule\": " << a.duel_follower_rule << ",\n";
+            ss << "  \"ecg_record_duel_follower_base\": " << a.duel_follower_base << ",\n";
+            ss << "  \"ecg_record_duel_winner_changes\": " << a.duel_winner_changes << ",\n";
+            ss << "  \"ecg_record_duel_selector\": " << l3_->getRecordDuelSelector() << ",\n";
         }
         ss << "  \"ecg_ref32_dead_bypasses\": "
            << l3_->getRef32DeadBypasses() << ",\n";

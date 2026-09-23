@@ -58,7 +58,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--popt-rank-mode", choices=("future", "constant"), default="future")
     parser.add_argument("--grasp-reference", choices=("off", "full", "flat", "rank"), default="off")
     parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
-    parser.add_argument("--record-pressure-gate", choices=("no", "on"), default="no")
+    parser.add_argument("--record-pressure-gate", choices=("no", "on", "duel"), default="no")
     parser.add_argument("--record-store-bound", choices=("drop", "keep"), default="drop")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
@@ -138,7 +138,10 @@ def pressure_gate_label(label: str, pressure_gate: str) -> str:
     if "ECG_REPLACEMENT" not in label:
         raise SystemExit(
             "pressure-gate requires a current ECG replacement policy")
-    return label + "_PRESSURE_GATE"
+    suffixes = {"on": "_PRESSURE_GATE", "duel": "_PRESSURE_DUEL"}
+    if pressure_gate not in suffixes:
+        raise SystemExit(f"unknown pressure-gate selection: {pressure_gate}")
+    return label + suffixes[pressure_gate]
 
 
 def governed_first_label(label: str, governed_first: str) -> str:
@@ -450,6 +453,8 @@ def validate_victim_order(payload: dict[str, Any], options: argparse.Namespace) 
             "record store-bound retention does not match the requested arm")
     require(payload["workload"].get("record_expiry_clock") == options.record_expiry_clock,
             "record expiry clock does not match the requested arm")
+    require(payload["workload"].get("record_pressure_gate") == options.record_pressure_gate,
+            "record pressure gate does not match the requested arm")
 
 
 def validate_grasp_reference(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:

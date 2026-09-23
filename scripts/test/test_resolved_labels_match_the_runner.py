@@ -11,7 +11,10 @@ job's recorded expectation against the label the runner would produce from that
 job's own options and policies.
 """
 from pathlib import Path
+import getopt
 import json
+import re
+import shlex
 import subprocess
 import sys
 
@@ -129,21 +132,75 @@ def test_resolved_expectations_match_what_the_runner_emits(tmp_path, profile):
 
 @pytest.mark.parametrize("profile", PROFILES)
 def test_paired_arms_resolve_to_distinct_labels(tmp_path, profile):
-    """A control and a treatment must never share one output label."""
+    """A control and a treatment must never share one output label.
+
+    Arms are compared within one kernel at one capacity, since a study repeats
+    the same arms across capacities. The arm is every record option that splits
+    a control from a treatment: keyed on governed-first alone, this skipped the
+    pressure-gate study outright, whose arms all run governed-first.
+    """
     jobs = _resolved_jobs(tmp_path, profile)
-    by_benchmark: dict[str, list[tuple[str, list[str]]]] = {}
+    by_cell: dict[tuple, list[tuple[tuple[str, str], list[str]]]] = {}
     for job in jobs:
         metadata = job.get("metadata", {})
         expected = list(metadata.get("expected_policy_labels") or [])
         if not expected:
             continue
-        arm = str(metadata.get("record_governed_first", "no"))
-        by_benchmark.setdefault(str(metadata.get("benchmark")), []).append((arm, expected))
-    for benchmark, entries in by_benchmark.items():
+        arm = (str(metadata.get("record_governed_first", "no")),
+               str(metadata.get("record_pressure_gate", "no")))
+        cell = (str(metadata.get("benchmark")),
+                tuple(str(size) for size in metadata.get("l3_sizes") or []))
+        by_cell.setdefault(cell, []).append((arm, expected))
+    for cell, entries in by_cell.items():
         arms = {arm for arm, _ in entries}
         if len(arms) < 2:
             continue
         labels = [tuple(sorted(expected)) for _, expected in entries]
         assert len(set(labels)) == len(labels), (
-            f"{benchmark}: paired arms share a label {labels}, so the control "
+            f"{cell}: paired arms share a label {labels}, so the control "
             "and the treatment would collide in one matrix")
+
+
+def _pagerank_getopt():
+    """The option string every PageRank binary hands getopt.
+
+    Each of them builds a CLPageRank, which appends to CLApp's options, which
+    append to CLBase's. Reading it from the header keeps this in step with the
+    parser the binaries are compiled against.
+    """
+    header = (ROOT / "bench/include/external/gapbs/command_line.h").read_text()
+    base = re.search(r'std::string get_args_ = "([^"]+)";', header).group(1)
+
+    def appended(name):
+        body = header[header.index(f"class {name} "):]
+        return re.search(r'get_args_ \+= "([^"]+)";', body).group(1)
+
+    return base + appended("CLApp") + appended("CLPageRank")
+
+
+@pytest.mark.parametrize("profile", PROFILES)
+def test_pagerank_options_parse_under_its_own_getopt(tmp_path, profile):
+    """PageRank's options reach a GAPBS getopt, never the algorithms CLI.
+
+    The flow once appended an algorithms-CLI flag to PageRank's options. The
+    pr binary printed "invalid option -- '-'", then read the rest of the flag
+    as a start vertex, which PageRank ignores, so the cell still completed with
+    the right checksum and only its recorded options were wrong.
+    """
+    for source in ("bench/src_sim/pr.cc", "bench/src_gem5/pr.cc", "bench/src_sniper/pr.cc"):
+        assert "CLPageRank cli(" in (ROOT / source).read_text(), source
+    shortopts = _pagerank_getopt()
+    jobs = [job for job in _resolved_jobs(tmp_path, profile)
+            if job.get("metadata", {}).get("benchmark") == "pr"]
+    if not jobs:
+        pytest.skip(f"{profile} resolves no PageRank job")
+    for job in jobs:
+        tokens = shlex.split(str(job["metadata"].get("options") or ""))
+        try:
+            _, rest = getopt.getopt(tokens, shortopts)
+        except getopt.GetoptError as error:
+            pytest.fail(f"{job.get('job_id', '?')}: the pr binary cannot parse "
+                        f"{tokens}: {error}")
+        assert not rest, (
+            f"{job.get('job_id', '?')}: {rest} would reach the pr binary as "
+            "arguments it never reads")

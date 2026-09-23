@@ -1610,8 +1610,8 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             # the algorithms CLI, so the opt-in victim-order arm travels here.
             "ECG_RECORD_GOVERNED_FIRST": str(int(
                 getattr(args, "record_governed_first", "no") == "on")),
-            "ECG_RECORD_PRESSURE_GATE": str(int(
-                getattr(args, "record_pressure_gate", "no") == "on")),
+            "ECG_RECORD_PRESSURE_GATE": {"no": "0", "on": "1", "duel": "2"}[
+                getattr(args, "record_pressure_gate", "no")],
             # Sniper's record path reads SNIPER_-prefixed variables of its own,
             # so the same arm has to be named twice or it silently stays off.
             "SNIPER_ECG_RECORD_GOVERNED_FIRST": str(int(
@@ -7180,7 +7180,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--ecg-equivalence", action="store_true",
                         help="Observe actual record semantics on a bounded prepared graph; never speedup evidence.")
     parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
-    parser.add_argument("--record-pressure-gate", choices=("no", "on"), default="no")
+    parser.add_argument("--record-pressure-gate", choices=("no", "on", "duel"), default="no")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--current-pr-baselines", action="store_true",
                         help="Use the common fixed PageRank arithmetic and complete CSR access stream for cache_sim baselines.")
@@ -7324,6 +7324,10 @@ def main(argv: list[str]) -> int:
     if args.current_algorithms and (
             args.suite == "both" or args.suite != "cache-sim" and not args.ecg_equivalence):
         raise SystemExit("current detailed algorithms require one bounded --ecg-equivalence backend")
+    # gem5's L3 and Sniper's record path have no pressure signal, so a native
+    # row would carry the gate's label while running the ungated rule.
+    if args.record_pressure_gate != "no" and args.suite != "cache-sim":
+        raise SystemExit("record pressure gate is cache_sim-only")
     semantic_edge_limit = int(args.sniper_semantic_edge_limit)
     if int(args.sniper_roi_icount) > 0 and semantic_edge_limit > 0:
         raise SystemExit(

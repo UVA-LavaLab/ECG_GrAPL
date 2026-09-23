@@ -206,6 +206,7 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
         require(mode in algorithms.MODES or spec.label in ("LRU", "SRRIP", "GRASP_PAPER"),
                 "unsupported detailed algorithm policy")
         options = algorithms.parse_options(args.options)
+        require(options.record_pressure_gate == "no", "record pressure gate is cache_sim-only")
         require(options.queries == 1, "independent SpMV queries are cache_sim-only")
         require(options.grasp_reference == "off", "GRASP reference diagnostic is cache_sim-only")
         require(options.popt_rank_mode == "future", "P-OPT rank ablation is cache_sim-only")

@@ -87,7 +87,7 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     }
     const char* mechanism_name = std::getenv("ECG_RECORD_MECHANISM");
     const bool record_mode = mechanism_name != nullptr;
-    if (!record_mode && recordOption("ECG_RECORD_PRESSURE_GATE", 0, 1))
+    if (!record_mode && recordOption("ECG_RECORD_PRESSURE_GATE", 0, 2))
         throw std::invalid_argument("ECG_RECORD_PRESSURE_GATE requires a current ECG record mode");
     if (!record_mode && recordOption("ECG_RECORD_GOVERNED_FIRST", 0, 1))
         throw std::invalid_argument("ECG_RECORD_GOVERNED_FIRST requires a current ECG record mode");
@@ -177,8 +177,13 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
             throw std::invalid_argument(
                 "ECG_RECORD_GOVERNED_FIRST requires the replacement mechanism");
         cache.setRecordGovernedFirst(governed_first != 0);
-        cache.setRecordPressureGate(
-            recordOption("ECG_RECORD_PRESSURE_GATE", 0, 1) != 0);
+        // 0 off, 1 the per-set counter, 2 the duel; see --record-pressure-gate.
+        const uint64_t pressure_gate = recordOption("ECG_RECORD_PRESSURE_GATE", 0, 2);
+        if (pressure_gate == 2 && mechanism != ecg_record::Mechanism::REPLACEMENT)
+            throw std::invalid_argument(
+                "ECG_RECORD_PRESSURE_GATE=2 requires the replacement mechanism without prefetch");
+        cache.setRecordPressureGate(pressure_gate == 2 ? RecordPressureGate::DUEL
+            : pressure_gate == 1 ? RecordPressureGate::COUNTER : RecordPressureGate::NO);
         cache.setRecordDeliveredExpiryClock(
             recordOption("ECG_RECORD_DELIVERY_CLOCK", 0, 1) != 0);
     }

@@ -1,5 +1,7 @@
 #include <cstdint>
 #include <cstdio>
+#include <memory>
+#include <utility>
 #include <vector>
 
 #include "cache_sim/cache_sim.h"
@@ -239,6 +241,146 @@ bool exerciseGraspRecordBase(uint8_t bytes, bool replacement) {
     return true;
 }
 
+// The duel gate's selector trains on the off-chip transfers of two fixed
+// leader slots, and only while the record rule is active; followers take its
+// MSB. Returns zero, or the number of the first check that failed.
+int exerciseRecordPressureDuel() {
+    using namespace cache_sim;
+    using namespace ecg_record;
+    // Fewer than 64 sets, or a count that is not a multiple of 64, would give
+    // one leader slot more sets than the other, so the gate refuses both.
+    for (const std::size_t sets : {std::size_t{32}, std::size_t{96}}) {
+        CacheLevel refused("L3", sets * 64, 64, 1, EvictionPolicy::GRASP);
+        try {
+            refused.setRecordPressureGate(RecordPressureGate::DUEL);
+            return 1;
+        } catch (const std::invalid_argument&) {}
+    }
+    constexpr uint64_t vertices = 256, records = 8;
+    constexpr std::size_t sets = 128;
+    alignas(64) static std::array<uint32_t, vertices> properties{};
+    std::vector<uint32_t> degrees(vertices, 1);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), vertices, records, true);
+    context.registerPropertyArray(properties.data(), vertices, 4, 256, 0.50, true);
+    Requirements requirements;
+    requirements.vertex_count = vertices;
+    requirements.record_count = records;
+    Layout layout;
+    if (selectLayout(requirements, layout) != Status::OK)
+        return 2;
+    NativeConfiguration configuration;
+    packLayout(layout, configuration.layout_descriptor);
+    configuration.record_base = 0x20000000;
+    configuration.property_base = reinterpret_cast<uint64_t>(properties.data());
+    configuration.record_count = records;
+    configuration.vertex_count = vertices;
+    configuration.context = configuration.generation = 1;
+    configuration.control = kNativeEnable;
+    // Lines away from the property array, placed by set and tag.
+    const auto line = [](std::size_t set, uint64_t tag) {
+        return uint64_t{0x10000000} + ((tag * sets + set) << 6);
+    };
+    const auto make = [&](RecordPressureGate gate) {
+        auto cache = std::make_unique<CacheLevel>(
+            "L3", sets * 2 * 64, 64, 2, EvictionPolicy::GRASP);
+        cache->initGraphContext(&context);
+        cache->prepareRecord(EvictionPolicy::GRASP);
+        cache->setRecordPressureGate(gate);
+        return cache;
+    };
+
+    auto duel = make(RecordPressureGate::DUEL);
+    const auto& a = duel->getRecordVictimAttribution();
+    if (duel->getRecordDuelSelector() != 511)
+        return 3;
+    // Slot 16 of every 64 sets always runs the rule and slot 17 always
+    // relaxes; every other set follows the selector, which starts pressured.
+    for (const std::size_t set : {std::size_t{16}, std::size_t{80}})
+        if (!duel->recordPressuredForTest(set) || duel->recordPressuredForTest(set + 1))
+            return 4;
+    for (const std::size_t set : {std::size_t{0}, std::size_t{15}, std::size_t{18}, std::size_t{127}})
+        if (!duel->recordPressuredForTest(set))
+            return 5;
+    // Before the rule is bound both leader groups run the base policy, so
+    // their misses carry no information and must not train the selector.
+    duel->access(line(16, 0), false);
+    if (duel->getRecordDuelSelector() != 511 || a.duel_transfers != 0)
+        return 6;
+    duel->configureRecord(configuration, true, EvictionPolicy::GRASP);
+    // A demand miss in a rule leader counts up and relaxes the followers; one
+    // in a base leader counts down and presses them again. A follower miss is
+    // a transfer but never trains, and the leaders ignore the selector.
+    duel->access(line(16, 1), false);
+    if (duel->getRecordDuelSelector() != 512 || duel->recordPressuredForTest(0) ||
+        !duel->recordPressuredForTest(16) || duel->recordPressuredForTest(17))
+        return 7;
+    duel->access(line(17, 1), false);
+    duel->access(line(3, 1), false);
+    if (duel->getRecordDuelSelector() != 511 || !duel->recordPressuredForTest(0) ||
+        a.duel_transfers != 3 || a.duel_leader_transfers_rule != 1 ||
+        a.duel_leader_transfers_base != 1 || a.duel_winner_changes != 2)
+        return 8;
+    duel->insert(line(16, 2), false);
+    duel->access(line(16, 2), false);
+    if (duel->getRecordDuelSelector() != 511 || a.duel_transfers != 3)
+        return 9;
+    // A dirty victim is the other transfer. It trains exactly as a miss does,
+    // and a rule leader's victim goes through the rule, not the base.
+    const uint64_t unpressured = a.unpressured;
+    duel->insert(line(80, 1), true);
+    duel->insert(line(80, 2), true);
+    duel->insert(line(80, 3), false);
+    if (duel->getStats().writebacks.load() != 1 || duel->getRecordDuelSelector() != 512 ||
+        a.duel_transfers != 4 || a.duel_leader_transfers_rule != 2 ||
+        a.unpressured != unpressured)
+        return 10;
+    // Relaxed, a follower's victim is the base's, attributed as unpressured.
+    duel->insert(line(3, 2), false);
+    duel->insert(line(3, 3), false);
+    duel->insert(line(3, 4), false);
+    if (a.duel_follower_base != 1 || a.duel_follower_rule != 0 ||
+        a.unpressured != unpressured + 1)
+        return 11;
+    // A base leader always relaxes, and its writeback counts down.
+    duel->insert(line(81, 1), true);
+    duel->insert(line(81, 2), true);
+    duel->insert(line(81, 3), false);
+    if (duel->getRecordDuelSelector() != 511 || a.duel_leader_transfers_base != 2 ||
+        a.unpressured != unpressured + 2 || a.duel_winner_changes != 4)
+        return 12;
+    // Pressed again, a follower's victim goes through the rule.
+    duel->insert(line(4, 1), false);
+    duel->insert(line(4, 2), false);
+    duel->insert(line(4, 3), false);
+    if (a.duel_follower_rule != 1 || a.duel_follower_base != 1 ||
+        a.unpressured != unpressured + 2)
+        return 13;
+    // Ten bits saturate at both ends, flipping the followers once each way.
+    for (uint64_t miss = 0; miss < 600; ++miss)
+        duel->access(line(16, 100 + miss), false);
+    if (duel->getRecordDuelSelector() != 1023 || a.duel_winner_changes != 5)
+        return 14;
+    for (uint64_t miss = 0; miss < 1100; ++miss)
+        duel->access(line(17, 100 + miss), false);
+    if (duel->getRecordDuelSelector() != 0 || a.duel_winner_changes != 6 ||
+        a.duel_transfers != 1705 || duel->getStats().writebacks.load() != 2)
+        return 15;
+    // Without the replacement rule, or under the counter gate, nothing trains.
+    for (const auto& [replacement, gate] : {std::pair{false, RecordPressureGate::DUEL},
+                                            std::pair{true, RecordPressureGate::COUNTER}}) {
+        auto idle = make(gate);
+        idle->configureRecord(configuration, replacement, EvictionPolicy::GRASP);
+        idle->access(line(16, 1), false);
+        idle->access(line(16, 2), false);
+        idle->access(line(17, 1), false);
+        if (idle->getRecordDuelSelector() != 511 ||
+            idle->getRecordVictimAttribution().duel_transfers != 0)
+            return 16;
+    }
+    return 0;
+}
+
 int main() {
     using namespace cache_sim;
     ecg_record::Requirements requirements;
@@ -332,6 +474,10 @@ int main() {
                 return 10;
             }
         }
+    }
+    if (const int check = exerciseRecordPressureDuel()) {
+        std::printf("record pressure duel check %d failed [FAIL]\n", check);
+        return 11;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;
