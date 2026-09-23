@@ -59,12 +59,14 @@ residency at this capacity.
 That is a defect in how the masks are *used*, not in the masks. It is entry
 **C3** in the taxonomy, and giving ungoverned lines strict eviction precedence
 recovers 17.61% of SpMV kernel transfers and 23.29% of PageRank kernel
-transfers with no new storage **at 8 MiB/16-way**. A preregistered reading at 24
+transfers **at 8 MiB/16-way**. A preregistered reading at 24
 MiB reverses the comparison against GRASP, so the mitigation is
 capacity-pressure dependent; it buys misses and pays writebacks, and the trade
 is favourable only while the cache is pressured. The full result, the decision split and the
 hardware accounting are on the
-[governed-first eviction page](Governed-First-Eviction).
+[governed-first eviction page](Governed-First-Eviction). That page also corrects
+an earlier claim that the rule needs no new storage: it reads a recency order,
+which a GRASP cache does not keep.
 
 One candidate cause remains open for the dense kernels: **insertion**. The
 record bound is used to choose a victim but not to place an incoming line, and

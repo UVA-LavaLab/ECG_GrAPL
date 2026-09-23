@@ -10,15 +10,35 @@ governed property lines were displaced by a structural stream.
 part of the result rather than a hedge. A second reading at 24 MiB, reported in
 [how the result depends on capacity](#how-the-result-depends-on-capacity),
 **loses to GRASP on both kernels and regresses on SpMV**, and a four-point sweep
-places the crossover between 16 and 20 MiB. Every competitive statement on this
-page therefore holds up to roughly 16 MiB on this graph, and the mitigation is
-measured to be capacity-pressure dependent.
+places the crossover between 16 and 20 MiB. The mitigation is measured to be
+capacity-pressure dependent.
 
-The gated result is about `selectVictim` against its own previous ordering. It is
-not a timing result — `timing_valid_for_speedup` is `false` in every receipt
-quoted here.
+Two later studies on the same graph and capacities are reported here too:
 
-The rule is off by default, as `--record-governed-first no`.
+- **A pressure signal from set dueling failed its frozen gate.** It was safe on
+  SpMV at 8 and 16 MiB only, safe on PageRank at no capacity, and it regressed
+  on PageRank at 20 and 24 MiB. See
+  [the set-dueling result](#a-pressure-signal-from-set-dueling-failed).
+- **An RRPV order passed its frozen gate on both kernels.** Every choice the
+  record does not decide is taken from GRASP's RRPV bits instead of recency.
+  With it, ECG leads the favourable P-OPT control at all four capacities on
+  both kernels, thinly on SpMV at 8 MiB. It leads GRASP on SpMV at 8 and
+  16 MiB and on PageRank at 8, 16 and 20 MiB, the last thinly. GRASP still
+  leads SpMV above 16 MiB and, thinly, PageRank at 24 MiB. See
+  [the RRPV order](#the-rrpv-order-no-choice-reads-recency).
+
+The [hardware cost](#hardware-cost) of the rule as first measured has been
+**corrected**. It assumed the cache already keeps a recency order, and a GRASP
+cache, which is SpMV's base here, does not. The RRPV order removes that
+dependence.
+
+Every gated result is about `selectVictim` against its own previous ordering,
+and the matched comparisons are functional cache results on one graph. None is
+a timing result: `timing_valid_for_speedup` is `false` in every receipt quoted
+here.
+
+The rule is off by default, as `--record-governed-first no`. So is the RRPV
+order, as `--record-rrpv-order no`.
 
 ## The one difference under test
 
@@ -43,12 +63,8 @@ strictly-farther override run as before.
 
 ```cpp
 if (options.governed_first) {
-    std::size_t ungoverned = count;
-    for (std::size_t index = 0; index < count; ++index) {
-        if (!ways[index].property &&
-            (ungoverned == count || ways[index].recency < ways[ungoverned].recency))
-            ungoverned = index;
-    }
+    const std::size_t ungoverned = options.rrpv_order
+        ? grasp_scan(ungoverned_way) : pick(ungoverned_way, by_recency);
     if (ungoverned != count) {
         victim = ungoverned;
         if (trace) trace->path = VictimPath::UNGOVERNED_FIRST;
@@ -56,6 +72,11 @@ if (options.governed_first) {
     }
 }
 ```
+
+`pick(ungoverned_way, by_recency)` is the least-recently-used ungoverned way, and
+it is the rule that the sections up to the dueling study measure. `grasp_scan`
+belongs to [the RRPV order](#the-rrpv-order-no-choice-reads-recency), a later
+option that is off by default.
 
 Nothing else changes. The record grammar, the 4-byte and 8-byte layout
 selection, the window rule, insertion, hit promotion, recency, dirty state and
@@ -211,18 +232,37 @@ disjoint, and neither is evidence about the other.
 
 ## Hardware cost
 
-One **governed bit per line**, which is already present as `WayState::property`
-and is already read for the existing record rule — no new storage.
+One **governed bit per line**. It is already present as `WayState::property`,
+and the existing record rule already reads it.
 
-One **comparison across the ways of the selected set** to find the
-least-recently-used ungoverned way. This is the same scan shape the cache
-already performs to select an LRU victim, over a set that has already been read
-out for the replacement decision, and it can share that comparator tree. The
-rule is a reordering of an existing priority list, evaluated after the DEAD scan
-and before the base victim.
+A **recency order**. The rule as measured here reads it in three places: to
+choose the least-recently-used ungoverned way, to break ties among DEAD ways,
+and to break ties between equal bounds in the override. Its cost depends on the
+base policy.
 
-No new ports, no new metadata traffic, no change to the record codec, no change
-to the window rule, and no change to what the producer publishes.
+- **On an LRU cache** the order already exists. The ungoverned scan then has the
+  shape of the LRU victim scan, over a set that has already been read out for
+  the replacement decision, and it can share that comparator tree. That is
+  PageRank's measured configuration, whose base victim is LRU.
+- **On a GRASP cache** it does not exist. GRASP keeps a 3-bit RRPV per line, not
+  a recency order, and SpMV's confirming cells ran on a `GRASP_PAPER` base.
+  There the rule as measured needs **a second replacement state** beside the
+  RRPV bits, for example a 4-bit age per line in a 16-way set, kept up to date on
+  every access to the set.
+
+**Correction.** An earlier version of this section said, without qualification,
+that the rule needs no new storage and can share the LRU comparator tree. That
+holds only on an LRU cache. It was not true of the configuration that produced
+SpMV's result.
+
+[The RRPV order](#the-rrpv-order-no-choice-reads-recency) removes the recency
+order. It builds every choice the record does not decide from the RRPV bits a
+GRASP cache already keeps, at the cost stated in that section.
+
+Under either order: no new ports, no new metadata traffic, no change to the
+record codec, no change to the window rule, and no change to what the producer
+publishes. The rule is a reordering of an existing priority list, evaluated
+after the DEAD scan and before the base victim.
 
 ## What this result does not claim
 
@@ -434,17 +474,300 @@ saving is an order of magnitude larger; SpMV does not.
 Both effects have the same shape. Governed-first and the strictly-farther
 override each trade residency against a predicted future, which is the right
 trade when capacity is scarce and a pure loss when it is not. **They are
-pressure heuristics applied without a pressure signal.** Gating them on an
-occupancy or recent-miss signal per set, so the rule relaxes toward the base
-policy when the cache is not pressured, is the obvious mitigation and would cost
-a saturating counter per set. It is **not implemented and not measured**, and
-nothing here should be read as a result for it.
+pressure heuristics applied without a pressure signal.** Two signals were then
+built, each meant to relax the rule toward the base policy wherever the cache is
+not pressured:
+
+- **A 4-bit hit/miss counter per set.** Its study is **void**, not negative. The
+  counter was keyed on a legacy property region, which for SpMV defaults to the
+  output `y`. Nearly every kernel access to `y` misses, so every counter stayed
+  saturated. The gate therefore read "pressured" on every decision, and the
+  gated cell matched its control in every metric. The counter now keys on the
+  lines the record rule governs. A test runs the real binary with the gate off
+  and on and pins that behaviour. The study has not been rerun, so no result
+  exists for the counter.
+- **Set dueling.** It asks directly which rule moves fewer transfers. It was
+  measured, and it **failed its frozen gate**; see
+  [the next section](#a-pressure-signal-from-set-dueling-failed).
 
 One further reading worth keeping. At 24 MiB, ECG base-first incurs **more**
 property misses than plain GRASP — 565,607 against 472,501 — although GRASP is
 its own base victim. The strictly-farther override is itself harmful at ample
 capacity, independently of governed-first, which is a separate finding about the
 record rule rather than about this mitigation.
+
+## A pressure signal from set dueling failed
+
+Set dueling makes one choice per cache, between the rule and a relaxed form of
+it, by measuring both:
+
+- **Leader sets.** Sets with `set & 63 == 16` always apply the rule. Sets with
+  `set & 63 == 17` always relax: DEAD-first, then the base policy's own victim.
+  Every other set follows a selector.
+- **Selector.** One 10-bit saturating counter, starting at 511. A transfer in a
+  rule leader adds one, a transfer in a relaxed leader subtracts one, and the
+  followers relax while the counter reads 512 or more.
+- **Transfer.** An LLC demand miss or a dirty victim, the same two components
+  the kernel-transfer metric counts.
+
+Hardware: the 10-bit counter, a 6-bit comparison on the set index, and one
+increment or decrement per transfer the cache already makes. There is no
+per-set or per-line state, no new port and no metadata traffic. `selectVictim`
+stays stateless, because the signal only supplies its existing `pressured`
+input.
+
+The `ecg_pressure_duel_cache` study ran 32 rows, with one binary per kernel:
+GRASP_PAPER, `POPT:UNCHARGED`, governed-first, and governed-first with the duel,
+at 8, 16, 20 and 24 MiB on the same graph and geometry as the capacity sweep.
+The gate was frozen before the run and applied once, on kernel transfers:
+
+- `excess = (duel - best) / best`, where `best` is the lower of GRASP and
+  governed-first;
+- **capacity-safe** means `excess ≤ 0.01` at all four capacities;
+- a duel above both GRASP and governed-first is a **regression**.
+
+| Kernel | LLC | GRASP_PAPER | `POPT:UNCHARGED` | Governed-first | Duel | Best | Excess | Reading |
+|---|---|---:|---:|---:|---:|---|---:|---|
+| SpMV | 8 MiB | 15,456,930 | 12,398,416 | 12,289,362 | 12,339,443 | governed-first | +0.41% | safe |
+| SpMV | 16 MiB | 6,702,419 | 6,249,737 | 6,151,409 | 6,162,935 | governed-first | +0.19% | safe |
+| SpMV | 20 MiB | 5,887,025 | 6,252,319 | 6,126,909 | 6,048,250 | GRASP | +2.74% | fails |
+| SpMV | 24 MiB | 5,754,248 | 6,249,737 | 6,106,480 | 5,970,105 | GRASP | +3.75% | fails |
+| PageRank | 8 MiB | 15,975,818 | 13,880,532 | 13,011,200 | 13,193,583 | governed-first | +1.40% | fails |
+| PageRank | 16 MiB | 6,900,452 | 8,263,074 | 6,151,504 | 6,213,698 | governed-first | +1.01% | fails |
+| PageRank | 20 MiB | 6,068,180 | 7,178,381 | 6,132,881 | 6,163,017 | GRASP | +1.56% | **regression** |
+| PageRank | 24 MiB | 5,946,046 | 6,085,744 | 6,118,682 | 6,133,975 | GRASP | +3.16% | **regression** |
+
+**SpMV is partial.** It is safe at 8 and 16 MiB and fails at 20 and 24 MiB, and
+the passing capacities are not generalised. **PageRank is not safe** at any
+capacity. At 16 MiB it misses by 679 transfers, which is recorded as a miss and
+not rounded, and it regresses at 20 and 24 MiB. The leader count, leader slots,
+selector width, initial value and transfer definition have not been retuned.
+
+Every GRASP, P-OPT and governed-first figure measured by an earlier study
+reproduced exactly in this build, so the capacity tables above stand.
+
+The receipts show why it failed:
+
+1. **Where the followers stayed on the rule, the relaxed leaders account for the
+   whole difference.** At SpMV 8 and 16 MiB and at every PageRank capacity, the
+   duel's transfers above governed-first equal the relaxed leader sets' extra
+   transfers over the rule leader sets to within 656. One set in 64 always runs
+   the relaxed form, by design. On PageRank that form moves 1.9 and 1.6 times the
+   rule's transfers in its sets at 8 and 16 MiB, so those sets alone put both
+   cells past the 1% allowance.
+2. **PageRank's relaxed form was DEAD-first plus LRU, not GRASP.** `pr`
+   configures its record path without a base policy, so its base is the cache's
+   default, LRU. Scaled by 64, its relaxed leader sets sit 19% to 55% above
+   GRASP. Only 43 follower decisions ever went relaxed, all at 8 MiB. So the
+   PageRank rows measure a duel against DEAD-first plus LRU, and they say
+   nothing about a duel against a GRASP-based relaxed form.
+3. **SpMV's relaxed sets do not behave like GRASP either.** They take DEAD-first
+   and then GRASP's own victim, yet scaled by 64 they sit about 5% above GRASP at
+   20 and 24 MiB. There the duel runs relaxed on 63% and 78% of decisions and
+   recovers 32.8% and 38.7% of governed-first's gap to GRASP, all of it in
+   writebacks.
+4. **Above 8 MiB the record's bound is never compared.** At 16, 20 and 24 MiB on
+   both kernels, every governed-first decision is DEAD-first or ungoverned-first.
+   `base_kept`, `overridden` and `base_no_future` are all zero. There the rule
+   reduces to two steps: evict a dead governed line if the set holds one, and
+   otherwise the least-recently-used ungoverned line.
+
+The counts in the fourth point are measured, and what follows from them is
+inference. The crossover would then be set by the order among lines the record
+does not describe, which is recency, and not by the record's information. A
+signal that switches the rule off aims at the wrong lever. The next study tests
+exactly that.
+
+## The RRPV order: no choice reads recency
+
+In record mode ECG already runs GRASP's insertion and hit update on every line,
+so the cache holds an RRPV even for the lines the record is silent about.
+`--record-rrpv-order on`, or `ECG_RECORD_RRPV_ORDER=1` for `pr`, takes every
+choice the record does not decide from those bits:
+
+1. **A DEAD governed way first**, unchanged. Ties go in GRASP's scan order: the
+   highest RRPV, then the lowest way.
+2. **Otherwise an ungoverned way, chosen by GRASP's scan** masked by the governed
+   bit. GRASP's ageing applies to the ungoverned ways only.
+3. **In a set holding only governed ways, GRASP's scan is the base on every
+   kernel**, including PageRank, whose rule otherwise falls back to LRU. A
+   strictly farther live bound still overrides it. Ties between equal bounds go
+   to the higher RRPV, then the lower way.
+
+In a set with no governed way, the victim and the set's RRPV state after the
+decision equal GRASP's own. `testRrpvOrderIsGraspWithoutGovernedWays` pins
+that, so at the level of a single decision ECG is at worst GRASP. The cache
+throws if a decision under this order would reach an LRU scan, the base policy
+or prefetch admission. On PageRank the arm registers its two property arrays
+with GRASP_PAPER's tiers, a 0.50 hot fraction with the capacity boundary, which
+are the tiers the GRASP_PAPER row uses.
+
+Hardware:
+
+- **State.** The 3-bit RRPV per line, the governed bit and GRASP's region
+  registers. A GRASP cache already holds all three.
+- **Removed.** The recency order.
+- **Per eviction.** One max-RRPV search masked by the governed bit, plus GRASP's
+  ageing, which is at most seven rounds. DEAD-first and the bound comparison
+  are unchanged.
+- **Interface.** No new port and no metadata traffic.
+
+### Frozen study
+
+The `ecg_rrpv_order_cache` study ran 32 rows, with one binary per kernel:
+GRASP_PAPER, `POPT:UNCHARGED`, governed-first, and governed-first with the RRPV
+order, at 8, 16, 20 and 24 MiB. The gate was frozen before the run and applied
+once, on kernel transfers within one binary:
+
+- `lift = (rule - arm) / rule`, where the rule is governed-first and the arm adds
+  the RRPV order;
+- **safe** where ECG already led means `lift ≥ -0.005` at 8 and 16 MiB;
+- **improves** above the crossover means `lift ≥ +0.010` at 20 and 24 MiB;
+- **confirmed** means both, per kernel;
+- any `lift < -0.005` is a **regression**.
+
+Integrity was checked first, and it was clean in all eight cells:
+
+- four distinct labels;
+- one binary and one result per kernel: `result_digest` `55e3fc26a1027ddb`, and
+  `pr_score_checksum` `6249d06ef4cc2ed7`;
+- identical access counts and no prefetch fills;
+- every arm decision was RRPV-ordered and none reached an LRU base;
+- no rule decision was RRPV-ordered.
+
+| Kernel | LLC | GRASP_PAPER | `POPT:UNCHARGED` | Governed-first | RRPV order | Lift |
+|---|---|---:|---:|---:|---:|---:|
+| SpMV | 8 MiB | 15,456,930 | 12,398,416 | 12,289,362 | 12,289,813 | −0.004% |
+| SpMV | 16 MiB | 6,702,419 | 6,249,737 | 6,151,409 | 6,123,151 | +0.46% |
+| SpMV | 20 MiB | 5,887,025 | 6,252,319 | 6,126,909 | 6,052,874 | +1.21% |
+| SpMV | 24 MiB | 5,754,248 | 6,249,737 | 6,106,480 | 5,977,208 | +2.12% |
+| PageRank | 8 MiB | 15,975,743 | 13,880,986 | 13,011,137 | 12,872,632 | +1.06% |
+| PageRank | 16 MiB | 6,900,691 | 8,262,963 | 6,151,543 | 6,125,111 | +0.43% |
+| PageRank | 20 MiB | 6,068,167 | 7,178,487 | 6,132,857 | 6,055,044 | +1.27% |
+| PageRank | 24 MiB | 5,946,039 | 6,085,585 | 6,118,746 | 5,996,115 | +2.00% |
+
+**Confirmed on both kernels, with no regression.** The largest lift is +2.12%.
+
+SpMV's GRASP, P-OPT and governed-first rows reproduce the dueling study exactly.
+On PageRank all three drift by at most 454 transfers, and the baselines move
+alongside the rule. Rebuilding `pr` for the arm shifted its heap layout, which
+moves every policy's rows, not only the arm's. The gate is applied within the
+new binary. That is why the PageRank figures here differ slightly from those
+earlier on this page.
+
+### Against the named baselines
+
+Margins are `(baseline - ECG) / baseline` on the same binary. A margin under 1%
+is marked thin.
+
+| Margin | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---:|---:|---:|---:|
+| SpMV, RRPV order vs GRASP_PAPER | **+20.49%** | **+8.64%** | −2.82% | −3.87% |
+| SpMV, RRPV order vs `POPT:UNCHARGED` | +0.88% (thin) | **+2.03%** | **+3.19%** | **+4.36%** |
+| PageRank, RRPV order vs GRASP_PAPER | **+19.42%** | **+11.24%** | +0.22% (thin) | −0.84% (thin) |
+| PageRank, RRPV order vs `POPT:UNCHARGED` | **+7.26%** | **+25.87%** | **+15.65%** | **+1.47%** |
+| SpMV, governed-first vs GRASP_PAPER | +20.49% | +8.22% | −4.07% | −6.12% |
+| SpMV, governed-first vs `POPT:UNCHARGED` | +0.88% (thin) | +1.57% | +2.01% | +2.29% |
+| PageRank, governed-first vs GRASP_PAPER | +18.56% | +10.86% | −1.07% | −2.90% |
+| PageRank, governed-first vs `POPT:UNCHARGED` | +6.27% | +25.55% | +14.57% | −0.54% (thin) |
+
+- **Against the favourable P-OPT control** the RRPV order leads in all eight
+  cells, while governed-first alone trailed at PageRank 24 MiB. SpMV at 8 MiB
+  remains a thin crossing.
+- **Against GRASP** it leads in five of the eight cells, where governed-first led
+  in four. PageRank at 20 MiB moves from −1.07% to +0.22%, which is thin and one
+  cell on one graph.
+- **GRASP still leads SpMV above 16 MiB**, by 2.82% and 3.87%, and leads
+  PageRank thinly at 24 MiB, by 0.84%. The order narrows the crossover and does
+  not close it.
+
+### Where the lift comes from
+
+| Governed-first − RRPV order | LLC | Writebacks | Structural misses | Property misses |
+|---|---|---:|---:|---:|
+| SpMV | 8 MiB | −148 | −185 | −118 |
+| SpMV | 16 MiB | +28,292 | −34 | 0 |
+| SpMV | 20 MiB | +74,464 | −429 | 0 |
+| SpMV | 24 MiB | +128,840 | 0 | +432 |
+| PageRank | 8 MiB | −4,608 | 0 | +143,113 |
+| PageRank | 16 MiB | +26,098 | 0 | +334 |
+| PageRank | 20 MiB | +77,324 | 0 | +489 |
+| PageRank | 24 MiB | +122,374 | 0 | +257 |
+
+- **Above 8 MiB the lift is writebacks, on both kernels.** No other component
+  moves by as many as 500 transfers. Neither arm reaches the base victim at
+  these capacities, so the two differ only in the order among ungoverned lines
+  and among DEAD lines. Writebacks are charged when a dirty line is evicted, and
+  a dirty line still resident when the kernel ends is never charged, under any
+  policy. Part of a writeback saving can therefore be deferral rather than
+  avoidance. These receipts do not separate the two.
+- **PageRank at 8 MiB is the base switch.** Its lift is 143,113 fewer property
+  misses, net of 4,608 more writebacks. With GRASP's scan as the base instead of
+  LRU, the base's own victim stands, because no other line in the set has a
+  strictly farther bound, on 1,381,382 decisions instead of 138,279: 11.6% of
+  decisions instead of 1.1%. Overridden decisions fall from 50.2% to 39.8%. The
+  preregistration named this cell as the safety risk. It came in on the
+  favourable side, 0.06 points outside its predicted ±1% band.
+- **SpMV at 8 MiB is a wash**, 451 transfers. Its rule already had a GRASP base,
+  so only ties and the ungoverned order changed.
+- The ungoverned-first share of decisions moves by at most 0.5 points, inside
+  the 2 points the preregistration predicted.
+
+### What is left against GRASP
+
+This split of the RRPV order's gap to GRASP is arithmetic on the rows, not a
+cause:
+
+| RRPV order − GRASP_PAPER | Gap | Writebacks | Structural misses | Property misses |
+|---|---:|---:|---:|---:|
+| SpMV 20 MiB | +165,849 | +40,641 | +57,917 | +67,291 |
+| SpMV 24 MiB | +222,960 | +57,214 | +127,519 | +38,227 |
+| PageRank 20 MiB | −13,123 | +83,767 | 0 | −96,890 |
+| PageRank 24 MiB | +50,076 | +87,739 | 0 | −37,663 |
+
+On PageRank the record already beats GRASP on property misses at both
+capacities, and what remains is writebacks. On SpMV at 24 MiB more than half of
+the gap is structural. As [the traffic floor](#ecg-has-a-traffic-floor-grasp-does-not)
+shows, GRASP converts added capacity into structural hits: its structural misses
+fall from 5,073,432 at 8 MiB to 4,945,273 at 24 MiB. The RRPV order's are
+5,072,792 at 24 MiB, identical to governed-first's, so it converts none.
+
+The preregistration predicted that the masked scan, like GRASP's, would leave
+some older structural lines resident and so recover part of that reuse. **It did
+not**, and that prediction failed. So did the SpMV lift predictions at 20 and
+24 MiB: about +2.0% and +2.8% were predicted, and +1.21% and +2.12% were
+measured.
+
+Why SpMV's residual persists is open. One untested candidate is the cache state
+the kernel inherits from construction. The boundary between construction and the
+kernel keeps the cache's contents, and at 20 MiB a record policy's setup moves
+18.04 million transfers through the cache against GRASP's 2.77 million. The
+receipts carry no per-pass split, so this cannot yet be separated from the
+kernel's own decisions.
+
+### Setup, reported separately
+
+SpMV's setup transfers are identical between governed-first and the RRPV order
+at every capacity: 19,195,101, 18,340,263, 18,042,849 and 17,805,112. The order
+adds no preprocessing, and the
+[construction accounting](#construction-as-a-one-time-cost) is unchanged.
+PageRank's rows carry no setup phase for any policy.
+
+### What this result does not claim
+
+- **Nothing about BFS, SSSP or BC.** SSSP is a
+  [documented case](Traversal-Metadata-Taxonomy) in which an LRU base beat a
+  GRASP base, so the order must not be carried over to the filtered kernels
+  without evidence of its own.
+- **Nothing about another graph, or about timing.** One graph was measured, in
+  the functional cache model.
+- **Nothing native.** Only cache_sim implements the order, and gem5 and Sniper
+  refuse it rather than run the recency order under its label.
+- **No default change.** Governed-first and the RRPV order are both off by
+  default.
+- **Beating governed-first is not a competitive claim.** The margins against
+  GRASP and P-OPT come from one graph, and the thin ones are not generalised:
+  SpMV against P-OPT at 8 MiB, and PageRank against GRASP at 20 and 24 MiB.
 
 ## Status and default
 
@@ -469,20 +792,45 @@ plumbing exercise, and it is pinned by
 of the sites is reverted and which also checks that the installed simulator
 checkouts have not drifted from the overlays that own them.
 
+The two later options are narrower. The RRPV order, `--record-rrpv-order`, and
+the pressure gate, `--record-pressure-gate` with `on` for the per-set counter
+and `duel` for set dueling, exist in cache_sim only. Both are off by default,
+and the gem5 and Sniper harnesses refuse them rather than run a cell under a
+label whose behaviour they do not implement.
+
 ## Reproducing
 
 ```bash
 make -j1 PARALLEL=1 sim-algorithms sim-pr
 python3 -m pytest -q scripts/test/test_ecg_record.py \
+  scripts/test/test_ecg_record_cache.py \
   scripts/test/test_record_victim_arms_reach_the_kernel.py \
   scripts/test/test_resolved_labels_match_the_runner.py
 python3 scripts/experiments/ecg/flows/experiment_run.py \
   --profile ecg_governed_first_cache --run-dir <run-dir>
+python3 scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_pressure_duel_cache --run-dir <duel-run-dir>
+python3 scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_rrpv_order_cache --run-dir <rrpv-run-dir>
 ```
 
 Both kernels must be rebuilt: `pr` is a separate executable configured by
 environment rather than by the algorithm CLI, and a shared `DEP_ECG` header
-feeds both. `testGovernedFirstEviction` in `bench/src_sim/test_ecg_record.cc`
-pins the rule itself, and the two script tests pin the option and its output
-label across every site that computes one, because a correctly executed cell
-that is labelled as its own control is indistinguishable from a missing policy.
+feeds both. `pr` reads the two later options as `ECG_RECORD_PRESSURE_GATE` and
+`ECG_RECORD_RRPV_ORDER`. `testGovernedFirstEviction` in
+`bench/src_sim/test_ecg_record.cc` pins the rule itself, and the script tests
+pin each option and its output label across every site that computes one,
+because a correctly executed cell that is labelled as its own control is
+indistinguishable from a missing policy.
+
+The later options have their own tests:
+
+- `testRrpvOrderNeverReadsRecency` and `testRrpvOrderIsGraspWithoutGovernedWays`,
+  in the same file, pin the RRPV order. Each case of the first is built so that
+  recency and the RRPV disagree. The second is the equality with GRASP's victim
+  and ageing in a set with no governed way.
+- `exerciseRecordPressureDuel` and `exerciseRrpvOrderWithoutLru`, in
+  `bench/src_sim/test_ecg_record_cache.cc`, pin the selector's training and the
+  cache's refusal of any decision under the RRPV order that would reach an LRU
+  scan. The duel also refuses a set count that would give one leader slot more
+  sets than the other.
