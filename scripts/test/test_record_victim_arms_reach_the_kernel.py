@@ -275,3 +275,81 @@ def test_every_expected_label_source_agrees(arm):
         "enabled", "off", 1, arm, "drop")
     assert expected == produced, (
         "the flow expects labels the runner does not produce")
+
+
+def _runner_cell(tmp_path, extra_options):
+    """The argv and environment the runner would execute, at fixture geometry.
+
+    The caches are small enough that the fixture evicts, since a victim rule
+    that never runs cannot be observed.
+    """
+    from scripts.experiments.ecg import algorithm_matrix, roi_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    args = roi_matrix.parse_args([
+        "--suite", "cache-sim", "--benchmark", "spmv", "--current-algorithms",
+        "--options", f"--graph {graph} --repeat 2 --record-base-policy GRASP_PAPER "
+                     f"--record-preprocess csr {extra_options}",
+        "--policies", "ECG:replacement", "--l1d-size", "128B", "--l1d-ways", "2",
+        "--l2-size", "256B", "--l2-ways", "2", "--l3-sizes", "2048B", "--l3-ways", "4",
+        "--out-dir", str(tmp_path), "--no-build",
+    ])
+    captured: list[tuple[list[str], dict[str, str]]] = []
+
+    def run_command(command, cwd, env, *rest, **kw):
+        captured.append(([str(part) for part in command], dict(env)))
+        raise RuntimeError("stop after the command is built")
+
+    try:
+        algorithm_matrix.run_cache_cell(
+            args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "2048B",
+            run_command, roi_matrix.parse_size_bytes)
+    except Exception:
+        pass
+    assert captured, "run_cache_cell never reached the kernel command"
+    return captured[0]
+
+
+@pytest.mark.parametrize("gate", ["no", "on"])
+def test_pressure_gate_counts_the_lines_the_record_rule_governs(tmp_path, gate):
+    """The gate's signal must not come from the legacy epoch region selector.
+
+    The per-set pressure counter once keyed on `isGovernedProperty`, which is
+    the region `CACHE_ECG_EPOCH_REGION_INDICES` names, not the lines the
+    record rule governs. The runner strips every `CACHE_` variable, so the
+    kernel fell back to region 1: for SpMV the streamed output `y`, not the
+    gathered `x` the records describe. On cit-Patents every `y` line missed,
+    the counter stayed saturated, and the gate never relaxed once.
+
+    Both runs set the selector to a value of the same length, because the
+    environment's size moves the heap and with it a small graph's set mapping.
+    The gate-off arm is the control that makes the comparison meaningful.
+    """
+    import json
+    import subprocess
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    command, env = _runner_cell(
+        tmp_path, f"--record-governed-first on --record-pressure-gate {gate}")
+    assert not any(key.startswith("CACHE_") for key in env)
+    output = Path(command[command.index("--output") + 1])
+    results = {}
+    for region in ("0", "1"):
+        ran = subprocess.run(
+            command, cwd=ROOT, env={**env, "CACHE_ECG_EPOCH_REGION_INDICES": region},
+            capture_output=True, text=True, timeout=60, check=False)
+        assert ran.returncode == 0, ran.stdout + ran.stderr
+        payload = json.loads(output.read_text())
+        assert payload["workload"]["record_pressure_gate"] == gate
+        results[region] = (
+            {key: value for key, value in payload["metrics"].items()
+             if key.startswith("ecg_record_victim_")},
+            payload["traffic_phases"]["kernel"])
+    decisions = results["1"][0]
+    if gate == "on":
+        assert 0 < decisions["ecg_record_victim_unpressured"] < decisions["ecg_record_victim_decisions"], (
+            "the gate must both relax and hold on this fixture, or the comparison is vacuous")
+    assert results["0"] == results["1"], (
+        "the victim decisions follow a region selector the record rule never reads")

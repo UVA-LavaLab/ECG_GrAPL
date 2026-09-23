@@ -1089,11 +1089,11 @@ public:
                 // Hit!
                 stats_.hits++;
                 if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_hits++;
-                if (isGovernedProperty(address)) {
+                if (isGovernedProperty(address))
                     ++governed_property_hits_;
-                    if (record_pressure_gate_ && record_pressure_[set_idx] > 0)
-                        --record_pressure_[set_idx];
-                }
+                if (record_pressure_gate_ && recordProperty(address) &&
+                    record_pressure_[set_idx] > 0)
+                    --record_pressure_[set_idx];
                 if (isRef32Governed(address))
                     ++ref32_governed_hits_;
                 updateOnHit(set, i, set_idx);
@@ -1110,12 +1110,11 @@ public:
         // Miss
         stats_.misses++;
         if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_misses++;
-        if (isGovernedProperty(address)) {
+        if (isGovernedProperty(address))
             ++governed_property_misses_;
-            if (record_pressure_gate_ &&
-                record_pressure_[set_idx] < kRecordPressureMax)
-                ++record_pressure_[set_idx];
-        }
+        if (record_pressure_gate_ && recordProperty(address) &&
+            record_pressure_[set_idx] < kRecordPressureMax)
+            ++record_pressure_[set_idx];
         if (isRef32Governed(address))
             ++ref32_governed_misses_;
         recordAdmissionAccess(set_idx, true);
@@ -3694,10 +3693,12 @@ private:
     size_t size_bytes_;
     size_t line_size_;
     size_t associativity_;
-    // Pressure signal for the opt-in gate. A property miss to a set pushes the
-    // counter up and a property hit pushes it down, so it saturates high while
-    // the set's property working set does not fit and falls to zero once it
-    // does. No new ports: it is updated on accesses the cache already performs.
+    // Pressure signal for the opt-in gate. A miss to a line the record rule
+    // governs pushes the set's counter up and a hit pushes it down, so it
+    // saturates high while the governed working set does not fit and falls to
+    // zero once it does. It uses the rule's own predicate, recordProperty(), not
+    // the legacy epoch region, which can name a different array. No new ports:
+    // it is updated on accesses the cache already performs.
     static constexpr uint8_t kRecordPressureMax = 15;
     static constexpr uint8_t kRecordPressureThreshold = 8;
     std::vector<uint8_t> record_pressure_;
