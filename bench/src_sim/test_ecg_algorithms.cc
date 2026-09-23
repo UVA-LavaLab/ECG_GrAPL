@@ -1,13 +1,28 @@
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
+#include <iterator>
+#include <optional>
+#include <random>
+#include <regex>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <vector>
 
+#include <spawn.h>
+#include <sys/utsname.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include "ecg_algorithms.h"
 #include "cache_sim/ecg_algorithm.h"
+#include "kernel_census_receipt.h"
 
 namespace {
 
@@ -1286,10 +1301,253 @@ void testTraversalPreprocessing() {
           "an invalid row horizon cannot publish a partial carrier");
 }
 
+// The kernel census under the study's roster, each policy configured as the
+// algorithms driver configures it. Arming the census changes no decision, and
+// clearing or setting every last-level dirty bit at kernel entry changes only
+// writebacks, by exactly the setup writebacks and exit residue the census
+// reports, so the clean kernel total needs no second run. The comparison masks
+// writebacks, so a policy that read the dirty bit fails it only where the
+// victims it changes move another counter. On this graph a clean-first GRASP
+// changes victims without doing so; GRASP's victim loop is held instead by the
+// cache replay's clean-entry counterfactual in test_ecg_record_cache.cc.
+//
+// The cache model sees real addresses, so a run's heap history moves its
+// traffic, and so can OpenMP's thread interleaving: two identical runs in one
+// process need not agree. The matrix runs every cell as a fresh process on one
+// thread with address randomisation off, and every run compared here is run
+// the same way, as this binary started again under setarch -R; a repeated run
+// must reproduce the first, which checks that premise.
+struct CensusRosterRow {
+    const char* name;
+    cache_sim::EvictionPolicy policy;
+    bool grasp_paper, popt, records, rrpv;
+};
+constexpr CensusRosterRow kCensusRoster[] = {
+    {"GRASP_PAPER", cache_sim::EvictionPolicy::GRASP, true, false, false, false},
+    {"POPT:UNCHARGED", cache_sim::EvictionPolicy::POPT, false, true, false, false},
+    {"ECG governed-first", cache_sim::EvictionPolicy::GRASP, true, false, true, false},
+    {"ECG governed-first RRPV order", cache_sim::EvictionPolicy::GRASP, true, false, true, true}};
+using CensusEntry = cache_sim::CacheHierarchy::KernelEntryForTest;
+constexpr CensusEntry kCensusModes[] = {CensusEntry::AS_BUILT, CensusEntry::UNARMED,
+    CensusEntry::CLEAN, CensusEntry::DIRTY, CensusEntry::UNARMED};
+constexpr const char* kCensusRunFlag = "--census-roster-run";
+
+// One roster run, in the child: the kernel's transfers on the first line,
+// then the receipt.
+int censusRosterRun(const char* row_argument, const char* mode_argument) {
+    using namespace ecg_algorithm;
+    const unsigned long row_index = std::strtoul(row_argument, nullptr, 10);
+    const unsigned long mode_index = std::strtoul(mode_argument, nullptr, 10);
+    if (row_index >= std::size(kCensusRoster) || mode_index >= std::size(kCensusModes))
+        return 2;
+    const CensusRosterRow& row = kCensusRoster[row_index];
+    std::mt19937 random(20260923);
+    std::uniform_int_distribution<uint32_t> vertex(0, 255);
+    std::vector<std::tuple<uint32_t, uint32_t, int32_t>> edges;
+    while (edges.size() < 2048) {
+        const uint32_t from = vertex(random), to = vertex(random);
+        if (from != to)
+            edges.emplace_back(from, to, 1);
+    }
+    std::sort(edges.begin(), edges.end());
+    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+    const Fixture graph(256, true, edges);
+    Options options;
+    options.algorithm = Algorithm::SPMV;
+    options.repetitions = 2;
+    options.records = row.records;
+    if (row.records) {
+        options.mechanism = ecg_record::Mechanism::REPLACEMENT;
+        options.record_base_policy = RecordBasePolicy::GRASP_PAPER;
+        options.record_governed_first = true;
+        options.record_rrpv_order = row.rrpv;
+    }
+    if (setenv("GRASP_BOUNDARY_MODE", row.grasp_paper ? "capacity" : "vertex", 1) != 0 ||
+            (row.popt && setenv("POPT_MATRIX_STREAM_SIM", "0", 1) != 0))
+        return 3;
+    cache_sim::CacheHierarchy cache(128, 2, 256, 2, 2048, 4, 64,
+        cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, row.policy);
+    cache.setKernelEntryForTest(kCensusModes[mode_index]);
+    cache_sim::AlgorithmBackend backend(cache, options, 2048, row.grasp_paper, row.popt);
+    ecg_algorithm::run(graph.view(), options, backend);
+    std::cout << backend.kernelTraffic().offchip() << '\n' << cache.toJSON() << std::flush;
+    return std::cout ? 0 : 4;
+}
+
+// Starts this binary again for one roster run, as the matrix starts a cell:
+// under setarch -R, on one thread, with the environment's cache, ECG, P-OPT,
+// GRASP and OpenMP settings removed. Returns the run's output, or nothing if
+// it did not exit cleanly.
+std::optional<std::string> censusRosterSpawn(size_t row, size_t mode) {
+    std::string self(4096, '\0');
+    const ssize_t length = readlink("/proc/self/exe", self.data(), self.size());
+    utsname machine{};
+    if (length <= 0 || static_cast<size_t>(length) >= self.size() || uname(&machine) != 0)
+        return std::nullopt;
+    self.resize(static_cast<size_t>(length));
+    std::vector<std::string> arguments = {"setarch", machine.machine, "-R", self, kCensusRunFlag,
+        std::to_string(row), std::to_string(mode)};
+    std::vector<std::string> environment = {
+        "OMP_NUM_THREADS=1", "OMP_WAIT_POLICY=PASSIVE", "GRAPHBREW_SIDEBAND_LOG=0"};
+    for (char** variable = environ; *variable; ++variable) {
+        const std::string entry(*variable);
+        bool kept = entry.rfind("GRAPHBREW_SIDEBAND_LOG=", 0) != 0;
+        for (const char* prefix : {"CACHE_", "ECG_", "GEM5_", "SNIPER_", "POPT_", "GRASP_",
+                "STRUCTURAL_", "TOPT_", "OMP_"})
+            kept = kept && entry.rfind(prefix, 0) != 0;
+        if (kept)
+            environment.push_back(entry);
+    }
+    std::vector<char*> argv, envp;
+    for (std::string& argument : arguments)
+        argv.push_back(argument.data());
+    for (std::string& entry : environment)
+        envp.push_back(entry.data());
+    argv.push_back(nullptr);
+    envp.push_back(nullptr);
+
+    int ends[2];
+    if (pipe(ends) != 0)
+        return std::nullopt;
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_adddup2(&actions, ends[1], STDOUT_FILENO);
+    posix_spawn_file_actions_addclose(&actions, ends[0]);
+    posix_spawn_file_actions_addclose(&actions, ends[1]);
+    pid_t child = 0;
+    const int spawned = posix_spawnp(&child, "setarch", &actions, nullptr, argv.data(), envp.data());
+    posix_spawn_file_actions_destroy(&actions);
+    close(ends[1]);
+    std::string output;
+    char buffer[1 << 14];
+    for (ssize_t count; spawned == 0 && (count = read(ends[0], buffer, sizeof buffer)) != 0;) {
+        if (count > 0)
+            output.append(buffer, static_cast<size_t>(count));
+        else if (errno != EINTR)
+            break;
+    }
+    close(ends[0]);
+    int status = 0;
+    if (spawned != 0 || waitpid(child, &status, 0) != child || !WIFEXITED(status) ||
+            WEXITSTATUS(status) != 0)
+        return std::nullopt;
+    return output;
+}
+
+void testKernelCensusUnderTheRoster() {
+    constexpr size_t kBuilt = 0, kUnarmed = 1, kClean = 2, kDirty = 3, kRepeat = 4;
+    const char* const segments[] = {
+        "before_first_pass", "first_pass", "between_passes", "later_passes", "after_last_pass"};
+    const std::regex writebacks("\"(writebacks|llc_writebacks|total_offchip_traffic)\": [0-9]+");
+    const auto masked = [&](const std::string& json) {
+        return std::regex_replace(json, writebacks, "\"$1\": #");
+    };
+    const auto same = [](const std::string& expected, const std::string& actual, const std::string& what) {
+        if (expected == actual)
+            return !expected.empty();
+        std::istringstream left(expected), right(actual);
+        std::string want, got;
+        while (std::getline(left, want) && std::getline(right, got) && want == got) {}
+        std::cerr << what << ": " << want << " | " << got << '\n';
+        return false;
+    };
+
+    for (size_t index = 0; index < std::size(kCensusRoster); ++index) {
+        const CensusRosterRow& row = kCensusRoster[index];
+        const std::string at = std::string(" under ") + row.name;
+        std::string receipt[std::size(kCensusModes)], census[std::size(kCensusModes)];
+        uint64_t kernel[std::size(kCensusModes)] = {};
+        bool ran = true;
+        for (size_t mode = 0; ran && mode < std::size(kCensusModes); ++mode) {
+            const auto output = censusRosterSpawn(index, mode);
+            const size_t line = output ? output->find('\n') : std::string::npos;
+            ran = line != std::string::npos;
+            if (!ran)
+                break;
+            kernel[mode] = std::strtoull(output->c_str(), nullptr, 10);
+            receipt[mode] = output->substr(line + 1);
+            census[mode] = kernelCensusLine(receipt[mode]);
+        }
+        check(ran, ("every roster run exits cleanly as a fresh process" + at).c_str());
+        if (!ran)
+            continue;
+        check(same(receipt[kUnarmed], receipt[kRepeat], "repeat" + at) && kernel[kRepeat] == kernel[kUnarmed],
+              ("a roster run repeats exactly in a fresh process" + at).c_str());
+        const auto field = [&](size_t mode, const std::string& key) {
+            const uint64_t value = receiptValue(census[mode], key);
+            check(value != UINT64_MAX, ("the kernel census carries " + key + at).c_str());
+            return value;
+        };
+        const auto segment = [&](size_t mode, const char* name, const std::string& key) {
+            const uint64_t value = segmentValue(census[mode], name, key);
+            check(value != UINT64_MAX, ("every census segment carries " + key + at).c_str());
+            return value;
+        };
+
+        check(census[kUnarmed].empty() && !census[kBuilt].empty() &&
+              same(receipt[kUnarmed], withoutKernelCensus(receipt[kBuilt]), "armed" + at),
+              ("arming the kernel census changes no decision" + at).c_str());
+        const auto counter = [&](const char* key) {
+            const uint64_t value = receiptValue(receipt[kBuilt], key);
+            return value == UINT64_MAX ? 0 : value;
+        };
+        if (row.records)
+            check(counter("ecg_record_victim_decisions") > 0 &&
+                  (!row.rrpv || counter("ecg_record_victim_rrpv_ordered") > 0),
+                  ("the record victim rule decides evictions in the census graph" + at).c_str());
+        for (const size_t mode : {kClean, kDirty})
+            check(same(masked(receipt[kUnarmed]), masked(withoutKernelCensus(receipt[mode])),
+                       (mode == kClean ? "clean entry" : "dirty entry") + at),
+                  ("the entry dirty state moves no counter but the writebacks" + at).c_str());
+
+        check(field(kClean, "entry_dirty_lines") == 0 && field(kClean, "entry_property_dirty_lines") == 0 &&
+              field(kClean, "entry_dirty_writebacks") == 0 && field(kClean, "entry_dirty_rewritten") == 0 &&
+              field(kClean, "exit_entry_dirty_lines") == 0,
+              ("a clean kernel entry leaves the kernel no setup dirt" + at).c_str());
+        check(field(kDirty, "entry_valid_lines") > 0 &&
+              field(kDirty, "entry_dirty_lines") == field(kDirty, "entry_valid_lines") &&
+              field(kDirty, "entry_property_dirty_lines") == field(kDirty, "entry_property_lines") &&
+              field(kDirty, "entry_dirty_writebacks") > 0,
+              ("a dirty kernel entry charges the kernel setup writebacks" + at).c_str());
+        check(field(kBuilt, "entries") == 1 && field(kBuilt, "passes") == 2 &&
+              field(kBuilt, "exit_property_lines") > 0,
+              ("the census sees one kernel, both passes and property lines at exit" + at).c_str());
+        for (const size_t mode : {kBuilt, kDirty}) {
+            uint64_t transfers = 0;
+            for (const char* name : segments) {
+                for (const char* key : {"total_accesses", "memory_accesses", "prefetch_fills", "llc_hits",
+                        "llc_misses", "llc_property_hits", "llc_property_misses"})
+                    check(segment(mode, name, key) == segment(kClean, name, key),
+                          ("the entry state moves no access, miss or fill between segments" + at).c_str());
+                check(segment(kClean, name, "entry_dirty_writebacks") == 0 &&
+                      segment(kClean, name, "llc_writebacks") ==
+                          segment(mode, name, "llc_writebacks") - segment(mode, name, "entry_dirty_writebacks"),
+                      ("each segment's clean writebacks are its own less its setup writebacks" + at).c_str());
+                transfers += segment(mode, name, "total_offchip_traffic");
+            }
+            check(transfers == kernel[mode],
+                  ("the census segments sum to the kernel's transfers" + at).c_str());
+            for (const char* key : {"entries", "passes", "entry_valid_lines", "entry_property_lines",
+                    "exit_valid_lines", "exit_property_lines"})
+                check(field(mode, key) == field(kClean, key),
+                      ("the entry state moves no line into or out of the cache" + at).c_str());
+            check(field(kClean, "exit_dirty_lines") ==
+                      field(mode, "exit_dirty_lines") - field(mode, "exit_entry_dirty_lines"),
+                  ("the clean exit residue is the residue less the setup dirt still resident" + at).c_str());
+            check(kernel[mode] - field(mode, "entry_dirty_writebacks") +
+                      (field(mode, "exit_dirty_lines") - field(mode, "exit_entry_dirty_lines")) ==
+                      kernel[kClean] + field(kClean, "exit_dirty_lines"),
+                  ("the clean kernel total needs no clean run" + at).c_str());
+        }
+    }
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
     using namespace ecg_algorithm;
+    if (argc == 4 && std::strcmp(argv[1], kCensusRunFlag) == 0)
+        return censusRosterRun(argv[2], argv[3]);
     testPreparedPoptQueryReuse();
     testGraspReferenceConsumer();
     testFrontierProducerAndCounts();
@@ -1307,6 +1565,7 @@ int main() {
     testPoptDirectMatrix();
     testUnboundRecordPreparation();
     testTraversalPreprocessing();
+    testKernelCensusUnderTheRoster();
     const Fixture diamond(8, true, {
         {0,1,2}, {0,2,5}, {0,5,20}, {1,2,1}, {1,3,2},
         {2,3,1}, {2,4,4}, {3,4,1}, {4,5,3}, {6,7,1}});

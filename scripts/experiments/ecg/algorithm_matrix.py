@@ -14,10 +14,10 @@ import shutil
 from typing import Any, Callable
 
 if __package__:
-    from .record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned
+    from .record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned, validate_kernel_census
     from .record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, window_layout
 else:
-    from record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned
+    from record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned, validate_kernel_census
     from record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, window_layout
 
 
@@ -1089,6 +1089,8 @@ def run_cache_cell(
         traffic = _integer(metrics, "total_offchip_traffic")
         misses, hits = _integer(metrics["L3"], "misses"), _integer(metrics["L3"], "hits")
         row.update(validate_traffic_phases(payload))
+        row.update(validate_kernel_census(metrics.get("kernel_census"),
+                                          payload["traffic_phases"]["kernel"]))
         validate_bfs_phases(payload, options)
         if options.bfs_traffic_phases == "on":
             for phase in payload["bfs_traffic_phases"]["phases"]:

@@ -8,55 +8,6 @@
 
 namespace cache_sim {
 
-struct AlgorithmTraffic {
-    uint64_t total_accesses = 0;
-    uint64_t memory_accesses = 0;
-    uint64_t prefetch_fills = 0;
-    uint64_t llc_writebacks = 0;
-    uint64_t llc_hits = 0, llc_misses = 0, llc_property_hits = 0, llc_property_misses = 0;
-
-    uint64_t offchip() const { return memory_accesses + prefetch_fills + llc_writebacks; }
-
-    static AlgorithmTraffic snapshot(const CacheHierarchy& cache) {
-        const auto& llc = cache.getL3Stats();
-        return {cache.getTotalAccesses(), cache.getMemoryAccesses(), cache.getPrefetchFills(),
-            cache.getWritebackTraffic(), llc.hits.load(), llc.misses.load(),
-            llc.prop_hits.load(), llc.prop_misses.load()};
-    }
-
-    void accumulate(const AlgorithmTraffic& other) {
-        for (auto field : {&AlgorithmTraffic::total_accesses, &AlgorithmTraffic::memory_accesses,
-                &AlgorithmTraffic::prefetch_fills, &AlgorithmTraffic::llc_writebacks,
-                &AlgorithmTraffic::llc_hits, &AlgorithmTraffic::llc_misses,
-                &AlgorithmTraffic::llc_property_hits, &AlgorithmTraffic::llc_property_misses})
-            if (!ecg_record::checkedAdd(this->*field, other.*field, this->*field))
-                throw std::overflow_error("BFS traffic attribution overflow");
-    }
-
-    AlgorithmTraffic since(const AlgorithmTraffic& before) const {
-        if (total_accesses < before.total_accesses || memory_accesses < before.memory_accesses ||
-            prefetch_fills < before.prefetch_fills || llc_writebacks < before.llc_writebacks ||
-            llc_hits < before.llc_hits || llc_misses < before.llc_misses ||
-            llc_property_hits < before.llc_property_hits || llc_property_misses < before.llc_property_misses)
-            throw std::logic_error("algorithm phase counters were reset");
-        return {total_accesses - before.total_accesses, memory_accesses - before.memory_accesses,
-                prefetch_fills - before.prefetch_fills, llc_writebacks - before.llc_writebacks,
-                llc_hits - before.llc_hits, llc_misses - before.llc_misses,
-                llc_property_hits - before.llc_property_hits, llc_property_misses - before.llc_property_misses};
-    }
-
-    void write(std::ostream& output) const {
-        output << "{\"total_accesses\":" << total_accesses
-               << ",\"memory_accesses\":" << memory_accesses
-               << ",\"prefetch_fills\":" << prefetch_fills
-               << ",\"llc_writebacks\":" << llc_writebacks
-               << ",\"llc_hits\":" << llc_hits << ",\"llc_misses\":" << llc_misses
-               << ",\"llc_property_hits\":" << llc_property_hits
-               << ",\"llc_property_misses\":" << llc_property_misses
-               << ",\"total_offchip_traffic\":" << offchip() << '}';
-    }
-};
-
 // Sequential query ownership; the immutable source graph must outlive this preparation.
 class PreparedSpmvMatrix {
   public:
@@ -263,6 +214,7 @@ class AlgorithmBackend {
     }
 
     void beginGraphPass() {
+        cache_.markKernelPass(true);
         if (options_.bfs_traffic_phases)
             transitionBfsPhase(BfsPhase::BETWEEN, BfsPhase::PROBE);
         if (options_.grasp_graph_passes && !window_runtime_ && !frontier_runtime_) {
@@ -324,6 +276,7 @@ class AlgorithmBackend {
             window_observer_->associateStore(index, destination, reinterpret_cast<uint64_t>(base), bytes);
     }
     void endGraphPass() {
+        cache_.markKernelPass(false);
         if (options_.bfs_traffic_phases)
             transitionBfsPhase(BfsPhase::PROBE, BfsPhase::BETWEEN);
         if (options_.grasp_graph_passes && !window_runtime_ && !frontier_runtime_) {
@@ -730,6 +683,7 @@ class AlgorithmBackend {
                 grasp_phase_configured_ = true;
             }
             setup_traffic_ = traffic();
+            cache_.markKernelEntry();
             kernel_started_ = true;
             if (options_.bfs_traffic_phases)
                 transitionBfsPhase(BfsPhase::SETUP, BfsPhase::BETWEEN);

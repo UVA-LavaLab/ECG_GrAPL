@@ -83,6 +83,77 @@ def validate_pr_workload(
     }
 
 
+CENSUS_SEGMENTS = ("before_first_pass", "first_pass", "between_passes", "later_passes", "after_last_pass")
+CENSUS_COUNTERS = (
+    "total_accesses", "memory_accesses", "prefetch_fills", "llc_writebacks",
+    "llc_hits", "llc_misses", "llc_property_hits", "llc_property_misses",
+)
+CENSUS_LINES = (
+    "entry_valid_lines", "entry_dirty_lines", "entry_property_lines", "entry_property_dirty_lines",
+    "entry_dirty_writebacks", "entry_dirty_rewritten",
+    "exit_valid_lines", "exit_dirty_lines", "exit_property_lines", "exit_entry_dirty_lines",
+)
+
+
+def _census_unsigned(fields: object, key: str) -> int:
+    value = fields.get(key) if isinstance(fields, Mapping) else None
+    require(type(value) is int and 0 <= value <= UINT64_MAX, f"invalid kernel census field {key}")
+    return value
+
+
+def validate_kernel_census(census: object, kernel: Mapping[str, object]) -> dict[str, int]:
+    """Check one kernel's passive census against the kernel phase it divides.
+
+    The segments must sum to the kernel counters exactly, each segment's setup
+    writebacks must lie within its own writebacks and sum to the census's,
+    every last-level line dirty at entry must be written back, rewritten or
+    still resident, and the lines resident at exit must bound their dirty and
+    property lines.
+    """
+    require(isinstance(census, Mapping), "missing kernel census")
+    require(_census_unsigned(census, "entries") == 1, "kernel census does not cover exactly one kernel")
+    passes = _census_unsigned(census, "passes")
+    lines = {key: _census_unsigned(census, key) for key in CENSUS_LINES}
+    require(lines["entry_dirty_lines"] == lines["entry_dirty_writebacks"] + lines["entry_dirty_rewritten"] +
+            lines["exit_entry_dirty_lines"], "kernel census leaves an entry-dirty line unaccounted")
+    require(lines["entry_property_dirty_lines"] <= min(lines["entry_property_lines"], lines["entry_dirty_lines"]) and
+            max(lines["entry_property_lines"], lines["entry_dirty_lines"]) <= lines["entry_valid_lines"] and
+            lines["exit_entry_dirty_lines"] <= lines["exit_dirty_lines"] and
+            max(lines["exit_dirty_lines"], lines["exit_property_lines"]) <= lines["exit_valid_lines"],
+            "kernel census line counts are inconsistent")
+    segments = census.get("segments")
+    require(isinstance(segments, Mapping) and set(segments) == set(CENSUS_SEGMENTS),
+            "kernel census segments are incomplete")
+    result = {"kernel_census_passes": passes, **{"kernel_census_" + key: value for key, value in lines.items()}}
+    for counter in CENSUS_COUNTERS:
+        values = [_census_unsigned(segments[segment], counter) for segment in CENSUS_SEGMENTS]
+        require(sum(values) == _census_unsigned(kernel, counter),
+                f"kernel census segments do not sum to the kernel: {counter}")
+        result.update({f"kernel_census_{segment}_{counter}": value
+                       for segment, value in zip(CENSUS_SEGMENTS, values)})
+    for segment in CENSUS_SEGMENTS:
+        offchip = _census_unsigned(segments[segment], "total_offchip_traffic")
+        require(offchip == sum(result[f"kernel_census_{segment}_{counter}"] for counter in
+                               ("memory_accesses", "prefetch_fills", "llc_writebacks")),
+                f"invalid kernel census traffic sum: {segment}")
+        result[f"kernel_census_{segment}_total_offchip_traffic"] = offchip
+        setup = _census_unsigned(segments[segment], "entry_dirty_writebacks")
+        require(setup <= result[f"kernel_census_{segment}_llc_writebacks"],
+                f"kernel census charges a segment more setup writebacks than it wrote back: {segment}")
+        result[f"kernel_census_{segment}_entry_dirty_writebacks"] = setup
+    # Pass segments exist only for the passes the kernel ran.
+    empty = ("first_pass", "between_passes", "later_passes", "after_last_pass") if passes == 0 else (
+        ("between_passes", "later_passes") if passes == 1 else ())
+    require(all(result[f"kernel_census_{segment}_{counter}"] == 0
+                for segment in empty for counter in CENSUS_COUNTERS),
+            "kernel census charges a pass segment the kernel did not run")
+    require(lines["entry_dirty_writebacks"] <= _census_unsigned(kernel, "llc_writebacks"),
+            "kernel census charges more setup writebacks than the kernel wrote back")
+    require(sum(result[f"kernel_census_{segment}_entry_dirty_writebacks"] for segment in CENSUS_SEGMENTS) ==
+            lines["entry_dirty_writebacks"], "kernel census setup writebacks by segment do not sum to the census")
+    return result
+
+
 def resolve_layout(
     *, records: int, vertices: int, maximum_id: int,
     traversals: int, requested_bytes: int = 0, minimum_mantissa_bits: int = 0,

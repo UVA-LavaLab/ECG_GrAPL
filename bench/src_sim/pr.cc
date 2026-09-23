@@ -227,6 +227,7 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         cache.writeArray(contribution.data(), node);
     }
     cache.resetStats();
+    cache.markKernelEntry();
     if (record_mode) {
         std::cerr << "[ECG-RECORD-STREAM ";
         ecg_record::writeLayoutFields(std::cerr, layout);
@@ -244,6 +245,7 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     const uint64_t out_index = reinterpret_cast<uint64_t>(graph.out_index_storage());
     uint64_t index_reads = 0;
     for (int iteration = 0; iteration < iterations; ++iteration) {
+        cache.markKernelPass(true);
         if (record_mode)
             cache.recordIteration(uint64_t(iteration) * requirements.record_count, iteration + 1 < iterations);
         for (NodeID node = 0; node < graph.num_nodes(); ++node) {
@@ -284,6 +286,7 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
             cache.writeArray(contribution.data(), node);
             contribution[node] = score / graph.out_degree(node);
         }
+        cache.markKernelPass(false);
     }
     if (record_mode)
         cache.finishRecord(requirements.record_count * iterations);

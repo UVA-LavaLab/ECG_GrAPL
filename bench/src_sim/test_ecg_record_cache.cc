@@ -1,10 +1,15 @@
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
+#include <random>
+#include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "cache_sim/cache_sim.h"
+#include "kernel_census_receipt.h"
 
 bool exerciseHierarchy(uint8_t bytes, ecg_record::Mechanism mechanism) {
     using namespace cache_sim;
@@ -482,6 +487,251 @@ int exerciseRrpvOrderWithoutLru() {
     return 0;
 }
 
+// The kernel census on a hand-traced stream. A 1-way L1 and a 1-way L2 set
+// send every access that is not an immediate repeat to the single 4-way L3
+// set, so under LRU each count below follows by hand. C and D are lines of two
+// property arrays. Setup writes A, B and C and reads E, so the kernel enters
+// holding one property line. Pass one rewrites A and evicts B, so the first
+// pass carries setup's one writeback; pass two re-reads C and reads D,
+// evicting clean E, so the kernel leaves holding two property lines and C
+// still dirty from setup. Returns zero, or the number of the failed check.
+int exerciseKernelCensus() {
+    using namespace cache_sim;
+    constexpr uint64_t A = 0x0000, B = 0x1000, C = 0x2000, D = 0x3000, E = 0x4000, F = 0x5000;
+    std::vector<uint32_t> degrees(16, 1);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), 16, 8, true);
+    for (const uint64_t array : {C, D})
+        context.registerPropertyArray(reinterpret_cast<float*>(array), 16, 4, 256, 0.50, true);
+    CacheHierarchy cache(64, 1, 128, 1, 256, 4, 64,
+        EvictionPolicy::LRU, EvictionPolicy::LRU, EvictionPolicy::LRU);
+    cache.initGraphContext(&context);
+    // Before the kernel boundary, pass marks are ignored and nothing is emitted.
+    cache.markKernelPass(false);
+    cache.markKernelPass(true);
+    for (const uint64_t line : {A, B, C})
+        cache.access(line, true);
+    cache.access(E);
+    if (cache.toJSON().find("kernel_census") != std::string::npos)
+        return 1;
+    cache.markKernelEntry();
+    cache.access(E);
+    cache.markKernelPass(true);
+    cache.access(A, true);
+    cache.access(F);
+    cache.markKernelPass(false);
+    cache.access(F);
+    cache.markKernelPass(true);
+    cache.access(C);
+    cache.access(D);
+    cache.markKernelPass(false);
+    cache.access(D);
+    const std::string json = cache.toJSON();
+    const std::string census = kernelCensusLine(json);
+    if (census.empty())
+        return 2;
+    const std::string idle = "{\"total_accesses\":1,\"memory_accesses\":0,\"prefetch_fills\":0,"
+        "\"llc_writebacks\":0,\"llc_hits\":0,\"llc_misses\":0,\"llc_property_hits\":0,"
+        "\"llc_property_misses\":0,\"total_offchip_traffic\":0,\"entry_dirty_writebacks\":0}";
+    for (const std::string& field : std::vector<std::string>{
+            "\"entries\":1,", "\"passes\":2,", "\"entry_valid_lines\":4,",
+            "\"entry_dirty_lines\":3,", "\"entry_property_lines\":1,",
+            "\"entry_property_dirty_lines\":1,", "\"entry_dirty_writebacks\":1,",
+            "\"entry_dirty_rewritten\":1,", "\"exit_valid_lines\":4,",
+            "\"exit_dirty_lines\":2,", "\"exit_property_lines\":2,",
+            "\"exit_entry_dirty_lines\":1,",
+            "\"before_first_pass\":" + idle,
+            "\"first_pass\":{\"total_accesses\":2,\"memory_accesses\":1,\"prefetch_fills\":0,"
+                "\"llc_writebacks\":1,\"llc_hits\":1,\"llc_misses\":1,\"llc_property_hits\":0,"
+                "\"llc_property_misses\":0,\"total_offchip_traffic\":2,\"entry_dirty_writebacks\":1}",
+            "\"between_passes\":" + idle,
+            "\"later_passes\":{\"total_accesses\":2,\"memory_accesses\":1,\"prefetch_fills\":0,"
+                "\"llc_writebacks\":0,\"llc_hits\":1,\"llc_misses\":1,\"llc_property_hits\":1,"
+                "\"llc_property_misses\":1,\"total_offchip_traffic\":1,\"entry_dirty_writebacks\":0}",
+            "\"after_last_pass\":" + idle})
+        if (census.find(field) == std::string::npos) {
+            std::printf("kernel census lacks %s in %s\n", field.c_str(), census.c_str());
+            return 3;
+        }
+    if (cache.toJSON() != json)
+        return 4;
+    // A kernel may release its graph context before the receipt is written,
+    // so the exit residue is classified by the regions the census armed with.
+    cache.initGraphContext(nullptr);
+    if (kernelCensusLine(cache.toJSON()) != census)
+        return 5;
+    return 0;
+}
+
+// A reproducible stream over 48 lines, the first 24 a governed property array
+// and a third of the accesses writes, that enters the kernel at access 3000
+// and runs three passes with gaps around them, marking the boundaries as a
+// kernel does. PLAIN leaves the census unarmed, ARMED arms it and CLEANED also
+// cleans every last-level line at the boundary. Every run resets its
+// statistics at the boundary, so its L3 counters cover the kernel alone.
+enum class CensusRun { PLAIN, ARMED, CLEANED };
+
+void replayCensusStream(cache_sim::CacheHierarchy& cache, CensusRun run) {
+    using Entry = cache_sim::CacheHierarchy::KernelEntryForTest;
+    constexpr uint64_t base = 0x10000;
+    constexpr std::size_t entry = 3000, end = 6000;
+    cache.setKernelEntryForTest(run == CensusRun::PLAIN ? Entry::UNARMED :
+                                run == CensusRun::CLEANED ? Entry::CLEAN : Entry::AS_BUILT);
+    std::mt19937_64 random(20260923);
+    for (std::size_t step = 0; step < end; ++step) {
+        if (step == entry) {
+            cache.resetStats();
+            cache.markKernelEntry();
+        }
+        if (step >= entry && (step - entry) % 1000 == 50)
+            cache.markKernelPass(true);
+        const uint64_t line = random() % 48;
+        cache.access(base + line * 64, random() % 3 == 0);
+        if (step >= entry && (step - entry) % 1000 == 949)
+            cache.markKernelPass(false);
+    }
+}
+
+// The census must observe without steering. For every policy the armed
+// receipt, less its census line, is byte-identical to the unarmed one, and the
+// unarmed receipt carries no census. Returns zero, or the failed check.
+int exerciseKernelCensusIsPassive() {
+    using namespace cache_sim;
+    std::vector<uint32_t> degrees(384, 1);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), 384, 384, true);
+    context.registerPropertyArray(reinterpret_cast<float*>(0x10000), 384, 4, 1024, 0.50, true);
+    for (const auto policy : {EvictionPolicy::LRU, EvictionPolicy::FIFO, EvictionPolicy::RANDOM,
+             EvictionPolicy::SRRIP, EvictionPolicy::GRASP}) {
+        CacheHierarchy plain(128, 2, 256, 2, 1024, 4, 64,
+            EvictionPolicy::LRU, EvictionPolicy::LRU, policy);
+        CacheHierarchy armed(128, 2, 256, 2, 1024, 4, 64,
+            EvictionPolicy::LRU, EvictionPolicy::LRU, policy);
+        plain.initGraphContext(&context);
+        armed.initGraphContext(&context);
+        replayCensusStream(plain, CensusRun::PLAIN);
+        replayCensusStream(armed, CensusRun::ARMED);
+        const std::string reference = plain.toJSON(), observed = armed.toJSON();
+        if (reference.find("kernel_census") != std::string::npos)
+            return 1;
+        if (withoutKernelCensus(observed) != reference)
+            return 2;
+        // A stream that never evicts an entry-dirty line could not fail below.
+        const std::string census = kernelCensusLine(observed);
+        if (receiptValue(census, "entries") != 1 || receiptValue(census, "passes") != 3 ||
+            receiptValue(census, "entry_property_lines") == 0 ||
+            receiptValue(census, "entry_dirty_writebacks") == 0)
+            return 3;
+    }
+    return 0;
+}
+
+// No replacement decision reads the dirty bit, so cleaning the last level at
+// the kernel boundary must leave every hit, miss and eviction unchanged and
+// move exactly what the census attributes to setup: the writebacks of lines
+// dirtied before the kernel, each from the segment the census charged it to,
+// and the setup-dirty lines still resident at the end. Returns zero, or the
+// number of the failed check.
+int exerciseCleanEntryCounterfactual() {
+    using namespace cache_sim;
+    std::vector<uint32_t> degrees(384, 1);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), 384, 384, true);
+    context.registerPropertyArray(reinterpret_cast<float*>(0x10000), 384, 4, 1024, 0.50, true);
+    // A stream whose setup writebacks all fell before the first pass could not
+    // tell a pass from the boundary; some policy must carry one into a pass.
+    bool setup_writeback_in_pass = false;
+    for (const auto policy : {EvictionPolicy::LRU, EvictionPolicy::FIFO, EvictionPolicy::RANDOM,
+             EvictionPolicy::SRRIP, EvictionPolicy::GRASP}) {
+        CacheHierarchy census(128, 2, 256, 2, 1024, 4, 64,
+            EvictionPolicy::LRU, EvictionPolicy::LRU, policy);
+        CacheHierarchy cleaned(128, 2, 256, 2, 1024, 4, 64,
+            EvictionPolicy::LRU, EvictionPolicy::LRU, policy);
+        census.initGraphContext(&context);
+        cleaned.initGraphContext(&context);
+        replayCensusStream(census, CensusRun::ARMED);
+        replayCensusStream(cleaned, CensusRun::CLEANED);
+        const auto& observed = census.getL3Stats();
+        const auto& clean = cleaned.getL3Stats();
+        if (observed.hits.load() != clean.hits.load() ||
+            observed.misses.load() != clean.misses.load() ||
+            observed.evictions.load() != clean.evictions.load() ||
+            census.getMemoryAccesses() != cleaned.getMemoryAccesses())
+            return 1;
+        const std::string line = kernelCensusLine(census.toJSON());
+        const std::string clean_line = kernelCensusLine(cleaned.toJSON());
+        if (receiptValue(clean_line, "entry_dirty_lines") != 0 ||
+            receiptValue(clean_line, "exit_entry_dirty_lines") != 0)
+            return 2;
+        const uint64_t setup_writebacks = receiptValue(line, "entry_dirty_writebacks");
+        if (setup_writebacks == 0 || setup_writebacks == UINT64_MAX)
+            return 3;
+        if (clean.writebacks.load() != observed.writebacks.load() - setup_writebacks ||
+            receiptValue(clean_line, "exit_dirty_lines") !=
+                receiptValue(line, "exit_dirty_lines") - receiptValue(line, "exit_entry_dirty_lines"))
+            return 4;
+        // Cleaning moves no line, so both runs leave the same lines resident,
+        // property lines among them.
+        const uint64_t resident_property = receiptValue(line, "exit_property_lines");
+        if (resident_property == 0 || resident_property == UINT64_MAX ||
+            receiptValue(clean_line, "exit_property_lines") != resident_property ||
+            receiptValue(clean_line, "exit_valid_lines") != receiptValue(line, "exit_valid_lines"))
+            return 8;
+        uint64_t charged = 0;
+        for (const char* segment : {"before_first_pass", "first_pass", "between_passes",
+                 "later_passes", "after_last_pass"}) {
+            const uint64_t setup = segmentValue(line, segment, "entry_dirty_writebacks");
+            if (setup == UINT64_MAX ||
+                segmentValue(clean_line, segment, "llc_writebacks") !=
+                    segmentValue(line, segment, "llc_writebacks") - setup)
+                return 5;
+            charged += setup;
+            const std::string name = segment;
+            setup_writeback_in_pass |= setup > 0 && (name == "first_pass" || name == "later_passes");
+        }
+        if (charged != setup_writebacks)
+            return 6;
+    }
+    return setup_writeback_in_pass ? 0 : 7;
+}
+
+// The census fails closed on anything that would misplace a boundary: a pass
+// closed before it opens or opened twice, a receipt or a kernel boundary
+// inside a pass, and a statistics reset after the boundary. A new boundary
+// re-arms it and counts the entry. Returns zero, or the failed check.
+int exerciseKernelCensusFailsClosed() {
+    using namespace cache_sim;
+    const auto refuses = [](const auto& action) {
+        try {
+            action();
+        } catch (const std::logic_error&) {
+            return true;
+        }
+        return false;
+    };
+    CacheHierarchy cache(64, 1, 128, 1, 256, 4, 64,
+        EvictionPolicy::LRU, EvictionPolicy::LRU, EvictionPolicy::LRU);
+    cache.access(0x0000, true);
+    cache.markKernelEntry();
+    if (!refuses([&] { cache.markKernelPass(false); }))
+        return 1;
+    cache.markKernelPass(true);
+    if (!refuses([&] { cache.markKernelPass(true); }) || !refuses([&] { cache.toJSON(); }) ||
+        !refuses([&] { cache.markKernelEntry(); }))
+        return 2;
+    cache.markKernelPass(false);
+    if (receiptValue(kernelCensusLine(cache.toJSON()), "passes") != 1)
+        return 3;
+    cache.resetStats();
+    if (!refuses([&] { cache.toJSON(); }))
+        return 4;
+    cache.markKernelEntry();
+    const std::string census = kernelCensusLine(cache.toJSON());
+    if (receiptValue(census, "entries") != 2 || receiptValue(census, "passes") != 0)
+        return 5;
+    return 0;
+}
+
 int main() {
     using namespace cache_sim;
     ecg_record::Requirements requirements;
@@ -583,6 +833,22 @@ int main() {
     if (const int check = exerciseRrpvOrderWithoutLru()) {
         std::printf("record RRPV order check %d failed [FAIL]\n", check);
         return 12;
+    }
+    if (const int check = exerciseKernelCensus()) {
+        std::printf("kernel census check %d failed [FAIL]\n", check);
+        return 13;
+    }
+    if (const int check = exerciseKernelCensusIsPassive()) {
+        std::printf("kernel census passivity check %d failed [FAIL]\n", check);
+        return 14;
+    }
+    if (const int check = exerciseCleanEntryCounterfactual()) {
+        std::printf("clean-entry counterfactual check %d failed [FAIL]\n", check);
+        return 15;
+    }
+    if (const int check = exerciseKernelCensusFailsClosed()) {
+        std::printf("kernel census fail-closed check %d failed [FAIL]\n", check);
+        return 16;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;

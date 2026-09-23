@@ -583,6 +583,7 @@ struct CacheLine {
     bool ecg_ref32_prefetch = false;
     ecg_record::LineMetadata record_metadata;
     bool pin = false;            // PIN policy: line is pinned in cache (high-reuse region)
+    bool entry_dirty = false;    // Kernel census only: dirty at kernel entry, not rewritten since
 };
 
 class CacheObservationSink {
@@ -1106,6 +1107,10 @@ public:
                     observeRecord(set[i], *record);
                 if (is_write) {
                     set[i].dirty = true;
+                    if (set[i].entry_dirty) {
+                        set[i].entry_dirty = false;
+                        ++entry_dirty_rewritten_;
+                    }
                 }
                 recordAdmissionAccess(set_idx, false);
                 return true;
@@ -1350,6 +1355,8 @@ public:
             }
             if (set[victim_idx].dirty) {
                 stats_.writebacks++;
+                if (set[victim_idx].entry_dirty)
+                    ++entry_dirty_writebacks_;
                 recordDuelTransfer(set_idx);
             }
         }
@@ -1358,6 +1365,7 @@ public:
         set[victim_idx].tag = tag;
         set[victim_idx].valid = true;
         set[victim_idx].dirty = is_write;
+        set[victim_idx].entry_dirty = false;
         set[victim_idx].last_access = global_time_++;
         set[victim_idx].insert_time = global_time_;
         set[victim_idx].access_count = 1;
@@ -2209,7 +2217,88 @@ public:
         return false;
     }
 
+    // Kernel census. Passive: no replacement, insertion, admission or
+    // prefetch decision reads the marks or counters below. Arming marks every
+    // line that is dirty at the kernel boundary; a write hit or an eviction
+    // retires the mark, so each marked line is rewritten, written back or still
+    // resident when the kernel ends. Arming also keeps the property regions
+    // registered then, so the exit residue is classified like the entry even
+    // after the kernel has released its graph context.
+    struct KernelCensusEntry {
+        uint64_t valid_lines = 0, dirty_lines = 0;
+        uint64_t property_lines = 0, property_dirty_lines = 0;
+    };
+    struct KernelCensusExit {
+        uint64_t valid_lines = 0, dirty_lines = 0;
+        uint64_t property_lines = 0, entry_dirty_lines = 0;
+    };
+
+    KernelCensusEntry armKernelCensus() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        KernelCensusEntry entry;
+        entry_dirty_writebacks_ = 0;
+        entry_dirty_rewritten_ = 0;
+        census_region_count_ = graph_ctx_ ? graph_ctx_->num_regions : 0;
+        for (uint32_t i = 0; i < census_region_count_; ++i)
+            census_regions_[i] = {graph_ctx_->regions[i].base_address, graph_ctx_->regions[i].upper_bound};
+        for (auto& set : cache_)
+            for (auto& line : set) {
+                line.entry_dirty = line.valid && line.dirty;
+                if (!line.valid)
+                    continue;
+                const bool property = censusPropertyLine(line.line_addr);
+                ++entry.valid_lines;
+                entry.dirty_lines += line.dirty;
+                entry.property_lines += property;
+                entry.property_dirty_lines += property && line.dirty;
+            }
+        return entry;
+    }
+
+    KernelCensusExit kernelCensusExit() const {
+        KernelCensusExit exit;
+        for (const auto& set : cache_)
+            for (const auto& line : set) {
+                if (!line.valid)
+                    continue;
+                ++exit.valid_lines;
+                exit.dirty_lines += line.dirty;
+                exit.property_lines += censusPropertyLine(line.line_addr);
+                exit.entry_dirty_lines += line.entry_dirty;
+            }
+        return exit;
+    }
+
+    uint64_t entryDirtyWritebacks() const { return entry_dirty_writebacks_; }
+    uint64_t entryDirtyRewritten() const { return entry_dirty_rewritten_; }
+
+    // The entry counterfactuals: every line keeps its place and its
+    // replacement state; only its dirty bit is cleared or, if valid, set.
+    void setDirtyLinesForTest(bool dirty) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto& set : cache_)
+            for (auto& line : set) {
+                line.dirty = dirty && line.valid;
+                line.entry_dirty = false;
+            }
+    }
+
 private:
+    // A line holds property data when either end lies in a region the census
+    // armed with.
+    bool censusPropertyLine(uint64_t line_addr) const {
+        const uint64_t last = line_addr + line_size_ - 1;
+        for (uint32_t i = 0; i < census_region_count_; ++i) {
+            const auto& [base, upper] = census_regions_[i];
+            if ((line_addr >= base && line_addr < upper) || (last >= base && last < upper))
+                return true;
+        }
+        return false;
+    }
+
+    uint64_t entry_dirty_writebacks_ = 0, entry_dirty_rewritten_ = 0;
+    std::array<std::pair<uint64_t, uint64_t>, MAX_PROPERTY_REGIONS> census_regions_{};
+    uint32_t census_region_count_ = 0;
     ecg_record::NativeConfiguration record_configuration_;
     ecg_record::Receiver record_receiver_;
     bool record_configured_ = false;
@@ -3988,6 +4077,59 @@ private:
     }
 };
 
+class CacheHierarchy;
+
+struct AlgorithmTraffic {
+    uint64_t total_accesses = 0;
+    uint64_t memory_accesses = 0;
+    uint64_t prefetch_fills = 0;
+    uint64_t llc_writebacks = 0;
+    uint64_t llc_hits = 0, llc_misses = 0, llc_property_hits = 0, llc_property_misses = 0;
+
+    uint64_t offchip() const { return memory_accesses + prefetch_fills + llc_writebacks; }
+
+    static AlgorithmTraffic snapshot(const CacheHierarchy& cache);
+
+    void accumulate(const AlgorithmTraffic& other) {
+        for (auto field : {&AlgorithmTraffic::total_accesses, &AlgorithmTraffic::memory_accesses,
+                &AlgorithmTraffic::prefetch_fills, &AlgorithmTraffic::llc_writebacks,
+                &AlgorithmTraffic::llc_hits, &AlgorithmTraffic::llc_misses,
+                &AlgorithmTraffic::llc_property_hits, &AlgorithmTraffic::llc_property_misses})
+            if (!ecg_record::checkedAdd(this->*field, other.*field, this->*field))
+                throw std::overflow_error("algorithm traffic overflow");
+    }
+
+    AlgorithmTraffic since(const AlgorithmTraffic& before) const {
+        if (total_accesses < before.total_accesses || memory_accesses < before.memory_accesses ||
+            prefetch_fills < before.prefetch_fills || llc_writebacks < before.llc_writebacks ||
+            llc_hits < before.llc_hits || llc_misses < before.llc_misses ||
+            llc_property_hits < before.llc_property_hits || llc_property_misses < before.llc_property_misses)
+            throw std::logic_error("algorithm phase counters were reset");
+        return {total_accesses - before.total_accesses, memory_accesses - before.memory_accesses,
+                prefetch_fills - before.prefetch_fills, llc_writebacks - before.llc_writebacks,
+                llc_hits - before.llc_hits, llc_misses - before.llc_misses,
+                llc_property_hits - before.llc_property_hits, llc_property_misses - before.llc_property_misses};
+    }
+
+    void write(std::ostream& output) const {
+        output << '{';
+        writeFields(output);
+        output << '}';
+    }
+
+    // The fields alone, for an object that carries more than the traffic.
+    void writeFields(std::ostream& output) const {
+        output << "\"total_accesses\":" << total_accesses
+               << ",\"memory_accesses\":" << memory_accesses
+               << ",\"prefetch_fills\":" << prefetch_fills
+               << ",\"llc_writebacks\":" << llc_writebacks
+               << ",\"llc_hits\":" << llc_hits << ",\"llc_misses\":" << llc_misses
+               << ",\"llc_property_hits\":" << llc_property_hits
+               << ",\"llc_property_misses\":" << llc_property_misses
+               << ",\"total_offchip_traffic\":" << offchip();
+    }
+};
+
 // ============================================================================
 // Cache Hierarchy (L1 -> L2 -> L3)
 // ============================================================================
@@ -4777,9 +4919,65 @@ public:
         stride_pf_untrained_ = 0;
         popt_stream_lines_ = 0;
         popt_stream_columns_ = 0;
+        // A reset after the kernel boundary would separate the census from
+        // the counters it must sum to; only a new boundary re-arms it.
+        census_reset_ = census_armed_;
         std::lock_guard<std::mutex> lock(prefetch_mutex_);
         prefetched_lines_.clear();
     }
+
+    // Kernel census: the setup/kernel boundary. Arms the passive census,
+    // records which last-level lines are dirty at entry, and starts the
+    // segments.
+    // Re-arming at a later boundary counts the entry and restarts the rest.
+    void markKernelEntry() {
+        if (census_pass_open_)
+            throw std::logic_error("kernel census: kernel boundary inside a graph pass");
+        if (kernel_entry_for_test_ == KernelEntryForTest::UNARMED)
+            return;
+        if (kernel_entry_for_test_ != KernelEntryForTest::AS_BUILT)
+            l3_->setDirtyLinesForTest(kernel_entry_for_test_ == KernelEntryForTest::DIRTY);
+        census_armed_ = true;
+        census_reset_ = false;
+        ++census_entries_;
+        census_passes_ = 0;
+        census_segments_.fill(AlgorithmTraffic());
+        census_entry_writebacks_.fill(0);
+        census_mark_ = AlgorithmTraffic::snapshot(*this);
+        census_entry_ = l3_->armKernelCensus();
+        census_entry_writebacks_mark_ = l3_->entryDirtyWritebacks();
+    }
+
+    // Kernel census: a graph-pass boundary. Ignored until the kernel boundary
+    // arms the census, so setup passes are never segmented.
+    void markKernelPass(bool begin) {
+        if (!census_armed_)
+            return;
+        if (census_reset_)
+            throw std::logic_error("kernel census: statistics were reset inside the kernel");
+        if (begin == census_pass_open_)
+            throw std::logic_error(begin ? "kernel census: graph pass opened twice"
+                                         : "kernel census: graph pass closed before it opened");
+        const size_t segment = begin
+            ? (census_passes_ == 0 ? kCensusBeforeFirstPass : kCensusBetweenPasses)
+            : (census_passes_ == 0 ? kCensusFirstPass : kCensusLaterPasses);
+        const AlgorithmTraffic now = AlgorithmTraffic::snapshot(*this);
+        census_segments_[segment].accumulate(now.since(census_mark_));
+        census_mark_ = now;
+        const uint64_t written_back = l3_->entryDirtyWritebacks();
+        census_entry_writebacks_[segment] += written_back - census_entry_writebacks_mark_;
+        census_entry_writebacks_mark_ = written_back;
+        census_pass_open_ = begin;
+        if (!begin)
+            ++census_passes_;
+    }
+
+    // Kernel-boundary modes for tests. AS_BUILT arms the census on the cache
+    // setup left; UNARMED leaves it unarmed, as every kernel ran before the
+    // census existed; CLEAN and DIRTY first clear or set every last-level
+    // dirty bit in place, leaving residency and replacement state untouched.
+    enum class KernelEntryForTest : uint8_t { AS_BUILT, UNARMED, CLEAN, DIRTY };
+    void setKernelEntryForTest(KernelEntryForTest entry) { kernel_entry_for_test_ = entry; }
 
     void flushRef32CommitUpdates() {
         if (!ref32ResourcesActive())
@@ -5440,10 +5638,56 @@ public:
         ss << "  \"stream_prefetch_issued\": " << stride_pf_issued_ << ",\n";
         ss << "  \"stream_prefetch_throttled\": " << stride_pf_throttled_ << ",\n";
         ss << "  \"stream_prefetch_untrained\": " << stride_pf_untrained_ << ",\n";
+        // Only an armed kernel emits the census, so every other receipt is
+        // byte-identical to what it was before the census existed.
+        if (census_armed_)
+            ss << "  \"kernel_census\": " << kernelCensusJSON() << ",\n";
         ss << "  \"L1\": " << levelToJSON(*l1_) << ",\n";
         ss << "  \"L2\": " << levelToJSON(*l2_) << ",\n";
         ss << "  \"L3\": " << levelToJSON(*l3_) << "\n";
         ss << "}";
+        return ss.str();
+    }
+
+    // The census as one line. Segments cover the kernel from its boundary to
+    // now, so they sum to the kernel phase, and each names the setup
+    // writebacks among its own; every mark set at entry must be accounted as
+    // written back, rewritten or still resident.
+    std::string kernelCensusJSON() const {
+        if (census_reset_)
+            throw std::logic_error("kernel census: statistics were reset inside the kernel");
+        if (census_pass_open_)
+            throw std::logic_error("kernel census: receipt written inside a graph pass");
+        const size_t trailing = census_passes_ == 0 ? kCensusBeforeFirstPass : kCensusAfterLastPass;
+        auto segments = census_segments_;
+        segments[trailing].accumulate(AlgorithmTraffic::snapshot(*this).since(census_mark_));
+        const auto exit = l3_->kernelCensusExit();
+        const uint64_t written_back = l3_->entryDirtyWritebacks();
+        const uint64_t rewritten = l3_->entryDirtyRewritten();
+        auto entry_writebacks = census_entry_writebacks_;
+        entry_writebacks[trailing] += written_back - census_entry_writebacks_mark_;
+        if (census_entry_.dirty_lines != written_back + rewritten + exit.entry_dirty_lines)
+            throw std::logic_error("kernel census: an entry-dirty line is unaccounted");
+        std::ostringstream ss;
+        ss << "{\"entries\":" << census_entries_ << ",\"passes\":" << census_passes_
+           << ",\"entry_valid_lines\":" << census_entry_.valid_lines
+           << ",\"entry_dirty_lines\":" << census_entry_.dirty_lines
+           << ",\"entry_property_lines\":" << census_entry_.property_lines
+           << ",\"entry_property_dirty_lines\":" << census_entry_.property_dirty_lines
+           << ",\"entry_dirty_writebacks\":" << written_back
+           << ",\"entry_dirty_rewritten\":" << rewritten
+           << ",\"exit_valid_lines\":" << exit.valid_lines
+           << ",\"exit_dirty_lines\":" << exit.dirty_lines
+           << ",\"exit_property_lines\":" << exit.property_lines
+           << ",\"exit_entry_dirty_lines\":" << exit.entry_dirty_lines << ",\"segments\":{";
+        static constexpr const char* kNames[kCensusSegments] = {
+            "before_first_pass", "first_pass", "between_passes", "later_passes", "after_last_pass"};
+        for (size_t segment = 0; segment < kCensusSegments; ++segment) {
+            ss << (segment ? ",\"" : "\"") << kNames[segment] << "\":{";
+            segments[segment].writeFields(ss);
+            ss << ",\"entry_dirty_writebacks\":" << entry_writebacks[segment] << '}';
+        }
+        ss << "}}";
         return ss.str();
     }
 
@@ -5477,6 +5721,21 @@ private:
         uint64_t line = 0;
         uint64_t ready_step = 0;
     };
+
+    // Kernel census segments, in kernel order.
+    enum : size_t {
+        kCensusBeforeFirstPass, kCensusFirstPass, kCensusBetweenPasses,
+        kCensusLaterPasses, kCensusAfterLastPass, kCensusSegments
+    };
+    bool census_armed_ = false, census_reset_ = false, census_pass_open_ = false;
+    uint64_t census_entries_ = 0, census_passes_ = 0;
+    AlgorithmTraffic census_mark_;
+    std::array<AlgorithmTraffic, kCensusSegments> census_segments_{};
+    // Writebacks of lines dirty at entry, by the segment each fell in.
+    uint64_t census_entry_writebacks_mark_ = 0;
+    std::array<uint64_t, kCensusSegments> census_entry_writebacks_{};
+    KernelEntryForTest kernel_entry_for_test_ = KernelEntryForTest::AS_BUILT;
+    CacheLevel::KernelCensusEntry census_entry_;
 
     bool record_model_ = false;
     bool record_replacement_ = false;
@@ -6234,6 +6493,13 @@ private:
         }
     }
 };
+
+inline AlgorithmTraffic AlgorithmTraffic::snapshot(const CacheHierarchy& cache) {
+    const auto& llc = cache.getL3Stats();
+    return {cache.getTotalAccesses(), cache.getMemoryAccesses(), cache.getPrefetchFills(),
+        cache.getWritebackTraffic(), llc.hits.load(), llc.misses.load(),
+        llc.prop_hits.load(), llc.prop_misses.load()};
+}
 
 // ============================================================================
 // FAST Cache Hierarchy - NO LOCKS, optimized for single-threaded simulation
