@@ -159,6 +159,7 @@ class AlgorithmBackend {
             options_.grasp_reference == ecg_algorithm::GraspReferenceMode::FLAT;
         context_.grasp_reference_consumer = referenceConsumer();
         cache_.setRecordGovernedFirst(options_.record_governed_first);
+        cache_.setRecordRrpvOrder(options_.record_rrpv_order);
         cache_.setRecordPressureGate(recordPressureGate());
         cache_.setRecordStoreKeepsBound(options_.record_store_keeps_bound);
         cache_.setRecordDeliveredExpiryClock(options_.record_delivered_expiry_clock);

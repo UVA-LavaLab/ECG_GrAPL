@@ -1697,6 +1697,12 @@ public:
         uint64_t base_no_future = 0;
         uint64_t base_kept = 0;
         uint64_t overridden = 0;
+        // Decisions taken under the RRPV order; those where that order chose a
+        // different way than recency would have from the same candidates; and
+        // decisions whose base victim came from the LRU scan.
+        uint64_t rrpv_ordered = 0;
+        uint64_t rrpv_changed = 0;
+        uint64_t base_lru = 0;
         // Census summed over decisions; divide by decisions for a per-eviction mean.
         uint64_t census_governed = 0;
         uint64_t census_finite = 0;
@@ -1942,6 +1948,14 @@ public:
         record_victim_options_.governed_first = governed_first;
     }
 
+    // Orders every record victim decision by RRPV; see VictimOptions::rrpv_order.
+    // No path that would fall back to a recency scan accepts it: findVictim and
+    // prefetch admission refuse it outside the record replacement rule.
+    void setRecordRrpvOrder(bool rrpv_order) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_victim_options_.rrpv_order = rrpv_order;
+    }
+
     // C2c: a store does not change when a line is next read, so the bound
     // stays a valid upper bound on the next potential designated read.
     void setRecordStoreKeepsBound(bool keeps) {
@@ -2155,6 +2169,9 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         if (!record_configured_)
             throw std::logic_error("Current ECG prefetch has no cache configuration");
+        // Admission consults the base victim, which the RRPV order never uses.
+        if (record_victim_options_.rrpv_order)
+            throw std::logic_error("RRPV-ordered victim rule has no prefetch admission");
         if (!record_replacement_)
             return true;
         const auto& set = cache_[getSetIndex(address)];
@@ -2550,6 +2567,13 @@ private:
                 if (!set[i].valid) return i;
             }
         }
+        // The RRPV order has no recency fallback: a decision under it is the
+        // record rule's or, before records bind, the GRASP base scan's.
+        if (record_victim_options_.rrpv_order &&
+            (window_profile_ || frontier_profile_ || grasp_phase_scoped_ ||
+             (record_configured_ ? !record_replacement_
+                                 : !record_prepared_ || record_base_policy_ != EvictionPolicy::GRASP)))
+            throw std::logic_error("RRPV-ordered victim rule reached a recency scan");
         if (grasp_phase_scoped_ && !grasp_graph_pass_)
             return findVictimLRU(set);
         if (window_profile_ || frontier_profile_) {
@@ -2622,15 +2646,21 @@ private:
                     record_victim_attribution_.census_expired_within_1m += behind <= 1048576;
                 }
             }
+            ecg_record::VictimOptions options = record_victim_options_;
             const auto select_base = [&]() {
-                return record_base_policy_ == EvictionPolicy::GRASP
-                    ? findVictimGRASP(set) : findVictimLRU(set);
+                // Under the RRPV order the rule takes the GRASP scan itself.
+                if (options.rrpv_order)
+                    throw std::logic_error("RRPV-ordered victim rule consulted the base policy");
+                if (record_base_policy_ == EvictionPolicy::GRASP)
+                    return findVictimGRASP(set);
+                ++record_victim_attribution_.base_lru;
+                return findVictimLRU(set);
             };
             std::size_t victim = 0;
             ecg_record::VictimTrace trace;
+            ecg_record::VictimAgeing ageing;
             // The rule is stateless, so the per-set signal is supplied here.
             // With the gate off this stays true and the rule is unchanged.
-            ecg_record::VictimOptions options = record_victim_options_;
             if (record_pressure_gate_ != RecordPressureGate::NO)
                 options.pressured = recordSetPressured(evicting_set_idx_);
             if (record_pressure_gate_ == RecordPressureGate::DUEL &&
@@ -2640,10 +2670,15 @@ private:
             if (ecg_record::selectVictim(
                     record_receiver_.layout(), ways.data(), set.size(),
                     record_receiver_.comparisonWatermark(), select_base, victim, &trace,
-                    options) !=
+                    options, &ageing) !=
                         ecg_record::Status::OK)
                 throw std::logic_error("Invalid current ECG victim selection");
+            // The rule never writes the ways it reads; the cache owns RRPV.
+            for (std::size_t index = 0; index < set.size(); ++index)
+                if ((ageing.ways >> index) & 1)
+                    set[index].rrpv = static_cast<uint8_t>(set[index].rrpv + ageing.amount);
             recordVictimAttribution(trace);
+            record_victim_attribution_.rrpv_ordered += options.rrpv_order;
             return victim;
         }
         if (record_prepared_)
@@ -3863,6 +3898,7 @@ private:
           case ecg_record::VictimPath::BASE_KEPT: ++a.base_kept; break;
           case ecg_record::VictimPath::OVERRIDDEN: ++a.overridden; break;
         }
+        a.rrpv_changed += trace.rrpv_changed;
         a.census_governed += trace.governed;
         a.census_finite += trace.finite;
         a.census_dead += trace.dead;
@@ -4187,6 +4223,10 @@ public:
 
     void setRecordGovernedFirst(bool governed_first) {
         l3_->setRecordGovernedFirst(governed_first);
+    }
+
+    void setRecordRrpvOrder(bool rrpv_order) {
+        l3_->setRecordRrpvOrder(rrpv_order);
     }
 
     void setRecordStoreKeepsBound(bool keeps) {
@@ -5235,6 +5275,9 @@ public:
             ss << "  \"ecg_record_victim_base_no_future\": " << a.base_no_future << ",\n";
             ss << "  \"ecg_record_victim_base_kept\": " << a.base_kept << ",\n";
             ss << "  \"ecg_record_victim_overridden\": " << a.overridden << ",\n";
+            ss << "  \"ecg_record_victim_rrpv_ordered\": " << a.rrpv_ordered << ",\n";
+            ss << "  \"ecg_record_victim_rrpv_changed\": " << a.rrpv_changed << ",\n";
+            ss << "  \"ecg_record_victim_base_lru\": " << a.base_lru << ",\n";
             ss << "  \"ecg_record_ways_governed\": " << a.census_governed << ",\n";
             ss << "  \"ecg_record_ways_finite\": " << a.census_finite << ",\n";
             ss << "  \"ecg_record_ways_dead\": " << a.census_dead << ",\n";

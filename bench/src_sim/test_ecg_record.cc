@@ -1208,6 +1208,200 @@ void testGovernedFirstEviction() {
     check(saw_ungoverned > 0, "the governed-first fixture exercises the non-governed path");
 }
 
+// A literal copy of cache_sim's findVictimGRASP on bare RRPVs: take the first
+// way at the maximum, otherwise age every way below it and look again.
+std::size_t graspScanReference(uint8_t* rrpv, std::size_t count) {
+    while (true) {
+        for (std::size_t index = 0; index < count; ++index)
+            if (rrpv[index] >= ecg_record::kVictimRrpvMax)
+                return index;
+        for (std::size_t index = 0; index < count; ++index)
+            if (rrpv[index] < ecg_record::kVictimRrpvMax)
+                ++rrpv[index];
+    }
+}
+
+void applyAgeing(uint8_t* rrpv, std::size_t count, const ecg_record::VictimAgeing& ageing) {
+    for (std::size_t index = 0; index < count; ++index)
+        if ((ageing.ways >> index) & 1)
+            rrpv[index] = static_cast<uint8_t>(rrpv[index] + ageing.amount);
+}
+
+// Under the RRPV order every choice the rule makes comes from the line's RRPV,
+// the GRASP half of ECG's state, and none from recency. Each case is built so
+// the recency order and the RRPV order disagree.
+void testRrpvOrderNeverReadsRecency() {
+    using namespace ecg_record;
+    auto req = requirements(32);
+    req.record_count = 34;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK, "RRPV order fixture layout");
+    VictimOptions governed; governed.governed_first = true;
+    VictimOptions governed_rrpv = governed; governed_rrpv.rrpv_order = true;
+    VictimOptions rrpv; rrpv.rrpv_order = true;
+    VictimAgeing ageing;
+    VictimTrace trace;
+    std::size_t victim = 0;
+    unsigned base_calls = 0;
+    const auto first_way = [&base_calls]() { ++base_calls; return std::size_t{0}; };
+
+    // The ageing is reported, never applied by the rule, so a caller that
+    // gives it nowhere to go has asked for a decision it cannot complete.
+    WayState single[1];
+    check(selectVictim(layout, single, 1, 19, victim, nullptr, rrpv) == Status::INVALID_COUNTS,
+          "the RRPV order refuses a call with no ageing output");
+
+    // Non-governed choice: way 0 is least recent, way 1 holds the higher RRPV.
+    WayState ways[3];
+    ways[0].rrpv = 3; ways[0].recency = 1;
+    ways[1].rrpv = 6; ways[1].recency = 9;
+    ways[2].property = true; ways[2].rrpv = 2; ways[2].recency = 5;
+    ways[2].state = State::FINITE; ways[2].deadline = 19 + 8;
+    check(selectVictim(layout, ways, 3, 19, victim, nullptr, governed) == Status::OK && victim == 0,
+          "the recency order takes the least recent non-governed way");
+    check(selectVictim(layout, ways, 3, 19, first_way, victim, &trace, governed_rrpv, &ageing) ==
+              Status::OK && victim == 1 && trace.path == VictimPath::UNGOVERNED_FIRST &&
+              trace.rrpv_changed,
+          "the RRPV order takes the non-governed way GRASP would evict");
+    check(ageing.amount == 1 && ageing.ways == 0b011,
+          "only the non-governed candidates age, by what the GRASP scan would add");
+
+    // DEAD ties: the higher RRPV first, then the lower way; nothing ages.
+    WayState dead[3];
+    dead[0].property = true; dead[0].state = State::DEAD; dead[0].rrpv = 2; dead[0].recency = 1;
+    dead[1].property = true; dead[1].state = State::DEAD; dead[1].rrpv = 5; dead[1].recency = 9;
+    dead[2].rrpv = 7; dead[2].recency = 4;
+    check(selectVictim(layout, dead, 3, 19, victim) == Status::OK && victim == 0,
+          "the recency order takes the least recent DEAD way");
+    check(selectVictim(layout, dead, 3, 19, first_way, victim, &trace, rrpv, &ageing) ==
+              Status::OK && victim == 1 && trace.path == VictimPath::DEAD_FIRST &&
+              trace.rrpv_changed && ageing.amount == 0 && ageing.ways == 0,
+          "the RRPV order takes the DEAD way with the higher RRPV and ages nothing");
+    dead[0].rrpv = 5; dead[0].recency = 9; dead[1].recency = 1;
+    check(selectVictim(layout, dead, 3, 19, first_way, victim, nullptr, rrpv, &ageing) ==
+              Status::OK && victim == 0,
+          "equal RRPV among DEAD ways resolves to the lower way");
+
+    // Override ties: way 0 is the GRASP base victim with the nearest bound;
+    // ways 1 and 2 carry the same farther bound.
+    WayState tie[3];
+    for (auto& way : tie) { way.property = true; way.state = State::FINITE; }
+    tie[0].rrpv = 7; tie[0].recency = 5; tie[0].deadline = 19 + 8;
+    tie[1].rrpv = 3; tie[1].recency = 1; tie[1].deadline = 19 + 64;
+    tie[2].rrpv = 5; tie[2].recency = 9; tie[2].deadline = 19 + 64;
+    check(selectVictim(layout, tie, 3, 19, first_way, victim) == Status::OK && victim == 1,
+          "the recency order breaks an equal-bound override by recency");
+    check(selectVictim(layout, tie, 3, 19, first_way, victim, &trace, rrpv, &ageing) ==
+              Status::OK && victim == 2 && trace.path == VictimPath::OVERRIDDEN &&
+              trace.rrpv_changed,
+          "the RRPV order breaks an equal-bound override by RRPV");
+    tie[1].rrpv = 5; tie[1].recency = 9; tie[2].recency = 1;
+    check(selectVictim(layout, tie, 3, 19, first_way, victim, nullptr, rrpv, &ageing) ==
+              Status::OK && victim == 1,
+          "equal RRPV and equal bound resolve to the lower way");
+
+    // The base victim is the GRASP scan's, whatever the base callback says:
+    // way 1 holds the maximum, the callback names way 0, and the set ages by
+    // the two steps the scan would take.
+    WayState plain[3];
+    plain[0].rrpv = 1; plain[0].recency = 1;
+    plain[1].rrpv = 5; plain[1].recency = 7;
+    plain[2].rrpv = 5; plain[2].recency = 3;
+    base_calls = 0;
+    check(selectVictim(layout, plain, 3, 19, first_way, victim, &trace, rrpv, &ageing) ==
+              Status::OK && victim == 1 && trace.path == VictimPath::BASE_NOT_GOVERNED &&
+              ageing.amount == 2 && ageing.ways == 0b111 && base_calls == 0,
+          "the RRPV order takes and ages as the GRASP scan, never the base callback");
+    VictimOptions relaxed = rrpv; relaxed.pressured = false;
+    check(selectVictim(layout, plain, 3, 19, first_way, victim, &trace, relaxed, &ageing) ==
+              Status::OK && victim == 1 && trace.path == VictimPath::UNPRESSURED &&
+              ageing.amount == 2 && ageing.ways == 0b111 && base_calls == 0,
+          "an unpressured set under the RRPV order is the GRASP scan too");
+
+    // The literal property: rewriting every recency changes nothing, on any
+    // shape and in any arm, and a trace never changes the result.
+    std::mt19937_64 rng(0x52525056);
+    const State states[4] = {State::UNKNOWN, State::FINITE, State::DEAD, State::WRAP};
+    int differed = 0, changed = 0;
+    for (int trial = 0; trial < 20000; ++trial) {
+        const std::size_t count = 1 + (rng() % 16);
+        const uint64_t sequence = rng() % 64;
+        WayState sample[16], rewritten[16];
+        for (std::size_t i = 0; i < count; ++i) {
+            sample[i].property = (rng() % 4) != 0;
+            sample[i].rrpv = static_cast<uint8_t>(rng() % 8);
+            sample[i].recency = rng() % 4096;
+            sample[i].state = states[rng() % 4];
+            sample[i].deadline = rng() % 128;
+            rewritten[i] = sample[i];
+            rewritten[i].recency = rng() % 4096;
+        }
+        VictimOptions options; options.rrpv_order = true;
+        options.governed_first = (rng() & 1) != 0;
+        options.pressured = (rng() & 3) != 0;
+        std::size_t a = 0, b = 0, c = 0;
+        VictimAgeing age_a, age_b, age_c;
+        VictimTrace traced;
+        const Status s1 = selectVictim(layout, sample, count, sequence, first_way, a,
+                                       nullptr, options, &age_a);
+        const Status s2 = selectVictim(layout, rewritten, count, sequence, first_way, b,
+                                       nullptr, options, &age_b);
+        const Status s3 = selectVictim(layout, sample, count, sequence, first_way, c,
+                                       &traced, options, &age_c);
+        if (s1 != Status::OK || s2 != s1 || s3 != s1 || a != b || a != c ||
+            age_a.ways != age_b.ways || age_a.amount != age_b.amount ||
+            age_a.ways != age_c.ways || age_a.amount != age_c.amount)
+            ++differed;
+        changed += traced.rrpv_changed;
+    }
+    check(differed == 0, "under the RRPV order no victim or ageing depends on recency");
+    check(changed > 0, "the fixture reaches choices the recency order would make differently");
+    check(base_calls == 0, "the RRPV order never consults the base callback");
+}
+
+// With no governed way in the set ECG has no bound to offer, and the RRPV
+// order must then be exactly GRASP: the same victim and the same ageing, in
+// every arm. This is what makes ECG at worst GRASP rather than at worst LRU.
+void testRrpvOrderIsGraspWithoutGovernedWays() {
+    using namespace ecg_record;
+    auto req = requirements(1024);
+    req.record_count = 64;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK, "GRASP parity fixture layout");
+    std::mt19937_64 rng(0x6A5F0A11);
+    int differed = 0, aged = 0;
+    unsigned base_calls = 0;
+    const auto first_way = [&base_calls]() { ++base_calls; return std::size_t{0}; };
+    for (int trial = 0; trial < 20000; ++trial) {
+        const std::size_t count = 1 + (rng() % 16);
+        WayState ways[16];
+        uint8_t reference[16], ordered[16];
+        for (std::size_t i = 0; i < count; ++i) {
+            ways[i].rrpv = static_cast<uint8_t>(rng() % 8);
+            ways[i].recency = rng() % 4096;
+            reference[i] = ordered[i] = ways[i].rrpv;
+        }
+        VictimOptions options; options.rrpv_order = true;
+        options.governed_first = (rng() & 1) != 0;
+        options.pressured = (rng() & 3) != 0;
+        std::size_t victim = 0;
+        VictimAgeing ageing;
+        const std::size_t expected = graspScanReference(reference, count);
+        if (selectVictim(layout, ways, count, rng() % 64, first_way, victim, nullptr,
+                         options, &ageing) != Status::OK || victim != expected) {
+            ++differed;
+            continue;
+        }
+        applyAgeing(ordered, count, ageing);
+        for (std::size_t i = 0; i < count; ++i)
+            if (ordered[i] != reference[i]) ++differed;
+        aged += ageing.amount != 0;
+    }
+    check(differed == 0, "with no governed way the RRPV order is the GRASP scan exactly");
+    check(aged > 0, "the parity fixture exercises ageing");
+    check(base_calls == 0, "the parity fixture never consults the base callback");
+}
+
 int main() {
     testAdaptiveBudgets();
     testSixBitConfiguration();
@@ -1229,6 +1423,8 @@ int main() {
     testVictimTraceIsPassive();
     testGovernedFirstEviction();
     testPressureGateRelaxesToTheBaseVictim();
+    testRrpvOrderNeverReadsRecency();
+    testRrpvOrderIsGraspWithoutGovernedWays();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }

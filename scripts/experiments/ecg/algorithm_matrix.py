@@ -58,6 +58,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--popt-rank-mode", choices=("future", "constant"), default="future")
     parser.add_argument("--grasp-reference", choices=("off", "full", "flat", "rank"), default="off")
     parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
+    parser.add_argument("--record-rrpv-order", choices=("no", "on"), default="no")
     parser.add_argument("--record-pressure-gate", choices=("no", "on", "duel"), default="no")
     parser.add_argument("--record-store-bound", choices=("drop", "keep"), default="drop")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
@@ -79,6 +80,12 @@ def parse_options(text: str) -> argparse.Namespace:
     if min(parsed.repeat, parsed.delta, parsed.max_passes, parsed.bfs_alpha, parsed.bfs_beta,
            parsed.window_observer_bytes) <= 0 or parsed.source < 0:
         raise RecordResourceError("invalid current algorithm parameters")
+    # The order ranks by GRASP tiers, which the kernel registers only for the
+    # GRASP_PAPER base. PageRank's labels always name the LRU base, so this is
+    # checked here rather than in rrpv_order_label.
+    if parsed.record_rrpv_order != "no" and (
+            parsed.record_base_policy != "GRASP_PAPER" or parsed.record_model != "next"):
+        raise RecordResourceError("record RRPV order requires the GRASP_PAPER record base under the NEXT model")
     parsed.source_list = []
     if parsed.sources:
         if not re.fullmatch(r"[0-9]+(?:,[0-9]+)*", parsed.sources):
@@ -152,6 +159,16 @@ def governed_first_label(label: str, governed_first: str) -> str:
     return label + "_GOVERNED_FIRST"
 
 
+def rrpv_order_label(label: str, rrpv_order: str) -> str:
+    if rrpv_order == "no":
+        return label
+    # Prefetch admission still consults the base victim, and the window and
+    # frontier models choose victims by their own rules.
+    require(rrpv_order == "on" and label.startswith("ECG_REPLACEMENT") and "_MODEL_" not in label,
+            "record RRPV order requires the current ECG replacement policy under the NEXT model")
+    return label + "_RRPV_ORDER"
+
+
 def grasp_reference_label(label: str, mode: str) -> str:
     if mode == "off":
         return label
@@ -174,9 +191,9 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   grasp_reference: str = "off", queries: int = 1,
                   governed_first: str = "no", store_bound: str = "drop",
                   expiry_clock: str = "progress",
-                  pressure_gate: str = "no") -> list[str]:
-    return [pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(governed_first_label(record_policy_label(
-                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), store_bound), expiry_clock), observer),
+                  pressure_gate: str = "no", rrpv_order: str = "no") -> list[str]:
+    return [pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(rrpv_order_label(governed_first_label(record_policy_label(
+                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), rrpv_order), store_bound), expiry_clock), observer),
                 grasp_scope), popt_rank_mode), grasp_reference), queries), pressure_gate)
             for spec in policies]
 
@@ -435,6 +452,9 @@ def validate_payload(
     require(options.record_governed_first == "no" or (
                 mode != "csr" and options.record_model == "next"),
             "governed-first requires the current NEXT record replacement rule")
+    require(options.record_rrpv_order == "no" or (
+                mode != "csr" and options.record_model == "next"),
+            "record RRPV order requires the current NEXT record replacement rule")
     expected_result = contract()["references"][algorithm]
     if evidence and graph_path.name == expected_result["graph"] and options.source == 0 and not options.source_list:
         require(graph.sha256 == contract()["graphs"][expected_result["graph"]]["sha256"],
@@ -455,6 +475,8 @@ def validate_victim_order(payload: dict[str, Any], options: argparse.Namespace) 
             "record expiry clock does not match the requested arm")
     require(payload["workload"].get("record_pressure_gate") == options.record_pressure_gate,
             "record pressure gate does not match the requested arm")
+    require(payload["workload"].get("record_rrpv_order") == options.record_rrpv_order,
+            "record RRPV order does not match the requested arm")
 
 
 def validate_grasp_reference(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
@@ -920,7 +942,8 @@ def run_cache_cell(
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
             options.frontier_gating, options.grasp_reference, options.queries,
             options.record_governed_first, options.record_store_bound,
-            options.record_expiry_clock, options.record_pressure_gate)[0]
+            options.record_expiry_clock, options.record_pressure_gate,
+            options.record_rrpv_order)[0]
         if reference:
             row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:
@@ -993,6 +1016,8 @@ def run_cache_cell(
             command.extend(("--record-governed-first", options.record_governed_first))
         if options.record_pressure_gate != "no":
             command.extend(("--record-pressure-gate", options.record_pressure_gate))
+        if options.record_rrpv_order != "no":
+            command.extend(("--record-rrpv-order", options.record_rrpv_order))
         if options.record_store_bound != "drop":
             command.extend(("--record-store-bound", options.record_store_bound))
         if options.record_expiry_clock != "progress":

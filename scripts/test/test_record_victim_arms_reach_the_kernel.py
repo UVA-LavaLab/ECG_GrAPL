@@ -54,6 +54,7 @@ def _captured_command(tmp_path, extra_options):
     ("--record-store-bound", "keep", "--record-store-bound"),
     ("--record-pressure-gate", "on", "--record-pressure-gate"),
     ("--record-pressure-gate", "duel", "--record-pressure-gate"),
+    ("--record-rrpv-order", "on", "--record-rrpv-order"),
 ])
 def test_requested_victim_arm_reaches_the_kernel_argv(tmp_path, option, value, flag):
     command = _captured_command(tmp_path, f"{option} {value}")
@@ -66,6 +67,7 @@ def test_requested_victim_arm_reaches_the_kernel_argv(tmp_path, option, value, f
     ("--record-governed-first", "no"),
     ("--record-store-bound", "drop"),
     ("--record-pressure-gate", "no"),
+    ("--record-rrpv-order", "no"),
 ])
 def test_default_victim_arm_is_not_emitted(tmp_path, option, default):
     command = _captured_command(tmp_path, f"{option} {default}")
@@ -129,6 +131,10 @@ def _row_label_from_the_real_cell(tmp_path, extra_options):
     ("--record-pressure-gate duel", "_PRESSURE_DUEL"),
     ("--record-governed-first on --record-pressure-gate duel",
      "_GOVERNED_FIRST_PRESSURE_DUEL"),
+    ("--record-rrpv-order on", "_RRPV_ORDER"),
+    ("--record-governed-first on --record-rrpv-order on", "_GOVERNED_FIRST_RRPV_ORDER"),
+    ("--record-governed-first on --record-rrpv-order on --record-pressure-gate duel",
+     "_GOVERNED_FIRST_RRPV_ORDER_PRESSURE_DUEL"),
 ])
 def test_the_row_label_site_carries_every_arm(tmp_path, extra, suffix):
     base = _row_label_from_the_real_cell(tmp_path, "")
@@ -203,9 +209,10 @@ def test_pagerank_arms_do_not_collide():
         "the PageRank control and treatment would share one row label")
 
 
+@pytest.mark.parametrize("rrpv", ["no", "on"])
 @pytest.mark.parametrize("gate", ["no", "on", "duel"])
 @pytest.mark.parametrize("arm", ["no", "on"])
-def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm, gate):
+def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm, gate, rrpv):
     """The invariant that five diverging label sites all violated.
 
     Expected labels are computed in the flow's completion check, and actual
@@ -221,7 +228,7 @@ def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm, g
 
     produced = algorithm_matrix.policy_labels(
         [parse_policy_spec("ECG:replacement")], "GRASP_PAPER", "off", "next", 6,
-        "all", "future", "enabled", "off", 1, arm, "drop", "progress", gate)[0]
+        "all", "future", "enabled", "off", 1, arm, "drop", "progress", gate, rrpv)[0]
 
     csv_path = tmp_path / "roi_matrix.csv"
     with csv_path.open("w", newline="") as handle:
@@ -231,7 +238,7 @@ def test_completion_check_expects_the_label_the_runner_produces(tmp_path, arm, g
 
     status, detail = experiment_run.csv_status(
         csv_path, ["ECG:replacement"], "GRASP_PAPER", "off", "next", 6,
-        "all", "future", "enabled", "off", 1, arm, "drop", "progress", gate)
+        "all", "future", "enabled", "off", 1, arm, "drop", "progress", gate, rrpv)
     assert status == "ok", (
         f"the completion check rejected the label the runner produces: {detail}")
 
@@ -366,7 +373,8 @@ def test_pressure_gate_counts_the_lines_the_record_rule_governs(tmp_path, gate):
         "the victim decisions follow a region selector the record rule never reads")
 
 
-def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", l3_ways="2"):
+def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", l3_ways="2",
+                   rrpv="no", policy="ECG:replacement"):
     """The argv and environment the runner would execute for PageRank.
 
     PageRank is a separate executable that reads its record settings from the
@@ -380,8 +388,9 @@ def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", 
     args = roi_matrix.parse_args([
         "--suite", "cache-sim", "--benchmark", "pr", "--current-pr-baselines",
         "--record-governed-first", governed, "--record-pressure-gate", gate,
+        *(("--record-rrpv-order", rrpv) if rrpv != "no" else ()),
         "--options", f"-f {graph} -o 0 -n 1 -i 2 -t 0",
-        "--policies", "ECG:replacement", "--l1d-size", "128B", "--l1d-ways", "2",
+        "--policies", policy, "--l1d-size", "128B", "--l1d-ways", "2",
         "--l2-size", "256B", "--l2-ways", "2", "--l3-sizes", l3_size, "--l3-ways", l3_ways,
         "--out-dir", str(tmp_path), "--no-build",
     ])
@@ -394,7 +403,7 @@ def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", 
     monkeypatch.setattr(roi_matrix, "run_command", run_command)
     try:
         roi_matrix.run_cache_sim(
-            args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), l3_size)
+            args, tmp_path, roi_matrix.parse_policy_spec(policy), l3_size)
     except Exception:
         pass
     assert captured, "run_cache_sim never reached the PageRank command"
@@ -578,3 +587,227 @@ def test_pressure_duel_trains_on_exactly_the_transfers_pagerank_makes(tmp_path, 
     control = results["no"][0]
     assert control["ecg_record_duel_transfers"] == 0 and control["ecg_record_duel_selector"] == 511, (
         "the duel must not train when it is off")
+
+
+# The RRPV order is the arm under which no ECG victim decision reads recency:
+# the choice among non-governed ways, the choice among DEAD ways, the tie
+# between equally distant bounds, and the base victim itself all follow the
+# line's GRASP re-reference value. PageRank's record rule otherwise falls back
+# to an LRU base, since pr.cc configures no other; these pin the arm through
+# every layer that PageRank and the algorithms kernels each take.
+
+_GRASP_PAPER_TIERS = {"GRASP_HOT_FRACTION": "0.50", "GRASP_BOUNDARY_MODE": "capacity"}
+
+
+def test_rrpv_order_labels_are_distinct_and_refused_where_the_order_cannot_hold():
+    """Only the replacement mechanism under the NEXT model carries the order.
+
+    Prefetch admission still consults the base policy and the window and
+    frontier models choose victims by their own rules, so the label must be
+    refused there rather than name an order the cache does not run.
+    """
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+
+    def labels(policy, **kw):
+        return algorithm_matrix.policy_labels([parse_policy_spec(policy)], base_policy="GRASP_PAPER", **kw)[0]
+
+    base = labels("ECG:replacement")
+    ordered = labels("ECG:replacement", rrpv_order="on")
+    governed = labels("ECG:replacement", governed_first="on", rrpv_order="on")
+    dueled = labels("ECG:replacement", governed_first="on", rrpv_order="on", pressure_gate="duel")
+    assert base == "ECG_REPLACEMENT_BASE_GRASP_PAPER"
+    assert ordered == base + "_RRPV_ORDER"
+    assert governed == base + "_GOVERNED_FIRST_RRPV_ORDER"
+    assert dueled == base + "_GOVERNED_FIRST_RRPV_ORDER_PRESSURE_DUEL"
+    assert labels("ECG:replacement", rrpv_order="no") == base
+    for policy in ("ECG:replacement-prefetch", "ECG:transport", "ECG:prefetch", "GRASP_PAPER", "LRU"):
+        with pytest.raises(RecordReceiptError, match="RRPV order requires"):
+            labels(policy, rrpv_order="on")
+    for model in ("window", "frontier"):
+        with pytest.raises(RecordReceiptError, match="RRPV order requires"):
+            labels("ECG:replacement", record_model=model, rrpv_order="on")
+
+
+@pytest.mark.parametrize("extra,refused", [
+    ("--record-base-policy GRASP_PAPER", False),
+    ("--record-base-policy GRASP_PAPER --record-governed-first on", False),
+    ("--record-base-policy GRASP_PAPER --record-pressure-gate duel", False),
+    ("--record-base-policy LRU", True),
+    ("", True),
+    ("--record-base-policy GRASP_PAPER --record-model window", True),
+    ("--record-base-policy GRASP_PAPER --record-model frontier", True),
+])
+def test_rrpv_order_options_require_the_grasp_base_under_the_next_model(extra, refused):
+    """The order ranks by the GRASP tiers, so the kernel must register them.
+
+    The algorithms kernel registers GRASP_PAPER's tiers only for that base, so
+    an LRU base would leave every line in one tier and the order would reduce
+    to a scan by way index. The label cannot check this, because PageRank's
+    labels always name the LRU base, so the options parser does.
+    """
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.record_resources import RecordResourceError
+    assert algorithm_matrix.parse_options("--graph g.sg").record_rrpv_order == "no"
+    text = f"--graph g.sg {extra} --record-rrpv-order on"
+    if refused:
+        with pytest.raises(RecordResourceError, match="RRPV order requires the GRASP_PAPER record base"):
+            algorithm_matrix.parse_options(text)
+    else:
+        assert algorithm_matrix.parse_options(text).record_rrpv_order == "on"
+
+
+@pytest.mark.parametrize("gate,gate_suffix", [("no", ""), ("duel", "_PRESSURE_DUEL")])
+@pytest.mark.parametrize("rrpv,suffix", [("no", ""), ("on", "_RRPV_ORDER")])
+@pytest.mark.parametrize("governed", ["no", "on"])
+def test_pagerank_branch_labels_carry_the_rrpv_order(governed, rrpv, suffix, gate, gate_suffix):
+    """PageRank labels the order in its own branch, and the flow must agree.
+
+    The `governed="no", gate="no"` case is the one that exercises the fast
+    path in expected_labels_for, which returns the bare label for any
+    configuration that looks default unless the new option is in its condition.
+    """
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    args = SimpleNamespace(
+        current_algorithms=False, current_pr_baselines=True,
+        record_governed_first=governed, record_store_bound="drop",
+        record_expiry_clock="progress", record_pressure_gate=gate,
+        record_rrpv_order=rrpv, options="")
+    produced = roi_matrix.output_policy_labels(args, [parse_policy_spec("ECG:replacement")])
+    governed_suffix = "_GOVERNED_FIRST" if governed == "on" else ""
+    assert produced == ["ECG_REPLACEMENT" + governed_suffix + suffix + gate_suffix]
+    expected = experiment_run.expected_labels_for(
+        ["ECG:replacement"], "LRU", "off", "next", 6, "all", "future",
+        "enabled", "off", 1, governed, "drop", "progress", gate, rrpv)
+    assert expected == produced, "the flow expects a PageRank label the runner does not produce"
+
+
+@pytest.mark.parametrize("rrpv,value", [("no", "0"), ("on", "1")])
+def test_pagerank_environment_carries_the_rrpv_order_with_grasp_paper_tiers(
+        tmp_path, monkeypatch, rrpv, value):
+    """Under the order PageRank tiers its lines exactly as the GRASP_PAPER cell does.
+
+    pr.cc registers an explicit 0.15 hot fraction for its record arm, which
+    the LRU base never reads. Once the order ranks by those tiers, the arm and
+    the GRASP_PAPER baseline it is compared with must tier identically, or the
+    comparison mixes the order with a different hot set. An ambient value is
+    planted to show the runner, not the caller's shell, decides the tiers.
+    """
+    monkeypatch.setenv("GRASP_HOT_FRACTION", "0.15")
+    monkeypatch.setenv("GRASP_BOUNDARY_MODE", "vertex")
+    (tmp_path / "record").mkdir()
+    _, env = _pagerank_cell(tmp_path / "record", monkeypatch, "no", rrpv=rrpv)
+    assert env["ECG_RECORD_RRPV_ORDER"] == value
+    tiers = {key: env.get(key) for key in _GRASP_PAPER_TIERS}
+    if rrpv == "on":
+        assert tiers == _GRASP_PAPER_TIERS
+    else:
+        assert tiers == {key: None for key in _GRASP_PAPER_TIERS}, (
+            "the rule without the order must not observe GRASP tiers")
+    (tmp_path / "grasp").mkdir()
+    _, grasp = _pagerank_cell(tmp_path / "grasp", monkeypatch, "no", policy="GRASP_PAPER")
+    assert {key: grasp.get(key) for key in _GRASP_PAPER_TIERS} == _GRASP_PAPER_TIERS
+    assert "ECG_RECORD_RRPV_ORDER" not in grasp, "a baseline must not carry the record arm"
+
+
+def test_rrpv_order_reaches_the_spmv_kernel_and_orders_every_decision(tmp_path):
+    """Through the runner, every SpMV decision is RRPV-ordered and the result holds.
+
+    SpMV's base is GRASP_PAPER, so even the rule without the order never
+    reaches the LRU scan; what the order changes there is the choice among
+    non-governed ways, which governed-first otherwise takes by recency.
+    """
+    import json
+    if not (ROOT / "bench/bin_sim/algorithms").is_file():
+        pytest.skip("current algorithm executable is not built")
+    results = {}
+    for rrpv in ("no", "on"):
+        work = tmp_path / rrpv
+        work.mkdir()
+        command, env = _runner_cell(work, f"--record-governed-first on --record-rrpv-order {rrpv}")
+        assert ("--record-rrpv-order" in command) == (rrpv == "on")
+        ran = _run_kernel(command, env)
+        assert ran.returncode == 0, (ran.stdout + ran.stderr)[-600:]
+        results[rrpv] = json.loads(Path(command[command.index("--output") + 1]).read_text())
+    for rrpv, payload in results.items():
+        assert payload["workload"]["record_rrpv_order"] == rrpv
+    control, ordered = results["no"]["metrics"], results["on"]["metrics"]
+    assert control["ecg_record_victim_rrpv_ordered"] == 0
+    assert control["ecg_record_victim_base_lru"] == 0
+    assert ordered["ecg_record_victim_decisions"] > 0
+    assert ordered["ecg_record_victim_rrpv_ordered"] == ordered["ecg_record_victim_decisions"]
+    assert ordered["ecg_record_victim_base_lru"] == 0
+    assert ordered["ecg_record_victim_ungoverned_first"] > 0
+    assert ordered["ecg_record_victim_rrpv_changed"] > 0, (
+        "the order never chose differently from recency, so this fixture cannot show it acts")
+    assert results["on"]["workload"]["result_digest"] == results["no"]["workload"]["result_digest"], (
+        "the victim order changed the SpMV result")
+
+
+def test_rrpv_order_reaches_the_pagerank_kernel_and_removes_the_lru_base(tmp_path, monkeypatch):
+    """Through the runner, PageRank's record rule stops consulting LRU.
+
+    The control is the rule as it runs today, whose base victim is the LRU
+    scan; it must show that scan in use, or the arm removes nothing.
+    """
+    import json
+    import re
+    if not (ROOT / "bench/bin_sim/pr").is_file():
+        pytest.skip("current PageRank executable is not built")
+    results = {}
+    for rrpv in ("no", "on"):
+        work = tmp_path / rrpv
+        work.mkdir()
+        command, env = _pagerank_cell(work, monkeypatch, "no", rrpv=rrpv)
+        ran = _run_kernel(command, env)
+        text = ran.stdout + ran.stderr
+        assert ran.returncode == 0, text[-600:]
+        checksum = re.search(r"\[ECG-PR-RESULT [^\]]*score_checksum=([0-9a-f]+)", text)
+        assert checksum, text[-600:]
+        results[rrpv] = (json.loads(Path(env["CACHE_OUTPUT_JSON"]).read_text()), checksum.group(1), text)
+    control, ordered = results["no"][0], results["on"][0]
+    assert control["ecg_record_victim_base_lru"] > 0
+    assert control["ecg_record_victim_rrpv_ordered"] == 0
+    assert "[ECG-PR-RRPV-ORDER" not in results["no"][2]
+    assert ordered["ecg_record_victim_decisions"] > 0
+    assert ordered["ecg_record_victim_rrpv_ordered"] == ordered["ecg_record_victim_decisions"]
+    assert ordered["ecg_record_victim_base_lru"] == 0
+    assert "[ECG-PR-RRPV-ORDER hot_percent=50 boundary=capacity]" in results["on"][2]
+    assert results["on"][1] == results["no"][1], "the victim order changed the PageRank result"
+
+
+@pytest.mark.parametrize("suite,refused", [
+    ("cache-sim", False), ("gem5", True), ("sniper", True), ("both", True)])
+def test_rrpv_order_is_refused_where_no_backend_implements_it(tmp_path, suite, refused):
+    """gem5's L3 and Sniper's record path keep their own victim order."""
+    import subprocess
+    ran = subprocess.run([
+        sys.executable, str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", suite, "--dry-run", "--benchmark", "pr",
+        "--policies", "ECG:replacement", "--record-rrpv-order", "on",
+        "--out-dir", str(tmp_path)], cwd=ROOT, capture_output=True, text=True,
+        timeout=300, check=False)
+    text = ran.stdout + ran.stderr
+    if refused:
+        assert ran.returncode != 0 and "record RRPV order is cache_sim-only" in text, text[-600:]
+    else:
+        assert ran.returncode == 0, text[-600:]
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_native_algorithm_cells_refuse_the_rrpv_order(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--benchmark", "spmv", "--current-algorithms", "--ecg-equivalence",
+        "--options", f"--graph {graph} --record-base-policy GRASP_PAPER --record-rrpv-order on",
+        "--policies", "ECG:replacement", "--dry-run", "--out-dir", str(tmp_path)])
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "32kB", backend, roi_matrix)
+    assert rows and rows[0]["status"] == "error", rows
+    assert "record RRPV order is cache_sim-only" in rows[0].get("error", ""), rows[0].get("error")

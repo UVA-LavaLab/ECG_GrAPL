@@ -1522,6 +1522,9 @@ def parse_ecg_log_stats(
     return stats
 
 
+GRASP_PAPER_TIERS = {"GRASP_BOUNDARY_MODE": "capacity", "GRASP_HOT_FRACTION": "0.50"}
+
+
 def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size: str,
                   effective_l3_ways: str, json_path: Path) -> dict[str, str]:
     env = dict(os.environ)
@@ -1591,11 +1594,11 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
     env.pop("POPT_SE_POSTFINAL", None)
     if spec.popt_se_postfinal is not None:
         env["POPT_SE_POSTFINAL"] = spec.popt_se_postfinal
-    if spec.label == "GRASP_PAPER":
-        env.update({
-            "GRASP_BOUNDARY_MODE": "capacity",
-            "GRASP_HOT_FRACTION": "0.50",
-        })
+    # The RRPV-ordered record arm ranks lines by their GRASP tiers, so it must
+    # tier exactly as the GRASP_PAPER cell it is compared with.
+    rrpv_order = getattr(args, "record_rrpv_order", "no") == "on"
+    if spec.label == "GRASP_PAPER" or (spec.record_mechanism is not None and rrpv_order):
+        env.update(GRASP_PAPER_TIERS)
     if getattr(args, "current_pr_baselines", False):
         env["ECG_CURRENT_PR_BASELINE"] = "1"
     if spec.record_mechanism is not None:
@@ -1612,6 +1615,7 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
                 getattr(args, "record_governed_first", "no") == "on")),
             "ECG_RECORD_PRESSURE_GATE": {"no": "0", "on": "1", "duel": "2"}[
                 getattr(args, "record_pressure_gate", "no")],
+            "ECG_RECORD_RRPV_ORDER": str(int(rrpv_order)),
             # Sniper's record path reads SNIPER_-prefixed variables of its own,
             # so the same arm has to be named twice or it silently stays off.
             "SNIPER_ECG_RECORD_GOVERNED_FIRST": str(int(
@@ -6864,7 +6868,8 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
             options.record_model, options.window_candidate_rrpv, options.grasp_scope, options.popt_rank_mode,
             options.frontier_gating, options.grasp_reference, options.queries,
             options.record_governed_first, options.record_store_bound,
-            options.record_expiry_clock, options.record_pressure_gate)
+            options.record_expiry_clock, options.record_pressure_gate,
+            options.record_rrpv_order)
     # PageRank runs through the separate pr kernel, so its labels never pass
     # through algorithm_matrix.policy_labels. Without this the opt-in arms and
     # their controls share one label and collide in the combined matrix.
@@ -6872,6 +6877,10 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
     governed_first = getattr(args, "record_governed_first", "no")
     if governed_first != "no":
         labels = [algorithm_matrix.governed_first_label(label, governed_first)
+                  for label in labels]
+    rrpv_order = getattr(args, "record_rrpv_order", "no")
+    if rrpv_order != "no":
+        labels = [algorithm_matrix.rrpv_order_label(label, rrpv_order)
                   for label in labels]
     expiry_clock = getattr(args, "record_expiry_clock", "progress")
     if expiry_clock != "progress":
@@ -7181,6 +7190,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                         help="Observe actual record semantics on a bounded prepared graph; never speedup evidence.")
     parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
     parser.add_argument("--record-pressure-gate", choices=("no", "on", "duel"), default="no")
+    parser.add_argument("--record-rrpv-order", choices=("no", "on"), default="no")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--current-pr-baselines", action="store_true",
                         help="Use the common fixed PageRank arithmetic and complete CSR access stream for cache_sim baselines.")
@@ -7328,6 +7338,9 @@ def main(argv: list[str]) -> int:
     # row would carry the gate's label while running the ungated rule.
     if args.record_pressure_gate != "no" and args.suite != "cache-sim":
         raise SystemExit("record pressure gate is cache_sim-only")
+    # Both native backends keep their own victim order, so the same holds here.
+    if args.record_rrpv_order != "no" and args.suite != "cache-sim":
+        raise SystemExit("record RRPV order is cache_sim-only")
     semantic_edge_limit = int(args.sniper_semantic_edge_limit)
     if int(args.sniper_roi_icount) > 0 and semantic_edge_limit > 0:
         raise SystemExit(

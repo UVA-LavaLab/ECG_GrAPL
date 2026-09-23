@@ -51,8 +51,14 @@ bool exerciseHierarchy(uint8_t bytes, ecg_record::Mechanism mechanism) {
         }
     }
     cache.finishRecord(records * 2);
-    if (cache.toJSON().find("\"ecg_mode_effective\": \"RECORD\"") == std::string::npos)
+    const std::string json = cache.toJSON();
+    if (json.find("\"ecg_mode_effective\": \"RECORD\"") == std::string::npos)
         return false;
+    for (const char* field : {"\"ecg_record_victim_rrpv_ordered\": ",
+                              "\"ecg_record_victim_rrpv_changed\": ",
+                              "\"ecg_record_victim_base_lru\": "})
+        if (json.find(field) == std::string::npos)
+            return false;
     return (mechanism != ecg_record::Mechanism::PREFETCH &&
             mechanism != ecg_record::Mechanism::REPLACEMENT_PREFETCH) ||
         cache.getPrefetchRequests() > 0;
@@ -381,6 +387,101 @@ int exerciseRecordPressureDuel() {
     return 0;
 }
 
+// PageRank configures its record arm with no base policy, which the cache
+// takes as LRU, so its base victim today is the least recently used way.
+// Under the RRPV order that arm must never reach the LRU scan: with no governed
+// way to consult it evicts and ages exactly as GRASP does. The GRASP-based arm
+// with governed-first must do the same instead of taking the least recent
+// non-governed way. Returns zero, or the number of the first check that failed.
+int exerciseRrpvOrderWithoutLru() {
+    using namespace cache_sim;
+    using namespace ecg_record;
+    constexpr uint64_t vertices = 256, records = 8;
+    alignas(64) std::array<uint32_t, vertices> properties{};
+    std::vector<uint32_t> degrees(vertices, 1);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), vertices, records, true);
+    context.registerPropertyArray(
+        properties.data(), vertices, 4, 256, 0.50, true);
+    Requirements requirements;
+    requirements.vertex_count = vertices;
+    requirements.record_count = records;
+    Layout layout;
+    if (selectLayout(requirements, layout) != Status::OK)
+        return 1;
+    const uint64_t base = reinterpret_cast<uint64_t>(properties.data());
+    NativeConfiguration configuration;
+    packLayout(layout, configuration.layout_descriptor);
+    packProperty(
+        {PropertyKind::U32, 4, TraversalMode::ORDERED_FILTERED},
+        configuration.property_descriptor);
+    configuration.record_base = base + 4096;
+    configuration.property_base = base;
+    configuration.record_count = records;
+    configuration.vertex_count = vertices;
+    configuration.context = configuration.generation = 1;
+    configuration.control = kNativeEnable | kNativeManagedPasses;
+
+    // Four lines outside the governed property array, on which the two scans
+    // disagree: way 3 is the least recent, way 1 is GRASP's victim.
+    const uint8_t rrpv[4] = {2, 5, 5, 1};
+    std::vector<CacheLine> shape(4);
+    for (std::size_t index = 0; index < shape.size(); ++index) {
+        shape[index].valid = true;
+        shape[index].line_addr = base + 2048 + index * 64;
+        shape[index].rrpv = rrpv[index];
+        shape[index].last_access = 4 - index;
+    }
+    CacheLevel grasp("L3", 256, 64, 4, EvictionPolicy::GRASP);
+    grasp.initGraphContext(&context);
+    auto reference = shape;
+    const std::size_t grasp_victim = grasp.selectVictimForTest(reference);
+    if (grasp_victim != 1)
+        return 2;
+    const auto same_rrpv = [&reference](const std::vector<CacheLine>& set) {
+        for (std::size_t index = 0; index < set.size(); ++index)
+            if (set[index].rrpv != reference[index].rrpv)
+                return false;
+        return true;
+    };
+
+    CacheLevel pagerank("L3", 256, 64, 4, EvictionPolicy::ECG);
+    pagerank.initGraphContext(&context);
+    pagerank.configureRecord(configuration, true);
+    pagerank.advanceRecordProgress(1);
+    auto today = shape;
+    // The dependency this arm removes: the base victim is the LRU scan's.
+    if (pagerank.selectVictimForTest(today) != 3 ||
+        pagerank.getRecordVictimAttribution().base_lru != 1)
+        return 3;
+    pagerank.setRecordRrpvOrder(true);
+    auto ordered = shape;
+    if (pagerank.selectVictimForTest(ordered) != grasp_victim || !same_rrpv(ordered))
+        return 4;
+    const auto& lru_arm = pagerank.getRecordVictimAttribution();
+    if (lru_arm.decisions != 2 || lru_arm.base_lru != 1 || lru_arm.rrpv_ordered != 1)
+        return 5;
+
+    CacheLevel spmv("L3", 256, 64, 4, EvictionPolicy::GRASP);
+    spmv.initGraphContext(&context);
+    spmv.prepareRecord(EvictionPolicy::GRASP);
+    spmv.configureRecord(configuration, true, EvictionPolicy::GRASP);
+    spmv.advanceRecordProgress(1);
+    spmv.setRecordGovernedFirst(true);
+    auto recency = shape;
+    if (spmv.selectVictimForTest(recency) != 3)
+        return 6;
+    spmv.setRecordRrpvOrder(true);
+    auto governed_first = shape;
+    if (spmv.selectVictimForTest(governed_first) != grasp_victim || !same_rrpv(governed_first))
+        return 7;
+    const auto& grasp_arm = spmv.getRecordVictimAttribution();
+    if (grasp_arm.ungoverned_first != 2 || grasp_arm.rrpv_ordered != 1 ||
+        grasp_arm.rrpv_changed != 1 || grasp_arm.base_lru != 0)
+        return 8;
+    return 0;
+}
+
 int main() {
     using namespace cache_sim;
     ecg_record::Requirements requirements;
@@ -478,6 +579,10 @@ int main() {
     if (const int check = exerciseRecordPressureDuel()) {
         std::printf("record pressure duel check %d failed [FAIL]\n", check);
         return 11;
+    }
+    if (const int check = exerciseRrpvOrderWithoutLru()) {
+        std::printf("record RRPV order check %d failed [FAIL]\n", check);
+        return 12;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;

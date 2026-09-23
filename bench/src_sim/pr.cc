@@ -91,10 +91,35 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         throw std::invalid_argument("ECG_RECORD_PRESSURE_GATE requires a current ECG record mode");
     if (!record_mode && recordOption("ECG_RECORD_GOVERNED_FIRST", 0, 1))
         throw std::invalid_argument("ECG_RECORD_GOVERNED_FIRST requires a current ECG record mode");
+    // Opt-in RRPV order: no record victim decision reads recency. It ranks by
+    // the state the GRASP_PAPER baseline keeps, so that baseline's tiering must
+    // be declared here rather than defaulted; see VictimOptions::rrpv_order.
+    const bool rrpv_order = recordOption("ECG_RECORD_RRPV_ORDER", 0, 1) != 0;
+    if (rrpv_order && !record_mode)
+        throw std::invalid_argument("ECG_RECORD_RRPV_ORDER requires a current ECG record mode");
     ecg_record::Mechanism mechanism = ecg_record::Mechanism::TRANSPORT;
     if (record_mode && ecg_record::parseMechanismName(mechanism_name, mechanism) !=
             ecg_record::Status::OK)
         throw std::invalid_argument("Unknown current ECG mechanism");
+    double hot_fraction = 0.15;
+    if (rrpv_order) {
+        // Prefetch admission and transport keep asking the base victim.
+        if (mechanism != ecg_record::Mechanism::REPLACEMENT)
+            throw std::invalid_argument(
+                "ECG_RECORD_RRPV_ORDER requires the replacement mechanism without prefetch");
+        const char* fraction = std::getenv("GRASP_HOT_FRACTION");
+        const char* boundary = std::getenv("GRASP_BOUNDARY_MODE");
+        if (!fraction || !boundary)
+            throw std::invalid_argument(
+                "ECG_RECORD_RRPV_ORDER requires GRASP_HOT_FRACTION and GRASP_BOUNDARY_MODE");
+        char* end = nullptr;
+        hot_fraction = std::strtod(fraction, &end);
+        if (end == fraction || *end != '\0' || !(hot_fraction > 0.0 && hot_fraction <= 1.0))
+            throw std::invalid_argument("GRASP_HOT_FRACTION must lie in (0, 1]");
+        if (std::string(boundary) != "capacity")
+            throw std::invalid_argument(
+                "ECG_RECORD_RRPV_ORDER requires GRASP_BOUNDARY_MODE=capacity");
+    }
     const uint64_t bytes = recordOption("ECG_RECORD_BYTES", 0, 8);
     if (bytes != 0 && bytes != 4 && bytes != 8)
         throw std::invalid_argument("ECG_RECORD_BYTES must be zero, four or eight");
@@ -148,8 +173,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     GraphCacheContext context;
     context.initTopology(degrees.data(), graph.num_nodes(), graph.num_edges_directed(), graph.directed());
     const uint64_t llc_bytes = GetEnvSizeBytes("CACHE_L3_SIZE", 8 * 1024 * 1024);
-    context.registerPropertyArray(scores.data(), graph.num_nodes(), 4, llc_bytes, record_mode ? 0.15 : -1.0, true);
-    context.registerPropertyArray(contribution.data(), graph.num_nodes(), 4, llc_bytes, record_mode ? 0.15 : -1.0, true);
+    context.registerPropertyArray(scores.data(), graph.num_nodes(), 4, llc_bytes, record_mode ? hot_fraction : -1.0, true);
+    context.registerPropertyArray(contribution.data(), graph.num_nodes(), 4, llc_bytes, record_mode ? hot_fraction : -1.0, true);
     static pvector<uint8_t> popt_matrix;
     if (!record_mode && (GraphSimEffectiveL3Policy() == EvictionPolicy::POPT ||
                          std::getenv("POPT_SE_POSTFINAL")))
@@ -186,6 +211,14 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
             : pressure_gate == 1 ? RecordPressureGate::COUNTER : RecordPressureGate::NO);
         cache.setRecordDeliveredExpiryClock(
             recordOption("ECG_RECORD_DELIVERY_CLOCK", 0, 1) != 0);
+        cache.setRecordRrpvOrder(rrpv_order);
+        if (rrpv_order) {
+            for (uint32_t region = 1; region < context.num_regions; ++region)
+                if (context.regions[region].grasp_hot_percent != context.regions[0].grasp_hot_percent)
+                    throw std::logic_error("PageRank property regions disagree on GRASP tiering");
+            std::cerr << "[ECG-PR-RRPV-ORDER hot_percent=" << context.regions[0].grasp_hot_percent
+                      << " boundary=capacity]\n";
+        }
     }
     for (NodeID node = 0; node < graph.num_nodes(); ++node) {
         cache.readArray(scores.data(), node);
@@ -287,6 +320,8 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
         else
             throw std::invalid_argument("Current ECG requires the accurate single-core hierarchy");
     }
+    if (recordOption("ECG_RECORD_RRPV_ORDER", 0, 1) != 0)
+        throw std::invalid_argument("ECG_RECORD_RRPV_ORDER requires a current ECG record mode");
     const ScoreT init_score = 1.0f / g.num_nodes();
     const ScoreT base_score = (1.0f - kDamp) / g.num_nodes();
     pvector<ScoreT> scores(

@@ -98,6 +98,9 @@ struct Options {
     bool popt_constant_rank = false;
     // Opt-in governed-first eviction for the current record victim rule.
     bool record_governed_first = false;
+    // Opt-in: the record victim rule orders every choice by RRPV, never by
+    // recency, and takes its base victim from the GRASP_PAPER scan.
+    bool record_rrpv_order = false;
     RecordPressureGate record_pressure_gate = RecordPressureGate::NO;
     // Opt-in: an ordinary STORE to a governed line keeps its FINITE bound,
     // because a store does not change when that line is next READ.

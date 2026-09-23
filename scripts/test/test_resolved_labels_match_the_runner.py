@@ -75,7 +75,8 @@ def _runner_labels(metadata):
             options.grasp_scope, options.popt_rank_mode,
             options.frontier_gating, options.grasp_reference, options.queries,
             options.record_governed_first, options.record_store_bound,
-            options.record_expiry_clock, options.record_pressure_gate)
+            options.record_expiry_clock, options.record_pressure_gate,
+            options.record_rrpv_order)
     # PageRank: a separate kernel configured by environment, labelled by its
     # own branch of output_policy_labels.
     from types import SimpleNamespace
@@ -84,7 +85,8 @@ def _runner_labels(metadata):
         record_governed_first=str(metadata.get("record_governed_first", "no")),
         record_store_bound=str(metadata.get("record_store_bound", "drop")),
         record_expiry_clock=str(metadata.get("record_expiry_clock", "progress")),
-        record_pressure_gate=str(metadata.get("record_pressure_gate", "no")))
+        record_pressure_gate=str(metadata.get("record_pressure_gate", "no")),
+        record_rrpv_order=str(metadata.get("record_rrpv_order", "no")))
     return roi_matrix.output_policy_labels(
         args, [parse_policy_spec(policy) for policy in policies])
 
@@ -123,7 +125,8 @@ def test_resolved_expectations_match_what_the_runner_emits(tmp_path, profile):
             str(metadata.get("record_governed_first", "no")),
             str(metadata.get("record_store_bound", "drop")),
             str(metadata.get("record_expiry_clock", "progress")),
-            str(metadata.get("record_pressure_gate", "no")))
+            str(metadata.get("record_pressure_gate", "no")),
+            str(metadata.get("record_rrpv_order", "no")))
         assert sorted(gate) == sorted(produced), (
             f"{job.get('job_id', '?')}: the completion and marker checks expect "
             f"{gate} but the runner emits {produced}; a correctly executed cell "
@@ -147,7 +150,8 @@ def test_paired_arms_resolve_to_distinct_labels(tmp_path, profile):
         if not expected:
             continue
         arm = (str(metadata.get("record_governed_first", "no")),
-               str(metadata.get("record_pressure_gate", "no")))
+               str(metadata.get("record_pressure_gate", "no")),
+               str(metadata.get("record_rrpv_order", "no")))
         cell = (str(metadata.get("benchmark")),
                 tuple(str(size) for size in metadata.get("l3_sizes") or []))
         by_cell.setdefault(cell, []).append((arm, expected))

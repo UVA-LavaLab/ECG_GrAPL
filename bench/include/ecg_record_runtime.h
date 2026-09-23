@@ -391,6 +391,22 @@ struct VictimTrace {
     // latter. `unknown` keeps its previous meaning so earlier readings stay
     // comparable.
     uint8_t expired = 0;
+    // Under the RRPV order only: the rule's own choice among DEAD ways, among
+    // non-governed ways, or between equally distant bounds differs from the
+    // one the recency order would have made from the same candidates.
+    bool rrpv_changed = false;
+};
+
+// The RRPV value at which the GRASP scan takes a way without ageing the set.
+inline constexpr uint8_t kVictimRrpvMax = 7;
+
+// Ageing the rule asks its caller to apply after an RRPV-ordered decision.
+// The rule itself never writes to the ways it inspects, so the increment the
+// GRASP scan would have made is reported here instead: every way whose bit is
+// set in `ways` gains `amount`. `amount` is zero when nothing ages.
+struct VictimAgeing {
+    uint64_t ways = 0;
+    uint8_t amount = 0;
 };
 
 // Opt-in governed-first eviction. When set, a way holding data this traversal
@@ -400,7 +416,8 @@ struct VictimTrace {
 // precedes non-property", "non-property precedes ordinary property
 // candidates"); the default path does not provide it, so it is measured as a
 // candidate rather than enabled silently. Among non-governed ways the least
-// recently used is taken, so the rule carries no way-index bias.
+// recently used is taken, so the rule carries no way-index bias; under the RRPV
+// order below it is the way the GRASP scan would take among them.
 struct VictimOptions {
     bool governed_first = false;
     // Governed-first and the strictly-farther override both trade residency
@@ -415,6 +432,14 @@ struct VictimOptions {
     // one rule still serves all three backends. Defaults true, so every
     // existing caller and every recorded result is unchanged.
     bool pressured = true;
+    // Order every choice the rule makes by the line's RRPV instead of its
+    // recency. Under this order no decision reads recency at all: the base
+    // victim is the GRASP scan's rather than the caller's, and among DEAD ways,
+    // non-governed ways or equally distant bounds the higher RRPV goes first,
+    // then the lower way, as in that scan. The scan's ageing is reported
+    // through the VictimAgeing output, which the order therefore requires.
+    // Defaults false, so every existing caller and result is unchanged.
+    bool rrpv_order = false;
 };
 
 template<class SelectBaseVictim>
@@ -422,11 +447,17 @@ inline Status selectVictim(
         const Layout& layout, const WayState* ways, std::size_t count,
         uint64_t sequence, SelectBaseVictim select_base_victim,
         std::size_t& victim, VictimTrace* trace = nullptr,
-        VictimOptions options = VictimOptions()) {
+        VictimOptions options = VictimOptions(), VictimAgeing* ageing = nullptr) {
     victim = std::numeric_limits<std::size_t>::max();
+    if (ageing)
+        *ageing = VictimAgeing();
     if (validateLayout(layout) != Status::OK)
         return Status::INVALID_LAYOUT;
     if (!ways || count == 0 || count > 64)
+        return Status::INVALID_COUNTS;
+    // The RRPV order reports the ageing its scan implies instead of applying
+    // it, so a caller with nowhere to receive it cannot complete the decision.
+    if (options.rrpv_order && !ageing)
         return Status::INVALID_COUNTS;
     if (trace) {
         *trace = VictimTrace();
@@ -450,23 +481,62 @@ inline Status selectVictim(
             }
         }
     }
-    std::size_t dead = count;
-    for (std::size_t index = 0; index < count; ++index) {
-        if (ways[index].property && ways[index].state == State::DEAD &&
-            (dead == count || ways[index].recency < ways[dead].recency))
-            dead = index;
-    }
+    // Which of two candidates the rule would rather evict. By default the less
+    // recently used; under the RRPV order the higher RRPV and then the lower
+    // way, which is the order the GRASP scan takes them in.
+    const auto rrpv_key = [ways](std::size_t index) {
+        return ways[index].rrpv < kVictimRrpvMax ? ways[index].rrpv : kVictimRrpvMax;
+    };
+    const auto by_recency = [ways](std::size_t a, std::size_t b) {
+        return ways[a].recency < ways[b].recency;
+    };
+    const auto by_rrpv = [&rrpv_key](std::size_t a, std::size_t b) {
+        return rrpv_key(a) > rrpv_key(b) || (rrpv_key(a) == rrpv_key(b) && a < b);
+    };
+    const auto prefers = [&](std::size_t a, std::size_t b) {
+        return options.rrpv_order ? by_rrpv(a, b) : by_recency(a, b);
+    };
+    // The candidate `better` ranks first among the ways `eligible` accepts.
+    const auto pick = [count](auto eligible, auto better) {
+        std::size_t chosen = count;
+        for (std::size_t index = 0; index < count; ++index)
+            if (eligible(index) && (chosen == count || better(index, chosen)))
+                chosen = index;
+        return chosen;
+    };
+    // The GRASP scan over the ways `eligible` accepts: it takes the first at
+    // the highest RRPV and, when that is below the maximum, ages every
+    // candidate by the steps it takes to get there. None passes the maximum,
+    // because none started above the highest.
+    const auto grasp_scan = [&](auto eligible) {
+        const std::size_t chosen = pick(eligible, by_rrpv);
+        if (chosen != count && rrpv_key(chosen) < kVictimRrpvMax) {
+            ageing->amount = static_cast<uint8_t>(kVictimRrpvMax - rrpv_key(chosen));
+            for (std::size_t index = 0; index < count; ++index)
+                if (eligible(index))
+                    ageing->ways |= uint64_t{1} << index;
+        }
+        return chosen;
+    };
+    const auto any_way = [](std::size_t) { return true; };
+    const auto dead_way = [ways](std::size_t index) {
+        return ways[index].property && ways[index].state == State::DEAD;
+    };
+    const auto ungoverned_way = [ways](std::size_t index) { return !ways[index].property; };
+    const std::size_t dead = pick(dead_way, prefers);
     if (dead != count) {
         victim = dead;
-        if (trace)
+        if (trace) {
             trace->path = VictimPath::DEAD_FIRST;
+            trace->rrpv_changed = options.rrpv_order && dead != pick(dead_way, by_recency);
+        }
         return Status::OK;
     }
     // Unpressured: take the base policy's victim untouched. DEAD is still
     // honoured above, because a line known dead has no future to trade away and
     // evicting it costs nothing at any capacity.
     if (!options.pressured) {
-        victim = select_base_victim();
+        victim = options.rrpv_order ? grasp_scan(any_way) : select_base_victim();
         if (victim >= count)
             return Status::INVALID_COUNTS;
         if (trace)
@@ -474,20 +544,19 @@ inline Status selectVictim(
         return Status::OK;
     }
     if (options.governed_first) {
-        std::size_t ungoverned = count;
-        for (std::size_t index = 0; index < count; ++index) {
-            if (!ways[index].property &&
-                (ungoverned == count || ways[index].recency < ways[ungoverned].recency))
-                ungoverned = index;
-        }
+        const std::size_t ungoverned = options.rrpv_order
+            ? grasp_scan(ungoverned_way) : pick(ungoverned_way, by_recency);
         if (ungoverned != count) {
             victim = ungoverned;
-            if (trace)
+            if (trace) {
                 trace->path = VictimPath::UNGOVERNED_FIRST;
+                trace->rrpv_changed = options.rrpv_order &&
+                    ungoverned != pick(ungoverned_way, by_recency);
+            }
             return Status::OK;
         }
     }
-    victim = select_base_victim();
+    victim = options.rrpv_order ? grasp_scan(any_way) : select_base_victim();
     if (victim >= count)
         return Status::INVALID_COUNTS;
     const std::size_t base = victim;
@@ -500,27 +569,40 @@ inline Status selectVictim(
         return Status::OK;
     }
     // Override the selected base only by comparing two live property futures;
-    // UNKNOWN never pins a line or changes the base policy's decision.
+    // UNKNOWN never pins a line or changes the base policy's decision. Under the
+    // RRPV order a trace also follows the recency order from the same base, so
+    // it can say whether an equal-bound tie was decided differently.
+    const bool compare_orders = trace && options.rrpv_order;
+    std::size_t recency_victim = victim;
+    EffectiveFuture recency_best = best;
     for (std::size_t index = 0; index < count; ++index) {
         if (!ways[index].property)
             continue;
         const auto future = resolveFuture(ways[index].state, ways[index].deadline, sequence);
-        if (future.state == State::FINITE && future.remaining > 0 &&
-            (future.remaining > best.remaining ||
-                (future.remaining == best.remaining && ways[index].recency < ways[victim].recency))) {
+        if (future.state != State::FINITE || future.remaining == 0)
+            continue;
+        if (future.remaining > best.remaining ||
+            (future.remaining == best.remaining && prefers(index, victim))) {
             victim = index;
             best = future;
         }
+        if (compare_orders && (future.remaining > recency_best.remaining ||
+                (future.remaining == recency_best.remaining && by_recency(index, recency_victim)))) {
+            recency_victim = index;
+            recency_best = future;
+        }
     }
-    if (trace)
+    if (trace) {
         trace->path = victim == base ? VictimPath::BASE_KEPT : VictimPath::OVERRIDDEN;
+        trace->rrpv_changed = compare_orders && victim != recency_victim;
+    }
     return Status::OK;
 }
 
 inline Status selectVictim(
         const Layout& layout, const WayState* ways, std::size_t count,
         uint64_t sequence, std::size_t& victim, VictimTrace* trace = nullptr,
-        VictimOptions options = VictimOptions()) {
+        VictimOptions options = VictimOptions(), VictimAgeing* ageing = nullptr) {
     const auto select_lru = [ways, count]() {
         std::size_t lru = 0;
         for (std::size_t index = 1; index < count; ++index)
@@ -529,7 +611,7 @@ inline Status selectVictim(
         return lru;
     };
     return selectVictim(
-        layout, ways, count, sequence, select_lru, victim, trace, options);
+        layout, ways, count, sequence, select_lru, victim, trace, options, ageing);
 }
 
 template<class SelectBaseVictim>
