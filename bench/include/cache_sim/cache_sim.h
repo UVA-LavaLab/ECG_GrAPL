@@ -1119,6 +1119,11 @@ public:
         
         // Miss
         stats_.misses++;
+        if (!dead_first_lines_.empty() &&
+            dead_first_lines_.erase(address & ~(uint64_t(line_size_ - 1))) != 0)
+            ++(is_write ? record_victim_attribution_.dead_first_refetch_write
+               : record ? record_victim_attribution_.dead_first_refetch_gather
+                        : record_victim_attribution_.dead_first_refetch_read);
         if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_misses++;
         if (isGovernedProperty(address))
             ++governed_property_misses_;
@@ -1644,6 +1649,7 @@ public:
         governed_property_hits_ = 0;
         governed_property_misses_ = 0;
         record_victim_attribution_ = RecordVictimAttribution();
+        dead_first_lines_.clear();
         ref32_dead_bypasses_ = 0;
         ref32_dead_victims_ = 0;
         ref32_non_property_victims_ = 0;
@@ -1743,6 +1749,13 @@ public:
         uint64_t duel_follower_rule = 0;
         uint64_t duel_follower_base = 0;
         uint64_t duel_winner_changes = 0;
+        // DEAD-first victims that a later demand miss fetched again, by that
+        // access: a write, a record-carrying gather or another read. A DEAD
+        // bound claims no later reference, so each is a reference it missed.
+        // Each victim counts at most once.
+        uint64_t dead_first_refetch_write = 0;
+        uint64_t dead_first_refetch_gather = 0;
+        uint64_t dead_first_refetch_read = 0;
     };
     const RecordVictimAttribution& getRecordVictimAttribution() const {
         return record_victim_attribution_;
@@ -2768,6 +2781,8 @@ private:
                     set[index].rrpv = static_cast<uint8_t>(set[index].rrpv + ageing.amount);
             recordVictimAttribution(trace);
             record_victim_attribution_.rrpv_ordered += options.rrpv_order;
+            if (trace.path == ecg_record::VictimPath::DEAD_FIRST && set[victim].valid)
+                dead_first_lines_.insert(set[victim].line_addr);
             return victim;
         }
         if (record_prepared_)
@@ -3974,6 +3989,9 @@ private:
     uint64_t governed_property_hits_ = 0;
     uint64_t governed_property_misses_ = 0;
     RecordVictimAttribution record_victim_attribution_;
+    // Passive: the lines DEAD-first evicted since the counters were reset and
+    // not yet fetched again, read only by the re-fetch count. Not hardware.
+    std::unordered_set<uint64_t> dead_first_lines_;
 
     void recordVictimAttribution(const ecg_record::VictimTrace& trace) {
         auto& a = record_victim_attribution_;
@@ -4447,7 +4465,9 @@ public:
             throw std::logic_error("Discontinuous functional ECG traversal");
         auto configuration = record_configuration_;
         configuration.iteration_base = base;
+        // A declared in-place write belongs to the region, not to the pass.
         configuration.control = ecg_record::kNativeEnable |
+            (configuration.control & ecg_record::kNativeWrittenInPlace) |
             (has_next ? ecg_record::kNativeHasNext : 0);
         ecg_record::Layout layout;
         if (ecg_record::validateNativeConfiguration(configuration, layout) != ecg_record::Status::OK)
@@ -4462,6 +4482,7 @@ public:
         auto configuration = record_configuration_;
         configuration.iteration_base = record_cursor_.base();
         configuration.control = ecg_record::kNativeEnable | ecg_record::kNativeManagedPasses |
+            (configuration.control & ecg_record::kNativeWrittenInPlace) |
             (has_next ? ecg_record::kNativeHasNext : 0);
         ecg_record::Layout layout;
         if (ecg_record::validateNativeConfiguration(configuration, layout) != ecg_record::Status::OK)
@@ -5483,6 +5504,9 @@ public:
             ss << "  \"ecg_record_victim_rrpv_ordered\": " << a.rrpv_ordered << ",\n";
             ss << "  \"ecg_record_victim_rrpv_changed\": " << a.rrpv_changed << ",\n";
             ss << "  \"ecg_record_victim_base_lru\": " << a.base_lru << ",\n";
+            ss << "  \"ecg_record_dead_first_refetch_write\": " << a.dead_first_refetch_write << ",\n";
+            ss << "  \"ecg_record_dead_first_refetch_gather\": " << a.dead_first_refetch_gather << ",\n";
+            ss << "  \"ecg_record_dead_first_refetch_read\": " << a.dead_first_refetch_read << ",\n";
             ss << "  \"ecg_record_ways_governed\": " << a.census_governed << ",\n";
             ss << "  \"ecg_record_ways_finite\": " << a.census_finite << ",\n";
             ss << "  \"ecg_record_ways_dead\": " << a.census_dead << ",\n";

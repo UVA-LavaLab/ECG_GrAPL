@@ -871,8 +871,9 @@ PullGraph lastPassGraph() {
 }
 
 // How a replay decodes its last pass: FINAL as the kernel does, so each line's
-// last gather retires it DEAD, or ONGOING as if another pass followed.
-enum class LastPass { FINAL, ONGOING };
+// last gather retires it DEAD, ONGOING as if another pass followed, or
+// WRITTEN_IN_PLACE, a final pass whose configuration declares the in-place write.
+enum class LastPass { FINAL, ONGOING, WRITTEN_IN_PLACE };
 
 enum class PassAccess { OTHER, GATHER, WRITE };
 
@@ -884,10 +885,17 @@ struct PassStep {
     bool retired;
 };
 
+// The receipt's count of DEAD-first victims that a later access fetched again,
+// by the kind of access that did.
+struct DeadRefetches {
+    uint64_t write = UINT64_MAX, gather = UINT64_MAX, read = UINT64_MAX;
+};
+
 struct PullPageRankRun {
     std::vector<PassStep> last_pass;
     std::string census;
     uint64_t dead_first = UINT64_MAX;
+    DeadRefetches refetched;
     bool decoded = true;
 };
 
@@ -895,9 +903,11 @@ struct PullPageRankRun {
 // single 16-way L3 set: setup writes both property arrays, then three passes
 // each gather contribution[v] through the records and write scores[u] and
 // contribution[u] in place. Each record is also decoded beside the cache, to
-// know when a gather retires its line.
+// know when a gather retires its line. A managed replay opens and closes each
+// pass through the pass cursor, as the shared kernels do, where pr.cc names
+// each pass's base.
 PullPageRankRun replayPullPageRank(const PullGraph& graph, const ecg_record::RecordStream& stream,
-                                   LastPass decode, bool governed_first) {
+                                   LastPass decode, bool governed_first, bool managed = false) {
     using namespace cache_sim;
     constexpr uint64_t vertices = 64, ways = 16, passes = 3;
     alignas(64) static float scores[vertices], contribution[vertices];
@@ -918,7 +928,9 @@ PullPageRankRun replayPullPageRank(const PullGraph& graph, const ecg_record::Rec
     configuration.record_count = records;
     configuration.vertex_count = vertices;
     configuration.context = configuration.generation = 1;
-    configuration.control = ecg_record::kNativeEnable;
+    configuration.control = ecg_record::kNativeEnable |
+        (managed ? ecg_record::kNativeManagedPasses : 0) |
+        (decode == LastPass::WRITTEN_IN_PLACE ? ecg_record::kNativeWrittenInPlace : 0);
     cache.configureRecord(configuration, stream, ecg_record::Mechanism::REPLACEMENT);
     cache.setRecordGovernedFirst(governed_first);
     for (uint64_t node = 0; node < vertices; ++node) {
@@ -934,6 +946,8 @@ PullPageRankRun replayPullPageRank(const PullGraph& graph, const ecg_record::Rec
     for (uint64_t pass = 0; pass < passes; ++pass) {
         const bool last = pass + 1 == passes;
         const bool has_next = !last || decode == LastPass::ONGOING;
+        // A declared in-place write keeps a final WRAP bound live.
+        const bool wrap_live = has_next || decode == LastPass::WRITTEN_IN_PLACE;
         std::set<uint64_t> retired;
         const auto step = [&](PassAccess kind, const void* address, const auto& access) {
             const bool was_retired = retired.count(line(address)) != 0;
@@ -951,7 +965,10 @@ PullPageRankRun replayPullPageRank(const PullGraph& graph, const ecg_record::Rec
             });
         };
         cache.markKernelPass(true);
-        cache.recordIteration(pass * records, has_next);
+        if (managed)
+            cache.recordBeginPass(has_next);
+        else
+            cache.recordIteration(pass * records, has_next);
         for (uint64_t node = 0; node < vertices; ++node) {
             read(&in_index[node]);
             read(&in_index[node + 1]);
@@ -961,7 +978,7 @@ PullPageRankRun replayPullPageRank(const PullGraph& graph, const ecg_record::Rec
                 const uint64_t word = step(PassAccess::OTHER, record,
                     [&] { return cache.recordLoad(edge); });
                 ecg_record::Prediction prediction;
-                if (ecg_record::makePrediction(layout, word, pass * records + edge + 1, has_next,
+                if (ecg_record::makePrediction(layout, word, pass * records + edge + 1, wrap_live,
                         prediction) != ecg_record::Status::OK ||
                     prediction.destination != graph.source[edge]) {
                     run.decoded = false;
@@ -987,15 +1004,23 @@ PullPageRankRun replayPullPageRank(const PullGraph& graph, const ecg_record::Rec
                 return uint64_t{0};
             });
         }
+        if (managed)
+            cache.recordClosePass();
         cache.markKernelPass(false);
     }
     cache.finishRecord(records * passes);
     const std::string json = cache.toJSON();
     run.census = kernelCensusLine(json);
-    const std::string field = "\"ecg_record_victim_dead_first\": ";
-    const std::size_t at = json.find(field);
-    if (at != std::string::npos)
-        run.dead_first = std::strtoull(json.c_str() + at + field.size(), nullptr, 10);
+    const auto field = [&json](const char* key) {
+        const std::string name = std::string("\"") + key + "\": ";
+        const std::size_t at = json.find(name);
+        return at == std::string::npos
+            ? UINT64_MAX : std::strtoull(json.c_str() + at + name.size(), nullptr, 10);
+    };
+    run.dead_first = field("ecg_record_victim_dead_first");
+    run.refetched = {field("ecg_record_dead_first_refetch_write"),
+                     field("ecg_record_dead_first_refetch_gather"),
+                     field("ecg_record_dead_first_refetch_read")};
     return run;
 }
 
@@ -1015,10 +1040,27 @@ PullPageRankRun replayPullPageRank(const PullGraph& graph, const ecg_record::Rec
 // written in the pass, either miss follows a dirty eviction and the write
 // dirties the line again, so the last pass's misses and the lines it turns
 // dirty grow together whichever the cause. Only the charge to each access
-// can. Every record offset within a line is replayed, under the LRU base and
-// under governed-first. Returns zero, or the number of the failed check.
+// can, or the receipt's passive count of DEAD-first victims fetched again,
+// which names the access that fetched each one. A configuration that
+// declares the in-place write decodes the final pass as the pass before it, so
+// that pass then repeats the ongoing replay miss for miss, whether each pass
+// names its base, as pr.cc does, or opens through the managed cursor, as the
+// shared kernels do. Every record offset within a line is replayed, under the
+// LRU base and under governed-first. Returns zero, or the number of the
+// failed check.
 int exerciseLastPassInPlaceWrite() {
     const PullGraph graph = lastPassGraph();
+    // A declared write retires no line DEAD and repeats the ongoing replay.
+    const auto repeats = [](const PullPageRankRun& written, const PullPageRankRun& ongoing) {
+        if (written.dead_first != 0 || written.census != ongoing.census ||
+            written.last_pass.size() != ongoing.last_pass.size())
+            return false;
+        for (std::size_t index = 0; index < written.last_pass.size(); ++index)
+            if (written.last_pass[index].misses != ongoing.last_pass[index].misses ||
+                written.last_pass[index].retired)
+                return false;
+        return true;
+    };
     ecg_record::Requirements requirements;
     requirements.vertex_count = 64;
     requirements.record_count = graph.source.size();
@@ -1061,7 +1103,9 @@ int exerciseLastPassInPlaceWrite() {
                 replayPullPageRank(graph, *records, LastPass::FINAL, build.governed_first);
             const PullPageRankRun ongoing =
                 replayPullPageRank(graph, *records, LastPass::ONGOING, build.governed_first);
-            if (!final_pass.decoded || !ongoing.decoded)
+            const PullPageRankRun written =
+                replayPullPageRank(graph, *records, LastPass::WRITTEN_IN_PLACE, build.governed_first);
+            if (!final_pass.decoded || !ongoing.decoded || !written.decoded)
                 return 3;
             const std::vector<std::string> detail = censusPassDetail(final_pass.census);
             const std::vector<std::string> reference = censusPassDetail(ongoing.census);
@@ -1117,11 +1161,135 @@ int exerciseLastPassInPlaceWrite() {
                     return 12;
                 census_alike |= more_dirtied == more_misses;
             }
+            if (!repeats(written, ongoing))
+                return 14;
+            // The passive count names what re-fetched a DEAD-first victim: the
+            // in-place write under pr.cc's builds, a gather under the split one,
+            // and nothing where no line is retired.
+            const DeadRefetches& count = final_pass.refetched;
+            for (const PullPageRankRun* run : {&ongoing, &written})
+                if (run->refetched.write != 0 || run->refetched.gather != 0 ||
+                    run->refetched.read != 0)
+                    return 15;
+            if (count.read != 0 || count.write == UINT64_MAX || count.gather == UINT64_MAX)
+                return 15;
+            if (build.vertices_per_line == 16 ? count.write == 0 || count.gather != 0
+                                              : count.gather == 0)
+                return 16;
+            // And it counts the re-fetches the replay charges to each access.
+            if (count.write != write_refetches || count.gather != gather_refetches)
+                return 17;
+            // Through the managed cursor the final pass still retires lines,
+            // and the declaration still keeps them.
+            const PullPageRankRun managed_final = replayPullPageRank(
+                graph, *records, LastPass::FINAL, build.governed_first, true);
+            const PullPageRankRun managed_ongoing = replayPullPageRank(
+                graph, *records, LastPass::ONGOING, build.governed_first, true);
+            const PullPageRankRun managed_written = replayPullPageRank(
+                graph, *records, LastPass::WRITTEN_IN_PLACE, build.governed_first, true);
+            if (!managed_final.decoded || !managed_ongoing.decoded || !managed_written.decoded ||
+                managed_final.dead_first == 0 || managed_final.dead_first == UINT64_MAX ||
+                !repeats(managed_written, managed_ongoing))
+                return 18;
         }
     }
     // Some offset must show the split build's gather re-fetch with the census
     // signature of an in-place write, or the census would have told them apart.
     return census_alike ? 0 : 13;
+}
+
+// The passive re-fetch count on one two-way L3 set. It names each DEAD-first
+// victim once, by the demand miss that fetches it back: a write, a gather that
+// carries a record, or another read. A later miss on the same line, after an
+// ordinary eviction, adds nothing, and resetting the counters forgets the
+// victims evicted before. Returns zero, or the number of the failed check.
+int exerciseDeadFirstRefetchCount() {
+    using namespace cache_sim;
+    ecg_record::Requirements requirements;
+    requirements.vertex_count = 64;
+    requirements.record_count = 8;
+    ecg_record::Layout layout;
+    if (ecg_record::selectLayout(requirements, layout) != ecg_record::Status::OK)
+        return 1;
+    ecg_record::NativeConfiguration configuration;
+    ecg_record::packLayout(layout, configuration.layout_descriptor);
+    configuration.record_base = 0x2000;
+    configuration.property_base = 0x1000;
+    configuration.record_count = 8;
+    configuration.vertex_count = 64;
+    configuration.context = 1;
+    configuration.generation = 7;
+    configuration.control = ecg_record::kNativeEnable;
+    GraphCacheContext context;
+    std::vector<uint32_t> degrees(64, 1);
+    context.initTopology(degrees.data(), 64, 8, true);
+    context.registerPropertyArray(reinterpret_cast<float*>(0x1000), 64, 4, 128, 0.15, true);
+    CacheLevel cache("L3", 128, 64, 2, EvictionPolicy::ECG);
+    cache.initGraphContext(&context);
+    cache.configureRecord(configuration, true);
+    uint64_t sequence = 0;
+    // Retire a resident line DEAD, then fill another so the rule evicts it.
+    const auto evict_dead = [&](uint64_t line, uint64_t fill) {
+        ecg_record::CommitUpdate update;
+        update.physical_line = update.property_vaddr = line;
+        update.context = 1;
+        update.generation = 7;
+        update.sequence = ++sequence;
+        update.state = ecg_record::State::DEAD;
+        const uint64_t before = cache.getRecordVictimAttribution().dead_first;
+        if (cache.applyRecordUpdate(update) != ecg_record::ApplyResult::APPLIED)
+            return false;
+        cache.insert(fill, false);
+        return !cache.contains(line) &&
+            cache.getRecordVictimAttribution().dead_first == before + 1;
+    };
+    const auto fetch = [&](uint64_t line, bool is_write, bool gather) {
+        ecg_record::NativeLoadResult observation;
+        observation.property_address = line;
+        observation.context = 1;
+        observation.generation = 7;
+        observation.sequence = ++sequence;
+        observation.state = ecg_record::State::FINITE;
+        const auto* record = gather ? &observation : nullptr;
+        if (!cache.access(line, is_write, record))
+            cache.insert(line, is_write, false, record);
+    };
+    const auto counted = [&](uint64_t write, uint64_t gather, uint64_t read) {
+        const auto& a = cache.getRecordVictimAttribution();
+        return a.dead_first_refetch_write == write && a.dead_first_refetch_gather == gather &&
+            a.dead_first_refetch_read == read;
+    };
+    cache.insert(0x1000, false);
+    cache.insert(0x1040, false);
+    if (!evict_dead(0x1000, 0x1080))
+        return 2;
+    fetch(0x1000, true, false);
+    if (!counted(1, 0, 0))
+        return 3;
+    // Two ordinary fills push 0x1000 out again; its next miss is not a re-fetch.
+    fetch(0x10c0, false, false);
+    fetch(0x1040, false, false);
+    if (cache.contains(0x1000))
+        return 4;
+    fetch(0x1000, false, false);
+    if (!counted(1, 0, 0))
+        return 5;
+    if (!evict_dead(0x1000, 0x1080))
+        return 6;
+    fetch(0x1000, false, true);
+    if (!counted(1, 1, 0))
+        return 7;
+    if (!evict_dead(0x1000, 0x10c0) || !evict_dead(0x1080, 0x1040))
+        return 8;
+    fetch(0x1080, false, false);
+    if (!counted(1, 1, 1))
+        return 9;
+    // 0x1000 was evicted DEAD-first too, but before the counters were reset.
+    cache.resetStats();
+    fetch(0x1000, true, false);
+    if (!counted(0, 0, 0))
+        return 10;
+    return 0;
 }
 
 int main() {
@@ -1253,6 +1421,10 @@ int main() {
     if (const int check = exerciseLastPassInPlaceWrite()) {
         std::printf("last-pass in-place write check %d failed [FAIL]\n", check);
         return 19;
+    }
+    if (const int check = exerciseDeadFirstRefetchCount()) {
+        std::printf("DEAD-first re-fetch count check %d failed [FAIL]\n", check);
+        return 20;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;

@@ -479,6 +479,18 @@ void testNativeConfigurationAndBinding() {
     check(nativePropertyAccess(configuration, configuration.property_base + 4,
                                word, 0x1008, property) == Status::INVALID_ADDRESS,
           "an ungoverned property base fails closed");
+    NativeLoadResult final_pass, written;
+    configuration.control = kNativeEnable;
+    check(nativePropertyAccess(configuration, configuration.property_base,
+                               word, 0x1008, final_pass) == Status::OK &&
+          final_pass.state == State::DEAD && final_pass.deadline == 0,
+          "a WRAP bound with no later pass retires its line");
+    configuration.control = kNativeEnable | kNativeWrittenInPlace;
+    check(nativePropertyAccess(configuration, configuration.property_base,
+                               word, 0x1008, written) == Status::OK &&
+          written.state == State::FINITE && written.deadline == written.sequence + 2 &&
+          !written.has_next_iteration,
+          "an in-place written region keeps a final-pass WRAP bound as before another pass");
     configuration.control = 0;
     check(validateNativeConfiguration(configuration, layout) == Status::INVALID_LAYOUT,
           "an inactive descriptor is not a native context");

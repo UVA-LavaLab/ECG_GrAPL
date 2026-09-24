@@ -8,8 +8,12 @@ namespace ecg_record {
 static constexpr uint64_t kNativeEnable = 1;
 static constexpr uint64_t kNativeHasNext = 2;
 static constexpr uint64_t kNativeManagedPasses = 4;
+// The kernel also writes this property region in place, a reference no record
+// describes. A line whose last record falls in the final pass still has that
+// write to come, so its WRAP bound decodes as before another pass, never DEAD.
+static constexpr uint64_t kNativeWrittenInPlace = 8;
 static constexpr uint64_t kNativeControlMask =
-    kNativeEnable | kNativeHasNext | kNativeManagedPasses;
+    kNativeEnable | kNativeHasNext | kNativeManagedPasses | kNativeWrittenInPlace;
 
 struct NativeConfiguration {
     uint64_t layout_descriptor = 0;
@@ -214,7 +218,8 @@ inline Status nativePropertyAccess(
     unpackProperty(configuration.property_descriptor, property);
     status = makePrediction(
         layout, raw_record, result.sequence,
-        (configuration.control & kNativeHasNext) != 0, prediction, property.traversal);
+        (configuration.control & (kNativeHasNext | kNativeWrittenInPlace)) != 0,
+        prediction, property.traversal);
     if (status != Status::OK)
         return status;
     status = propertyAddress(property, property_base, result.destination, result.property_address);
