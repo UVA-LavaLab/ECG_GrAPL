@@ -13,7 +13,7 @@ part of the result rather than a hedge. A second reading at 24 MiB, reported in
 places the crossover between 16 and 20 MiB. The mitigation is measured to be
 capacity-pressure dependent.
 
-Three later studies on the same graph and capacities are reported here too:
+Four later studies on the same graph and capacities are reported here too:
 
 - **A pressure signal from set dueling failed its frozen gate.** It was safe on
   SpMV at 8 and 16 MiB only, safe on PageRank at no capacity, and it regressed
@@ -32,6 +32,13 @@ Three later studies on the same graph and capacities are reported here too:
   writebacks deferred past the kernel's end. On a boundary that charges them,
   that lift is 0.02% or less. See
   [the kernel census](#the-kernel-census-entry-state-and-deferred-writebacks).
+- **Over eight passes after one construction, the settled passes tie GRASP at
+  20 and 24 MiB.** Once the kernel has settled, the RRPV order ties GRASP there
+  on both kernels, and no ECG row's mean per settled pass exceeds either
+  baseline's. From 16 MiB up ECG settles on the same per-pass floor on both
+  kernels. GRASP's remaining leads sit at the kernel's ends: SpMV's first pass,
+  and PageRank's last, where wrapped bounds decode to DEAD. See
+  [the steady state](#the-steady-state-eight-passes-after-one-construction).
 
 The [hardware cost](#hardware-cost) of the rule as first measured has been
 **corrected**. It assumed the cache already keeps a recency order, and a GRASP
@@ -928,7 +935,9 @@ at 20 MiB and 640 at 24 MiB.
 Two passes cannot separate a steady state from a slow warm-up. GRASP_PAPER
 still holds 232,264 and 235,267 of x's setup-dirty lines at exit, so its entry
 state lasts through both passes. What a kernel invoked repeatedly after one
-construction sees is not measured.
+construction sees is not measured. Eight passes after one construction were
+measured later; see
+[the steady state](#the-steady-state-eight-passes-after-one-construction).
 
 ### Above 8 MiB the RRPV order's lift is deferral
 
@@ -1009,6 +1018,9 @@ The prediction that each ECG row's second-iteration margin against GRASP_PAPER
 would stay within a point of its whole-kernel margin held at 8 MiB and failed
 at 16–24 MiB. There `d`, the difference between the two margins, ran from
 −1.5% to −4.0%. Two iterations cannot say which one a longer run resembles.
+A later run of eight iterations showed that the deficit belongs to the last
+iteration, not to the second; see
+[the last pass](#the-last-pass-wrapped-bounds-become-dead).
 
 ### Setup, reported separately
 
@@ -1078,7 +1090,8 @@ Twelve predictions were recorded before the run, and six held.
     is a tie;
   - the RRPV order's lift over governed-first above 8 MiB is writebacks
     deferred past the kernel's end.
-- **Not settled:**
+- **Not settled** by the census, and answered for eight passes of one run by
+  [the steady state](#the-steady-state-eight-passes-after-one-construction):
   - what a kernel invoked repeatedly after one construction sees; neither the
     frozen first pass nor this second pass is that;
   - whether PageRank's second-iteration deficit persists.
@@ -1087,6 +1100,367 @@ Twelve predictions were recorded before the run, and six held.
   - nothing about BFS, SSSP or BC, another graph, timing, gem5 or Sniper;
   - neither boundary is a competitive claim, and a clean figure never replaces
     a frozen margin in a verdict.
+
+## The steady state: eight passes after one construction
+
+The census study left two questions that its two passes could not answer. Two
+passes cannot separate a steady state from a slow warm-up. And on both kernels
+the second pass was also the last, which matters for ECG alone: when no further
+pass is requested, a wrapped bound decodes to DEAD rather than FINITE, as
+[decoding a conservative future bound](ReusePlan-FlowThrough#3-decode-a-conservative-future-bound)
+describes. SpMV requests a further pass on every `--repeat` pass but the last,
+and PageRank on every iteration but the last. No baseline reads the request.
+
+The `ecg_steady_state_cache` study reran the census study's 32 rows with eight
+passes, SpMV with `--repeat 8` and PageRank with `-o 0 -n 1 -i 8 -t 0`, and
+changed nothing else. One question per kernel was gated. The gate and six
+predictions were frozen before the run, and everything else was reported. The
+budget was 32 rows in 24 jobs; all ran once, and none was rerun.
+
+**Per-pass detail.** The census now details each pass, up to 64: the pass's
+counters, and the last level's valid, dirty, property and setup-dirty lines at
+its end. A detailed pass is what the census would have reported had the kernel
+ended there. It adds receipt fields only; the modeled cache gains no bits,
+ports, metadata traffic or per-eviction work. Two figures are read per pass:
+
+- its transfers, `T`: its misses and its writebacks. The eight passes sum to
+  the frozen kernel transfers;
+- its flow, `F`: its misses and the lines it turned from clean to dirty. A
+  write is charged to the pass that makes it, not to the pass whose eviction
+  writes the line back. Here the eight passes sum to the clean figure, because
+  no kernel write at the last level hit a line that setup had left dirty.
+
+**The window.** Pass 1 starts from the state that setup leaves, and passes 2
+and 3 settle. Passes 4–7 are the window that the gate reads, and each of them
+has a next pass. Pass 8 is the only pass without one, and is reported on its
+own. A row is stationary when each of three quantities is at most 0.1% of the
+corresponding window mean:
+
+1. the difference between the mean of passes 4 and 5 and the mean of passes 6
+   and 7, on transfers and on flow;
+2. the difference between the row's mean transfers and its mean flow, which
+   measures the net change in its resident dirty lines across the window;
+3. the writebacks of setup's dirty lines per window pass.
+
+**The gated question.** For each kernel, the RRPV order against GRASP_PAPER at
+20 and 24 MiB. The margin is `(baseline - ECG) / baseline` on the two rows'
+mean transfers per window pass. It is a lead at +0.5% or more, a tie strictly
+between −0.5% and +0.5%, and a deficit at −0.5% or less; a pair with a row
+that is not stationary is not classed. The verdict is `ecg_leads`, `tie` or
+`grasp_leads` when both capacities agree, `mixed` when they differ, and
+`unresolved` when either is not classed.
+
+Integrity was clean on all 32 rows:
+
+- four distinct labels, one binary and one result per kernel and capacity;
+- no prefetch fills, and identical access counts;
+- every RRPV-order decision was RRPV-ordered, and none reached an LRU base; no
+  governed-first row made one;
+- every census validates, with one entry and eight detailed passes, and no
+  access fell outside the passes.
+
+This rebuild moved no row. SpMV's setup, entry state and first pass reproduce
+the census study's exactly on all 16 rows, and so do PageRank's entry state and
+first pass. Each baseline's second pass reproduces the census study's second
+pass exactly, on both kernels at every capacity. Earlier rebuilds had moved
+PageRank rows by up to 454 and 916 transfers.
+
+### Kernel transfers first
+
+Over the whole kernel, the RRPV order's margins, frozen / clean:
+
+| RRPV order vs | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---|---|---|---|
+| SpMV, GRASP_PAPER | +20.77 / +20.70 | +9.42 / +9.25 | −0.64 / −0.48 (thin) | −0.94 / −0.69 (thin) |
+| SpMV, `POPT:UNCHARGED` | +0.96 / +0.98 (thin) | +0.52 / +0.52 (thin) | +0.82 / +0.71 (thin) | +1.12 / +0.82 (thin) |
+| PageRank, GRASP_PAPER | +19.13 / +19.20 | +11.17 / +11.27 | +0.11 / +0.34 (thin) | −0.22 / +0.04 (sensitive, thin) |
+| PageRank, `POPT:UNCHARGED` | +6.83 / +6.81 | +27.12 / +27.01 | +15.80 / +15.75 | +0.77 / +0.98 (thin) |
+
+- **Governed-first's clean margins are within 0.01 points of these,** except on
+  PageRank at 8 MiB: +18.69% against GRASP_PAPER and +6.22% against P-OPT.
+  Its frozen margins against GRASP_PAPER are lower: −0.95% and −1.48% on SpMV
+  at 20 and 24 MiB, and −0.21% and −0.72% on PageRank, which are
+  boundary-sensitive, +0.33% and +0.04% clean.
+- **Above 8 MiB the RRPV order's lift over governed-first is still deferral.**
+  Frozen, it is +0.11% to +0.54% at those six points; clean, it rounds to 0.00%
+  at each. On PageRank at 8 MiB it is +0.62% frozen and +0.63% clean, and on
+  SpMV at 8 MiB it rounds to 0.00% on both boundaries.
+- **A whole-kernel margin depends on the pass count** when the gap sits at the
+  kernel's ends. The RRPV order's deficit to GRASP_PAPER on SpMV at 20 and
+  24 MiB is −2.82% and −3.87% over the census study's two passes, and −0.64%
+  and −0.94% over eight. On PageRank at 24 MiB it is −0.84% over two and
+  −0.22% over eight. Neither is a per-pass figure; the window is.
+
+### In the window, ECG is never behind
+
+**Both gated questions are ties:**
+
+| RRPV order vs GRASP_PAPER | GRASP_PAPER per pass | RRPV order per pass | Margin, transfers / flow | Class |
+|---|---:|---:|---:|---|
+| SpMV, 20 MiB | 3,010,189.00 | 3,008,562.00 | +0.054% / +0.051% | tie |
+| SpMV, 24 MiB | 3,008,562.50 | 3,008,561.50 | +0.000% / +0.000% | tie |
+| PageRank, 20 MiB | 3,010,729.25 | 3,008,562.00 | +0.072% / +0.072% | tie |
+| PageRank, 24 MiB | 3,008,562.00 | 3,008,562.00 | +0.000% / +0.000% | tie |
+
+**The verdict is `tie` on both kernels.** Once the kernel has settled, the RRPV
+order's mean transfers per pass are no higher than GRASP_PAPER's at 20 and
+24 MiB, and at most 0.072% lower. So GRASP_PAPER's SpMV lead does not persist into the
+settled passes, and PageRank's second-iteration deficit does not recur in a
+pass that has a next pass.
+
+Every pair, gated or reported, with its class:
+
+| RRPV order, per pass | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---|---|---|---|
+| SpMV, GRASP_PAPER | +20.86 lead | +9.67 lead | +0.05 tie | 0.00 tie |
+| SpMV, `POPT:UNCHARGED` | +0.99 lead (thin) | 0.00 tie | 0.00 tie | 0.00 tie |
+| PageRank, GRASP_PAPER | +19.03 lead | +11.15 lead | +0.07 tie | 0.00 tie |
+| PageRank, `POPT:UNCHARGED` | +6.68 lead | +27.54 lead | +15.86 lead | +0.54 lead (thin) |
+
+- Governed-first's classes are the RRPV order's at every point, and its margins
+  differ only on PageRank at 8 MiB: +18.64% and +6.24%. There the RRPV order's
+  per-pass lift over it is +0.47%; everywhere else it is 0.00%.
+- Every class is the same on flow.
+- No ECG row's window mean, on transfers or on flow, exceeds either baseline's
+  at any capacity on either kernel. Pass by pass, from the second pass to the
+  seventh, an ECG row moves more transfers than a baseline in only two passes,
+  by 1 and by 4: governed-first against GRASP_PAPER at 24 MiB, in SpMV's fifth
+  pass and PageRank's second.
+
+**The per-pass floor.** From 16 MiB up, every ECG row's window mean is 3,008,562
+transfers per pass on both kernels, to within half a transfer. That figure is:
+
+- 2,536,716 structural misses, which every row on both kernels has in every
+  pass from the second on;
+- 235,923 property misses and 235,923 writebacks.
+
+235,923 lines is one 4-byte array over the graph's 3,774,768 vertices. The
+count fits a pass that misses and writes back each line of the output array
+once, SpMV's y and PageRank's scores, and keeps the gathered array resident: x,
+or PageRank's contributions. The census counts lines, not arrays, so that is
+inferred. The floor is the level that a settled pass reaches here, not a proven
+minimum: `POPT:UNCHARGED`'s PageRank row at 24 MiB writes back about 46,400
+fewer lines per pass than the floor, though it misses about 62,700 more
+property lines.
+
+How far each row's window mean sits above the floor:
+
+| Above the floor, per pass | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---:|---:|---:|---:|
+| SpMV, GRASP_PAPER | +155.75% | +10.70% | +0.054% | 0.00% |
+| SpMV, `POPT:UNCHARGED` | +104.42% | 0.00% | 0.00% | 0.00% |
+| SpMV, governed-first and RRPV order | +102.40% | 0.00% | 0.00% | 0.00% |
+| PageRank, GRASP_PAPER | +164.45% | +12.54% | +0.072% | 0.00% |
+| PageRank, `POPT:UNCHARGED` | +129.47% | +38.00% | +18.85% | +0.54% |
+| PageRank, governed-first | +115.15% | 0.00% | 0.00% | 0.00% |
+| PageRank, RRPV order | +114.14% | 0.00% | 0.00% | 0.00% |
+
+On SpMV at 24 MiB GRASP_PAPER is half a transfer per pass above the floor and
+the RRPV order half a transfer below it. Every other 0.00% is exact.
+
+- **ECG settles on the floor from 16 MiB up on both kernels.** GRASP_PAPER
+  reaches it only at 24 MiB, and `POPT:UNCHARGED` from 16 MiB on SpMV and at no
+  capacity on PageRank.
+- **At 8 MiB the gathered array cannot stay resident:** its 235,923 lines
+  exceed the cache's 131,072. ECG is nearest the floor there on both kernels.
+
+**Settled is not drained.** All 32 rows are stationary. The nearest to a bound
+is GRASP_PAPER on SpMV at 20 MiB, whose window halves differ by 1,761 transfers
+against a bound of 3,010. On SpMV, stationary does not mean that setup's dirty
+lines have left. From the end of pass 1 to the end of pass 7, governed-first and
+the RRPV order hold the same number of them: 2, 126,228, 163,876 and 196,609 at
+8–24 MiB, from 16 MiB up as many as the lines of x they entered with.
+GRASP_PAPER still holds 65,667, 159,149, 230,651 and 235,267 at the end of
+pass 7, and P-OPT none. The window measures a state in which those lines stay:
+at most 254 of them leave during any row's four window passes.
+
+### Where GRASP_PAPER's remaining lead falls
+
+The whole-kernel gap between GRASP_PAPER and the RRPV order, split by pass, as
+transfers / flow. Positive means the RRPV order moves fewer:
+
+| GRASP_PAPER − RRPV order | Pass 1 | Passes 2–7 | Pass 8 | Kernel |
+|---|---:|---:|---:|---:|
+| SpMV 8 MiB | +1,550,176 / +1,502,783 | +9,633,943 / +9,631,863 | +1,614,403 / +1,605,659 | +12,798,522 / +12,740,305 |
+| SpMV 16 MiB | +243,801 / +205,242 | +1,939,979 / +1,935,194 | +328,854 / +323,097 | +2,512,634 / +2,463,533 |
+| SpMV 20 MiB | −145,418 / −126,481 | +9,847 / +8,860 | −18,136 / +2,521 | −153,707 / −115,100 |
+| SpMV 24 MiB | −183,788 / −166,178 | +8 / +7 | −38,858 / +958 | −222,638 / −165,213 |
+| PageRank 8 MiB | +1,572,262 / +1,653,489 | +9,084,753 / +9,085,044 | +1,529,489 / +1,515,725 | +12,186,504 / +12,254,258 |
+| PageRank 16 MiB | +514,299 / +507,907 | +2,269,482 / +2,269,958 | +257,195 / +315,297 | +3,040,976 / +3,093,162 |
+| PageRank 20 MiB | +127,828 / +124,343 | +12,148 / +12,203 | −114,246 / −54,151 | +25,730 / +82,395 |
+| PageRank 24 MiB | +62,511 / +65,596 | 0 / 0 | −115,419 / −55,890 | −52,908 / +9,706 |
+
+- **At 8 and 16 MiB the RRPV order leads in every pass group,** and the six
+  interior passes carry about three quarters of the lead.
+- **On SpMV at 20 and 24 MiB, GRASP_PAPER's lead is the first pass.** Its flow
+  part, 126,481 and 166,178, is exactly the census study's extra first-pass
+  misses. After it the RRPV order leads on flow in every pass group. On
+  transfers the last pass adds 18,136 and 38,858 to GRASP_PAPER's lead, but on
+  flow the last pass favours the RRPV order: that is writeback timing, which
+  [the last pass](#the-last-pass-wrapped-bounds-become-dead) explains.
+- **On PageRank at 20 and 24 MiB, GRASP_PAPER leads only in the last pass.**
+  The RRPV order leads the first pass by 127,828 and 62,511 transfers and ties
+  or leads the interior, then loses the last pass by 114,246 and 115,419
+  transfers, or 54,151 and 55,890 on flow. At 24 MiB the last pass outweighs
+  the first, which is why the whole-kernel frozen margin is −0.22%.
+- **Governed-first splits the same way.** Except on PageRank at 8 MiB, its flow
+  gaps are within 1,000 of the RRPV order's in every pass group. Above 8 MiB
+  its transfer gaps at both ends are worse, by the writebacks that the RRPV
+  order defers.
+
+### The last pass: wrapped bounds become DEAD
+
+In the census study the second pass was the last. Here it has a next pass.
+Every row reproduces the census study's first pass exactly, and each baseline
+its second pass too. What differs for ECG is that its second pass now requests
+a further one. Against the census study's second pass,
+ECG's has:
+
+- on PageRank at 16–24 MiB, 27,953 to 30,777 fewer property misses and 84,799
+  to 105,608 fewer writebacks. That brings it to the floor, or 4 transfers
+  below it for the RRPV order at 24 MiB;
+- on SpMV at 16–24 MiB, the same misses but for 432 more by the RRPV order at
+  24 MiB. It writes back 37,660 to 90,048 fewer of setup's dirty lines and
+  25,063 to 53,928 more of the others. Its transfers change by −60,303 to
+  +6,112, and bring it to the floor too;
+- at 8 MiB, more: 9,495 and 9,346 more transfers on SpMV and 15,930 and 15,957
+  on PageRank, for governed-first and the RRPV order. Most are writebacks, and
+  584 to 2,234 are property misses.
+
+And this run's last pass moves what the census study's last pass moved.
+Governed-first's transfers are equal at 7 of 8 points and 2 apart at the
+eighth, and the RRPV order's are within 2,671, 0.09%. So ECG's last pass costs
+the same, to within 0.09%, whether it follows one pass or seven. The baselines
+do not depend on the request. Their second pass is identical in both studies,
+and their last pass differs from their seventh by at most 2,963 transfers,
+0.10%. On 14 of their 16 rows that is within the largest step between
+consecutive passes 2–7; GRASP_PAPER's SpMV rows at 20 and 24 MiB exceed it by
+258 and 1.
+
+**On PageRank the last pass adds misses.** Pass 8 against pass 7 on ECG's rows:
+
+| PageRank, pass 8 − pass 7 | Transfers | Misses | Writebacks | Resident dirty lines | Flow |
+|---|---:|---:|---:|---:|---:|
+| 16 MiB, governed-first | +135,369 | +30,777 | +104,592 | −73,815 | +61,554 |
+| 16 MiB, RRPV order | +118,757 | +30,429 | +88,328 | −57,899 | +60,858 |
+| 20 MiB, governed-first | +134,555 | +28,947 | +105,608 | −76,661 | +57,894 |
+| 20 MiB, RRPV order | +117,078 | +28,462 | +88,616 | −60,154 | +56,924 |
+| 24 MiB, governed-first | +132,838 | +28,196 | +104,642 | −76,446 | +56,392 |
+| 24 MiB, RRPV order | +115,419 | +27,945 | +87,474 | −59,529 | +55,890 |
+
+The resident dirty lines did not change during pass 7 on these rows, so that
+column is pass 8's own change. Every added miss is a property miss, and on
+every row the flow rises by exactly twice the added misses, so the lines turned
+dirty rise by as many as the misses. The added writebacks are those added dirty
+lines plus the drop in resident dirty lines. The drop is writeback timing, and
+it moves no flow.
+
+Two readings fit, and the census cannot separate them. Neither is measured:
+
+- **A write re-fetches a line the record has retired.** PageRank's kernel
+  gathers contributions along in-edges throughout the pass and updates each
+  vertex's own contribution in place, in vertex order. In the last pass a
+  contribution line decodes DEAD after its last gather. If its vertices' writes
+  are still to come, the line can be evicted and written back, and then missed
+  and dirtied again by the write: one writeback, one miss and one line turned
+  dirty. The bound stays conservative for the gathers it describes.
+- **The bound is not conservative.** A line decoded DEAD is gathered again
+  later in the same pass. That fits the doubled flow only if every such line's
+  write was still to come.
+
+**On SpMV the last pass changes writebacks and adds no flow.** The kernel only
+reads x.
+From 16 MiB up, the last pass writes back 37,660 to 85,366 of the setup-dirty
+lines that governed-first had held since the first pass, and 47,816 to 90,049
+of the RRPV order's. Against the seventh pass, its transfers change by −6,112
+to +60,303. Its misses do not change, but for 479 fewer by the RRPV order at
+24 MiB, and its flow, which charges those writebacks to setup, does not rise.
+
+At 8 MiB the last pass is cheaper than the seventh on both kernels: by 9,492
+and 9,336 transfers on SpMV and by 15,930 and 15,732 on PageRank, for
+governed-first and the RRPV order.
+
+### Setup, reported separately, and the break-even
+
+SpMV's setup is the census study's, exactly: a common floor of 2,877,491
+transfers at 8 MiB and 2,772,640 at 16–24 MiB, and the same excess above it for
+each mechanism. PageRank's rows carry no setup phase for any policy.
+
+SpMV's break-even counts passes of this run after one construction: the least
+number whose frozen kernel gains, pass by pass, repay the setup excess. Beyond
+seven passes it assumes that every further pass repeats the window's gain, and
+it is `never` when that gain is not positive and no pass up to the seventh
+repays. Pass 8 is excluded. Governed-first / RRPV order:
+
+| Against | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---:|---:|---:|---:|
+| GRASP_PAPER | 11 / 11 | 49 / 49 | 9,512 / 9,476 | 30,648,801 / 15,216,259 |
+| `POPT:UNCHARGED` | 164 / 164 | never / never | never / never | never / 16,439,057 |
+
+- **Every figure is an extrapolation,** since none is seven passes or fewer.
+- **From 20 MiB up there is little or no per-pass gain to repay with.** Against
+  GRASP_PAPER it is 1,627 transfers per pass at 20 MiB and at most one at
+  24 MiB. Against P-OPT it is zero from 16 MiB up, but for half a transfer by
+  the RRPV order at 24 MiB.
+- **Excluding pass 8 favours ECG wherever its last pass loses:** against both
+  baselines at 20 and 24 MiB, and against P-OPT for governed-first at 16 MiB.
+- **These counts are not comparable with the census study's break-even,**
+  which assumed that every two-pass invocation repeats a gain measured from the
+  construction's cache state. Here only the first pass starts from it, and a
+  pass is not an independent query.
+
+### Predictions
+
+Six predictions were recorded before the run, and all six held:
+
+- every row is stationary, including the one named as the likeliest
+  exception, GRASP_PAPER on SpMV at 16 MiB;
+- SpMV's gated question is a tie, and every SpMV row's window mean at 20 and
+  24 MiB is within 0.1% of the floor;
+- with low confidence, PageRank's gated question is a tie or an ECG lead at
+  each of 20 and 24 MiB,
+  most likely a tie at both, and the RRPV order's last-pass margin against
+  GRASP_PAPER is −0.5% or worse at both. It was a tie at both, and the
+  last-pass margins were −3.79% and −3.84%;
+- SpMV's setup, entry state and first pass reproduce the census study's
+  exactly, and so does GRASP_PAPER's SpMV second pass;
+- at 8 and 16 MiB the RRPV order's window margin against GRASP_PAPER exceeds
+  +5% on both kernels;
+- the RRPV order's per-pass lift over governed-first is within 0.1% on SpMV at
+  every capacity and on PageRank at 16–24 MiB, and positive on PageRank at
+  8 MiB, where it is +0.47%.
+
+### What the steady state settles and what it does not claim
+
+- **Settled** on this graph and these capacities, in the functional cache
+  model, over eight passes:
+  - once the kernel has settled, the RRPV order ties GRASP_PAPER at 20 and
+    24 MiB on both kernels, and no ECG row's window mean exceeds either
+    baseline's at any capacity;
+  - from 16 MiB up, ECG settles on the per-pass floor on both kernels;
+  - where GRASP_PAPER still leads over the whole kernel, its lead is at one
+    end: SpMV's first pass, which starts from the state setup leaves, and
+    PageRank's last pass;
+  - ECG's last pass differs because it requests no further pass. A second
+    pass that requests none costs what an eighth does, and from 16 MiB up one
+    that requests another sits on the floor, to within 4 transfers. On SpMV
+    from 16 MiB up the difference is writebacks, and 479 misses for the RRPV
+    order at 24 MiB. On PageRank from 16 MiB up the last pass moves 115,419 to
+    135,369 more transfers than the seventh, including 27,945 to 30,777 added
+    property misses, and every run has a last pass.
+- **Not settled:**
+  - whether PageRank's added last-pass misses are writes re-fetching retired
+    lines or bounds that are not conservative;
+  - what a kernel invoked repeatedly with other work between invocations sees;
+    the passes here share one run's cache state.
+- **Not claimed:**
+  - no new mechanism and no default change; the per-pass detail is census
+    instrumentation;
+  - nothing about another kernel or graph, timing, gem5 or Sniper;
+  - a pass is not an independent query, and the break-even is not a query
+    count;
+  - no earlier verdict is revised;
+  - a tie is not a lead, and neither boundary is a competitive claim.
 
 ## Status and default
 
@@ -1119,7 +1493,8 @@ label whose behaviour they do not implement.
 
 The kernel census is cache_sim instrumentation, not an option. Every cache_sim
 kernel arms it at the kernel boundary and adds its fields to the receipt. It
-changes no decision, and gem5 and Sniper have no counterpart.
+changes no decision, and gem5 and Sniper have no counterpart. Its per-pass
+detail is the same instrumentation, and stops at 64 passes.
 
 ## Reproducing
 
@@ -1139,6 +1514,8 @@ python3 scripts/experiments/ecg/flows/experiment_run.py \
   --profile ecg_rrpv_order_cache --run-dir <rrpv-run-dir>
 python3 scripts/experiments/ecg/flows/experiment_run.py \
   --profile ecg_kernel_census_cache --run-dir <census-run-dir>
+python3 scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_steady_state_cache --run-dir <steady-run-dir>
 ```
 
 Both kernels must be rebuilt: `pr` is a separate executable configured by
@@ -1183,3 +1560,23 @@ The kernel census has its own tests:
 - `scripts/test/test_kernel_census.py` holds the receipt validator to the
   census contract. It requires both executables to emit a census through the
   real runner.
+
+The per-pass detail has its own tests:
+
+- `exerciseKernelCensusPassDetail`, in
+  `bench/src_sim/test_ecg_record_cache.cc`, requires each detailed pass to be
+  what the census would have reported had the kernel ended with that pass.
+  Under LRU, FIFO, RANDOM, SRRIP and GRASP, a replay cut right after pass `k`
+  must detail the full replay's first `k` passes, and its exit must be the full
+  replay's end of pass `k`.
+- `exerciseKernelCensusPassDetailIsBounded`, in the same file, stops the detail
+  at 64 passes. The passes beyond it are still counted and charged, but not
+  detailed.
+- In `scripts/test/test_kernel_census.py`,
+  `test_a_census_details_each_pass_it_ran_up_to_its_limit` requires a census to
+  detail each pass it ran, up to the limit, and
+  `test_a_pass_detail_that_does_not_divide_its_passes_is_refused` refuses a
+  detail that disagrees with its census. It must cover the passes, sum to the
+  first-pass and later-pass segments, keep consistent line counts at each
+  pass's end, never mark a setup-dirty line again after the mark retired, and
+  end where the census's exit does.
