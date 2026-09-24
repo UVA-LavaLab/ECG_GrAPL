@@ -97,4 +97,7 @@ transfers on SpMV and PageRank. That result holds at 8 MiB/16-way and is
 measured not to hold at 24 MiB, so the mitigation is capacity-pressure
 dependent. Choosing among the lines the record does not describe by GRASP's
 RRPV bits rather than by recency removes the rule's need for a recency order
-and narrows, but does not close, that crossover. Both are off by default.
+and narrows, but does not close, that crossover. Both are off by default. A
+passive kernel census then showed that GRASP's remaining SpMV lead is the cache
+state its kernel starts in. It also showed that above 8 MiB the RRPV order's
+gain is writebacks deferred past the kernel's end.

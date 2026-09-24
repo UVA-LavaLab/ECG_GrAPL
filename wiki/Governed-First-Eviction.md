@@ -13,7 +13,7 @@ part of the result rather than a hedge. A second reading at 24 MiB, reported in
 places the crossover between 16 and 20 MiB. The mitigation is measured to be
 capacity-pressure dependent.
 
-Two later studies on the same graph and capacities are reported here too:
+Three later studies on the same graph and capacities are reported here too:
 
 - **A pressure signal from set dueling failed its frozen gate.** It was safe on
   SpMV at 8 and 16 MiB only, safe on PageRank at no capacity, and it regressed
@@ -26,6 +26,12 @@ Two later studies on the same graph and capacities are reported here too:
   16 MiB and on PageRank at 8, 16 and 20 MiB, the last thinly. GRASP still
   leads SpMV above 16 MiB and, thinly, PageRank at 24 MiB. See
   [the RRPV order](#the-rrpv-order-no-choice-reads-recency).
+- **A passive kernel census reran the RRPV-order rows.** GRASP's SpMV lead
+  above 16 MiB comes from the state the kernel starts in, not from the second
+  pass's decisions. Above 8 MiB the RRPV order's lift over governed-first is
+  writebacks deferred past the kernel's end. On a boundary that charges them,
+  that lift is 0.02% or less. See
+  [the kernel census](#the-kernel-census-entry-state-and-deferred-writebacks).
 
 The [hardware cost](#hardware-cost) of the rule as first measured has been
 **corrected**. It assumed the cache already keeps a recency order, and a GRASP
@@ -647,6 +653,11 @@ Integrity was checked first, and it was clean in all eight cells:
 | PageRank | 24 MiB | 5,946,039 | 6,085,585 | 6,118,746 | 5,996,115 | +2.00% |
 
 **Confirmed on both kernels, with no regression.** The largest lift is +2.12%.
+The [kernel census](#the-kernel-census-entry-state-and-deferred-writebacks)
+later showed that above 8 MiB this lift is writebacks deferred past the
+kernel's end. The verdict stands on its frozen metric. The lifts at 20 and
+24 MiB that it rests on are boundary-sensitive on both kernels, between −0.01%
+and +0.02% on the census's clean boundary.
 
 SpMV's GRASP, P-OPT and governed-first rows reproduce the dueling study exactly.
 On PageRank all three drift by at most 454 transfers, and the baselines move
@@ -679,7 +690,9 @@ is marked thin.
   cell on one graph.
 - **GRASP still leads SpMV above 16 MiB**, by 2.82% and 3.87%, and leads
   PageRank thinly at 24 MiB, by 0.84%. The order narrows the crossover and does
-  not close it.
+  not close it. The
+  [kernel census](#the-kernel-census-entry-state-and-deferred-writebacks) places
+  SpMV's remaining deficit in the state the kernel starts in.
 
 ### Where the lift comes from
 
@@ -700,7 +713,9 @@ is marked thin.
   and among DEAD lines. Writebacks are charged when a dirty line is evicted, and
   a dirty line still resident when the kernel ends is never charged, under any
   policy. Part of a writeback saving can therefore be deferral rather than
-  avoidance. These receipts do not separate the two.
+  avoidance. These receipts do not separate the two. The
+  [kernel census](#the-kernel-census-entry-state-and-deferred-writebacks)
+  does: above 8 MiB the saving is deferral.
 - **PageRank at 8 MiB is the base switch.** Its lift is 143,113 fewer property
   misses, net of 4,608 more writebacks. With GRASP's scan as the base instead of
   LRU, the base's own victim stands, because no other line in the set has a
@@ -738,12 +753,15 @@ not**, and that prediction failed. So did the SpMV lift predictions at 20 and
 24 MiB: about +2.0% and +2.8% were predicted, and +1.21% and +2.12% were
 measured.
 
-Why SpMV's residual persists is open. One untested candidate is the cache state
-the kernel inherits from construction. The boundary between construction and the
-kernel keeps the cache's contents, and at 20 MiB a record policy's setup moves
-18.04 million transfers through the cache against GRASP's 2.77 million. The
-receipts carry no per-pass split, so this cannot yet be separated from the
-kernel's own decisions.
+This study left open why SpMV's residual persisted, and named one candidate:
+the cache state the kernel inherits from construction. The boundary between
+construction and the kernel keeps the cache's contents, and at 20 MiB a record
+policy's setup moves 18.04 million transfers through the cache against GRASP's
+2.77 million. These receipts carry no per-pass split. The
+[kernel census](#the-kernel-census-entry-state-and-deferred-writebacks) added
+one and confirmed the candidate. The residual is the first pass's misses.
+GRASP_PAPER enters the kernel with all of x resident, and the RRPV order with
+69% of it at 20 MiB and 83% at 24 MiB.
 
 ### Setup, reported separately
 
@@ -768,6 +786,307 @@ PageRank's rows carry no setup phase for any policy.
 - **Beating governed-first is not a competitive claim.** The margins against
   GRASP and P-OPT come from one graph, and the thin ones are not generalised:
   SpMV against P-OPT at 8 MiB, and PageRank against GRASP at 20 and 24 MiB.
+
+## The kernel census: entry state and deferred writebacks
+
+The RRPV-order study left two questions that its receipts could not answer.
+First, its lift above 8 MiB was writebacks, and a writeback saving can be
+deferral rather than avoidance. Second, GRASP's SpMV lead above 16 MiB could
+come from the cache state the kernel inherits from setup, rather than from the
+kernel's own decisions. The `ecg_kernel_census_cache` study reran the same 32
+rows with a passive census that answers both, on this graph.
+
+**The census.** `cache_sim` arms it at the kernel boundary, and the receipt
+reports:
+
+- **the entry state:** the resident, dirty and property lines when the kernel
+  begins;
+- **the passes:** the kernel's transfers, misses and writebacks, split at its
+  graph passes. SpMV ran two `--repeat` passes and PageRank two iterations.
+  Every writeback of a line that setup left dirty is charged to the pass it
+  fell in;
+- **the exit residue:** the dirty lines still resident when the kernel ends,
+  and how many of those setup dirtied.
+
+The census adds receipt fields only. The modeled cache gains no bits, ports,
+metadata traffic or per-eviction work. [The tests](#reproducing) require the
+receipt of each of the study's four policies, less its census, to be
+byte-identical to a receipt without one.
+
+**Two boundaries.** The frozen metric is the kernel transfers that every study
+on this page uses. It charges the kernel for writing back lines that setup left
+dirty, but never for the dirty lines the kernel leaves resident at exit. The
+census adds a clean boundary that does neither:
+
+```text
+clean = kernel transfers
+      - writebacks, during the kernel, of lines that setup left dirty
+      + dirty lines at exit that the kernel wrote
+```
+
+The clean figure needs no second run, because no roster decision reads the
+dirty bit. A test runs each roster policy from a clean entry and finds the same
+figure. A line's setup mark retires only when the line leaves the last level. So
+if the kernel rewrote a setup-dirty line only in L1 or L2, the clean figure
+would still charge its writeback to setup, as a clean-entry run of this model
+would too.
+
+Every clean figure is reported beside its frozen one, never in its place. A
+figure is marked boundary-sensitive when its sign differs between the two, or
+when its two values differ by a point or more.
+
+### The census study
+
+The study ran GRASP_PAPER, `POPT:UNCHARGED`, governed-first and the RRPV order
+at 8, 16, 20 and 24 MiB, with one binary per kernel: the RRPV-order study's 32
+rows. One question was gated. The gate and twelve predictions were frozen
+before the run, and everything else was reported. The budget was 32 rows; all
+32 ran once, and none was rerun.
+
+Integrity was clean on all 32 rows:
+
+- four distinct labels, one binary and one result per kernel and capacity;
+- no prefetch fills, and identical access counts;
+- every RRPV-order decision was RRPV-ordered, and none reached an LRU base;
+- every census validates, with one entry and two passes of equal accesses, and
+  no access fell outside the passes.
+
+SpMV reproduces the RRPV-order study exactly on all 16 rows. PageRank drifts
+on all 16, baselines included, by −916 to +529 transfers, as it drifted by up
+to 454 at the RRPV-order study's rebuild. The census enlarged the simulator's
+cache objects, and the cache model maps real addresses, so a rebuild can move
+any row. PageRank is therefore compared within this binary. The prediction that
+it would drift by at most 500 transfers missed.
+
+### GRASP's SpMV lead is the state the kernel starts in
+
+SpMV's setup ends by initialising x, the property array the kernel reads.
+GRASP_PAPER goes from there straight into the kernel. ECG builds its records,
+and P-OPT its rank matrix, between that initialisation and the kernel. The
+policies therefore start the kernel with different amounts of x resident, and
+every resident line of x is dirty:
+
+| LLC | Lines | GRASP_PAPER | Governed-first and RRPV order | `POPT:UNCHARGED` |
+|---|---:|---:|---:|---:|
+| 8 MiB | 131,072 | 131,072 | 5,326 | 0 |
+| 16 MiB | 262,144 | 235,923 | 126,228 | 0 |
+| 20 MiB | 327,680 | 235,923 | 163,876 | 0 |
+| 24 MiB | 393,216 | 235,923 | 196,609 | 0 |
+
+x is 235,923 lines. From 16 MiB up GRASP_PAPER enters with all of it. At
+8 MiB it enters with a cache that holds nothing else.
+
+The gated question asked whether the RRPV order's deficit to GRASP_PAPER at 20
+and 24 MiB reaches SpMV's second pass. It compares two deficits:
+
+- `m_kernel`, the deficit over the whole kernel;
+- `m_steady`, the deficit on the second pass once the setup writebacks that
+  fell there are removed.
+
+The deficit does not reach the second pass, class E, when
+`m_steady ≥ −0.5%`. Below that, three classes compare `m_steady` with
+`m_kernel`, using a one-point band. They separate a deficit partly confined to
+the first pass, one that recurs at about its whole-kernel size, and one that the
+second pass shows more of.
+
+| LLC | m_kernel | m_steady | Class |
+|---|---:|---:|---|
+| 20 MiB | −2.82% | +1.69% | E |
+| 24 MiB | −3.87% | +1.69% | E |
+
+**The verdict is `entry_explained`,** class E at both capacities. The deficit
+is a first-pass transient: the entry state, or the warm-up from it.
+
+The +1.69% is not a lead. In the second pass the RRPV order writes back 49,472
+and 50,443 fewer of the lines that the kernel dirtied, and leaves them dirty at
+exit instead, which `m_steady` does not charge. Its second-pass misses are only
+1,273 and 432 fewer, out of about 2.77 million. On misses the second pass is a
+tie, so the class does not rest on the deferral.
+
+On the clean boundary the whole gap is the first pass's misses:
+
+| RRPV order − GRASP_PAPER | 20 MiB | 24 MiB |
+|---|---:|---:|
+| Clean gap | 125,208 | 165,314 |
+| First-pass misses | +126,481 | +166,178 |
+| of which property | +68,564 | +38,659 |
+| of which structural | +57,917 | +127,519 |
+| Second-pass misses | −1,273 | −432 |
+| Lines the kernel dirtied | 0 | −432 |
+
+The first-pass misses, the second-pass misses and the lines the kernel dirtied
+sum to the gap exactly. The first pass's property part is close to the number
+of x's lines that the RRPV order lacks at entry, 72,047 and 39,314.
+
+GRASP_PAPER's first pass misses 66,319 and 128,159 fewer structural lines than
+the 2,536,716 that every SpMV second pass misses, under every policy and at
+every capacity. So structural lines that its setup left resident serve the
+kernel too. That is inferred from the misses; the census does not say which
+arrays those lines belong to. The RRPV order gets 8,402 lines of the same help
+at 20 MiB and 640 at 24 MiB.
+
+Two passes cannot separate a steady state from a slow warm-up. GRASP_PAPER
+still holds 232,264 and 235,267 of x's setup-dirty lines at exit, so its entry
+state lasts through both passes. What a kernel invoked repeatedly after one
+construction sees is not measured.
+
+### Above 8 MiB the RRPV order's lift is deferral
+
+The frozen lift over governed-first splits exactly into three parts:
+
+- the clean lift;
+- the writebacks of setup's dirty lines that the RRPV order saves;
+- the extra dirty lines that the kernel wrote and the RRPV order leaves
+  resident at exit.
+
+| Kernel | LLC | Frozen lift | Clean lift | Setup writebacks saved | Extra dirty lines at exit |
+|---|---|---:|---:|---:|---:|
+| SpMV | 16 MiB | 28,258 (+0.46%) | −34 | −10,156 | 38,448 |
+| SpMV | 20 MiB | 74,035 (+1.21%) | −429 | −8,495 | 82,959 |
+| SpMV | 24 MiB | 129,272 (+2.12%) | +864 | −4,682 | 133,090 |
+| PageRank | 8 MiB | 138,483 (+1.06%) | +143,694 (+1.10%) | 0 | −5,211 |
+| PageRank | 16 MiB | 26,422 (+0.43%) | +696 | 0 | 25,726 |
+| PageRank | 20 MiB | 77,915 (+1.27%) | +970 | 0 | 76,945 |
+| PageRank | 24 MiB | 122,525 (+2.00%) | +490 | 0 | 122,035 |
+
+SpMV at 8 MiB is −451 frozen and −303 clean.
+
+- **Above 8 MiB, on both kernels, the RRPV order moves writebacks past the
+  kernel's end rather than removing them.** Its clean lift is between −0.01%
+  and +0.02%. It also writes back more of setup's dirty lines than
+  governed-first, not fewer, the opposite of what was predicted.
+- **PageRank at 8 MiB keeps a real reduction,** +1.10% on the clean boundary.
+  It comes from the property misses that the GRASP base recovers; see
+  [where the lift comes from](#where-the-lift-comes-from).
+- **The RRPV-order verdict stands on its frozen metric.** Its SpMV
+  confirmation at 20 and 24 MiB is boundary-sensitive, −0.01% and +0.01% clean,
+  and is not reversed. PageRank's lifts there are boundary-sensitive too,
+  +0.02% and +0.01% clean.
+- **What the RRPV order still offers** is that no ECG decision reads recency,
+  at no clean cost. On the clean boundary it is never worse than governed-first
+  by more than 0.01%. It makes no lift claim above 8 MiB.
+
+### Against the named baselines, on both boundaries
+
+The RRPV order's margins are `(baseline - ECG) / baseline`, frozen / clean. A
+margin under 1% is marked thin. PageRank's figures come from the census binary,
+so they can differ from the RRPV-order study's by a few hundredths of a point.
+
+| RRPV order vs | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---|---|---|---|
+| SpMV, GRASP_PAPER | +20.49 / +20.20 | +8.64 / +7.98 | −2.82 / −2.10 | −3.87 / −2.81 (sensitive) |
+| SpMV, `POPT:UNCHARGED` | +0.88 / +0.94 (thin) | +2.03 / +2.03 | +3.19 / +2.76 | +4.36 / +3.17 (sensitive) |
+| PageRank, GRASP_PAPER | +19.42 / +19.73 | +11.24 / +11.60 | +0.22 / +1.09 (thin) | −0.84 / +0.15 (sensitive, thin) |
+| PageRank, `POPT:UNCHARGED` | +7.26 / +7.18 | +25.88 / +25.45 | +15.64 / +15.42 | +1.47 / +2.20 |
+
+- **On the clean boundary ECG leads P-OPT at all eight points.** Only SpMV at
+  8 MiB is thin.
+- **Against GRASP_PAPER, SpMV keeps its deficit at 20 and 24 MiB** on the clean
+  boundary, and the entry state explains it. PageRank at 24 MiB moves from
+  −0.84% to +0.15%, which is thin.
+- **The frozen boundary flatters whichever policy leaves more dirty lines
+  resident at exit.** On PageRank at 20 and 24 MiB:
+  - GRASP_PAPER leaves 306,908 and 368,399;
+  - the RRPV order leaves 250,910 and 308,468;
+  - governed-first leaves 173,965 and 186,433.
+- **Governed-first's clean margins are within 0.02 points of the RRPV
+  order's,** except on PageRank at 8 MiB: +18.84% against GRASP_PAPER and
+  +6.15% against P-OPT. Two of its frozen deficits turn positive on the clean
+  boundary: −1.07% against GRASP_PAPER at PageRank 20 MiB becomes +1.07%, and
+  −0.54% against P-OPT at PageRank 24 MiB becomes +2.20%.
+
+### PageRank: better in the first iteration, worse in the second
+
+This is reported, not gated. Every PageRank row enters with no dirty line, so
+its two boundaries differ only by the exit residue.
+
+At 24 MiB the RRPV order's first iteration misses 65,593 fewer property lines
+than GRASP_PAPER's. Its second iteration has 27,953 more property misses and
+84,799 more writebacks, and moves 3.75% more transfers. At 20 MiB the second
+iteration moves 3.81% more.
+
+The prediction that each ECG row's second-iteration margin against GRASP_PAPER
+would stay within a point of its whole-kernel margin held at 8 MiB and failed
+at 16–24 MiB. There `d`, the difference between the two margins, ran from
+−1.5% to −4.0%. Two iterations cannot say which one a longer run resembles.
+
+### Setup, reported separately
+
+The kernel is the region of interest, and construction is a one-time cost
+reported beside it. On SpMV every policy pays GRASP_PAPER's whole setup,
+loading the CSR and initialising x. That common floor is 2,877,491 transfers at
+8 MiB and 2,772,640 at 16–24 MiB. PageRank's rows carry no setup phase for any
+policy. Each mechanism's own SpMV preprocessing costs this much above the
+floor:
+
+| LLC | `POPT:UNCHARGED` | Governed-first and RRPV order |
+|---|---:|---:|
+| 8 MiB | +6,416,016 | +16,317,610 |
+| 16 MiB | +6,509,060 | +15,567,623 |
+| 20 MiB | +6,498,712 | +15,270,209 |
+| 24 MiB | +6,501,242 | +15,032,472 |
+
+The number of kernel invocations after which the frozen kernel gain repays
+that excess, governed-first / RRPV order:
+
+| Against | 8 MiB | 16 MiB | 20 MiB | 24 MiB |
+|---|---:|---:|---:|---:|
+| GRASP_PAPER | 6 / 6 | 29 / 27 | never | never |
+| `POPT:UNCHARGED` | 91 / 92 | 93 / 72 | 70 / 44 | 60 / 32 |
+
+From 16 MiB up the RRPV order breaks even sooner only because of its deferred
+writebacks. On the clean boundary the two have the same kernel figure, within
+0.02%, and the same setup. Each break-even assumes that every invocation
+repeats this run's frozen gain. This census shows that the gain depends on the
+state the kernel starts in.
+
+### Predictions
+
+Twelve predictions were recorded before the run, and six held.
+
+- **Held:**
+  - governed-first and the RRPV order enter SpMV with setup-dirty lines, and
+    P-OPT enters with none;
+  - the RRPV order's clean SpMV lift at 20 and 24 MiB is under one point;
+  - every PageRank row enters clean;
+  - on PageRank the RRPV order's clean lift over governed-first stays positive
+    at 16–24 MiB, although only by +0.01% to +0.02%;
+  - SpMV reproduces the RRPV-order study exactly;
+  - no access falls outside the passes.
+- **Missed:**
+  - GRASP_PAPER enters with x as predicted, but ECG's record build does not
+    flush x. ECG enters with 5,326 to 196,609 of x's lines, 4–50% of the LLC,
+    not the 1% at most that was predicted.
+  - The RRPV order does not avoid setup writebacks. It writes back 4,682 to
+    10,156 more than governed-first, and its lift is deferred kernel
+    writebacks.
+  - The verdict is `entry_explained`, not the predicted mix, in which part of
+    the 24 MiB deficit would have recurred in the second pass.
+  - Above 8 MiB most setup writebacks do not fall in the first pass. Only
+    17–31% do, and the rest fall in the second.
+  - On PageRank the second-iteration margins against GRASP_PAPER do not stay
+    within a point of the whole-kernel margins at 16–24 MiB, as described
+    above.
+  - PageRank drifts by up to 916 transfers, not 500.
+
+### What the census settles and what it does not claim
+
+- **Settled** on this graph and these capacities, in the functional cache
+  model, with two passes:
+  - GRASP_PAPER's SpMV lead above 16 MiB is confined to the first pass, where
+    the state the kernel starts in accounts for it. On misses the second pass
+    is a tie;
+  - the RRPV order's lift over governed-first above 8 MiB is writebacks
+    deferred past the kernel's end.
+- **Not settled:**
+  - what a kernel invoked repeatedly after one construction sees; neither the
+    frozen first pass nor this second pass is that;
+  - whether PageRank's second-iteration deficit persists.
+- **Not claimed:**
+  - no new mechanism, and no default change;
+  - nothing about BFS, SSSP or BC, another graph, timing, gem5 or Sniper;
+  - neither boundary is a competitive claim, and a clean figure never replaces
+    a frozen margin in a verdict.
 
 ## Status and default
 
@@ -798,6 +1117,10 @@ and `duel` for set dueling, exist in cache_sim only. Both are off by default,
 and the gem5 and Sniper harnesses refuse them rather than run a cell under a
 label whose behaviour they do not implement.
 
+The kernel census is cache_sim instrumentation, not an option. Every cache_sim
+kernel arms it at the kernel boundary and adds its fields to the receipt. It
+changes no decision, and gem5 and Sniper have no counterpart.
+
 ## Reproducing
 
 ```bash
@@ -805,13 +1128,17 @@ make -j1 PARALLEL=1 sim-algorithms sim-pr
 python3 -m pytest -q scripts/test/test_ecg_record.py \
   scripts/test/test_ecg_record_cache.py \
   scripts/test/test_record_victim_arms_reach_the_kernel.py \
-  scripts/test/test_resolved_labels_match_the_runner.py
+  scripts/test/test_resolved_labels_match_the_runner.py \
+  scripts/test/test_ecg_algorithms.py \
+  scripts/test/test_kernel_census.py
 python3 scripts/experiments/ecg/flows/experiment_run.py \
   --profile ecg_governed_first_cache --run-dir <run-dir>
 python3 scripts/experiments/ecg/flows/experiment_run.py \
   --profile ecg_pressure_duel_cache --run-dir <duel-run-dir>
 python3 scripts/experiments/ecg/flows/experiment_run.py \
   --profile ecg_rrpv_order_cache --run-dir <rrpv-run-dir>
+python3 scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_kernel_census_cache --run-dir <census-run-dir>
 ```
 
 Both kernels must be rebuilt: `pr` is a separate executable configured by
@@ -834,3 +1161,25 @@ The later options have their own tests:
   cache's refusal of any decision under the RRPV order that would reach an LRU
   scan. The duel also refuses a set count that would give one leader slot more
   sets than the other.
+
+The kernel census has its own tests:
+
+- In `bench/src_sim/test_ecg_record_cache.cc`:
+  - `exerciseKernelCensus` checks every count against a hand-traced stream;
+  - `exerciseKernelCensusIsPassive` requires the receipt under LRU, FIFO,
+    RANDOM, SRRIP and GRASP, less its census, to be byte-identical to a
+    receipt without one;
+  - `exerciseCleanEntryCounterfactual` cleans the last level at the kernel
+    boundary. Every hit, miss and eviction must stay the same, and exactly the
+    writebacks the census charged to setup must move;
+  - `exerciseKernelCensusFailsClosed` refuses anything that would misplace a
+    boundary, such as a kernel boundary inside a pass or a statistics reset
+    after the boundary.
+- `testKernelCensusUnderTheRoster`, in `bench/src_sim/test_ecg_algorithms.cc`,
+  runs the study's four roster policies through the algorithm backend in fresh
+  processes. It requires an exact repeat and a passive census. A clean entry
+  and an all-dirty entry must move nothing but the writebacks, and the clean
+  figure must equal a clean-entry run's.
+- `scripts/test/test_kernel_census.py` holds the receipt validator to the
+  census contract. It requires both executables to emit a census through the
+  real runner.
