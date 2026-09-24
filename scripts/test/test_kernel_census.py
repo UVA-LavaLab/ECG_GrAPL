@@ -6,12 +6,13 @@ kernel with a different cache from one whose setup evicts it. The census makes
 both visible: it marks the last-level lines that are dirty at the kernel
 boundary, follows each mark to a writeback, a rewrite or the end of the run,
 and splits the kernel's traffic, setup's writebacks included, at its graph
-passes. The C++ fixtures prove it passive, receipt for receipt: a cache replay
-under LRU, FIFO, RANDOM, SRRIP and GRASP, and the study's four roster policies
-through the algorithm backend, each run in a fresh process as the matrix runs
-a cell. These tests hold the validator to the census contract and require both
-executables to emit a census through the real runner for each row the study
-compares.
+passes. It also details the kernel's first passes one by one, each with the
+cache state it ended in. The C++ fixtures prove it passive, receipt for
+receipt: a cache replay under LRU, FIFO, RANDOM, SRRIP and GRASP, and the
+study's four roster policies through the algorithm backend, each run in a
+fresh process as the matrix runs a cell. These tests hold the validators to
+the census contract and require both executables to emit a detailed census
+through the real runner for each row the study compares.
 """
 from pathlib import Path
 import sys
@@ -186,6 +187,180 @@ def test_a_census_that_does_not_divide_its_kernel_is_refused(name, message):
         validate_kernel_census(census, kernel)
 
 
+# The resident, dirty, property and setup-dirty lines at the end of each
+# detailed pass. The last is the census's exit, as it must be when nothing
+# runs after the kernel's last pass; what runs after it brings one more
+# property line in.
+_ENDS = ((62, 11, 35, 5), (60, 9, 30, 3))
+
+
+def _kernel_of(census):
+    from scripts.experiments.ecg.record_receipts import CENSUS_COUNTERS
+    return {counter: sum(fields[counter] for fields in census["segments"].values())
+            for counter in CENSUS_COUNTERS}
+
+
+def _detailed(passes=2, *, quiet_exit=False):
+    """A census whose pass detail agrees with its segments.
+
+    With quiet_exit nothing runs after the last pass, so the census's exit is
+    the last detailed pass's end.
+    """
+    from scripts.experiments.ecg.record_receipts import CENSUS_PASS_ENDS
+    census, _ = _census(passes)
+    segments = census["segments"]
+    if quiet_exit:
+        segments["after_last_pass"] = dict.fromkeys(segments["after_last_pass"], 0)
+    census["pass_detail_limit"] = 64
+    census["pass_detail"] = [
+        {**segments[segment], **dict(zip(CENSUS_PASS_ENDS, ends))}
+        for segment, ends in zip(("first_pass", "later_passes")[:passes], _ENDS[-passes:])]
+    if passes and not quiet_exit:
+        census["pass_detail"][-1]["end_property_lines"] -= 1
+    return census, _kernel_of(census)
+
+
+def _many(passes, *, quiet_exit=False):
+    """A census of 64 passes or more, each later pass repeating the second.
+
+    It details its first 64. Beyond them the 63 detailed later passes fall
+    short of the later-pass segment, and the passes no detail shows bring one
+    more property line in before the exit.
+    """
+    from scripts.experiments.ecg.record_receipts import CENSUS_PASS_TRAFFIC
+    census, _ = _detailed(2, quiet_exit=quiet_exit)
+    first, later = census["pass_detail"]
+    census["passes"] = passes
+    census["segments"]["later_passes"] = {key: later[key] * (passes - 1) for key in CENSUS_PASS_TRAFFIC}
+    census["pass_detail"] = [first] + [dict(later) for _ in range(63)]
+    if passes > 64:
+        census["exit_property_lines"] += 1
+    return census, _kernel_of(census)
+
+
+@pytest.mark.parametrize("passes,quiet_exit", [
+    (0, False), (1, False), (1, True), (2, False), (2, True),
+    (64, False), (64, True), (70, False), (70, True)])
+def test_a_census_details_each_pass_it_ran_up_to_its_limit(passes, quiet_exit):
+    from scripts.experiments.ecg.record_receipts import (
+        CENSUS_PASS_ENDS, CENSUS_PASS_TRAFFIC, validate_kernel_census, validate_kernel_census_passes)
+    census, kernel = (_many if passes >= 64 else _detailed)(passes, quiet_exit=quiet_exit)
+    detail = validate_kernel_census_passes(census)
+    assert len(detail) == min(passes, 64)
+    assert all(set(fields) == {*CENSUS_PASS_TRAFFIC, *CENSUS_PASS_ENDS} for fields in detail)
+    if passes:
+        assert detail[0]["total_offchip_traffic"] == 27
+        assert detail[-1]["end_entry_dirty_lines"] == 3
+    # The pass detail is additive: the segment validator still divides the kernel.
+    assert validate_kernel_census(census, kernel)["kernel_census_passes"] == passes
+
+
+def _corrupt_detail(name):
+    if name == "detail-exceeds-later-passes":
+        census, _ = _many(70)
+        census["segments"]["later_passes"]["llc_hits"] = 63 * census["pass_detail"][1]["llc_hits"] - 1
+        return census
+    if name == "at-the-limit-undercounts":
+        census, _ = _many(64)
+        census["segments"]["later_passes"]["llc_hits"] += 1
+        return census
+    if name == "at-the-limit-exit-differs":
+        census, _ = _many(64, quiet_exit=True)
+        census["pass_detail"][-1]["end_property_lines"] -= 1
+        return census
+    census, _ = _detailed(2, quiet_exit=name == "quiet-exit-differs")
+    detail = census["pass_detail"]
+    if name == "absent":
+        census = None
+    elif name == "absent-detail":
+        del census["pass_detail"]
+    elif name == "absent-limit":
+        del census["pass_detail_limit"]
+    elif name == "other-limit":
+        census["pass_detail_limit"] = 32
+    elif name == "detail-not-a-list":
+        census["pass_detail"] = {"1": detail[0], "2": detail[1]}
+    elif name == "short-detail":
+        detail.pop()
+    elif name == "long-detail":
+        detail.append(dict(detail[-1]))
+    elif name == "pass-not-an-object":
+        detail[0] = 5
+    elif name == "missing-end":
+        del detail[1]["end_dirty_lines"]
+    elif name == "extra-field":
+        detail[0]["begin_dirty_lines"] = 1
+    elif name == "boolean-end":
+        detail[0]["end_valid_lines"] = True
+    elif name == "negative-counter":
+        detail[1]["llc_hits"] = -1
+    elif name == "offchip-disagrees":
+        detail[1]["total_offchip_traffic"] += 1
+    elif name == "more-setup-writebacks-than-pass":
+        detail[1]["entry_dirty_writebacks"] = detail[1]["llc_writebacks"] + 1
+    elif name == "end-dirty-exceeds-valid":
+        detail[0]["end_dirty_lines"] = detail[0]["end_valid_lines"] + 1
+    elif name == "end-property-exceeds-valid":
+        detail[0]["end_property_lines"] = detail[0]["end_valid_lines"] + 1
+    elif name == "end-mark-exceeds-dirty":
+        detail[0]["end_entry_dirty_lines"] = detail[0]["end_dirty_lines"] + 1
+    elif name == "first-pass-overcounts":
+        detail[0]["llc_misses"] += 1
+    elif name == "first-pass-undercounts":
+        detail[0]["llc_misses"] -= 1
+    elif name == "later-passes-overcount":
+        detail[1]["llc_property_hits"] += 1
+    elif name == "later-passes-undercount":
+        detail[1]["llc_property_hits"] -= 1
+    elif name == "more-marks-than-entry-left":
+        detail[0]["end_entry_dirty_lines"] = 8
+    elif name == "mark-reappears":
+        detail[1]["end_entry_dirty_lines"] = detail[0]["end_entry_dirty_lines"] + 1
+    elif name == "fewer-marks-than-exit":
+        detail[1]["end_entry_dirty_lines"] = census["exit_entry_dirty_lines"] - 1
+    elif name == "quiet-exit-differs":
+        detail[1]["end_property_lines"] -= 1
+    else:
+        raise AssertionError(name)
+    return census
+
+
+@pytest.mark.parametrize("name,message", [
+    ("absent", "missing kernel census"),
+    ("absent-detail", "invalid kernel census pass detail"),
+    ("absent-limit", "invalid kernel census field pass_detail_limit"),
+    ("other-limit", "pass detail limit is not 64"),
+    ("detail-not-a-list", "invalid kernel census pass detail"),
+    ("short-detail", "pass detail does not cover its passes"),
+    ("long-detail", "pass detail does not cover its passes"),
+    ("pass-not-an-object", "pass detail fields differ: pass 1"),
+    ("missing-end", "pass detail fields differ: pass 2"),
+    ("extra-field", "pass detail fields differ: pass 1"),
+    ("boolean-end", "invalid kernel census field end_valid_lines"),
+    ("negative-counter", "invalid kernel census field llc_hits"),
+    ("offchip-disagrees", "invalid kernel census pass traffic sum: pass 2"),
+    ("more-setup-writebacks-than-pass", "more setup writebacks than it wrote back: pass 2"),
+    ("end-dirty-exceeds-valid", "pass end line counts are inconsistent: pass 1"),
+    ("end-property-exceeds-valid", "pass end line counts are inconsistent: pass 1"),
+    ("end-mark-exceeds-dirty", "pass end line counts are inconsistent: pass 1"),
+    ("first-pass-overcounts", "first pass detail differs from its segment: llc_misses"),
+    ("first-pass-undercounts", "first pass detail differs from its segment: llc_misses"),
+    ("later-passes-overcount", "later pass detail does not sum to its segment: llc_property_hits"),
+    ("later-passes-undercount", "later pass detail does not sum to its segment: llc_property_hits"),
+    ("at-the-limit-undercounts", "later pass detail does not sum to its segment: llc_hits"),
+    ("detail-exceeds-later-passes", "later pass detail exceeds its segment: llc_hits"),
+    ("more-marks-than-entry-left", "keeps more setup-dirty lines than entry left: pass 1"),
+    ("mark-reappears", "marks a setup-dirty line after it retired: pass 2"),
+    ("fewer-marks-than-exit", "pass detail and exit disagree on setup-dirty lines"),
+    ("quiet-exit-differs", "exit differs from its last pass end"),
+    ("at-the-limit-exit-differs", "exit differs from its last pass end"),
+])
+def test_a_pass_detail_that_does_not_divide_its_passes_is_refused(name, message):
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError, validate_kernel_census_passes
+    with pytest.raises(RecordReceiptError, match=message):
+        validate_kernel_census_passes(_corrupt_detail(name))
+
+
 # The four rows the study compares at every capacity, with the options its
 # manifest stages give them. The fixture caches are small enough to evict.
 _GEOMETRY = ("--l1d-size", "128B", "--l1d-ways", "2", "--l2-size", "256B", "--l2-ways", "2",
@@ -220,6 +395,7 @@ def _check_row(name, row):
     """
     assert row.get("status") == "ok", (name, row.get("error"))
     assert row["kernel_census_passes"] == 2, name
+    assert row["kernel_census_detailed_passes"] == 2, name
     assert row["kernel_census_first_pass_total_accesses"] > 0, name
     assert (row["kernel_census_first_pass_total_accesses"] ==
             row["kernel_census_later_passes_total_accesses"]), f"{name}: a pass boundary is misplaced"

@@ -75,7 +75,8 @@ from policy_specs import (  # noqa: E402
 )
 from record_receipts import (  # noqa: E402
     LAYOUT_FIELDS, RecordReceiptError, validate_functional_record, validate_gem5_record,
-    validate_sniper_record, validate_equivalence, validate_kernel_census, validate_pr_workload,
+    validate_sniper_record, validate_equivalence, validate_kernel_census, validate_kernel_census_passes,
+    validate_pr_workload,
 )
 from record_resources import RecordResourceError, graph_info, plan_resources  # noqa: E402
 import algorithm_matrix  # noqa: E402
@@ -3866,6 +3867,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
             kernel.update(llc_hits=llc.get("hits"), llc_misses=llc.get("misses"),
                           llc_property_hits=llc.get("prop_hits"), llc_property_misses=llc.get("prop_misses"))
             row.update(validate_kernel_census(data.get("kernel_census"), kernel))
+            row["kernel_census_detailed_passes"] = len(validate_kernel_census_passes(data.get("kernel_census")))
         except RecordReceiptError as error:
             mark_row_error(row, f"fixed PageRank receipt failed: {error}")
     apply_popt_se_receipt(row, log_text, spec)

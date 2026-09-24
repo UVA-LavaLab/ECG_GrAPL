@@ -154,6 +154,80 @@ def validate_kernel_census(census: object, kernel: Mapping[str, object]) -> dict
     return result
 
 
+CENSUS_PASS_DETAIL_LIMIT = 64
+CENSUS_PASS_TRAFFIC = (*CENSUS_COUNTERS, "total_offchip_traffic", "entry_dirty_writebacks")
+CENSUS_PASS_ENDS = ("end_valid_lines", "end_dirty_lines", "end_property_lines", "end_entry_dirty_lines")
+
+
+def validate_kernel_census_passes(census: object) -> list[dict[str, int]]:
+    """Check a census's pass detail against its passes, segments and exit.
+
+    The census details its first CENSUS_PASS_DETAIL_LIMIT passes. The first
+    detailed pass must be the first-pass segment and the rest must sum to the
+    later-pass segment, or lie within it when the kernel ran more passes than
+    it details. Each pass's end must bound its dirty and property lines, the
+    lines dirty at entry may only retire, and when nothing runs after the last
+    pass its end must be the census's exit.
+    """
+    require(isinstance(census, Mapping), "missing kernel census")
+    passes = _census_unsigned(census, "passes")
+    require(_census_unsigned(census, "pass_detail_limit") == CENSUS_PASS_DETAIL_LIMIT,
+            f"kernel census pass detail limit is not {CENSUS_PASS_DETAIL_LIMIT}")
+    detail = census.get("pass_detail")
+    require(isinstance(detail, list), "invalid kernel census pass detail")
+    require(len(detail) == min(passes, CENSUS_PASS_DETAIL_LIMIT),
+            "kernel census pass detail does not cover its passes")
+    keys = (*CENSUS_PASS_TRAFFIC, *CENSUS_PASS_ENDS)
+    result = []
+    for number, fields in enumerate(detail, 1):
+        require(isinstance(fields, Mapping) and set(fields) == set(keys),
+                f"kernel census pass detail fields differ: pass {number}")
+        values = {key: _census_unsigned(fields, key) for key in keys}
+        require(values["total_offchip_traffic"] ==
+                values["memory_accesses"] + values["prefetch_fills"] + values["llc_writebacks"],
+                f"invalid kernel census pass traffic sum: pass {number}")
+        require(values["entry_dirty_writebacks"] <= values["llc_writebacks"],
+                f"kernel census charges a pass more setup writebacks than it wrote back: pass {number}")
+        require(values["end_entry_dirty_lines"] <= values["end_dirty_lines"] and
+                max(values["end_dirty_lines"], values["end_property_lines"]) <= values["end_valid_lines"],
+                f"kernel census pass end line counts are inconsistent: pass {number}")
+        result.append(values)
+    segments = census.get("segments")
+    require(isinstance(segments, Mapping) and set(segments) == set(CENSUS_SEGMENTS),
+            "kernel census segments are incomplete")
+    if result:
+        for key in CENSUS_PASS_TRAFFIC:
+            require(result[0][key] == _census_unsigned(segments["first_pass"], key),
+                    f"kernel census first pass detail differs from its segment: {key}")
+            later = sum(values[key] for values in result[1:])
+            segment = _census_unsigned(segments["later_passes"], key)
+            if passes <= CENSUS_PASS_DETAIL_LIMIT:
+                require(later == segment, f"kernel census later pass detail does not sum to its segment: {key}")
+            else:
+                require(later <= segment, f"kernel census later pass detail exceeds its segment: {key}")
+    # A line dirty at entry keeps its mark until it is written back or
+    # rewritten, so the marks never grow or outnumber what entry left.
+    entry = _census_unsigned(census, "entry_dirty_lines")
+    retired = _census_unsigned(segments["before_first_pass"], "entry_dirty_writebacks")
+    marks = entry
+    for number, values in enumerate(result, 1):
+        retired += values["entry_dirty_writebacks"]
+        require(values["end_entry_dirty_lines"] + retired <= entry,
+                f"kernel census pass detail keeps more setup-dirty lines than entry left: pass {number}")
+        require(values["end_entry_dirty_lines"] <= marks,
+                f"kernel census pass detail marks a setup-dirty line after it retired: pass {number}")
+        marks = values["end_entry_dirty_lines"]
+    if result:
+        require(marks >= _census_unsigned(census, "exit_entry_dirty_lines"),
+                "kernel census pass detail and exit disagree on setup-dirty lines")
+    # With nothing run after the last pass, the exit reads the cache it left.
+    quiet = all(_census_unsigned(segments["after_last_pass"], counter) == 0 for counter in CENSUS_COUNTERS)
+    if result and passes <= CENSUS_PASS_DETAIL_LIMIT and quiet:
+        require(all(result[-1][end] == _census_unsigned(census, end.replace("end_", "exit_", 1))
+                    for end in CENSUS_PASS_ENDS), "kernel census exit differs from its last pass end")
+    return result
+
+
 def resolve_layout(
     *, records: int, vertices: int, maximum_id: int,
     traversals: int, requested_bytes: int = 0, minimum_mantissa_bits: int = 0,

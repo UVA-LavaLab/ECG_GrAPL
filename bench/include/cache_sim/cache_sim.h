@@ -4943,6 +4943,7 @@ public:
         census_passes_ = 0;
         census_segments_.fill(AlgorithmTraffic());
         census_entry_writebacks_.fill(0);
+        census_pass_detail_.clear();
         census_mark_ = AlgorithmTraffic::snapshot(*this);
         census_entry_ = l3_->armKernelCensus();
         census_entry_writebacks_mark_ = l3_->entryDirtyWritebacks();
@@ -4962,14 +4963,20 @@ public:
             ? (census_passes_ == 0 ? kCensusBeforeFirstPass : kCensusBetweenPasses)
             : (census_passes_ == 0 ? kCensusFirstPass : kCensusLaterPasses);
         const AlgorithmTraffic now = AlgorithmTraffic::snapshot(*this);
-        census_segments_[segment].accumulate(now.since(census_mark_));
+        const AlgorithmTraffic traffic = now.since(census_mark_);
+        census_segments_[segment].accumulate(traffic);
         census_mark_ = now;
         const uint64_t written_back = l3_->entryDirtyWritebacks();
-        census_entry_writebacks_[segment] += written_back - census_entry_writebacks_mark_;
+        const uint64_t setup_writebacks = written_back - census_entry_writebacks_mark_;
+        census_entry_writebacks_[segment] += setup_writebacks;
         census_entry_writebacks_mark_ = written_back;
         census_pass_open_ = begin;
-        if (!begin)
-            ++census_passes_;
+        if (begin)
+            return;
+        ++census_passes_;
+        // Only a detailed pass pays the end-of-pass scan of the last level.
+        if (census_pass_detail_.size() < kCensusPassDetail)
+            census_pass_detail_.push_back({traffic, setup_writebacks, l3_->kernelCensusExit()});
     }
 
     // Kernel-boundary modes for tests. AS_BUILT arms the census on the cache
@@ -5652,7 +5659,10 @@ public:
     // The census as one line. Segments cover the kernel from its boundary to
     // now, so they sum to the kernel phase, and each names the setup
     // writebacks among its own; every mark set at entry must be accounted as
-    // written back, rewritten or still resident.
+    // written back, rewritten or still resident. The pass detail then gives
+    // each of the first kCensusPassDetail passes its own traffic, its setup
+    // writebacks and the last-level lines it ended with, as the exit would
+    // read had the kernel ended there.
     std::string kernelCensusJSON() const {
         if (census_reset_)
             throw std::logic_error("kernel census: statistics were reset inside the kernel");
@@ -5687,7 +5697,18 @@ public:
             segments[segment].writeFields(ss);
             ss << ",\"entry_dirty_writebacks\":" << entry_writebacks[segment] << '}';
         }
-        ss << "}}";
+        ss << "},\"pass_detail_limit\":" << kCensusPassDetail << ",\"pass_detail\":[";
+        for (size_t pass = 0; pass < census_pass_detail_.size(); ++pass) {
+            const CensusPass& detail = census_pass_detail_[pass];
+            ss << (pass ? ",{" : "{");
+            detail.traffic.writeFields(ss);
+            ss << ",\"entry_dirty_writebacks\":" << detail.entry_dirty_writebacks
+               << ",\"end_valid_lines\":" << detail.end.valid_lines
+               << ",\"end_dirty_lines\":" << detail.end.dirty_lines
+               << ",\"end_property_lines\":" << detail.end.property_lines
+               << ",\"end_entry_dirty_lines\":" << detail.end.entry_dirty_lines << '}';
+        }
+        ss << "]}";
         return ss.str();
     }
 
@@ -5736,6 +5757,17 @@ private:
     std::array<uint64_t, kCensusSegments> census_entry_writebacks_{};
     KernelEntryForTest kernel_entry_for_test_ = KernelEntryForTest::AS_BUILT;
     CacheLevel::KernelCensusEntry census_entry_;
+    // The first kCensusPassDetail passes, each with its own traffic, the
+    // setup writebacks among it and the last-level lines at its end. The
+    // limit bounds the scans for kernels that open a pass per frontier level
+    // or bucket; passes beyond it are still counted and segmented.
+    static constexpr size_t kCensusPassDetail = 64;
+    struct CensusPass {
+        AlgorithmTraffic traffic;
+        uint64_t entry_dirty_writebacks = 0;
+        CacheLevel::KernelCensusExit end;
+    };
+    std::vector<CensusPass> census_pass_detail_;
 
     bool record_model_ = false;
     bool record_replacement_ = false;
