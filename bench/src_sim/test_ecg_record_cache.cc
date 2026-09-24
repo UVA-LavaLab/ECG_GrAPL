@@ -1,8 +1,12 @@
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <list>
 #include <memory>
 #include <random>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -831,6 +835,295 @@ int exerciseKernelCensusFailsClosed() {
     return 0;
 }
 
+// A pull-PageRank graph on 64 vertices, whose F32 property array fills four
+// 64-byte lines. Node u gathers source[offset[u]] up to source[offset[u + 1]],
+// in the kernel's order. Vertices 16..31 fill one line: nodes 0..3 gather its
+// first half, nodes 12..15 its second, and nodes 16..31 then write it in place
+// after its last gather. Nodes 32..63 gather two sources each, which keeps the
+// L3 under pressure.
+struct PullGraph {
+    std::vector<uint64_t> offset, source;
+    std::vector<uint32_t> out_degree;
+};
+
+PullGraph lastPassGraph() {
+    constexpr uint64_t vertices = 64;
+    PullGraph graph;
+    graph.offset.push_back(0);
+    for (uint64_t node = 0; node < vertices; ++node) {
+        if (node < 4) {
+            graph.source.push_back(16 + node);
+        } else if (node >= 12 && node < 16) {
+            graph.source.push_back(12 + node);
+        } else if (node >= 32) {
+            graph.source.push_back(node % 16);
+            graph.source.push_back(32 + node * 7 % 32);
+        }
+        graph.offset.push_back(graph.source.size());
+    }
+    // A vertex without out-edges still divides by its out-degree; it counts one.
+    graph.out_degree.assign(vertices, 0);
+    for (const uint64_t source : graph.source)
+        ++graph.out_degree[source];
+    for (uint32_t& degree : graph.out_degree)
+        degree = std::max<uint32_t>(degree, 1);
+    return graph;
+}
+
+// How a replay decodes its last pass: FINAL as the kernel does, so each line's
+// last gather retires it DEAD, or ONGOING as if another pass followed.
+enum class LastPass { FINAL, ONGOING };
+
+enum class PassAccess { OTHER, GATHER, WRITE };
+
+// One access of the last pass: its kind, the L3 misses it took, and whether a
+// gather had already retired its line DEAD earlier in that pass.
+struct PassStep {
+    PassAccess kind;
+    uint64_t misses;
+    bool retired;
+};
+
+struct PullPageRankRun {
+    std::vector<PassStep> last_pass;
+    std::string census;
+    uint64_t dead_first = UINT64_MAX;
+    bool decoded = true;
+};
+
+// pr.cc's kernel, access for access, under the replacement mechanism on a
+// single 16-way L3 set: setup writes both property arrays, then three passes
+// each gather contribution[v] through the records and write scores[u] and
+// contribution[u] in place. Each record is also decoded beside the cache, to
+// know when a gather retires its line.
+PullPageRankRun replayPullPageRank(const PullGraph& graph, const ecg_record::RecordStream& stream,
+                                   LastPass decode, bool governed_first) {
+    using namespace cache_sim;
+    constexpr uint64_t vertices = 64, ways = 16, passes = 3;
+    alignas(64) static float scores[vertices], contribution[vertices];
+    alignas(64) static uint64_t in_index[vertices + 1], out_index[vertices + 1];
+    const ecg_record::Layout& layout = stream.layout;
+    const uint64_t records = graph.source.size();
+    GraphCacheContext context;
+    context.initTopology(graph.out_degree.data(), vertices, records, true);
+    context.registerPropertyArray(scores, vertices, 4, ways * 64, 0.15, true);
+    context.registerPropertyArray(contribution, vertices, 4, ways * 64, 0.15, true);
+    CacheHierarchy cache(64, 1, 64, 1, ways * 64, ways, 64,
+        EvictionPolicy::LRU, EvictionPolicy::LRU, EvictionPolicy::ECG);
+    cache.initGraphContext(&context);
+    ecg_record::NativeConfiguration configuration;
+    ecg_record::packLayout(layout, configuration.layout_descriptor);
+    configuration.record_base = reinterpret_cast<uint64_t>(stream.data());
+    configuration.property_base = reinterpret_cast<uint64_t>(contribution);
+    configuration.record_count = records;
+    configuration.vertex_count = vertices;
+    configuration.context = configuration.generation = 1;
+    configuration.control = ecg_record::kNativeEnable;
+    cache.configureRecord(configuration, stream, ecg_record::Mechanism::REPLACEMENT);
+    cache.setRecordGovernedFirst(governed_first);
+    for (uint64_t node = 0; node < vertices; ++node) {
+        cache.readArray(scores, node);
+        cache.writeArray(scores, node);
+        cache.readArray(contribution, node);
+        cache.writeArray(contribution, node);
+    }
+    cache.resetStats();
+    cache.markKernelEntry();
+    PullPageRankRun run;
+    const auto line = [](const void* address) { return reinterpret_cast<uint64_t>(address) / 64; };
+    for (uint64_t pass = 0; pass < passes; ++pass) {
+        const bool last = pass + 1 == passes;
+        const bool has_next = !last || decode == LastPass::ONGOING;
+        std::set<uint64_t> retired;
+        const auto step = [&](PassAccess kind, const void* address, const auto& access) {
+            const bool was_retired = retired.count(line(address)) != 0;
+            const uint64_t misses = cache.getL3Stats().misses.load();
+            const uint64_t result = access();
+            if (last)
+                run.last_pass.push_back(
+                    {kind, cache.getL3Stats().misses.load() - misses, was_retired});
+            return result;
+        };
+        const auto read = [&](const void* address) {
+            step(PassAccess::OTHER, address, [&] {
+                cache.access(reinterpret_cast<uint64_t>(address));
+                return uint64_t{0};
+            });
+        };
+        cache.markKernelPass(true);
+        cache.recordIteration(pass * records, has_next);
+        for (uint64_t node = 0; node < vertices; ++node) {
+            read(&in_index[node]);
+            read(&in_index[node + 1]);
+            for (uint64_t edge = graph.offset[node]; edge < graph.offset[node + 1]; ++edge) {
+                const auto* record = reinterpret_cast<const void*>(
+                    configuration.record_base + edge * layout.record_bytes);
+                const uint64_t word = step(PassAccess::OTHER, record,
+                    [&] { return cache.recordLoad(edge); });
+                ecg_record::Prediction prediction;
+                if (ecg_record::makePrediction(layout, word, pass * records + edge + 1, has_next,
+                        prediction) != ecg_record::Status::OK ||
+                    prediction.destination != graph.source[edge]) {
+                    run.decoded = false;
+                    return run;
+                }
+                const float* property = &contribution[prediction.destination];
+                if (step(PassAccess::GATHER, property,
+                        [&] { return cache.recordProperty(edge, word); }) != graph.source[edge]) {
+                    run.decoded = false;
+                    return run;
+                }
+                if (prediction.state == ecg_record::State::DEAD)
+                    retired.insert(line(property));
+            }
+            step(PassAccess::OTHER, &scores[node], [&] {
+                cache.writeArray(scores, node);
+                return uint64_t{0};
+            });
+            read(&out_index[node]);
+            read(&out_index[node + 1]);
+            step(PassAccess::WRITE, &contribution[node], [&] {
+                cache.writeArray(contribution, node);
+                return uint64_t{0};
+            });
+        }
+        cache.markKernelPass(false);
+    }
+    cache.finishRecord(records * passes);
+    const std::string json = cache.toJSON();
+    run.census = kernelCensusLine(json);
+    const std::string field = "\"ecg_record_victim_dead_first\": ";
+    const std::size_t at = json.find(field);
+    if (at != std::string::npos)
+        run.dead_first = std::strtoull(json.c_str() + at + field.size(), nullptr, 10);
+    return run;
+}
+
+// Why PageRank's last pass can miss where a pass followed by another does not.
+// DEAD bounds the gathers the records carry, but the vertex loop also writes
+// contribution[u] in place, and no record describes that write. So a final
+// pass may retire a line DEAD, evict it first and have the write re-fetch it,
+// with a bound that held for every gather. A builder whose lines split a real
+// line would instead retire half of it while the other half is still to be
+// gathered, so that a gather re-fetches it: a bound that did not hold.
+//
+// Built from 16 F32 values per line, as pr.cc builds them on its 2 MiB-aligned
+// array, no gather reads a line after its DEAD decode, and every miss the
+// final pass adds is an in-place write to a retired line. Built from 8 per
+// line, the same kernel also adds a gather of a retired line. The census
+// cannot always tell the two apart: while a re-fetched line is still to be
+// written in the pass, either miss follows a dirty eviction and the write
+// dirties the line again, so the last pass's misses and the lines it turns
+// dirty grow together whichever the cause. Only the charge to each access
+// can. Every record offset within a line is replayed, under the LRU base and
+// under governed-first. Returns zero, or the number of the failed check.
+int exerciseLastPassInPlaceWrite() {
+    const PullGraph graph = lastPassGraph();
+    ecg_record::Requirements requirements;
+    requirements.vertex_count = 64;
+    requirements.record_count = graph.source.size();
+    requirements.traversal_count = 3;
+    requirements.max_vertex_id = *std::max_element(graph.source.begin(), graph.source.end());
+    requirements.max_vertex_id_known = true;
+    std::list<ecg_record::RecordStream> copies;
+    std::list<std::vector<char>> padding;
+    // The two pr.cc builds, then the split build, which must fail the checks
+    // that hold for them.
+    struct Build {
+        uint64_t vertices_per_line;
+        bool governed_first;
+    };
+    bool census_alike = false;
+    for (const Build build : {Build{16, false}, Build{16, true}, Build{8, true}}) {
+        ecg_record::Layout layout;
+        ecg_record::RecordStream stream;
+        if (ecg_record::selectLayout(requirements, layout) != ecg_record::Status::OK ||
+            ecg_record::buildRecords(requirements, layout, build.vertices_per_line,
+                [&graph](std::size_t edge) { return graph.source[edge]; }, stream) !=
+                ecg_record::Status::OK)
+            return 1;
+        // The records share the L3 with the property lines, so which records
+        // share a line moves the evictions. Copies separated by padding that
+        // stays allocated walk the stream through every 16-byte offset in a line.
+        std::array<const ecg_record::RecordStream*, 4> at_offset{};
+        for (int copy = 0; copy < 256 && std::count(at_offset.begin(), at_offset.end(), nullptr);
+             ++copy) {
+            padding.emplace_back(16 * (copy % 7) + 1);
+            copies.push_back(stream);
+            const uint64_t offset = reinterpret_cast<uint64_t>(copies.back().data()) % 64;
+            if (offset % 16 == 0 && !at_offset[offset / 16])
+                at_offset[offset / 16] = &copies.back();
+        }
+        if (std::count(at_offset.begin(), at_offset.end(), nullptr))
+            return 2;
+        for (const ecg_record::RecordStream* records : at_offset) {
+            const PullPageRankRun final_pass =
+                replayPullPageRank(graph, *records, LastPass::FINAL, build.governed_first);
+            const PullPageRankRun ongoing =
+                replayPullPageRank(graph, *records, LastPass::ONGOING, build.governed_first);
+            if (!final_pass.decoded || !ongoing.decoded)
+                return 3;
+            const std::vector<std::string> detail = censusPassDetail(final_pass.census);
+            const std::vector<std::string> reference = censusPassDetail(ongoing.census);
+            if (detail.size() != 3 || reference.size() != 3 ||
+                final_pass.last_pass.size() != ongoing.last_pass.size())
+                return 4;
+            // The replays part only where the last pass decodes.
+            if (detail[0] != reference[0] || detail[1] != reference[1])
+                return 5;
+            uint64_t regathers = 0, write_refetches = 0, gather_refetches = 0;
+            uint64_t other_added = 0, removed = 0;
+            int64_t added = 0;
+            for (std::size_t index = 0; index < final_pass.last_pass.size(); ++index) {
+                const PassStep& step = final_pass.last_pass[index];
+                const PassStep& same = ongoing.last_pass[index];
+                if (step.kind != same.kind)
+                    return 4;
+                regathers += step.kind == PassAccess::GATHER && step.retired;
+                const int64_t more = int64_t(step.misses) - int64_t(same.misses);
+                added += more;
+                if (more < 0)
+                    removed += uint64_t(-more);
+                else if (step.kind == PassAccess::WRITE && step.retired)
+                    write_refetches += uint64_t(more);
+                else if (step.kind == PassAccess::GATHER && step.retired)
+                    gather_refetches += uint64_t(more);
+                else
+                    other_added += uint64_t(more);
+            }
+            const auto more = [&](const char* key) {
+                return int64_t(receiptValue(detail[2], key)) - int64_t(receiptValue(reference[2], key));
+            };
+            // Both replays enter the last pass with the same dirty lines, so the
+            // lines it turns dirty differ by its writebacks and its end dirt.
+            const int64_t more_misses = more("llc_misses");
+            const int64_t more_dirtied = more("llc_writebacks") + more("end_dirty_lines");
+            if (more_misses != added)
+                return 6;
+            if (build.vertices_per_line == 16) {
+                if (regathers != 0)
+                    return 7;
+                if (write_refetches == 0 || gather_refetches + other_added + removed != 0)
+                    return 8;
+                if (more_dirtied != more_misses)
+                    return 9;
+                if (final_pass.dead_first == 0 || final_pass.dead_first == UINT64_MAX ||
+                    ongoing.dead_first != 0)
+                    return 10;
+            } else {
+                if (regathers == 0)
+                    return 11;
+                if (gather_refetches == 0)
+                    return 12;
+                census_alike |= more_dirtied == more_misses;
+            }
+        }
+    }
+    // Some offset must show the split build's gather re-fetch with the census
+    // signature of an in-place write, or the census would have told them apart.
+    return census_alike ? 0 : 13;
+}
+
 int main() {
     using namespace cache_sim;
     ecg_record::Requirements requirements;
@@ -956,6 +1249,10 @@ int main() {
     if (const int check = exerciseKernelCensusPassDetailIsBounded()) {
         std::printf("kernel census bounded pass detail check %d failed [FAIL]\n", check);
         return 18;
+    }
+    if (const int check = exerciseLastPassInPlaceWrite()) {
+        std::printf("last-pass in-place write check %d failed [FAIL]\n", check);
+        return 19;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;
