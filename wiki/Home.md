@@ -102,4 +102,7 @@ passive kernel census then showed that GRASP's remaining SpMV lead is the cache
 state its kernel starts in. It also showed that above 8 MiB the RRPV order's
 gain is writebacks deferred past the kernel's end. Over eight passes after one
 construction, the settled passes tie GRASP at 20 and 24 MiB on both kernels,
-and GRASP's remaining leads sit in the kernel's first or last pass.
+and GRASP's remaining leads sit in the kernel's first or last pass. A later
+passive count showed that from 16 MiB up PageRank's added misses in that last
+pass are its own in-place writes fetching back lines retired as DEAD; no gather
+fetched one back.

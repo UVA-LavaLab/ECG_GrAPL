@@ -13,7 +13,7 @@ part of the result rather than a hedge. A second reading at 24 MiB, reported in
 places the crossover between 16 and 20 MiB. The mitigation is measured to be
 capacity-pressure dependent.
 
-Four later studies on the same graph and capacities are reported here too:
+Five later studies on the same graph and capacities are reported here too:
 
 - **A pressure signal from set dueling failed its frozen gate.** It was safe on
   SpMV at 8 and 16 MiB only, safe on PageRank at no capacity, and it regressed
@@ -39,6 +39,13 @@ Four later studies on the same graph and capacities are reported here too:
   kernels. GRASP's remaining leads sit at the kernel's ends: SpMV's first pass,
   and PageRank's last, where wrapped bounds decode to DEAD. See
   [the steady state](#the-steady-state-eight-passes-after-one-construction).
+- **PageRank's added last-pass misses are its own in-place writes.** A passive
+  count charges each line that DEAD-first eviction retired and a later miss
+  fetched again to the access that fetched it. From 16 MiB up the last pass's
+  added property misses are the kernel's in-place write fetching back retired
+  lines, and no gather fetches one back. A one-bit declaration that would stop
+  the retirement is in the codec and is not measured. See
+  [the re-fetch count](#the-re-fetch-count-pageranks-added-last-pass-misses-are-in-place-writes).
 
 The [hardware cost](#hardware-cost) of the rule as first measured has been
 **corrected**. It assumed the cache already keeps a recency order, and a GRASP
@@ -1368,6 +1375,10 @@ Two readings fit, and the census cannot separate them. Neither is measured:
   later in the same pass. That fits the doubled flow only if every such line's
   write was still to come.
 
+A later count separated them: on these rows the added misses are writes
+re-fetching retired lines, and no gather fetches one back; see
+[the re-fetch count](#the-re-fetch-count-pageranks-added-last-pass-misses-are-in-place-writes).
+
 **On SpMV the last pass changes writebacks and adds no flow.** The kernel only
 reads x.
 From 16 MiB up, the last pass writes back 37,660 to 85,366 of the setup-dirty
@@ -1450,7 +1461,8 @@ Six predictions were recorded before the run, and all six held:
     property misses, and every run has a last pass.
 - **Not settled:**
   - whether PageRank's added last-pass misses are writes re-fetching retired
-    lines or bounds that are not conservative;
+    lines or bounds that are not conservative. A later count answered it for
+    these rows: they are writes; see [the re-fetch count](#the-re-fetch-count-pageranks-added-last-pass-misses-are-in-place-writes);
   - what a kernel invoked repeatedly with other work between invocations sees;
     the passes here share one run's cache state.
 - **Not claimed:**
@@ -1461,6 +1473,255 @@ Six predictions were recorded before the run, and all six held:
     count;
   - no earlier verdict is revised;
   - a tie is not a lead, and neither boundary is a competitive claim.
+
+## The re-fetch count: PageRank's added last-pass misses are in-place writes
+
+[The last pass](#the-last-pass-wrapped-bounds-become-dead) left two readings of
+PageRank's added last-pass misses, and the census could not separate them: a
+write re-fetching a line the record has retired, or a bound that is not
+conservative. A fixture, a passive count and a rerun of the steady state's
+PageRank rows separate them. A one-bit declaration that would stop the
+retirement was added beside the count, and it is not measured.
+
+### A fixture that charges each added miss to one access
+
+`exerciseLastPassInPlaceWrite`, in `bench/src_sim/test_ecg_record_cache.cc`,
+replays PageRank's record-mode kernel access for access: three passes over a
+64-vertex pull graph, with a last level of one 16-way set. Each case is
+replayed twice, identically until the last pass. In one replay the last pass
+requests no further pass, as the kernel's last pass does; in the other it
+requests one, as if another pass followed. Each record is also decoded beside
+the cache. So every last-pass access is tagged with whether a gather had
+already retired its line DEAD in that pass, and every miss the final replay
+adds is charged to one access.
+
+- **With 16 values per line, as the kernel builds its records,** the one added
+  miss is the in-place write, fetching again a line that a DEAD decode retired
+  after its last gather. No gather reads a line after its DEAD decode. That
+  holds at each of four record offsets within a line, under the LRU base and
+  under governed-first.
+- **A control built with 8 values per line** splits each real line across two
+  builder lines, so a DEAD decode can precede the line's last gather: a bound
+  that is not conservative, by construction. Its gathers do fetch retired lines
+  again. Yet at three of the four offsets its census shows the write's
+  signature, one line turned dirty per added miss. The doubled flow is
+  therefore no evidence against a non-conservative bound; only a charge to
+  each access separates the two readings.
+
+On the kernel itself the second reading is excluded by construction. It builds
+16 four-byte values per 64-byte line on a line-aligned array, and its records
+run in the order of its gathers, so a DEAD decode is the pass's last gather of
+that line. That is an argument, not a measurement; the count below measures it
+on this graph.
+
+### The written-in-place bit
+
+A property region that the kernel also writes in place can now declare it.
+`kNativeWrittenInPlace`, in `bench/include/ecg_record_native.h`, is one more
+bit of the record control word, and it says that the kernel writes the region
+by a reference no record describes. The decode ORs it into its has-next input,
+so in a pass that requests no further one a wrapped bound decodes FINITE, with
+the deadline it would carry before another pass, instead of DEAD. A line whose
+write is still to come is then not retired.
+
+- **Hardware cost:** one configuration bit per property region, in the existing
+  control word, and one OR gate on the has-next input of the wrapped-bound
+  decode. No per-line state, no port, no per-eviction work, no metadata traffic
+  and no change to the record or its codec.
+- **What it leaves alone:** the pass's own has-next result still comes from the
+  has-next bit alone. cache_sim keeps the new bit when it rebuilds the control
+  word for each pass, because a declared write belongs to the region, not to
+  the pass.
+- **With the bit clear nothing changes.** Before it existed, a control word
+  that carried it failed closed.
+- **It is coarse.** In the last pass it keeps every wrapped bound in the region
+  from decoding DEAD, including those of lines whose write has already
+  happened, so it is expected to give up the 8 MiB last-pass gain below. It
+  would also hide a bound that is not conservative, since a split line would no
+  longer be retired either. The count has to be read with the bit clear.
+- **No kernel sets it.** No option or label carries it, and nothing on this
+  page measures it.
+
+`testNativeConfigurationAndBinding`, in `bench/src_sim/test_ecg_record.cc`, pins
+the decode: with the enable bit alone a last-pass wrapped bound decodes DEAD,
+and with the written-in-place bit added it decodes FINITE while the has-next
+result stays false. In the fixture a last pass replayed with the bit retires no
+line and repeats the ongoing replay miss for miss, whether each pass names its
+base, as PageRank does, or opens through the managed cursor, as the shared
+kernels do.
+
+### The passive re-fetch count
+
+cache_sim counts each DEAD-first victim that a later demand miss at the last
+level fetches again. A victim counts once, under the access that fetched it:
+
+- `ecg_record_dead_first_refetch_write`: a write;
+- `ecg_record_dead_first_refetch_gather`: a gather that carries a record;
+- `ecg_record_dead_first_refetch_read`: any other read.
+
+A DEAD bound claims that no later reference exists, so each count is a
+reference the bound did not describe. A write is the kernel's own in-place
+update, which no record describes; a gather means the bound was not
+conservative. The count runs from the statistics reset at kernel entry, with
+no reset per pass, and a writeback from the level above is not a demand miss.
+It is simulator bookkeeping, a set of victim line addresses. It reads no
+decision state and changes no decision, and the modeled cache gains nothing.
+
+`exerciseDeadFirstRefetchCount`, in the same file as the fixture, pins it on a
+one-set, two-way cache: each kind of access counts under its own field, a
+victim counts once, and the reset forgets every victim. In the fixture the
+count equals the replay's charge to each access in every case. The combined
+CSV does not carry the three fields, so they are read from the raw receipts.
+
+### The study: the steady state's PageRank rows, rerun
+
+The `ecg_refetch_count_cache` study reran the steady state's eight PageRank ECG
+rows unchanged: governed-first and the RRPV order at 8, 16, 20 and 24 MiB, with
+eight passes after one construction, `-o 0 -n 1 -i 8 -t 0`. It adds no label,
+option or mechanism, and no row sets the bit. Its gate was frozen before the
+run:
+
+- **Integrity first,** as in the steady state, and two checks on each row. The
+  read count must be 0, because in record mode the kernel touches its
+  contributions only through gathers and the in-place write. The DEAD-first
+  victim count must be positive, because a count that reads exactly zero is not
+  a check.
+- **The split falsifier:** the gather count must be 0 on all eight rows. A
+  positive count would mean a bound that is not conservative, and would stop
+  the study for a report.
+- **The gated question,** at 16–24 MiB, where the last pass adds misses:
+  `r = write / Δ`, where Δ is the row's pass-8 property misses less its pass-7
+  property misses, both from its own per-pass detail. It is confirmed when
+  0.9 ≤ r ≤ 1.1 on all six rows. The two 8 MiB rows, whose last pass gains,
+  are reported only.
+
+Every re-fetch is read as the last pass's, which
+[where the re-fetches fall](#where-the-re-fetches-fall) checks.
+
+Integrity was clean on all eight rows:
+
+- two distinct labels, one binary and one PageRank result;
+- every RRPV-order decision was RRPV-ordered and none reached an LRU base, and
+  no governed-first row made one;
+- every census validates, with eight detailed passes, and every row has a read
+  count of 0 and a positive DEAD-first count.
+
+**The change that added the bit and the count moved no row.** Each row's entry
+state, all eight of its passes and its result reproduce the steady state's same
+row exactly. So every figure below holds for the steady state's rows too.
+
+| PageRank | DEAD-first victims | Write | Gather | Read | Property misses, pass 7 | Pass 8 | Δ | r |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 8 MiB, governed-first | 98,732 | 11,301 | 0 | 0 | 3,472,827 | 3,471,117 | −1,710 | reported only |
+| 8 MiB, RRPV order | 96,943 | 11,837 | 0 | 0 | 3,442,763 | 3,440,851 | −1,912 | reported only |
+| 16 MiB, governed-first | 129,874 | 30,777 | 0 | 0 | 235,923 | 266,700 | +30,777 | 1 |
+| 16 MiB, RRPV order | 129,586 | 30,429 | 0 | 0 | 235,923 | 266,352 | +30,429 | 1 |
+| 20 MiB, governed-first | 124,377 | 28,947 | 0 | 0 | 235,923 | 264,870 | +28,947 | 1 |
+| 20 MiB, RRPV order | 123,888 | 28,462 | 0 | 0 | 235,923 | 264,385 | +28,462 | 1 |
+| 24 MiB, governed-first | 125,156 | 28,196 | 0 | 0 | 235,923 | 264,119 | +28,196 | 1 |
+| 24 MiB, RRPV order | 125,060 | 28,154 | 0 | 0 | 235,923 | 263,868 | +27,945 | 1.0075 |
+
+- **The split falsifier holds.** On no row does a gather or any other read fetch
+  a DEAD-first victim again. So on this graph no gather paid a miss for a DEAD
+  bound, which is where a bound that is not conservative would cost one.
+- **The gated question is confirmed.** r is exactly 1 on five of the six gated
+  rows, and 1.0075 on the RRPV order at 24 MiB. From 16 MiB up the last pass's
+  added property misses are the in-place write fetching again the lines that
+  DEAD-first eviction retired: exactly on five rows, and to within 209 misses,
+  0.75%, on the sixth.
+
+**Each re-fetch adds two to the flow.** On all six rows at 16–24 MiB the added
+writebacks and the change in resident dirty lines sum to Δ, and the flow rises
+by 2Δ: each re-fetch adds one miss and one line turned dirty, which is written
+back or is still dirty at the end. That is the doubled flow the steady state
+found. The write accounts for 22.5–23.7% of the DEAD-first victims at
+16–24 MiB and 11.4–12.2% at 8 MiB; no access fetches the rest again.
+
+### Where the re-fetches fall
+
+The DEAD-first and re-fetch counts are kernel totals; only the per-pass detail
+is per pass. Reading the write count against the last pass rests on two
+things:
+
+- **The decode.** A bound decodes DEAD from a DEAD token, which reads the same
+  in every pass, or from a wrapped bound in a pass that requests no further
+  one, which only the last pass does.
+- **Two passes against eight.** The census study's rows ran two passes from an
+  older build. On seven of the eight rows they have the same DEAD-first victims
+  as both eight-pass runs, and on the RRPV order at 8 MiB 28 more, although the
+  eight-pass runs make about four times as many victim decisions. So passes 2–7
+  add no DEAD-first victim. That the first pass adds none rests on the decode,
+  not on a count.
+
+On that reading the RRPV order's last pass at 24 MiB fetched 235,714 property
+lines other than its re-fetches. That is 209 fewer than its seventh pass, and
+207 fewer than its lowest of passes 2–7, 235,921 in pass 2. Every other row at
+16–24 MiB fetched exactly 235,923 other property lines in its last pass, as in
+each of its passes 2–7. So that row's last pass also carries a small saving,
+with the sign of the 8 MiB gain below. The receipts do not say which stream it
+comes from, and it is unattributed.
+
+### At 8 MiB the last pass gains
+
+- **Governed-first's** write fetches back 11,301 lines, and its other property
+  misses fall by 13,011, against passes 2–7 that each have 3,472,827.
+- **The RRPV order's** write fetches back 11,837 lines, and its other property
+  misses fall by 13,749 against pass 7, or by 13,697 against its lowest of
+  passes 2–7.
+
+So at 8 MiB the last pass's DEAD decodes save more other property misses than
+the write fetches back: evicting DEAD lines first keeps more of the other lines
+resident. The written-in-place bit, which keeps every wrapped bound in the
+region from decoding DEAD, is expected to give up both parts.
+
+### Predictions
+
+Four predictions were recorded before the run, with medium confidence, and one
+held:
+
+- the gather and read counts are 0 on every row: held;
+- r is exactly 1 on each of the six gated rows: failed on the RRPV order at
+  24 MiB, where it is 1.0075;
+- each gated row's write count equals the steady state's Δ, provided its passes
+  7 and 8 reproduce the steady state's: failed on the same row, 28,154 against
+  27,945;
+- the sharper form, r ≤ 1, since a re-fetch that evicts a line needed again
+  adds a miss to Δ but not to the write count: failed on the same row.
+
+The three failures are the same 209 misses. The gate reads r > 1.1 as
+DEAD-first saving misses that the floor says do not exist, and 1.0075 lies
+inside the band with that sign.
+
+The budget was eight rows in eight jobs, to run once. All eight ran once, none
+was void and none was rerun, and the budget is closed.
+
+### What the re-fetch count settles and what it does not claim
+
+- **Settled** for PageRank on this graph and these capacities, in the
+  functional cache model, with the bit clear:
+  - from 16 MiB up, the last pass's added property misses are the in-place
+    write fetching again the lines that DEAD-first eviction retired: exactly on
+    five of the six rows, and to within 209 misses on the sixth;
+  - no gather or other read fetches a DEAD-first victim again, so no gather
+    paid a miss for a DEAD bound;
+  - at 8 MiB the last pass's DEAD decodes save more property misses than the
+    write fetches back;
+  - the bit and the count change nothing while the bit is clear.
+- **Not settled:**
+  - whether the written-in-place bit removes the re-fetches without other
+    effects, and what it costs at 8 MiB; it is not measured;
+  - the 209-miss saving in the RRPV order's last pass at 24 MiB;
+  - whether the in-place write costs anything in a pass that has a next pass.
+    It follows each line's last gather there too, while the line holds a bound
+    for the next pass. From 16 MiB up those passes sit on the floor, so any
+    such cost could show only at 8 MiB;
+  - another kernel's record builder, and another graph.
+- **Not claimed:**
+  - no measured mechanism and no default change: the count is
+    instrumentation, and no kernel sets the bit;
+  - nothing about another kernel or graph, timing, gem5 or Sniper;
+  - no competitive claim: the study ran no baseline;
+  - no earlier verdict is revised.
 
 ## Status and default
 
@@ -1483,13 +1744,23 @@ exists so that a native comparison is a build and a run rather than a
 plumbing exercise, and it is pinned by
 `scripts/test/test_governed_first_reaches_every_backend.py`, which fails if any
 of the sites is reverted and which also checks that the installed simulator
-checkouts have not drifted from the overlays that own them.
+checkouts have not drifted from the overlays that own them. For Sniper it
+compares every shared record header on the installer's own copy list, not only
+the runtime header.
 
 The two later options are narrower. The RRPV order, `--record-rrpv-order`, and
 the pressure gate, `--record-pressure-gate` with `on` for the per-set counter
 and `duel` for set dueling, exist in cache_sim only. Both are off by default,
 and the gem5 and Sniper harnesses refuse them rather than run a cell under a
 label whose behaviour they do not implement.
+
+The written-in-place bit is narrower still. It is part of the shared record
+codec, and cache_sim keeps it from pass to pass, but no kernel sets it and no
+option or label carries it. The shared algorithm kernels, gem5's guest harness
+and Sniper's runtime and harness each rebuild the control word from a has-next
+flag, so each would drop the bit, and Sniper's cache model reads only the
+has-next bit. Carrying it to a native backend is a change across the backends
+that has not been made.
 
 The kernel census is cache_sim instrumentation, not an option. Every cache_sim
 kernel arms it at the kernel boundary and adds its fields to the receipt. It
@@ -1516,6 +1787,8 @@ python3 scripts/experiments/ecg/flows/experiment_run.py \
   --profile ecg_kernel_census_cache --run-dir <census-run-dir>
 python3 scripts/experiments/ecg/flows/experiment_run.py \
   --profile ecg_steady_state_cache --run-dir <steady-run-dir>
+python3 scripts/experiments/ecg/flows/experiment_run.py \
+  --profile ecg_refetch_count_cache --run-dir <refetch-run-dir>
 ```
 
 Both kernels must be rebuilt: `pr` is a separate executable configured by
@@ -1580,3 +1853,18 @@ The per-pass detail has its own tests:
   first-pass and later-pass segments, keep consistent line counts at each
   pass's end, never mark a setup-dirty line again after the mark retired, and
   end where the census's exit does.
+
+The written-in-place bit and the re-fetch count have their own tests:
+
+- `testNativeConfigurationAndBinding`, in `bench/src_sim/test_ecg_record.cc`,
+  requires a last-pass wrapped bound to decode DEAD under the enable bit alone
+  and FINITE with the written-in-place bit, with the has-next result unchanged.
+- `exerciseLastPassInPlaceWrite`, in `bench/src_sim/test_ecg_record_cache.cc`,
+  replays PageRank's kernel with its last pass final, ongoing and written in
+  place, and charges each added miss to one access. The written-in-place
+  replay must repeat the ongoing one under both pass interfaces, the split
+  control must fetch a retired line back by a gather, and the count must equal
+  the replay's charge.
+- `exerciseDeadFirstRefetchCount`, in the same file, requires each kind of
+  access to count under its own field, a victim to count once, and the
+  statistics reset to forget every victim.
