@@ -22,6 +22,7 @@ are installed output, so the two must agree.
 """
 from pathlib import Path
 import hashlib
+import importlib.util
 import sys
 
 import pytest
@@ -176,3 +177,41 @@ def test_installed_checkouts_match_their_source(overlay, installed):
         f"{installed.relative_to(ROOT)} is stale against "
         f"{overlay.relative_to(ROOT)}; reinstall the checkout rather than "
         "patching it in place")
+
+
+def _sniper_installer():
+    spec = importlib.util.spec_from_file_location(
+        "setup_sniper_for_drift_test", ROOT / "scripts/setup_sniper.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+SNIPER_INSTALLER = _sniper_installer()
+
+
+def test_the_sniper_installer_copies_the_native_record_header():
+    """Removing a header from the copy list would leave its last copy in place."""
+    assert "ecg_record_native.h" in SNIPER_INSTALLER.SHARED_RECORD_HEADERS
+
+
+@pytest.mark.parametrize("name", SNIPER_INSTALLER.SHARED_RECORD_HEADERS)
+def test_every_shared_record_header_in_sniper_matches_its_source(name):
+    """Every shared record header Sniper's installer copies must be current.
+
+    The list is the installer's own, so a header added there is compared here
+    without anyone remembering to. The pairs above name only the runtime
+    header, and they passed while Sniper held a native record header one
+    change behind its source, a copy that would silently drop a control bit
+    the source now honours.
+    """
+    source = SNIPER_INSTALLER.PROJECT_ROOT / "bench/include" / name
+    installed = (SNIPER_INSTALLER.SNIPER_DIR /
+                 "common/core/memory_subsystem/cache" / name)
+    if not installed.exists():
+        pytest.skip(f"{name} is not installed in this environment")
+    assert (hashlib.sha256(source.read_bytes()).hexdigest() ==
+            hashlib.sha256(installed.read_bytes()).hexdigest()), (
+        f"{installed.relative_to(ROOT)} is stale against "
+        f"{source.relative_to(ROOT)}; reinstall with "
+        "scripts/setup_sniper.py --skip-build --apply-overlays")
