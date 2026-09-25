@@ -1617,6 +1617,9 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
             "ECG_RECORD_PRESSURE_GATE": {"no": "0", "on": "1", "duel": "2"}[
                 getattr(args, "record_pressure_gate", "no")],
             "ECG_RECORD_RRPV_ORDER": str(int(rrpv_order)),
+            # PageRank's in-place contribution store; only its kernel reads this.
+            "ECG_RECORD_WRITTEN_IN_PLACE": str(int(
+                getattr(args, "record_written_in_place", "no") == "on")),
             # Sniper's record path reads SNIPER_-prefixed variables of its own,
             # so the same arm has to be named twice or it silently stays off.
             "SNIPER_ECG_RECORD_GOVERNED_FIRST": str(int(
@@ -6891,6 +6894,10 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
     if rrpv_order != "no":
         labels = [algorithm_matrix.rrpv_order_label(label, rrpv_order)
                   for label in labels]
+    written_in_place = getattr(args, "record_written_in_place", "no")
+    if written_in_place != "no":
+        labels = [algorithm_matrix.written_in_place_label(label, written_in_place)
+                  for label in labels]
     expiry_clock = getattr(args, "record_expiry_clock", "progress")
     if expiry_clock != "progress":
         labels = [algorithm_matrix.expiry_clock_label(label, expiry_clock)
@@ -7200,6 +7207,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
     parser.add_argument("--record-pressure-gate", choices=("no", "on", "duel"), default="no")
     parser.add_argument("--record-rrpv-order", choices=("no", "on"), default="no")
+    parser.add_argument("--record-written-in-place", choices=("no", "on"), default="no")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--current-pr-baselines", action="store_true",
                         help="Use the common fixed PageRank arithmetic and complete CSR access stream for cache_sim baselines.")
@@ -7350,6 +7358,11 @@ def main(argv: list[str]) -> int:
     # Both native backends keep their own victim order, so the same holds here.
     if args.record_rrpv_order != "no" and args.suite != "cache-sim":
         raise SystemExit("record RRPV order is cache_sim-only")
+    # Only cache_sim's PageRank sets the bit: the native control words, the
+    # shared algorithms kernels and the other legacy kernels never do.
+    if args.record_written_in_place != "no" and (
+            args.suite != "cache-sim" or args.benchmark != "pr" or args.current_algorithms):
+        raise SystemExit("record written-in-place bit is cache_sim PageRank-only")
     semantic_edge_limit = int(args.sniper_semantic_edge_limit)
     if int(args.sniper_roi_icount) > 0 and semantic_edge_limit > 0:
         raise SystemExit(

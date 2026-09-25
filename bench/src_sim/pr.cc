@@ -97,10 +97,21 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     const bool rrpv_order = recordOption("ECG_RECORD_RRPV_ORDER", 0, 1) != 0;
     if (rrpv_order && !record_mode)
         throw std::invalid_argument("ECG_RECORD_RRPV_ORDER requires a current ECG record mode");
+    // Opt-in: the kernel stores contribution[u] in place once u's gathers
+    // finish, so in the last pass a wrapped bound is not the line's last use.
+    // One configuration bit for the region keeps those bounds FINITE; no line state.
+    const bool written_in_place = recordOption("ECG_RECORD_WRITTEN_IN_PLACE", 0, 1) != 0;
+    if (written_in_place && !record_mode)
+        throw std::invalid_argument("ECG_RECORD_WRITTEN_IN_PLACE requires a current ECG record mode");
     ecg_record::Mechanism mechanism = ecg_record::Mechanism::TRANSPORT;
     if (record_mode && ecg_record::parseMechanismName(mechanism_name, mechanism) !=
             ecg_record::Status::OK)
         throw std::invalid_argument("Unknown current ECG mechanism");
+    // Prefetch also acts on the decoded bound, and transport makes no victim
+    // decision from it; only the replacement mechanism has been checked with the bit.
+    if (written_in_place && mechanism != ecg_record::Mechanism::REPLACEMENT)
+        throw std::invalid_argument(
+            "ECG_RECORD_WRITTEN_IN_PLACE requires the replacement mechanism without prefetch");
     double hot_fraction = 0.15;
     if (rrpv_order) {
         // Prefetch admission and transport keep asking the base victim.
@@ -188,7 +199,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         configuration.record_count = requirements.record_count;
         configuration.vertex_count = requirements.vertex_count;
         configuration.context = configuration.generation = 1;
-        configuration.control = ecg_record::kNativeEnable;
+        configuration.control = ecg_record::kNativeEnable |
+            (written_in_place ? ecg_record::kNativeWrittenInPlace : 0);
         cache.configureRecord(configuration, stream, mechanism,
             recordOption("ECG_RECORD_UPDATE_LATENCY", 8, 4096),
             recordOption("ECG_RECORD_PREFETCH_LATENCY", 8, 4096),
@@ -219,6 +231,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
             std::cerr << "[ECG-PR-RRPV-ORDER hot_percent=" << context.regions[0].grasp_hot_percent
                       << " boundary=capacity]\n";
         }
+        if (written_in_place)
+            std::cerr << "[ECG-PR-WRITTEN-IN-PLACE property=contribution]\n";
     }
     for (NodeID node = 0; node < graph.num_nodes(); ++node) {
         cache.readArray(scores.data(), node);
@@ -325,6 +339,8 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
     }
     if (recordOption("ECG_RECORD_RRPV_ORDER", 0, 1) != 0)
         throw std::invalid_argument("ECG_RECORD_RRPV_ORDER requires a current ECG record mode");
+    if (recordOption("ECG_RECORD_WRITTEN_IN_PLACE", 0, 1) != 0)
+        throw std::invalid_argument("ECG_RECORD_WRITTEN_IN_PLACE requires a current ECG record mode");
     const ScoreT init_score = 1.0f / g.num_nodes();
     const ScoreT base_score = (1.0f - kDamp) / g.num_nodes();
     pvector<ScoreT> scores(

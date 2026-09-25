@@ -830,6 +830,13 @@ def make_roi_job(
             raise SystemExit("invalid current RRPV-order record selection")
         if order != "no" and settings.get("current_algorithms"):
             options += " --record-rrpv-order " + order
+    if "algorithm_record_written_in_place" in settings:
+        written = str(settings["algorithm_record_written_in_place"])
+        # Only PageRank sets the bit, from the runner's environment; neither its
+        # GAPBS options nor the algorithms CLI carry it.
+        if (written not in ("no", "on") or not settings.get("current_pr_baselines") or
+                settings.get("current_algorithms")):
+            raise SystemExit("invalid current written-in-place record selection")
     if "algorithm_record_governed_first" in settings:
         governed = str(settings["algorithm_record_governed_first"])
         # PageRank runs through the separate pr kernel under
@@ -921,6 +928,11 @@ def make_roi_job(
         if "algorithm_record_rrpv_order" in settings:
             command.extend(("--record-rrpv-order",
                             str(settings["algorithm_record_rrpv_order"])))
+        # Emitted only when set, so every job recorded before the bit existed
+        # keeps its exact argv and configuration hash.
+        if "algorithm_record_written_in_place" in settings:
+            command.extend(("--record-written-in-place",
+                            str(settings["algorithm_record_written_in_place"])))
         if "algorithm_record_expiry_clock" in settings:
             command.extend(("--record-expiry-clock",
                             str(settings["algorithm_record_expiry_clock"])))
@@ -1156,6 +1168,7 @@ def make_roi_job(
     expiry_clock = str(settings.get("algorithm_record_expiry_clock", "progress"))
     pressure_gate = str(settings.get("algorithm_record_pressure_gate", "no"))
     rrpv_order = str(settings.get("algorithm_record_rrpv_order", "no"))
+    written_in_place = str(settings.get("algorithm_record_written_in_place", "no"))
     if settings.get("current_algorithms"):
         parsed_algorithm = algorithm_matrix.parse_options(options)
         record_base, observer = parsed_algorithm.record_base_policy, parsed_algorithm.window_observer
@@ -1173,7 +1186,8 @@ def make_roi_job(
     expected_policy_labels = algorithm_matrix.policy_labels(
         [parse_policy_spec(policy) for policy in all_policies], record_base, observer, record_model,
         candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating, grasp_reference, query_count,
-        governed_first, store_bound, expiry_clock, pressure_gate, rrpv_order)
+        governed_first, store_bound, expiry_clock, pressure_gate, rrpv_order,
+        written_in_place)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
@@ -1263,6 +1277,7 @@ def make_roi_job(
             "record_expiry_clock": expiry_clock,
             "record_pressure_gate": pressure_gate,
             "record_rrpv_order": rrpv_order,
+            "record_written_in_place": written_in_place,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1300,7 +1315,7 @@ def expected_labels_for(
         grasp_reference: str = "off", query_count: int = 1,
         governed_first: str = "no", store_bound: str = "drop",
         expiry_clock: str = "progress", pressure_gate: str = "no",
-        rrpv_order: str = "no") -> list[str]:
+        rrpv_order: str = "no", written_in_place: str = "no") -> list[str]:
     """The one place that decides what output labels a job should produce.
 
     This expression previously existed in three copies, each with its own
@@ -1313,7 +1328,8 @@ def expected_labels_for(
         record_model == "next" and grasp_scope == "all" and
         popt_rank_mode == "future" and grasp_reference == "off" and
         query_count == 1 and governed_first == "no" and store_bound == "drop" and
-        expiry_clock == "progress" and pressure_gate == "no" and rrpv_order == "no")
+        expiry_clock == "progress" and pressure_gate == "no" and rrpv_order == "no" and
+        written_in_place == "no")
     if default_shape:
         return [policy_output_label(policy) for policy in expected_policies]
     return algorithm_matrix.policy_labels(
@@ -1321,7 +1337,7 @@ def expected_labels_for(
         record_base_policy, window_observer, record_model, candidate_rrpv,
         grasp_scope, popt_rank_mode, frontier_gating, grasp_reference,
         query_count, governed_first, store_bound, expiry_clock, pressure_gate,
-        rrpv_order)
+        rrpv_order, written_in_place)
 
 
 def csv_status(
@@ -1333,7 +1349,7 @@ def csv_status(
         grasp_reference: str = "off", query_count: int = 1,
         governed_first: str = "no", store_bound: str = "drop",
         expiry_clock: str = "progress", pressure_gate: str = "no",
-        rrpv_order: str = "no") -> tuple[str, str]:
+        rrpv_order: str = "no", written_in_place: str = "no") -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1349,7 +1365,7 @@ def csv_status(
                 expected_policies, record_base_policy, window_observer, record_model,
                 candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating,
                 grasp_reference, query_count, governed_first, store_bound,
-                expiry_clock, pressure_gate, rrpv_order))
+                expiry_clock, pressure_gate, rrpv_order, written_in_place))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1382,10 +1398,11 @@ def job_csv_status(job: Job) -> tuple[str, str]:
     expiry_clock = str(job.metadata.get("record_expiry_clock", "progress"))
     pressure_gate = str(job.metadata.get("record_pressure_gate", "no"))
     rrpv_order = str(job.metadata.get("record_rrpv_order", "no"))
+    written_in_place = str(job.metadata.get("record_written_in_place", "no"))
     status, detail = csv_status(
         job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode,
         gating, reference, queries, governed_first, store_bound, expiry_clock,
-        pressure_gate, rrpv_order)
+        pressure_gate, rrpv_order, written_in_place)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
@@ -1427,7 +1444,8 @@ def job_csv_status(job: Job) -> tuple[str, str]:
         str(job.metadata.get("record_store_bound", "drop")),
         str(job.metadata.get("record_expiry_clock", "progress")),
         str(job.metadata.get("record_pressure_gate", "no")),
-        str(job.metadata.get("record_rrpv_order", "no")))
+        str(job.metadata.get("record_rrpv_order", "no")),
+        str(job.metadata.get("record_written_in_place", "no")))
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),

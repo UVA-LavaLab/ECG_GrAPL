@@ -374,21 +374,27 @@ def test_pressure_gate_counts_the_lines_the_record_rule_governs(tmp_path, gate):
 
 
 def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", l3_ways="2",
-                   rrpv="no", policy="ECG:replacement"):
+                   rrpv="no", policy="ECG:replacement", written="no", graph_bytes=None):
     """The argv and environment the runner would execute for PageRank.
 
     PageRank is a separate executable that reads its record settings from the
     environment, so the gate reaches it through a different site than the
     algorithms CLI. The default LLC has 64 sets, the smallest the duel allows.
+    The graph is pressure512 unless other serialized graph bytes are given.
     """
     from scripts.experiments.ecg import roi_matrix
     from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
-    graph = tmp_path / "pressure512.sg"
-    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    if graph_bytes is None:
+        graph = tmp_path / "pressure512.sg"
+        graph.write_bytes(algorithm_outputs()[graph.name][0])
+    else:
+        graph = tmp_path / "fixture.sg"
+        graph.write_bytes(graph_bytes)
     args = roi_matrix.parse_args([
         "--suite", "cache-sim", "--benchmark", "pr", "--current-pr-baselines",
         "--record-governed-first", governed, "--record-pressure-gate", gate,
         *(("--record-rrpv-order", rrpv) if rrpv != "no" else ()),
+        *(("--record-written-in-place", written) if written != "no" else ()),
         "--options", f"-f {graph} -o 0 -n 1 -i 2 -t 0",
         "--policies", policy, "--l1d-size", "128B", "--l1d-ways", "2",
         "--l2-size", "256B", "--l2-ways", "2", "--l3-sizes", l3_size, "--l3-ways", l3_ways,
@@ -811,3 +817,376 @@ def test_native_algorithm_cells_refuse_the_rrpv_order(tmp_path, backend):
         args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "32kB", backend, roi_matrix)
     assert rows and rows[0]["status"] == "error", rows
     assert "record RRPV order is cache_sim-only" in rows[0].get("error", ""), rows[0].get("error")
+
+
+# The written-in-place bit. PageRank's kernel stores contribution[u] in place
+# once u's gathers finish, so on its last pass a contribution line can be
+# retired as DEAD after its last gather and then fetched back by that store. The
+# bit declares the in-place store for the region, and the last pass's wrapped
+# bounds then decode as FINITE, as they do before another pass, instead of DEAD.
+# It is one configuration bit per region, set only by cache_sim's PageRank from
+# its environment; these pin it through every layer PageRank takes and refuse
+# it everywhere the bit is not set.
+
+
+def test_written_in_place_labels_are_distinct_and_refused_where_the_bit_cannot_hold():
+    """Only the replacement mechanism without prefetch, under the NEXT model, carries it.
+
+    Prefetch also acts on the decoded bound and has not been checked with the
+    bit, transport makes no victim decision from it, and the window and
+    frontier models choose victims by their own rules. The label is refused
+    there rather than name a bit the cache does not act on.
+    """
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+
+    def labels(policy, **kw):
+        return algorithm_matrix.policy_labels([parse_policy_spec(policy)], **kw)[0]
+
+    assert labels("ECG:replacement", written_in_place="no") == "ECG_REPLACEMENT"
+    assert labels("ECG:replacement", written_in_place="on") == "ECG_REPLACEMENT_WRITTEN_IN_PLACE"
+    assert labels("ECG:replacement", governed_first="on", written_in_place="on") == (
+        "ECG_REPLACEMENT_GOVERNED_FIRST_WRITTEN_IN_PLACE")
+    assert labels("ECG:replacement", base_policy="GRASP_PAPER", governed_first="on",
+                  rrpv_order="on", written_in_place="on", pressure_gate="duel") == (
+        "ECG_REPLACEMENT_BASE_GRASP_PAPER_GOVERNED_FIRST_RRPV_ORDER_WRITTEN_IN_PLACE_PRESSURE_DUEL")
+    for policy in ("ECG:replacement-prefetch", "ECG:transport", "ECG:prefetch",
+                   "GRASP_PAPER", "LRU", "POPT:uncharged"):
+        with pytest.raises(RecordReceiptError, match="written-in-place bit requires"):
+            labels(policy, written_in_place="on")
+    for model in ("window", "frontier"):
+        with pytest.raises(RecordReceiptError, match="written-in-place bit requires"):
+            labels("ECG:replacement", record_model=model, written_in_place="on")
+    with pytest.raises(RecordReceiptError, match="written-in-place bit requires"):
+        labels("ECG:replacement", written_in_place="yes")
+
+
+def test_the_algorithms_options_have_no_written_in_place_bit():
+    """The bit is plumbed for PageRank only, so the shared kernels cannot name it.
+
+    The algorithms CLI is shared with the native guests, and neither the shared
+    kernels nor the native record paths set the bit. Leaving the option out of
+    that parser keeps an algorithms row from carrying a bit its kernel never set.
+    """
+    from scripts.experiments.ecg import algorithm_matrix
+    with pytest.raises(SystemExit):
+        algorithm_matrix.parse_options("--graph g.sg --record-written-in-place on")
+
+
+@pytest.mark.parametrize("gate,gate_suffix", [("no", ""), ("duel", "_PRESSURE_DUEL")])
+@pytest.mark.parametrize("rrpv,rrpv_suffix", [("no", ""), ("on", "_RRPV_ORDER")])
+@pytest.mark.parametrize("written,suffix", [("no", ""), ("on", "_WRITTEN_IN_PLACE")])
+@pytest.mark.parametrize("governed", ["no", "on"])
+def test_pagerank_branch_labels_carry_the_written_in_place_bit(
+        governed, written, suffix, rrpv, rrpv_suffix, gate, gate_suffix):
+    """PageRank labels the bit in its own branch, and the flow must agree.
+
+    The case with every other option at its default is the one that exercises
+    the fast path in expected_labels_for, which returns the bare label for any
+    configuration that looks default unless the new option is in its condition.
+    """
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    args = SimpleNamespace(
+        current_algorithms=False, current_pr_baselines=True,
+        record_governed_first=governed, record_store_bound="drop",
+        record_expiry_clock="progress", record_pressure_gate=gate,
+        record_rrpv_order=rrpv, record_written_in_place=written, options="")
+    produced = roi_matrix.output_policy_labels(args, [parse_policy_spec("ECG:replacement")])
+    governed_suffix = "_GOVERNED_FIRST" if governed == "on" else ""
+    assert produced == ["ECG_REPLACEMENT" + governed_suffix + rrpv_suffix + suffix + gate_suffix]
+    expected = experiment_run.expected_labels_for(
+        ["ECG:replacement"], "LRU", "off", "next", 6, "all", "future",
+        "enabled", "off", 1, governed, "drop", "progress", gate, rrpv, written)
+    assert expected == produced, "the flow expects a PageRank label the runner does not produce"
+
+
+@pytest.mark.parametrize("governed", ["no", "on"])
+def test_completion_check_tells_the_written_in_place_arm_from_its_control(tmp_path, governed):
+    """The completion check accepts each arm's own label and rejects the other's.
+
+    Accepting the right label is half of the check. One that also accepted the
+    control's label for the treatment could not tell a cell that dropped the
+    bit from a cell that carried it.
+    """
+    import csv
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    for produced_arm in ("no", "on"):
+        produced = algorithm_matrix.policy_labels(
+            [parse_policy_spec("ECG:replacement")], governed_first=governed,
+            written_in_place=produced_arm)[0]
+        csv_path = tmp_path / f"{produced_arm}.csv"
+        with csv_path.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["status", "policy_label"])
+            writer.writeheader()
+            writer.writerow({"status": "ok", "policy_label": produced})
+        for expected_arm in ("no", "on"):
+            status, detail = experiment_run.csv_status(
+                csv_path, ["ECG:replacement"], governed_first=governed,
+                written_in_place=expected_arm)
+            assert (status == "ok") == (produced_arm == expected_arm), (
+                f"{produced} checked as arm {expected_arm}: {status} {detail}")
+
+
+@pytest.mark.parametrize("written", ["no", "on"])
+def test_job_status_threads_the_written_in_place_bit_into_both_checks(tmp_path, written):
+    """The CSV check and the completion-marker check each rebuild the expectation.
+
+    Both read the job's metadata separately, and each was once left on the
+    default label while the other was right. Both must see the bit, or a
+    correctly executed cell is reported partial after it has already run.
+    """
+    import csv
+    import json
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    label = algorithm_matrix.policy_labels(
+        [parse_policy_spec("ECG:replacement")], governed_first="on",
+        written_in_place=written)[0]
+    csv_path = tmp_path / "roi_matrix.csv"
+    with csv_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["status", "policy_label"])
+        writer.writeheader()
+        writer.writerow({"status": "ok", "policy_label": label})
+    cell = {"l3_sizes": ["8MB"], "threads": [1], "structure_prefetch_degree": 0,
+            "config_hash": "fixture"}
+    (tmp_path / "roi_matrix.complete.json").write_text(json.dumps({
+        "complete": True, "all_rows_ok": True, "policy_labels": [label], **cell,
+        "outputs": {"roi_matrix.csv": experiment_run.output_descriptor(csv_path)}}))
+    job = experiment_run.Job(
+        job_id="fixture", stage="fixture", kind="roi_matrix", command=[],
+        out_dir=tmp_path, log_path=tmp_path / "fixture.log", metadata={
+            "policies": ["ECG:replacement"], "record_governed_first": "on",
+            "record_written_in_place": written, **cell})
+    assert experiment_run.job_csv_status(job) == ("ok", "1 ok rows")
+
+
+@pytest.mark.parametrize("written,value", [("no", "0"), ("on", "1")])
+def test_pagerank_environment_carries_the_written_in_place_bit(tmp_path, monkeypatch, written, value):
+    """A record cell's bit is the runner's, and a baseline never sees it.
+
+    The opposite value is planted in the caller's environment first, so a cell
+    that inherited the shell's setting fails here. Record cells always carry
+    the variable, so the two arms' environments have the same size.
+    """
+    monkeypatch.setenv("ECG_RECORD_WRITTEN_IN_PLACE", "0" if written == "on" else "1")
+    (tmp_path / "record").mkdir()
+    _, env = _pagerank_cell(tmp_path / "record", monkeypatch, "no", governed="on", written=written)
+    assert env["ECG_RECORD_WRITTEN_IN_PLACE"] == value
+    (tmp_path / "grasp").mkdir()
+    _, grasp = _pagerank_cell(tmp_path / "grasp", monkeypatch, "no", policy="GRASP_PAPER")
+    assert "ECG_RECORD_WRITTEN_IN_PLACE" not in grasp, "a baseline must not carry the record bit"
+
+
+@pytest.mark.parametrize("suite,benchmark,extra,refused", [
+    ("cache-sim", "pr", (), False),
+    ("gem5", "pr", (), True),
+    ("sniper", "pr", (), True),
+    ("both", "pr", (), True),
+    ("cache-sim", "spmv", ("--current-algorithms",), True),
+    # PageRank itself runs under the shared kernels too, which never set the bit.
+    ("cache-sim", "pr", ("--current-algorithms",), True),
+    ("cache-sim", "bfs", (), True),
+])
+def test_written_in_place_bit_is_refused_outside_cache_sim_pagerank(
+        tmp_path, suite, benchmark, extra, refused):
+    """Only cache_sim's PageRank sets the bit, so only its rows may carry the label.
+
+    gem5's guest and Sniper's record path build their control words without
+    it, the shared algorithms kernels never set it, and the runner's other
+    kernels run no current record mode.
+    """
+    import subprocess
+    ran = subprocess.run([
+        sys.executable, str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", suite, "--dry-run", "--benchmark", benchmark, *extra,
+        "--policies", "ECG:replacement", "--record-written-in-place", "on",
+        "--out-dir", str(tmp_path)], cwd=ROOT, capture_output=True, text=True,
+        timeout=300, check=False)
+    text = ran.stdout + ran.stderr
+    if refused:
+        assert ran.returncode != 0 and (
+            "record written-in-place bit is cache_sim PageRank-only" in text), text[-600:]
+    else:
+        assert ran.returncode == 0, text[-600:]
+
+
+def _flow_jobs(tmp_path, **settings):
+    """Resolve one PageRank stage through the real flow, running nothing.
+
+    No tracked profile carries the bit, so the stage lives in a derived
+    manifest under tmp_path and the tracked manifest is only read. `--list`
+    builds each job's command, expected labels and metadata as a run would. A
+    setting passed as None is left out of the stage.
+    """
+    import json
+    import subprocess
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    manifest = json.loads((ROOT / "scripts/experiments/ecg/experiment_manifest.json").read_text())
+    stage = {
+        "name": "written_in_place_probe", "kind": "roi_matrix",
+        "profiles": ["written_in_place_probe"], "suite": "cache-sim",
+        "graph_set": "written_in_place_probe", "benchmarks": ["pr"],
+        "policies": ["ECG:replacement"], "current_pr_baselines": True,
+        "algorithm_record_governed_first": "on", "ecg_record_bytes": 0,
+        "cache_record_rss_mib": 4096, "cache_sim_omp_threads": 1,
+        "l3_sizes": ["8MB"], "l3_ways": "16", "prefetcher": "none", "flowthrough": "off",
+        "structure_prefetch_degree": 0, "policy_sharding_allowed": False,
+        "out_subdir": "written_in_place_probe"}
+    stage.update(settings)
+    manifest["stages"] = [{key: value for key, value in stage.items() if value is not None}]
+    manifest["graph_sets"]["written_in_place_probe"] = [
+        {"name": "pressure512", "path": str(graph), "options_key": "written_in_place_probe"}]
+    manifest["benchmark_options"]["written_in_place_probe"] = {
+        "pr": "-f {graph_path} -o 0 -n 1 -i 2 -t 0"}
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest))
+    run_dir = tmp_path / "run"
+    ran = subprocess.run([
+        sys.executable, "-I", str(ROOT / "scripts/experiments/ecg/flows/experiment_run.py"),
+        "--manifest", str(path), "--profile", "written_in_place_probe",
+        "--run-dir", str(run_dir), "--lock-path", str(tmp_path / "lock"),
+        "--no-build", "--list"], cwd=ROOT, capture_output=True, text=True,
+        timeout=300, check=False)
+    resolved = run_dir / "resolved_manifest.json"
+    jobs = json.loads(resolved.read_text()).get("jobs", []) if ran.returncode == 0 else []
+    return ran, jobs
+
+
+@pytest.mark.parametrize("written", [None, "no", "on"])
+def test_the_flow_carries_the_written_in_place_bit_to_the_pagerank_runner(tmp_path, written):
+    """The stage setting reaches the runner's argv, the job's labels and its metadata.
+
+    It must never reach PageRank's own options, which a GAPBS getopt parses.
+    Without the setting the command is unchanged, so existing jobs keep their
+    configuration hashes. The recorded expectation is checked against the label
+    the runner computes from the exact argv the flow built.
+    """
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    ran, jobs = _flow_jobs(tmp_path, algorithm_record_written_in_place=written)
+    assert ran.returncode == 0 and len(jobs) == 1, (ran.stdout + ran.stderr)[-600:]
+    command, metadata = jobs[0]["command"], jobs[0]["metadata"]
+    if written is None:
+        assert "--record-written-in-place" not in command
+    else:
+        assert command[command.index("--record-written-in-place") + 1] == written
+    assert metadata["record_written_in_place"] == (written or "no")
+    assert "written" not in str(metadata["options"])
+    args = roi_matrix.parse_args(command[3:])
+    produced = roi_matrix.output_policy_labels(
+        args, [parse_policy_spec(policy) for policy in args.policies])
+    assert metadata["expected_policy_labels"] == produced == [
+        "ECG_REPLACEMENT_GOVERNED_FIRST" + ("_WRITTEN_IN_PLACE" if written == "on" else "")]
+
+
+@pytest.mark.parametrize("settings", [
+    {"algorithm_record_written_in_place": "yes"},
+    {"algorithm_record_written_in_place": "on", "current_pr_baselines": None},
+    {"algorithm_record_written_in_place": "on", "current_algorithms": True},
+])
+def test_the_flow_refuses_a_written_in_place_bit_it_cannot_deliver(tmp_path, settings):
+    """A setting the flow would silently drop is refused when the job resolves.
+
+    Without current_pr_baselines the PageRank command never receives the flag,
+    and the algorithms kernels have no such option, so either would run the
+    control while the stage asked for the treatment.
+    """
+    ran, _ = _flow_jobs(tmp_path, **settings)
+    text = ran.stdout + ran.stderr
+    assert ran.returncode != 0 and "invalid current written-in-place record selection" in text, (
+        text[-600:])
+
+
+def _backward_citation_graph():
+    """A directed graph in which every vertex cites only older, distant vertices.
+
+    Pull PageRank reads a vertex's contribution while visiting the vertices it
+    cites, so each contribution line is last gathered in a pass well before the
+    kernel's own in-place store to it, as most lines of cit-Patents are. The
+    symmetric pressure512 fixture cannot show a store fetching back a line
+    retired as DEAD, whatever the cache: each of its lines is last gathered at
+    or after its own store.
+    """
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import serialized_graph
+    edges = [(vertex, vertex - step) for vertex in range(512)
+             for step in (65, 97, 129, 193) if vertex >= step]
+    return serialized_graph(512, edges, True, traversal="in")[0]
+
+
+@pytest.mark.parametrize("rrpv", ["no", "on"])
+def test_written_in_place_bit_reaches_the_pagerank_kernel_and_retires_nothing_as_dead(
+        tmp_path, monkeypatch, rrpv):
+    """Through the runner, the bit removes every DEAD-first victim and changes nothing else.
+
+    Both the governed-first rule and its RRPV-ordered arm are run. Each control
+    must retire lines DEAD first and fetch some of them back with the kernel's
+    own store, or this fixture could not show the bit acting. Before the last
+    pass the bit decodes nothing differently, so the first pass must match
+    exactly, and the scores are unchanged.
+    """
+    import json
+    import re
+    if not (ROOT / "bench/bin_sim/pr").is_file():
+        pytest.skip("current PageRank executable is not built")
+    graph = _backward_citation_graph()
+    results = {}
+    for written in ("no", "on"):
+        work = tmp_path / written
+        work.mkdir()
+        command, env = _pagerank_cell(work, monkeypatch, "no", governed="on", rrpv=rrpv,
+                                      written=written, graph_bytes=graph)
+        ran = _run_kernel(command, env)
+        text = ran.stdout + ran.stderr
+        assert ran.returncode == 0, text[-600:]
+        checksum = re.search(r"\[ECG-PR-RESULT [^\]]*score_checksum=([0-9a-f]+)", text)
+        assert checksum, text[-600:]
+        results[written] = (json.loads(Path(env["CACHE_OUTPUT_JSON"]).read_text()),
+                            checksum.group(1), text)
+    control, treated = results["no"][0], results["on"][0]
+    assert control["ecg_record_victim_dead_first"] > 0
+    assert control["ecg_record_dead_first_refetch_write"] > 0, (
+        "no DEAD-first victim was fetched back by the store, so the fixture cannot show the bit")
+    assert treated["ecg_record_victim_decisions"] > 0
+    assert treated["ecg_record_victim_dead_first"] == 0
+    for access in ("write", "gather", "read"):
+        assert treated[f"ecg_record_dead_first_refetch_{access}"] == 0
+    assert "[ECG-PR-WRITTEN-IN-PLACE" not in results["no"][2]
+    assert "[ECG-PR-WRITTEN-IN-PLACE property=contribution]" in results["on"][2]
+    passes = [payload["kernel_census"]["pass_detail"] for payload in (control, treated)]
+    assert len(passes[0]) == len(passes[1]) == 2
+    assert passes[0][0] == passes[1][0], "the bit changed a pass it must not decode differently"
+    assert results["on"][1] == results["no"][1], "the bit changed the PageRank result"
+
+
+@pytest.mark.parametrize("policy,drop,message", [
+    ("GRASP_PAPER", (), "requires a current ECG record mode"),
+    ("GRASP_PAPER", ("ECG_CURRENT_PR_BASELINE",), "requires a current ECG record mode"),
+    ("ECG:transport", (), "requires the replacement mechanism without prefetch"),
+    ("ECG:prefetch", (), "requires the replacement mechanism without prefetch"),
+    ("ECG:replacement-prefetch", (), "requires the replacement mechanism without prefetch"),
+])
+def test_the_pagerank_kernel_refuses_the_bit_where_it_cannot_hold(
+        tmp_path, monkeypatch, policy, drop, message):
+    """The kernel fails closed by itself, whatever reaches its environment.
+
+    The runner never sets the bit for these cells, so it is planted directly:
+    on the fixed baseline path, on the legacy path, and under the mechanisms
+    whose use of the decoded bound has not been checked with it.
+    """
+    if not (ROOT / "bench/bin_sim/pr").is_file():
+        pytest.skip("current PageRank executable is not built")
+    command, env = _pagerank_cell(tmp_path, monkeypatch, "no", policy=policy)
+    for name in drop:
+        env.pop(name)
+    env["ECG_RECORD_WRITTEN_IN_PLACE"] = "1"
+    ran = _run_kernel(command, env)
+    text = ran.stdout + ran.stderr
+    assert ran.returncode != 0 and "ECG_RECORD_WRITTEN_IN_PLACE " + message in text, text[-600:]

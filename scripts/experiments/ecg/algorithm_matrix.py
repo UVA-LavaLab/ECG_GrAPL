@@ -169,6 +169,16 @@ def rrpv_order_label(label: str, rrpv_order: str) -> str:
     return label + "_RRPV_ORDER"
 
 
+def written_in_place_label(label: str, written_in_place: str) -> str:
+    if written_in_place == "no":
+        return label
+    # Only PageRank sets the bit, under the replacement mechanism without
+    # prefetch; the window and frontier models choose victims by their own rules.
+    require(written_in_place == "on" and label.startswith("ECG_REPLACEMENT") and "_MODEL_" not in label,
+            "record written-in-place bit requires the current ECG replacement policy under the NEXT model")
+    return label + "_WRITTEN_IN_PLACE"
+
+
 def grasp_reference_label(label: str, mode: str) -> str:
     if mode == "off":
         return label
@@ -191,9 +201,10 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   grasp_reference: str = "off", queries: int = 1,
                   governed_first: str = "no", store_bound: str = "drop",
                   expiry_clock: str = "progress",
-                  pressure_gate: str = "no", rrpv_order: str = "no") -> list[str]:
-    return [pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(rrpv_order_label(governed_first_label(record_policy_label(
-                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), rrpv_order), store_bound), expiry_clock), observer),
+                  pressure_gate: str = "no", rrpv_order: str = "no",
+                  written_in_place: str = "no") -> list[str]:
+    return [pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(written_in_place_label(rrpv_order_label(governed_first_label(record_policy_label(
+                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), rrpv_order), written_in_place), store_bound), expiry_clock), observer),
                 grasp_scope), popt_rank_mode), grasp_reference), queries), pressure_gate)
             for spec in policies]
 
