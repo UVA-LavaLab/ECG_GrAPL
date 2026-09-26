@@ -1019,8 +1019,8 @@ def test_written_in_place_bit_is_refused_outside_cache_sim_pagerank(
 def _flow_jobs(tmp_path, **settings):
     """Resolve one PageRank stage through the real flow, running nothing.
 
-    No tracked profile carries the bit, so the stage lives in a derived
-    manifest under tmp_path and the tracked manifest is only read. `--list`
+    The stage lives in a derived manifest under tmp_path, so each setting can
+    be varied while the tracked manifest is only read. `--list`
     builds each job's command, expected labels and metadata as a run would. A
     setting passed as None is left out of the stage.
     """
@@ -1103,6 +1103,57 @@ def test_the_flow_refuses_a_written_in_place_bit_it_cannot_deliver(tmp_path, set
     text = ran.stdout + ran.stderr
     assert ran.returncode != 0 and "invalid current written-in-place record selection" in text, (
         text[-600:])
+
+
+def test_the_written_in_place_profile_pairs_each_row_with_its_control(tmp_path):
+    """Each bit-on row is its bit-off control with only the bit set.
+
+    The profile's eight bit-off rows run first, selected with `--only _off`, and
+    its eight bit-on rows run later into the same run directory. The filtered
+    selection must be exactly the bit-off rows, with the commands and
+    configuration hashes they have in the whole profile, or the second
+    invocation would run them again instead of resuming them. The bit-off rows
+    repeat the re-fetch count profile's rows with the bit stated, so they are
+    read against those rows.
+    """
+    from scripts.experiments.ecg.flows import experiment_run
+    manifest = experiment_run.load_manifest(experiment_run.DEFAULT_MANIFEST)
+
+    def resolve(profile, *extra):
+        args = experiment_run.parse_args(["--profile", profile, "--list", *extra])
+        return experiment_run.expand_jobs(args, manifest, tmp_path)
+
+    def argv(job):
+        return [part.replace(job.stage, "STAGE") for part in job.command]
+
+    def identity(job):
+        return job.job_id, job.command, job.metadata["config_hash"]
+
+    jobs = resolve("ecg_write_aware_cache")
+    controls, treated = jobs[:8], jobs[8:]
+    assert len(jobs) == 16
+    assert [identity(job) for job in resolve("ecg_write_aware_cache", "--only", "_off")] == [
+        identity(job) for job in controls]
+    labels = set()
+    for control, arm, previous in zip(controls, treated, resolve("ecg_refetch_count_cache")):
+        assert control.stage.endswith("_off") and arm.stage.endswith("_on")
+        assert control.stage[4:-len("_off")] == arm.stage[4:-len("_on")]
+        flag = control.command.index("--record-written-in-place") + 1
+        assert (control.command[flag], arm.command[flag]) == ("no", "on")
+        assert len(control.command) == len(arm.command)
+        assert [index for index, (off, on) in enumerate(zip(argv(control), argv(arm)))
+                if off != on] == [flag]
+        assert argv(control)[:flag - 1] + argv(control)[flag + 1:] == argv(previous)
+        assert (control.metadata["record_written_in_place"],
+                arm.metadata["record_written_in_place"]) == ("no", "on")
+        label = control.metadata["expected_policy_labels"]
+        assert label == previous.metadata["expected_policy_labels"]
+        assert arm.metadata["expected_policy_labels"] == [label[0] + "_WRITTEN_IN_PLACE"]
+        labels.update((label[0], label[0] + "_WRITTEN_IN_PLACE"))
+    assert sorted(labels) == [
+        "ECG_REPLACEMENT_GOVERNED_FIRST", "ECG_REPLACEMENT_GOVERNED_FIRST_RRPV_ORDER",
+        "ECG_REPLACEMENT_GOVERNED_FIRST_RRPV_ORDER_WRITTEN_IN_PLACE",
+        "ECG_REPLACEMENT_GOVERNED_FIRST_WRITTEN_IN_PLACE"]
 
 
 def _backward_citation_graph():
