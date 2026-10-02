@@ -350,8 +350,8 @@
       }
     },
     "ecg_write_aware_cache": {
-      "status": "blocked",
-      "reason": "Section be found that PageRank's extra last-pass property misses at 16 to 24MiB are the in-place write fetching again the lines that DEAD-first eviction retired: r = 1 on five rows and 1.0075 on the sixth, with no gather or other read fetching a retired line again on any row. The written-in-place control bit keeps has-next asserted on the contribution region, so the last pass's wrapped bounds decode finite instead of dead, as they do in every interior pass. This profile measures the bit against its bit-off control on one binary. Preregistered in NEXT.md section bd before any row existed; blocked until the user approves the named budget write-aware-16, these 16 rows, to run once with no automatic follow-on.",
+      "status": "ready",
+      "reason": "Section be found that PageRank's extra last-pass property misses at 16 to 24MiB are the in-place write fetching again the lines that DEAD-first eviction retired: r = 1 on five rows and 1.0075 on the sixth, with no gather or other read fetching a retired line again on any row. The written-in-place control bit keeps has-next asserted on the contribution region, so the last pass's wrapped bounds decode finite instead of dead, as they do in every interior pass. This profile measures the bit against its bit-off control on one binary. Preregistered in NEXT.md section bd before any row existed; the user approved the named budget write-aware-16, these 16 rows, to run once with no automatic follow-on.",
       "require_clean_worktree": true,
       "development_gate": {
         "metric": "per row, each pass's total_offchip_traffic T_k from the row's kernel_census pass_detail and PageRank's kernel transfers K, total_offchip_traffic; per row, ecg_record_victim_dead_first, ecg_record_victim_decisions and the three re-fetch counts ecg_record_dead_first_refetch_write, ecg_record_dead_first_refetch_gather and ecg_record_dead_first_refetch_read, read from each row's raw cache_sim receipt, because the combined CSV does not carry them; C, the clean boundary, is reported for every row and gated nowhere",
