@@ -157,6 +157,9 @@ struct Result {
     uint64_t ordinary_property_reads = 0, property_writes = 0, auxiliary_accesses = 0;
     uint64_t construction_reads = 0, construction_writes = 0;
     uint64_t carrier_bytes = 0, construction_auxiliary_peak_bytes = 0, workspace_peak_bytes = 0;
+    // Record mode's ordinary reads of a record word before its edge's paired load,
+    // apart from the paired record traffic; and its compact copy of the weights.
+    uint64_t record_inspections = 0, record_inspection_bytes = 0, record_weight_bytes = 0;
     uint64_t constructed_finite_records = 0, constructed_wrap_records = 0, constructed_unknown_records = 0;
     uint64_t result_digest = 0, work_digest = 0, position_digest = 0, record_digest = 0;
     uint64_t reached = 0, levels = 0, components = 0, relax_attempts = 0, relax_successes = 0;
@@ -470,6 +473,8 @@ class Engine {
         }
         property_ = {kind, sizeof(T), mode};
         graph_ = graph;
+        stream_ = nullptr;
+        weights_ = nullptr;
         cursor_ = ecg_record::PassCursor{};
         if (graph.records && cursor_.configure(graph.records, mode) != ecg_record::Status::OK)
             throw std::logic_error("invalid-pass-domain");
@@ -543,10 +548,17 @@ class Engine {
             }
         }
         Carrier* carrier = nullptr;
+        // The kernels that read weights get a compact copy beside the carrier
+        // when the source interleaves them with the IDs: one edge stream a pass.
+        const bool compact = graph.weights && graph.edge_stride != sizeof(int32_t) &&
+            (options.algorithm == Algorithm::SSSP || options.algorithm == Algorithm::SPMV);
+        const void* weight_source = compact ? graph.weights : nullptr;
+        const uint64_t weight_stride = compact ? graph.edge_stride : 0;
         for (const auto& prepared : carriers_) {
             if (prepared->columns == graph.columns && prepared->records == graph.records &&
                 prepared->vertices == graph.vertices && prepared->stride == sizeof(T) &&
-                prepared->line_offset == base % 64 && prepared->mode == mode) {
+                prepared->line_offset == base % 64 && prepared->mode == mode &&
+                prepared->weights == weight_source && prepared->weight_stride == weight_stride) {
                 carrier = prepared.get();
                 break;
             }
@@ -559,6 +571,8 @@ class Engine {
             prepared->stride = sizeof(T);
             prepared->line_offset = base % 64;
             prepared->mode = mode;
+            prepared->weights = weight_source;
+            prepared->weight_stride = weight_stride;
             ecg_record::Requirements requirements;
             requirements.vertex_count = graph.vertices;
             requirements.record_count = graph.records;
@@ -640,10 +654,33 @@ class Engine {
             result.constructed_finite_records += stats.finite_records;
             result.constructed_wrap_records += stats.wrap_records;
             result.constructed_unknown_records += stats.unknown_records;
+            if (compact) {
+                // Charged where it is built, each source weight read and each copy
+                // written, in the workspace beside the carrier and apart from it.
+                uint64_t bytes = 0;
+                if (!ecg_record::checkedMultiply(graph.records, sizeof(int32_t), bytes))
+                    throw std::length_error("record-weight-workspace-limit");
+                reserve(bytes);
+                try {
+                    prepared->compact_weights.reset(static_cast<int32_t*>(::operator new(
+                        static_cast<std::size_t>(bytes), std::align_val_t{64})));
+                } catch (const std::bad_alloc&) {
+                    release(bytes);
+                    throw;
+                }
+                int32_t* copy = prepared->compact_weights.get();
+                for (uint64_t index = 0; index < graph.records; ++index) {
+                    const int32_t weight = graph.weight(*this, index, MemoryKind::CONSTRUCTION, false);
+                    touch(copy + index, sizeof(int32_t), true, MemoryKind::CONSTRUCTION, 0, 0, false);
+                    copy[index] = weight;
+                }
+                result.record_weight_bytes += bytes;
+            }
             carrier = prepared.get();
             carriers_.push_back(std::move(prepared));
         }
         stream_ = &carrier->stream;
+        weights_ = carrier->compact_weights.get();
         id_mask_ = ecg_record::lowMask(stream_->layout.id_bits);
         ecg_record::NativeConfiguration configuration;
         ecg_record::packLayout(stream_->layout, configuration.layout_descriptor);
@@ -719,6 +756,47 @@ class Engine {
     void frontierSort(bool entering) {
         if constexpr (Backend::models_memory)
             backend_.frontierSort(entering);
+    }
+
+    // The weight of edge `index` in the bound view. Record mode reads the compact
+    // copy when there is one: the same logical read, count and evidence as the
+    // interleaved one, from the weight stream beside the carrier.
+    int32_t weight(uint64_t index) {
+        if (!weights_)
+            return graph_.weight(*this, index);
+        if (index >= graph_.records)
+            throw std::out_of_range("csr-weight");
+        return read<int32_t>(weights_ + index, MemoryKind::WEIGHT, 2, index);
+    }
+
+    // The target of edge `index` for a predicate that runs before the edge's
+    // governed access, as BC's DAG test does. Record mode reads it from the record,
+    // its one edge stream: one ordinary access at the record's width, checked
+    // against the binding, that consumes no cursor, pairs no property load and
+    // publishes no bound. Both modes record the CSR ID read's evidence and count.
+    uint32_t edgeTarget(uint64_t index) {
+        if (!options.records) {
+            const uint32_t target = graph_.id(*this, index, MemoryKind::EDGE, false);
+            edgeEvidence(index);
+            return target;
+        }
+        uint64_t address = 0;
+        if (options.record_model != RecordModel::NEXT || !pass_open_ || !stream_ ||
+            index >= graph_.records ||
+            ecg_record::recordAddress(stream_->layout, configuration_.record_base, index,
+                stream_->size(), address) != ecg_record::Status::OK)
+            throw std::logic_error("edge-target-outside-a-record-pass");
+        if constexpr (Backend::models_memory)
+            backend_.recordInspect(index);
+        touch(reinterpret_cast<const void*>(address), stream_->layout.record_bytes, false,
+            MemoryKind::EDGE, 1, index, false, !Backend::models_memory);
+        edgeEvidence(index);
+        const uint64_t target = stream_->word(index) & id_mask_;
+        if (target >= graph_.vertices)
+            throw std::logic_error("invalid-actual-record");
+        ++result.record_inspections;
+        result.record_inspection_bytes += stream_->layout.record_bytes;
+        return static_cast<uint32_t>(target);
     }
 
     template<class T>
@@ -833,18 +911,36 @@ class Engine {
     }
 
   private:
+    struct AlignedWeights {
+        void operator()(int32_t* data) const { ::operator delete(data, std::align_val_t{64}); }
+    };
     struct Carrier {
         const void* columns = nullptr;
         uint64_t vertices = 0, records = 0, stride = 0, line_offset = 0;
         ecg_record::TraversalMode mode = ecg_record::TraversalMode::DENSE_EXACT;
         ecg_record::RecordStream stream;
+        // The interleaved weights a compact copy was taken from, and the copy.
+        const void* weights = nullptr;
+        uint64_t weight_stride = 0;
+        std::unique_ptr<int32_t, AlignedWeights> compact_weights;
     };
+    // The semantic event of reading edge `index`'s target, as the CSR ID read records it.
+    void edgeEvidence(uint64_t index) {
+        if (!options.evidence)
+            return;
+        work_.add(static_cast<uint64_t>(MemoryKind::EDGE));
+        work_.add(false);
+        work_.add(1);
+        work_.add(index);
+        work_.add(sizeof(int32_t));
+    }
     Backend& backend_;
     GraphView graph_;
     ecg_record::PropertyDescriptor property_;
     ecg_record::NativeConfiguration configuration_;
     ecg_record::PassCursor cursor_;
     const ecg_record::RecordStream* stream_ = nullptr;
+    const int32_t* weights_ = nullptr;
     std::unique_ptr<ecg_window::RecordStream> window_stream_;
     std::unique_ptr<ecg_frontier::RecordStream> frontier_stream_;
     std::vector<std::unique_ptr<Carrier>> carriers_;
@@ -941,7 +1037,7 @@ void spmv(const GraphView& graph, Access& access) {
             const auto row = graph.row(access, vertex);
             for (uint64_t index = row.first; index < row.second; ++index) {
                 const auto item = access.neighbor(index, x);
-                const float product = static_cast<float>(graph.weight(access, index)) * item.second;
+                const float product = static_cast<float>(access.weight(index)) * item.second;
                 sum += product;
             }
             y.set(vertex, sum);
@@ -1214,7 +1310,7 @@ void sssp(const GraphView& graph, Access& access) {
         const uint64_t source_distance = distance.get(vertex);
         const auto row = graph.row(access, vertex);
         for (uint64_t index = row.first; index < row.second; ++index) {
-            const uint64_t weight = static_cast<uint32_t>(graph.weight(access, index));
+            const uint64_t weight = static_cast<uint32_t>(access.weight(index));
             if ((weight <= access.options.delta) != light)
                 continue;
             const auto item = access.neighbor(index, distance);
@@ -1430,8 +1526,9 @@ void bc(const GraphView& graph, Access& access) {
                 float sum = 0;
                 const auto row = graph.row(access, vertex);
                 for (uint64_t index = row.first; index < row.second; ++index) {
-                    // DAG membership needs the ordinary CSR ID before a paired delta load exists.
-                    const uint32_t target = graph.id(access, index);
+                    // DAG membership needs the target before a paired delta load exists;
+                    // record mode reads it from the record, its one edge stream.
+                    const uint32_t target = access.edgeTarget(index);
                     if (depth.get(target) != level + 1)
                         continue;
                     const auto item = access.neighbor(index, dependency);

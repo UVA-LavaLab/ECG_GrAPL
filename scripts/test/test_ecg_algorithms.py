@@ -1417,6 +1417,98 @@ def test_algorithm_resource_plans_cover_auxiliary_work():
         plan_algorithm_resources(graph, algorithm="bc", popt_full_capacity=True, **options)
 
 
+def test_algorithm_resource_plans_reserve_compact_weights():
+    """The weight readers' compact copy is admitted inside the workspace."""
+    from dataclasses import replace
+    from scripts.experiments.ecg.record_resources import GraphInfo, RecordResourceError, plan_algorithm_resources
+    weighted = GraphInfo(False, 512, 3968, 495, 37913, "a" * 64, True, 0, 31)
+    options = dict(requested_bytes=4, minimum_mantissa_bits=0, traversals=1, sources=1,
+                   carrier_limit=1 << 20, auxiliary_limit=1 << 20, rss_mib=1024)
+    for algorithm in ("sssp", "spmv"):
+        plan = plan_algorithm_resources(weighted, algorithm=algorithm, records=True,
+                                        workspace_limit=1 << 20, **options)
+        assert plan["record_weight_bytes_upper"] == 4 * 3968
+        need = (plan["array_bytes"] + plan["carrier_payload_bytes_upper"] +
+                plan["record_weight_bytes_upper"] + plan["construction_auxiliary_bytes_upper"])
+        assert plan_algorithm_resources(weighted, algorithm=algorithm, records=True,
+                                        workspace_limit=need, **options)
+        with pytest.raises(RecordResourceError, match="explicit limits"):
+            plan_algorithm_resources(weighted, algorithm=algorithm, records=True,
+                                     workspace_limit=need - 1, **options)
+    unweighted = replace(weighted, weighted=False, minimum_weight=None, maximum_weight=None)
+    for graph, algorithm, records in ((unweighted, "sssp", True), (weighted, "sssp", False),
+                                      (weighted, "bc", True), (weighted, "bfs", True)):
+        plan = plan_algorithm_resources(graph, algorithm=algorithm, records=records,
+                                        workspace_limit=1 << 20, **options)
+        assert plan["record_weight_bytes_upper"] == 0
+
+
+def test_one_edge_stream_receipts_pass_the_runner_validator(tmp_path):
+    """Record runs report BC's inspections and the weight readers' compact copy, and the
+    runner's validator refuses forged values of either."""
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    binary = ROOT / "bench/bin_sim/algorithms"
+    if not binary.is_file():
+        pytest.skip("current algorithm executable is not built")
+    outputs = algorithm_outputs()
+    runs = {}
+    for algorithm, name in (("sssp", "weighted-diamond.wsg"), ("spmv", "weighted-diamond.wsg"),
+                            ("bc", "diamond.sg")):
+        graph = tmp_path / name
+        graph.write_bytes(outputs[name][0])
+        graph_info = algorithm_matrix.graph_info(
+            graph, allow_weighted=name.endswith(".wsg"), traversal="out")
+        options = algorithm_matrix.parse_options(f"--graph {graph}")
+        for width in (4, 8):
+            for mode in ("csr", "replacement"):
+                output = tmp_path / f"{algorithm}-{width}-{mode}.json"
+                ran = subprocess.run([
+                    "setarch", os.uname().machine, "-R", str(binary),
+                    "--algorithm", algorithm, "--graph", str(graph), "--delta", "8",
+                    "--mode", mode, "--record-bytes", str(width), "--values", "--evidence",
+                    "--l1-bytes", "128", "--l1-ways", "2",
+                    "--l2-bytes", "256", "--l2-ways", "2",
+                    "--llc-bytes", "512", "--llc-ways", "2",
+                    "--output", str(output),
+                ], env={**os.environ, "OMP_NUM_THREADS": "1", "GRAPHBREW_SIDEBAND_LOG": "0"},
+                    capture_output=True, text=True, timeout=20, check=False)
+                assert ran.returncode == 0, ran.stdout + ran.stderr
+                payload = json.loads(output.read_text())
+                validation = dict(
+                    algorithm=algorithm, mode=mode, policy="LRU", graph=graph_info, graph_path=graph,
+                    options=options, requested_bytes=width, minimum_mantissa_bits=0,
+                    evidence=True, llc_sets=4)
+                algorithm_matrix.validate_payload(payload, ran.stdout + ran.stderr, **validation)
+                runs[(algorithm, width, mode)] = (payload, ran.stdout + ran.stderr, validation)
+    for width in (4, 8):
+        for algorithm in ("sssp", "spmv"):
+            work = runs[(algorithm, width, "replacement")][0]["workload"]
+            assert work["record_weight_bytes"] == 4 * work["source_edges"]
+            assert work["record_inspections"] == work["record_inspection_bytes"] == 0
+        bc = runs[("bc", width, "replacement")][0]["workload"]
+        assert 0 < bc["record_inspections"] <= bc["actual_records"] <= 2 * bc["record_inspections"]
+        assert bc["record_inspection_bytes"] == width * bc["record_inspections"]
+        assert bc["record_weight_bytes"] == 0
+        for algorithm in ("sssp", "spmv", "bc"):
+            work = runs[(algorithm, width, "csr")][0]["workload"]
+            assert work["record_inspections"] == work["record_weight_bytes"] == 0
+    for key, field, change in (
+            (("sssp", 4, "replacement"), "record_weight_bytes", 4),
+            (("spmv", 8, "replacement"), "record_weight_bytes", -4),
+            (("sssp", 4, "replacement"), "record_inspections", 1),
+            (("bc", 8, "replacement"), "record_inspection_bytes", 1),
+            (("bc", 4, "replacement"), "record_inspections", -1),
+            (("bc", 4, "csr"), "record_inspections", 1),
+            (("sssp", 8, "csr"), "record_weight_bytes", 4)):
+        payload, log, validation = runs[key]
+        forged = copy.deepcopy(payload)
+        forged["workload"][field] += change
+        with pytest.raises(RecordReceiptError, match="record inspections|without a NEXT carrier"):
+            algorithm_matrix.validate_payload(forged, log, **validation)
+
+
 def test_preprocessing_profile_has_matched_serial_controls(tmp_path):
     from scripts.experiments.ecg.flows import experiment_run
     from scripts.experiments.ecg.algorithm_matrix import parse_options

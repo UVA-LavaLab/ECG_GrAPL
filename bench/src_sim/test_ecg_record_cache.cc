@@ -1292,6 +1292,121 @@ int exerciseDeadFirstRefetchCount() {
     return 0;
 }
 
+// An ordinary read of a record word before its
+// paired load fills like any read and, under record prefetch, captures the line
+// it fills, so the property load acquires no line a record load's fill would
+// have captured. A read that skips the capture leaves the line to a charged
+// acquisition. 32 records span two lines at four bytes and four at eight.
+int exerciseRecordInspection() {
+    using namespace cache_sim;
+    constexpr uint64_t vertices = 512;
+    constexpr uint64_t records = 32;
+    alignas(64) std::array<float, vertices> properties{};
+    std::vector<uint32_t> degrees(vertices, 1);
+    for (uint8_t bytes : {uint8_t{4}, uint8_t{8}}) {
+        ecg_record::Requirements requirements;
+        requirements.vertex_count = vertices;
+        requirements.record_count = records;
+        requirements.traversal_count = 1;
+        requirements.requested_record_bytes = bytes;
+        ecg_record::Layout layout;
+        ecg_record::RecordStream stream;
+        if (ecg_record::selectLayout(requirements, layout) != ecg_record::Status::OK ||
+            layout.record_bytes != bytes ||
+            ecg_record::buildRecords(requirements, layout, 16,
+                [](std::size_t index) { return uint64_t(index * 16); }, stream) != ecg_record::Status::OK)
+            return 1;
+        // Run 0 makes paired loads only; run 1 inspects each record first; run 2
+        // first reads each record word through the ordinary path, without capture.
+        uint64_t acquisitions[3] = {}, inspections[3] = {};
+        for (int run = 0; run < 3; ++run) {
+            GraphCacheContext context;
+            context.initTopology(degrees.data(), vertices, records, true);
+            context.registerPropertyArray(properties.data(), vertices, 4, 128, 0.15, true);
+            CacheHierarchy cache(64, 1, 128, 1, 128, 2, 64,
+                EvictionPolicy::LRU, EvictionPolicy::LRU, EvictionPolicy::LRU);
+            cache.initGraphContext(&context);
+            ecg_record::NativeConfiguration configuration;
+            ecg_record::packLayout(layout, configuration.layout_descriptor);
+            configuration.record_base = reinterpret_cast<uint64_t>(stream.data());
+            configuration.property_base = reinterpret_cast<uint64_t>(properties.data());
+            configuration.record_count = records;
+            configuration.vertex_count = vertices;
+            configuration.context = 1;
+            configuration.generation = 1;
+            configuration.control = ecg_record::kNativeEnable;
+            cache.configureRecord(configuration, stream, ecg_record::Mechanism::PREFETCH);
+            cache.recordIteration(0, true);
+            for (uint64_t index = 0; index < records; ++index) {
+                if (run == 1)
+                    cache.recordInspect(index);
+                if (run == 2)
+                    cache.access(configuration.record_base + index * layout.record_bytes);
+                const uint64_t word = cache.recordLoad(index);
+                if (cache.recordProperty(index, word) != index * 16)
+                    return 2;
+            }
+            cache.finishRecord(records);
+            acquisitions[run] = cache.recordAcquisitions();
+            inspections[run] = cache.recordInspections();
+        }
+        if (inspections[0] != 0 || inspections[1] != records || inspections[2] != 0)
+            return 3;
+        if (acquisitions[1] != acquisitions[0])
+            return 4;
+        if (acquisitions[2] <= acquisitions[0])
+            return 5;
+    }
+    // Fails closed before a record model exists and while a record load waits
+    // for its property load.
+    CacheHierarchy unbound(64, 1, 128, 1, 128, 2, 64,
+        EvictionPolicy::LRU, EvictionPolicy::LRU, EvictionPolicy::LRU);
+    bool refused = false;
+    try {
+        unbound.recordInspect(0);
+    } catch (const std::logic_error&) {
+        refused = true;
+    }
+    if (!refused)
+        return 6;
+    ecg_record::Requirements requirements;
+    requirements.vertex_count = vertices;
+    requirements.record_count = records;
+    ecg_record::Layout layout;
+    ecg_record::RecordStream stream;
+    if (ecg_record::selectLayout(requirements, layout) != ecg_record::Status::OK ||
+        ecg_record::buildRecords(requirements, layout, 16,
+            [](std::size_t index) { return uint64_t(index * 16); }, stream) != ecg_record::Status::OK)
+        return 7;
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), vertices, records, true);
+    context.registerPropertyArray(properties.data(), vertices, 4, 128, 0.15, true);
+    CacheHierarchy cache(64, 1, 128, 1, 128, 2, 64,
+        EvictionPolicy::LRU, EvictionPolicy::LRU, EvictionPolicy::LRU);
+    cache.initGraphContext(&context);
+    ecg_record::NativeConfiguration configuration;
+    ecg_record::packLayout(layout, configuration.layout_descriptor);
+    configuration.record_base = reinterpret_cast<uint64_t>(stream.data());
+    configuration.property_base = reinterpret_cast<uint64_t>(properties.data());
+    configuration.record_count = records;
+    configuration.vertex_count = vertices;
+    configuration.context = 1;
+    configuration.generation = 1;
+    configuration.control = ecg_record::kNativeEnable;
+    cache.configureRecord(configuration, stream, ecg_record::Mechanism::PREFETCH);
+    cache.recordIteration(0, true);
+    const uint64_t word = cache.recordLoad(0);
+    refused = false;
+    try {
+        cache.recordInspect(1);
+    } catch (const std::logic_error&) {
+        refused = true;
+    }
+    if (!refused || cache.recordInspections() != 0 || cache.recordProperty(0, word) != 0)
+        return 8;
+    return 0;
+}
+
 int main() {
     using namespace cache_sim;
     ecg_record::Requirements requirements;
@@ -1425,6 +1540,10 @@ int main() {
     if (const int check = exerciseDeadFirstRefetchCount()) {
         std::printf("DEAD-first re-fetch count check %d failed [FAIL]\n", check);
         return 20;
+    }
+    if (const int check = exerciseRecordInspection()) {
+        std::printf("record inspection check %d failed [FAIL]\n", check);
+        return 21;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;

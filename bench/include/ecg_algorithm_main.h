@@ -344,6 +344,8 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
     field("structural_positions", result.structural_positions);
     field("actual_records", result.actual_records);
     field("skipped_positions", result.skipped_positions);
+    field("record_inspections", result.record_inspections);
+    field("record_inspection_bytes", result.record_inspection_bytes);
     field("csr_index_reads", result.csr_index_reads);
     field("edge_reads", result.edge_reads);
     field("weight_reads", result.weight_reads);
@@ -353,6 +355,7 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
     field("construction_read_bytes", result.construction_reads);
     field("construction_write_bytes", result.construction_writes);
     field("carrier_allocation_bytes", result.carrier_bytes);
+    field("record_weight_bytes", result.record_weight_bytes);
     field("construction_auxiliary_peak_bytes", result.construction_auxiliary_peak_bytes);
     field("constructed_finite_records", result.constructed_finite_records);
     field("constructed_wrap_records", result.constructed_wrap_records);

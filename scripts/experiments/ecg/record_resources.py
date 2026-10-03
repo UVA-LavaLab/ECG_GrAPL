@@ -263,8 +263,12 @@ def plan_algorithm_resources(
         scratch += 192
     shared_owner = 512 if popt_full_capacity and queries > 1 else 0
     scratch += shared_owner
+    # The weight readers keep a compact 4-byte copy of interleaved weights beside
+    # the carrier, so a record pass reads one edge stream.
+    weight_copy = 4 * carrier_records if (
+        records and not window and graph.weighted and algorithm in ("sssp", "spmv")) else 0
     if carrier > carrier_limit or scratch + popt_bytes > auxiliary_limit or (
-            arrays + carrier + scratch + popt_bytes + context_bytes > workspace_limit):
+            arrays + carrier + weight_copy + scratch + popt_bytes + context_bytes > workspace_limit):
         raise RecordResourceError("algorithm arrays/carrier/construction exceed their explicit limits")
     directions = 2 if graph.directed else 1
     graph_peak = (directions + 1) * 8 * (graph.vertices + 1) + 12 * graph.vertices + (
@@ -281,6 +285,7 @@ def plan_algorithm_resources(
         **asdict(graph), **layout,
         "algorithm": algorithm, "carrier_records_upper": carrier_records,
         "carrier_payload_bytes_upper": carrier, "array_bytes": arrays,
+        "record_weight_bytes_upper": weight_copy,
         "construction_auxiliary_bytes_upper": scratch, "graph_loader_bytes_upper": graph_peak,
         "record_preprocess": preprocessing, "construction_partitions": partitions,
         "record_model": record_model,

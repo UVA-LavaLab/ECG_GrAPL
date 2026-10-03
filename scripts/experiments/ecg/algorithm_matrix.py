@@ -326,6 +326,16 @@ def validate_payload(
         require(_integer(work, "carrier_allocation_bytes") == carrier_count * layout["record_bytes"] and
                 _integer(work, "construction_read_bytes") > 0 and _integer(work, "construction_write_bytes") > 0,
                 "missing charged immutable carrier construction")
+        # One edge stream per edge. BC inspects every edge its
+        # forward pass examined, so its paired loads number between one and two per
+        # inspection; the weight readers carry a compact copy of the weights.
+        inspections = _integer(work, "record_inspections")
+        require(_integer(work, "record_weight_bytes") ==
+                (4 * carrier_count if graph.weighted and algorithm in ("sssp", "spmv") else 0) and
+                _integer(work, "record_inspection_bytes") == inspections * layout["record_bytes"] and
+                (inspections <= _integer(work, "actual_records") <= 2 * inspections
+                 if algorithm == "bc" else inspections == 0),
+                "record inspections or compact weights disagree with the kernel and its source")
         if "record_preprocess" in work:
             require(sum(_integer(work, "constructed_" + state + "_records") for state in
                         ("finite", "wrap", "unknown")) == carrier_count,
@@ -381,6 +391,10 @@ def validate_payload(
                 if replacement else 0), "ordinary governed-region invalidations are unaccounted")
     elif not records:
         require(_integer(work, "carrier_allocation_bytes") == 0, "CSR baseline built an ECG carrier")
+    if not records or window or frontier:
+        require(all(_integer(work, key) == 0 for key in (
+                    "record_inspections", "record_inspection_bytes", "record_weight_bytes")),
+                "a run without a NEXT carrier reported record inspections or weights")
     if window or frontier:
         require(algorithm == "bfs" and records and not graph.weighted and backend == "cache_sim" and
                 not direction_optimizing and options.record_base_policy == "GRASP_PAPER" and

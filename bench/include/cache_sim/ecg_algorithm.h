@@ -359,6 +359,11 @@ class AlgorithmBackend {
         return frontier_runtime_ ? frontier_runtime_->recordLoad(index) :
             window_runtime_ ? window_runtime_->recordLoad(index) : cache_.recordLoad(index);
     }
+    void recordInspect(uint64_t index) {
+        if (frontier_runtime_ || window_runtime_)
+            throw std::logic_error("record inspection requires the NEXT record model");
+        cache_.recordInspect(index);
+    }
     uint64_t windowTraceValue() const { return frontier_runtime_ ? frontier_runtime_->traceValue() : window_runtime_->traceValue(); }
     uint64_t windowTraceSource() const { return frontier_runtime_ ? frontier_runtime_->traceSource() : window_runtime_->traceSource(); }
 

@@ -1544,10 +1544,225 @@ void testKernelCensusUnderTheRoster() {
 
 } // namespace
 
+// Record mode reads one edge stream per edge, as CSR does. The
+// spy counts the ordinary reads each record pass makes of the fixture's
+// interleaved edges, split into ID and weight slots, and of the bound carrier;
+// a paired record load reaches no hook, so carrier reads are inspections only.
+struct EdgeStreamSpy : ecg_algorithm::PlainBackend {
+    uint64_t edges = 0, edges_end = 0, carrier = 0, carrier_end = 0;
+    uint64_t id_reads = 0, weight_reads = 0, carrier_reads = 0;
+    bool open = false;
+    explicit EdgeStreamSpy(const Fixture& fixture)
+        : edges(reinterpret_cast<uint64_t>(fixture.edges.data())),
+          edges_end(edges + fixture.edges.size() * sizeof(Fixture::Edge)) {}
+    void bind(const ecg_record::NativeConfiguration& configuration,
+              const ecg_record::RecordStream& stream) {
+        ecg_algorithm::PlainBackend::bind(configuration, stream);
+        carrier = configuration.record_base;
+        carrier_end = carrier + stream.size() * stream.layout.record_bytes;
+    }
+    void beginPass(bool has_next) {
+        ecg_algorithm::PlainBackend::beginPass(has_next);
+        open = true;
+    }
+    void closePass() {
+        ecg_algorithm::PlainBackend::closePass();
+        open = false;
+    }
+    void memory(const void* pointer, uint64_t, bool write) {
+        const uint64_t address = reinterpret_cast<uint64_t>(pointer);
+        if (!open || write)
+            return;
+        if (address >= edges && address < edges_end) {
+            if ((address - edges) % sizeof(Fixture::Edge) == 0)
+                ++id_reads;
+            else
+                ++weight_reads;
+        } else if (address >= carrier && address < carrier_end) {
+            ++carrier_reads;
+        }
+    }
+};
+
+template<class Backend>
+ecg_algorithm::Result runOn(Backend& backend, const ecg_algorithm::GraphView& graph,
+                            ecg_algorithm::Algorithm algorithm, bool records, uint8_t bytes,
+                            const std::vector<uint32_t>& sources = {}) {
+    ecg_algorithm::Options options;
+    options.algorithm = algorithm;
+    options.records = records;
+    options.record_bytes = bytes;
+    options.source = sources.empty() ? 0 : sources.front();
+    options.sources = sources;
+    options.delta = 2;
+    options.capture_values = options.evidence = true;
+    return ecg_algorithm::run(graph, options, backend);
+}
+
+void testOneEdgeStreamPerEdge() {
+    using ecg_algorithm::Algorithm;
+    // From source 0 the reverse pass finds rows 1, 2 and 3 mixed, row 4 all
+    // rejected and row 8 empty; 5 reaches 0 only as a source; 6 and 7 are isolated.
+    const Fixture dag(9, true, {{0,1,1}, {0,2,1}, {1,2,1}, {1,3,1}, {2,1,1}, {2,3,1},
+                                {3,0,1}, {3,4,1}, {3,8,1}, {4,1,1}, {4,3,1}, {5,0,1}});
+    // Brandes examines every edge of every vertex a source reaches once on the way back.
+    const auto examined = [&dag](const std::vector<uint32_t>& sources) {
+        uint64_t total = 0;
+        for (uint32_t source : sources) {
+            std::vector<bool> seen(dag.offsets.size() - 1);
+            std::vector<uint32_t> queue{source};
+            seen[source] = true;
+            for (std::size_t head = 0; head < queue.size(); ++head) {
+                const uint32_t vertex = queue[head];
+                for (uint64_t index = dag.offsets[vertex]; index < dag.offsets[vertex + 1]; ++index) {
+                    ++total;
+                    const auto next = static_cast<uint32_t>(dag.edges[index].id);
+                    if (!seen[next]) {
+                        seen[next] = true;
+                        queue.push_back(next);
+                    }
+                }
+            }
+        }
+        return total;
+    };
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        for (const auto& sources : {std::vector<uint32_t>{0}, std::vector<uint32_t>{0, 3, 5}}) {
+            ecg_algorithm::PlainBackend plain;
+            EdgeStreamSpy spy(dag);
+            const auto csr = runOn(plain, dag.view(), Algorithm::BC, false, width, sources);
+            const auto ecg = runOn(spy, dag.view(), Algorithm::BC, true, width, sources);
+            check(spy.id_reads == 0 && spy.weight_reads == 0,
+                  "BC's record passes read no CSR edge");
+            check(spy.carrier_reads == examined(sources),
+                  "BC inspects one record per reverse-pass edge examination");
+            check(csr.result_digest == ecg.result_digest && csr.work_digest == ecg.work_digest &&
+                  csr.position_digest == ecg.position_digest && csr.values_f32 == ecg.values_f32,
+                  "BC's record inspection keeps CSR's result and work");
+        }
+    }
+    // Weights 1 and 2 are light at delta 2, so every SSSP pass filters its rows.
+    const Fixture weighted(6, true, {{0,1,1}, {0,2,3}, {0,5,9}, {1,2,1}, {1,3,4},
+                                     {2,3,1}, {2,4,5}, {3,5,2}, {4,5,1}});
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        for (Algorithm algorithm : {Algorithm::SSSP, Algorithm::SPMV}) {
+            ecg_algorithm::PlainBackend plain;
+            EdgeStreamSpy spy(weighted);
+            const auto csr = runOn(plain, weighted.view(true), algorithm, false, width);
+            const auto ecg = runOn(spy, weighted.view(true), algorithm, true, width);
+            check(spy.id_reads == 0 && spy.weight_reads == 0 && spy.carrier_reads == 0,
+                  "weighted record passes read no interleaved edge");
+            check(csr.result_digest == ecg.result_digest && csr.work_digest == ecg.work_digest &&
+                  csr.position_digest == ecg.position_digest && csr.weight_reads == ecg.weight_reads,
+                  "weighted record passes keep CSR's result, work and weight reads");
+        }
+    }
+}
+
+void testEdgeStreamAccounting() {
+    using ecg_algorithm::Algorithm;
+    using Engine = ecg_algorithm::Engine<ecg_algorithm::PlainBackend>;
+    const Fixture dag(9, true, {{0,1,1}, {0,2,1}, {1,2,1}, {1,3,1}, {2,1,1}, {2,3,1},
+                                {3,0,1}, {3,4,1}, {3,8,1}, {4,1,1}, {4,3,1}, {5,0,1}});
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        ecg_algorithm::PlainBackend plain, other;
+        const auto csr = runOn(plain, dag.view(), Algorithm::BC, false, width);
+        const auto ecg = runOn(other, dag.view(), Algorithm::BC, true, width);
+        // From source 0 the reverse pass examines rows 0, 1, 2, 3, 4 and 8: 11 edges.
+        check(ecg.record_inspections == 11 && ecg.record_inspection_bytes == 11u * width &&
+              csr.record_inspections == 0 && csr.record_inspection_bytes == 0 &&
+              ecg.record_weight_bytes == 0,
+              "BC counts its record inspections apart from the paired loads");
+    }
+    const Fixture weighted(6, false, {{0,1,1}, {0,2,3}, {1,2,1}, {1,3,4}, {2,3,1},
+                                      {2,4,5}, {3,5,2}, {4,5,1}});
+    std::vector<int32_t> ids, costs;
+    for (const auto& edge : weighted.edges) {
+        ids.push_back(edge.id);
+        costs.push_back(edge.weight);
+    }
+    const ecg_algorithm::GraphView split{weighted.offsets.size() - 1, weighted.edges.size(), false,
+        weighted.offsets.data(), ids.data(), costs.data(), 4, false, nullptr, nullptr};
+    const uint64_t copy = 4 * weighted.edges.size();
+    for (uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        for (Algorithm algorithm : {Algorithm::SSSP, Algorithm::SPMV}) {
+            ecg_algorithm::PlainBackend a, b, c, d;
+            const auto csr = runOn(a, weighted.view(true), algorithm, false, width);
+            const auto ecg = runOn(b, weighted.view(true), algorithm, true, width);
+            const auto compact = runOn(c, split, algorithm, true, width);
+            const auto unweighted = runOn(d, weighted.view(), algorithm, true, width);
+            check(ecg.record_weight_bytes == copy && csr.record_weight_bytes == 0 &&
+                  compact.record_weight_bytes == 0 && unweighted.record_weight_bytes == 0 &&
+                  ecg.record_inspections == 0,
+                  "only an interleaved weighted view gets a compact weight copy");
+            check(ecg.result_digest == csr.result_digest && compact.result_digest == csr.result_digest &&
+                  compact.work_digest == ecg.work_digest && compact.weight_reads == ecg.weight_reads,
+                  "the compact copy carries every weight of its edge");
+            check(ecg.workspace_peak_bytes >= csr.workspace_peak_bytes + ecg.carrier_bytes + copy,
+                  "the workspace holds the weights beside the carrier");
+            // The construction scratch is smaller than the copy, so a limit one byte
+            // short of arrays, carrier and copy can only fail at the copy.
+            check(ecg.construction_auxiliary_peak_bytes < copy, "weight-limit fixture precondition");
+            ecg_algorithm::Options tight;
+            tight.algorithm = algorithm;
+            tight.records = true;
+            tight.record_bytes = width;
+            tight.delta = 2;
+            tight.maximum_workspace_bytes = csr.workspace_peak_bytes + ecg.carrier_bytes + copy - 1;
+            std::string refusal;
+            try {
+                ecg_algorithm::PlainBackend backend;
+                ecg_algorithm::run(weighted.view(true), tight, backend);
+            } catch (const std::length_error& error) {
+                refusal = error.what();
+            }
+            check(refusal == "algorithm-workspace-limit", "a workspace too small for the weights fails");
+        }
+        for (Algorithm algorithm : {Algorithm::BFS, Algorithm::BC}) {
+            ecg_algorithm::PlainBackend backend;
+            check(runOn(backend, weighted.view(true), algorithm, true, width).record_weight_bytes == 0,
+                  "kernels that read no weight get no weight copy");
+        }
+    }
+    // An inspection needs the NEXT model, a binding, an open pass and an edge of it.
+    const auto refuses = [](auto&& inspect) {
+        try {
+            inspect();
+        } catch (const std::logic_error& error) {
+            return std::string(error.what()) == "edge-target-outside-a-record-pass";
+        }
+        return false;
+    };
+    ecg_algorithm::Options options;
+    options.algorithm = Algorithm::BC;
+    options.records = true;
+    options.record_bytes = 4;
+    ecg_algorithm::PlainBackend backend;
+    ecg_algorithm::Result result;
+    Engine engine(dag.view(), options, backend, result);
+    check(refuses([&] { engine.edgeTarget(0); }), "an inspection without a binding fails closed");
+    Engine::Buffer<uint32_t> depth(engine, dag.offsets.size() - 1, "depth", true);
+    engine.bind(dag.view(), depth, ecg_record::TraversalMode::ORDERED_FILTERED);
+    check(refuses([&] { engine.edgeTarget(0); }), "an inspection outside a pass fails closed");
+    engine.beginPass();
+    check(engine.edgeTarget(0) == 1 && result.record_inspections == 1,
+          "an inspection in a pass returns its edge's target");
+    check(refuses([&] { engine.edgeTarget(dag.edges.size()); }),
+          "an inspection past the carrier fails closed");
+    ecg_algorithm::Options window = options;
+    window.record_model = ecg_algorithm::RecordModel::WINDOW;
+    ecg_algorithm::PlainBackend window_backend;
+    ecg_algorithm::Result window_result;
+    Engine window_engine(dag.view(), window, window_backend, window_result);
+    check(refuses([&] { window_engine.edgeTarget(0); }), "an inspection needs the NEXT model");
+}
+
 int main(int argc, char** argv) {
     using namespace ecg_algorithm;
     if (argc == 4 && std::strcmp(argv[1], kCensusRunFlag) == 0)
         return censusRosterRun(argv[2], argv[3]);
+    testOneEdgeStreamPerEdge();
+    testEdgeStreamAccounting();
     testPreparedPoptQueryReuse();
     testGraspReferenceConsumer();
     testFrontierProducerAndCounts();

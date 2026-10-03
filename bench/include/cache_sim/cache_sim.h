@@ -4580,6 +4580,26 @@ public:
         return word;
     }
 
+    // An ordinary read of a record word before its edge's paired load, as BC's DAG
+    // test makes. It fills like any read and, under record prefetch, captures the
+    // line it fills, as recordLoad does and as gem5's fill listener does; it pairs
+    // nothing, consumes no cursor and publishes no bound.
+    void recordInspect(uint64_t index) {
+        if (!record_model_ || record_pending_ || (record_managed_ && !record_cursor_.open()))
+            throw std::logic_error("Functional ECG record inspection is outside a record pass");
+        uint64_t address = 0;
+        if (ecg_record::recordAddress(record_stream_->layout, record_configuration_.record_base,
+                index, record_stream_->size(), address) != ecg_record::Status::OK)
+            throw std::invalid_argument("Invalid functional ECG record address");
+        const bool fill = !l1_->contains(address);
+        access(address);
+        ++record_inspections_;
+        if (record_prefetch_ && fill)
+            captureRecordLine(lineAddress(address));
+    }
+    uint64_t recordInspections() const { return record_inspections_; }
+    uint64_t recordAcquisitions() const { return record_acquisitions_; }
+
     uint64_t recordProperty(uint64_t index, uint64_t word) {
         uint64_t address = 0;
         if (!record_model_ || !record_pending_ ||
@@ -5835,6 +5855,7 @@ private:
     uint64_t record_expired_ = 0;
     uint64_t record_max_updates_ = 0;
     uint64_t record_acquisitions_ = 0;
+    uint64_t record_inspections_ = 0;
     uint64_t record_candidates_ = 0;
     uint64_t record_prefetch_issued_ = 0;
     uint64_t record_prefetch_fills_ = 0;
