@@ -379,8 +379,8 @@
       }
     },
     "ecg_same_binary_baselines_cache": {
-      "status": "blocked",
-      "reason": "Section bf measured the written-in-place bit against its bit-off control on one binary, 2bf6634d, but read its margins against GRASP_PAPER and POPT_UNCHARGED from section bb's baselines, which ran on another binary; section bg found that a rebuild moves cache_sim rows through the heap layout the simulated caches index by, and that the ECG rows' drift does not bound the baselines'. This profile runs ecg_steady_state_cache's four PageRank baseline jobs unchanged on the binary section bf used, so that its sixteen ECG rows meet baselines from the same binary. Preregistered in NEXT.md section bk before any row existed; blocked until the user names its budget.",
+      "status": "ready",
+      "reason": "Section bf measured the written-in-place bit against its bit-off control on one binary, 2bf6634d, but read its margins against GRASP_PAPER and POPT_UNCHARGED from section bb's baselines, which ran on another binary; section bg found that a rebuild moves cache_sim rows through the heap layout the simulated caches index by, and that the ECG rows' drift does not bound the baselines'. This profile runs ecg_steady_state_cache's four PageRank baseline jobs unchanged on the binary section bf used, so that its sixteen ECG rows meet baselines from the same binary. Preregistered in NEXT.md section bk before any row existed; the user approved the named budget same-binary-8, these 8 rows, to run once with no automatic follow-on.",
       "require_clean_worktree": true,
       "development_gate": {
         "metric": "kernel transfers K, PageRank's total_offchip_traffic over the eight passes of one run after one construction, reported first for every row; C = K - entry_dirty_writebacks + (exit_dirty_lines - exit_entry_dirty_lines), the clean boundary, reported beside K and never instead of it; T_k, pass k's total_offchip_traffic from the row's kernel_census pass_detail",
