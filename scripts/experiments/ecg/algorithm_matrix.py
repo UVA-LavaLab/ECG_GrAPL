@@ -59,6 +59,8 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--grasp-reference", choices=("off", "full", "flat", "rank"), default="off")
     parser.add_argument("--record-governed-first", choices=("no", "on"), default="no")
     parser.add_argument("--record-rrpv-order", choices=("no", "on"), default="no")
+    parser.add_argument("--record-uninformed-base", choices=("no", "on"), default="no")
+    parser.add_argument("--record-bound-compare", choices=("on", "no"), default="on")
     parser.add_argument("--record-pressure-gate", choices=("no", "on", "duel"), default="no")
     parser.add_argument("--record-store-bound", choices=("drop", "keep"), default="drop")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
@@ -86,6 +88,9 @@ def parse_options(text: str) -> argparse.Namespace:
     if parsed.record_rrpv_order != "no" and (
             parsed.record_base_policy != "GRASP_PAPER" or parsed.record_model != "next"):
         raise RecordResourceError("record RRPV order requires the GRASP_PAPER record base under the NEXT model")
+    if (parsed.record_uninformed_base != "no" or parsed.record_bound_compare != "on") and \
+            parsed.record_model != "next":
+        raise RecordResourceError("record victim controls require the NEXT model")
     parsed.source_list = []
     if parsed.sources:
         if not re.fullmatch(r"[0-9]+(?:,[0-9]+)*", parsed.sources):
@@ -179,6 +184,25 @@ def written_in_place_label(label: str, written_in_place: str) -> str:
     return label + "_WRITTEN_IN_PLACE"
 
 
+# The two record victim controls act only inside the replacement rule: prefetch
+# admission runs the default rule, and the window and frontier models choose
+# victims by their own rules. Their suffixes follow every other one.
+def uninformed_base_label(label: str, uninformed_base: str) -> str:
+    if uninformed_base == "no":
+        return label
+    require(uninformed_base == "on" and label.startswith("ECG_REPLACEMENT") and "_MODEL_" not in label,
+            "record uninformed fallback requires the current ECG replacement policy under the NEXT model")
+    return label + "_UNINFORMED_BASE"
+
+
+def bound_compare_label(label: str, bound_compare: str) -> str:
+    if bound_compare == "on":
+        return label
+    require(bound_compare == "no" and label.startswith("ECG_REPLACEMENT") and "_MODEL_" not in label,
+            "record bound-comparison ablation requires the current ECG replacement policy under the NEXT model")
+    return label + "_NO_BOUND_COMPARE"
+
+
 def grasp_reference_label(label: str, mode: str) -> str:
     if mode == "off":
         return label
@@ -202,10 +226,11 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   governed_first: str = "no", store_bound: str = "drop",
                   expiry_clock: str = "progress",
                   pressure_gate: str = "no", rrpv_order: str = "no",
-                  written_in_place: str = "no") -> list[str]:
-    return [pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(written_in_place_label(rrpv_order_label(governed_first_label(record_policy_label(
+                  written_in_place: str = "no", uninformed_base: str = "no",
+                  bound_compare: str = "on") -> list[str]:
+    return [bound_compare_label(uninformed_base_label(pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(written_in_place_label(rrpv_order_label(governed_first_label(record_policy_label(
                 spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), rrpv_order), written_in_place), store_bound), expiry_clock), observer),
-                grasp_scope), popt_rank_mode), grasp_reference), queries), pressure_gate)
+                grasp_scope), popt_rank_mode), grasp_reference), queries), pressure_gate), uninformed_base), bound_compare)
             for spec in policies]
 
 
@@ -480,6 +505,9 @@ def validate_payload(
     require(options.record_rrpv_order == "no" or (
                 mode != "csr" and options.record_model == "next"),
             "record RRPV order requires the current NEXT record replacement rule")
+    require((options.record_uninformed_base == "no" and options.record_bound_compare == "on") or (
+                mode == "replacement" and options.record_model == "next"),
+            "record victim controls require the current NEXT record replacement rule without prefetch")
     expected_result = contract()["references"][algorithm]
     if evidence and graph_path.name == expected_result["graph"] and options.source == 0 and not options.source_list:
         require(graph.sha256 == contract()["graphs"][expected_result["graph"]]["sha256"],
@@ -502,6 +530,28 @@ def validate_victim_order(payload: dict[str, Any], options: argparse.Namespace) 
             "record pressure gate does not match the requested arm")
     require(payload["workload"].get("record_rrpv_order") == options.record_rrpv_order,
             "record RRPV order does not match the requested arm")
+    require(payload["workload"].get("record_uninformed_base") == options.record_uninformed_base,
+            "record uninformed fallback does not match the requested arm")
+    require(payload["workload"].get("record_bound_compare") == options.record_bound_compare,
+            "record bound comparison does not match the requested arm")
+    # Wherever the cache reports its victim paths they close to its decisions and
+    # agree with the controls; a requested control needs that report.
+    metrics = payload.get("metrics")
+    requested = options.record_uninformed_base != "no" or options.record_bound_compare != "on"
+    if requested or isinstance(metrics, dict) and "ecg_record_victim_decisions" in metrics:
+        require(isinstance(metrics, dict), "record victim controls need the cache's victim report")
+        paths = ("dead_first", "unpressured", "ungoverned_first", "base_not_governed", "base_no_future",
+                 "base_kept", "overridden", "uninformed_base", "no_bound_compare")
+        counts = {path: _integer(metrics, "ecg_record_victim_" + path) for path in paths}
+        require(sum(counts.values()) == _integer(metrics, "ecg_record_victim_decisions"),
+                "record victim paths do not close to the decisions")
+        require(_integer(metrics, "ecg_record_uninformed_base") == int(options.record_uninformed_base == "on") and
+                _integer(metrics, "ecg_record_bound_compare") == int(options.record_bound_compare == "on"),
+                "effective record victim controls do not match the requested arm")
+        require((options.record_uninformed_base == "on" or counts["uninformed_base"] == 0) and
+                (options.record_bound_compare == "no" or counts["no_bound_compare"] == 0) and
+                (options.record_bound_compare == "on" or counts["base_kept"] + counts["overridden"] == 0),
+                "record victim paths contradict the requested controls")
 
 
 def validate_grasp_reference(payload: dict[str, Any], options: argparse.Namespace) -> dict[str, Any]:
@@ -968,7 +1018,8 @@ def run_cache_cell(
             options.frontier_gating, options.grasp_reference, options.queries,
             options.record_governed_first, options.record_store_bound,
             options.record_expiry_clock, options.record_pressure_gate,
-            options.record_rrpv_order)[0]
+            options.record_rrpv_order, uninformed_base=options.record_uninformed_base,
+            bound_compare=options.record_bound_compare)[0]
         if reference:
             row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:
@@ -1043,6 +1094,10 @@ def run_cache_cell(
             command.extend(("--record-pressure-gate", options.record_pressure_gate))
         if options.record_rrpv_order != "no":
             command.extend(("--record-rrpv-order", options.record_rrpv_order))
+        if options.record_uninformed_base != "no":
+            command.extend(("--record-uninformed-base", options.record_uninformed_base))
+        if options.record_bound_compare != "on":
+            command.extend(("--record-bound-compare", options.record_bound_compare))
         if options.record_store_bound != "drop":
             command.extend(("--record-store-bound", options.record_store_bound))
         if options.record_expiry_clock != "progress":

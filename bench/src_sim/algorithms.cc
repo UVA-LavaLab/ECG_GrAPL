@@ -105,5 +105,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        }, true, true, true, true, true, true, true, true);
+        }, true, true, true, true, true, true, true, true, true);
 }

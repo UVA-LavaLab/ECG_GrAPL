@@ -1065,14 +1065,17 @@ void testVictimTraceIsPassive() {
     // hardcoded count, so adding a path later fails loudly instead of silently
     // shrinking what this check covers.
     const int opt_in[] = {static_cast<int>(VictimPath::UNGOVERNED_FIRST),
-                          static_cast<int>(VictimPath::UNPRESSURED)};
+                          static_cast<int>(VictimPath::UNPRESSURED),
+                          static_cast<int>(VictimPath::UNINFORMED_BASE),
+                          static_cast<int>(VictimPath::NO_BOUND_COMPARE)};
+    constexpr int kOptIn = static_cast<int>(sizeof(opt_in) / sizeof(opt_in[0]));
     int covered = 0, opt_in_seen = 0;
     for (int i = 0; i < kVictimPathCount; ++i) {
-        const bool is_opt_in = i == opt_in[0] || i == opt_in[1];
+        const bool is_opt_in = std::find(opt_in, opt_in + kOptIn, i) != opt_in + kOptIn;
         if (is_opt_in) opt_in_seen += traced_paths[i];
         else covered += traced_paths[i] > 0;
     }
-    check(covered == kVictimPathCount - 2 && opt_in_seen == 0,
+    check(covered == kVictimPathCount - kOptIn && opt_in_seen == 0,
           "the passivity fixture exercises every default victim path and no other");
 }
 
@@ -1414,6 +1417,247 @@ void testRrpvOrderIsGraspWithoutGovernedWays() {
     check(base_calls == 0, "the parity fixture never consults the base callback");
 }
 
+// The base decision as the rule takes it: under the RRPV order the GRASP scan
+// over every way and its ageing, otherwise the base callback's way.
+std::size_t baseDecision(const ecg_record::WayState* ways, std::size_t count, bool rrpv_order,
+                         std::size_t base_way, ecg_record::VictimAgeing& ageing) {
+    ageing = ecg_record::VictimAgeing();
+    if (!rrpv_order)
+        return base_way;
+    uint8_t rrpv[64];
+    uint8_t highest = 0;
+    for (std::size_t i = 0; i < count; ++i) {
+        rrpv[i] = std::min<uint8_t>(ways[i].rrpv, ecg_record::kVictimRrpvMax);
+        highest = std::max(highest, rrpv[i]);
+    }
+    if (highest < ecg_record::kVictimRrpvMax) {
+        ageing.amount = static_cast<uint8_t>(ecg_record::kVictimRrpvMax - highest);
+        ageing.ways = count == 64 ? ~uint64_t{0} : (uint64_t{1} << count) - 1;
+    }
+    return graspScanReference(rrpv, count);
+}
+
+bool sameWays(const ecg_record::WayState* a, const ecg_record::WayState* b, std::size_t count) {
+    for (std::size_t i = 0; i < count; ++i)
+        if (a[i].property != b[i].property || a[i].rrpv != b[i].rrpv || a[i].recency != b[i].recency ||
+            a[i].state != b[i].state || a[i].deadline != b[i].deadline)
+            return false;
+    return true;
+}
+
+// Opt-in uninformed fallback (step 6b). A set whose governed ways hold no live
+// bound takes the configured base decision whole, its victim and its ageing,
+// where governed-first would scan and age only the ungoverned ways.
+void testUninformedSetTakesTheBaseDecision() {
+    using namespace ecg_record;
+    auto req = requirements(32);
+    req.record_count = 34;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK, "uninformed fixture layout");
+    constexpr uint64_t sequence = 19;
+    VictimOptions arm; arm.governed_first = true; arm.rrpv_order = true;
+    VictimOptions fallback = arm; fallback.uninformed_base = true;
+    unsigned calls = 0;
+    const auto base = [&calls]() { ++calls; return std::size_t{0}; };
+    std::size_t victim = 0;
+    VictimAgeing ageing;
+    VictimTrace trace;
+    const auto decide = [&](WayState* ways, std::size_t count, const VictimOptions& options) {
+        return selectVictim(layout, ways, count, sequence, base, victim, &trace, options,
+                            &ageing) == Status::OK;
+    };
+    WayState ways[3];
+    ways[0].property = true; ways[0].state = State::UNKNOWN; ways[0].rrpv = 7; ways[0].recency = 1;
+    ways[1].property = false; ways[1].rrpv = 0; ways[1].recency = 9;
+    check(decide(ways, 2, arm) && victim == 1 && ageing.amount == 7 && ageing.ways == 0b10 &&
+          trace.path == VictimPath::UNGOVERNED_FIRST,
+          "governed-first evicts the ungoverned way and ages it by 7 without information");
+    check(decide(ways, 2, fallback) && victim == 0 && ageing.amount == 0 && ageing.ways == 0 &&
+          trace.path == VictimPath::UNINFORMED_BASE && calls == 0,
+          "uninformed, the fallback takes the GRASP scan's RRPV-7 way and ages nothing");
+    ways[0].rrpv = 5; ways[1].rrpv = 2;
+    check(decide(ways, 2, fallback) && victim == 0 && ageing.amount == 2 && ageing.ways == 0b11,
+          "the fallback ages every way by the GRASP scan's steps");
+    // One live governed bound keeps governed-first; a bound at or past its
+    // deadline, raw WRAP, or a bound on an ungoverned way is no information.
+    ways[2].property = true; ways[2].rrpv = 1; ways[2].state = State::FINITE;
+    ways[2].deadline = sequence + 8;
+    check(decide(ways, 3, fallback) && victim == 1 && trace.path == VictimPath::UNGOVERNED_FIRST,
+          "one live governed bound keeps governed-first");
+    for (const auto& [state, deadline, governed] : {
+            std::tuple<State, uint64_t, bool>{State::FINITE, sequence, true},
+            std::tuple<State, uint64_t, bool>{State::FINITE, sequence - 1, true},
+            std::tuple<State, uint64_t, bool>{State::WRAP, sequence + 8, true},
+            std::tuple<State, uint64_t, bool>{State::FINITE, sequence + 8, false}}) {
+        ways[2].state = state; ways[2].deadline = deadline; ways[2].property = governed;
+        check(decide(ways, 3, fallback) && victim == 0 && trace.path == VictimPath::UNINFORMED_BASE,
+              "a bound at or past its deadline, raw WRAP or an ungoverned bound is no information");
+    }
+    // DEAD and the pressure gate keep their places ahead of the fallback.
+    ways[2].property = true; ways[2].state = State::DEAD;
+    check(decide(ways, 3, fallback) && victim == 2 && trace.path == VictimPath::DEAD_FIRST,
+          "explicit DEAD precedes the fallback");
+    ways[2].state = State::UNKNOWN;
+    VictimOptions relaxed = fallback; relaxed.pressured = false;
+    check(decide(ways, 3, relaxed) && trace.path == VictimPath::UNPRESSURED,
+          "an unpressured set keeps its own path");
+    // Under the recency order the fallback is one call of the base policy.
+    VictimOptions recency; recency.governed_first = true;
+    calls = 0;
+    check(selectVictim(layout, ways, 3, sequence, base, victim, &trace, recency) == Status::OK &&
+          victim == 1 && calls == 0 && trace.path == VictimPath::UNGOVERNED_FIRST,
+          "recency-ordered governed-first takes the ungoverned way");
+    recency.uninformed_base = true;
+    check(selectVictim(layout, ways, 3, sequence, base, victim, &trace, recency) == Status::OK &&
+          victim == 0 && calls == 1 && trace.path == VictimPath::UNINFORMED_BASE,
+          "under the recency order the fallback is one call of the base policy");
+    // Random sets: an uninformed set takes the base decision, any other set the
+    // rule's decision without the fallback; tracing changes nothing; no way is
+    // written.
+    std::mt19937_64 rng(0x0B5E7A11);
+    const State states[4] = {State::UNKNOWN, State::FINITE, State::DEAD, State::WRAP};
+    int mismatches = 0, uninformed = 0, informed = 0;
+    for (int trial = 0; trial < 20000; ++trial) {
+        const std::size_t count = trial % 997 == 0 ? 64 : 1 + rng() % 16;
+        const uint64_t now = 32 + rng() % 32;
+        WayState sample[64], copy[64];
+        bool live = false, dead = false;
+        for (std::size_t i = 0; i < count; ++i) {
+            sample[i].property = (rng() % 4) != 0;
+            sample[i].rrpv = static_cast<uint8_t>(rng() % 8);
+            sample[i].recency = rng() % 4096;
+            sample[i].state = states[rng() % 4];
+            sample[i].deadline = rng() % 128;
+            copy[i] = sample[i];
+            dead = dead || (sample[i].property && sample[i].state == State::DEAD);
+            live = live || (sample[i].property && sample[i].state == State::FINITE &&
+                            sample[i].deadline > now);
+        }
+        VictimOptions without;
+        without.governed_first = (rng() & 1) != 0;
+        without.rrpv_order = (rng() & 1) != 0;
+        without.pressured = (rng() & 3) != 0;
+        VictimOptions with = without; with.uninformed_base = true;
+        const std::size_t base_way = rng() % count;
+        const auto pick = [base_way]() { return base_way; };
+        std::size_t a = 0, b = 0, c = 0;
+        VictimAgeing aa, ab, ac;
+        VictimTrace traced;
+        const Status sa = selectVictim(layout, sample, count, now, pick, a, nullptr, without, &aa);
+        const Status sb = selectVictim(layout, sample, count, now, pick, b, nullptr, with, &ab);
+        const Status sc = selectVictim(layout, sample, count, now, pick, c, &traced, with, &ac);
+        if (sb != sc || b != c || ab.ways != ac.ways || ab.amount != ac.amount ||
+            !sameWays(sample, copy, count))
+            ++mismatches;
+        if (!dead && with.pressured && !live) {
+            ++uninformed;
+            VictimAgeing expected_ageing;
+            const std::size_t expected = baseDecision(sample, count, with.rrpv_order, base_way,
+                                                      expected_ageing);
+            if (sc != Status::OK || traced.path != VictimPath::UNINFORMED_BASE || c != expected ||
+                ac.ways != expected_ageing.ways || ac.amount != expected_ageing.amount ||
+                traced.rrpv_changed)
+                ++mismatches;
+        } else {
+            ++informed;
+            if (sa != sb || a != b || aa.ways != ab.ways || aa.amount != ab.amount)
+                ++mismatches;
+        }
+    }
+    check(mismatches == 0, "the fallback takes the base decision exactly when no governed bound is live");
+    check(uninformed > 0 && informed > 0, "the random fixture reaches both kinds of set");
+}
+
+// Opt-in B2 ablation (step 6c). With the bound comparison off, a governed live
+// base victim stands with the base's own ageing; every earlier branch runs.
+void testBoundCompareOffKeepsTheBaseVictim() {
+    using namespace ecg_record;
+    auto req = requirements(32);
+    req.record_count = 34;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK, "bound-comparison fixture layout");
+    constexpr uint64_t sequence = 19;
+    WayState ways[2];
+    ways[0].property = true; ways[0].state = State::FINITE; ways[0].deadline = sequence + 8;
+    ways[0].rrpv = 7; ways[0].recency = 1;
+    ways[1].property = true; ways[1].state = State::FINITE; ways[1].deadline = sequence + 64;
+    ways[1].rrpv = 3; ways[1].recency = 9;
+    const auto first = []() { return std::size_t{0}; };
+    VictimOptions on, off;
+    off.bound_compare = false;
+    std::size_t victim = 0;
+    VictimTrace trace;
+    check(selectVictim(layout, ways, 2, sequence, first, victim, &trace, on) == Status::OK &&
+          victim == 1 && trace.path == VictimPath::OVERRIDDEN,
+          "the comparison replaces a live base with a farther live bound");
+    check(selectVictim(layout, ways, 2, sequence, first, victim, &trace, off) == Status::OK &&
+          victim == 0 && trace.path == VictimPath::NO_BOUND_COMPARE,
+          "without the comparison the live base stands");
+    VictimOptions arm_off = off; arm_off.rrpv_order = true;
+    VictimAgeing ageing;
+    check(selectVictim(layout, ways, 2, sequence, first, victim, &trace, arm_off, &ageing) ==
+              Status::OK && victim == 0 && ageing.amount == 0 &&
+              trace.path == VictimPath::NO_BOUND_COMPARE && !trace.rrpv_changed,
+          "under the RRPV order the GRASP scan's victim stands");
+    ways[0].rrpv = 5;
+    check(selectVictim(layout, ways, 2, sequence, first, victim, &trace, arm_off, &ageing) ==
+              Status::OK && victim == 0 && ageing.amount == 2 && ageing.ways == 0b11,
+          "and keeps the GRASP scan's ageing");
+    // Random sets, each control alone and both together: where the comparison
+    // would have run, the base decision stands; elsewhere nothing changes.
+    std::mt19937_64 rng(0xB2AB1A7E);
+    const State states[4] = {State::UNKNOWN, State::FINITE, State::DEAD, State::WRAP};
+    int mismatches = 0, bypassed = 0, both = 0;
+    for (int trial = 0; trial < 20000; ++trial) {
+        const std::size_t count = 1 + rng() % 16;
+        const uint64_t now = 32 + rng() % 32;
+        WayState sample[16], copy[16];
+        for (std::size_t i = 0; i < count; ++i) {
+            sample[i].property = (rng() % 4) != 0;
+            sample[i].rrpv = static_cast<uint8_t>(rng() % 8);
+            sample[i].recency = rng() % 4096;
+            sample[i].state = states[rng() % 4];
+            sample[i].deadline = rng() % 128;
+            copy[i] = sample[i];
+        }
+        VictimOptions compare;
+        compare.governed_first = (rng() & 1) != 0;
+        compare.rrpv_order = (rng() & 1) != 0;
+        compare.pressured = (rng() & 3) != 0;
+        compare.uninformed_base = (rng() & 1) != 0;
+        VictimOptions ablated = compare; ablated.bound_compare = false;
+        both += ablated.uninformed_base;
+        const std::size_t base_way = rng() % count;
+        const auto pick = [base_way]() { return base_way; };
+        std::size_t a = 0, b = 0, c = 0;
+        VictimAgeing aa, ab, ac;
+        VictimTrace ta, tb;
+        const Status sa = selectVictim(layout, sample, count, now, pick, a, &ta, compare, &aa);
+        const Status sb = selectVictim(layout, sample, count, now, pick, b, &tb, ablated, &ab);
+        const Status sc = selectVictim(layout, sample, count, now, pick, c, nullptr, ablated, &ac);
+        if (sb != sc || b != c || ab.ways != ac.ways || ab.amount != ac.amount ||
+            !sameWays(sample, copy, count))
+            ++mismatches;
+        if (sa != Status::OK || sb != Status::OK) {
+            ++mismatches;
+            continue;
+        }
+        if (ta.path == VictimPath::BASE_KEPT || ta.path == VictimPath::OVERRIDDEN) {
+            ++bypassed;
+            VictimAgeing expected_ageing;
+            const std::size_t expected = baseDecision(sample, count, compare.rrpv_order, base_way,
+                                                      expected_ageing);
+            if (tb.path != VictimPath::NO_BOUND_COMPARE || b != expected || tb.rrpv_changed ||
+                ab.ways != expected_ageing.ways || ab.amount != expected_ageing.amount)
+                ++mismatches;
+        } else if (tb.path != ta.path || a != b || aa.ways != ab.ways || aa.amount != ab.amount) {
+            ++mismatches;
+        }
+    }
+    check(mismatches == 0, "without the comparison only the refinement changes");
+    check(bypassed > 0 && both > 0, "the random fixture reaches the refinement and both controls");
+}
+
 int main() {
     testAdaptiveBudgets();
     testSixBitConfiguration();
@@ -1437,6 +1681,8 @@ int main() {
     testPressureGateRelaxesToTheBaseVictim();
     testRrpvOrderNeverReadsRecency();
     testRrpvOrderIsGraspWithoutGovernedWays();
+    testUninformedSetTakesTheBaseDecision();
+    testBoundCompareOffKeepsTheBaseVictim();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }

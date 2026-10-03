@@ -101,6 +101,10 @@ struct Options {
     // Opt-in: the record victim rule orders every choice by RRPV, never by
     // recency, and takes its base victim from the GRASP_PAPER scan.
     bool record_rrpv_order = false;
+    // Opt-in record victim controls: a set with no live governed bound takes
+    // the base decision whole; off, the bound comparison is skipped (B2).
+    bool record_uninformed_base = false;
+    bool record_bound_compare = true;
     RecordPressureGate record_pressure_gate = RecordPressureGate::NO;
     // Opt-in: an ordinary STORE to a governed line keeps its FINITE bound,
     // because a store does not change when that line is next READ.

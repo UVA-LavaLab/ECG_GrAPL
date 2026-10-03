@@ -1407,6 +1407,137 @@ int exerciseRecordInspection() {
     return 0;
 }
 
+// The uninformed fallback and the bound-comparison switch inside the record
+// replacement rule, with the arm's governed-first and RRPV order, and their
+// refusals on paths without that rule (steps 6b and 6c).
+int exerciseVictimControls() {
+    using namespace cache_sim;
+    using namespace ecg_record;
+    constexpr uint64_t vertices = 256, records = 8;
+    alignas(64) std::array<uint32_t, vertices> properties{};
+    std::vector<uint32_t> degrees(vertices, 1);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), vertices, records, true);
+    context.registerPropertyArray(
+        properties.data(), vertices, 4, 256, 0.50, true);
+    Requirements requirements;
+    requirements.vertex_count = vertices;
+    requirements.record_count = records;
+    Layout layout;
+    if (selectLayout(requirements, layout) != Status::OK)
+        return 1;
+    const uint64_t base = reinterpret_cast<uint64_t>(properties.data());
+    NativeConfiguration configuration;
+    packLayout(layout, configuration.layout_descriptor);
+    packProperty(
+        {PropertyKind::U32, 4, TraversalMode::ORDERED_FILTERED},
+        configuration.property_descriptor);
+    configuration.record_base = base + 4096;
+    configuration.property_base = base;
+    configuration.record_count = records;
+    configuration.vertex_count = vertices;
+    configuration.context = configuration.generation = 1;
+    configuration.control = kNativeEnable | kNativeManagedPasses;
+    const auto arm = [&](bool replacement) {
+        auto level = std::make_unique<CacheLevel>("L3", 256, 64, 4, EvictionPolicy::GRASP);
+        level->initGraphContext(&context);
+        level->prepareRecord(EvictionPolicy::GRASP);
+        level->configureRecord(configuration, replacement, EvictionPolicy::GRASP);
+        level->advanceRecordProgress(1);
+        level->setRecordGovernedFirst(true);
+        level->setRecordRrpvOrder(true);
+        return level;
+    };
+    const auto closes = [](const CacheLevel::RecordVictimAttribution& a) {
+        return a.decisions == a.dead_first + a.unpressured + a.ungoverned_first +
+            a.base_not_governed + a.base_no_future + a.base_kept + a.overridden +
+            a.uninformed_base + a.no_bound_compare;
+    };
+    // Way 0 is a governed property line with no bound at RRPV 7; ways 1 to 3
+    // lie outside the property array at RRPV 0, 1 and 2.
+    const uint8_t mixed_rrpv[4] = {7, 0, 1, 2};
+    std::vector<CacheLine> mixed(4);
+    for (std::size_t index = 0; index < mixed.size(); ++index) {
+        mixed[index].valid = true;
+        mixed[index].line_addr = index == 0 ? base : base + 2048 + index * 64;
+        mixed[index].rrpv = mixed_rrpv[index];
+        mixed[index].last_access = 4 - index;
+    }
+    auto today = arm(true);
+    auto decided = mixed;
+    if (today->selectVictimForTest(decided) != 3 || decided[1].rrpv != 5 || decided[0].rrpv != 7 ||
+        today->getRecordVictimAttribution().ungoverned_first != 1)
+        return 2;
+    auto fallback = arm(true);
+    fallback->setRecordUninformedBase(true);
+    decided = mixed;
+    if (fallback->selectVictimForTest(decided) != 0 || decided[1].rrpv != 0 || decided[3].rrpv != 2 ||
+        fallback->getRecordVictimAttribution().uninformed_base != 1 ||
+        !closes(fallback->getRecordVictimAttribution()))
+        return 3;
+    // Four governed lines: way 0 live and near at RRPV 7, way 1 live and far.
+    std::vector<CacheLine> governed(4);
+    const uint8_t governed_rrpv[4] = {7, 3, 1, 0};
+    for (std::size_t index = 0; index < governed.size(); ++index) {
+        governed[index].valid = true;
+        governed[index].line_addr = base + index * 64;
+        governed[index].rrpv = governed_rrpv[index];
+        governed[index].last_access = 4 - index;
+    }
+    governed[0].record_metadata.state = governed[1].record_metadata.state = LineState::FINITE;
+    governed[0].record_metadata.value = 5;
+    governed[1].record_metadata.value = 60;
+    auto compared = arm(true);
+    decided = governed;
+    if (compared->selectVictimForTest(decided) != 1 ||
+        compared->getRecordVictimAttribution().overridden != 1)
+        return 4;
+    auto ablated = arm(true);
+    ablated->setRecordBoundCompare(false);
+    decided = governed;
+    if (ablated->selectVictimForTest(decided) != 0 ||
+        ablated->getRecordVictimAttribution().no_bound_compare != 1 ||
+        ablated->getRecordVictimAttribution().base_kept + ablated->getRecordVictimAttribution().overridden != 0 ||
+        !closes(ablated->getRecordVictimAttribution()))
+        return 5;
+    // Refused without the record replacement rule, and by prefetch admission.
+    // The levels here leave the RRPV order off, whose own refusals would fire
+    // first, and each refusal must be the controls' own.
+    const auto bare = [&](bool replacement) {
+        auto level = std::make_unique<CacheLevel>("L3", 256, 64, 4, EvictionPolicy::GRASP);
+        level->initGraphContext(&context);
+        level->prepareRecord(EvictionPolicy::GRASP);
+        level->configureRecord(configuration, replacement, EvictionPolicy::GRASP);
+        level->advanceRecordProgress(1);
+        return level;
+    };
+    const auto refused_by_controls = [](auto&& attempt) {
+        try {
+            attempt();
+        } catch (const std::logic_error& error) {
+            return std::string(error.what()).find("record victim controls") != std::string::npos;
+        }
+        return false;
+    };
+    for (int control = 0; control < 2; ++control) {
+        auto transport = bare(false);
+        auto admission = bare(true);
+        if (control == 0) {
+            transport->setRecordUninformedBase(true);
+            admission->setRecordUninformedBase(true);
+        } else {
+            transport->setRecordBoundCompare(false);
+            admission->setRecordBoundCompare(false);
+        }
+        decided = mixed;
+        if (!refused_by_controls([&] { transport->selectVictimForTest(decided); }))
+            return 6;
+        if (!refused_by_controls([&] { admission->canAdmitRecordPrefetch(base, 1); }))
+            return 7;
+    }
+    return 0;
+}
+
 int main() {
     using namespace cache_sim;
     ecg_record::Requirements requirements;
@@ -1544,6 +1675,10 @@ int main() {
     if (const int check = exerciseRecordInspection()) {
         std::printf("record inspection check %d failed [FAIL]\n", check);
         return 21;
+    }
+    if (const int check = exerciseVictimControls()) {
+        std::printf("record victim controls check %d failed [FAIL]\n", check);
+        return 22;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;

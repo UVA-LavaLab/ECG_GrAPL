@@ -76,7 +76,8 @@ def _runner_labels(metadata):
             options.frontier_gating, options.grasp_reference, options.queries,
             options.record_governed_first, options.record_store_bound,
             options.record_expiry_clock, options.record_pressure_gate,
-            options.record_rrpv_order)
+            options.record_rrpv_order, uninformed_base=options.record_uninformed_base,
+            bound_compare=options.record_bound_compare)
     # PageRank: a separate kernel configured by environment, labelled by its
     # own branch of output_policy_labels.
     from types import SimpleNamespace
@@ -87,7 +88,9 @@ def _runner_labels(metadata):
         record_expiry_clock=str(metadata.get("record_expiry_clock", "progress")),
         record_pressure_gate=str(metadata.get("record_pressure_gate", "no")),
         record_rrpv_order=str(metadata.get("record_rrpv_order", "no")),
-        record_written_in_place=str(metadata.get("record_written_in_place", "no")))
+        record_written_in_place=str(metadata.get("record_written_in_place", "no")),
+        record_uninformed_base=str(metadata.get("record_uninformed_base", "no")),
+        record_bound_compare=str(metadata.get("record_bound_compare", "on")))
     return roi_matrix.output_policy_labels(
         args, [parse_policy_spec(policy) for policy in policies])
 
@@ -128,7 +131,9 @@ def test_resolved_expectations_match_what_the_runner_emits(tmp_path, profile):
             str(metadata.get("record_expiry_clock", "progress")),
             str(metadata.get("record_pressure_gate", "no")),
             str(metadata.get("record_rrpv_order", "no")),
-            str(metadata.get("record_written_in_place", "no")))
+            str(metadata.get("record_written_in_place", "no")),
+            str(metadata.get("record_uninformed_base", "no")),
+            str(metadata.get("record_bound_compare", "on")))
         assert sorted(gate) == sorted(produced), (
             f"{job.get('job_id', '?')}: the completion and marker checks expect "
             f"{gate} but the runner emits {produced}; a correctly executed cell "
@@ -154,7 +159,9 @@ def test_paired_arms_resolve_to_distinct_labels(tmp_path, profile):
         arm = (str(metadata.get("record_governed_first", "no")),
                str(metadata.get("record_pressure_gate", "no")),
                str(metadata.get("record_rrpv_order", "no")),
-               str(metadata.get("record_written_in_place", "no")))
+               str(metadata.get("record_written_in_place", "no")),
+               str(metadata.get("record_uninformed_base", "no")),
+               str(metadata.get("record_bound_compare", "on")))
         cell = (str(metadata.get("benchmark")),
                 tuple(str(size) for size in metadata.get("l3_sizes") or []))
         by_cell.setdefault(cell, []).append((arm, expected))

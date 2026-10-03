@@ -371,11 +371,14 @@ enum class VictimPath : uint8_t {
     BASE_NO_FUTURE,     // the base victim is governed but carries no live bound
     BASE_KEPT,          // the base victim is governed and live; no farther candidate existed
     OVERRIDDEN,         // a farther live governed future replaced the base victim
+    // Opt-in, appended so the earlier values keep their meaning.
+    UNINFORMED_BASE,    // no governed way held a live bound; the base decision stood whole
+    NO_BOUND_COMPARE,   // the live-bound comparison is off; the governed live base stood
 };
 
 // Keep in step with VictimPath. Tests assert coverage against this rather than
 // a literal, so a new path cannot quietly narrow what they check.
-inline constexpr int kVictimPathCount = 7;
+inline constexpr int kVictimPathCount = 9;
 
 struct VictimTrace {
     VictimPath path = VictimPath::BASE_NOT_GOVERNED;
@@ -440,6 +443,17 @@ struct VictimOptions {
     // through the VictimAgeing output, which the order therefore requires.
     // Defaults false, so every existing caller and result is unchanged.
     bool rrpv_order = false;
+    // When no governed way holds a live bound (governed, FINITE and short of
+    // its deadline), take the configured base decision whole, its victim and
+    // its ageing: the GRASP scan under the RRPV order, one call of the base
+    // policy otherwise. Checked after DEAD-first and the pressure gate and
+    // before governed-first, so a set without information about its governed
+    // data is decided as the base policy decides it. Defaults false.
+    bool uninformed_base = false;
+    // Refine a governed, live base victim against the other live bounds. Off,
+    // the base victim stands with its own ageing and every earlier branch still
+    // runs: the ablation of the bound comparison alone. Defaults true.
+    bool bound_compare = true;
 };
 
 template<class SelectBaseVictim>
@@ -543,6 +557,26 @@ inline Status selectVictim(
             trace->path = VictimPath::UNPRESSURED;
         return Status::OK;
     }
+    // Opt-in: a set none of whose governed ways holds a live bound has no
+    // information for the rule to act on, so it takes the base decision whole.
+    // Decided from the ways themselves, never from the optional trace.
+    if (options.uninformed_base) {
+        bool live = false;
+        for (std::size_t index = 0; index < count && !live; ++index) {
+            if (!ways[index].property)
+                continue;
+            const auto future = resolveFuture(ways[index].state, ways[index].deadline, sequence);
+            live = future.state == State::FINITE && future.remaining > 0;
+        }
+        if (!live) {
+            victim = options.rrpv_order ? grasp_scan(any_way) : select_base_victim();
+            if (victim >= count)
+                return Status::INVALID_COUNTS;
+            if (trace)
+                trace->path = VictimPath::UNINFORMED_BASE;
+            return Status::OK;
+        }
+    }
     if (options.governed_first) {
         const std::size_t ungoverned = options.rrpv_order
             ? grasp_scan(ungoverned_way) : pick(ungoverned_way, by_recency);
@@ -566,6 +600,13 @@ inline Status selectVictim(
         if (trace)
             trace->path = ways[victim].property
                 ? VictimPath::BASE_NO_FUTURE : VictimPath::BASE_NOT_GOVERNED;
+        return Status::OK;
+    }
+    // Opt-in ablation: the governed, live base victim stands with its own
+    // ageing, without the comparison against the other live bounds.
+    if (!options.bound_compare) {
+        if (trace)
+            trace->path = VictimPath::NO_BOUND_COMPARE;
         return Status::OK;
     }
     // Override the selected base only by comparing two live property futures;

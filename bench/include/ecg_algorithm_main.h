@@ -126,6 +126,14 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value != "on" && value != "no")
                 throw std::invalid_argument("record-rrpv-order-must-be-on-or-no");
             command.options.record_rrpv_order = value == "on";
+        } else if (argument == "--record-uninformed-base") {
+            if (value != "on" && value != "no")
+                throw std::invalid_argument("record-uninformed-base-must-be-on-or-no");
+            command.options.record_uninformed_base = value == "on";
+        } else if (argument == "--record-bound-compare") {
+            if (value != "on" && value != "no")
+                throw std::invalid_argument("record-bound-compare-must-be-on-or-no");
+            command.options.record_bound_compare = value == "on";
         } else if (argument == "--grasp-reference") {
             if (value == "off") command.options.grasp_reference = GraspReferenceMode::OFF;
             else if (value == "full") command.options.grasp_reference = GraspReferenceMode::FULL;
@@ -251,6 +259,12 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
          command.options.record_base_policy != RecordBasePolicy::GRASP_PAPER))
         throw std::invalid_argument(
             "rrpv-order requires the current NEXT record replacement rule over GRASP_PAPER");
+    // Prefetch admission runs the default rule, so neither control can act there.
+    if ((command.options.record_uninformed_base || !command.options.record_bound_compare) &&
+        (!command.options.records || command.options.record_model != RecordModel::NEXT ||
+         command.options.mechanism != ecg_record::Mechanism::REPLACEMENT))
+        throw std::invalid_argument(
+            "record victim controls require the current NEXT record replacement rule without prefetch");
     if (command.options.records && command.policy != "LRU")
         throw std::invalid_argument("current-record-modes-own-their-replacement-policy");
     if (!command.options.records &&
@@ -327,6 +341,8 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
            << "\",\"record_victim_order\":\""
            << (options.record_governed_first ? "governed-first" : "base-first")
            << "\",\"record_rrpv_order\":\"" << (options.record_rrpv_order ? "on" : "no")
+           << "\",\"record_uninformed_base\":\"" << (options.record_uninformed_base ? "on" : "no")
+           << "\",\"record_bound_compare\":\"" << (options.record_bound_compare ? "on" : "no")
            << "\",\"record_pressure_gate\":\""
            << recordPressureGateName(options.record_pressure_gate)
            << "\",\"record_store_bound\":\""
@@ -453,9 +469,13 @@ int applicationMain(
         int argc, char** argv, Invoke invoke, bool allow_popt = false,
         bool allow_grasp_record_base = false, bool allow_window_observer = false,
         bool allow_window_model = false, bool allow_bfs_phases = false, bool allow_frontier_model = false,
-        bool allow_grasp_reference = false, bool allow_spmv_queries = false) {
+        bool allow_grasp_reference = false, bool allow_spmv_queries = false,
+        bool allow_victim_controls = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        if ((command.options.record_uninformed_base || !command.options.record_bound_compare) &&
+            !allow_victim_controls)
+            throw std::invalid_argument("record victim controls are cache_sim-only");
         if (command.queries > 1 && !allow_spmv_queries)
             throw std::invalid_argument("independent SpMV queries are cache_sim-only");
         if (command.options.grasp_reference != GraspReferenceMode::OFF && !allow_grasp_reference)

@@ -103,6 +103,13 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     const bool written_in_place = recordOption("ECG_RECORD_WRITTEN_IN_PLACE", 0, 1) != 0;
     if (written_in_place && !record_mode)
         throw std::invalid_argument("ECG_RECORD_WRITTEN_IN_PLACE requires a current ECG record mode");
+    // Opt-in record victim controls, as the algorithms' --record-uninformed-base
+    // and --record-bound-compare; see VictimOptions. Defaults leave the rule as it is.
+    const bool uninformed_base = recordOption("ECG_RECORD_UNINFORMED_BASE", 0, 1) != 0;
+    const bool bound_compare = recordOption("ECG_RECORD_BOUND_COMPARE", 1, 1) != 0;
+    if ((uninformed_base || !bound_compare) && !record_mode)
+        throw std::invalid_argument(
+            "ECG_RECORD_UNINFORMED_BASE and ECG_RECORD_BOUND_COMPARE require a current ECG record mode");
     ecg_record::Mechanism mechanism = ecg_record::Mechanism::TRANSPORT;
     if (record_mode && ecg_record::parseMechanismName(mechanism_name, mechanism) !=
             ecg_record::Status::OK)
@@ -112,6 +119,10 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     if (written_in_place && mechanism != ecg_record::Mechanism::REPLACEMENT)
         throw std::invalid_argument(
             "ECG_RECORD_WRITTEN_IN_PLACE requires the replacement mechanism without prefetch");
+    // Prefetch admission runs the default rule, and transport decides no victim.
+    if ((uninformed_base || !bound_compare) && mechanism != ecg_record::Mechanism::REPLACEMENT)
+        throw std::invalid_argument(
+            "record victim controls require the replacement mechanism without prefetch");
     double hot_fraction = 0.15;
     if (rrpv_order) {
         // Prefetch admission and transport keep asking the base victim.
@@ -233,6 +244,13 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         }
         if (written_in_place)
             std::cerr << "[ECG-PR-WRITTEN-IN-PLACE property=contribution]\n";
+        cache.setRecordUninformedBase(uninformed_base);
+        cache.setRecordBoundCompare(bound_compare);
+        if (uninformed_base)
+            std::cerr << "[ECG-PR-UNINFORMED-BASE base="
+                      << (rrpv_order ? "grasp-scan" : "base-policy") << "]\n";
+        if (!bound_compare)
+            std::cerr << "[ECG-PR-NO-BOUND-COMPARE base=stands]\n";
     }
     for (NodeID node = 0; node < graph.num_nodes(); ++node) {
         cache.readArray(scores.data(), node);
@@ -341,6 +359,10 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
         throw std::invalid_argument("ECG_RECORD_RRPV_ORDER requires a current ECG record mode");
     if (recordOption("ECG_RECORD_WRITTEN_IN_PLACE", 0, 1) != 0)
         throw std::invalid_argument("ECG_RECORD_WRITTEN_IN_PLACE requires a current ECG record mode");
+    if (recordOption("ECG_RECORD_UNINFORMED_BASE", 0, 1) != 0 ||
+        recordOption("ECG_RECORD_BOUND_COMPARE", 1, 1) == 0)
+        throw std::invalid_argument(
+            "ECG_RECORD_UNINFORMED_BASE and ECG_RECORD_BOUND_COMPARE require a current ECG record mode");
     const ScoreT init_score = 1.0f / g.num_nodes();
     const ScoreT base_score = (1.0f - kDamp) / g.num_nodes();
     pvector<ScoreT> scores(

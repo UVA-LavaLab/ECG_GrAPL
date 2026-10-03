@@ -1711,6 +1711,8 @@ public:
         uint64_t base_no_future = 0;
         uint64_t base_kept = 0;
         uint64_t overridden = 0;
+        uint64_t uninformed_base = 0;
+        uint64_t no_bound_compare = 0;
         // Decisions taken under the RRPV order; those where that order chose a
         // different way than recency would have from the same candidates; and
         // decisions whose base victim came from the LRU scan.
@@ -1977,6 +1979,21 @@ public:
         record_victim_options_.rrpv_order = rrpv_order;
     }
 
+    // The two opt-in victim controls; see VictimOptions::uninformed_base and
+    // VictimOptions::bound_compare. Like the RRPV order, refused on any path
+    // that does not run the record replacement rule.
+    void setRecordUninformedBase(bool uninformed_base) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_victim_options_.uninformed_base = uninformed_base;
+    }
+    void setRecordBoundCompare(bool bound_compare) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_victim_options_.bound_compare = bound_compare;
+    }
+    const ecg_record::VictimOptions& getRecordVictimOptions() const {
+        return record_victim_options_;
+    }
+
     // C2c: a store does not change when a line is next read, so the bound
     // stays a valid upper bound on the next potential designated read.
     void setRecordStoreKeepsBound(bool keeps) {
@@ -2193,6 +2210,9 @@ public:
         // Admission consults the base victim, which the RRPV order never uses.
         if (record_victim_options_.rrpv_order)
             throw std::logic_error("RRPV-ordered victim rule has no prefetch admission");
+        // Admission runs the default rule, so it cannot honour either control.
+        if (record_victim_options_.uninformed_base || !record_victim_options_.bound_compare)
+            throw std::logic_error("record victim controls have no prefetch admission");
         if (!record_replacement_)
             return true;
         const auto& set = cache_[getSetIndex(address)];
@@ -2676,6 +2696,13 @@ private:
              (record_configured_ ? !record_replacement_
                                  : !record_prepared_ || record_base_policy_ != EvictionPolicy::GRASP)))
             throw std::logic_error("RRPV-ordered victim rule reached a recency scan");
+        // The uninformed fallback and the comparison switch act only inside the
+        // record replacement rule; before a binding the base policy decides
+        // setup, where neither has anything to act on.
+        if ((record_victim_options_.uninformed_base || !record_victim_options_.bound_compare) &&
+            (window_profile_ || frontier_profile_ || grasp_phase_scoped_ ||
+             (record_configured_ && !record_replacement_)))
+            throw std::logic_error("record victim controls reached a path without the record rule");
         if (grasp_phase_scoped_ && !grasp_graph_pass_)
             return findVictimLRU(set);
         if (window_profile_ || frontier_profile_) {
@@ -4004,6 +4031,8 @@ private:
           case ecg_record::VictimPath::BASE_NO_FUTURE: ++a.base_no_future; break;
           case ecg_record::VictimPath::BASE_KEPT: ++a.base_kept; break;
           case ecg_record::VictimPath::OVERRIDDEN: ++a.overridden; break;
+          case ecg_record::VictimPath::UNINFORMED_BASE: ++a.uninformed_base; break;
+          case ecg_record::VictimPath::NO_BOUND_COMPARE: ++a.no_bound_compare; break;
         }
         a.rrpv_changed += trace.rrpv_changed;
         a.census_governed += trace.governed;
@@ -4387,6 +4416,14 @@ public:
 
     void setRecordRrpvOrder(bool rrpv_order) {
         l3_->setRecordRrpvOrder(rrpv_order);
+    }
+
+    void setRecordUninformedBase(bool uninformed_base) {
+        l3_->setRecordUninformedBase(uninformed_base);
+    }
+
+    void setRecordBoundCompare(bool bound_compare) {
+        l3_->setRecordBoundCompare(bound_compare);
     }
 
     void setRecordStoreKeepsBound(bool keeps) {
@@ -5521,6 +5558,13 @@ public:
             ss << "  \"ecg_record_victim_base_no_future\": " << a.base_no_future << ",\n";
             ss << "  \"ecg_record_victim_base_kept\": " << a.base_kept << ",\n";
             ss << "  \"ecg_record_victim_overridden\": " << a.overridden << ",\n";
+            ss << "  \"ecg_record_victim_uninformed_base\": " << a.uninformed_base << ",\n";
+            ss << "  \"ecg_record_victim_no_bound_compare\": " << a.no_bound_compare << ",\n";
+            // The effective controls, so a receipt states which rule decided.
+            ss << "  \"ecg_record_uninformed_base\": "
+               << int(l3_->getRecordVictimOptions().uninformed_base) << ",\n";
+            ss << "  \"ecg_record_bound_compare\": "
+               << int(l3_->getRecordVictimOptions().bound_compare) << ",\n";
             ss << "  \"ecg_record_victim_rrpv_ordered\": " << a.rrpv_ordered << ",\n";
             ss << "  \"ecg_record_victim_rrpv_changed\": " << a.rrpv_changed << ",\n";
             ss << "  \"ecg_record_victim_base_lru\": " << a.base_lru << ",\n";
