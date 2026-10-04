@@ -113,6 +113,7 @@ class AlgorithmBackend {
         cache_.setRecordRrpvOrder(options_.record_rrpv_order);
         cache_.setRecordUninformedBase(options_.record_uninformed_base);
         cache_.setRecordBoundCompare(options_.record_bound_compare);
+        cache_.setRecordCarrierFirst(options_.record_carrier_first);
         cache_.setRecordPressureGate(recordPressureGate());
         cache_.setRecordStoreKeepsBound(options_.record_store_keeps_bound);
         cache_.setRecordDeliveredExpiryClock(options_.record_delivered_expiry_clock);

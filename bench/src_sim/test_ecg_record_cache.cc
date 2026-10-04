@@ -1538,6 +1538,131 @@ int exerciseVictimControls() {
     return 0;
 }
 
+// Carrier-first inside the record replacement rule: the precedence covers the
+// lines of the bound record stream, partial first and last lines included, and
+// nothing else the traversal does not govern; the span follows a rebinding;
+// the control is refused where the rule does not run and beside governed-first.
+int exerciseCarrierFirst() {
+    using namespace cache_sim;
+    using namespace ecg_record;
+    constexpr uint64_t vertices = 256, records = 8;
+    alignas(64) std::array<uint32_t, vertices> properties{};
+    alignas(64) std::array<uint32_t, vertices> others{};
+    std::vector<uint32_t> degrees(vertices, 1);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), vertices, records, true);
+    context.registerPropertyArray(properties.data(), vertices, 4, 256, 0.50, true);
+    context.registerPropertyArray(others.data(), vertices, 4, 256, 0.50, true);
+    Requirements requirements;
+    requirements.vertex_count = vertices;
+    requirements.record_count = records;
+    Layout layout;
+    if (selectLayout(requirements, layout) != Status::OK || layout.record_bytes != 4)
+        return 1;
+    const uint64_t base = reinterpret_cast<uint64_t>(properties.data());
+    const uint64_t other = reinterpret_cast<uint64_t>(others.data());
+    // Eight four-byte records from 48 bytes into a line: two partial lines.
+    const uint64_t stream = base + 8192 + 48;
+    NativeConfiguration configuration;
+    packLayout(layout, configuration.layout_descriptor);
+    packProperty({PropertyKind::U32, 4, TraversalMode::ORDERED_FILTERED},
+                 configuration.property_descriptor);
+    configuration.record_base = stream;
+    configuration.property_base = base;
+    configuration.record_count = records;
+    configuration.vertex_count = vertices;
+    configuration.context = configuration.generation = 1;
+    configuration.control = kNativeEnable | kNativeManagedPasses;
+    const auto level_with = [&](bool replacement, bool carrier, bool governed) {
+        auto level = std::make_unique<CacheLevel>("L3", 256, 64, 4, EvictionPolicy::GRASP);
+        level->initGraphContext(&context);
+        level->prepareRecord(EvictionPolicy::GRASP);
+        level->configureRecord(configuration, replacement, EvictionPolicy::GRASP);
+        level->advanceRecordProgress(1);
+        level->setRecordGovernedFirst(governed);
+        level->setRecordCarrierFirst(carrier);
+        level->setRecordRrpvOrder(replacement);
+        return level;
+    };
+    const auto closes = [](const CacheLevel::RecordVictimAttribution& a) {
+        return a.decisions == a.dead_first + a.unpressured + a.ungoverned_first +
+            a.base_not_governed + a.base_no_future + a.base_kept + a.overridden +
+            a.uninformed_base + a.no_bound_compare + a.carrier_first;
+    };
+    const auto line_at = [](uint64_t address, uint8_t rrpv, uint64_t touched) {
+        CacheLine line;
+        line.valid = true;
+        line.line_addr = address / 64 * 64;
+        line.rrpv = rrpv;
+        line.last_access = touched;
+        return line;
+    };
+    // Way 0 governed without a bound at RRPV 7; way 1 the stream's second,
+    // partial line at RRPV 0; way 2 an unbound property line at RRPV 2; way 3
+    // an ordinary line, a frontier say, at RRPV 1.
+    const std::vector<CacheLine> mixed = {
+        line_at(base, 7, 4), line_at(stream + 31, 0, 3), line_at(other, 2, 2), line_at(base + 4096, 1, 1)};
+    auto legacy = level_with(true, false, true);
+    auto decided = mixed;
+    if (legacy->selectVictimForTest(decided) != 2 || legacy->getRecordVictimAttribution().ungoverned_first != 1)
+        return 2;
+    auto carrier = level_with(true, true, false);
+    decided = mixed;
+    if (carrier->selectVictimForTest(decided) != 1 || decided[1].rrpv != 7 || decided[0].rrpv != 7 ||
+        decided[2].rrpv != 2 || decided[3].rrpv != 1 ||
+        carrier->getRecordVictimAttribution().carrier_first != 1 ||
+        !closes(carrier->getRecordVictimAttribution()))
+        return 3;
+    // The stream's first, partial line is carrier too; the lines beside the
+    // stream are not.
+    auto first = level_with(true, true, false);
+    decided = {line_at(base, 7, 4), line_at(stream, 0, 3), line_at(other, 2, 2), line_at(base + 4096, 1, 1)};
+    if (first->selectVictimForTest(decided) != 1 || first->getRecordVictimAttribution().carrier_first != 1)
+        return 4;
+    auto beside = level_with(true, true, false);
+    decided = {line_at(base, 7, 4), line_at(stream - 64, 0, 3), line_at(stream + 32 + 64, 2, 2),
+               line_at(base + 4096, 1, 1)};
+    if (beside->selectVictimForTest(decided) != 0 || beside->getRecordVictimAttribution().carrier_first != 0 ||
+        beside->getRecordVictimAttribution().base_no_future != 1 || !closes(beside->getRecordVictimAttribution()))
+        return 5;
+    // A rebinding to another stream moves the span with it.
+    NativeConfiguration moved = configuration;
+    moved.record_base = base + 12288;
+    moved.generation = 2;
+    auto rebound = level_with(true, true, false);
+    rebound->disableRecord();
+    rebound->configureRecord(moved, true, EvictionPolicy::GRASP);
+    rebound->advanceRecordProgress(1);
+    decided = mixed;
+    if (rebound->selectVictimForTest(decided) != 0 || rebound->getRecordVictimAttribution().carrier_first != 0)
+        return 6;
+    decided = {line_at(base, 7, 4), line_at(moved.record_base, 0, 3), line_at(other, 2, 2), line_at(base + 4096, 1, 1)};
+    if (rebound->selectVictimForTest(decided) != 1 || rebound->getRecordVictimAttribution().carrier_first != 1)
+        return 7;
+    // Refused without the record replacement rule, by prefetch admission, and
+    // beside governed-first.
+    const auto refused_with = [](auto&& attempt, const char* words) {
+        try {
+            attempt();
+        } catch (const std::logic_error& error) {
+            return std::string(error.what()).find(words) != std::string::npos;
+        }
+        return false;
+    };
+    auto transport = level_with(false, true, false);
+    decided = mixed;
+    if (!refused_with([&] { transport->selectVictimForTest(decided); }, "record victim controls"))
+        return 8;
+    auto admission = level_with(false, true, false);
+    if (!refused_with([&] { admission->canAdmitRecordPrefetch(base, 1); }, "record victim controls"))
+        return 9;
+    auto conflicting = level_with(true, true, true);
+    decided = mixed;
+    if (!refused_with([&] { conflicting->selectVictimForTest(decided); }, "two victim orders"))
+        return 10;
+    return 0;
+}
+
 int main() {
     using namespace cache_sim;
     ecg_record::Requirements requirements;
@@ -1679,6 +1804,10 @@ int main() {
     if (const int check = exerciseVictimControls()) {
         std::printf("record victim controls check %d failed [FAIL]\n", check);
         return 22;
+    }
+    if (const int check = exerciseCarrierFirst()) {
+        std::printf("carrier-first check %d failed [FAIL]\n", check);
+        return 23;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;

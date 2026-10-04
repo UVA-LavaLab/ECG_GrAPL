@@ -134,6 +134,10 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value != "on" && value != "no")
                 throw std::invalid_argument("record-bound-compare-must-be-on-or-no");
             command.options.record_bound_compare = value == "on";
+        } else if (argument == "--record-carrier-first") {
+            if (value != "on" && value != "no")
+                throw std::invalid_argument("record-carrier-first-must-be-on-or-no");
+            command.options.record_carrier_first = value == "on";
         } else if (argument == "--grasp-reference") {
             if (value == "off") command.options.grasp_reference = GraspReferenceMode::OFF;
             else if (value == "full") command.options.grasp_reference = GraspReferenceMode::FULL;
@@ -259,12 +263,15 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
          command.options.record_base_policy != RecordBasePolicy::GRASP_PAPER))
         throw std::invalid_argument(
             "rrpv-order requires the current NEXT record replacement rule over GRASP_PAPER");
-    // Prefetch admission runs the default rule, so neither control can act there.
-    if ((command.options.record_uninformed_base || !command.options.record_bound_compare) &&
+    // Prefetch admission runs the default rule, so no control can act there.
+    if ((command.options.record_uninformed_base || !command.options.record_bound_compare ||
+         command.options.record_carrier_first) &&
         (!command.options.records || command.options.record_model != RecordModel::NEXT ||
          command.options.mechanism != ecg_record::Mechanism::REPLACEMENT))
         throw std::invalid_argument(
             "record victim controls require the current NEXT record replacement rule without prefetch");
+    if (command.options.record_carrier_first && command.options.record_governed_first)
+        throw std::invalid_argument("governed-first and carrier-first are two victim orders, never one");
     if (command.options.records && command.policy != "LRU")
         throw std::invalid_argument("current-record-modes-own-their-replacement-policy");
     if (!command.options.records &&
@@ -339,7 +346,8 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
            << "\",\"record_preprocess\":\"" << (options.traversal_preprocessing ? "traversal" : "csr")
            << "\",\"record_reuse_scope\":\"" << recordReuseScope(options)
            << "\",\"record_victim_order\":\""
-           << (options.record_governed_first ? "governed-first" : "base-first")
+           << (options.record_carrier_first ? "carrier-first"
+               : options.record_governed_first ? "governed-first" : "base-first")
            << "\",\"record_rrpv_order\":\"" << (options.record_rrpv_order ? "on" : "no")
            << "\",\"record_uninformed_base\":\"" << (options.record_uninformed_base ? "on" : "no")
            << "\",\"record_bound_compare\":\"" << (options.record_bound_compare ? "on" : "no")
@@ -473,7 +481,8 @@ int applicationMain(
         bool allow_victim_controls = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
-        if ((command.options.record_uninformed_base || !command.options.record_bound_compare) &&
+        if ((command.options.record_uninformed_base || !command.options.record_bound_compare ||
+             command.options.record_carrier_first) &&
             !allow_victim_controls)
             throw std::invalid_argument("record victim controls are cache_sim-only");
         if (command.queries > 1 && !allow_spmv_queries)

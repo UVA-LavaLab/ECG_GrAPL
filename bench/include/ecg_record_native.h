@@ -137,6 +137,32 @@ inline bool nativePropertyLine(
     return address / 64 >= configuration.property_base / 64 && address / 64 <= last / 64;
 }
 
+// The lines of the active record stream: from the first record's line to the
+// last record's, partial first and last lines included, from the validated
+// configuration alone. The codec places the last record; validation already
+// ran it over the whole stream. A record is aligned to its width, which divides
+// the line, so the last record lies within one line. False, with an empty span,
+// when the configuration is invalid.
+inline bool nativeCarrierSpan(
+        const NativeConfiguration& configuration, uint64_t& first_line, uint64_t& last_line) {
+    first_line = last_line = 0;
+    Layout layout;
+    uint64_t last_record = 0;
+    if (validateNativeConfiguration(configuration, layout) != Status::OK ||
+        recordAddress(layout, configuration.record_base, configuration.record_count - 1,
+                      configuration.record_count, last_record) != Status::OK)
+        return false;
+    first_line = configuration.record_base / 64;
+    last_line = last_record / 64;
+    return true;
+}
+
+inline bool nativeCarrierLine(const NativeConfiguration& configuration, uint64_t address) {
+    uint64_t first_line = 0, last_line = 0;
+    return nativeCarrierSpan(configuration, first_line, last_line) &&
+           address / 64 >= first_line && address / 64 <= last_line;
+}
+
 inline Status nativeRecordAccess(
         const NativeConfiguration& configuration, uint64_t address,
         uint8_t instruction_bytes, NativeRecordAccess& output) {

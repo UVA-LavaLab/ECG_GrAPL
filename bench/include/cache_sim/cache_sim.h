@@ -1713,6 +1713,7 @@ public:
         uint64_t overridden = 0;
         uint64_t uninformed_base = 0;
         uint64_t no_bound_compare = 0;
+        uint64_t carrier_first = 0;
         // Decisions taken under the RRPV order; those where that order chose a
         // different way than recency would have from the same candidates; and
         // decisions whose base victim came from the LRU scan.
@@ -1945,6 +1946,8 @@ public:
         record_dead_bypasses_ = 0;
         record_mode_snapshot_ = true;
         record_prepared_ = true;
+        record_carrier_span_ = ecg_record::nativeCarrierSpan(
+            configuration, record_carrier_first_line_, record_carrier_last_line_);
         record_configured_ = true;
     }
 
@@ -1990,6 +1993,13 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         record_victim_options_.bound_compare = bound_compare;
     }
+    // The third victim order; see VictimOptions::carrier_first. Refused, like
+    // the two controls above, on any path that does not run the record
+    // replacement rule, and beside governed-first.
+    void setRecordCarrierFirst(bool carrier_first) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_victim_options_.carrier_first = carrier_first;
+    }
     const ecg_record::VictimOptions& getRecordVictimOptions() const {
         return record_victim_options_;
     }
@@ -2010,6 +2020,7 @@ public:
     void disableRecord() {
         std::lock_guard<std::mutex> lock(mutex_);
         record_configured_ = false;
+        record_carrier_span_ = false;
         record_receiver_.disable();
     }
 
@@ -2210,8 +2221,9 @@ public:
         // Admission consults the base victim, which the RRPV order never uses.
         if (record_victim_options_.rrpv_order)
             throw std::logic_error("RRPV-ordered victim rule has no prefetch admission");
-        // Admission runs the default rule, so it cannot honour either control.
-        if (record_victim_options_.uninformed_base || !record_victim_options_.bound_compare)
+        // Admission runs the default rule, so it cannot honour any control.
+        if (record_victim_options_.uninformed_base || !record_victim_options_.bound_compare ||
+            record_victim_options_.carrier_first)
             throw std::logic_error("record victim controls have no prefetch admission");
         if (!record_replacement_)
             return true;
@@ -2335,6 +2347,11 @@ private:
     ecg_record::NativeConfiguration record_configuration_;
     ecg_record::Receiver record_receiver_;
     bool record_configured_ = false;
+    // The bound record stream's first and last lines, decoded once when the
+    // records bind or rebind; empty while none is bound.
+    bool record_carrier_span_ = false;
+    uint64_t record_carrier_first_line_ = 0;
+    uint64_t record_carrier_last_line_ = 0;
     const ecg_window::Profile* window_profile_ = nullptr;
     const ecg_frontier::Profile* frontier_profile_ = nullptr;
     ecg_frontier::Bitmap frontier_current_{};
@@ -2356,6 +2373,11 @@ private:
 
     bool recordProperty(uint64_t address) const {
         return record_configured_ && ecg_record::nativePropertyLine(record_configuration_, address);
+    }
+
+    bool recordCarrier(uint64_t address) const {
+        return record_configured_ && record_carrier_span_ &&
+            address / 64 >= record_carrier_first_line_ && address / 64 <= record_carrier_last_line_;
     }
 
     void invalidateRecordObservationUnlocked(uint64_t address, uint64_t sequence) {
@@ -2409,6 +2431,7 @@ private:
         way.state = ecg_record::victimState(
             line.record_metadata, record_receiver_, record_replacement_);
         way.deadline = line.record_metadata.value;
+        way.carrier = recordCarrier(line.line_addr);
         return way;
     }
 
@@ -2696,13 +2719,16 @@ private:
              (record_configured_ ? !record_replacement_
                                  : !record_prepared_ || record_base_policy_ != EvictionPolicy::GRASP)))
             throw std::logic_error("RRPV-ordered victim rule reached a recency scan");
-        // The uninformed fallback and the comparison switch act only inside the
-        // record replacement rule; before a binding the base policy decides
-        // setup, where neither has anything to act on.
-        if ((record_victim_options_.uninformed_base || !record_victim_options_.bound_compare) &&
+        // The uninformed fallback, the comparison switch and carrier-first act
+        // only inside the record replacement rule; before a binding the base
+        // policy decides setup, where none has anything to act on.
+        if ((record_victim_options_.uninformed_base || !record_victim_options_.bound_compare ||
+             record_victim_options_.carrier_first) &&
             (window_profile_ || frontier_profile_ || grasp_phase_scoped_ ||
              (record_configured_ && !record_replacement_)))
             throw std::logic_error("record victim controls reached a path without the record rule");
+        if (record_victim_options_.governed_first && record_victim_options_.carrier_first)
+            throw std::logic_error("governed-first and carrier-first are two victim orders, never one");
         if (grasp_phase_scoped_ && !grasp_graph_pass_)
             return findVictimLRU(set);
         if (window_profile_ || frontier_profile_) {
@@ -4033,6 +4059,7 @@ private:
           case ecg_record::VictimPath::OVERRIDDEN: ++a.overridden; break;
           case ecg_record::VictimPath::UNINFORMED_BASE: ++a.uninformed_base; break;
           case ecg_record::VictimPath::NO_BOUND_COMPARE: ++a.no_bound_compare; break;
+          case ecg_record::VictimPath::CARRIER_FIRST: ++a.carrier_first; break;
         }
         a.rrpv_changed += trace.rrpv_changed;
         a.census_governed += trace.governed;
@@ -4424,6 +4451,10 @@ public:
 
     void setRecordBoundCompare(bool bound_compare) {
         l3_->setRecordBoundCompare(bound_compare);
+    }
+
+    void setRecordCarrierFirst(bool carrier_first) {
+        l3_->setRecordCarrierFirst(carrier_first);
     }
 
     void setRecordStoreKeepsBound(bool keeps) {
@@ -5560,11 +5591,14 @@ public:
             ss << "  \"ecg_record_victim_overridden\": " << a.overridden << ",\n";
             ss << "  \"ecg_record_victim_uninformed_base\": " << a.uninformed_base << ",\n";
             ss << "  \"ecg_record_victim_no_bound_compare\": " << a.no_bound_compare << ",\n";
+            ss << "  \"ecg_record_victim_carrier_first\": " << a.carrier_first << ",\n";
             // The effective controls, so a receipt states which rule decided.
             ss << "  \"ecg_record_uninformed_base\": "
                << int(l3_->getRecordVictimOptions().uninformed_base) << ",\n";
             ss << "  \"ecg_record_bound_compare\": "
                << int(l3_->getRecordVictimOptions().bound_compare) << ",\n";
+            ss << "  \"ecg_record_carrier_first\": "
+               << int(l3_->getRecordVictimOptions().carrier_first) << ",\n";
             ss << "  \"ecg_record_victim_rrpv_ordered\": " << a.rrpv_ordered << ",\n";
             ss << "  \"ecg_record_victim_rrpv_changed\": " << a.rrpv_changed << ",\n";
             ss << "  \"ecg_record_victim_base_lru\": " << a.base_lru << ",\n";

@@ -1625,6 +1625,9 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
                 getattr(args, "record_uninformed_base", "no") == "on")),
             "ECG_RECORD_BOUND_COMPARE": str(int(
                 getattr(args, "record_bound_compare", "on") == "on")),
+            # The third victim order; the kernel refuses it beside governed-first.
+            "ECG_RECORD_CARRIER_FIRST": str(int(
+                getattr(args, "record_carrier_first", "no") == "on")),
             # Sniper's record path reads SNIPER_-prefixed variables of its own,
             # so the same arm has to be named twice or it silently stays off.
             "SNIPER_ECG_RECORD_GOVERNED_FIRST": str(int(
@@ -6887,14 +6890,18 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
             options.record_governed_first, options.record_store_bound,
             options.record_expiry_clock, options.record_pressure_gate,
             options.record_rrpv_order, uninformed_base=options.record_uninformed_base,
-            bound_compare=options.record_bound_compare)
+            bound_compare=options.record_bound_compare, carrier_first=options.record_carrier_first)
     # PageRank runs through the separate pr kernel, so its labels never pass
     # through algorithm_matrix.policy_labels. Without this the opt-in arms and
     # their controls share one label and collide in the combined matrix.
     labels = [spec.label for spec in policies]
     governed_first = getattr(args, "record_governed_first", "no")
+    carrier_first = getattr(args, "record_carrier_first", "no")
     if governed_first != "no":
         labels = [algorithm_matrix.governed_first_label(label, governed_first)
+                  for label in labels]
+    if carrier_first != "no":
+        labels = [algorithm_matrix.carrier_first_label(label, carrier_first)
                   for label in labels]
     rrpv_order = getattr(args, "record_rrpv_order", "no")
     if rrpv_order != "no":
@@ -7224,6 +7231,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--record-written-in-place", choices=("no", "on"), default="no")
     parser.add_argument("--record-uninformed-base", choices=("no", "on"), default="no")
     parser.add_argument("--record-bound-compare", choices=("on", "no"), default="on")
+    parser.add_argument("--record-carrier-first", choices=("no", "on"), default="no")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--current-pr-baselines", action="store_true",
                         help="Use the common fixed PageRank arithmetic and complete CSR access stream for cache_sim baselines.")
@@ -7374,11 +7382,13 @@ def main(argv: list[str]) -> int:
     # Both native backends keep their own victim order, so the same holds here.
     if args.record_rrpv_order != "no" and args.suite != "cache-sim":
         raise SystemExit("record RRPV order is cache_sim-only")
-    # The native rules carry neither control, so a native row would bear the
-    # control's label while running the rule without it.
-    if (args.record_uninformed_base != "no" or args.record_bound_compare != "on") and \
-            args.suite != "cache-sim":
+    # The native rules carry neither control nor the carrier-first order, so a
+    # native row would bear the label while running the rule without it.
+    if (args.record_uninformed_base != "no" or args.record_bound_compare != "on" or
+            args.record_carrier_first != "no") and args.suite != "cache-sim":
         raise SystemExit("record victim controls are cache_sim-only")
+    if args.record_governed_first != "no" and args.record_carrier_first != "no":
+        raise SystemExit("governed-first and carrier-first are two victim orders, never one")
     # Only cache_sim's PageRank sets the bit: the native control words, the
     # shared algorithms kernels and the other legacy kernels never do.
     if args.record_written_in_place != "no" and (

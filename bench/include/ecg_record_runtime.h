@@ -358,6 +358,9 @@ struct WayState {
     uint8_t grasp_tier = 0;
     State state = State::UNKNOWN;
     uint64_t deadline = 0;
+    // The way holds a line of the active record carrier, the record stream this
+    // traversal reads; classified from the record configuration, never stored.
+    bool carrier = false;
 };
 
 // Passive decision-path attribution. Which branch of the victim rule fired, and
@@ -374,11 +377,12 @@ enum class VictimPath : uint8_t {
     // Opt-in, appended so the earlier values keep their meaning.
     UNINFORMED_BASE,    // no governed way held a live bound; the base decision stood whole
     NO_BOUND_COMPARE,   // the live-bound comparison is off; the governed live base stood
+    CARRIER_FIRST,      // opt-in carrier-first evicted a way of the record carrier
 };
 
 // Keep in step with VictimPath. Tests assert coverage against this rather than
 // a literal, so a new path cannot quietly narrow what they check.
-inline constexpr int kVictimPathCount = 9;
+inline constexpr int kVictimPathCount = 10;
 
 struct VictimTrace {
     VictimPath path = VictimPath::BASE_NOT_GOVERNED;
@@ -454,6 +458,11 @@ struct VictimOptions {
     // the base victim stands with its own ageing and every earlier branch still
     // runs: the ablation of the bound comparison alone. Defaults true.
     bool bound_compare = true;
+    // The third victim order, beside base-first and governed-first and
+    // exclusive with governed-first: the precedence covers only the ways of the
+    // record carrier, not every way the traversal does not govern. Defaults
+    // false.
+    bool carrier_first = false;
 };
 
 template<class SelectBaseVictim>
@@ -472,6 +481,9 @@ inline Status selectVictim(
     // The RRPV order reports the ageing its scan implies instead of applying
     // it, so a caller with nowhere to receive it cannot complete the decision.
     if (options.rrpv_order && !ageing)
+        return Status::INVALID_COUNTS;
+    // Governed-first and carrier-first are two victim orders, never one.
+    if (options.governed_first && options.carrier_first)
         return Status::INVALID_COUNTS;
     if (trace) {
         *trace = VictimTrace();
@@ -586,6 +598,25 @@ inline Status selectVictim(
                 trace->path = VictimPath::UNGOVERNED_FIRST;
                 trace->rrpv_changed = options.rrpv_order &&
                     ungoverned != pick(ungoverned_way, by_recency);
+            }
+            return Status::OK;
+        }
+    }
+    // Opt-in carrier-first: the precedence covers only the ways of the record
+    // carrier, never a governed way. A set without one takes the base decision
+    // below, never governed-first's.
+    if (options.carrier_first) {
+        const auto carrier_way = [ways](std::size_t index) {
+            return ways[index].carrier && !ways[index].property;
+        };
+        const std::size_t carrier = options.rrpv_order
+            ? grasp_scan(carrier_way) : pick(carrier_way, by_recency);
+        if (carrier != count) {
+            victim = carrier;
+            if (trace) {
+                trace->path = VictimPath::CARRIER_FIRST;
+                trace->rrpv_changed = options.rrpv_order &&
+                    carrier != pick(carrier_way, by_recency);
             }
             return Status::OK;
         }

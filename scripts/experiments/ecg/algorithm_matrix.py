@@ -61,6 +61,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--record-rrpv-order", choices=("no", "on"), default="no")
     parser.add_argument("--record-uninformed-base", choices=("no", "on"), default="no")
     parser.add_argument("--record-bound-compare", choices=("on", "no"), default="on")
+    parser.add_argument("--record-carrier-first", choices=("no", "on"), default="no")
     parser.add_argument("--record-pressure-gate", choices=("no", "on", "duel"), default="no")
     parser.add_argument("--record-store-bound", choices=("drop", "keep"), default="drop")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
@@ -88,9 +89,11 @@ def parse_options(text: str) -> argparse.Namespace:
     if parsed.record_rrpv_order != "no" and (
             parsed.record_base_policy != "GRASP_PAPER" or parsed.record_model != "next"):
         raise RecordResourceError("record RRPV order requires the GRASP_PAPER record base under the NEXT model")
-    if (parsed.record_uninformed_base != "no" or parsed.record_bound_compare != "on") and \
-            parsed.record_model != "next":
+    if (parsed.record_uninformed_base != "no" or parsed.record_bound_compare != "on" or
+            parsed.record_carrier_first != "no") and parsed.record_model != "next":
         raise RecordResourceError("record victim controls require the NEXT model")
+    if parsed.record_governed_first != "no" and parsed.record_carrier_first != "no":
+        raise RecordResourceError("governed-first and carrier-first are two victim orders, never one")
     parsed.source_list = []
     if parsed.sources:
         if not re.fullmatch(r"[0-9]+(?:,[0-9]+)*", parsed.sources):
@@ -164,6 +167,17 @@ def governed_first_label(label: str, governed_first: str) -> str:
     return label + "_GOVERNED_FIRST"
 
 
+# The third victim order takes governed-first's place in the label, since the
+# two are exclusive. Like the victim controls it acts only inside the
+# replacement rule without prefetch, under the NEXT model.
+def carrier_first_label(label: str, carrier_first: str) -> str:
+    if carrier_first == "no":
+        return label
+    require(carrier_first == "on" and label.startswith("ECG_REPLACEMENT") and "_MODEL_" not in label,
+            "record carrier-first requires the current ECG replacement policy under the NEXT model")
+    return label + "_CARRIER_FIRST"
+
+
 def rrpv_order_label(label: str, rrpv_order: str) -> str:
     if rrpv_order == "no":
         return label
@@ -227,9 +241,11 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   expiry_clock: str = "progress",
                   pressure_gate: str = "no", rrpv_order: str = "no",
                   written_in_place: str = "no", uninformed_base: str = "no",
-                  bound_compare: str = "on") -> list[str]:
-    return [bound_compare_label(uninformed_base_label(pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(written_in_place_label(rrpv_order_label(governed_first_label(record_policy_label(
-                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), rrpv_order), written_in_place), store_bound), expiry_clock), observer),
+                  bound_compare: str = "on", carrier_first: str = "no") -> list[str]:
+    require(governed_first == "no" or carrier_first == "no",
+            "governed-first and carrier-first are two victim orders, never one")
+    return [bound_compare_label(uninformed_base_label(pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(written_in_place_label(rrpv_order_label(carrier_first_label(governed_first_label(record_policy_label(
+                spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), carrier_first), rrpv_order), written_in_place), store_bound), expiry_clock), observer),
                 grasp_scope), popt_rank_mode), grasp_reference), queries), pressure_gate), uninformed_base), bound_compare)
             for spec in policies]
 
@@ -505,7 +521,8 @@ def validate_payload(
     require(options.record_rrpv_order == "no" or (
                 mode != "csr" and options.record_model == "next"),
             "record RRPV order requires the current NEXT record replacement rule")
-    require((options.record_uninformed_base == "no" and options.record_bound_compare == "on") or (
+    require((options.record_uninformed_base == "no" and options.record_bound_compare == "on" and
+             options.record_carrier_first == "no") or (
                 mode == "replacement" and options.record_model == "next"),
             "record victim controls require the current NEXT record replacement rule without prefetch")
     expected_result = contract()["references"][algorithm]
@@ -519,7 +536,8 @@ def validate_payload(
 
 
 def validate_victim_order(payload: dict[str, Any], options: argparse.Namespace) -> None:
-    expected = "governed-first" if options.record_governed_first == "on" else "base-first"
+    expected = ("carrier-first" if options.record_carrier_first == "on" else
+                "governed-first" if options.record_governed_first == "on" else "base-first")
     require(payload["workload"].get("record_victim_order") == expected,
             "record victim order does not match the requested arm")
     require(payload["workload"].get("record_store_bound") == options.record_store_bound,
@@ -537,20 +555,25 @@ def validate_victim_order(payload: dict[str, Any], options: argparse.Namespace) 
     # Wherever the cache reports its victim paths they close to its decisions and
     # agree with the controls; a requested control needs that report.
     metrics = payload.get("metrics")
-    requested = options.record_uninformed_base != "no" or options.record_bound_compare != "on"
+    requested = (options.record_uninformed_base != "no" or options.record_bound_compare != "on" or
+                 options.record_carrier_first != "no")
     if requested or isinstance(metrics, dict) and "ecg_record_victim_decisions" in metrics:
         require(isinstance(metrics, dict), "record victim controls need the cache's victim report")
         paths = ("dead_first", "unpressured", "ungoverned_first", "base_not_governed", "base_no_future",
-                 "base_kept", "overridden", "uninformed_base", "no_bound_compare")
+                 "base_kept", "overridden", "uninformed_base", "no_bound_compare", "carrier_first")
         counts = {path: _integer(metrics, "ecg_record_victim_" + path) for path in paths}
         require(sum(counts.values()) == _integer(metrics, "ecg_record_victim_decisions"),
                 "record victim paths do not close to the decisions")
         require(_integer(metrics, "ecg_record_uninformed_base") == int(options.record_uninformed_base == "on") and
-                _integer(metrics, "ecg_record_bound_compare") == int(options.record_bound_compare == "on"),
+                _integer(metrics, "ecg_record_bound_compare") == int(options.record_bound_compare == "on") and
+                _integer(metrics, "ecg_record_carrier_first") == int(options.record_carrier_first == "on"),
                 "effective record victim controls do not match the requested arm")
+        # Each precedence path belongs to its own victim order.
         require((options.record_uninformed_base == "on" or counts["uninformed_base"] == 0) and
                 (options.record_bound_compare == "no" or counts["no_bound_compare"] == 0) and
-                (options.record_bound_compare == "on" or counts["base_kept"] + counts["overridden"] == 0),
+                (options.record_bound_compare == "on" or counts["base_kept"] + counts["overridden"] == 0) and
+                (options.record_carrier_first == "on" or counts["carrier_first"] == 0) and
+                (options.record_governed_first == "on" or counts["ungoverned_first"] == 0),
                 "record victim paths contradict the requested controls")
 
 
@@ -1019,7 +1042,7 @@ def run_cache_cell(
             options.record_governed_first, options.record_store_bound,
             options.record_expiry_clock, options.record_pressure_gate,
             options.record_rrpv_order, uninformed_base=options.record_uninformed_base,
-            bound_compare=options.record_bound_compare)[0]
+            bound_compare=options.record_bound_compare, carrier_first=options.record_carrier_first)[0]
         if reference:
             row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:
@@ -1098,6 +1121,8 @@ def run_cache_cell(
             command.extend(("--record-uninformed-base", options.record_uninformed_base))
         if options.record_bound_compare != "on":
             command.extend(("--record-bound-compare", options.record_bound_compare))
+        if options.record_carrier_first != "no":
+            command.extend(("--record-carrier-first", options.record_carrier_first))
         if options.record_store_bound != "drop":
             command.extend(("--record-store-bound", options.record_store_bound))
         if options.record_expiry_clock != "progress":

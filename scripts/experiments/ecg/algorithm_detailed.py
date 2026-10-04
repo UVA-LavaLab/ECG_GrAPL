@@ -208,7 +208,8 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
         options = algorithms.parse_options(args.options)
         require(options.record_pressure_gate == "no", "record pressure gate is cache_sim-only")
         require(options.record_rrpv_order == "no", "record RRPV order is cache_sim-only")
-        require(options.record_uninformed_base == "no" and options.record_bound_compare == "on",
+        require(options.record_uninformed_base == "no" and options.record_bound_compare == "on" and
+                options.record_carrier_first == "no",
                 "record victim controls are cache_sim-only")
         require(options.queries == 1, "independent SpMV queries are cache_sim-only")
         require(options.grasp_reference == "off", "GRASP reference diagnostic is cache_sim-only")

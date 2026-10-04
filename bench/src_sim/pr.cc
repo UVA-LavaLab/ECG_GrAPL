@@ -110,6 +110,12 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     if ((uninformed_base || !bound_compare) && !record_mode)
         throw std::invalid_argument(
             "ECG_RECORD_UNINFORMED_BASE and ECG_RECORD_BOUND_COMPARE require a current ECG record mode");
+    // The third victim order, as the algorithms' --record-carrier-first.
+    const bool carrier_first = recordOption("ECG_RECORD_CARRIER_FIRST", 0, 1) != 0;
+    if (carrier_first && !record_mode)
+        throw std::invalid_argument("ECG_RECORD_CARRIER_FIRST requires a current ECG record mode");
+    if (carrier_first && recordOption("ECG_RECORD_GOVERNED_FIRST", 0, 1) != 0)
+        throw std::invalid_argument("governed-first and carrier-first are two victim orders, never one");
     ecg_record::Mechanism mechanism = ecg_record::Mechanism::TRANSPORT;
     if (record_mode && ecg_record::parseMechanismName(mechanism_name, mechanism) !=
             ecg_record::Status::OK)
@@ -120,7 +126,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         throw std::invalid_argument(
             "ECG_RECORD_WRITTEN_IN_PLACE requires the replacement mechanism without prefetch");
     // Prefetch admission runs the default rule, and transport decides no victim.
-    if ((uninformed_base || !bound_compare) && mechanism != ecg_record::Mechanism::REPLACEMENT)
+    if ((uninformed_base || !bound_compare || carrier_first) &&
+        mechanism != ecg_record::Mechanism::REPLACEMENT)
         throw std::invalid_argument(
             "record victim controls require the replacement mechanism without prefetch");
     double hot_fraction = 0.15;
@@ -251,6 +258,9 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
                       << (rrpv_order ? "grasp-scan" : "base-policy") << "]\n";
         if (!bound_compare)
             std::cerr << "[ECG-PR-NO-BOUND-COMPARE base=stands]\n";
+        cache.setRecordCarrierFirst(carrier_first);
+        if (carrier_first)
+            std::cerr << "[ECG-PR-CARRIER-FIRST precedence=record-carrier]\n";
     }
     for (NodeID node = 0; node < graph.num_nodes(); ++node) {
         cache.readArray(scores.data(), node);
@@ -363,6 +373,8 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
         recordOption("ECG_RECORD_BOUND_COMPARE", 1, 1) == 0)
         throw std::invalid_argument(
             "ECG_RECORD_UNINFORMED_BASE and ECG_RECORD_BOUND_COMPARE require a current ECG record mode");
+    if (recordOption("ECG_RECORD_CARRIER_FIRST", 0, 1) != 0)
+        throw std::invalid_argument("ECG_RECORD_CARRIER_FIRST requires a current ECG record mode");
     const ScoreT init_score = 1.0f / g.num_nodes();
     const ScoreT base_score = (1.0f - kDamp) / g.num_nodes();
     pvector<ScoreT> scores(

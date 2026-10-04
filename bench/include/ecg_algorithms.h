@@ -105,6 +105,9 @@ struct Options {
     // the base decision whole; off, the bound comparison is skipped (B2).
     bool record_uninformed_base = false;
     bool record_bound_compare = true;
+    // Opt-in third victim order, exclusive with governed-first: the precedence
+    // covers only the ways of the record carrier.
+    bool record_carrier_first = false;
     RecordPressureGate record_pressure_gate = RecordPressureGate::NO;
     // Opt-in: an ordinary STORE to a governed line keeps its FINITE bound,
     // because a store does not change when that line is next READ.

@@ -135,6 +135,8 @@ def _row_label_from_the_real_cell(tmp_path, extra_options):
     ("--record-governed-first on --record-rrpv-order on", "_GOVERNED_FIRST_RRPV_ORDER"),
     ("--record-governed-first on --record-rrpv-order on --record-pressure-gate duel",
      "_GOVERNED_FIRST_RRPV_ORDER_PRESSURE_DUEL"),
+    ("--record-carrier-first on", "_CARRIER_FIRST"),
+    ("--record-carrier-first on --record-rrpv-order on", "_CARRIER_FIRST_RRPV_ORDER"),
 ])
 def test_the_row_label_site_carries_every_arm(tmp_path, extra, suffix):
     base = _row_label_from_the_real_cell(tmp_path, "")
@@ -375,7 +377,7 @@ def test_pressure_gate_counts_the_lines_the_record_rule_governs(tmp_path, gate):
 
 def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", l3_ways="2",
                    rrpv="no", policy="ECG:replacement", written="no", graph_bytes=None,
-                   uninformed="no", bound="on"):
+                   uninformed="no", bound="on", carrier="no"):
     """The argv and environment the runner would execute for PageRank.
 
     PageRank is a separate executable that reads its record settings from the
@@ -398,6 +400,7 @@ def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", 
         *(("--record-written-in-place", written) if written != "no" else ()),
         *(("--record-uninformed-base", uninformed) if uninformed != "no" else ()),
         *(("--record-bound-compare", bound) if bound != "on" else ()),
+        *(("--record-carrier-first", carrier) if carrier != "no" else ()),
         "--options", f"-f {graph} -o 0 -n 1 -i 2 -t 0",
         "--policies", policy, "--l1d-size", "128B", "--l1d-ways", "2",
         "--l2-size", "256B", "--l2-ways", "2", "--l3-sizes", l3_size, "--l3-ways", l3_ways,
@@ -1552,3 +1555,339 @@ def test_a_pagerank_baseline_refuses_a_victim_control(tmp_path, monkeypatch, var
     ran = _run_kernel(command, {**env, variable: value})
     text = ran.stdout + ran.stderr
     assert ran.returncode != 0 and "require a current ECG record mode" in text, text[-600:]
+
+
+# Carrier-first (step 8): the third victim order beside base-first and
+# governed-first, exclusive with governed-first. Its precedence covers only the
+# lines of the record carrier. Like the victim controls it acts only inside
+# cache_sim's record replacement rule without prefetch; these pin it through
+# every layer and refuse it everywhere else.
+
+CARRIER_ARMS = [("no", "no", ""), ("on", "no", "_GOVERNED_FIRST"), ("no", "on", "_CARRIER_FIRST")]
+TEN_PATHS = ("dead_first", "unpressured", "ungoverned_first", "base_not_governed", "base_no_future",
+             "base_kept", "overridden", "uninformed_base", "no_bound_compare", "carrier_first")
+
+
+def test_carrier_first_labels_take_governed_firsts_place_and_are_refused_where_they_cannot_hold():
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    from scripts.experiments.ecg.record_resources import RecordResourceError
+
+    def labels(policy, **kw):
+        return algorithm_matrix.policy_labels([parse_policy_spec(policy)], **kw)[0]
+
+    for governed, carrier, suffix in CARRIER_ARMS:
+        assert labels("ECG:replacement", governed_first=governed, carrier_first=carrier) == (
+            "ECG_REPLACEMENT" + suffix)
+    assert labels("ECG:replacement", base_policy="GRASP_PAPER", carrier_first="on", rrpv_order="on",
+                  written_in_place="on", pressure_gate="duel", uninformed_base="on",
+                  bound_compare="no") == (
+        "ECG_REPLACEMENT_BASE_GRASP_PAPER_CARRIER_FIRST_RRPV_ORDER_WRITTEN_IN_PLACE_PRESSURE_DUEL"
+        "_UNINFORMED_BASE_NO_BOUND_COMPARE")
+    for policy in ("ECG:replacement-prefetch", "ECG:transport", "ECG:prefetch",
+                   "GRASP_PAPER", "LRU", "POPT:uncharged"):
+        with pytest.raises(RecordReceiptError, match="requires the current ECG replacement policy"):
+            labels(policy, carrier_first="on")
+    for model in ("window", "frontier"):
+        with pytest.raises(RecordReceiptError, match="requires the current ECG replacement policy"):
+            labels("ECG:replacement", record_model=model, carrier_first="on")
+    with pytest.raises(RecordReceiptError, match="carrier-first requires"):
+        labels("ECG:replacement", carrier_first="yes")
+    with pytest.raises(RecordReceiptError, match="two victim orders"):
+        labels("ECG:replacement", governed_first="on", carrier_first="on")
+    with pytest.raises(RecordResourceError, match="two victim orders"):
+        algorithm_matrix.parse_options(
+            "--graph g.sg --record-governed-first on --record-carrier-first on")
+    with pytest.raises(RecordResourceError, match="NEXT model"):
+        algorithm_matrix.parse_options("--graph g.sg --record-model window --record-carrier-first on")
+    assert algorithm_matrix.parse_options("--graph g.sg").record_carrier_first == "no"
+
+
+@pytest.mark.parametrize("governed,carrier,suffix", CARRIER_ARMS)
+def test_the_runner_marker_labels_carry_carrier_first(governed, carrier, suffix):
+    """The algorithms branch of output_policy_labels writes the completion
+    marker's labels, so it must carry the order the row label carries."""
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    args = SimpleNamespace(current_algorithms=True, options=(
+        f"--graph g.sg --record-governed-first {governed} --record-carrier-first {carrier}"))
+    assert roi_matrix.output_policy_labels(args, [parse_policy_spec("ECG:replacement")]) == [
+        "ECG_REPLACEMENT" + suffix]
+
+
+@pytest.mark.parametrize("governed,carrier,suffix", CARRIER_ARMS)
+def test_pagerank_branch_labels_carry_carrier_first(governed, carrier, suffix):
+    """PageRank's own label branch puts carrier-first where governed-first sits,
+    and the flow's expectation agrees, including its default-shape fast path."""
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    args = SimpleNamespace(
+        current_algorithms=False, current_pr_baselines=True,
+        record_governed_first=governed, record_carrier_first=carrier, record_store_bound="drop",
+        record_expiry_clock="progress", record_pressure_gate="no",
+        record_rrpv_order="on", record_written_in_place="on",
+        record_uninformed_base="no", record_bound_compare="on", options="")
+    produced = roi_matrix.output_policy_labels(args, [parse_policy_spec("ECG:replacement")])
+    assert produced == ["ECG_REPLACEMENT" + suffix + "_RRPV_ORDER_WRITTEN_IN_PLACE"]
+    assert produced == experiment_run.expected_labels_for(
+        ["ECG:replacement"], governed_first=governed, rrpv_order="on", written_in_place="on",
+        carrier_first=carrier)
+    assert experiment_run.expected_labels_for(
+        ["ECG:replacement"], governed_first=governed, carrier_first=carrier) == ["ECG_REPLACEMENT" + suffix]
+
+
+def test_completion_check_tells_carrier_first_from_the_other_orders(tmp_path):
+    import csv
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    arms = [(governed, carrier) for governed, carrier, _ in CARRIER_ARMS]
+    for produced_arm in arms:
+        produced = algorithm_matrix.policy_labels(
+            [parse_policy_spec("ECG:replacement")], governed_first=produced_arm[0],
+            carrier_first=produced_arm[1])[0]
+        csv_path = tmp_path / f"{'-'.join(produced_arm)}.csv"
+        with csv_path.open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["status", "policy_label"])
+            writer.writeheader()
+            writer.writerow({"status": "ok", "policy_label": produced})
+        for expected_arm in arms:
+            status, detail = experiment_run.csv_status(
+                csv_path, ["ECG:replacement"], governed_first=expected_arm[0],
+                carrier_first=expected_arm[1])
+            assert (status == "ok") == (produced_arm == expected_arm), (
+                f"{produced} checked as arm {expected_arm}: {status} {detail}")
+
+
+def test_job_status_threads_carrier_first_into_both_checks(tmp_path):
+    import csv
+    import json
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.flows import experiment_run
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    label = algorithm_matrix.policy_labels(
+        [parse_policy_spec("ECG:replacement")], carrier_first="on", rrpv_order="on")[0]
+    csv_path = tmp_path / "roi_matrix.csv"
+    with csv_path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["status", "policy_label"])
+        writer.writeheader()
+        writer.writerow({"status": "ok", "policy_label": label})
+    cell = {"l3_sizes": ["8MB"], "threads": [1], "structure_prefetch_degree": 0,
+            "config_hash": "fixture"}
+    (tmp_path / "roi_matrix.complete.json").write_text(json.dumps({
+        "complete": True, "all_rows_ok": True, "policy_labels": [label], **cell,
+        "outputs": {"roi_matrix.csv": experiment_run.output_descriptor(csv_path)}}))
+    job = experiment_run.Job(
+        job_id="fixture", stage="fixture", kind="roi_matrix", command=[],
+        out_dir=tmp_path, log_path=tmp_path / "fixture.log", metadata={
+            "policies": ["ECG:replacement"], "record_governed_first": "no",
+            "record_carrier_first": "on", "record_rrpv_order": "on", **cell})
+    assert experiment_run.job_csv_status(job) == ("ok", "1 ok rows")
+    job.metadata["record_carrier_first"] = "no"
+    assert experiment_run.job_csv_status(job)[0] != "ok"
+
+
+def test_pagerank_environment_carries_carrier_first(tmp_path, monkeypatch):
+    """A record cell carries the runner's order, never the shell's, and a baseline neither."""
+    monkeypatch.setenv("ECG_RECORD_CARRIER_FIRST", "0")
+    (tmp_path / "record").mkdir()
+    _, env = _pagerank_cell(tmp_path / "record", monkeypatch, "no", carrier="on")
+    assert (env["ECG_RECORD_CARRIER_FIRST"], env["ECG_RECORD_GOVERNED_FIRST"]) == ("1", "0")
+    monkeypatch.setenv("ECG_RECORD_CARRIER_FIRST", "1")
+    (tmp_path / "governed").mkdir()
+    _, governed = _pagerank_cell(tmp_path / "governed", monkeypatch, "no", governed="on")
+    assert (governed["ECG_RECORD_CARRIER_FIRST"], governed["ECG_RECORD_GOVERNED_FIRST"]) == ("0", "1")
+    (tmp_path / "grasp").mkdir()
+    _, grasp = _pagerank_cell(tmp_path / "grasp", monkeypatch, "no", policy="GRASP_PAPER")
+    assert "ECG_RECORD_CARRIER_FIRST" not in grasp
+
+
+@pytest.mark.parametrize("suite,refused", [
+    ("cache-sim", False), ("gem5", True), ("sniper", True), ("both", True)])
+def test_carrier_first_is_refused_where_no_backend_implements_it(tmp_path, suite, refused):
+    import subprocess
+    ran = subprocess.run([
+        sys.executable, str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", suite, "--dry-run", "--benchmark", "pr",
+        "--policies", "ECG:replacement", "--record-carrier-first", "on",
+        "--out-dir", str(tmp_path)], cwd=ROOT, capture_output=True, text=True,
+        timeout=300, check=False)
+    text = ran.stdout + ran.stderr
+    if refused:
+        assert ran.returncode != 0 and "record victim controls are cache_sim-only" in text, text[-600:]
+    else:
+        assert ran.returncode == 0, text[-600:]
+
+
+def test_the_runner_refuses_both_victim_orders(tmp_path):
+    import subprocess
+    ran = subprocess.run([
+        sys.executable, str(ROOT / "scripts/experiments/ecg/roi_matrix.py"),
+        "--suite", "cache-sim", "--dry-run", "--benchmark", "pr",
+        "--policies", "ECG:replacement", "--record-carrier-first", "on",
+        "--record-governed-first", "on", "--out-dir", str(tmp_path)], cwd=ROOT,
+        capture_output=True, text=True, timeout=300, check=False)
+    text = ran.stdout + ran.stderr
+    assert ran.returncode != 0 and "two victim orders" in text, text[-600:]
+
+
+@pytest.mark.parametrize("backend", ["gem5", "sniper"])
+def test_native_algorithm_cells_refuse_carrier_first(tmp_path, backend):
+    from scripts.experiments.ecg import algorithm_detailed, roi_matrix
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    graph = tmp_path / "pressure512.sg"
+    graph.write_bytes(algorithm_outputs()[graph.name][0])
+    args = roi_matrix.parse_args([
+        "--suite", backend, "--benchmark", "spmv", "--current-algorithms", "--ecg-equivalence",
+        "--options", f"--graph {graph} --record-carrier-first on",
+        "--policies", "ECG:replacement", "--dry-run", "--out-dir", str(tmp_path)])
+    rows = algorithm_detailed.run_cell(
+        args, tmp_path, roi_matrix.parse_policy_spec("ECG:replacement"), "32kB", backend, roi_matrix)
+    assert rows and rows[0]["status"] == "error", rows
+    assert "record victim controls are cache_sim-only" in rows[0].get("error", ""), rows[0].get("error")
+
+
+@pytest.mark.parametrize("carrier", [None, "no", "on"])
+def test_the_flow_carries_carrier_first_to_the_pagerank_runner(tmp_path, carrier):
+    """The stage setting reaches the runner's argv, the labels and the metadata, never
+    PageRank's GAPBS options; absent, the command is the one it was before."""
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.policy_specs import parse_policy_spec
+    governed = "no" if carrier == "on" else "on"
+    ran, jobs = _flow_jobs(tmp_path, algorithm_record_carrier_first=carrier,
+                           algorithm_record_governed_first=governed)
+    assert ran.returncode == 0 and len(jobs) == 1, (ran.stdout + ran.stderr)[-600:]
+    command, metadata = jobs[0]["command"], jobs[0]["metadata"]
+    if carrier is None:
+        assert "--record-carrier-first" not in command
+    else:
+        assert command[command.index("--record-carrier-first") + 1] == carrier
+    assert metadata["record_carrier_first"] == (carrier or "no")
+    # The flag, not the word: pytest names tmp_path, and so the graph path, after the test.
+    assert "--record-carrier-first" not in str(metadata["options"])
+    args = roi_matrix.parse_args(command[3:])
+    produced = roi_matrix.output_policy_labels(
+        args, [parse_policy_spec(policy) for policy in args.policies])
+    expected = "ECG_REPLACEMENT_CARRIER_FIRST" if carrier == "on" else "ECG_REPLACEMENT_GOVERNED_FIRST"
+    assert metadata["expected_policy_labels"] == produced == [expected]
+
+
+@pytest.mark.parametrize("settings,words", [
+    ({"algorithm_record_carrier_first": "yes"}, ("invalid current record-carrier-first record selection",)),
+    ({"algorithm_record_carrier_first": "on", "current_pr_baselines": None},
+     ("invalid current record-carrier-first record selection",)),
+    ({"algorithm_record_carrier_first": "on"},
+     ("invalid current record-carrier-first record selection", "two victim orders")),
+])
+def test_the_flow_refuses_carrier_first_it_cannot_deliver(tmp_path, settings, words):
+    ran, _ = _flow_jobs(tmp_path, **settings)
+    text = ran.stdout + ran.stderr
+    assert ran.returncode != 0 and all(word in text for word in words), text[-600:]
+
+
+def test_carrier_first_reaches_the_algorithms_kernel(tmp_path):
+    """Through the runner each victim order reaches the cache's rule: the receipt states
+    it, the ten paths close, only its own precedence path fires, the result holds, and
+    the runner's validator refuses a receipt that contradicts it."""
+    import copy
+    import json
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    if not (ROOT / "bench/bin_sim/algorithms").is_file():
+        pytest.skip("current algorithm executable is not built")
+    results = {}
+    for governed, carrier, _ in CARRIER_ARMS:
+        work = tmp_path / f"{governed}-{carrier}"
+        work.mkdir()
+        options = (f"--record-rrpv-order on --record-governed-first {governed} "
+                   f"--record-carrier-first {carrier}")
+        command, env = _runner_cell(work, options)
+        assert ("--record-carrier-first" in command) == (carrier == "on")
+        ran = _run_kernel(command, env)
+        assert ran.returncode == 0, (ran.stdout + ran.stderr)[-600:]
+        payload = json.loads(Path(command[command.index("--output") + 1]).read_text())
+        parsed = algorithm_matrix.parse_options(
+            f"--graph g.sg --record-base-policy GRASP_PAPER {options}")
+        algorithm_matrix.validate_victim_order(payload, parsed)
+        results[(governed, carrier)] = (payload, parsed)
+    orders = {("no", "no"): "base-first", ("on", "no"): "governed-first", ("no", "on"): "carrier-first"}
+    for (governed, carrier), (payload, _) in results.items():
+        metrics, work = payload["metrics"], payload["workload"]
+        assert work["record_victim_order"] == orders[(governed, carrier)]
+        assert metrics["ecg_record_carrier_first"] == int(carrier == "on")
+        assert sum(metrics["ecg_record_victim_" + path] for path in TEN_PATHS) == (
+            metrics["ecg_record_victim_decisions"]) > 0
+        assert (metrics["ecg_record_victim_carrier_first"] > 0) == (carrier == "on")
+        assert (metrics["ecg_record_victim_ungoverned_first"] > 0) == (governed == "on")
+        assert work["result_digest"] == results[("no", "no")][0]["workload"]["result_digest"], (
+            "a victim order changed the SpMV result")
+    payload, parsed = results[("no", "on")]
+    for change in (
+            lambda p: p["metrics"].update(
+                ecg_record_victim_carrier_first=p["metrics"]["ecg_record_victim_carrier_first"] - 1,
+                ecg_record_victim_ungoverned_first=1),
+            lambda p: p["metrics"].update(ecg_record_carrier_first=0),
+            lambda p: p["metrics"].update(
+                ecg_record_victim_carrier_first=p["metrics"]["ecg_record_victim_carrier_first"] + 1),
+            lambda p: p["metrics"].pop("ecg_record_victim_carrier_first"),
+            lambda p: p["workload"].update(record_victim_order="governed-first")):
+        forged = copy.deepcopy(payload)
+        change(forged)
+        with pytest.raises(RecordReceiptError, match="record victim|victim order|ecg_record_victim"):
+            algorithm_matrix.validate_victim_order(forged, parsed)
+    payload, parsed = results[("on", "no")]
+    forged = copy.deepcopy(payload)
+    forged["metrics"].update(ecg_record_victim_carrier_first=1,
+                             ecg_record_victim_decisions=forged["metrics"]["ecg_record_victim_decisions"] + 1)
+    with pytest.raises(RecordReceiptError, match="record victim paths contradict"):
+        algorithm_matrix.validate_victim_order(forged, parsed)
+
+
+def test_carrier_first_reaches_the_pagerank_kernel(tmp_path, monkeypatch):
+    """Through the runner PageRank's rule takes carrier-first, marks it, closes its ten
+    paths, and keeps its result."""
+    import json
+    import re
+    if not (ROOT / "bench/bin_sim/pr").is_file():
+        pytest.skip("current PageRank executable is not built")
+    results = {}
+    for governed, carrier in (("on", "no"), ("no", "on")):
+        work = tmp_path / f"{governed}-{carrier}"
+        work.mkdir()
+        command, env = _pagerank_cell(work, monkeypatch, "no", governed=governed, carrier=carrier)
+        ran = _run_kernel(command, env)
+        text = ran.stdout + ran.stderr
+        assert ran.returncode == 0, text[-600:]
+        checksum = re.search(r"\[ECG-PR-RESULT [^\]]*score_checksum=([0-9a-f]+)", text)
+        assert checksum, text[-600:]
+        results[carrier] = (json.loads(Path(env["CACHE_OUTPUT_JSON"]).read_text()), checksum.group(1), text)
+    for carrier, (payload, checksum, text) in results.items():
+        assert payload["ecg_record_carrier_first"] == int(carrier == "on")
+        assert sum(payload["ecg_record_victim_" + path] for path in TEN_PATHS) == (
+            payload["ecg_record_victim_decisions"]) > 0
+        assert (payload["ecg_record_victim_carrier_first"] > 0) == (carrier == "on")
+        assert ("[ECG-PR-CARRIER-FIRST precedence=record-carrier]" in text) == (carrier == "on")
+        assert checksum == results["no"][1], "carrier-first changed the PageRank result"
+
+
+@pytest.mark.parametrize("environment,words", [
+    ({"ECG_RECORD_CARRIER_FIRST": "1"}, "ECG_RECORD_CARRIER_FIRST requires a current ECG record mode"),
+])
+def test_a_pagerank_baseline_refuses_carrier_first(tmp_path, monkeypatch, environment, words):
+    if not (ROOT / "bench/bin_sim/pr").is_file():
+        pytest.skip("current PageRank executable is not built")
+    command, env = _pagerank_cell(tmp_path, monkeypatch, "no", policy="GRASP_PAPER")
+    ran = _run_kernel(command, {**env, **environment})
+    text = ran.stdout + ran.stderr
+    assert ran.returncode != 0 and words in text, text[-600:]
+
+
+def test_the_pagerank_kernel_refuses_both_victim_orders(tmp_path, monkeypatch):
+    if not (ROOT / "bench/bin_sim/pr").is_file():
+        pytest.skip("current PageRank executable is not built")
+    command, env = _pagerank_cell(tmp_path, monkeypatch, "no", carrier="on")
+    ran = _run_kernel(command, {**env, "ECG_RECORD_GOVERNED_FIRST": "1"})
+    text = ran.stdout + ran.stderr
+    assert ran.returncode != 0 and "two victim orders" in text, text[-600:]

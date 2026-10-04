@@ -841,7 +841,8 @@ def make_roi_job(
     # environment, as it does the RRPV order; its GAPBS options never carry them.
     for key, default, values, flag in (
             ("algorithm_record_uninformed_base", "no", ("no", "on"), "--record-uninformed-base"),
-            ("algorithm_record_bound_compare", "on", ("on", "no"), "--record-bound-compare")):
+            ("algorithm_record_bound_compare", "on", ("on", "no"), "--record-bound-compare"),
+            ("algorithm_record_carrier_first", "no", ("no", "on"), "--record-carrier-first")):
         if key in settings:
             value = str(settings[key])
             if value not in values or not (
@@ -859,6 +860,11 @@ def make_roi_job(
             raise SystemExit("invalid current governed-first record selection")
         if settings.get("current_algorithms"):
             options += " --record-governed-first " + governed
+    # Refused here in the flow's own terms, before the label code would raise.
+    if (str(settings.get("algorithm_record_governed_first", "no")) != "no" and
+            str(settings.get("algorithm_record_carrier_first", "no")) != "no"):
+        raise SystemExit("invalid current record-carrier-first record selection: "
+                         "governed-first and carrier-first are two victim orders, never one")
     if "algorithm_grasp_reference" in settings:
         reference = str(settings["algorithm_grasp_reference"])
         if not settings.get("current_algorithms") or reference not in ("off", "full", "flat", "rank"):
@@ -951,6 +957,9 @@ def make_roi_job(
         if "algorithm_record_bound_compare" in settings:
             command.extend(("--record-bound-compare",
                             str(settings["algorithm_record_bound_compare"])))
+        if "algorithm_record_carrier_first" in settings:
+            command.extend(("--record-carrier-first",
+                            str(settings["algorithm_record_carrier_first"])))
         if "algorithm_record_expiry_clock" in settings:
             command.extend(("--record-expiry-clock",
                             str(settings["algorithm_record_expiry_clock"])))
@@ -1189,6 +1198,7 @@ def make_roi_job(
     written_in_place = str(settings.get("algorithm_record_written_in_place", "no"))
     uninformed_base = str(settings.get("algorithm_record_uninformed_base", "no"))
     bound_compare = str(settings.get("algorithm_record_bound_compare", "on"))
+    carrier_first = str(settings.get("algorithm_record_carrier_first", "no"))
     if settings.get("current_algorithms"):
         parsed_algorithm = algorithm_matrix.parse_options(options)
         record_base, observer = parsed_algorithm.record_base_policy, parsed_algorithm.window_observer
@@ -1205,11 +1215,12 @@ def make_roi_job(
         rrpv_order = parsed_algorithm.record_rrpv_order
         uninformed_base = parsed_algorithm.record_uninformed_base
         bound_compare = parsed_algorithm.record_bound_compare
+        carrier_first = parsed_algorithm.record_carrier_first
     expected_policy_labels = algorithm_matrix.policy_labels(
         [parse_policy_spec(policy) for policy in all_policies], record_base, observer, record_model,
         candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating, grasp_reference, query_count,
         governed_first, store_bound, expiry_clock, pressure_gate, rrpv_order,
-        written_in_place, uninformed_base, bound_compare)
+        written_in_place, uninformed_base, bound_compare, carrier_first)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
@@ -1302,6 +1313,7 @@ def make_roi_job(
             "record_written_in_place": written_in_place,
             "record_uninformed_base": uninformed_base,
             "record_bound_compare": bound_compare,
+            "record_carrier_first": carrier_first,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1340,7 +1352,8 @@ def expected_labels_for(
         governed_first: str = "no", store_bound: str = "drop",
         expiry_clock: str = "progress", pressure_gate: str = "no",
         rrpv_order: str = "no", written_in_place: str = "no",
-        uninformed_base: str = "no", bound_compare: str = "on") -> list[str]:
+        uninformed_base: str = "no", bound_compare: str = "on",
+        carrier_first: str = "no") -> list[str]:
     """The one place that decides what output labels a job should produce.
 
     This expression previously existed in three copies, each with its own
@@ -1354,7 +1367,8 @@ def expected_labels_for(
         popt_rank_mode == "future" and grasp_reference == "off" and
         query_count == 1 and governed_first == "no" and store_bound == "drop" and
         expiry_clock == "progress" and pressure_gate == "no" and rrpv_order == "no" and
-        written_in_place == "no" and uninformed_base == "no" and bound_compare == "on")
+        written_in_place == "no" and uninformed_base == "no" and bound_compare == "on" and
+        carrier_first == "no")
     if default_shape:
         return [policy_output_label(policy) for policy in expected_policies]
     return algorithm_matrix.policy_labels(
@@ -1362,7 +1376,7 @@ def expected_labels_for(
         record_base_policy, window_observer, record_model, candidate_rrpv,
         grasp_scope, popt_rank_mode, frontier_gating, grasp_reference,
         query_count, governed_first, store_bound, expiry_clock, pressure_gate,
-        rrpv_order, written_in_place, uninformed_base, bound_compare)
+        rrpv_order, written_in_place, uninformed_base, bound_compare, carrier_first)
 
 
 def csv_status(
@@ -1375,7 +1389,8 @@ def csv_status(
         governed_first: str = "no", store_bound: str = "drop",
         expiry_clock: str = "progress", pressure_gate: str = "no",
         rrpv_order: str = "no", written_in_place: str = "no",
-        uninformed_base: str = "no", bound_compare: str = "on") -> tuple[str, str]:
+        uninformed_base: str = "no", bound_compare: str = "on",
+        carrier_first: str = "no") -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1392,7 +1407,7 @@ def csv_status(
                 candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating,
                 grasp_reference, query_count, governed_first, store_bound,
                 expiry_clock, pressure_gate, rrpv_order, written_in_place,
-                uninformed_base, bound_compare))
+                uninformed_base, bound_compare, carrier_first))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1428,10 +1443,12 @@ def job_csv_status(job: Job) -> tuple[str, str]:
     written_in_place = str(job.metadata.get("record_written_in_place", "no"))
     uninformed_base = str(job.metadata.get("record_uninformed_base", "no"))
     bound_compare = str(job.metadata.get("record_bound_compare", "on"))
+    carrier_first = str(job.metadata.get("record_carrier_first", "no"))
     status, detail = csv_status(
         job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode,
         gating, reference, queries, governed_first, store_bound, expiry_clock,
-        pressure_gate, rrpv_order, written_in_place, uninformed_base, bound_compare)
+        pressure_gate, rrpv_order, written_in_place, uninformed_base, bound_compare,
+        carrier_first)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
@@ -1476,7 +1493,8 @@ def job_csv_status(job: Job) -> tuple[str, str]:
         str(job.metadata.get("record_rrpv_order", "no")),
         str(job.metadata.get("record_written_in_place", "no")),
         str(job.metadata.get("record_uninformed_base", "no")),
-        str(job.metadata.get("record_bound_compare", "on")))
+        str(job.metadata.get("record_bound_compare", "on")),
+        str(job.metadata.get("record_carrier_first", "no")))
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),

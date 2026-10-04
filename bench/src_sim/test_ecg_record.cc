@@ -1067,7 +1067,8 @@ void testVictimTraceIsPassive() {
     const int opt_in[] = {static_cast<int>(VictimPath::UNGOVERNED_FIRST),
                           static_cast<int>(VictimPath::UNPRESSURED),
                           static_cast<int>(VictimPath::UNINFORMED_BASE),
-                          static_cast<int>(VictimPath::NO_BOUND_COMPARE)};
+                          static_cast<int>(VictimPath::NO_BOUND_COMPARE),
+                          static_cast<int>(VictimPath::CARRIER_FIRST)};
     constexpr int kOptIn = static_cast<int>(sizeof(opt_in) / sizeof(opt_in[0]));
     int covered = 0, opt_in_seen = 0;
     for (int i = 0; i < kVictimPathCount; ++i) {
@@ -1440,7 +1441,7 @@ std::size_t baseDecision(const ecg_record::WayState* ways, std::size_t count, bo
 bool sameWays(const ecg_record::WayState* a, const ecg_record::WayState* b, std::size_t count) {
     for (std::size_t i = 0; i < count; ++i)
         if (a[i].property != b[i].property || a[i].rrpv != b[i].rrpv || a[i].recency != b[i].recency ||
-            a[i].state != b[i].state || a[i].deadline != b[i].deadline)
+            a[i].state != b[i].state || a[i].deadline != b[i].deadline || a[i].carrier != b[i].carrier)
             return false;
     return true;
 }
@@ -1658,6 +1659,217 @@ void testBoundCompareOffKeepsTheBaseVictim() {
     check(bypassed > 0 && both > 0, "the random fixture reaches the refinement and both controls");
 }
 
+// Opt-in carrier-first (step 8). The precedence covers only ways of the active
+// record carrier; every other ungoverned way competes in the base order, and a
+// set without a carrier way takes the base decision, never governed-first.
+void testCarrierFirstEviction() {
+    using namespace ecg_record;
+    auto req = requirements(32);
+    req.record_count = 34;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK, "carrier-first fixture layout");
+    check(kVictimPathCount == 10 && static_cast<int>(VictimPath::CARRIER_FIRST) == 9,
+          "carrier-first appends the tenth victim path");
+    constexpr uint64_t sequence = 19;
+    VictimOptions carrier; carrier.carrier_first = true; carrier.rrpv_order = true;
+    VictimOptions governed; governed.governed_first = true; governed.rrpv_order = true;
+    unsigned calls = 0;
+    const auto base = [&calls]() { ++calls; return std::size_t{0}; };
+    std::size_t victim = 0;
+    VictimAgeing ageing;
+    VictimTrace trace;
+    const auto decide = [&](WayState* ways, std::size_t count, const VictimOptions& options) {
+        return selectVictim(layout, ways, count, sequence, base, victim, &trace, options,
+                            &ageing) == Status::OK;
+    };
+    // A governed way without information, an ordinary ungoverned way (a
+    // frontier, say) and a carrier way.
+    WayState ways[3];
+    ways[0].property = true; ways[0].state = State::UNKNOWN; ways[0].rrpv = 2; ways[0].recency = 1;
+    ways[1].rrpv = 6; ways[1].recency = 2;
+    ways[2].carrier = true; ways[2].rrpv = 3; ways[2].recency = 9;
+    check(decide(ways, 3, governed) && victim == 1 && trace.path == VictimPath::UNGOVERNED_FIRST,
+          "governed-first evicts the highest-RRPV ungoverned way, carrier or not");
+    check(decide(ways, 3, carrier) && victim == 2 && ageing.amount == 4 && ageing.ways == 0b100 &&
+          trace.path == VictimPath::CARRIER_FIRST && calls == 0,
+          "carrier-first evicts the carrier way and ages only the carrier ways");
+    check(decide(ways, 2, carrier) && victim == 1 && ageing.amount == 1 && ageing.ways == 0b11 &&
+          trace.path == VictimPath::BASE_NOT_GOVERNED && calls == 0,
+          "with no carrier way the GRASP scan over every way decides, never governed-first");
+    WayState informed[3];
+    informed[0].property = true; informed[0].state = State::FINITE;
+    informed[0].deadline = sequence + 4; informed[0].rrpv = 7;
+    informed[1].rrpv = 1;
+    informed[2].property = true; informed[2].state = State::FINITE;
+    informed[2].deadline = sequence + 40; informed[2].rrpv = 0;
+    check(decide(informed, 3, carrier) && victim == 2 && trace.path == VictimPath::OVERRIDDEN,
+          "without a carrier way the live-bound comparison still refines a governed base");
+    WayState both[3];
+    both[0].property = true; both[0].carrier = true; both[0].rrpv = 2;
+    both[1].rrpv = 7;
+    both[2].property = true; both[2].rrpv = 1;
+    check(decide(both, 3, carrier) && victim == 1 && trace.path == VictimPath::BASE_NOT_GOVERNED,
+          "a governed way is never a carrier victim");
+    // DEAD, the pressure gate and an enabled fallback keep their places ahead.
+    ways[0].state = State::DEAD;
+    check(decide(ways, 3, carrier) && victim == 0 && trace.path == VictimPath::DEAD_FIRST,
+          "explicit DEAD precedes carrier-first");
+    ways[0].state = State::UNKNOWN;
+    VictimOptions relaxed = carrier; relaxed.pressured = false;
+    check(decide(ways, 3, relaxed) && trace.path == VictimPath::UNPRESSURED,
+          "an unpressured set keeps its own path");
+    VictimOptions fallback = carrier; fallback.uninformed_base = true;
+    check(decide(ways, 3, fallback) && victim == 1 && trace.path == VictimPath::UNINFORMED_BASE,
+          "an enabled fallback decides an uninformed set before carrier-first");
+    // Two carriers at the highest RRPV: the lower way goes, only carriers age.
+    WayState tie[4];
+    tie[0].property = true; tie[0].rrpv = 7;
+    tie[1].carrier = true; tie[1].rrpv = 5; tie[1].recency = 8;
+    tie[2].rrpv = 7;
+    tie[3].carrier = true; tie[3].rrpv = 5; tie[3].recency = 2;
+    check(decide(tie, 4, carrier) && victim == 1 && ageing.amount == 2 && ageing.ways == 0b1010 &&
+          trace.rrpv_changed,
+          "two carriers at the highest RRPV: the lower way goes and only the carriers age");
+    VictimOptions recency; recency.carrier_first = true;
+    check(selectVictim(layout, tie, 4, sequence, base, victim, &trace, recency) == Status::OK &&
+          victim == 3 && calls == 0 && trace.path == VictimPath::CARRIER_FIRST,
+          "under the recency order the least recently used carrier goes");
+    VictimOptions conflicting = carrier; conflicting.governed_first = true;
+    check(!decide(tie, 4, conflicting) && victim == std::numeric_limits<std::size_t>::max(),
+          "governed-first and carrier-first together are refused");
+    // Random sets against a reference: the precedence takes the eligible
+    // carrier the order ranks first; any other set decides as base-first;
+    // legacy orders ignore the carrier flag; tracing changes nothing; no way is
+    // written.
+    std::mt19937_64 rng(0xCA221E25);
+    const State states[4] = {State::UNKNOWN, State::FINITE, State::DEAD, State::WRAP};
+    int mismatches = 0, precedence = 0, fallthrough = 0;
+    for (int trial = 0; trial < 20000; ++trial) {
+        const std::size_t count = trial % 997 == 0 ? 64 : 1 + rng() % 16;
+        const uint64_t now = 32 + rng() % 32;
+        WayState sample[64], copy[64], cleared[64];
+        bool live = false, dead = false;
+        for (std::size_t i = 0; i < count; ++i) {
+            sample[i].property = (rng() % 3) == 0;
+            sample[i].carrier = (rng() % 3) == 0;
+            sample[i].rrpv = static_cast<uint8_t>(rng() % 8);
+            sample[i].recency = rng() % 4096;
+            sample[i].state = states[rng() % 4];
+            sample[i].deadline = rng() % 128;
+            copy[i] = cleared[i] = sample[i];
+            cleared[i].carrier = false;
+            dead = dead || (sample[i].property && sample[i].state == State::DEAD);
+            live = live || (sample[i].property && sample[i].state == State::FINITE &&
+                            sample[i].deadline > now);
+        }
+        VictimOptions options;
+        options.carrier_first = true;
+        options.rrpv_order = (rng() & 1) != 0;
+        options.pressured = (rng() & 3) != 0;
+        options.uninformed_base = (rng() & 1) != 0;
+        options.bound_compare = (rng() & 3) != 0;
+        VictimOptions plain = options; plain.carrier_first = false;
+        const std::size_t base_way = rng() % count;
+        const auto pick = [base_way]() { return base_way; };
+        std::size_t a = 0, b = 0, p = 0;
+        VictimAgeing aa, ab, ap;
+        VictimTrace ta, tp;
+        const Status sa = selectVictim(layout, sample, count, now, pick, a, &ta, options, &aa);
+        const Status sb = selectVictim(layout, sample, count, now, pick, b, nullptr, options, &ab);
+        const Status sp = selectVictim(layout, sample, count, now, pick, p, &tp, plain, &ap);
+        if (sa != Status::OK || sb != Status::OK || sp != Status::OK || a != b ||
+            aa.ways != ab.ways || aa.amount != ab.amount || !sameWays(sample, copy, count)) {
+            ++mismatches;
+            continue;
+        }
+        std::size_t eligible = count;
+        uint64_t eligible_bits = 0;
+        for (std::size_t i = 0; i < count; ++i) {
+            if (!sample[i].carrier || sample[i].property)
+                continue;
+            eligible_bits |= uint64_t{1} << i;
+            const auto key = [&](std::size_t j) {
+                return std::min<uint8_t>(sample[j].rrpv, kVictimRrpvMax);
+            };
+            if (eligible == count || (options.rrpv_order ? key(i) > key(eligible)
+                                                          : sample[i].recency < sample[eligible].recency))
+                eligible = i;
+        }
+        const bool before = dead || !options.pressured || (options.uninformed_base && !live);
+        if (!before && eligible != count) {
+            ++precedence;
+            const uint8_t highest = std::min<uint8_t>(sample[eligible].rrpv, kVictimRrpvMax);
+            const bool ages = options.rrpv_order && highest < kVictimRrpvMax;
+            if (a != eligible || ta.path != VictimPath::CARRIER_FIRST ||
+                aa.amount != (ages ? kVictimRrpvMax - highest : 0) ||
+                aa.ways != (ages ? eligible_bits : 0))
+                ++mismatches;
+        } else {
+            ++fallthrough;
+            if (a != p || ta.path != tp.path || aa.ways != ap.ways || aa.amount != ap.amount)
+                ++mismatches;
+        }
+        VictimOptions legacy = plain; legacy.governed_first = (rng() & 1) != 0;
+        std::size_t l = 0, c = 0;
+        VictimAgeing al, ac;
+        VictimTrace tl, tc;
+        if (selectVictim(layout, sample, count, now, pick, l, &tl, legacy, &al) != Status::OK ||
+            selectVictim(layout, cleared, count, now, pick, c, &tc, legacy, &ac) != Status::OK ||
+            l != c || tl.path != tc.path || al.ways != ac.ways || al.amount != ac.amount)
+            ++mismatches;
+    }
+    check(mismatches == 0, "carrier-first takes the first eligible carrier, otherwise decides as base-first");
+    check(precedence > 0 && fallthrough > 0, "the random fixture reaches both the precedence and the rest");
+}
+
+// The carrier span: every line holding a byte of the active record stream,
+// partial first and last lines included, from the configuration alone.
+void testNativeCarrierSpan() {
+    using namespace ecg_record;
+    for (const uint64_t vertices : {uint64_t{32}, uint64_t{1} << 32}) {
+        auto req = requirements(vertices);
+        req.record_count = 34;
+        Layout layout;
+        NativeConfiguration configuration;
+        configuration.record_base = 0x10000 + 56;  // eight bytes short of a line boundary
+        configuration.property_base = 0x80000000;
+        configuration.vertex_count = req.vertex_count;
+        configuration.record_count = req.record_count;
+        configuration.iteration_base = uint64_t{1} << 32;
+        configuration.context = 1;
+        configuration.control = kNativeEnable | kNativeHasNext;
+        check(selectLayout(req, layout) == Status::OK &&
+              packLayout(layout, configuration.layout_descriptor) == Status::OK,
+              "carrier span fixture layout");
+        const uint64_t last = configuration.record_base + req.record_count * layout.record_bytes - 1;
+        uint64_t first_line = 0, last_line = 0;
+        check(nativeCarrierSpan(configuration, first_line, last_line) &&
+              first_line == configuration.record_base / 64 && last_line == last / 64 &&
+              last_line > first_line + 1,
+              "the span runs from the first record's line to the last record's line");
+        check(nativeCarrierLine(configuration, configuration.record_base) &&
+              nativeCarrierLine(configuration, first_line * 64) &&
+              nativeCarrierLine(configuration, last) && nativeCarrierLine(configuration, last_line * 64 + 63),
+              "every byte of a partial first or last line is carrier");
+        check(!nativeCarrierLine(configuration, first_line * 64 - 1) &&
+              !nativeCarrierLine(configuration, (last_line + 1) * 64) &&
+              !nativeCarrierLine(configuration, configuration.property_base),
+              "the adjacent lines and the property array are not carrier");
+        NativeConfiguration broken = configuration;
+        broken.layout_descriptor ^= 1;
+        check(!nativeCarrierSpan(broken, first_line, last_line) &&
+              !nativeCarrierLine(broken, configuration.record_base),
+              "an invalid configuration has no carrier");
+        broken = configuration;
+        broken.control = 0;
+        check(!nativeCarrierLine(broken, configuration.record_base), "a disabled configuration has no carrier");
+        broken = configuration;
+        broken.record_base = UINT64_MAX - 7 - (UINT64_MAX - 7) % 64;
+        check(!nativeCarrierSpan(broken, first_line, last_line),
+              "a span that would pass the end of the address space fails closed");
+    }
+}
+
 int main() {
     testAdaptiveBudgets();
     testSixBitConfiguration();
@@ -1683,6 +1895,8 @@ int main() {
     testRrpvOrderIsGraspWithoutGovernedWays();
     testUninformedSetTakesTheBaseDecision();
     testBoundCompareOffKeepsTheBaseVictim();
+    testCarrierFirstEviction();
+    testNativeCarrierSpan();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }
