@@ -435,8 +435,8 @@
       }
     },
     "ecg_rescreen_carrier_cache": {
-      "status": "blocked",
-      "reason": "Step 8 of NEXT.md section bj, planned in section br and implemented in section bs (commit 8c9a932a): carrier-first, a third record victim order, gives the precedence to the record carrier's ways instead of every ungoverned way. This profile re-screens all five kernels at 8MiB and the dense kernels at 20 and 24MiB against GRASP_PAPER, POPT_UNCHARGED, a transport control and the governed-first arm, with the filtered kernels' carrier-first rows without the bound comparison beside them. Preregistered in NEXT.md section bt before any row existed; blocked until the user approves a named budget.",
+      "status": "ready",
+      "reason": "Step 8 of NEXT.md section bj, planned in section br and implemented in section bs (commit 8c9a932a): carrier-first, a third record victim order, gives the precedence to the record carrier's ways instead of every ungoverned way. This profile re-screens all five kernels at 8MiB and the dense kernels at 20 and 24MiB against GRASP_PAPER, POPT_UNCHARGED, a transport control and the governed-first arm, with the filtered kernels' carrier-first rows without the bound comparison beside them. Preregistered in NEXT.md section bt before any row existed; the user approved the named budget rescreen-40, these 40 rows, to run once with no automatic follow-on.",
       "require_clean_worktree": true,
       "development_gate": {
         "metric": "kernel transfers K, reported first for every row: traffic_phases.kernel.total_offchip_traffic for the algorithms and the root total_offchip_traffic for PageRank, each checked against the sum of all five census segments; C = K - entry_dirty_writebacks + (exit_dirty_lines - exit_entry_dirty_lines) from the row's kernel_census, the clean boundary, reported beside K and never instead of it; algorithm setup traffic is reported apart, including the first binding's compact-weight construction, and never added to K; work after that boundary, including any later binding, remains in K; PageRank setup traffic is not measured and is reported as not measured, never as zero",
