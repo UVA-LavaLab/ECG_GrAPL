@@ -38,15 +38,20 @@ Semantic position is `s=iteration_base+j+1`, not a CPU cycle or O3 sequence.
 
 `Requirements` contains `vertex_count`, `max_vertex_id_known`,
 `max_vertex_id`, `record_count`, `traversal_count`,
-`requested_record_bytes`, and `minimum_mantissa_bits`. Let `W` be 32 or 64
-record bits:
+`requested_record_bytes`, `minimum_mantissa_bits`, `weighted`, and
+`max_weight_pattern`. Let `W` be 32 or 64 record bits:
 
 ```text
 id_bits       = max(1, bit_width(maximum encoded vertex ID))
-metadata_bits = W - id_bits
+weight_bits   = max(1, bit_width(maximum weight pattern)) if weighted, else 0
+metadata_bits = W - id_bits - weight_bits
 H             = bit_width(record_count)
 K             = H * 2^m
 ```
+
+Only kernels that read edge weights (SSSP, weighted SpMV) carry them: each
+record keeps its edge's int32 weight, as its uint32 pattern, above the token,
+so a pass reads one edge stream. The figure shows the unweighted word.
 
 The layout chooses the largest `m` such that
 `2 + 2*H*2^m <= 2^metadata_bits`. Selection tries four bytes and then eight

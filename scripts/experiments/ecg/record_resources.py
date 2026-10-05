@@ -88,10 +88,11 @@ def _graph_info(
                 count -= items
 
         maximum = 0
-        minimum_weight: int | None = None
-        maximum_weight: int | None = None
+        extrema: list[tuple[int, int]] = []
         encoded_direction = 1 if directed and traversal == "in" else 0
         for direction in range(2 if directed else 1):
+            direction_minimum: int | None = None
+            direction_maximum: int | None = None
             previous = 0
             position = 0
             for offsets in chunks(vertices + 1, "q"):
@@ -112,8 +113,15 @@ def _graph_info(
                 if weighted:
                     weights = entries[1::2]
                     low_weight, high_weight = min(weights), max(weights)
-                    minimum_weight = low_weight if minimum_weight is None else min(minimum_weight, low_weight)
-                    maximum_weight = high_weight if maximum_weight is None else max(maximum_weight, high_weight)
+                    direction_minimum = low_weight if direction_minimum is None else min(direction_minimum, low_weight)
+                    direction_maximum = high_weight if direction_maximum is None else max(direction_maximum, high_weight)
+            if weighted:
+                extrema.append((direction_minimum, direction_maximum))
+        # A record's weight lane is sized from the stream it encodes; both
+        # directions of one graph carry the same weights.
+        if len(set(extrema)) > 1:
+            raise RecordResourceError("serialized directions disagree on their weights")
+        minimum_weight, maximum_weight = extrema[0] if extrema else (None, None)
         for _ids in chunks(vertices, "i"):
             pass
         if _signature(os.fstat(handle.fileno())) != signature or _signature(path.stat()) != signature:
@@ -200,6 +208,19 @@ def popt_reservation(column_bytes: int, *, l3_bytes: int, l3_ways: int, line_siz
             "effective_bytes": sets * (l3_ways - reserved_ways) * line_size, "fits": needed_ways <= reservable}
 
 
+def record_weight_bits(graph: GraphInfo, algorithm: str) -> int:
+    """The weight lane of a record carrier (ecg_record.h): the kernels that read
+    edge weights carry them, max(1, bit width of the largest int32 weight's uint32
+    pattern); a negative weight sets bit 31. Every other carrier has none."""
+    if not graph.weighted or algorithm not in ("sssp", "spmv"):
+        return 0
+    if graph.minimum_weight is None or graph.maximum_weight is None:
+        raise RecordResourceError("a weighted carrier needs its weight extrema")
+    if graph.minimum_weight < 0:
+        return 32
+    return max(1, graph.maximum_weight.bit_length())
+
+
 def window_layout(maximum_id: int, requested_bytes: int) -> dict[str, int]:
     if not 0 <= maximum_id <= (1 << 32) - 1 or requested_bytes not in (0, 4, 8):
         raise RecordResourceError("invalid window record layout")
@@ -265,7 +286,8 @@ def plan_algorithm_resources(
             layout = resolve_layout(
                 records=carrier_records, vertices=graph.vertices, maximum_id=graph.maximum_id,
                 traversals=traversals, requested_bytes=requested_bytes,
-                minimum_mantissa_bits=minimum_mantissa_bits)
+                minimum_mantissa_bits=minimum_mantissa_bits,
+                weight_bits=record_weight_bits(graph, algorithm))
         except RecordReceiptError as error:
             raise RecordResourceError(str(error)) from error
     # TC's oriented target IDs are known only after its charged orientation.
@@ -285,12 +307,9 @@ def plan_algorithm_resources(
         scratch += 192
     shared_owner = 512 if popt_full_capacity and queries > 1 else 0
     scratch += shared_owner
-    # The weight readers keep a compact 4-byte copy of interleaved weights beside
-    # the carrier, so a record pass reads one edge stream.
-    weight_copy = 4 * carrier_records if (
-        records and not window and graph.weighted and algorithm in ("sssp", "spmv")) else 0
+    # The weight readers' records carry the weights, so no second array is planned.
     if carrier > carrier_limit or scratch + popt_bytes > auxiliary_limit or (
-            arrays + carrier + weight_copy + scratch + popt_bytes + context_bytes > workspace_limit):
+            arrays + carrier + scratch + popt_bytes + context_bytes > workspace_limit):
         raise RecordResourceError("algorithm arrays/carrier/construction exceed their explicit limits")
     directions = 2 if graph.directed else 1
     graph_peak = (directions + 1) * 8 * (graph.vertices + 1) + 12 * graph.vertices + (
@@ -307,7 +326,7 @@ def plan_algorithm_resources(
         **asdict(graph), **layout,
         "algorithm": algorithm, "carrier_records_upper": carrier_records,
         "carrier_payload_bytes_upper": carrier, "array_bytes": arrays,
-        "record_weight_bytes_upper": weight_copy,
+        "record_weight_bytes_upper": 0,
         "construction_auxiliary_bytes_upper": scratch, "graph_loader_bytes_upper": graph_peak,
         "record_preprocess": preprocessing, "construction_partitions": partitions,
         "record_model": record_model,

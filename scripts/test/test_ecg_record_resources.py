@@ -70,6 +70,22 @@ def test_weighted_graph_inspection_keeps_ids_weights_and_direction_separate(tmp_
         graph_info(path, allow_weighted=True)
 
 
+def test_weight_extrema_follow_the_encoded_direction(tmp_path):
+    """The weight lane is sized from the stream the carrier encodes, so a file whose
+    two directions disagree on their weights is refused, not averaged."""
+    path = tmp_path / "disagreeing.wsg"
+    data = struct.pack("<?qq", True, 2, 8)
+    data += struct.pack("<9q", 0, 1, 2, 2, 2, 2, 2, 2, 2)
+    data += struct.pack("<4i", 7, 4, 2, -3)
+    data += struct.pack("<9q", 0, 0, 0, 1, 1, 1, 1, 1, 2)
+    data += struct.pack("<4i", 1, -3, 0, 99)
+    data += struct.pack("<8i", *range(8))
+    path.write_bytes(data)
+    for traversal in ("in", "out"):
+        with pytest.raises(RecordResourceError, match="directions disagree"):
+            graph_info(path, allow_weighted=True, traversal=traversal)
+
+
 def test_weighted_graph_rejects_an_out_of_domain_neighbor(tmp_path):
     path = tmp_path / "invalid.wsg"
     data = struct.pack("<?qq", False, 1, 2)

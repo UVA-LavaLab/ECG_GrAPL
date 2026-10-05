@@ -15,10 +15,10 @@ from typing import Any, Callable
 
 if __package__:
     from .record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned, validate_kernel_census, validate_kernel_census_passes
-    from .record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, popt_reservation, window_layout
+    from .record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, popt_reservation, record_weight_bits, window_layout
 else:
     from record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned, validate_kernel_census, validate_kernel_census_passes
-    from record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, popt_reservation, window_layout
+    from record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, popt_reservation, record_weight_bits, window_layout
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -416,25 +416,44 @@ def validate_payload(
         maximum = _integer(work, "maximum_encoded_id")
         require(maximum <= graph.maximum_id and (algorithm == "tc" or maximum == graph.maximum_id),
                 "encoded VID bound disagrees with the actual OUT stream")
+        weight_bits = record_weight_bits(graph, algorithm)
         layout = resolve_layout(
             records=carrier_count, vertices=graph.vertices, maximum_id=maximum,
             traversals=options.repeat if algorithm in ("spmv", "tc") else 1,
-            requested_bytes=requested_bytes, minimum_mantissa_bits=minimum_mantissa_bits)
+            requested_bytes=requested_bytes, minimum_mantissa_bits=minimum_mantissa_bits,
+            weight_bits=weight_bits)
         for key in ("record_bytes", "id_bits", "metadata_bits", "mantissa_bits"):
             require(_integer(work, key) == layout[key], f"algorithm layout mismatch: {key}")
+        # The weight lane is present exactly when the carrier holds weights.
+        require(work.get("weight_bits") == layout.get("weight_bits"),
+                "algorithm layout mismatch: weight_bits")
         require(_integer(work, "carrier_allocation_bytes") == carrier_count * layout["record_bytes"] and
                 _integer(work, "construction_read_bytes") > 0 and _integer(work, "construction_write_bytes") > 0,
                 "missing charged immutable carrier construction")
-        # One edge stream per edge. BC inspects every edge its
-        # forward pass examined, so its paired loads number between one and two per
-        # inspection; the weight readers carry a compact copy of the weights.
+        # One edge stream per edge. BC inspects every edge its forward pass examined,
+        # so its paired loads number between one and two per inspection. The weight
+        # readers inspect their edges' own records for weights: SSSP every scanned
+        # edge, after its pre-bind check of every weight and before any accepted
+        # edge's paired load; SpMV once per paired load. Weight reads are counted
+        # only where memory counts are measured.
         inspections = _integer(work, "record_inspections")
-        require(_integer(work, "record_weight_bytes") ==
-                (4 * carrier_count if graph.weighted and algorithm in ("sssp", "spmv") else 0) and
+        actual = _integer(work, "actual_records")
+        weight_reads = _integer(work, "weight_reads")
+        source_edges = _integer(work, "source_edges")
+        measured = _integer(work, "memory_counts_measured") == 1
+        if algorithm == "bc":
+            inspected = inspections <= actual <= 2 * inspections
+        elif weight_bits and algorithm == "sssp":
+            inspected = actual <= inspections and (
+                not measured or (weight_reads >= source_edges and inspections == weight_reads - source_edges))
+        elif weight_bits and algorithm == "spmv":
+            inspected = inspections == actual and (not measured or inspections == weight_reads)
+        else:
+            inspected = inspections == 0
+        require(_integer(work, "record_weight_bytes") == 0 and
                 _integer(work, "record_inspection_bytes") == inspections * layout["record_bytes"] and
-                (inspections <= _integer(work, "actual_records") <= 2 * inspections
-                 if algorithm == "bc" else inspections == 0),
-                "record inspections or compact weights disagree with the kernel and its source")
+                inspected,
+                "record inspections or the weight lane disagree with the kernel and its source")
         if "record_preprocess" in work:
             require(sum(_integer(work, "constructed_" + state + "_records") for state in
                         ("finite", "wrap", "unknown")) == carrier_count,
@@ -444,6 +463,18 @@ def validate_payload(
                         "row-local preprocessing incorrectly predicts another row/pass")
         runtime = receipt(log, {"cache_sim": "ECG-RECORD-FUNCTIONAL",
                                "gem5": "ECG-RECORD-NATIVE", "sniper": "SNIPER-ECG-RECORD"}[backend])
+        # The layout the backend actually ran: cache_sim's and gem5's runtime
+        # receipts and every Sniper configuration agree with the derived layout,
+        # weight lane included.
+        ran = ([runtime] if backend != "sniper" else
+               [dict(token.split("=", 1) for token in body.split() if "=" in token)
+                for body in re.findall(r"\[SNIPER-ECG-RECORD-CONFIG ([^\]\r\n]+)\]", log)])
+        require(bool(ran), "missing runtime layout receipt")
+        for fields in ran:
+            for key in ("record_bytes", "id_bits", "metadata_bits", "horizon_bits", "mantissa_bits"):
+                require(fields.get(key) == str(layout[key]), f"runtime layout disagrees: {key}")
+            require(fields.get("weight_bits") == (str(layout["weight_bits"]) if "weight_bits" in layout else None),
+                    "runtime layout disagrees: weight_bits")
         if backend == "gem5":
             require(unsigned(runtime, "replacement") == int(mode in ("replacement", "replacement-prefetch")) and
                     unsigned(runtime, "prefetch") == int(mode in ("prefetch", "replacement-prefetch")) and
@@ -492,7 +523,8 @@ def validate_payload(
         require(_integer(work, "carrier_allocation_bytes") == 0, "CSR baseline built an ECG carrier")
     if not records or window or frontier:
         require(all(_integer(work, key) == 0 for key in (
-                    "record_inspections", "record_inspection_bytes", "record_weight_bytes")),
+                    "record_inspections", "record_inspection_bytes", "record_weight_bytes")) and
+                "weight_bits" not in work,
                 "a run without a NEXT carrier reported record inspections or weights")
     if window or frontier:
         require(algorithm == "bfs" and records and not graph.weighted and backend == "cache_sim" and

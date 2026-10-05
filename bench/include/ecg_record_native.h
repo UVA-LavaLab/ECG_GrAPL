@@ -88,6 +88,9 @@ inline Status validateNativeConfiguration(
     requirements.max_vertex_id = std::min(
         configuration.vertex_count - 1, lowMask(decoded.id_bits));
     requirements.record_count = configuration.record_count;
+    // The widest pattern the descriptor's lane holds re-derives that lane.
+    requirements.weighted = decoded.weight_bits != 0;
+    requirements.max_weight_pattern = static_cast<uint32_t>(lowMask(decoded.weight_bits));
     status = validateConfiguration(requirements, decoded);
     if (status != Status::OK)
         return status;

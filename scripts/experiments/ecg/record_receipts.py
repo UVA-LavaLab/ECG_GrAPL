@@ -231,11 +231,16 @@ def validate_kernel_census_passes(census: object) -> list[dict[str, int]]:
 def resolve_layout(
     *, records: int, vertices: int, maximum_id: int,
     traversals: int, requested_bytes: int = 0, minimum_mantissa_bits: int = 0,
+    weight_bits: int = 0,
 ) -> dict[str, int | str]:
+    """The codec's layout (ecg_record.h selectLayout). A carrier that holds edge
+    weights keeps them in a lane of `weight_bits` above the token, which takes what
+    the ID and the lane leave; the lane appears in the layout only when present."""
     require(0 < records <= UINT64_MAX and 0 < vertices <= UINT64_MAX and
             0 <= maximum_id < vertices and traversals > 0, "invalid graph/work counts")
     require(requested_bytes in (0, 4, 8) and 0 <= minimum_mantissa_bits <= 61,
             "invalid requested record width or precision")
+    require(isinstance(weight_bits, int) and 0 <= weight_bits <= 32, "invalid record weight lane")
     horizon = records.bit_length()
     require(horizon <= 63, "record horizon exceeds the current checked arithmetic")
     id_bits = max(1, maximum_id.bit_length())
@@ -243,7 +248,7 @@ def resolve_layout(
     for width in (4, 8):
         if requested_bytes and width != requested_bytes:
             continue
-        metadata = width * 8 - id_bits
+        metadata = width * 8 - id_bits - weight_bits
         if metadata <= 0:
             continue
         levels = ((1 << metadata) - 2) // (2 * horizon)
@@ -264,19 +269,25 @@ def resolve_layout(
         "horizon_bits": horizon, "exponent_bits": (horizon - 1).bit_length(),
         "mantissa_bits": mantissa, "sequence_bits": 64, "deadline_bits": 64,
     }
+    if weight_bits:
+        expected["weight_bits"] = weight_bits
     return {**expected, "state_encoding": "joint-distance", "prefetch_selection": "record-window"}
 
 
 def validate_layout(
     fields: Mapping[str, str], *, records: int, vertices: int, maximum_id: int,
     traversals: int, requested_bytes: int = 0, minimum_mantissa_bits: int = 0,
+    weight_bits: int = 0,
 ) -> dict[str, int | str]:
     expected = resolve_layout(
         records=records, vertices=vertices, maximum_id=maximum_id, traversals=traversals,
-        requested_bytes=requested_bytes, minimum_mantissa_bits=minimum_mantissa_bits)
+        requested_bytes=requested_bytes, minimum_mantissa_bits=minimum_mantissa_bits,
+        weight_bits=weight_bits)
     for key, value in expected.items():
         actual = unsigned(fields, key) if isinstance(value, int) else fields.get(key)
         require(actual == value, f"inconsistent resolved ECG field {key}")
+    require("weight_bits" in expected or "weight_bits" not in fields,
+            "an unweighted record layout reports a weight lane")
     return expected
 
 

@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <memory>
 #include <mutex>
+#include <string>
 
 #include "cache.h"
 #include "config.hpp"
@@ -261,9 +262,12 @@ commitConfiguration(uint32_t core_id)
     ecg_record::PropertyDescriptor property;
     require(ecg_record::unpackProperty(
         core.staging.property_descriptor, property), "property-descriptor");
+    // A weighted record's lane, printed only when present, as writeLayoutFields does.
+    const std::string weight = layout.weight_bits
+        ? " weight_bits=" + std::to_string(unsigned(layout.weight_bits)) : std::string();
     std::fprintf(stderr,
         "[SNIPER-ECG-RECORD-CONFIG core=%u mechanism=%s "
-        "record_bytes=%u id_bits=%u metadata_bits=%u horizon_bits=%u "
+        "record_bytes=%u id_bits=%u metadata_bits=%u%s horizon_bits=%u "
         "exponent_bits=%u mantissa_bits=%u sequence_bits=%u "
         "deadline_bits=%u state_encoding=joint-distance "
         "prefetch_selection=record-window record_count=%llu vertex_count=%llu "
@@ -280,7 +284,7 @@ commitConfiguration(uint32_t core_id)
         "update_link_model=bounded-completion-corroboration "
         "core_scope=single-core]\n",
         core_id, ecg_record::mechanismName(core.runtime.mechanism()),
-        layout.record_bytes, layout.id_bits, layout.metadata_bits,
+        layout.record_bytes, layout.id_bits, layout.metadata_bits, weight.c_str(),
         layout.horizon_bits, layout.exponent_bits,
         layout.mantissa_bits, layout.sequence_bits,
         layout.deadline_bits,

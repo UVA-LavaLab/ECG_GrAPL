@@ -40,6 +40,7 @@ enum class Status : uint8_t {
     ARITHMETIC_OVERFLOW,
     RESOURCE_LIMIT,
     NOT_READY,
+    INVALID_WEIGHT,
 };
 
 inline const char* statusName(Status status) {
@@ -59,6 +60,7 @@ inline const char* statusName(Status status) {
       case Status::ARITHMETIC_OVERFLOW: return "arithmetic-overflow";
       case Status::RESOURCE_LIMIT: return "resource-limit";
       case Status::NOT_READY: return "not-ready";
+      case Status::INVALID_WEIGHT: return "invalid-weight";
     }
     return "invalid-status";
 }
@@ -297,12 +299,17 @@ struct Requirements {
     uint64_t max_vertex_id = 0;
     uint64_t record_count = 0;
     uint64_t traversal_count = 1;
+    // The largest uint32 pattern of an int32 edge weight the records carry, when
+    // the carrier holds the weights its kernel reads.
+    uint32_t max_weight_pattern = 0;
     uint8_t requested_record_bytes = 0;
     uint8_t minimum_mantissa_bits = 0;
     bool max_vertex_id_known = false;
+    bool weighted = false;
 };
 
-// One joint state/reference grammar; only resolved bit widths vary by graph.
+// One joint state/reference grammar; only resolved bit widths vary by graph. A
+// weighted record holds its edge's weight above the token: ID | token | weight.
 struct Layout {
     uint8_t record_bytes = 0;
     uint8_t id_bits = 0;
@@ -314,6 +321,7 @@ struct Layout {
     uint8_t deadline_bits = 64;
     uint64_t codes_per_state = 0;
     uint64_t max_finite_distance = 0;
+    uint8_t weight_bits = 0;
 
     bool operator==(const Layout& other) const {
         return record_bytes == other.record_bytes && id_bits == other.id_bits &&
@@ -321,9 +329,23 @@ struct Layout {
             exponent_bits == other.exponent_bits && mantissa_bits == other.mantissa_bits &&
             sequence_bits == other.sequence_bits && deadline_bits == other.deadline_bits &&
             codes_per_state == other.codes_per_state &&
-            max_finite_distance == other.max_finite_distance;
+            max_finite_distance == other.max_finite_distance &&
+            weight_bits == other.weight_bits;
     }
 };
+
+// An int32 edge weight's bits, unchanged, and back.
+inline uint32_t weightPattern(int32_t weight) {
+    uint32_t pattern;
+    std::memcpy(&pattern, &weight, sizeof(pattern));
+    return pattern;
+}
+
+inline int32_t weightFromPattern(uint32_t pattern) {
+    int32_t weight;
+    std::memcpy(&weight, &pattern, sizeof(weight));
+    return weight;
+}
 
 namespace detail {
 
@@ -376,9 +398,11 @@ inline uint64_t decodeDistance(const Layout& layout, uint64_t code) {
 }  // namespace detail
 
 inline Status validateLayout(const Layout& layout) {
+    const unsigned width = unsigned(layout.record_bytes) * 8;
     if ((layout.record_bytes != 4 && layout.record_bytes != 8) ||
-        layout.id_bits == 0 || layout.id_bits >= unsigned(layout.record_bytes) * 8 ||
-        layout.metadata_bits != unsigned(layout.record_bytes) * 8 - layout.id_bits ||
+        layout.id_bits == 0 || layout.weight_bits > 32 ||
+        unsigned(layout.id_bits) + layout.weight_bits >= width ||
+        layout.metadata_bits != width - layout.id_bits - layout.weight_bits ||
         layout.horizon_bits == 0 || layout.horizon_bits > 63 ||
         layout.sequence_bits != 64 || layout.deadline_bits != 64) {
         return Status::INVALID_LAYOUT;
@@ -411,8 +435,11 @@ inline Status selectLayout(const Requirements& requirements, Layout& output) {
         requirements.minimum_mantissa_bits > 61) {
         return Status::INVALID_WIDTH;
     }
+    if (!requirements.weighted && requirements.max_weight_pattern != 0)
+        return Status::INVALID_WEIGHT;
     Layout layout;
     layout.id_bits = bitWidth(maximum_id);
+    layout.weight_bits = requirements.weighted ? bitWidth(requirements.max_weight_pattern) : 0;
     layout.horizon_bits = bitWidth(requirements.record_count);
     if (layout.horizon_bits > 63)
         return Status::ARITHMETIC_OVERFLOW;
@@ -425,9 +452,9 @@ inline Status selectLayout(const Requirements& requirements, Layout& output) {
             requirements.requested_record_bytes != bytes) {
             continue;
         }
-        if (layout.id_bits >= unsigned(bytes) * 8)
+        if (unsigned(layout.id_bits) + layout.weight_bits >= unsigned(bytes) * 8)
             continue;
-        const unsigned metadata_bits = unsigned(bytes) * 8 - layout.id_bits;
+        const unsigned metadata_bits = unsigned(bytes) * 8 - layout.id_bits - layout.weight_bits;
         uint8_t mantissa = 0;
         uint64_t codes = 0;
         if (!detail::precisionFor(metadata_bits, layout.horizon_bits, mantissa, codes) ||
@@ -475,13 +502,15 @@ inline Status packLayout(const Layout& layout, uint64_t& descriptor) {
         (uint64_t{layout.metadata_bits} << 24) |
         (uint64_t{layout.horizon_bits} << 32) |
         (uint64_t{layout.mantissa_bits} << 40) |
-        (uint64_t{layout.exponent_bits} << 48);
+        (uint64_t{layout.exponent_bits} << 48) |
+        (uint64_t{layout.weight_bits} << 56);
     return Status::OK;
 }
 
+// Bits 56-61 hold the weight lane's width; 62 and 63 stay reserved.
 inline Status unpackLayout(uint64_t descriptor, Layout& output) {
     output = Layout{};
-    if ((descriptor & 0xFFu) != 0xECu || (descriptor >> 56) != 0)
+    if ((descriptor & 0xFFu) != 0xECu || (descriptor >> 62) != 0)
         return Status::INVALID_DESCRIPTOR;
     Layout layout;
     layout.record_bytes = (descriptor >> 8) & 0xFFu;
@@ -490,6 +519,7 @@ inline Status unpackLayout(uint64_t descriptor, Layout& output) {
     layout.horizon_bits = (descriptor >> 32) & 0xFFu;
     layout.mantissa_bits = (descriptor >> 40) & 0xFFu;
     layout.exponent_bits = (descriptor >> 48) & 0xFFu;
+    layout.weight_bits = (descriptor >> 56) & 0x3Fu;
     uint8_t expected_mantissa = 0;
     if (!detail::precisionFor(layout.metadata_bits, layout.horizon_bits,
                               expected_mantissa, layout.codes_per_state)) {
@@ -507,8 +537,10 @@ inline Status writeLayoutFields(std::ostream& output, const Layout& layout) {
         return Status::INVALID_LAYOUT;
     output << "record_bytes=" << unsigned(layout.record_bytes)
         << " id_bits=" << unsigned(layout.id_bits)
-        << " metadata_bits=" << unsigned(layout.metadata_bits)
-        << " horizon_bits=" << unsigned(layout.horizon_bits)
+        << " metadata_bits=" << unsigned(layout.metadata_bits);
+    if (layout.weight_bits)
+        output << " weight_bits=" << unsigned(layout.weight_bits);
+    output << " horizon_bits=" << unsigned(layout.horizon_bits)
         << " exponent_bits=" << unsigned(layout.exponent_bits)
         << " mantissa_bits=" << unsigned(layout.mantissa_bits)
         << " sequence_bits=64 deadline_bits=64"
@@ -524,14 +556,28 @@ struct DecodedRecord {
     bool distance_valid = false;
 };
 
+namespace detail {
+
+// The bits of a record word above its token, where a weighted record keeps its
+// weight; zero for an unweighted word, whose token fills every residual bit.
+inline uint64_t weightLane(const Layout& layout, uint64_t word) {
+    return word & ~lowMask(unsigned(layout.id_bits) + layout.metadata_bits);
+}
+
+}  // namespace detail
+
+// A weighted record carries its edge's weight pattern, zero-extended in a lane of
+// weight_bits above the token; an unweighted layout takes only pattern zero.
 inline Status encodeRecord(
         const Layout& layout, uint64_t destination, uint64_t distance,
-        State state, uint64_t& word) {
+        State state, uint32_t weight_pattern, uint64_t& word) {
     word = 0;
     if (validateLayout(layout) != Status::OK)
         return Status::INVALID_LAYOUT;
     if (destination > lowMask(layout.id_bits))
         return Status::INVALID_ID;
+    if (weight_pattern > lowMask(layout.weight_bits))
+        return Status::INVALID_WEIGHT;
     if (state != State::UNKNOWN && state != State::FINITE &&
         state != State::DEAD && state != State::WRAP) {
         return Status::INVALID_STATE;
@@ -547,7 +593,19 @@ inline Status encodeRecord(
             token += layout.codes_per_state;
     }
     word = destination | (token << layout.id_bits);
+    if (layout.weight_bits)
+        word |= uint64_t{weight_pattern} << (unsigned(layout.id_bits) + layout.metadata_bits);
     return Status::OK;
+}
+
+// An unweighted record; a weighted layout refuses rather than invent a weight.
+inline Status encodeRecord(
+        const Layout& layout, uint64_t destination, uint64_t distance,
+        State state, uint64_t& word) {
+    word = 0;
+    if (layout.weight_bits)
+        return Status::INVALID_WEIGHT;
+    return encodeRecord(layout, destination, distance, state, 0, word);
 }
 
 inline Status decodeRecord(
@@ -557,7 +615,7 @@ inline Status decodeRecord(
         return Status::INVALID_LAYOUT;
     if ((word & ~lowMask(unsigned(layout.record_bytes) * 8)) != 0)
         return Status::INVALID_RECORD;
-    const uint64_t token = word >> layout.id_bits;
+    const uint64_t token = (word >> layout.id_bits) & lowMask(layout.metadata_bits);
     if (token > 2 * layout.codes_per_state + 1)
         return Status::INVALID_RECORD;
     DecodedRecord decoded;
@@ -571,6 +629,21 @@ inline Status decodeRecord(
         decoded.distance_valid = true;
     }
     output = decoded;
+    return Status::OK;
+}
+
+// The weight a weighted record carries, bit for bit: its lane zero-extended to the
+// uint32 pattern, read as the int32 it was.
+inline Status decodeWeight(const Layout& layout, uint64_t word, int32_t& weight) {
+    weight = 0;
+    const unsigned width = unsigned(layout.record_bytes) * 8;
+    const unsigned shift = unsigned(layout.id_bits) + layout.metadata_bits;
+    if ((layout.record_bytes != 4 && layout.record_bytes != 8) ||
+        layout.weight_bits == 0 || layout.weight_bits > 32 || shift + layout.weight_bits != width)
+        return Status::INVALID_LAYOUT;
+    if ((word & ~lowMask(width)) != 0)
+        return Status::INVALID_RECORD;
+    weight = weightFromPattern(static_cast<uint32_t>(word >> shift));
     return Status::OK;
 }
 
@@ -600,16 +673,18 @@ inline Status makePrediction(
     prediction.sequence = sequence;
     prediction.state = decoded.state == State::WRAP
         ? (has_next_iteration ? State::FINITE : State::DEAD) : decoded.state;
+    // Normalization rewrites only the token; the ID and any weight lane stay.
+    const uint64_t lane = detail::weightLane(layout, word);
     prediction.normalized_record = word;
     if (decoded.state == State::WRAP) {
         const uint64_t token = has_next_iteration
-            ? (word >> layout.id_bits) - layout.codes_per_state : 1;
-        prediction.normalized_record = decoded.destination | (token << layout.id_bits);
+            ? ((word >> layout.id_bits) & lowMask(layout.metadata_bits)) - layout.codes_per_state : 1;
+        prediction.normalized_record = decoded.destination | (token << layout.id_bits) | lane;
     }
     if (mode == TraversalMode::ORDERED_FILTERED &&
         (decoded.state == State::WRAP || decoded.state == State::DEAD)) {
         prediction.state = State::UNKNOWN;
-        prediction.normalized_record = decoded.destination;
+        prediction.normalized_record = decoded.destination | lane;
     }
     if (prediction.state == State::FINITE &&
         !checkedAdd(sequence, decoded.distance, prediction.deadline)) {

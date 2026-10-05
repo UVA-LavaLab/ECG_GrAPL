@@ -1870,6 +1870,354 @@ void testNativeCarrierSpan() {
     }
 }
 
+// A carrier whose kernel reads edge weights holds each weight in its record word,
+// above the token, in a lane as wide as the largest uint32 weight pattern it
+// encodes; the token keeps the residual width under the same precision rule.
+void testWeightedLayoutSelection() {
+    using namespace ecg_record;
+    Requirements req;
+    req.vertex_count = uint64_t{1} << 18;
+    req.record_count = 680108;
+    req.weighted = true;
+    req.max_weight_pattern = 32;
+    Layout layout;
+    check(selectLayout(req, layout) == Status::OK && layout.record_bytes == 4 &&
+          layout.id_bits == 18 && layout.weight_bits == 6 && layout.metadata_bits == 8 &&
+          layout.horizon_bits == 20 && layout.mantissa_bits == 2,
+          "a weight lane shares a four-byte word when the token keeps its rule");
+    std::ostringstream narrow;
+    check(writeLayoutFields(narrow, layout) == Status::OK &&
+          narrow.str().find("record_bytes=4 id_bits=18 metadata_bits=8 weight_bits=6 horizon_bits=20") == 0,
+          "a weighted layout names its lane beside the token width");
+    req.requested_record_bytes = 8;
+    check(selectLayout(req, layout) == Status::OK && layout.record_bytes == 8 &&
+          layout.weight_bits == 6 && layout.metadata_bits == 40 && layout.mantissa_bits == 34,
+          "a requested eight-byte word gives the token what ID and weight leave");
+    req = Requirements{};
+    req.vertex_count = 3774768;
+    req.record_count = 33037894;
+    req.weighted = true;
+    req.max_weight_pattern = 32;
+    check(selectLayout(req, layout) == Status::OK && layout.record_bytes == 8 &&
+          layout.id_bits == 22 && layout.weight_bits == 6 && layout.metadata_bits == 36 &&
+          layout.horizon_bits == 25 && layout.mantissa_bits == 30,
+          "a weighted word escapes to eight bytes when four leave no token");
+    req.requested_record_bytes = 4;
+    check(selectLayout(req, layout) == Status::FORMAT_OVERFLOW,
+          "a requested width that cannot hold ID, weight and token refuses");
+    req.requested_record_bytes = 0;
+    req.max_weight_pattern = 0;
+    check(selectLayout(req, layout) == Status::OK && layout.weight_bits == 1,
+          "an all-zero weighted carrier still owns a one-bit lane");
+    req.max_weight_pattern = weightPattern(-1);
+    check(selectLayout(req, layout) == Status::OK && layout.weight_bits == 32 &&
+          layout.record_bytes == 8 && layout.metadata_bits == 10 && layout.mantissa_bits == 4,
+          "a negative weight takes the full thirty-two-bit pattern");
+    req.weighted = false;
+    req.max_weight_pattern = 5;
+    check(selectLayout(req, layout) == Status::INVALID_WEIGHT,
+          "an unweighted requirement cannot claim a weight");
+    req.max_weight_pattern = 0;
+    std::ostringstream plain;
+    check(selectLayout(req, layout) == Status::OK && layout.weight_bits == 0 &&
+          layout.metadata_bits == unsigned(layout.record_bytes) * 8 - layout.id_bits &&
+          writeLayoutFields(plain, layout) == Status::OK &&
+          plain.str().find("weight_bits") == std::string::npos,
+          "an unweighted carrier keeps every residual bit and names no lane");
+    Requirements small;
+    small.vertex_count = 1024;
+    small.record_count = 3;
+    small.weighted = true;
+    small.max_weight_pattern = 32;
+    check(selectLayout(small, layout) == Status::OK && layout.record_bytes == 4 &&
+          layout.metadata_bits == 16 && layout.mantissa_bits == 13,
+          "a small weighted graph keeps a four-byte word");
+    small.minimum_mantissa_bits = 20;
+    check(selectLayout(small, layout) == Status::OK && layout.record_bytes == 8 &&
+          layout.mantissa_bits >= 20,
+          "a minimum precision the four-byte token lacks escapes to eight bytes");
+    Layout broken = layout;
+    ++broken.metadata_bits;
+    check(validateLayout(broken) == Status::INVALID_LAYOUT,
+          "the token width is exactly what ID and weight leave");
+    broken = layout;
+    broken.weight_bits = 33;
+    broken.metadata_bits = 64 - broken.id_bits - 33;
+    check(validateLayout(broken) == Status::INVALID_LAYOUT,
+          "a lane wider than an int32 pattern is refused");
+}
+
+void testWeightedRecordRoundTrip() {
+    using namespace ecg_record;
+    Requirements req;
+    req.vertex_count = 1024;
+    req.record_count = 3;
+    req.weighted = true;
+    const struct { State state; uint64_t distance; } tokens[] = {
+        {State::UNKNOWN, 0}, {State::DEAD, 0}, {State::FINITE, 1}, {State::WRAP, 3}};
+    for (const uint32_t maximum : {uint32_t{32}, weightPattern(-1)}) {
+        req.max_weight_pattern = maximum;
+        for (const uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+            req.requested_record_bytes = width;
+            Layout layout;
+            if (selectLayout(req, layout) != Status::OK) {
+                check(maximum == weightPattern(-1) && width == 4,
+                      "only a full-width lane is too wide for four bytes here");
+                continue;
+            }
+            const uint32_t lane = static_cast<uint32_t>(lowMask(layout.weight_bits));
+            std::vector<uint32_t> patterns = {0, 1, lane >> 1, lane};
+            if (layout.weight_bits == 32) {
+                patterns.push_back(weightPattern(INT32_MAX));
+                patterns.push_back(weightPattern(INT32_MIN));
+            }
+            for (const uint32_t pattern : patterns) {
+                for (const auto& token : tokens) {
+                    uint64_t word = 0, plain = 0;
+                    int32_t weight = 0;
+                    DecodedRecord decoded, reference;
+                    check(encodeRecord(layout, 1023, token.distance, token.state, pattern, word) ==
+                              Status::OK &&
+                          encodeRecord(layout, 1023, token.distance, token.state, 0, plain) ==
+                              Status::OK &&
+                          decodeRecord(layout, word, decoded) == Status::OK &&
+                          decodeRecord(layout, plain, reference) == Status::OK &&
+                          decoded.destination == 1023 && decoded.state == reference.state &&
+                          decoded.distance == reference.distance &&
+                          decodeWeight(layout, word, weight) == Status::OK &&
+                          weightPattern(weight) == pattern,
+                          "the weight lane round-trips without touching ID, state or bound");
+                }
+            }
+            int32_t weight = 0;
+            uint64_t word = 0;
+            if (layout.weight_bits == 6) {
+                check(encodeRecord(layout, 7, 1, State::FINITE, 32, word) == Status::OK &&
+                      decodeWeight(layout, word, weight) == Status::OK && weight == 32,
+                      "a six-bit lane holding 32 is +32, never sign-extended");
+                check(encodeRecord(layout, 7, 1, State::FINITE, 64, word) == Status::INVALID_WEIGHT &&
+                      word == 0, "a pattern outside the lane is refused, not masked");
+            } else {
+                check(encodeRecord(layout, 7, 1, State::FINITE, weightPattern(-5), word) == Status::OK &&
+                      decodeWeight(layout, word, weight) == Status::OK && weight == -5,
+                      "a full lane restores a negative weight bit for bit");
+            }
+            check(encodeRecord(layout, 7, 1, State::FINITE, word) == Status::INVALID_WEIGHT && word == 0,
+                  "a weighted word is never encoded without its weight");
+            check(decodeWeight(layout, uint64_t{1} << 63 | (width == 4 ? uint64_t{1} << 40 : 0), weight) ==
+                      (width == 4 ? Status::INVALID_RECORD : Status::OK),
+                  "a lane read refuses bits beyond the record");
+        }
+    }
+    req.weighted = false;
+    req.max_weight_pattern = 0;
+    req.requested_record_bytes = 8;
+    Layout plain;
+    uint64_t word = 0, legacy = 0;
+    int32_t weight = 0;
+    check(selectLayout(req, plain) == Status::OK && plain.weight_bits == 0 &&
+          encodeRecord(plain, 1023, 3, State::WRAP, 0, word) == Status::OK &&
+          encodeRecord(plain, 1023, 3, State::WRAP, legacy) == Status::OK && word == legacy,
+          "an unweighted word is bit-identical with or without a zero pattern");
+    check(encodeRecord(plain, 1023, 3, State::WRAP, 1, word) == Status::INVALID_WEIGHT && word == 0 &&
+          decodeWeight(plain, legacy, weight) == Status::INVALID_LAYOUT,
+          "an unweighted layout neither encodes nor decodes a weight");
+}
+
+void testWeightedNormalizationAndWindow() {
+    using namespace ecg_record;
+    Requirements req = requirements(128);
+    req.weighted = true;
+    req.max_weight_pattern = 63;
+    for (const uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        req.requested_record_bytes = width;
+        Layout layout;
+        check(selectLayout(req, layout) == Status::OK && layout.weight_bits == 6,
+              "weighted window fixture layout");
+        uint64_t word = 0;
+        int32_t weight = 0;
+        DecodedRecord decoded;
+        check(encodeRecord(layout, 18, 4, State::WRAP, 45, word) == Status::OK, "weighted WRAP word");
+        for (const bool has_next : {true, false}) {
+            Prediction prediction;
+            check(makePrediction(layout, word, 19, has_next, prediction) == Status::OK &&
+                  decodeRecord(layout, prediction.normalized_record, decoded) == Status::OK &&
+                  decoded.destination == 18 &&
+                  decoded.state == (has_next ? State::FINITE : State::DEAD) &&
+                  prediction.deadline == (has_next ? 23u : 0u) &&
+                  decodeWeight(layout, prediction.normalized_record, weight) == Status::OK && weight == 45,
+                  "dense normalization rewrites only the token");
+        }
+        for (const State state : {State::WRAP, State::DEAD}) {
+            Prediction prediction;
+            check(encodeRecord(layout, 18, state == State::WRAP ? 4 : 0, state, 45, word) == Status::OK &&
+                  makePrediction(layout, word, 19, true, prediction, TraversalMode::ORDERED_FILTERED) ==
+                      Status::OK &&
+                  prediction.state == State::UNKNOWN &&
+                  decodeRecord(layout, prediction.normalized_record, decoded) == Status::OK &&
+                  decoded.state == State::UNKNOWN && decoded.destination == 18 &&
+                  decodeWeight(layout, prediction.normalized_record, weight) == Status::OK && weight == 45,
+                  "filtered normalization keeps the record's ID and weight");
+        }
+        RecordWindow light, heavy;
+        light.remaining_records = heavy.remaining_records = 16;
+        light.vertex_count = heavy.vertex_count = 128;
+        light.valid_mask = heavy.valid_mask = UINT16_MAX;
+        const uint64_t lines[16] = {0,0,1,1,2,2,0,2,3,3,4,3,4,5,5,5};
+        const uint64_t bounds[16] = {0,0,0,0,0,0,0,0,31,0,7,0,0,15,0,0};
+        for (std::size_t index = 0; index < 16; ++index) {
+            const State state = bounds[index] ? State::FINITE : State::UNKNOWN;
+            check(encodeRecord(layout, lines[index] * 16, bounds[index], state, 0, light.words[index]) ==
+                      Status::OK &&
+                  encodeRecord(layout, lines[index] * 16, bounds[index], state,
+                               static_cast<uint32_t>((index * 13) % 64), heavy.words[index]) == Status::OK,
+                  "weighted window entries are valid record words");
+        }
+        PrefetchTarget a, b;
+        check(selectWindowTarget(layout, light, 16, a) == Status::OK &&
+              selectWindowTarget(layout, heavy, 16, b) == Status::OK && a.valid && b.valid &&
+              a.lead == b.lead && a.destination == b.destination && a.lead == 10,
+              "a weight never moves the window's choice");
+        Prediction pa, pb;
+        check(makePrediction(layout, light.words[10], 11, true, pa) == Status::OK &&
+              makePrediction(layout, heavy.words[10], 11, true, pb) == Status::OK &&
+              pa.state == pb.state && pa.deadline == pb.deadline,
+              "a weight never moves a deadline");
+        heavy.valid_mask = 1;
+        check(selectWindowTarget(layout, heavy, 16, b) == Status::NOT_READY && !b.valid,
+              "missing weighted words are not ready, not empty");
+    }
+}
+
+void testWeightedNativeConfigurationAndBinding() {
+    using namespace ecg_record;
+    Requirements req;
+    req.vertex_count = 1024;
+    req.record_count = 3;
+    req.weighted = true;
+    req.max_weight_pattern = 32;
+    for (const uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+        req.requested_record_bytes = width;
+        Layout layout, restored;
+        NativeConfiguration configuration;
+        configuration.record_base = 0x1000;
+        configuration.property_base = 0x80000000;
+        configuration.vertex_count = req.vertex_count;
+        configuration.record_count = req.record_count;
+        configuration.context = 1;
+        configuration.control = kNativeEnable | kNativeHasNext;
+        check(selectLayout(req, layout) == Status::OK &&
+              packLayout(layout, configuration.layout_descriptor) == Status::OK &&
+              unpackLayout(configuration.layout_descriptor, restored) == Status::OK && restored == layout &&
+              validateNativeConfiguration(configuration, restored) == Status::OK &&
+              restored == layout && restored.weight_bits == 6,
+              "a weighted descriptor revalidates against the counts it binds");
+        uint64_t word = 0;
+        NativeLoadResult property;
+        check(encodeRecord(layout, 1023, 2, State::WRAP, 32, word) == Status::OK &&
+              nativePropertyAccess(configuration, configuration.property_base, word,
+                                   configuration.record_base + width, property) == Status::OK &&
+              property.destination == 1023 && property.raw_record == word &&
+              property.property_address == 0x80000000ULL + 1023 * 4 &&
+              property.state == State::FINITE && property.deadline == property.sequence + 2,
+              "a weighted word binds the property access of its ID and token");
+        NativeConfiguration stripped = configuration;
+        stripped.layout_descriptor &= ~(uint64_t{0x3F} << 56);
+        check(validateNativeConfiguration(stripped, restored) == Status::INVALID_LAYOUT,
+              "a descriptor without its lane disagrees with its token width");
+        NativeConfiguration wide = configuration;
+        wide.layout_descriptor = (wide.layout_descriptor & ~(uint64_t{0x3F} << 56)) | (uint64_t{33} << 56);
+        check(validateNativeConfiguration(wide, restored) != Status::OK,
+              "a lane wider than thirty-two bits is refused");
+        check(unpackLayout(configuration.layout_descriptor | (uint64_t{1} << 62), restored) ==
+                  Status::INVALID_DESCRIPTOR,
+              "descriptor bits above the lane stay reserved");
+    }
+    req.max_weight_pattern = weightPattern(-1);
+    req.requested_record_bytes = 0;
+    Layout full, restored;
+    uint64_t descriptor = 0;
+    check(selectLayout(req, full) == Status::OK && full.weight_bits == 32 &&
+          packLayout(full, descriptor) == Status::OK &&
+          unpackLayout(descriptor, restored) == Status::OK && restored == full,
+          "a full thirty-two-bit lane survives the descriptor");
+}
+
+void testWeightedBuildersRequireSource() {
+    using namespace ecg_record;
+    Requirements req;
+    req.vertex_count = 64;
+    req.record_count = 16;
+    req.weighted = true;
+    req.max_weight_pattern = 40;
+    const uint32_t ids[] = {0, 1, 7, 8, 0, 9, 7, 8, 31, 32, 63, 31, 32, 63, 31, 32};
+    // Repeated destinations carry different weights; the largest sits on position 13.
+    uint32_t weights[16];
+    for (uint32_t index = 0; index < 16; ++index)
+        weights[index] = (index * 5) % 17;
+    weights[13] = 40;
+    const auto destination = [&ids](uint64_t index) { return uint64_t{ids[index]}; };
+    const auto scope = [](uint64_t index) { return BuildScope{static_cast<uint8_t>(index % 2), UINT64_MAX}; };
+    for (const auto traversal : {TraversalMode::DENSE_EXACT, TraversalMode::ORDERED_FILTERED}) {
+        const PropertyDescriptor property{PropertyKind::U64, 8, traversal};
+        for (const uint8_t width : {uint8_t{4}, uint8_t{8}}) {
+            req.requested_record_bytes = width;
+            Requirements plain = req;
+            plain.weighted = false;
+            plain.max_weight_pattern = 0;
+            Layout layout, plain_layout;
+            check(selectLayout(req, layout) == Status::OK && selectLayout(plain, plain_layout) == Status::OK,
+                  "weighted builder fixture layouts");
+            BuildLimits limits;
+            limits.maximum_auxiliary_bytes = 4096;
+            RecordStream stream, reference;
+            uint64_t reads = 0;
+            const Status built = buildRecords<2>(req, layout, property, 0x1008, destination, stream, limits,
+                UnobservedConstruction{}, scope, [&](uint64_t index) { ++reads; return weights[index]; });
+            check(built == Status::OK && reads == req.record_count &&
+                  buildRecords<2>(plain, plain_layout, property, 0x1008, destination, reference, limits,
+                      UnobservedConstruction{}, scope) == Status::OK,
+                  "a weighted build reads each position's weight once");
+            if (built != Status::OK)
+                continue;
+            for (uint64_t index = 0; index < req.record_count; ++index) {
+                DecodedRecord got, want;
+                int32_t weight = 0;
+                check(decodeRecord(layout, stream.word(index), got) == Status::OK &&
+                      decodeRecord(plain_layout, reference.word(index), want) == Status::OK &&
+                      got.destination == ids[index] && got.state == want.state &&
+                      decodeWeight(layout, stream.word(index), weight) == Status::OK &&
+                      weight == static_cast<int32_t>(weights[index]),
+                      "each record carries its own position's weight and the same state");
+            }
+            check(buildRecords<2>(req, layout, property, 0x1008, destination, stream, limits,
+                      UnobservedConstruction{}, scope) == Status::INVALID_WEIGHT && stream.size() == 0,
+                  "a weighted carrier never fabricates absent weights");
+            check(buildRecords<2>(plain, plain_layout, property, 0x1008, destination, stream, limits,
+                      UnobservedConstruction{}, scope, [&](uint64_t index) { return weights[index]; }) ==
+                      Status::INVALID_WEIGHT && stream.size() == 0 &&
+                  buildRecords<2>(plain, plain_layout, property, 0x1008, destination, stream, limits,
+                      UnobservedConstruction{}, scope, [](uint64_t) { return 0u; }) ==
+                      Status::INVALID_WEIGHT && stream.size() == 0,
+                  "an unweighted carrier refuses a weight source, even an all-zero one");
+            check(buildRecords<2>(req, layout, property, 0x1008, destination, stream, limits,
+                      UnobservedConstruction{}, scope,
+                      [&](uint64_t index) { return index == 5 ? 41u : weights[index]; }) ==
+                      Status::INVALID_WEIGHT && stream.size() == 0,
+                  "a weight above the claimed maximum fails without partial output");
+        }
+    }
+    req.requested_record_bytes = 0;
+    Layout layout;
+    RecordStream stream;
+    uint64_t reads = 0;
+    check(selectLayout(req, layout) == Status::OK &&
+          buildRecords(req, layout, 16,
+              [&](std::size_t index) { ++reads; return uint64_t{ids[index]}; }, stream) ==
+              Status::INVALID_WEIGHT && stream.size() == 0 && reads == 0,
+          "the line-mapped builder has no weight source and refuses before reading");
+}
+
 int main() {
     testAdaptiveBudgets();
     testSixBitConfiguration();
@@ -1897,6 +2245,11 @@ int main() {
     testBoundCompareOffKeepsTheBaseVictim();
     testCarrierFirstEviction();
     testNativeCarrierSpan();
+    testWeightedLayoutSelection();
+    testWeightedRecordRoundTrip();
+    testWeightedNormalizationAndWindow();
+    testWeightedNativeConfigurationAndBinding();
+    testWeightedBuildersRequireSource();
     std::printf("[SUMMARY] failures=%d\n", failures);
     return failures != 0;
 }

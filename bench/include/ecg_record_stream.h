@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -150,6 +151,8 @@ Status buildRecordsMapped(
     const Status configuration = validateConfiguration(requirements, layout);
     if (configuration != Status::OK)
         return configuration;
+    if (requirements.weighted)
+        return Status::INVALID_WEIGHT;
     if (limits.source_id_bytes != 4 && limits.source_id_bytes != 8) {
         return Status::INVALID_WIDTH;
     }
@@ -257,14 +260,40 @@ struct FullBuildScope {
     BuildScope operator()(uint64_t) const { return {}; }
 };
 
+// No weight source: a carrier built without one holds no weights, and weighted
+// requirements refuse it rather than receive invented zeros.
+struct AbsentWeights {
+    uint32_t operator()(uint64_t) const { return 0; }
+};
+
 namespace detail {
 
-template<std::size_t Partitions, typename DestinationAt, typename Observe, typename ScopeAt>
+// The weight pattern of position `index`, checked against the claimed maximum.
+template<typename WeightAt>
+Status weightAt(const Requirements& requirements, WeightAt& weight_at,
+                uint64_t index, uint32_t& pattern) {
+    pattern = 0;
+    if constexpr (std::is_same<WeightAt, AbsentWeights>::value) {
+        return requirements.weighted ? Status::INVALID_WEIGHT : Status::OK;
+    } else {
+        if (!requirements.weighted)
+            return Status::INVALID_WEIGHT;
+        pattern = weight_at(index);
+        return pattern > requirements.max_weight_pattern ? Status::INVALID_WEIGHT : Status::OK;
+    }
+}
+
+}  // namespace detail
+
+namespace detail {
+
+template<std::size_t Partitions, typename DestinationAt, typename Observe, typename ScopeAt,
+         typename WeightAt>
 Status buildFilteredRecords(
         const Requirements& requirements, const Layout& layout,
         const PropertyDescriptor& property, uint64_t property_base, uint64_t last_address,
         DestinationAt destination_at, RecordStream& output, const BuildLimits& limits,
-        Observe observe, ScopeAt scope_at) {
+        Observe observe, ScopeAt scope_at, WeightAt& weight_at) {
     struct Positions {
         std::array<uint64_t, Partitions> next;
         Positions() { next.fill(UINT64_MAX); }
@@ -358,9 +387,13 @@ Status buildFilteredRecords(
         if (new_line)
             ++stream.stats.property_lines;
         const bool finite = next != UINT64_MAX && next < scope.end;
+        uint32_t pattern = 0;
+        const Status weighed = weightAt(requirements, weight_at, position, pattern);
+        if (weighed != Status::OK)
+            return weighed;
         uint64_t word = 0;
         const Status encoded = encodeRecord(layout, id, finite ? next - position : 0,
-            finite ? State::FINITE : State::UNKNOWN, word);
+            finite ? State::FINITE : State::UNKNOWN, pattern, word);
         if (encoded != Status::OK)
             return encoded;
         observe(stream.data() + position * layout.record_bytes, layout.record_bytes, true);
@@ -381,13 +414,14 @@ Status buildFilteredRecords(
 }  // namespace detail
 
 template<std::size_t Partitions = 1, typename DestinationAt,
-         typename Observe = UnobservedConstruction, typename ScopeAt = FullBuildScope>
+         typename Observe = UnobservedConstruction, typename ScopeAt = FullBuildScope,
+         typename WeightAt = AbsentWeights>
 Status buildRecords(
         const Requirements& requirements, const Layout& layout,
         const PropertyDescriptor& property, uint64_t property_base,
         DestinationAt destination_at, RecordStream& output,
         const BuildLimits& limits = BuildLimits{}, Observe observe = Observe{},
-        ScopeAt scope_at = ScopeAt{}) {
+        ScopeAt scope_at = ScopeAt{}, WeightAt weight_at = WeightAt{}) {
     static_assert(Partitions > 0 && Partitions <= 64, "bounded static reference partitions");
     output = RecordStream{};
     const Status configuration = validateConfiguration(requirements, layout);
@@ -402,7 +436,7 @@ Status buildRecords(
         return status;
     if (property.traversal == TraversalMode::ORDERED_FILTERED)
         return detail::buildFilteredRecords<Partitions>(requirements, layout, property,
-            property_base, last, destination_at, output, limits, observe, scope_at);
+            property_base, last, destination_at, output, limits, observe, scope_at, weight_at);
     struct Slot {
         uint64_t key = UINT64_MAX;
         std::array<uint64_t, Partitions> first, next;
@@ -513,8 +547,12 @@ Status buildRecords(
             state = State::WRAP;
             distance = requirements.record_count - position + first;
         }
+        uint32_t pattern = 0;
+        const Status weighed = detail::weightAt(requirements, weight_at, position, pattern);
+        if (weighed != Status::OK)
+            return weighed;
         uint64_t word = 0;
-        const Status encoded = encodeRecord(layout, id, distance, state, word);
+        const Status encoded = encodeRecord(layout, id, distance, state, pattern, word);
         if (encoded != Status::OK)
             return encoded;
         observe(stream.data() + position * layout.record_bytes, layout.record_bytes, true);

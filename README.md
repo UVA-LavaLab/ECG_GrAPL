@@ -19,19 +19,22 @@ with an improved graph-adaptive model and native RISC-V/gem5 implementation.
 ECG has one current record grammar rather than public versioned or fixed-width
 format families. `Requirements` supplies `vertex_count`,
 `max_vertex_id_known`, `max_vertex_id`, `record_count`, `traversal_count`,
-`requested_record_bytes`, and `minimum_mantissa_bits`. Layout selection uses:
+`requested_record_bytes`, `minimum_mantissa_bits`, `weighted`, and
+`max_weight_pattern`. Layout selection uses:
 
 - the maximum vertex ID actually encoded (not `vertex_count - 1` when isolated
   vertices enlarge the property domain);
 - `record_count` and `traversal_count`;
-- requested record width `0`, `4`, or `8` bytes; and
-- a minimum mantissa precision.
+- requested record width `0`, `4`, or `8` bytes;
+- a minimum mantissa precision; and
+- for SSSP and weighted SpMV, the largest edge weight actually encoded.
 
 For a word of `W` bits:
 
 ```text
 id_bits       = max(1, bit_width(max_encoded_vertex_id))
-metadata_bits = W - id_bits
+weight_bits   = max(1, bit_width(max_weight_pattern)) if weighted, else 0
+metadata_bits = W - id_bits - weight_bits
 H             = bit_width(record_count)
 K             = H * 2^mantissa_bits
 ```

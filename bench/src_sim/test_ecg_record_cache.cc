@@ -1414,6 +1414,88 @@ int exerciseRecordInspection() {
     return 0;
 }
 
+// A weighted carrier binds the functional cache through the shared native
+// validation, and a weight read is a record inspection either before its edge's
+// paired load (SSSP) or after the pair completes (SpMV). Neither adds an
+// acquisition of a line the paired loads would have captured, and the loaded word
+// keeps its full lane.
+int exerciseWeightedRecordInspection() {
+    using namespace cache_sim;
+    constexpr uint64_t vertices = 512;
+    constexpr uint64_t records = 32;
+    alignas(64) std::array<float, vertices> properties{};
+    std::vector<uint32_t> degrees(vertices, 1);
+    const ecg_record::PropertyDescriptor property{
+        ecg_record::PropertyKind::F32, 4, ecg_record::TraversalMode::DENSE_EXACT};
+    for (uint8_t bytes : {uint8_t{4}, uint8_t{8}}) {
+        ecg_record::Requirements requirements;
+        requirements.vertex_count = vertices;
+        requirements.record_count = records;
+        requirements.traversal_count = 1;
+        requirements.requested_record_bytes = bytes;
+        requirements.weighted = true;
+        requirements.max_weight_pattern = 63;
+        ecg_record::Layout layout;
+        ecg_record::RecordStream stream;
+        const uint64_t base = reinterpret_cast<uint64_t>(properties.data());
+        if (ecg_record::selectLayout(requirements, layout) != ecg_record::Status::OK ||
+            layout.record_bytes != bytes || layout.weight_bits != 6 ||
+            ecg_record::buildRecords(requirements, layout, property, base,
+                [](uint64_t index) { return index * 16; }, stream, ecg_record::BuildLimits{},
+                ecg_record::UnobservedConstruction{}, ecg_record::FullBuildScope{},
+                [](uint64_t index) { return static_cast<uint32_t>((index * 7) % 64); }) !=
+                ecg_record::Status::OK)
+            return 1;
+        // Run 0 makes paired loads only; run 1 inspects each record first; run 2
+        // inspects each record after its pair completes.
+        uint64_t acquisitions[3] = {}, inspections[3] = {};
+        for (int run = 0; run < 3; ++run) {
+            GraphCacheContext context;
+            context.initTopology(degrees.data(), vertices, records, true);
+            context.registerPropertyArray(properties.data(), vertices, 4, 128, 0.15, true);
+            CacheHierarchy cache(64, 1, 128, 1, 128, 2, 64,
+                EvictionPolicy::LRU, EvictionPolicy::LRU, EvictionPolicy::LRU);
+            cache.initGraphContext(&context);
+            ecg_record::NativeConfiguration configuration;
+            ecg_record::packLayout(layout, configuration.layout_descriptor);
+            configuration.record_base = reinterpret_cast<uint64_t>(stream.data());
+            configuration.property_base = base;
+            configuration.record_count = records;
+            configuration.vertex_count = vertices;
+            configuration.context = 1;
+            configuration.generation = 1;
+            configuration.control = ecg_record::kNativeEnable;
+            try {
+                cache.configureRecord(configuration, stream, ecg_record::Mechanism::PREFETCH);
+            } catch (const std::invalid_argument&) {
+                return 2;
+            }
+            cache.recordIteration(0, true);
+            for (uint64_t index = 0; index < records; ++index) {
+                if (run == 1)
+                    cache.recordInspect(index);
+                const uint64_t word = cache.recordLoad(index);
+                int32_t weight = -1;
+                if (ecg_record::decodeWeight(layout, word, weight) != ecg_record::Status::OK ||
+                    weight != static_cast<int32_t>((index * 7) % 64))
+                    return 3;
+                if (cache.recordProperty(index, word) != index * 16)
+                    return 4;
+                if (run == 2)
+                    cache.recordInspect(index);
+            }
+            cache.finishRecord(records);
+            acquisitions[run] = cache.recordAcquisitions();
+            inspections[run] = cache.recordInspections();
+        }
+        if (inspections[0] != 0 || inspections[1] != records || inspections[2] != records)
+            return 5;
+        if (acquisitions[1] != acquisitions[0] || acquisitions[2] > acquisitions[0])
+            return 6;
+    }
+    return 0;
+}
+
 // The uninformed fallback and the bound-comparison switch inside the record
 // replacement rule, with the arm's governed-first and RRPV order, and their
 // refusals on paths without that rule (steps 6b and 6c).
@@ -1815,6 +1897,10 @@ int main() {
     if (const int check = exerciseCarrierFirst()) {
         std::printf("carrier-first check %d failed [FAIL]\n", check);
         return 23;
+    }
+    if (const int check = exerciseWeightedRecordInspection()) {
+        std::printf("weighted record inspection check %d failed [FAIL]\n", check);
+        return 24;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;

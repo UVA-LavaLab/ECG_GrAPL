@@ -428,6 +428,8 @@ inline void writeResult(std::ostream& output, const Result& result, const Option
     field("id_bits", potential ? result.window_layout.id_bits : result.layout.id_bits);
     field("metadata_bits", potential ? result.window_layout.metadata_bits : result.layout.metadata_bits);
     field("mantissa_bits", potential ? 0 : result.layout.mantissa_bits);
+    if (!potential && result.layout.weight_bits)
+        field("weight_bits", result.layout.weight_bits);
     if (window) {
         field("window_token_bits", ecg_window::Layout::token_bits);
         field("window_known_records", result.window_known_records);

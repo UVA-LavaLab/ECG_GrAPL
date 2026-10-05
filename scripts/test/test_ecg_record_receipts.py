@@ -55,6 +55,50 @@ def test_layout_receipts_reject_unrequested_widening_and_bad_precision():
             requested_bytes=8)
 
 
+# The same cases as the C++ codec's testWeightedLayoutSelection.
+WEIGHTED_LAYOUTS = (
+    # records, vertices, weight bits, requested, (width, id, metadata, mantissa)
+    (680108, 1 << 18, 6, 0, (4, 18, 8, 2)),
+    (680108, 1 << 18, 6, 8, (8, 18, 40, 34)),
+    (33037894, 3774768, 6, 0, (8, 22, 36, 30)),
+    (33037894, 3774768, 32, 0, (8, 22, 10, 4)),
+    (3, 1024, 6, 0, (4, 10, 16, 13)),
+)
+
+
+def test_weighted_layouts_mirror_the_codec():
+    from scripts.experiments.ecg.record_receipts import resolve_layout
+    for records, vertices, weight_bits, requested, expected in WEIGHTED_LAYOUTS:
+        layout = resolve_layout(records=records, vertices=vertices, maximum_id=vertices - 1,
+                                traversals=1, requested_bytes=requested, weight_bits=weight_bits)
+        assert (layout["record_bytes"], layout["id_bits"], layout["metadata_bits"],
+                layout["mantissa_bits"]) == expected
+        assert layout["weight_bits"] == weight_bits
+    with pytest.raises(RecordReceiptError, match="record width"):
+        resolve_layout(records=33037894, vertices=3774768, maximum_id=3774767, traversals=1,
+                       requested_bytes=4, weight_bits=6)
+    for invalid in (-1, 33):
+        with pytest.raises(RecordReceiptError, match="weight"):
+            resolve_layout(records=34, vertices=32, maximum_id=31, traversals=1, weight_bits=invalid)
+    assert "weight_bits" not in resolve_layout(records=34, vertices=32, maximum_id=31, traversals=1)
+
+
+def test_weighted_layout_fields_are_present_exactly_when_expected():
+    from scripts.experiments.ecg.record_receipts import resolve_layout
+    expected = resolve_layout(records=680108, vertices=1 << 18, maximum_id=(1 << 18) - 1,
+                              traversals=1, weight_bits=6)
+    fields = {key: str(value) for key, value in expected.items()}
+    common = dict(records=680108, vertices=1 << 18, maximum_id=(1 << 18) - 1, traversals=1)
+    assert validate_layout(fields, weight_bits=6, **common)["weight_bits"] == 6
+    for forged in ({**fields, "weight_bits": "5"}, {k: v for k, v in fields.items() if k != "weight_bits"}):
+        with pytest.raises(RecordReceiptError):
+            validate_layout(forged, weight_bits=6, **common)
+    plain = layout_fields(4, (1 << 18) - 1, 680108)
+    assert "weight_bits" not in validate_layout(plain, **common)
+    with pytest.raises(RecordReceiptError, match="weight"):
+        validate_layout({**plain, "weight_bits": "0"}, **common)
+
+
 def test_receipts_are_unique_unsigned_and_complete():
     with pytest.raises(RecordReceiptError):
         receipt("[REC a=1]\n[REC a=1]", "REC")

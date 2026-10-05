@@ -6,6 +6,7 @@ import copy
 import csv
 import json
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -1417,8 +1418,9 @@ def test_algorithm_resource_plans_cover_auxiliary_work():
         plan_algorithm_resources(graph, algorithm="bc", popt_full_capacity=True, **options)
 
 
-def test_algorithm_resource_plans_reserve_compact_weights():
-    """The weight readers' compact copy is admitted inside the workspace."""
+def test_algorithm_resource_plans_carry_weights_in_the_record():
+    """The weight readers' records hold each weight in a lane sized from the encoded
+    stream's extrema; no second weight array is planned."""
     from dataclasses import replace
     from scripts.experiments.ecg.record_resources import GraphInfo, RecordResourceError, plan_algorithm_resources
     weighted = GraphInfo(False, 512, 3968, 495, 37913, "a" * 64, True, 0, 31)
@@ -1427,25 +1429,38 @@ def test_algorithm_resource_plans_reserve_compact_weights():
     for algorithm in ("sssp", "spmv"):
         plan = plan_algorithm_resources(weighted, algorithm=algorithm, records=True,
                                         workspace_limit=1 << 20, **options)
-        assert plan["record_weight_bytes_upper"] == 4 * 3968
+        assert plan["record_weight_bytes_upper"] == 0
+        assert (plan["record_bytes"], plan["id_bits"], plan["weight_bits"], plan["metadata_bits"]) == (4, 9, 5, 18)
+        assert plan["carrier_payload_bytes_upper"] == 4 * 3968
         need = (plan["array_bytes"] + plan["carrier_payload_bytes_upper"] +
-                plan["record_weight_bytes_upper"] + plan["construction_auxiliary_bytes_upper"])
+                plan["construction_auxiliary_bytes_upper"])
         assert plan_algorithm_resources(weighted, algorithm=algorithm, records=True,
                                         workspace_limit=need, **options)
         with pytest.raises(RecordResourceError, match="explicit limits"):
             plan_algorithm_resources(weighted, algorithm=algorithm, records=True,
                                      workspace_limit=need - 1, **options)
+    negative = replace(weighted, minimum_weight=-3)
+    with pytest.raises(RecordResourceError, match="record width"):
+        plan_algorithm_resources(negative, algorithm="spmv", records=True, workspace_limit=1 << 20, **options)
+    wide = plan_algorithm_resources(negative, algorithm="spmv", records=True, workspace_limit=1 << 20,
+                                    **{**options, "requested_bytes": 0})
+    assert (wide["record_bytes"], wide["weight_bits"], wide["metadata_bits"]) == (8, 32, 23)
+    assert wide["carrier_payload_bytes_upper"] == 8 * 3968
+    with pytest.raises(RecordResourceError, match="weight extrema"):
+        plan_algorithm_resources(replace(weighted, maximum_weight=None), algorithm="sssp", records=True,
+                                 workspace_limit=1 << 20, **options)
     unweighted = replace(weighted, weighted=False, minimum_weight=None, maximum_weight=None)
     for graph, algorithm, records in ((unweighted, "sssp", True), (weighted, "sssp", False),
                                       (weighted, "bc", True), (weighted, "bfs", True)):
         plan = plan_algorithm_resources(graph, algorithm=algorithm, records=records,
                                         workspace_limit=1 << 20, **options)
-        assert plan["record_weight_bytes_upper"] == 0
+        assert plan["record_weight_bytes_upper"] == 0 and "weight_bits" not in plan
 
 
 def test_one_edge_stream_receipts_pass_the_runner_validator(tmp_path):
-    """Record runs report BC's inspections and the weight readers' compact copy, and the
-    runner's validator refuses forged values of either."""
+    """Record runs report BC's inspections and the weight readers' inspections of their own
+    records, with the weight lane in the layout, and the runner's validator refuses forged
+    values of any of them."""
     from scripts.experiments.ecg import algorithm_matrix
     from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
     from scripts.experiments.ecg.record_receipts import RecordReceiptError
@@ -1482,22 +1497,30 @@ def test_one_edge_stream_receipts_pass_the_runner_validator(tmp_path):
                     evidence=True, llc_sets=4)
                 algorithm_matrix.validate_payload(payload, ran.stdout + ran.stderr, **validation)
                 runs[(algorithm, width, mode)] = (payload, ran.stdout + ran.stderr, validation)
+    lane = max(1, runs[("sssp", 4, "csr")][2]["graph"].maximum_weight.bit_length())
     for width in (4, 8):
         for algorithm in ("sssp", "spmv"):
             work = runs[(algorithm, width, "replacement")][0]["workload"]
-            assert work["record_weight_bytes"] == 4 * work["source_edges"]
-            assert work["record_inspections"] == work["record_inspection_bytes"] == 0
+            assert work["record_weight_bytes"] == 0 and work["weight_bits"] == lane
+            inspections = work["record_inspections"]
+            if algorithm == "sssp":
+                assert inspections == work["weight_reads"] - work["source_edges"] >= work["actual_records"] > 0
+            else:
+                assert inspections == work["weight_reads"] == work["actual_records"] > 0
+            assert work["record_inspection_bytes"] == width * inspections
         bc = runs[("bc", width, "replacement")][0]["workload"]
         assert 0 < bc["record_inspections"] <= bc["actual_records"] <= 2 * bc["record_inspections"]
         assert bc["record_inspection_bytes"] == width * bc["record_inspections"]
-        assert bc["record_weight_bytes"] == 0
+        assert bc["record_weight_bytes"] == 0 and "weight_bits" not in bc
         for algorithm in ("sssp", "spmv", "bc"):
             work = runs[(algorithm, width, "csr")][0]["workload"]
             assert work["record_inspections"] == work["record_weight_bytes"] == 0
+            assert "weight_bits" not in work
     for key, field, change in (
             (("sssp", 4, "replacement"), "record_weight_bytes", 4),
-            (("spmv", 8, "replacement"), "record_weight_bytes", -4),
+            (("spmv", 8, "replacement"), "record_weight_bytes", 4),
             (("sssp", 4, "replacement"), "record_inspections", 1),
+            (("spmv", 8, "replacement"), "record_inspections", -1),
             (("bc", 8, "replacement"), "record_inspection_bytes", 1),
             (("bc", 4, "replacement"), "record_inspections", -1),
             (("bc", 4, "csr"), "record_inspections", 1),
@@ -1507,6 +1530,41 @@ def test_one_edge_stream_receipts_pass_the_runner_validator(tmp_path):
         forged["workload"][field] += change
         with pytest.raises(RecordReceiptError, match="record inspections|without a NEXT carrier"):
             algorithm_matrix.validate_payload(forged, log, **validation)
+    # Inspections forged with consistent bytes break only the kernels' weight identities.
+    for key, change in ((("sssp", 4, "replacement"), 1), (("sssp", 8, "replacement"), -1),
+                        (("spmv", 4, "replacement"), 1), (("spmv", 8, "replacement"), -1)):
+        payload, log, validation = runs[key]
+        forged = copy.deepcopy(payload)
+        forged["workload"]["record_inspections"] += change
+        forged["workload"]["record_inspection_bytes"] += change * key[1]
+        with pytest.raises(RecordReceiptError, match="record inspections"):
+            algorithm_matrix.validate_payload(forged, log, **validation)
+    # The lane is present exactly where the carrier holds weights, in the workload
+    # and in the runtime receipt, and agrees with the lane derived from the graph.
+    payload, log, validation = runs[("sssp", 8, "replacement")]
+    for forged_payload in (
+            {**payload, "workload": {**payload["workload"], "weight_bits": lane + 1}},
+            {**payload, "workload": {k: v for k, v in payload["workload"].items() if k != "weight_bits"}}):
+        with pytest.raises(RecordReceiptError, match="layout"):
+            algorithm_matrix.validate_payload(forged_payload, log, **validation)
+    assert f" weight_bits={lane} " in log
+    for forged_log in (log.replace(f" weight_bits={lane} ", f" weight_bits={lane + 1} "),
+                       log.replace(f" weight_bits={lane} ", " ")):
+        with pytest.raises(RecordReceiptError, match="runtime layout"):
+            algorithm_matrix.validate_payload(payload, forged_log, **validation)
+    runtime = next(line for line in log.splitlines() if line.startswith("[ECG-RECORD-FUNCTIONAL "))
+    metadata = re.search(r" metadata_bits=(\d+) ", runtime).group(1)
+    forged_runtime = runtime.replace(f" metadata_bits={metadata} ", f" metadata_bits={int(metadata) + 1} ")
+    with pytest.raises(RecordReceiptError, match="runtime layout"):
+        algorithm_matrix.validate_payload(payload, log.replace(runtime, forged_runtime), **validation)
+    payload, log, validation = runs[("bc", 8, "replacement")]
+    with pytest.raises(RecordReceiptError, match="layout"):
+        algorithm_matrix.validate_payload(
+            {**payload, "workload": {**payload["workload"], "weight_bits": 1}}, log, **validation)
+    payload, log, validation = runs[("sssp", 8, "csr")]
+    with pytest.raises(RecordReceiptError, match="without a NEXT carrier"):
+        algorithm_matrix.validate_payload(
+            {**payload, "workload": {**payload["workload"], "weight_bits": lane}}, log, **validation)
 
 
 def test_preprocessing_profile_has_matched_serial_controls(tmp_path):

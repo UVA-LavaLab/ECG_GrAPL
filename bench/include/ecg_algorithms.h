@@ -175,8 +175,9 @@ struct Result {
     uint64_t ordinary_property_reads = 0, property_writes = 0, auxiliary_accesses = 0;
     uint64_t construction_reads = 0, construction_writes = 0;
     uint64_t carrier_bytes = 0, construction_auxiliary_peak_bytes = 0, workspace_peak_bytes = 0;
-    // Record mode's ordinary reads of a record word before its edge's paired load,
-    // apart from the paired record traffic; and its compact copy of the weights.
+    // Record mode's ordinary reads of a record word apart from its edge's paired
+    // load: BC's DAG test and the weight readers' weights. The weights live in the
+    // records, so record_weight_bytes, a second weight array, stays zero.
     uint64_t record_inspections = 0, record_inspection_bytes = 0, record_weight_bytes = 0;
     uint64_t constructed_finite_records = 0, constructed_wrap_records = 0, constructed_unknown_records = 0;
     uint64_t result_digest = 0, work_digest = 0, position_digest = 0, record_digest = 0;
@@ -507,7 +508,7 @@ class Engine {
         property_ = {kind, sizeof(T), mode};
         graph_ = graph;
         stream_ = nullptr;
-        weights_ = nullptr;
+        weighted_carrier_ = false;
         cursor_ = ecg_record::PassCursor{};
         if (graph.records && cursor_.configure(graph.records, mode) != ecg_record::Status::OK)
             throw std::logic_error("invalid-pass-domain");
@@ -581,12 +582,12 @@ class Engine {
             }
         }
         Carrier* carrier = nullptr;
-        // The kernels that read weights get a compact copy beside the carrier
-        // when the source interleaves them with the IDs: one edge stream a pass.
-        const bool compact = graph.weights && graph.edge_stride != sizeof(int32_t) &&
+        // The kernels that read weights carry each edge's weight in its record,
+        // so a record pass reads one edge stream, as CSR's interleaved edges do.
+        const bool weighted = graph.weights &&
             (options.algorithm == Algorithm::SSSP || options.algorithm == Algorithm::SPMV);
-        const void* weight_source = compact ? graph.weights : nullptr;
-        const uint64_t weight_stride = compact ? graph.edge_stride : 0;
+        const void* weight_source = weighted ? graph.weights : nullptr;
+        const uint64_t weight_stride = weighted ? graph.edge_stride : 0;
         for (const auto& prepared : carriers_) {
             if (prepared->columns == graph.columns && prepared->records == graph.records &&
                 prepared->vertices == graph.vertices && prepared->stride == sizeof(T) &&
@@ -614,9 +615,16 @@ class Engine {
             requirements.max_vertex_id_known = true;
             requirements.requested_record_bytes = options.record_bytes;
             requirements.minimum_mantissa_bits = options.minimum_mantissa_bits;
-            for (uint64_t index = 0; index < graph.records; ++index)
+            requirements.weighted = weighted;
+            const auto weight_at = [&](uint64_t index) {
+                return ecg_record::weightPattern(graph.weight(*this, index, MemoryKind::CONSTRUCTION, false));
+            };
+            for (uint64_t index = 0; index < graph.records; ++index) {
                 requirements.max_vertex_id = std::max<uint64_t>(requirements.max_vertex_id,
                     graph.id(*this, index, MemoryKind::CONSTRUCTION, false));
+                if (weighted)
+                    requirements.max_weight_pattern = std::max(requirements.max_weight_pattern, weight_at(index));
+            }
             ecg_record::Layout layout;
             auto status = ecg_record::selectLayout(requirements, layout);
             if (status != ecg_record::Status::OK)
@@ -661,13 +669,19 @@ class Engine {
                 return {0, last};
             };
             const auto build = [&](auto partitions) {
+                const auto id_at = [&](uint64_t index) {
+                    return graph.id(*this, index, MemoryKind::CONSTRUCTION, false);
+                };
+                const auto observe = [&](const void* address, uint64_t bytes, bool write) {
+                    touch(address, bytes, write, MemoryKind::CONSTRUCTION, 0, 0, false);
+                };
+                if (weighted)
+                    return ecg_record::buildRecords<decltype(partitions)::value>(
+                        requirements, layout, property_, base, id_at, prepared->stream, limits,
+                        observe, scope_at, weight_at);
                 return ecg_record::buildRecords<decltype(partitions)::value>(
-                    requirements, layout, property_, base,
-                    [&](uint64_t index) { return graph.id(*this, index, MemoryKind::CONSTRUCTION, false); },
-                    prepared->stream, limits,
-                    [&](const void* address, uint64_t bytes, bool write) {
-                        touch(address, bytes, write, MemoryKind::CONSTRUCTION, 0, 0, false);
-                    }, scope_at);
+                    requirements, layout, property_, base, id_at, prepared->stream, limits,
+                    observe, scope_at);
             };
             if (options.traversal_preprocessing && options.algorithm == Algorithm::SSSP)
                 status = build(std::integral_constant<std::size_t, 2>{});
@@ -687,33 +701,11 @@ class Engine {
             result.constructed_finite_records += stats.finite_records;
             result.constructed_wrap_records += stats.wrap_records;
             result.constructed_unknown_records += stats.unknown_records;
-            if (compact) {
-                // Charged where it is built, each source weight read and each copy
-                // written, in the workspace beside the carrier and apart from it.
-                uint64_t bytes = 0;
-                if (!ecg_record::checkedMultiply(graph.records, sizeof(int32_t), bytes))
-                    throw std::length_error("record-weight-workspace-limit");
-                reserve(bytes);
-                try {
-                    prepared->compact_weights.reset(static_cast<int32_t*>(::operator new(
-                        static_cast<std::size_t>(bytes), std::align_val_t{64})));
-                } catch (const std::bad_alloc&) {
-                    release(bytes);
-                    throw;
-                }
-                int32_t* copy = prepared->compact_weights.get();
-                for (uint64_t index = 0; index < graph.records; ++index) {
-                    const int32_t weight = graph.weight(*this, index, MemoryKind::CONSTRUCTION, false);
-                    touch(copy + index, sizeof(int32_t), true, MemoryKind::CONSTRUCTION, 0, 0, false);
-                    copy[index] = weight;
-                }
-                result.record_weight_bytes += bytes;
-            }
             carrier = prepared.get();
             carriers_.push_back(std::move(prepared));
         }
         stream_ = &carrier->stream;
-        weights_ = carrier->compact_weights.get();
+        weighted_carrier_ = stream_->layout.weight_bits != 0;
         id_mask_ = ecg_record::lowMask(stream_->layout.id_bits);
         ecg_record::NativeConfiguration configuration;
         ecg_record::packLayout(stream_->layout, configuration.layout_descriptor);
@@ -791,15 +783,30 @@ class Engine {
             backend_.frontierSort(entering);
     }
 
-    // The weight of edge `index` in the bound view. Record mode reads the compact
-    // copy when there is one: the same logical read, count and evidence as the
-    // interleaved one, from the weight stream beside the carrier.
+    // The weight of edge `index` in the bound view. A weighted record pass reads it
+    // from the edge's own record: one ordinary access at the record's width, an
+    // inspection that consumes no cursor, pairs no property load and publishes no
+    // bound, with the count and evidence of CSR's interleaved weight read.
     int32_t weight(uint64_t index) {
-        if (!weights_)
+        if (!weighted_carrier_)
             return graph_.weight(*this, index);
-        if (index >= graph_.records)
-            throw std::out_of_range("csr-weight");
-        return read<int32_t>(weights_ + index, MemoryKind::WEIGHT, 2, index);
+        uint64_t address = 0;
+        if (options.record_model != RecordModel::NEXT || !pass_open_ || !stream_ ||
+            index >= graph_.records ||
+            ecg_record::recordAddress(stream_->layout, configuration_.record_base, index,
+                stream_->size(), address) != ecg_record::Status::OK)
+            throw std::logic_error("weight-outside-a-record-pass");
+        if constexpr (Backend::models_memory)
+            backend_.recordInspect(index);
+        touch(reinterpret_cast<const void*>(address), stream_->layout.record_bytes, false,
+            MemoryKind::WEIGHT, 2, index, false, !Backend::models_memory);
+        weightEvidence(index);
+        int32_t value = 0;
+        if (ecg_record::decodeWeight(stream_->layout, stream_->word(index), value) != ecg_record::Status::OK)
+            throw std::logic_error("invalid-actual-record");
+        ++result.record_inspections;
+        result.record_inspection_bytes += stream_->layout.record_bytes;
+        return value;
     }
 
     // The target of edge `index` for a predicate that runs before the edge's
@@ -944,18 +951,14 @@ class Engine {
     }
 
   private:
-    struct AlignedWeights {
-        void operator()(int32_t* data) const { ::operator delete(data, std::align_val_t{64}); }
-    };
     struct Carrier {
         const void* columns = nullptr;
         uint64_t vertices = 0, records = 0, stride = 0, line_offset = 0;
         ecg_record::TraversalMode mode = ecg_record::TraversalMode::DENSE_EXACT;
         ecg_record::RecordStream stream;
-        // The interleaved weights a compact copy was taken from, and the copy.
+        // The source weights its records carry, if any.
         const void* weights = nullptr;
         uint64_t weight_stride = 0;
-        std::unique_ptr<int32_t, AlignedWeights> compact_weights;
     };
     // The semantic event of reading edge `index`'s target, as the CSR ID read records it.
     void edgeEvidence(uint64_t index) {
@@ -967,13 +970,23 @@ class Engine {
         work_.add(index);
         work_.add(sizeof(int32_t));
     }
+    // The semantic event of reading edge `index`'s weight, as the CSR weight read records it.
+    void weightEvidence(uint64_t index) {
+        if (!options.evidence)
+            return;
+        work_.add(static_cast<uint64_t>(MemoryKind::WEIGHT));
+        work_.add(false);
+        work_.add(2);
+        work_.add(index);
+        work_.add(sizeof(int32_t));
+    }
     Backend& backend_;
     GraphView graph_;
     ecg_record::PropertyDescriptor property_;
     ecg_record::NativeConfiguration configuration_;
     ecg_record::PassCursor cursor_;
     const ecg_record::RecordStream* stream_ = nullptr;
-    const int32_t* weights_ = nullptr;
+    bool weighted_carrier_ = false;
     std::unique_ptr<ecg_window::RecordStream> window_stream_;
     std::unique_ptr<ecg_frontier::RecordStream> frontier_stream_;
     std::vector<std::unique_ptr<Carrier>> carriers_;
