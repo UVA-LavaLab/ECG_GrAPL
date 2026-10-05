@@ -6945,7 +6945,8 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
             options.record_expiry_clock, options.record_pressure_gate,
             options.record_rrpv_order, uninformed_base=options.record_uninformed_base,
             bound_compare=options.record_bound_compare, carrier_first=options.record_carrier_first,
-            grasp_registration=options.grasp_registration, kernel_entry=options.kernel_entry)
+            grasp_registration=options.grasp_registration, kernel_entry=options.kernel_entry,
+            pass_scope=options.pass_scope)
     # PageRank runs through the separate pr kernel, so its labels never pass
     # through algorithm_matrix.policy_labels. Without this the opt-in arms and
     # their controls share one label and collide in the combined matrix.

@@ -763,9 +763,13 @@ def make_roi_job(
         options += " --record-preprocess " + preprocessing
     if "algorithm_record_base_policy" in settings:
         base = str(settings["algorithm_record_base_policy"])
-        if not settings.get("current_algorithms") or base not in ("LRU", "GRASP_PAPER"):
+        # PageRank's runner takes the base as its own flag (NEXT.md §bv C3); its
+        # GAPBS options must not carry it.
+        if base not in ("LRU", "GRASP_PAPER") or not (
+                settings.get("current_algorithms") or settings.get("current_pr_baselines")):
             raise SystemExit("invalid current record base policy")
-        options += " --record-base-policy " + base
+        if settings.get("current_algorithms"):
+            options += " --record-base-policy " + base
     if "algorithm_window_observer" in settings:
         observer = str(settings["algorithm_window_observer"])
         if not settings.get("current_algorithms") or observer not in ("control", "window"):
@@ -865,6 +869,32 @@ def make_roi_job(
             str(settings.get("algorithm_record_carrier_first", "no")) != "no"):
         raise SystemExit("invalid current record-carrier-first record selection: "
                          "governed-first and carrier-first are two victim orders, never one")
+    # The fair-comparison contracts (NEXT.md §bv C1 and C2). PageRank's runner
+    # takes them as its own flags; the algorithms CLI reads them from its options.
+    for key, default, values, flag in (
+            ("algorithm_grasp_registration", "all", ("all", "declared"), "--grasp-registration"),
+            ("algorithm_kernel_entry", "as-built", ("as-built", "cold"), "--kernel-entry")):
+        if key in settings:
+            value = str(settings[key])
+            if value not in values or not (
+                    settings.get("current_algorithms") or settings.get("current_pr_baselines")):
+                raise SystemExit(f"invalid current {flag[2:]} selection")
+            if value != default and settings.get("current_algorithms"):
+                options += f" {flag} {value}"
+    if "algorithm_pass_scope" in settings:
+        requested_scope = str(settings["algorithm_pass_scope"])
+        if requested_scope not in ("off", "srrip") or not settings.get("current_algorithms"):
+            raise SystemExit("invalid current pass-scope selection")
+        if requested_scope != "off":
+            # NEXT.md §by: refused for the whole stage here; the runner refuses
+            # each cell too, but only once the job has started.
+            base = str(settings.get("algorithm_record_base_policy", "LRU"))
+            if str(settings.get("algorithm_grasp_registration", "all")) != "declared" or not all(
+                    algorithm_matrix.pass_scope_admits(benchmark, parse_policy_spec(str(policy)), base)
+                    for policy in settings.get("policies", [])):
+                raise SystemExit("invalid current pass-scope selection: the scope serves the "
+                                 "declared GRASP base on BFS, SSSP or BC")
+            options += " --pass-scope " + requested_scope
     if "algorithm_grasp_reference" in settings:
         reference = str(settings["algorithm_grasp_reference"])
         if not settings.get("current_algorithms") or reference not in ("off", "full", "flat", "rank"):
@@ -963,6 +993,12 @@ def make_roi_job(
         if "algorithm_record_expiry_clock" in settings:
             command.extend(("--record-expiry-clock",
                             str(settings["algorithm_record_expiry_clock"])))
+        # The fair-comparison contracts, emitted only when set (NEXT.md §bv).
+        for key, flag in (("algorithm_record_base_policy", "--record-base-policy"),
+                          ("algorithm_grasp_registration", "--grasp-registration"),
+                          ("algorithm_kernel_entry", "--kernel-entry")):
+            if key in settings:
+                command.extend((flag, str(settings[key])))
     if settings.get("current_algorithms"):
         command.extend(("--current-algorithms", "--algorithm-workspace-bytes",
                         str(settings.get("algorithm_workspace_bytes", 512 << 20))))
@@ -1181,7 +1217,8 @@ def make_roi_job(
     config_hash = hashlib.sha256(json.dumps(
         {"command": command, "env": material_env, "inputs": inputs},
         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    record_base, observer, record_model, candidate_rrpv, grasp_scope = "LRU", "off", "next", 6, "all"
+    record_base, observer, record_model, candidate_rrpv, grasp_scope = (
+        str(settings.get("algorithm_record_base_policy", "LRU")), "off", "next", 6, "all")
     popt_rank_mode = "future"
     frontier_gating = "enabled"
     grasp_reference = "off"
@@ -1199,6 +1236,9 @@ def make_roi_job(
     uninformed_base = str(settings.get("algorithm_record_uninformed_base", "no"))
     bound_compare = str(settings.get("algorithm_record_bound_compare", "on"))
     carrier_first = str(settings.get("algorithm_record_carrier_first", "no"))
+    grasp_registration = str(settings.get("algorithm_grasp_registration", "all"))
+    kernel_entry = str(settings.get("algorithm_kernel_entry", "as-built"))
+    pass_scope = "off"
     if settings.get("current_algorithms"):
         parsed_algorithm = algorithm_matrix.parse_options(options)
         record_base, observer = parsed_algorithm.record_base_policy, parsed_algorithm.window_observer
@@ -1216,11 +1256,15 @@ def make_roi_job(
         uninformed_base = parsed_algorithm.record_uninformed_base
         bound_compare = parsed_algorithm.record_bound_compare
         carrier_first = parsed_algorithm.record_carrier_first
+        grasp_registration = parsed_algorithm.grasp_registration
+        kernel_entry = parsed_algorithm.kernel_entry
+        pass_scope = parsed_algorithm.pass_scope
     expected_policy_labels = algorithm_matrix.policy_labels(
         [parse_policy_spec(policy) for policy in all_policies], record_base, observer, record_model,
         candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating, grasp_reference, query_count,
         governed_first, store_bound, expiry_clock, pressure_gate, rrpv_order,
-        written_in_place, uninformed_base, bound_compare, carrier_first)
+        written_in_place, uninformed_base, bound_compare, carrier_first,
+        grasp_registration=grasp_registration, kernel_entry=kernel_entry, pass_scope=pass_scope)
     matrix_command = list(command)
     policy_start = matrix_command.index("--policies") + 1
     policy_end = matrix_command.index("--prefetcher")
@@ -1314,6 +1358,9 @@ def make_roi_job(
             "record_uninformed_base": uninformed_base,
             "record_bound_compare": bound_compare,
             "record_carrier_first": carrier_first,
+            "grasp_registration": grasp_registration,
+            "kernel_entry": kernel_entry,
+            "pass_scope": pass_scope,
             "config_hash": config_hash,
             "matrix_config_hash": matrix_config_hash,
             "comparison_config_hash": comparison_config_hash,
@@ -1353,7 +1400,8 @@ def expected_labels_for(
         expiry_clock: str = "progress", pressure_gate: str = "no",
         rrpv_order: str = "no", written_in_place: str = "no",
         uninformed_base: str = "no", bound_compare: str = "on",
-        carrier_first: str = "no") -> list[str]:
+        carrier_first: str = "no", grasp_registration: str = "all",
+        kernel_entry: str = "as-built", pass_scope: str = "off") -> list[str]:
     """The one place that decides what output labels a job should produce.
 
     This expression previously existed in three copies, each with its own
@@ -1368,7 +1416,8 @@ def expected_labels_for(
         query_count == 1 and governed_first == "no" and store_bound == "drop" and
         expiry_clock == "progress" and pressure_gate == "no" and rrpv_order == "no" and
         written_in_place == "no" and uninformed_base == "no" and bound_compare == "on" and
-        carrier_first == "no")
+        carrier_first == "no" and grasp_registration == "all" and kernel_entry == "as-built" and
+        pass_scope == "off")
     if default_shape:
         return [policy_output_label(policy) for policy in expected_policies]
     return algorithm_matrix.policy_labels(
@@ -1376,7 +1425,8 @@ def expected_labels_for(
         record_base_policy, window_observer, record_model, candidate_rrpv,
         grasp_scope, popt_rank_mode, frontier_gating, grasp_reference,
         query_count, governed_first, store_bound, expiry_clock, pressure_gate,
-        rrpv_order, written_in_place, uninformed_base, bound_compare, carrier_first)
+        rrpv_order, written_in_place, uninformed_base, bound_compare, carrier_first,
+        grasp_registration=grasp_registration, kernel_entry=kernel_entry, pass_scope=pass_scope)
 
 
 def csv_status(
@@ -1390,7 +1440,8 @@ def csv_status(
         expiry_clock: str = "progress", pressure_gate: str = "no",
         rrpv_order: str = "no", written_in_place: str = "no",
         uninformed_base: str = "no", bound_compare: str = "on",
-        carrier_first: str = "no") -> tuple[str, str]:
+        carrier_first: str = "no", grasp_registration: str = "all",
+        kernel_entry: str = "as-built", pass_scope: str = "off") -> tuple[str, str]:
     if not path.exists():
         return "missing", "output CSV missing"
     try:
@@ -1407,7 +1458,9 @@ def csv_status(
                 candidate_rrpv, grasp_scope, popt_rank_mode, frontier_gating,
                 grasp_reference, query_count, governed_first, store_bound,
                 expiry_clock, pressure_gate, rrpv_order, written_in_place,
-                uninformed_base, bound_compare, carrier_first))
+                uninformed_base, bound_compare, carrier_first,
+                grasp_registration=grasp_registration, kernel_entry=kernel_entry,
+                pass_scope=pass_scope))
             actual = {
                 row.get("policy_label", "") for row in rows
                 if row.get("policy_label")}
@@ -1444,11 +1497,16 @@ def job_csv_status(job: Job) -> tuple[str, str]:
     uninformed_base = str(job.metadata.get("record_uninformed_base", "no"))
     bound_compare = str(job.metadata.get("record_bound_compare", "on"))
     carrier_first = str(job.metadata.get("record_carrier_first", "no"))
+    contracts = {
+        "grasp_registration": str(job.metadata.get("grasp_registration", "all")),
+        "kernel_entry": str(job.metadata.get("kernel_entry", "as-built")),
+        "pass_scope": str(job.metadata.get("pass_scope", "off")),
+    }
     status, detail = csv_status(
         job.output_csv, expected, record_base, observer, model, floor, scope, rank_mode,
         gating, reference, queries, governed_first, store_bound, expiry_clock,
         pressure_gate, rrpv_order, written_in_place, uninformed_base, bound_compare,
-        carrier_first)
+        carrier_first, **contracts)
     if status != "ok":
         return status, detail
     if job.kind == "proof_matrix":
@@ -1494,7 +1552,7 @@ def job_csv_status(job: Job) -> tuple[str, str]:
         str(job.metadata.get("record_written_in_place", "no")),
         str(job.metadata.get("record_uninformed_base", "no")),
         str(job.metadata.get("record_bound_compare", "on")),
-        str(job.metadata.get("record_carrier_first", "no")))
+        str(job.metadata.get("record_carrier_first", "no")), **contracts)
     checks = {
         "policy_labels": expected_labels,
         "l3_sizes": list(job.metadata.get("l3_sizes", [])),

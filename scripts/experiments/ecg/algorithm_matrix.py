@@ -161,6 +161,17 @@ def pass_scope_label(label: str, scope: str) -> str:
     return label + "_PASS_SCOPED"
 
 
+def pass_scope_admits(benchmark: str, spec, record_base_policy: str) -> bool:
+    """NEXT.md §by: the one admission rule, for a runner cell and a flow stage alike.
+
+    The scope serves the filtered kernels' declared GRASP base: the CSR GRASP
+    baseline, or the record transport and replacement rows over that base.
+    """
+    mode = spec.record_mechanism or "csr"
+    return benchmark in ("bfs", "sssp", "bc") and (
+        spec.label == "GRASP_PAPER" if mode == "csr" else
+        mode in ("transport", "replacement") and record_base_policy == "GRASP_PAPER")
+
 
 def popt_rank_label(label: str, rank_mode: str) -> str:
     if rank_mode == "future":
@@ -1230,10 +1241,8 @@ def run_cache_cell(
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
         scoped = options.pass_scope != "off"
-        require(not scoped or args.benchmark in ("bfs", "sssp", "bc") and (
-            policy == "GRASP_PAPER" if mode == "csr" else
-            mode in ("transport", "replacement") and options.record_base_policy == "GRASP_PAPER"),
-            "pass scope requires the declared GRASP base on BFS, SSSP or BC without prefetch")
+        require(not scoped or pass_scope_admits(args.benchmark, spec, options.record_base_policy),
+                "pass scope requires the declared GRASP base on BFS, SSSP or BC without prefetch")
         batch = options.queries > 1
         require(not batch or args.benchmark == "spmv" and mode == "csr" and
                 options.record_model == "next" and options.record_preprocess == "csr" and

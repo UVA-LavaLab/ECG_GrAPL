@@ -242,6 +242,28 @@ def test_the_runner_refuses_a_scope_it_has_no_model_for(tmp_path, algorithm, spe
         rows[0].get("error"))
 
 
+@pytest.mark.parametrize("algorithm,spec,base,admitted", [
+    ("bfs", "GRASP_PAPER", "LRU", True),
+    ("sssp", "ECG:transport", "GRASP_PAPER", True),
+    ("bc", "ECG:replacement", "GRASP_PAPER", True),
+    ("bfs", "ECG:replacement", "LRU", False),
+    ("sssp", "ECG:transport", "LRU", False),
+    ("bfs", "ECG:prefetch", "GRASP_PAPER", False),
+    ("bc", "ECG", "GRASP_PAPER", False),
+    ("sssp", "POPT", "GRASP_PAPER", False),
+    ("bfs", "POPT:UNCHARGED", "LRU", False),
+    ("bc", "LRU", "LRU", False),
+    ("bc", "SRRIP", "LRU", False),
+    ("spmv", "GRASP_PAPER", "LRU", False),
+    ("cc", "GRASP_PAPER", "LRU", False),
+    ("tc", "GRASP_PAPER", "LRU", False),
+    ("pr", "GRASP_PAPER", "LRU", False),
+])
+def test_one_admission_rule_serves_the_runner_and_the_flow(algorithm, spec, base, admitted):
+    """The runner refuses a cell and the flow refuses a stage by this one rule."""
+    from scripts.experiments.ecg import algorithm_matrix, roi_matrix
+    assert algorithm_matrix.pass_scope_admits(algorithm, roi_matrix.parse_policy_spec(spec), base) is admitted
+
 
 _NATIVE_MAIN = """
 #include "ecg_algorithm_main.h"
