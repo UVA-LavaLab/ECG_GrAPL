@@ -22,6 +22,15 @@ The motivation:
   benchmark; it's the *mixed* configuration that is almost certainly a
   bug.
 
+* One exception is explicit (NEXT.md §bv C1). Under the GRASP registration
+  contract ``ecg.grasp-declaration.v1`` a kernel registers every property
+  array with ``grasp_region = !grasp_declared`` and then designates, per
+  phase, the arrays upstream GRASP protects with ``declareGraspRegion()``.
+  Such a call is the contract, not a mixed literal, and is allowed only in
+  a source that enables declarations and declares; which arrays it declares
+  is held by the receipts in ``test_fair_comparison.py`` and the C++
+  fixture in ``bench/src_sim/test_ecg_algorithms.cc``.
+
 We parse the source with regex (good enough for these small files; the
 calls are always single-line).  Test fails fast with the offending file
 and the boolean breakdown so the fix is obvious.
@@ -54,7 +63,10 @@ STRUCT_REGION_RE = re.compile(
 )
 
 
-def _parse_grasp_region(call_args: str) -> bool | None:
+DECLARED = "declared"  # the contract's flag, ``!grasp_declared``
+
+
+def _parse_grasp_region(call_args: str) -> bool | str | None:
     """Return the value of the trailing ``grasp_region`` argument.
 
     The signature is::
@@ -91,14 +103,16 @@ def _parse_grasp_region(call_args: str) -> bool | None:
         return True
     if val.lower() == "false":
         return False
+    if val == "!grasp_declared":
+        return DECLARED
     return None
 
 
-def _scan(path: Path) -> list[bool | None]:
+def _scan(path: Path) -> list[bool | str | None]:
     text = path.read_text()
     # Strip line comments to avoid matching examples in comments.
     text = re.sub(r"//[^\n]*", "", text)
-    out: list[bool | None] = []
+    out: list[bool | str | None] = []
     for match in CALL_RE.finditer(text):
         out.append(_parse_grasp_region(match.group(1)))
     # For gem5/Sniper sources the property regions are represented as
@@ -166,8 +180,14 @@ def test_multi_property_grasp_region_consistent(src_file: Path) -> None:
         f"{src_file.name}: could not parse grasp_region flag in one or "
         f"more registerPropertyArray() calls: {flags}"
     )
+    if DECLARED in flags:
+        text = re.sub(r"//[^\n]*", "", src_file.read_text())
+        assert "enableGraspDeclarations()" in text and "declareGraspRegion(" in text, (
+            f"{src_file.name} registers under the GRASP declaration contract "
+            f"without enabling it and declaring its arrays")
+    flags = [flag for flag in flags if flag != DECLARED]
     distinct = set(flags)
-    assert len(distinct) == 1, (
+    assert len(distinct) <= 1, (
         f"{src_file.name} registers {len(flags)} property arrays with "
         f"mixed grasp_region flags {flags}. All must be true (preferred) "
         f"or all false. Mixed configuration caused the BC multi-property "

@@ -66,6 +66,8 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--record-store-bound", choices=("drop", "keep"), default="drop")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
+    parser.add_argument("--grasp-registration", choices=("all", "declared"), default="all")
+    parser.add_argument("--kernel-entry", choices=("as-built", "cold"), default="as-built")
     parser.add_argument("--bfs-traffic-phases", choices=("on", "off"), default="off")
     parser.add_argument("--window-candidate-rrpv", choices=(6, 7), type=int, default=6)
     parser.add_argument("--window-observer", choices=("off", "control", "window"), default="off")
@@ -123,6 +125,16 @@ def observer_policy_label(label: str, observer: str) -> str:
 
 def grasp_scope_label(label: str, scope: str) -> str:
     return label if scope == "all" else f"{label}_GRAPH_PASSES"
+
+
+# NEXT.md §bv C1, C2: the fair-comparison contracts, outermost so every
+# historical label is unchanged and no row aliases one run under another.
+def grasp_registration_label(label: str, registration: str) -> str:
+    return label if registration == "all" else f"{label}_GRASP_DECLARED"
+
+
+def kernel_entry_label(label: str, entry: str) -> str:
+    return label if entry == "as-built" else f"{label}_COLD_ENTRY"
 
 
 def popt_rank_label(label: str, rank_mode: str) -> str:
@@ -241,12 +253,14 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   expiry_clock: str = "progress",
                   pressure_gate: str = "no", rrpv_order: str = "no",
                   written_in_place: str = "no", uninformed_base: str = "no",
-                  bound_compare: str = "on", carrier_first: str = "no") -> list[str]:
+                  bound_compare: str = "on", carrier_first: str = "no",
+                  grasp_registration: str = "all", kernel_entry: str = "as-built") -> list[str]:
     require(governed_first == "no" or carrier_first == "no",
             "governed-first and carrier-first are two victim orders, never one")
-    return [bound_compare_label(uninformed_base_label(pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(written_in_place_label(rrpv_order_label(carrier_first_label(governed_first_label(record_policy_label(
+    return [kernel_entry_label(grasp_registration_label(bound_compare_label(uninformed_base_label(pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(written_in_place_label(rrpv_order_label(carrier_first_label(governed_first_label(record_policy_label(
                 spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), carrier_first), rrpv_order), written_in_place), store_bound), expiry_clock), observer),
-                grasp_scope), popt_rank_mode), grasp_reference), queries), pressure_gate), uninformed_base), bound_compare)
+                grasp_scope), popt_rank_mode), grasp_reference), queries), pressure_gate), uninformed_base), bound_compare),
+                grasp_registration), kernel_entry)
             for spec in policies]
 
 
@@ -262,6 +276,8 @@ def validate_payload(
             payload.get("policy") == policy and payload.get("timing_valid_for_speedup") is False,
             "algorithm backend/mode/policy receipt mismatch")
     require(payload.get("grasp_scope", "all") == options.grasp_scope, "GRASP phase-scope receipt mismatch")
+    validate_fair_comparison(payload, algorithm, options.grasp_registration, options.kernel_entry,
+                             sources=len(options.source_list) or 1)
     constant_ranks = options.popt_rank_mode == "constant"
     reference = options.grasp_reference != "off"
     rank_constant = constant_ranks or options.grasp_reference == "flat"
@@ -937,10 +953,94 @@ def _file_hash(path: Path) -> str:
     return digest.hexdigest()
 
 
+# The frozen ecg.grasp-declaration.v1 declarations (NEXT.md §bv): each kernel's phases as (array, role, percent
+# of the last level). BC repeats its forward and backward phases for every source.
+GRASP_DECLARATION_CONTRACT = "ecg.grasp-declaration.v1"
+GRASP_DECLARATIONS = {
+    "spmv": (("x", "A", 100),),
+    "bfs": (("depth", "A", 100),),
+    "sssp": (("distances", "A", 100),),
+    "pr": (("contribution", "A", 50),),
+    "bc": (("path_counts", "A", 50), ("depth", "B", 50), ("dependency", "A", 50), ("depth", "B", 50)),
+}
+GRASP_DECLARED_KERNELS = frozenset(GRASP_DECLARATIONS)
+
+
+def expected_grasp_declarations(algorithm: str, sources: int = 1) -> list[tuple[str, str, int, int]]:
+    """The declarations a receipt must carry, with the property selections made before each."""
+    if algorithm != "bc":
+        return [(array, role, percent, 0) for array, role, percent in GRASP_DECLARATIONS.get(algorithm, ())]
+    return [(array, role, percent, 2 * source + (index >= 2))
+            for source in range(sources) for index, (array, role, percent) in enumerate(GRASP_DECLARATIONS["bc"])]
+
+
+def validate_fair_comparison(payload: dict[str, Any], algorithm: str, registration: str, entry: str,
+                             record_base: str | None = None, sources: int = 1) -> None:
+    """NEXT.md §bv C1-C3: a receipt attests the registration, the kernel entry and, for a PageRank record row,
+    the base policy it ran under, and conforms to each."""
+    metrics = payload.get("metrics") if "metrics" in payload else payload
+    require(isinstance(metrics, dict), "missing total traffic counters")
+    if "metrics" in payload:
+        require(payload.get("grasp_registration", "all") == registration, "GRASP registration receipt mismatch")
+        require(payload.get("kernel_entry", "as-built") == entry, "kernel-entry receipt mismatch")
+    require(metrics.get("kernel_entry", "as-built") == entry, "kernel-entry receipt mismatch")
+    captured = metrics.get("property_registration")
+    if registration == "declared":
+        require(isinstance(captured, dict) and captured.get("grasp_registration") == GRASP_DECLARATION_CONTRACT,
+                "declared GRASP registration has no declaration receipt")
+        require(captured.get("boundary_mode") == "capacity", "declared GRASP registration must tier by capacity")
+        declarations = captured.get("grasp_declarations")
+        require(isinstance(declarations, list) and all(isinstance(item, dict) for item in declarations),
+                "invalid GRASP declaration receipt")
+        declared = [(item.get("region"), item.get("role"), item.get("percent"), item.get("selections"))
+                    for item in declarations]
+        require(declared == expected_grasp_declarations(algorithm, sources),
+                f"GRASP declarations differ from {GRASP_DECLARATION_CONTRACT}")
+        phase: set[str] = set()
+        for array, role, _, _ in declared:
+            phase = {array} if role == "A" else phase | {array}
+        regions = captured.get("property_regions")
+        require(isinstance(regions, list) and regions and all(isinstance(region, dict) for region in regions),
+                "missing property region receipt")
+        require({region.get("name") for region in regions if region.get("grasp") is True} == phase,
+                "GRASP designations differ from the last declared phase")
+    elif captured is not None:
+        require(isinstance(captured, dict) and captured.get("grasp_registration") == "all" and
+                not captured.get("grasp_declarations"), "historical GRASP registration receipt mismatch")
+    if isinstance(captured, dict) and captured.get("property_regions"):
+        if "traffic_phases" in payload:
+            kernel = payload["traffic_phases"].get("kernel", {})
+            hits, misses = kernel.get("llc_property_hits"), kernel.get("llc_property_misses")
+        else:
+            llc = metrics.get("L3") if isinstance(metrics.get("L3"), dict) else {}
+            hits, misses = llc.get("prop_hits"), llc.get("prop_misses")
+        regions = captured["property_regions"]
+        require(sum(region.get("kernel_hits", 0) for region in regions) == hits and
+                sum(region.get("kernel_misses", 0) for region in regions) == misses,
+                "per-region counts do not close on the kernel's property traffic")
+    if entry == "cold":
+        maintenance = metrics.get("kernel_entry_maintenance_writebacks")
+        require(type(maintenance) is int and maintenance >= 0, "cold kernel entry has no maintenance receipt")
+        require(metrics.get("kernel_entry_cold_boundaries") == 1, "a cold kernel entry crosses exactly one boundary")
+        require(metrics.get("kernel_entry_residual_lines") == [0, 0, 0], "a cold boundary leaves no line at any level")
+        census = metrics.get("kernel_census")
+        require(isinstance(census, dict) and census.get("entry_valid_lines") == 0 and
+                census.get("entry_dirty_lines") == 0, "the kernel census must find an empty last level")
+        if "traffic_phases" in payload:
+            require(payload["traffic_phases"].get("setup", {}).get("llc_writebacks", -1) >= maintenance,
+                    "the boundary's write-backs must be setup's")
+    else:
+        require(metrics.get("kernel_entry_cold_boundaries", 0) == 0, "an as-built kernel entry crosses no boundary")
+    if record_base is not None:
+        require(metrics.get("record_base_policy") == record_base, "PageRank record base policy receipt mismatch")
+
+
 def validate_traffic_phases(payload: dict[str, Any]) -> dict[str, int]:
     phases = payload.get("traffic_phases")
+    cold = payload.get("kernel_entry", "as-built") == "cold"
     require(isinstance(phases, dict) and phases.get("boundary") == "first-binding-complete" and
-            phases.get("cache_state_preserved") is True, "missing nonintrusive setup/kernel traffic boundary")
+            phases.get("cache_state_preserved") is (not cold), "missing nonintrusive setup/kernel traffic boundary"
+            if not cold else "a cold kernel entry must report a boundary that does not preserve the cache")
     metrics = payload.get("metrics")
     require(isinstance(metrics, dict), "missing total traffic counters")
     result = {}
@@ -1042,7 +1142,8 @@ def run_cache_cell(
             options.record_governed_first, options.record_store_bound,
             options.record_expiry_clock, options.record_pressure_gate,
             options.record_rrpv_order, uninformed_base=options.record_uninformed_base,
-            bound_compare=options.record_bound_compare, carrier_first=options.record_carrier_first)[0]
+            bound_compare=options.record_bound_compare, carrier_first=options.record_carrier_first,
+            grasp_registration=options.grasp_registration, kernel_entry=options.kernel_entry)[0]
         if reference:
             row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:
@@ -1074,6 +1175,8 @@ def run_cache_cell(
         if options.record_model == "frontier":
             model_suffix = f"_MODEL_FRONTIER_RRPV7_GATING_{options.frontier_gating.upper()}"
         phase_suffix = "" if options.grasp_scope == "all" else "_GRAPH_PASSES"
+        phase_suffix += "" if options.grasp_registration == "all" else "_GRASP_DECLARED"
+        phase_suffix += "" if options.kernel_entry == "as-built" else "_COLD_ENTRY"
         rank_suffix = "" if options.popt_rank_mode == "future" else "_CONST_RANK"
         label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{model_suffix}{observer_suffix}{phase_suffix}"
                  f"{rank_suffix}_L3{parse_size_bytes(l3_size)}")
@@ -1129,6 +1232,10 @@ def run_cache_cell(
             command.extend(("--record-expiry-clock", options.record_expiry_clock))
         if phase_modes:
             command.extend(("--grasp-scope", options.grasp_scope, "--bfs-traffic-phases", options.bfs_traffic_phases))
+        if options.grasp_registration != "all":
+            command.extend(("--grasp-registration", options.grasp_registration))
+        if options.kernel_entry != "as-built":
+            command.extend(("--kernel-entry", options.kernel_entry))
         if options.record_model == "window":
             command.extend(("--record-model", "window", "--window-candidate-rrpv", str(options.window_candidate_rrpv)))
         if options.record_model == "frontier":

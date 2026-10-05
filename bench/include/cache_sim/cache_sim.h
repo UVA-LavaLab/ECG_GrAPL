@@ -11,6 +11,7 @@
 #include <cstring>
 #include <vector>
 #include <unordered_map>
+#include <array>
 #include <unordered_set>
 #include <list>
 #include <deque>
@@ -1094,7 +1095,10 @@ public:
             if (set[i].valid && set[i].tag == tag) {
                 // Hit!
                 stats_.hits++;
-                if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_hits++;
+                if (const auto* region = graph_ctx_ ? graph_ctx_->findRegion(address) : nullptr) {
+                    stats_.prop_hits++;
+                    region_hits_[region->region_id].fetch_add(1, std::memory_order_relaxed);
+                }
                 if (isGovernedProperty(address))
                     ++governed_property_hits_;
                 if (record_pressure_gate_ == RecordPressureGate::COUNTER &&
@@ -1124,7 +1128,10 @@ public:
             ++(is_write ? record_victim_attribution_.dead_first_refetch_write
                : record ? record_victim_attribution_.dead_first_refetch_gather
                         : record_victim_attribution_.dead_first_refetch_read);
-        if (graph_ctx_ && graph_ctx_->findRegion(address)) stats_.prop_misses++;
+        if (const auto* region = graph_ctx_ ? graph_ctx_->findRegion(address) : nullptr) {
+            stats_.prop_misses++;
+            region_misses_[region->region_id].fetch_add(1, std::memory_order_relaxed);
+        }
         if (isGovernedProperty(address))
             ++governed_property_misses_;
         if (record_pressure_gate_ == RecordPressureGate::COUNTER &&
@@ -1643,12 +1650,19 @@ public:
     const CacheStats& getStats() const { return stats_; }
     void resetStats() {
         stats_.reset();
+        for (std::size_t region = 0; region < MAX_PROPERTY_REGIONS; ++region) {
+            region_hits_[region].store(0, std::memory_order_relaxed);
+            region_misses_[region].store(0, std::memory_order_relaxed);
+        }
+        region_hit_marks_.fill(0);
+        region_miss_marks_.fill(0);
         reuse_admission_updates_ = 0;
         ref32_governed_hits_ = 0;
         ref32_governed_misses_ = 0;
         governed_property_hits_ = 0;
         governed_property_misses_ = 0;
         record_victim_attribution_ = RecordVictimAttribution();
+        record_duel_selector_at_reset_ = record_duel_selector_;
         dead_first_lines_.clear();
         ref32_dead_bypasses_ = 0;
         ref32_dead_victims_ = 0;
@@ -1965,6 +1979,9 @@ public:
     }
     RecordPressureGate recordPressureGate() const { return record_pressure_gate_; }
     uint16_t getRecordDuelSelector() const { return record_duel_selector_; }
+    // The selector keeps what earlier traffic taught it across a statistics
+    // reset; this is its value then, so the run's own leaders account for the rest.
+    uint16_t getRecordDuelSelectorAtReset() const { return record_duel_selector_at_reset_; }
     bool recordPressuredForTest(size_t set_idx) const {
         return recordSetPressured(set_idx);
     }
@@ -2319,6 +2336,47 @@ public:
 
     // The entry counterfactuals: every line keeps its place and its
     // replacement state; only its dirty bit is cleared or, if valid, set.
+    // The cold kernel boundary (NEXT.md §bv C2): collects the address of every
+    // dirty line and invalidates every line, so the hierarchy charges a line
+    // dirty in several levels once.
+    void invalidateForColdEntry(std::unordered_set<uint64_t>& dirty_lines) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto& set : cache_)
+            for (auto& line : set) {
+                if (line.valid && line.dirty)
+                    dirty_lines.insert(line.line_addr);
+                line = CacheLine();
+            }
+    }
+
+    void chargeMaintenanceWritebacks(uint64_t lines) { stats_.writebacks.fetch_add(lines); }
+
+    std::size_t validLines() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::size_t valid = 0;
+        for (const auto& set : cache_)
+            for (const auto& line : set)
+                valid += line.valid;
+        return valid;
+    }
+
+    // Hits and misses per property region (NEXT.md §bv C3), over the run and
+    // from the kernel boundary, so a named array's traffic compares across rows.
+    uint64_t propertyRegionHits(uint32_t region) const { return region_hits_.at(region).load(); }
+    uint64_t propertyRegionMisses(uint32_t region) const { return region_misses_.at(region).load(); }
+    uint64_t propertyRegionKernelHits(uint32_t region) const {
+        return region_hits_.at(region).load() - region_hit_marks_.at(region);
+    }
+    uint64_t propertyRegionKernelMisses(uint32_t region) const {
+        return region_misses_.at(region).load() - region_miss_marks_.at(region);
+    }
+    void markPropertyRegionKernel() {
+        for (std::size_t region = 0; region < MAX_PROPERTY_REGIONS; ++region) {
+            region_hit_marks_[region] = region_hits_[region].load();
+            region_miss_marks_[region] = region_misses_[region].load();
+        }
+    }
+
     void setDirtyLinesForTest(bool dirty) {
         std::lock_guard<std::mutex> lock(mutex_);
         for (auto& set : cache_)
@@ -3945,6 +4003,7 @@ private:
     static constexpr uint16_t kRecordDuelInitial = 511;
     static constexpr uint16_t kRecordDuelRelax = 512;
     uint16_t record_duel_selector_ = kRecordDuelInitial;
+    uint16_t record_duel_selector_at_reset_ = kRecordDuelInitial;
 
     static RecordDuelRole recordDuelRole(size_t set_idx) {
         const size_t slot = set_idx & (kRecordDuelSlots - 1);
@@ -4041,6 +4100,8 @@ private:
     uint64_t ref32_governed_misses_ = 0;
     uint64_t governed_property_hits_ = 0;
     uint64_t governed_property_misses_ = 0;
+    std::array<std::atomic<uint64_t>, MAX_PROPERTY_REGIONS> region_hits_{}, region_misses_{};
+    std::array<uint64_t, MAX_PROPERTY_REGIONS> region_hit_marks_{}, region_miss_marks_{};
     RecordVictimAttribution record_victim_attribution_;
     // Passive: the lines DEAD-first evicted since the counters were reset and
     // not yet fetched again, read only by the re-fetch count. Not hardware.
@@ -4507,6 +4568,7 @@ public:
         record_configuration_ = configuration;
         record_stream_ = &stream;
         record_mechanism_ = mechanism;
+        record_base_policy_name_ = base_policy == EvictionPolicy::GRASP ? "GRASP_PAPER" : "LRU";
         record_queue_ = std::make_unique<ecg_record::CommitQueue>(update_latency, 1);
         record_prefetch_latency_ = prefetch_latency;
         record_prefetch_capacity_ = prefetch_capacity;
@@ -5035,6 +5097,59 @@ public:
         prefetched_lines_.clear();
     }
 
+    // The cold kernel boundary (NEXT.md §bv C2), called before setup's last
+    // snapshot. Every line dirty at any level is written back once, charged as
+    // a last-level write-back so setup carries it, and every level is
+    // invalidated, so the kernel starts empty whichever policy built its
+    // setup. Pending prefetches or commit updates cannot cross it.
+    uint64_t coldKernelEntry() {
+        const char* stream = std::getenv("CACHE_STREAM_PREFETCH_DEGREE");
+        if (ref32_commit_channel_ || ref32_prefetch_enabled_ ||
+            record_mechanism_ == ecg_record::Mechanism::PREFETCH ||
+            record_mechanism_ == ecg_record::Mechanism::REPLACEMENT_PREFETCH ||
+            (stream && std::atoi(stream) > 0))
+            throw std::logic_error("cold-kernel-entry-requires-no-pending-prefetch");
+        std::unordered_set<uint64_t> dirty_lines;
+        l1_->invalidateForColdEntry(dirty_lines);
+        l2_->invalidateForColdEntry(dirty_lines);
+        l3_->invalidateForColdEntry(dirty_lines);
+        l3_->chargeMaintenanceWritebacks(dirty_lines.size());
+        cold_entry_residual_lines_ = {l1_->validLines(), l2_->validLines(), l3_->validLines()};
+        ++cold_kernel_entries_;
+        kernel_entry_maintenance_writebacks_ += dirty_lines.size();
+        return dirty_lines.size();
+    }
+    // The GRASP registration contract and each property region's last-level
+    // traffic (NEXT.md §bv C1, C3). The program that owns the context captures
+    // them when its kernel ends, before it detaches the context, and the
+    // receipt carries the capture.
+    void captureRegistrationReceipt(const GraphCacheContext& context) {
+        std::ostringstream receipt;
+        receipt << "{\"grasp_registration\":\""
+                << (context.grasp_declared ? GraphCacheContext::kGraspDeclarationContract : "all")
+                << "\",\"boundary_mode\":\"" << context.graspBoundaryMode()
+                << "\",\"grasp_declarations\":[";
+        const auto& declarations = context.graspDeclarations();
+        for (std::size_t index = 0; index < declarations.size(); ++index)
+            receipt << (index ? "," : "") << "{\"region\":\"" << context.regions[declarations[index].region].name
+                    << "\",\"role\":\""
+                    << (declarations[index].role == GraphCacheContext::GraspRole::PROPERTY_B ? "B" : "A")
+                    << "\",\"percent\":" << declarations[index].percent
+                    << ",\"selections\":" << declarations[index].selections << '}';
+        receipt << "],\"property_regions\":[";
+        for (uint32_t region = 0; region < context.num_regions; ++region)
+            receipt << (region ? "," : "") << "{\"name\":\"" << context.regions[region].name
+                    << "\",\"grasp\":" << (context.regions[region].grasp_region ? "true" : "false")
+                    << ",\"hits\":" << l3_->propertyRegionHits(region)
+                    << ",\"misses\":" << l3_->propertyRegionMisses(region)
+                    << ",\"kernel_hits\":" << l3_->propertyRegionKernelHits(region)
+                    << ",\"kernel_misses\":" << l3_->propertyRegionKernelMisses(region) << '}';
+        receipt << "]}";
+        registration_receipt_ = receipt.str();
+    }
+    uint64_t coldKernelEntries() const { return cold_kernel_entries_; }
+    uint64_t kernelEntryMaintenanceWritebacks() const { return kernel_entry_maintenance_writebacks_; }
+
     // Kernel census: the setup/kernel boundary. Arms the passive census,
     // records which last-level lines are dirty at entry, and starts the
     // segments.
@@ -5042,6 +5157,7 @@ public:
     void markKernelEntry() {
         if (census_pass_open_)
             throw std::logic_error("kernel census: kernel boundary inside a graph pass");
+        l3_->markPropertyRegionKernel();
         if (kernel_entry_for_test_ == KernelEntryForTest::UNARMED)
             return;
         if (kernel_entry_for_test_ != KernelEntryForTest::AS_BUILT)
@@ -5559,6 +5675,14 @@ public:
            << getStructuralFlowThroughAccesses() << ",\n";
         ss << "  \"llc_writebacks\": " << getWritebackTraffic() << ",\n";
         ss << "  \"total_offchip_traffic\": " << getTotalOffChipTraffic() << ",\n";
+        ss << "  \"kernel_entry\": \"" << (cold_kernel_entries_ ? "cold" : "as-built") << "\",\n";
+        ss << "  \"record_base_policy\": \"" << record_base_policy_name_ << "\",\n";
+        ss << "  \"kernel_entry_maintenance_writebacks\": " << kernel_entry_maintenance_writebacks_ << ",\n";
+        ss << "  \"kernel_entry_cold_boundaries\": " << cold_kernel_entries_ << ",\n";
+        ss << "  \"kernel_entry_residual_lines\": [" << cold_entry_residual_lines_[0] << ", "
+           << cold_entry_residual_lines_[1] << ", " << cold_entry_residual_lines_[2] << "],\n";
+        ss << "  \"property_registration\": "
+           << (registration_receipt_.empty() ? std::string("null") : registration_receipt_) << ",\n";
         ss << "  \"ecg_mode_effective\": \"" << l3_->getEcgMode()
            << "\",\n";
         ss << "  \"ecg_dueling_set_offset\": "
@@ -5625,6 +5749,7 @@ public:
             ss << "  \"ecg_record_duel_follower_base\": " << a.duel_follower_base << ",\n";
             ss << "  \"ecg_record_duel_winner_changes\": " << a.duel_winner_changes << ",\n";
             ss << "  \"ecg_record_duel_selector\": " << l3_->getRecordDuelSelector() << ",\n";
+            ss << "  \"ecg_record_duel_selector_at_reset\": " << l3_->getRecordDuelSelectorAtReset() << ",\n";
         }
         ss << "  \"ecg_ref32_dead_bypasses\": "
            << l3_->getRef32DeadBypasses() << ",\n";
@@ -5878,6 +6003,10 @@ private:
     uint64_t census_entry_writebacks_mark_ = 0;
     std::array<uint64_t, kCensusSegments> census_entry_writebacks_{};
     KernelEntryForTest kernel_entry_for_test_ = KernelEntryForTest::AS_BUILT;
+    uint64_t cold_kernel_entries_ = 0, kernel_entry_maintenance_writebacks_ = 0;
+    std::array<std::size_t, 3> cold_entry_residual_lines_{};
+    std::string registration_receipt_;
+    const char* record_base_policy_name_ = "none";
     CacheLevel::KernelCensusEntry census_entry_;
     // The first kCensusPassDetail passes, each with its own traffic, the
     // setup writebacks among it and the last-level lines at its end. The

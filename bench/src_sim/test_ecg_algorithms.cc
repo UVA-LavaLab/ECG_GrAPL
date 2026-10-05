@@ -1757,6 +1757,417 @@ void testEdgeStreamAccounting() {
     check(refuses([&] { window_engine.edgeTarget(0); }), "an inspection needs the NEXT model");
 }
 
+// True when `action` throws a standard exception whose message is `expected`.
+template<class Action>
+bool refusesWith(Action&& action, const std::string& expected) {
+    try {
+        action();
+    } catch (const std::exception& error) {
+        if (error.what() != expected)
+            std::cerr << "refused with \"" << error.what() << "\", expected \"" << expected << "\"\n";
+        return error.what() == expected;
+    }
+    return false;
+}
+
+Fixture declaredGraspGraph() {
+    std::mt19937 random(20261004);
+    std::uniform_int_distribution<uint32_t> vertex(0, 255);
+    std::uniform_int_distribution<int32_t> weight(1, 4);
+    std::vector<std::tuple<uint32_t, uint32_t, int32_t>> edges = {{0, 1, 1}};
+    while (edges.size() < 1024) {
+        const uint32_t from = vertex(random), to = vertex(random);
+        if (from < to)
+            edges.emplace_back(from, to, weight(random));
+    }
+    std::sort(edges.begin(), edges.end());
+    edges.erase(std::unique(edges.begin(), edges.end(), [](const auto& left, const auto& right) {
+        return std::get<0>(left) == std::get<0>(right) && std::get<1>(left) == std::get<1>(right);
+    }), edges.end());
+    return Fixture(256, false, edges);
+}
+
+// §bv C1. Under ecg.grasp-declaration.v1 each kernel phase registers the
+// array upstream GRASP's add_region("propertyA", ...) protects, at its
+// declared fraction of the last level: SpMV's x, BFS's depth and SSSP's
+// distances at the whole capacity (BellmanFordOpt's 100), BC's path counts
+// forward and dependencies backward at half (BC.C's 100 - frontier_frac).
+// BC adds depth, its per-edge visited check, as the phase's propertyB at the
+// other half, the role upstream gives the dense frontier bitmap. Every other
+// property array stays a property region but not a GRASP region. The
+// historical registration, every property array at half, stays the default.
+void testDeclaredGraspRegistration() {
+    using namespace ecg_algorithm;
+    using Role = cache_sim::GraphCacheContext::GraspRole;
+    struct Case {
+        Algorithm algorithm;
+        bool weighted;
+        std::vector<std::tuple<std::string, uint32_t, uint64_t, Role>> declarations;
+    };
+    const Case cases[] = {
+        {Algorithm::SPMV, true, {{"x", 100, 0, Role::PROPERTY_A}}},
+        {Algorithm::BFS, false, {{"depth", 100, 0, Role::PROPERTY_A}}},
+        {Algorithm::SSSP, true, {{"distances", 100, 0, Role::PROPERTY_A}}},
+        {Algorithm::BC, false, {{"path_counts", 50, 0, Role::PROPERTY_A}, {"depth", 50, 0, Role::PROPERTY_B},
+                                {"dependency", 50, 1, Role::PROPERTY_A}, {"depth", 50, 1, Role::PROPERTY_B}}}};
+    if (setenv("GRASP_BOUNDARY_MODE", "capacity", 1) != 0) {
+        check(false, "capacity tiering is configured");
+        return;
+    }
+    const Fixture graph = declaredGraspGraph();
+    for (const Case& item : cases) {
+        for (bool records : {false, true}) {
+            for (bool declared : {false, true}) {
+                Options options;
+                options.algorithm = item.algorithm;
+                options.delta = 2;
+                options.records = records;
+                options.grasp_declared = declared;
+                if (records) {
+                    options.mechanism = ecg_record::Mechanism::REPLACEMENT;
+                    options.record_base_policy = RecordBasePolicy::GRASP_PAPER;
+                }
+                cache_sim::CacheHierarchy cache(128, 2, 256, 2, 2048, 4, 64,
+                    cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU,
+                    cache_sim::EvictionPolicy::GRASP);
+                cache_sim::AlgorithmBackend backend(cache, options, 2048, true, false);
+                ecg_algorithm::run(graph.view(item.weighted), options, backend);
+                const auto& context = backend.graphContext();
+                const auto& log = context.graspDeclarations();
+                if (!declared) {
+                    bool every = context.num_regions > 0 && log.empty() && !context.grasp_declared;
+                    for (uint32_t index = 0; index < context.num_regions; ++index)
+                        every = every && context.regions[index].grasp_region &&
+                            context.regions[index].grasp_hot_percent == 50;
+                    check(every, "the historical registration keeps every property array a GRASP region at half");
+                    continue;
+                }
+                bool logged = context.grasp_declared && log.size() == item.declarations.size();
+                for (size_t index = 0; logged && index < log.size(); ++index)
+                    logged = log[index].region < context.num_regions &&
+                        std::string(context.regions[log[index].region].name) ==
+                            std::get<0>(item.declarations[index]) &&
+                        log[index].percent == std::get<1>(item.declarations[index]) &&
+                        log[index].selections == std::get<2>(item.declarations[index]) &&
+                        log[index].role == std::get<3>(item.declarations[index]);
+                check(logged, "each kernel phase declares upstream GRASP's arrays, fractions and moment");
+                std::vector<std::string> last_phase;
+                std::vector<uint32_t> last_percents;
+                for (const auto& declaration : item.declarations) {
+                    if (std::get<3>(declaration) == Role::PROPERTY_A) {
+                        last_phase.clear();
+                        last_percents.clear();
+                    }
+                    last_phase.push_back(std::get<0>(declaration));
+                    last_percents.push_back(std::get<1>(declaration));
+                }
+                uint32_t designated_regions = 0;
+                bool cold = context.num_regions > 0;
+                for (uint32_t index = 0; index < context.num_regions; ++index) {
+                    const auto& region = context.regions[index];
+                    const auto found = std::find(last_phase.begin(), last_phase.end(), std::string(region.name));
+                    const bool designated = found != last_phase.end();
+                    designated_regions += region.grasp_region;
+                    cold = cold && region.grasp_region == designated &&
+                        context.classifyGRASP(region.base_address, 2048) == (designated ? 1u : 3u) &&
+                        (!designated || region.grasp_hot_percent ==
+                            last_percents[static_cast<std::size_t>(found - last_phase.begin())]);
+                }
+                check(cold && designated_regions == last_phase.size(),
+                      "only the phase's declared arrays are GRASP regions; every other property line is cold");
+                const std::string receipt = cache.toJSON();
+                const std::string first = "{\"region\":\"" + std::get<0>(item.declarations.front()) +
+                    "\",\"role\":\"A\",\"percent\":" + std::to_string(std::get<1>(item.declarations.front())) + ",";
+                check(receipt.find("\"grasp_registration\":\"ecg.grasp-declaration.v1\"") != std::string::npos &&
+                      receipt.find(first) != std::string::npos,
+                      "the receipt attests the declared contract and its declarations");
+            }
+        }
+    }
+
+    // A phase switch changes only later classification: lines keep the RRPV
+    // they were inserted with.
+    {
+        cache_sim::GraphCacheContext context;
+        context.topology.num_vertices = 64;
+        context.enableGraspDeclarations();
+        const bool grasp_declared = context.grasp_declared;
+        check(refusesWith([&] { context.registerPropertyArray(reinterpret_cast<const void*>(0x60000), 64, 4, 2048, 0.5); },
+                          "declared-registration-designates-by-declaration"),
+              "under the declared contract registration designates nothing");
+        context.registerPropertyArray(reinterpret_cast<const void*>(0x10000), 64, 4, 2048, 0.5, !grasp_declared, "path_counts");
+        context.registerPropertyArray(reinterpret_cast<const void*>(0x20000), 64, 4, 2048, 0.5, !grasp_declared, "dependency");
+        context.declareGraspRegion(0x10000, 0.5, 0);
+        cache_sim::CacheLevel level("L3", 2048, 64, 4, cache_sim::EvictionPolicy::GRASP);
+        level.initGraphContext(&context);
+        level.insert(0x10000, false);
+        cache_sim::CacheLine before, after;
+        const bool inserted = level.lineSnapshotForTest(0x10000, before) && before.rrpv == 1;
+        context.declareGraspRegion(0x20000, 0.5, 1);
+        check(inserted && level.lineSnapshotForTest(0x10000, after) && after.rrpv == before.rrpv &&
+              context.classifyGRASP(0x10000, 2048) == 3 && context.classifyGRASP(0x20000, 2048) == 1,
+              "BC's backward declaration keeps forward lines' RRPV and reclassifies only later accesses");
+        context.registerPropertyArray(reinterpret_cast<const void*>(0x30000), 64, 4, 2048, 0.5, !grasp_declared, "depth");
+        context.registerPropertyArray(reinterpret_cast<const void*>(0x40000), 64, 4, 2048, 0.5, !grasp_declared, "scores");
+        context.declareGraspRegion(0x20000, 0.5, 1);
+        check(refusesWith([&] { context.declareGraspRegion(0x20000, 0.5, 1, Role::PROPERTY_B); },
+                          "grasp-property-b-repeats-property-a") &&
+              refusesWith([&] { context.declareGraspRegion(0x30000, 0.6, 1, Role::PROPERTY_B); },
+                          "grasp-phase-exceeds-the-last-level"),
+              "a phase's propertyB is another array and the phase stays within the last level");
+        context.declareGraspRegion(0x30000, 0.5, 1, Role::PROPERTY_B);
+        check(context.classifyGRASP(0x20000, 2048) == 1 && context.classifyGRASP(0x30000, 2048) == 1 &&
+              context.classifyGRASP(0x10000, 2048) == 3 && context.classifyGRASP(0x40000, 2048) == 3,
+              "a phase protects its propertyA and propertyB and nothing else");
+        check(refusesWith([&] { context.declareGraspRegion(0x40000, 0.0001, 1, Role::PROPERTY_B); },
+                          "grasp-phase-has-two-regions"),
+              "a phase has at most two GRASP regions, as upstream's propertyA and propertyB");
+        cache_sim::GraphCacheContext unphased;
+        unphased.topology.num_vertices = 64;
+        unphased.enableGraspDeclarations();
+        unphased.registerPropertyArray(reinterpret_cast<const void*>(0x10000), 64, 4, 2048, 0.5, !grasp_declared, "depth");
+        check(refusesWith([&] { unphased.declareGraspRegion(0x10000, 0.5, 0, Role::PROPERTY_B); },
+                          "grasp-property-b-without-property-a"),
+              "a propertyB follows its phase's propertyA");
+        check(refusesWith([&] { context.declareGraspRegion(0x50000, 0.5, 2); }, "undeclared-grasp-region") &&
+              refusesWith([&] { context.declareGraspRegion(0x20000, 0.0, 2); }, "invalid-grasp-fraction") &&
+              refusesWith([&] { context.declareGraspRegion(0x20000, 1.5, 2); }, "invalid-grasp-fraction"),
+              "a declaration names a registered array and a fraction in (0, 1]");
+        cache_sim::GraphCacheContext historical;
+        historical.topology.num_vertices = 64;
+        historical.registerPropertyArray(reinterpret_cast<const void*>(0x10000), 64, 4, 2048, 0.5);
+        check(refusesWith([&] { historical.declareGraspRegion(0x10000, 0.5, 0); }, "grasp-declarations-not-enabled"),
+              "the historical registration takes no declaration");
+    }
+
+    // The declared contract tiers by capacity whether or not GRASP_BOUNDARY_MODE
+    // is set; the historical registration keeps reading it.
+    {
+        const char* saved = std::getenv("GRASP_BOUNDARY_MODE");
+        const std::string kept = saved ? saved : "";
+        unsetenv("GRASP_BOUNDARY_MODE");
+        cache_sim::GraphCacheContext declared;
+        declared.topology.num_vertices = 64;
+        declared.enableGraspDeclarations();
+        const bool grasp_declared = declared.grasp_declared;
+        declared.registerPropertyArray(reinterpret_cast<const void*>(0x10000), 64, 4, 2048, 0.5, !grasp_declared, "x");
+        declared.declareGraspRegion(0x10000, 0.5, 0);
+        cache_sim::GraphCacheContext historical;
+        historical.topology.num_vertices = 64;
+        historical.registerPropertyArray(reinterpret_cast<const void*>(0x10000), 64, 4, 2048, 0.5);
+        check(declared.classifyGRASP(0x10000 + 200, 2048) == 1 &&
+              std::string(declared.graspBoundaryMode()) == "capacity" &&
+              historical.classifyGRASP(0x10000 + 200, 2048) == 2 &&
+              std::string(historical.graspBoundaryMode()) == "vertex",
+              "the declared contract tiers by capacity even when no boundary mode is set");
+        if (setenv("GRASP_BOUNDARY_MODE", kept.empty() ? "capacity" : kept.c_str(), 1) != 0)
+            check(false, "capacity tiering is restored");
+    }
+
+    // A kernel with no declaration, or BFS's direction-optimizing path with its
+    // dense bitmaps, cannot run GRASP tiers under the declared contract.
+    const Fixture cliques(10, false, {
+        {0,1,1}, {0,2,1}, {0,3,1}, {1,2,1}, {1,3,1}, {2,3,1},
+        {4,5,1}, {4,6,1}, {5,6,1}, {7,8,1}});
+    for (Algorithm algorithm : {Algorithm::CC, Algorithm::TC}) {
+        Options options;
+        options.algorithm = algorithm;
+        options.grasp_declared = true;
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 2048, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::GRASP);
+        cache_sim::AlgorithmBackend backend(cache, options, 2048, true, false);
+        check(refusesWith([&] { ecg_algorithm::run(cliques.view(), options, backend); }, "undeclared-grasp-region"),
+              "a kernel without a GRASP declaration refuses GRASP tiers under the declared contract");
+        Options plain = options;
+        cache_sim::CacheHierarchy lru(128, 2, 256, 2, 2048, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU);
+        cache_sim::AlgorithmBackend untiered(lru, plain, 2048, false, false);
+        bool ran = true;
+        try { ecg_algorithm::run(cliques.view(), plain, untiered); } catch (const std::exception&) { ran = false; }
+        check(ran, "a row without GRASP tiers runs every kernel under the declared contract");
+    }
+    {
+        const Fixture switching = directionSwitchGraph();
+        Options options;
+        options.algorithm = Algorithm::BFS;
+        options.bfs_direction_optimizing = true;
+        options.grasp_declared = true;
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 2048, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::GRASP);
+        cache_sim::AlgorithmBackend backend(cache, options, 2048, true, false);
+        check(refusesWith([&] { ecg_algorithm::run(switching.view(), options, backend); },
+                          "declared-grasp-has-no-direction-optimizing-bfs"),
+              "direction-optimizing BFS has no GRASP declaration");
+    }
+}
+
+// §bv C2. The cold kernel boundary: setup's dirty data is written back once
+// per line, whichever levels hold it dirty, every level is invalidated, and
+// the write-backs are setup's, so every row starts its kernel empty.
+void testColdKernelEntry() {
+    using namespace ecg_algorithm;
+    {
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 1024, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU);
+        // L1 is one set of two ways, L2 two sets and L3 four, indexed by line number.
+        cache.access(0x10000, true);   // a, line 0x400: a write miss, dirty in every level
+        cache.access(0x20040, false);  // b, line 0x801: read in every level ...
+        cache.access(0x20040, true);   // ... then dirty in L1 only
+        cache.access(0x30040, false);  // c, line 0xC01: evicts a from L1, which stays dirty in L2 and L3
+        const uint64_t memory = cache.getMemoryAccesses(), writebacks = cache.getWritebackTraffic();
+        check(cache.L1()->validLines() == 2 && cache.L3()->validLines() == 3,
+              "the cold-entry fixture holds lines in every level");
+        const uint64_t charged = cache.coldKernelEntry();
+        check(charged == 2 && cache.getWritebackTraffic() == writebacks + 2 &&
+              cache.getMemoryAccesses() == memory,
+              "each line dirty at any level is written back once, as last-level write-backs");
+        check(cache.L1()->validLines() == 0 && cache.L2()->validLines() == 0 &&
+              cache.L3()->validLines() == 0, "no level holds a line after the cold boundary");
+        check(cache.coldKernelEntries() == 1 && cache.kernelEntryMaintenanceWritebacks() == 2,
+              "the hierarchy records its cold boundary and its write-backs");
+        cache.access(0x30040, false);
+        check(cache.getMemoryAccesses() == memory + 1, "the kernel's first access to setup data misses");
+        const std::string json = cache.toJSON();
+        check(json.find("\"kernel_entry\": \"cold\"") != std::string::npos &&
+              json.find("\"kernel_entry_maintenance_writebacks\": 2") != std::string::npos &&
+              json.find("\"kernel_entry_cold_boundaries\": 1") != std::string::npos &&
+              json.find("\"kernel_entry_residual_lines\": [0, 0, 0]") != std::string::npos,
+              "the receipt attests one cold boundary, its write-backs and no line left at any level");
+        cache_sim::CacheHierarchy built(128, 2, 256, 2, 1024, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU);
+        const std::string historical = built.toJSON();
+        check(historical.find("\"kernel_entry\": \"as-built\"") != std::string::npos &&
+              historical.find("\"kernel_entry_cold_boundaries\": 0") != std::string::npos,
+              "the historical boundary stays the default and says so");
+    }
+    if (setenv("GRASP_BOUNDARY_MODE", "capacity", 1) != 0) {
+        check(false, "capacity tiering is configured");
+        return;
+    }
+    const Fixture graph = declaredGraspGraph();
+    for (Algorithm algorithm : {Algorithm::SPMV, Algorithm::BC}) {
+        for (bool records : {false, true}) {
+            for (bool cold : {false, true}) {
+                Options options;
+                options.algorithm = algorithm;
+                options.repetitions = algorithm == Algorithm::SPMV ? 2 : 1;
+                options.records = records;
+                options.cold_kernel_entry = cold;
+                if (records) {
+                    options.mechanism = ecg_record::Mechanism::REPLACEMENT;
+                    options.record_base_policy = RecordBasePolicy::GRASP_PAPER;
+                }
+                cache_sim::CacheHierarchy cache(128, 2, 256, 2, 2048, 4, 64,
+                    cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU,
+                    cache_sim::EvictionPolicy::GRASP);
+                cache_sim::AlgorithmBackend backend(cache, options, 2048, true, false);
+                ecg_algorithm::run(graph.view(algorithm == Algorithm::SPMV), options, backend);
+                const auto setup = backend.setupTraffic();
+                const auto kernel = backend.kernelTraffic();
+                const std::string json = cache.toJSON();
+                check(setup.offchip() + kernel.offchip() == cache.getTotalOffChipTraffic(),
+                      "setup and kernel traffic close across the boundary");
+                if (!cold) {
+                    check(cache.coldKernelEntries() == 0, "the as-built boundary runs no maintenance");
+                    continue;
+                }
+                check(cache.coldKernelEntries() == 1, "one cold boundary per kernel, none at BC's rebind");
+                check(setup.llc_writebacks >= cache.kernelEntryMaintenanceWritebacks() &&
+                      cache.kernelEntryMaintenanceWritebacks() > 0,
+                      "the boundary's write-backs are setup's");
+                check(json.find("\"entry_valid_lines\":0,") != std::string::npos &&
+                      json.find("\"entry_dirty_lines\":0,") != std::string::npos,
+                      "the census finds the kernel's cache empty");
+            }
+        }
+    }
+    {
+        Options options;
+        options.algorithm = Algorithm::SPMV;
+        options.records = true;
+        options.cold_kernel_entry = true;
+        options.mechanism = ecg_record::Mechanism::PREFETCH;
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 2048, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU);
+        cache_sim::AlgorithmBackend backend(cache, options, 2048, false, false);
+        check(refusesWith([&] { ecg_algorithm::run(graph.view(true), options, backend); },
+                          "cold-kernel-entry-requires-no-pending-prefetch"),
+              "a mechanism with queued prefetches cannot cross the cold boundary");
+    }
+}
+
+// §bv C3, at one level: each access is charged to the region that holds it.
+void testPropertyRegionAttribution() {
+    cache_sim::GraphCacheContext context;
+    context.topology.num_vertices = 64;
+    context.registerPropertyArray(reinterpret_cast<const void*>(0x10000), 64, 4, 1024, 0.5, true, "x");
+    context.registerPropertyArray(reinterpret_cast<const void*>(0x20000), 64, 4, 1024, 0.5, true, "y");
+    cache_sim::CacheLevel level("L3", 1024, 64, 4, cache_sim::EvictionPolicy::LRU);
+    level.initGraphContext(&context);
+    level.access(0x10000, false);            // x: miss
+    level.insert(0x10000, false);
+    level.access(0x10000, false);            // x: hit
+    level.access(0x20000, false);            // y: miss
+    level.access(0x20040, false);            // y: miss
+    level.insert(0x20040, false);
+    level.access(0x20040, false);            // y: hit
+    level.access(0x30000, false);            // no region
+    check(level.propertyRegionHits(0) == 1 && level.propertyRegionMisses(0) == 1 &&
+          level.propertyRegionHits(1) == 1 && level.propertyRegionMisses(1) == 2,
+          "each property access is charged to its own region");
+    level.markPropertyRegionKernel();
+    level.access(0x20000, false);            // y: miss after the boundary
+    check(level.propertyRegionKernelMisses(1) == 1 && level.propertyRegionKernelMisses(0) == 0 &&
+          level.propertyRegionMisses(1) == 3, "kernel counts start at the boundary");
+    level.resetStats();
+    check(level.propertyRegionMisses(1) == 0 && level.propertyRegionKernelMisses(1) == 0,
+          "a statistics reset clears the region counts with the rest");
+}
+
+// §bv C3. The last level counts hits and misses per named property region,
+// over the run and from the kernel boundary, so the gathered array's misses
+// are comparable across every row; the region-index counters stay as they were.
+void testPropertyRegionCounters() {
+    using namespace ecg_algorithm;
+    if (setenv("GRASP_BOUNDARY_MODE", "capacity", 1) != 0) {
+        check(false, "capacity tiering is configured");
+        return;
+    }
+    const Fixture graph = declaredGraspGraph();
+    for (bool records : {false, true}) {
+        Options options;
+        options.algorithm = Algorithm::SPMV;
+        options.repetitions = 2;
+        options.records = records;
+        if (records) {
+            options.mechanism = ecg_record::Mechanism::REPLACEMENT;
+            options.record_base_policy = RecordBasePolicy::GRASP_PAPER;
+        }
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 2048, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::GRASP);
+        cache_sim::AlgorithmBackend backend(cache, options, 2048, true, false);
+        ecg_algorithm::run(graph.view(true), options, backend);
+        const auto& stats = cache.getL3Stats();
+        const auto* level = cache.L3();
+        uint64_t hits = 0, misses = 0, kernel_hits = 0, kernel_misses = 0;
+        for (uint32_t region = 0; region < backend.graphContext().num_regions; ++region) {
+            hits += level->propertyRegionHits(region);
+            misses += level->propertyRegionMisses(region);
+            kernel_hits += level->propertyRegionKernelHits(region);
+            kernel_misses += level->propertyRegionKernelMisses(region);
+        }
+        const auto kernel = backend.kernelTraffic();
+        check(hits == stats.prop_hits.load() && misses == stats.prop_misses.load() &&
+              kernel_hits == kernel.llc_property_hits && kernel_misses == kernel.llc_property_misses,
+              "per-region counts partition the property hits and misses, over the run and the kernel");
+        const std::string json = cache.toJSON();
+        check(json.find("\"property_registration\": {\"grasp_registration\":\"all\",") != std::string::npos &&
+              json.find("\"property_regions\":[{\"name\":\"x\",\"grasp\":true,") != std::string::npos &&
+              json.find("{\"name\":\"y\",\"grasp\":true,") != std::string::npos,
+              "the receipt names each property region's counts and the registration it ran under");
+    }
+}
+
 int main(int argc, char** argv) {
     using namespace ecg_algorithm;
     if (argc == 4 && std::strcmp(argv[1], kCensusRunFlag) == 0)
@@ -1781,6 +2192,10 @@ int main(int argc, char** argv) {
     testUnboundRecordPreparation();
     testTraversalPreprocessing();
     testKernelCensusUnderTheRoster();
+    testDeclaredGraspRegistration();
+    testColdKernelEntry();
+    testPropertyRegionAttribution();
+    testPropertyRegionCounters();
     const Fixture diamond(8, true, {
         {0,1,2}, {0,2,5}, {0,5,20}, {1,2,1}, {1,3,2},
         {2,3,1}, {2,4,4}, {3,4,1}, {4,5,3}, {6,7,1}});

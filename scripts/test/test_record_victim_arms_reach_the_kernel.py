@@ -377,7 +377,7 @@ def test_pressure_gate_counts_the_lines_the_record_rule_governs(tmp_path, gate):
 
 def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", l3_ways="2",
                    rrpv="no", policy="ECG:replacement", written="no", graph_bytes=None,
-                   uninformed="no", bound="on", carrier="no"):
+                   uninformed="no", bound="on", carrier="no", iterations=2):
     """The argv and environment the runner would execute for PageRank.
 
     PageRank is a separate executable that reads its record settings from the
@@ -401,7 +401,7 @@ def _pagerank_cell(tmp_path, monkeypatch, gate, governed="no", l3_size="8192B", 
         *(("--record-uninformed-base", uninformed) if uninformed != "no" else ()),
         *(("--record-bound-compare", bound) if bound != "on" else ()),
         *(("--record-carrier-first", carrier) if carrier != "no" else ()),
-        "--options", f"-f {graph} -o 0 -n 1 -i 2 -t 0",
+        "--options", f"-f {graph} -o 0 -n 1 -i {iterations} -t 0",
         "--policies", policy, "--l1d-size", "128B", "--l1d-ways", "2",
         "--l2-size", "256B", "--l2-ways", "2", "--l3-sizes", l3_size, "--l3-ways", l3_ways,
         "--out-dir", str(tmp_path), "--no-build",
@@ -571,6 +571,15 @@ def test_pressure_duel_trains_on_exactly_the_transfers_pagerank_makes(tmp_path, 
     does, but its transfer count resets with the statistics, so it must equal
     the reported memory accesses plus LLC writebacks. The ranking must not
     change, because the gate only chooses which line leaves.
+
+    The selector must also integrate exactly the run's leader transfers, from
+    the value it held at the reset. Which arm the followers then take, and
+    whether the winner ever changes, depends on this fixture's traffic, which
+    moves with the heap layout (NEXT.md §bg): a 256-byte padding of CacheLevel
+    alone turned its one base-following window into none. So the run asserts
+    the exact identity and that followers decided; the selector's switching
+    is pinned deterministically by exerciseRecordPressureDuel in
+    bench/src_sim/test_ecg_record_cache.cc.
     """
     import json
     import re
@@ -593,9 +602,12 @@ def test_pressure_duel_trains_on_exactly_the_transfers_pagerank_makes(tmp_path, 
     assert metrics["ecg_record_duel_transfers"] == metrics["memory_accesses"] + metrics["llc_writebacks"]
     assert metrics["ecg_record_duel_leader_transfers_rule"] > 0
     assert metrics["ecg_record_duel_leader_transfers_base"] > 0
-    assert metrics["ecg_record_duel_follower_rule"] > 0
-    assert metrics["ecg_record_duel_follower_base"] > 0
-    assert metrics["ecg_record_duel_winner_changes"] > 0
+    integrated = (metrics["ecg_record_duel_selector_at_reset"] +
+                  metrics["ecg_record_duel_leader_transfers_rule"] -
+                  metrics["ecg_record_duel_leader_transfers_base"])
+    assert 0 < integrated < 1023 and metrics["ecg_record_duel_selector"] == integrated, (
+        "the selector integrates exactly the run's leader transfers")
+    assert metrics["ecg_record_duel_follower_rule"] + metrics["ecg_record_duel_follower_base"] > 0
     control = results["no"][0]
     assert control["ecg_record_duel_transfers"] == 0 and control["ecg_record_duel_selector"] == 511, (
         "the duel must not train when it is off")

@@ -33,6 +33,17 @@ using namespace cache_sim;
 typedef float ScoreT;
 const float kDamp = 0.85;
 
+// One of a fixed set of names, or the fallback when the variable is unset.
+static std::string choiceOption(const char* name, const char* fallback,
+                                std::initializer_list<const char*> allowed) {
+    const char* raw = std::getenv(name);
+    const std::string value = raw ? raw : fallback;
+    for (const char* choice : allowed)
+        if (value == choice)
+            return value;
+    throw std::invalid_argument(std::string(name) + " is not a supported choice");
+}
+
 static uint64_t recordOption(const char* name, uint64_t fallback, uint64_t maximum) {
     const char* raw = std::getenv(name);
     if (!raw)
@@ -116,10 +127,25 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         throw std::invalid_argument("ECG_RECORD_CARRIER_FIRST requires a current ECG record mode");
     if (carrier_first && recordOption("ECG_RECORD_GOVERNED_FIRST", 0, 1) != 0)
         throw std::invalid_argument("governed-first and carrier-first are two victim orders, never one");
+    // NEXT.md §bv C1: under ecg.grasp-declaration.v1 contribution is PageRank's
+    // one GRASP region, as PageRankOpt registers Packed_Curr_Degree, at
+    // 100 - frontier_frac = 50 percent of the last level; scores stays a
+    // property region. The default keeps both as GRASP regions, as recorded.
+    const bool grasp_declared =
+        choiceOption("ECG_GRASP_REGISTRATION", "all", {"all", "declared"}) == "declared";
+    // NEXT.md §bv C2: the cold kernel boundary, as the algorithms' --kernel-entry cold.
+    const bool cold_entry =
+        choiceOption("ECG_KERNEL_ENTRY", "as-built", {"as-built", "cold"}) == "cold";
+    // NEXT.md §bv C3: PageRank's transport control over GRASP_PAPER's victim
+    // policy, as the algorithms' --record-base-policy GRASP_PAPER; default LRU.
+    const bool grasp_record_base =
+        choiceOption("ECG_RECORD_BASE_POLICY", "LRU", {"LRU", "GRASP_PAPER"}) == "GRASP_PAPER";
     ecg_record::Mechanism mechanism = ecg_record::Mechanism::TRANSPORT;
     if (record_mode && ecg_record::parseMechanismName(mechanism_name, mechanism) !=
             ecg_record::Status::OK)
         throw std::invalid_argument("Unknown current ECG mechanism");
+    if (grasp_record_base && (!record_mode || mechanism != ecg_record::Mechanism::TRANSPORT))
+        throw std::invalid_argument("ECG_RECORD_BASE_POLICY=GRASP_PAPER is PageRank's transport control");
     // Prefetch also acts on the decoded bound, and transport makes no victim
     // decision from it; only the replacement mechanism has been checked with the bit.
     if (written_in_place && mechanism != ecg_record::Mechanism::REPLACEMENT)
@@ -131,23 +157,33 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         throw std::invalid_argument(
             "record victim controls require the replacement mechanism without prefetch");
     double hot_fraction = 0.15;
-    if (rrpv_order) {
-        // Prefetch admission and transport keep asking the base victim.
-        if (mechanism != ecg_record::Mechanism::REPLACEMENT)
-            throw std::invalid_argument(
-                "ECG_RECORD_RRPV_ORDER requires the replacement mechanism without prefetch");
+    // Prefetch admission and transport keep asking the base victim.
+    if (rrpv_order && mechanism != ecg_record::Mechanism::REPLACEMENT)
+        throw std::invalid_argument(
+            "ECG_RECORD_RRPV_ORDER requires the replacement mechanism without prefetch");
+    if (rrpv_order || grasp_record_base) {
+        // Both rank by the tiers the GRASP_PAPER row uses, so they are declared, not defaulted.
+        const std::string control = rrpv_order ? "ECG_RECORD_RRPV_ORDER" : "ECG_RECORD_BASE_POLICY=GRASP_PAPER";
         const char* fraction = std::getenv("GRASP_HOT_FRACTION");
         const char* boundary = std::getenv("GRASP_BOUNDARY_MODE");
         if (!fraction || !boundary)
             throw std::invalid_argument(
-                "ECG_RECORD_RRPV_ORDER requires GRASP_HOT_FRACTION and GRASP_BOUNDARY_MODE");
+                control + " requires GRASP_HOT_FRACTION and GRASP_BOUNDARY_MODE");
         char* end = nullptr;
         hot_fraction = std::strtod(fraction, &end);
         if (end == fraction || *end != '\0' || !(hot_fraction > 0.0 && hot_fraction <= 1.0))
             throw std::invalid_argument("GRASP_HOT_FRACTION must lie in (0, 1]");
         if (std::string(boundary) != "capacity")
+            throw std::invalid_argument(control + " requires GRASP_BOUNDARY_MODE=capacity");
+    }
+    constexpr double kPageRankGraspFraction = 0.50;  // PageRankOpt: 100 - frontier_frac
+    if (grasp_declared) {
+        const char* fraction = std::getenv("GRASP_HOT_FRACTION");
+        const char* boundary = std::getenv("GRASP_BOUNDARY_MODE");
+        if ((fraction && std::strtod(fraction, nullptr) != kPageRankGraspFraction) ||
+            (boundary && std::string(boundary) != "capacity"))
             throw std::invalid_argument(
-                "ECG_RECORD_RRPV_ORDER requires GRASP_BOUNDARY_MODE=capacity");
+                "ECG_GRASP_REGISTRATION=declared gives contribution half the last level, by capacity");
     }
     const uint64_t bytes = recordOption("ECG_RECORD_BYTES", 0, 8);
     if (bytes != 0 && bytes != 4 && bytes != 8)
@@ -202,8 +238,14 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
     GraphCacheContext context;
     context.initTopology(degrees.data(), graph.num_nodes(), graph.num_edges_directed(), graph.directed());
     const uint64_t llc_bytes = GetEnvSizeBytes("CACHE_L3_SIZE", 8 * 1024 * 1024);
-    context.registerPropertyArray(scores.data(), graph.num_nodes(), 4, llc_bytes, record_mode ? hot_fraction : -1.0, true);
-    context.registerPropertyArray(contribution.data(), graph.num_nodes(), 4, llc_bytes, record_mode ? hot_fraction : -1.0, true);
+    if (grasp_declared)
+        context.enableGraspDeclarations();
+    context.registerPropertyArray(scores.data(), graph.num_nodes(), 4, llc_bytes,
+        record_mode ? hot_fraction : -1.0, !grasp_declared, "scores");
+    context.registerPropertyArray(contribution.data(), graph.num_nodes(), 4, llc_bytes,
+        record_mode ? hot_fraction : -1.0, !grasp_declared, "contribution");
+    if (grasp_declared)
+        context.declareGraspRegion(reinterpret_cast<uint64_t>(contribution.data()), kPageRankGraspFraction, 0);
     static pvector<uint8_t> popt_matrix;
     if (!record_mode && (GraphSimEffectiveL3Policy() == EvictionPolicy::POPT ||
                          std::getenv("POPT_SE_POSTFINAL")))
@@ -222,7 +264,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         cache.configureRecord(configuration, stream, mechanism,
             recordOption("ECG_RECORD_UPDATE_LATENCY", 8, 4096),
             recordOption("ECG_RECORD_PREFETCH_LATENCY", 8, 4096),
-            recordOption("ECG_RECORD_PREFETCH_QUEUE", 16, 16));
+            recordOption("ECG_RECORD_PREFETCH_QUEUE", 16, 16),
+            grasp_record_base ? EvictionPolicy::GRASP : EvictionPolicy::LRU);
         // PageRank is configured by environment, not by the algorithms CLI, so
         // the opt-in victim-order arm reaches it here. Default off, matching
         // --record-governed-first no.
@@ -268,6 +311,8 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         cache.readArray(contribution.data(), node);
         cache.writeArray(contribution.data(), node);
     }
+    if (cold_entry)
+        cache.coldKernelEntry();
     cache.resetStats();
     cache.markKernelEntry();
     if (record_mode) {
@@ -330,6 +375,7 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         }
         cache.markKernelPass(false);
     }
+    cache.captureRegistrationReceipt(context);
     if (record_mode)
         cache.finishRecord(requirements.record_count * iterations);
     if (capture_evidence)
@@ -375,6 +421,11 @@ pvector<ScoreT> PageRankPullGS_Sim(const Graph &g, CacheType &cache,
             "ECG_RECORD_UNINFORMED_BASE and ECG_RECORD_BOUND_COMPARE require a current ECG record mode");
     if (recordOption("ECG_RECORD_CARRIER_FIRST", 0, 1) != 0)
         throw std::invalid_argument("ECG_RECORD_CARRIER_FIRST requires a current ECG record mode");
+    // NEXT.md §bv: only the current path implements the fair-comparison contracts.
+    for (const char* name : {"ECG_GRASP_REGISTRATION", "ECG_KERNEL_ENTRY", "ECG_RECORD_BASE_POLICY"})
+        if (std::getenv(name))
+            throw std::invalid_argument(
+                std::string(name) + ": the fair-comparison contracts require the current PageRank path");
     const ScoreT init_score = 1.0f / g.num_nodes();
     const ScoreT base_score = (1.0f - kDamp) / g.num_nodes();
     pvector<ScoreT> scores(

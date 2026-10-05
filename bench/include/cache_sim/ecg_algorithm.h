@@ -102,6 +102,18 @@ class AlgorithmBackend {
             (graph.vertices * 12 > options_.maximum_workspace_bytes ||
              options_.maximum_window_observer_bytes > options_.maximum_workspace_bytes - graph.vertices * 12))
             throw std::length_error("window observer exceeds algorithm workspace reservation");
+        const bool ordinary_kernels = !referenceConsumer() &&
+            options_.window_observer == ecg_algorithm::WindowObserverMode::OFF &&
+            options_.record_model == ecg_algorithm::RecordModel::NEXT &&
+            !options_.grasp_graph_passes && !options_.bfs_traffic_phases;
+        if (options_.grasp_declared && !ordinary_kernels)
+            throw std::invalid_argument("declared-grasp-requires-the-ordinary-kernels");
+        if (options_.grasp_declared && grasp_paper_ && options_.bfs_direction_optimizing)
+            throw std::invalid_argument("declared-grasp-has-no-direction-optimizing-bfs");
+        if (options_.cold_kernel_entry && !ordinary_kernels)
+            throw std::invalid_argument("cold-kernel-entry-requires-the-ordinary-kernels");
+        if (options_.grasp_declared)
+            context_.enableGraspDeclarations();
         // These policies use region bounds, not an uncharged degree/oracle prepass.
         context_.topology.num_vertices = static_cast<uint32_t>(graph.vertices);
         context_.topology.num_edges = graph.records;
@@ -167,7 +179,7 @@ class AlgorithmBackend {
         }
     }
 
-    void region(const char*, const void* base, uint64_t count, uint8_t bytes, bool property) {
+    void region(const char* name, const void* base, uint64_t count, uint8_t bytes, bool property) {
         if (usesPoptMatrix()) {
             uint64_t allocation = 0;
             if (!ecg_record::checkedMultiply(count, bytes, allocation) ||
@@ -179,8 +191,19 @@ class AlgorithmBackend {
         if (count == 0 || count > UINT32_MAX || context_.num_regions == MAX_PROPERTY_REGIONS)
             throw std::invalid_argument("invalid-algorithm-property-region");
         context_.registerPropertyArray(base, static_cast<uint32_t>(count), bytes,
-            llc_bytes_, grasp_paper_ ? 0.50 : 0.15, true);
+            llc_bytes_, grasp_paper_ ? 0.50 : 0.15, !options_.grasp_declared, name);
     }
+
+    // The kernel phase's GRASP array (ecg.grasp-declaration.v1). Ignored under
+    // the historical registration, where every property array is a GRASP region.
+    void declareGrasp(const void* base, double fraction, ecg_algorithm::GraspRole role) {
+        if (options_.grasp_declared)
+            context_.declareGraspRegion(reinterpret_cast<uint64_t>(base), fraction, property_selections_,
+                role == ecg_algorithm::GraspRole::PROPERTY_B ? GraphCacheContext::GraspRole::PROPERTY_B
+                                                             : GraphCacheContext::GraspRole::PROPERTY_A);
+    }
+
+    const GraphCacheContext& graphContext() const { return context_; }
 
     void propertyReferences(const void* base, ecg_algorithm::ReferencePattern pattern) {
         if (!usesPoptMatrix())
@@ -197,6 +220,7 @@ class AlgorithmBackend {
         if (!region || region->elem_size != ecg_record::propertyBytes(property.kind) ||
             property.stride_bytes != region->elem_size)
             throw std::invalid_argument("unregistered-algorithm-property");
+        ++property_selections_;
         if (usesPoptMatrix()) {
             const AlgorithmTraffic before = traffic();
             preparePopt(graph);
@@ -412,6 +436,7 @@ class AlgorithmBackend {
         }
         if (usesPoptMatrix() && (popt_live_ || !popt_ready_ || popt_governed_ != actual_records))
             throw std::logic_error("incomplete-popt-graph-work");
+        cache_.captureRegistrationReceipt(context_);
         if (active_)
             cache_.finishRecord(actual_records);
         else
@@ -686,10 +711,14 @@ class AlgorithmBackend {
     }
     void beginKernel() {
         if (!kernel_started_) {
+            if (options_.grasp_declared && grasp_paper_ && context_.graspDeclarations().empty())
+                throw std::invalid_argument("undeclared-grasp-region");
             if (options_.grasp_graph_passes && !window_runtime_ && !frontier_runtime_) {
                 cache_.configureGraspPhases();
                 grasp_phase_configured_ = true;
             }
+            if (options_.cold_kernel_entry)
+                cache_.coldKernelEntry();
             setup_traffic_ = traffic();
             cache_.markKernelEntry();
             kernel_started_ = true;
@@ -709,6 +738,7 @@ class AlgorithmBackend {
     AlgorithmTraffic setup_traffic_;
     AlgorithmTraffic query_start_traffic_, preparation_traffic_;
     bool kernel_started_ = false;
+    uint64_t property_selections_ = 0;
     BfsPhase bfs_phase_ = BfsPhase::SETUP;
     std::array<std::array<AlgorithmTraffic, 6>, 5> bfs_traffic_{};
     bool grasp_phase_configured_ = false, grasp_pass_open_ = false;

@@ -220,6 +220,8 @@ def run_cell(args, out_dir: Path, spec, l3_size: str, backend: str, roi: ModuleT
         require(options.window_observer == "off", "window observer is cache_sim-only")
         require(options.record_base_policy == "LRU",
                 "GRASP_PAPER record base is cache_sim-only")
+        require(options.grasp_registration == "all" and options.kernel_entry == "as-built",
+                "GRASP declarations and the cold kernel entry are cache_sim-only")
         require(options.bfs_direction == "td", "direction-optimized BFS is currently cache_sim-only")
         require(options.record_preprocess == "csr", "traversal preprocessing is currently cache_sim-only")
         graph = graph_info(options.graph, allow_weighted=True, traversal="out")

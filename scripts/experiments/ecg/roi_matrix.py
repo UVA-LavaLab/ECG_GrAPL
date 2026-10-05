@@ -1526,6 +1526,11 @@ def parse_ecg_log_stats(
 GRASP_PAPER_TIERS = {"GRASP_BOUNDARY_MODE": "capacity", "GRASP_HOT_FRACTION": "0.50"}
 
 
+def grasp_record_base(args: argparse.Namespace, spec: PolicySpec) -> bool:
+    """A record row on the GRASP_PAPER base (NEXT.md §bv C3) decides victims with GRASP in the last level."""
+    return spec.record_mechanism is not None and getattr(args, "record_base_policy", "LRU") == "GRASP_PAPER"
+
+
 def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size: str,
                   effective_l3_ways: str, json_path: Path) -> dict[str, str]:
     env = dict(os.environ)
@@ -1598,8 +1603,16 @@ def cache_sim_env(args: argparse.Namespace, spec: PolicySpec, effective_l3_size:
     # The RRPV-ordered record arm ranks lines by their GRASP tiers, so it must
     # tier exactly as the GRASP_PAPER cell it is compared with.
     rrpv_order = getattr(args, "record_rrpv_order", "no") == "on"
-    if spec.label == "GRASP_PAPER" or (spec.record_mechanism is not None and rrpv_order):
+    grasp_base = grasp_record_base(args, spec)
+    if spec.label == "GRASP_PAPER" or (spec.record_mechanism is not None and rrpv_order) or grasp_base:
         env.update(GRASP_PAPER_TIERS)
+    if grasp_base:
+        # The transport control decides victims as the GRASP_PAPER row does.
+        env.update({"CACHE_POLICY": "GRASP", "CACHE_L3_POLICY": "GRASP", "ECG_RECORD_BASE_POLICY": "GRASP_PAPER"})
+    if getattr(args, "grasp_registration", "all") != "all":
+        env["ECG_GRASP_REGISTRATION"] = args.grasp_registration
+    if getattr(args, "kernel_entry", "as-built") != "as-built":
+        env["ECG_KERNEL_ENTRY"] = args.kernel_entry
     if getattr(args, "current_pr_baselines", False):
         env["ECG_CURRENT_PR_BASELINE"] = "1"
     if spec.record_mechanism is not None:
@@ -3881,6 +3894,14 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
             row["kernel_census_detailed_passes"] = len(validate_kernel_census_passes(data.get("kernel_census")))
         except RecordReceiptError as error:
             mark_row_error(row, f"fixed PageRank receipt failed: {error}")
+    if args.benchmark == "pr" and row.get("status") == "ok":
+        # Every PageRank row, on whichever path it ran, attests the contracts it was asked for.
+        try:
+            algorithm_matrix.validate_fair_comparison(
+                data, "pr", getattr(args, "grasp_registration", "all"), getattr(args, "kernel_entry", "as-built"),
+                record_base=getattr(args, "record_base_policy", "LRU") if spec.record_mechanism else None)
+        except RecordReceiptError as error:
+            mark_row_error(row, f"PageRank contract receipt failed: {error}")
     apply_popt_se_receipt(row, log_text, spec)
     apply_next_use_record_receipt(
         row, log_text, required=spec.label == "ECG_NEXT_USE_LRU")
@@ -3943,7 +3964,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
             parse_size_bytes(args.l2_size), int(args.l2_ways), "LRU"),
         "L3": (
             parse_size_bytes(effective_l3_size),
-            int(effective_l3_ways), spec.policy),
+            int(effective_l3_ways), "GRASP" if grasp_record_base(args, spec) else spec.policy),
     }
     geometry_valid = True
     policy_valid = True
@@ -6890,11 +6911,16 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
             options.record_governed_first, options.record_store_bound,
             options.record_expiry_clock, options.record_pressure_gate,
             options.record_rrpv_order, uninformed_base=options.record_uninformed_base,
-            bound_compare=options.record_bound_compare, carrier_first=options.record_carrier_first)
+            bound_compare=options.record_bound_compare, carrier_first=options.record_carrier_first,
+            grasp_registration=options.grasp_registration, kernel_entry=options.kernel_entry)
     # PageRank runs through the separate pr kernel, so its labels never pass
     # through algorithm_matrix.policy_labels. Without this the opt-in arms and
     # their controls share one label and collide in the combined matrix.
     labels = [spec.label for spec in policies]
+    record_base = getattr(args, "record_base_policy", "LRU")
+    if record_base != "LRU":
+        labels = [f"{label}_BASE_{record_base}" if spec.record_mechanism is not None else label
+                  for label, spec in zip(labels, policies)]
     governed_first = getattr(args, "record_governed_first", "no")
     carrier_first = getattr(args, "record_carrier_first", "no")
     if governed_first != "no":
@@ -6927,6 +6953,9 @@ def output_policy_labels(args: argparse.Namespace, policies: list[PolicySpec]) -
     if bound_compare != "on":
         labels = [algorithm_matrix.bound_compare_label(label, bound_compare)
                   for label in labels]
+    labels = [algorithm_matrix.kernel_entry_label(algorithm_matrix.grasp_registration_label(
+        label, getattr(args, "grasp_registration", "all")), getattr(args, "kernel_entry", "as-built"))
+        for label in labels]
     return labels
 
 
@@ -7233,6 +7262,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--record-bound-compare", choices=("on", "no"), default="on")
     parser.add_argument("--record-carrier-first", choices=("no", "on"), default="no")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
+    # NEXT.md §bv C1-C3 for cache_sim PageRank, as the algorithms' options of the
+    # same names: the GRASP registration contract, the kernel entry, and the
+    # transport control's base policy.
+    parser.add_argument("--grasp-registration", choices=("all", "declared"), default="all")
+    parser.add_argument("--kernel-entry", choices=("as-built", "cold"), default="as-built")
+    parser.add_argument("--record-base-policy", choices=("LRU", "GRASP_PAPER"), default="LRU")
     parser.add_argument("--current-pr-baselines", action="store_true",
                         help="Use the common fixed PageRank arithmetic and complete CSR access stream for cache_sim baselines.")
     parser.add_argument("--current-algorithms", action="store_true",
@@ -7394,6 +7429,16 @@ def main(argv: list[str]) -> int:
     if args.record_written_in_place != "no" and (
             args.suite != "cache-sim" or args.benchmark != "pr" or args.current_algorithms):
         raise SystemExit("record written-in-place bit is cache_sim PageRank-only")
+    # The algorithms take these in --options; the native backends take neither yet.
+    if (args.grasp_registration != "all" or args.kernel_entry != "as-built" or
+            args.record_base_policy != "LRU") and (
+            args.suite != "cache-sim" or args.benchmark != "pr" or args.current_algorithms):
+        raise SystemExit("GRASP declarations, the cold kernel entry and the PageRank record base are "
+                         "cache_sim PageRank runner options; the algorithms take them in --options")
+    if (args.grasp_registration != "all" or args.kernel_entry != "as-built" or
+            args.record_base_policy != "LRU") and not args.current_pr_baselines:
+        raise SystemExit("GRASP declarations, the cold kernel entry and the PageRank record base "
+                         "require --current-pr-baselines, PageRank's current path")
     semantic_edge_limit = int(args.sniper_semantic_edge_limit)
     if int(args.sniper_roi_icount) > 0 and semantic_edge_limit > 0:
         raise SystemExit(

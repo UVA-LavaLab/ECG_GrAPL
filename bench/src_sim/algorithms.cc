@@ -62,6 +62,8 @@ int main(int argc, char** argv) {
                             ecg_record::mechanismName(command.options.mechanism) : "csr")
                        << "\",\"policy\":\"" << command.policy
                        << "\",\"grasp_scope\":\"" << (command.options.grasp_graph_passes ? "graph-passes" : "all")
+                       << "\",\"grasp_registration\":\"" << (command.options.grasp_declared ? "declared" : "all")
+                       << "\",\"kernel_entry\":\"" << (command.options.cold_kernel_entry ? "cold" : "as-built")
                        << "\",\"record_base_policy\":\""
                        << ecg_algorithm::recordBasePolicyName(
                             command.options.record_base_policy)
@@ -75,7 +77,8 @@ int main(int argc, char** argv) {
                 ecg_algorithm::writeResult(output, result, command.options);
                 output << ",\"metrics\":" << cache.toJSON()
                        << ",\"traffic_phases\":{\"boundary\":\"first-binding-complete\","
-                       << "\"cache_state_preserved\":true,\"setup\":";
+                       << "\"cache_state_preserved\":"
+                       << (command.options.cold_kernel_entry ? "false" : "true") << ",\"setup\":";
                 backend.setupTraffic().write(output);
                 output << ",\"kernel\":";
                 backend.kernelTraffic().write(output);
@@ -105,5 +108,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        }, true, true, true, true, true, true, true, true, true);
+        }, true, true, true, true, true, true, true, true, true, true);
 }

@@ -57,6 +57,22 @@ and the matched comparisons are functional cache results on one graph. None is
 a timing result: `timing_valid_for_speedup` is `false` in every receipt quoted
 here.
 
+> **Historical method.** Every comparison against GRASP_PAPER on this page,
+> and the P-OPT contrasts beside it, was measured under a protocol that has
+> since been corrected. Two things changed:
+>
+> - **Registration.** GRASP_PAPER registered every property array as a GRASP
+>   region, so the never-reused destination arrays (SpMV's `y`, PageRank's
+>   `scores`) held up to half the last level each. Upstream GRASP registers
+>   only the arrays each phase gathers.
+> - **Kernel entry.** The shared algorithm kernels began from whatever state
+>   their setup left, which differs between a CSR row and a record row.
+>
+> The corrected protocol is opt-in, as `--grasp-registration declared` and
+> `--kernel-entry cold`; see [status and default](#status-and-default). These
+> margins have not been re-measured under it. Read them as the record of the
+> historical protocol, not as current claims.
+
 The rule is off by default, as `--record-governed-first no`. So is the RRPV
 order, as `--record-rrpv-order no`.
 
@@ -1766,6 +1782,29 @@ The kernel census is cache_sim instrumentation, not an option. Every cache_sim
 kernel arms it at the kernel boundary and adds its fields to the receipt. It
 changes no decision, and gem5 and Sniper have no counterpart. Its per-pass
 detail is the same instrumentation, and stops at 64 passes.
+
+The fair-comparison contracts are cache_sim options, off by default. Native
+runners refuse them.
+
+- **`--grasp-registration declared`** makes each kernel phase designate the
+  arrays upstream GRASP protects, at a declared fraction of the last level:
+  - SpMV's `x`, top-down BFS's `depth` and SSSP's `distances` take the whole
+    capacity, as upstream's BellmanFordOpt does.
+  - PageRank's `contribution` takes half, as PageRankOpt does.
+  - BC's `path_counts` (forward) and `dependency` (backward) take half each,
+    as upstream's BC does. `depth`, which every BC edge reads, takes the other
+    half, the share upstream gives its frontier bitmap.
+
+  Every other property array stays a property region but not a GRASP region.
+  Kernels with no declaration refuse GRASP tiers under the contract.
+- **`--kernel-entry cold`** writes back every dirty line once, invalidates
+  every level and charges that maintenance to setup, so every row starts its
+  kernel empty.
+
+PageRank takes both from the runner, together with a GRASP-based transport
+control, `--record-base-policy GRASP_PAPER`. Every receipt states the
+registration, the declarations, the kernel entry and the last level's hits and
+misses per named property region.
 
 ## Reproducing
 

@@ -144,6 +144,14 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             else if (value == "flat") command.options.grasp_reference = GraspReferenceMode::FLAT;
             else if (value == "rank") command.options.grasp_reference = GraspReferenceMode::RANK;
             else throw std::invalid_argument("grasp-reference-must-be-off-full-flat-or-rank");
+        } else if (argument == "--grasp-registration") {
+            if (value != "all" && value != "declared")
+                throw std::invalid_argument("grasp-registration-must-be-all-or-declared");
+            command.options.grasp_declared = value == "declared";
+        } else if (argument == "--kernel-entry") {
+            if (value != "as-built" && value != "cold")
+                throw std::invalid_argument("kernel-entry-must-be-as-built-or-cold");
+            command.options.cold_kernel_entry = value == "cold";
         } else if (argument == "--grasp-scope") {
             if (value != "all" && value != "graph-passes")
                 throw std::invalid_argument("grasp-scope-must-be-all-or-graph-passes");
@@ -478,9 +486,13 @@ int applicationMain(
         bool allow_grasp_record_base = false, bool allow_window_observer = false,
         bool allow_window_model = false, bool allow_bfs_phases = false, bool allow_frontier_model = false,
         bool allow_grasp_reference = false, bool allow_spmv_queries = false,
-        bool allow_victim_controls = false) {
+        bool allow_victim_controls = false, bool allow_fair_comparison = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        // NEXT.md §bv C1, C2: the native backends take both with their region
+        // sideband and kernel-boundary marker in a later step.
+        if ((command.options.grasp_declared || command.options.cold_kernel_entry) && !allow_fair_comparison)
+            throw std::invalid_argument("GRASP declarations and the cold kernel entry are cache_sim-only");
         if ((command.options.record_uninformed_base || !command.options.record_bound_compare ||
              command.options.record_carrier_first) &&
             !allow_victim_controls)

@@ -45,6 +45,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <stdexcept>
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -133,6 +134,7 @@ struct PropertyRegion {
     uint32_t grasp_hot_percent = 15; // GRASP frontier_frac as % of VERTEX SPACE (array-relative, GRASP-faithful per ligra.h add_region). ~0.15 reproduces Faldu corpus results AND auto-scales (vs the old fixed 0.50-of-LLC which under-protected large graphs). ~ Faldu's stated 10% (which is vertex-relative).
     bool grasp_region = true;       // Whether GRASP treats this as propertyA/B
     uint32_t popt_line_offset = UINT32_MAX;
+    char name[24] = {};             // The kernel's array name, for declarations and receipts
 
     // Bucket boundaries: bucket_bounds[i] = upper byte address of bucket i
     // Bucket 0 = highest-degree (most important to cache)
@@ -1507,10 +1509,17 @@ struct GraphCacheContext {
     void registerPropertyArray(const void* data_ptr, uint32_t num_elements,
                                uint32_t elem_size, size_t llc_size,
                                double manual_hot_fraction = -1.0,
-                               bool grasp_region = true) {
+                               bool grasp_region = true,
+                               const char* name = nullptr) {
+        // Under ecg.grasp-declaration.v1 only a declaration designates a GRASP region.
+        if (grasp_declared && grasp_region)
+            throw std::invalid_argument("declared-registration-designates-by-declaration");
         if (num_regions >= MAX_PROPERTY_REGIONS) return;
 
         PropertyRegion& r = regions[num_regions];
+        r.name[0] = '\0';
+        if (name)
+            std::snprintf(r.name, sizeof(r.name), "%s", name);
         r.base_address = reinterpret_cast<uint64_t>(data_ptr);
         r.upper_bound = r.base_address + static_cast<uint64_t>(num_elements) * elem_size;
         r.num_elements = num_elements;
@@ -1581,6 +1590,81 @@ struct GraphCacheContext {
                                 r.grasp_hot_percent, r.grasp_region);
         num_regions++;
     }
+
+    // GRASP registration contract ecg.grasp-declaration.v1 (NEXT.md §bv C1).
+    // Upstream GRASP registers, per simulated phase, the array the kernel
+    // gathers through neighbour indices as propertyA and, in its dense
+    // iterations, the frontier bitmap as propertyB, each at a capacity fraction
+    // of its own that together fill at most the last level. Once enabled, every
+    // property region registers as a non-GRASP region; a phase's PROPERTY_A
+    // declaration replaces the designation and an optional PROPERTY_B adds a
+    // second array. Without it every property array stays a GRASP region, the
+    // historical registration. A phase switch changes only later
+    // classification: lines keep the RRPV they were inserted with.
+    enum class GraspRole : uint8_t { PROPERTY_A, PROPERTY_B };
+    struct GraspDeclaration {
+        uint32_t region = 0;        // the designated region's index
+        uint32_t percent = 0;       // its capacity fraction, percent of the LLC
+        uint64_t selections = 0;    // property selections the kernel made before it
+        GraspRole role = GraspRole::PROPERTY_A;
+    };
+    static constexpr const char* kGraspDeclarationContract = "ecg.grasp-declaration.v1";
+    bool grasp_declared = false;
+    std::vector<GraspDeclaration> grasp_declarations_;
+    uint32_t grasp_phase_regions_ = 0, grasp_phase_percent_ = 0;
+
+    void enableGraspDeclarations() {
+        if (num_regions != 0)
+            throw std::logic_error("grasp-declarations-after-registration");
+        grasp_declared = true;
+    }
+
+    void declareGraspRegion(uint64_t base, double fraction, uint64_t selections,
+                            GraspRole role = GraspRole::PROPERTY_A) {
+        if (!grasp_declared)
+            throw std::logic_error("grasp-declarations-not-enabled");
+        if (!(fraction > 0.0 && fraction <= 1.0))
+            throw std::invalid_argument("invalid-grasp-fraction");
+        uint32_t designated = num_regions;
+        for (uint32_t index = 0; index < num_regions; ++index)
+            if (regions[index].base_address == base)
+                designated = index;
+        if (designated == num_regions)
+            throw std::invalid_argument("undeclared-grasp-region");
+        const auto percent = static_cast<uint32_t>(fraction * 100.0 + 0.5);
+        if (role == GraspRole::PROPERTY_B) {
+            if (grasp_phase_regions_ == 0)
+                throw std::invalid_argument("grasp-property-b-without-property-a");
+            if (grasp_phase_regions_ != 1)
+                throw std::invalid_argument("grasp-phase-has-two-regions");
+            if (regions[designated].grasp_region)
+                throw std::invalid_argument("grasp-property-b-repeats-property-a");
+            if (grasp_phase_percent_ + percent > 100)
+                throw std::invalid_argument("grasp-phase-exceeds-the-last-level");
+            regions[designated].grasp_region = true;
+            ++grasp_phase_regions_;
+            grasp_phase_percent_ += percent;
+        } else {
+            for (uint32_t index = 0; index < num_regions; ++index)
+                regions[index].grasp_region = index == designated;
+            grasp_phase_regions_ = 1;
+            grasp_phase_percent_ = percent;
+        }
+        regions[designated].grasp_hot_percent = percent;
+        grasp_declarations_.push_back({designated, percent, selections, role});
+    }
+
+    const std::vector<GraspDeclaration>& graspDeclarations() const { return grasp_declarations_; }
+
+    // Tiers relative to the last level's capacity, as GRASP_PAPER does: always
+    // under the declared contract, otherwise when GRASP_BOUNDARY_MODE says so.
+    bool graspCapacityRelative() const {
+        if (grasp_declared)
+            return true;
+        const char* mode = std::getenv("GRASP_BOUNDARY_MODE");
+        return mode && std::string(mode) == "capacity";
+    }
+    const char* graspBoundaryMode() const { return graspCapacityRelative() ? "capacity" : "vertex"; }
 
     // Register a GRASP trace header property region directly.  The official
     // GRASP trace format carries propertyA/propertyB base/end addresses plus
@@ -1866,9 +1950,7 @@ struct GraphCacheContext {
         for (uint32_t i = 0; i < num_regions; ++i) {
             const PropertyRegion& r = regions[i];
             if (!r.grasp_region) continue;
-            const char* mode = std::getenv("GRASP_BOUNDARY_MODE");
-            const bool capacity_relative =
-                mode && std::string(mode) == "capacity";
+            const bool capacity_relative = graspCapacityRelative();
             uint32_t tier = capacity_relative
                 ? ecg_policy::classifyGraspTierCapacity(
                     addr, r.base_address, r.upper_bound, llc_size,

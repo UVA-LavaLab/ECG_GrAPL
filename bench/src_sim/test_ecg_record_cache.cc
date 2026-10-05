@@ -381,6 +381,13 @@ int exerciseRecordPressureDuel() {
     if (duel->getRecordDuelSelector() != 0 || a.duel_winner_changes != 6 ||
         a.duel_transfers != 1705 || duel->getStats().writebacks.load() != 2)
         return 15;
+    // A statistics reset keeps the selector and reports the value it kept, so
+    // the leaders of the run after it account for the rest exactly.
+    if (duel->getRecordDuelSelectorAtReset() != 511)
+        return 17;
+    duel->resetStats();
+    if (duel->getRecordDuelSelector() != 0 || duel->getRecordDuelSelectorAtReset() != 0)
+        return 18;
     // Without the replacement rule, or under the counter gate, nothing trains.
     for (const auto& [replacement, gate] : {std::pair{false, RecordPressureGate::DUEL},
                                             std::pair{true, RecordPressureGate::COUNTER}}) {

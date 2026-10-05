@@ -24,6 +24,9 @@ enum class Algorithm : uint8_t { SPMV, BFS, SSSP, CC, BC, TC };
 enum class MemoryKind : uint8_t { INDEX, EDGE, WEIGHT, PROPERTY, AUXILIARY, CONSTRUCTION };
 enum class ReferencePattern : uint8_t { NEIGHBOR, VERTEX, NEIGHBOR_AND_VERTEX };
 enum class RecordBasePolicy : uint8_t { LRU, GRASP_PAPER };
+// A kernel phase's GRASP arrays (ecg.grasp-declaration.v1): PROPERTY_A starts
+// the phase's designation, an optional PROPERTY_B adds a second array.
+enum class GraspRole : uint8_t { PROPERTY_A, PROPERTY_B };
 enum class WindowObserverMode : uint8_t { OFF, CONTROL, WINDOW };
 enum class RecordModel : uint8_t { NEXT, WINDOW, FRONTIER };
 // RANK is the rank-first selection arm of the consumer-architecture study.
@@ -109,6 +112,14 @@ struct Options {
     // covers only the ways of the record carrier.
     bool record_carrier_first = false;
     RecordPressureGate record_pressure_gate = RecordPressureGate::NO;
+    // Opt-in GRASP registration contract ecg.grasp-declaration.v1: each kernel
+    // phase designates the one array upstream GRASP protects, at its declared
+    // fraction of the last level; off, every property array is a GRASP region.
+    bool grasp_declared = false;
+    // Opt-in cold kernel boundary: setup's dirty data is written back and every
+    // level invalidated before the kernel's first access; off, the kernel
+    // starts in whatever state setup left.
+    bool cold_kernel_entry = false;
     // Opt-in: an ordinary STORE to a governed line keeps its FINITE bound,
     // because a store does not change when that line is next READ.
     bool record_store_keeps_bound = false;
@@ -421,6 +432,21 @@ class Engine {
             if (property)
                 backend_.propertyReferences(base, references);
         }
+    }
+
+    // GRASP's arrays for the kernel phase that follows (ecg.grasp-declaration.v1):
+    // upstream GRASP registers, per simulated phase, the array the kernel
+    // gathers through neighbour indices, add_region("propertyA", array, frac,
+    // n), and in dense iterations the frontier bitmap as propertyB. frac is
+    // 100 - frontier_frac = 50 where the kernel also reads a dense frontier
+    // irregularly (PageRankOpt, Radii, BC) and 100 where it does not
+    // (BellmanFordOpt). The native backends take it with their region sideband
+    // in a later step.
+    template<class T>
+    void declareGrasp(const Array<T, Engine>& array, double fraction,
+                      GraspRole role = GraspRole::PROPERTY_A) {
+        if constexpr (Backend::models_memory)
+            backend_.declareGrasp(array.data(), fraction, role);
     }
 
     void touch(const void* address, uint64_t bytes, bool write, MemoryKind kind,
@@ -1028,11 +1054,21 @@ void sortPrefix(Buffer& values, uint64_t count) {
     }
 }
 
+// ecg.grasp-declaration.v1 capacity fractions (NEXT.md §bv). Upstream gives
+// the whole capacity to a kernel that reads no dense frontier irregularly
+// (BellmanFordOpt) and half to one that does (PageRankOpt, Radii, BC). SpMV and
+// top-down BFS have no upstream application and take the first rule, as their
+// frontiers, if any, are queues; BC keeps upstream's half per phase, with depth,
+// read by every edge, in the frontier bitmap's half.
+inline constexpr double kGraspWholeCapacity = 1.0;
+inline constexpr double kGraspHalfCapacity = 0.5;
+
 template<class Access>
 void spmv(const GraphView& graph, Access& access) {
     typename Access::template Buffer<float> x(access, graph.vertices, "x", true);
     typename Access::template Buffer<float> y(
         access, graph.vertices, "y", true, ReferencePattern::VERTEX);
+    access.declareGrasp(x, kGraspWholeCapacity);
     for (uint64_t vertex = 0; vertex < graph.vertices; ++vertex)
         x.set(vertex, static_cast<float>(vertex + 1));
     access.bind(graph, x, ecg_record::TraversalMode::DENSE_EXACT);
@@ -1199,6 +1235,7 @@ void bfs(const GraphView& graph, Access& access) {
     typename Access::template Buffer<uint32_t> depth(access, graph.vertices, "depth", true);
     typename Access::template Buffer<uint32_t> frontier(access, graph.vertices, "frontier");
     typename Access::template Buffer<uint32_t> next(access, graph.vertices, "next_frontier");
+    access.declareGrasp(depth, kGraspWholeCapacity);
     depth.fill(UINT32_MAX);
     depth.set(access.options.source, 0);
     frontier.set(0, access.options.source);
@@ -1303,6 +1340,7 @@ void sssp(const GraphView& graph, Access& access) {
             throw std::invalid_argument("negative-weight");
     typename Access::template Buffer<uint64_t> distance(
         access, graph.vertices, "distances", true, ReferencePattern::NEIGHBOR_AND_VERTEX);
+    access.declareGrasp(distance, kGraspWholeCapacity);
     typename Access::template Buffer<uint32_t> frontier(access, graph.vertices, "frontier");
     typename Access::template Buffer<uint32_t> removed(access, graph.vertices, "heavy_frontier");
     typename Access::template Buffer<uint8_t> marked(access, graph.vertices, "heavy_membership");
@@ -1486,6 +1524,10 @@ void bc(const GraphView& graph, Access& access) {
         frontier.set(0, source);
         levels.set(0, 0);
         uint64_t size = 1, reached = 0, level_count = 0;
+        // BC.C's propertyA (NumPaths) and, as propertyB, the per-edge visited
+        // check: upstream's dense frontier bitmap, here the depth every edge reads.
+        access.declareGrasp(sigma, kGraspHalfCapacity);
+        access.declareGrasp(depth, kGraspHalfCapacity, GraspRole::PROPERTY_B);
         access.bind(graph, depth, ecg_record::TraversalMode::ORDERED_FILTERED);
         while (size != 0) {
             uint64_t next_size = 0;
@@ -1522,6 +1564,8 @@ void bc(const GraphView& graph, Access& access) {
         }
         access.result.reached += reached;
         access.result.levels += level_count;
+        access.declareGrasp(dependency, kGraspHalfCapacity);
+        access.declareGrasp(depth, kGraspHalfCapacity, GraspRole::PROPERTY_B);
         access.bind(graph, dependency, ecg_record::TraversalMode::ORDERED_FILTERED);
         for (uint64_t level = level_count; level-- > 0;) {
             const uint64_t first = levels.get(level), last = levels.get(level + 1);
