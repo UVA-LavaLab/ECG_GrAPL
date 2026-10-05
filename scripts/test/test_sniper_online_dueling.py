@@ -332,12 +332,15 @@ def _run_sniper_end_to_end(monkeypatch, tmp_path, log_text, write_matching_geome
     monkeypatch.setattr(roi_matrix, "sniper_runner_path", lambda a: fake_runner)
     monkeypatch.setattr(roi_matrix, "sniper_graph_policies_enabled", lambda a: True)
 
-    def fake_run_command(cmd, cwd, env, timeout, stdout_path, dry_run, pass_fds=()):
+    def fake_run_command(cmd, cwd, env, timeout, stdout_path, dry_run, pass_fds=(), rss_mib=None):
         import subprocess
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        # The kernel's own semantic receipt, which every sg_kernel row needs
+        # before its variant receipt is judged.
         stdout_path.write_text(
             "[ECG-MODE-RECEIPT sim=sniper "
-            "requested=ECG_GRASP_POPT effective=ECG_GRASP_POPT]\n" +
+            "requested=ECG_GRASP_POPT effective=ECG_GRASP_POPT]\n"
+            "GraphBrew Sniper SG PR checksum: 3f2a\n" +
             log_text)
         return subprocess.CompletedProcess(cmd, 0)
 

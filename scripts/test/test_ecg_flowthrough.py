@@ -242,8 +242,13 @@ def test_sniper_flowthrough_preserves_nuca_lookup_and_skips_miss_fill():
     sniper = read("bench/src_sniper/sg_kernel.cc")
     assert "context/ReusePlan sideband export failed" in sniper
     assert "const bool flowthrough_on" in sniper
-    assert "flowthrough_on" in sniper.split(
-        "sniper_export_context(", 1)[1].split("))", 1)[0]
+    # PageRank's record path exports its context without structural
+    # flow-through; every other export must hand the flow-through state on.
+    calls = [piece.split("))", 1) for piece in sniper.split("sniper_export_context(")[1:]]
+    record = [args for args, after in calls if "ECG record context export failed" in after[:200]]
+    exports = [args for args, after in calls if "ECG record context export failed" not in after[:200]]
+    assert len(record) == 1 and "flowthrough_on" not in record[0]
+    assert len(exports) >= 3 and all("flowthrough_on" in args for args in exports)
 
 
 def test_sniper_governed_properties_use_page_alignment():
