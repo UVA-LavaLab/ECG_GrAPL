@@ -462,8 +462,8 @@
       }
     },
     "ecg_screen_a_patents_cache": {
-      "status": "blocked",
-      "reason": "Stage 1 of the real-graph screen under methodology A, the user's decision of 2026-10-05 (NEXT.md section by): on BFS, SSSP and BC the bar is the best of GRASP_PAPER, the equally pass-scoped GRASP_PAPER and charged P-OPT, on PageRank and SpMV the best of GRASP_PAPER and charged P-OPT, and uncharged P-OPT is the upper bound. Designed in NEXT.md section bz and reviewed by Astra (GO WITH CHANGES, adopted) before any row existed; blocked until the user approves a named budget.",
+      "status": "ready",
+      "reason": "Stage 1 of the real-graph screen under methodology A, the user's decision of 2026-10-05 (NEXT.md section by): on BFS, SSSP and BC the bar is the best of GRASP_PAPER, the equally pass-scoped GRASP_PAPER and charged P-OPT, on PageRank and SpMV the best of GRASP_PAPER and charged P-OPT, and uncharged P-OPT is the upper bound. Designed in NEXT.md section bz and reviewed by Astra (GO WITH CHANGES, adopted) before any row existed; the user approved the named budget screen-a-51, these 51 rows, to run once with no automatic follow-on.",
       "require_clean_worktree": true,
       "development_gate": {
         "metric": "kernel transfers K, reported first for every row: traffic_phases.kernel.total_offchip_traffic for the algorithms and the root total_offchip_traffic for PageRank, each checked against the sum of all five census segments; charged P-OPT's K already contains its column stream and is never charged twice; C = K - entry_dirty_writebacks + (exit_dirty_lines - exit_entry_dirty_lines) from the row's kernel_census, the clean boundary, reported beside K and never instead of it; algorithm setup traffic is reported apart and never added to K; PageRank setup traffic is not measured and is reported as not measured, never as zero",
