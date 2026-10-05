@@ -1004,6 +1004,10 @@ struct GraphCacheContext {
     // --- Rereference Matrix (P-OPT) ---
     RereferenceConfig rereference;
     bool compound_popt = false;
+    // The one property region a single-matrix kernel designates as P-OPT's
+    // irregular data (NEXT.md §bw), as the authors' applications register
+    // IRREGDATA; -1 keeps the historical reading, every property region.
+    int32_t popt_region = -1;
     bool popt_constant_rank = false;
     bool grasp_reference_consumer = false;
     // Rank-first selection arm. It shares the base-first arm's engagement
@@ -2101,10 +2105,37 @@ struct GraphCacheContext {
     }
 
     bool isPoptData(uint64_t addr) const {
-        if (!compound_popt)
-            return isPropertyData(addr);
+        if (!compound_popt) {
+            if (popt_region < 0)
+                return isPropertyData(addr);
+            return findRegion(addr) == &regions[popt_region];
+        }
         const PropertyRegion* region = findRegion(addr);
         return region && region->popt_line_offset != UINT32_MAX;
+    }
+
+    // Designate the single matrix's irregular region. Every other property
+    // region is then regular data: P-OPT evicts it first and never ranks it.
+    void designatePoptRegion(const void* base) {
+        if (compound_popt)
+            throw std::invalid_argument("popt-irregular-region-needs-the-single-matrix");
+        if (popt_region >= 0)
+            throw std::invalid_argument("popt-irregular-region-already-designated");
+        const PropertyRegion* region = findRegion(reinterpret_cast<uint64_t>(base));
+        if (!region || region->base_address != reinterpret_cast<uint64_t>(base))
+            throw std::invalid_argument("popt-irregular-region-is-not-registered");
+        popt_region = static_cast<int32_t>(region - regions);
+    }
+
+    // Whether P-OPT treats a property region as its irregular data: a
+    // compound matrix's banks, else the designated region, else (historical)
+    // every region; nothing without a matrix.
+    bool poptCoversRegion(uint32_t index) const {
+        if (index >= num_regions || rereference.num_cache_lines == 0)
+            return false;
+        if (compound_popt)
+            return regions[index].popt_line_offset != UINT32_MAX;
+        return popt_region < 0 || static_cast<int32_t>(index) == popt_region;
     }
 
     // Compute P-OPT rereference distance for a cache line address.
@@ -2114,6 +2145,8 @@ struct GraphCacheContext {
         if (hints_for_thread().current_src == UINT32_MAX) return max_rank;
         const PropertyRegion* r = findRegion(line_addr);
         if (r == nullptr) return max_rank;
+        if (!compound_popt && popt_region >= 0 && r != &regions[popt_region])
+            return max_rank;
         uint32_t cline_id = static_cast<uint32_t>(
             (line_addr - r->base_address) / rereference.line_size);
         if (compound_popt) {

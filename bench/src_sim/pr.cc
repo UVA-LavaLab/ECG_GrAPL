@@ -248,8 +248,12 @@ static pvector<ScoreT> PageRankPullGSFixed_Sim(
         context.declareGraspRegion(reinterpret_cast<uint64_t>(contribution.data()), kPageRankGraspFraction, 0);
     static pvector<uint8_t> popt_matrix;
     if (!record_mode && (GraphSimEffectiveL3Policy() == EvictionPolicy::POPT ||
-                         std::getenv("POPT_SE_POSTFINAL")))
+                         std::getenv("POPT_SE_POSTFINAL"))) {
         preparePageRankRereference(graph, context, popt_matrix);
+        // P-OPT ranks the gathered contributions, its irregular data; the
+        // scores are regular data, as the authors' PageRank registers them.
+        context.designatePoptRegion(contribution.data());
+    }
     cache.initGraphContext(&context);
     if (record_mode) {
         ecg_record::NativeConfiguration configuration;

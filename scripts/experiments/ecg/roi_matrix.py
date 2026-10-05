@@ -636,6 +636,18 @@ def estimate_num_iterations(options: str) -> int | None:
     return None
 
 
+def validate_pagerank_popt_coverage(data: dict[str, Any]) -> None:
+    """NEXT.md §bw: P-OPT ranks only PageRank's contributions, which the authors register as IRREGDATA; the scores
+    are regular data."""
+    registration = data.get("property_registration")
+    if not isinstance(registration, dict) or not isinstance(registration.get("property_regions"), list):
+        raise RecordReceiptError("missing property region receipt")
+    covered = {region.get("name") for region in registration["property_regions"]
+               if isinstance(region, dict) and region.get("popt") is True}
+    if covered != {"contribution"}:
+        raise RecordReceiptError(f"P-OPT must rank only the contributions, not {sorted(covered)}")
+
+
 def apply_overhead_metrics(row: dict[str, Any]) -> None:
     """Charge P-OPT's rereference-matrix stream without double-counting.
 
@@ -3912,6 +3924,11 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
                 record_base=getattr(args, "record_base_policy", "LRU") if spec.record_mechanism else None)
         except RecordReceiptError as error:
             mark_row_error(row, f"PageRank contract receipt failed: {error}")
+    if args.benchmark == "pr" and row.get("status") == "ok" and spec.policy == "POPT":
+        try:
+            validate_pagerank_popt_coverage(data)
+        except RecordReceiptError as error:
+            mark_row_error(row, f"PageRank P-OPT coverage receipt failed: {error}")
     apply_popt_se_receipt(row, log_text, spec)
     apply_next_use_record_receipt(
         row, log_text, required=spec.label == "ECG_NEXT_USE_LRU")

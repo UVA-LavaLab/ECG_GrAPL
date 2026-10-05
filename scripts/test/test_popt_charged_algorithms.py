@@ -296,6 +296,78 @@ def test_pagerank_runs_the_bar_under_the_fair_contracts(tmp_path):
     assert row["policy_label"] == "POPT_GRASP_DECLARED_COLD_ENTRY"
 
 
+def _pagerank_receipt(tmp_path, name, **settings):
+    output = tmp_path / f"pr-{name}.json"
+    env = dict(_clean_env(), CACHE_ULTRAFAST="0", CACHE_FAST="0", ECG_CURRENT_PR_BASELINE="1",
+               CACHE_L1_POLICY="LRU", CACHE_L2_POLICY="LRU", CACHE_L1_SIZE="1KB", CACHE_L2_SIZE="2KB",
+               CACHE_L3_SIZE="4KB", CACHE_L3_WAYS="16", CACHE_OUTPUT_JSON=str(output), **settings)
+    ran = subprocess.run([str(PAGERANK), "-g", "10", "-k", "8", "-o", "5", "-n", "1", "-i", "2", "-t", "0"],
+                         cwd=tmp_path, env=env, capture_output=True, text=True, timeout=120, check=False)
+    assert ran.returncode == 0, ran.stderr[-2000:]
+    return json.loads(output.read_text())
+
+
+def _coverage(registration):
+    return {region["name"]: region["popt"] for region in registration["property_regions"]}
+
+
+@pytest.mark.parametrize("settings", [{}, {"POPT_SE_POSTFINAL": "later_lower_bound"}])
+def test_pagerank_popt_ranks_only_the_contributions(tmp_path, settings):
+    """The authors' PageRank registers outgoing_contrib as IRREGDATA and scores as REGDATA (NEXT.md §bw)."""
+    if not PAGERANK.is_file():
+        pytest.skip("functional PageRank binary is not built")
+    from scripts.experiments.ecg import roi_matrix
+    receipt = _pagerank_receipt(tmp_path, "popt", CACHE_POLICY="POPT", CACHE_L3_POLICY="POPT", **settings)
+    assert _coverage(receipt["property_registration"]) == {"scores": False, "contribution": True}
+    roi_matrix.validate_pagerank_popt_coverage(receipt)
+    grasp = _pagerank_receipt(tmp_path, "grasp", CACHE_POLICY="GRASP", CACHE_L3_POLICY="GRASP",
+                              GRASP_BOUNDARY_MODE="capacity", GRASP_HOT_FRACTION="0.50")
+    assert _coverage(grasp["property_registration"]) == {"scores": False, "contribution": False}
+    for name in ("scores", "contribution"):
+        changed = copy.deepcopy(receipt)
+        for region in changed["property_registration"]["property_regions"]:
+            if region["name"] == name:
+                region["popt"] = not region["popt"]
+        # roi_matrix imports record_receipts by module name: catch the class it raises.
+        with pytest.raises(roi_matrix.RecordReceiptError):
+            roi_matrix.validate_pagerank_popt_coverage(changed)
+            pytest.fail(f"accepted P-OPT coverage with {name} flipped")
+
+
+@pytest.mark.parametrize("policy,refused", [("POPT_CHARGED", True), ("GRASP_PAPER", False)])
+def test_the_runner_checks_pagerank_popt_coverage(tmp_path, monkeypatch, policy, refused):
+    """Every PageRank P-OPT row passes the coverage check, and no other row is held to it."""
+    if not PAGERANK.is_file():
+        pytest.skip("functional PageRank binary is not built")
+    from scripts.experiments.ecg import roi_matrix
+
+    def departed(data):
+        raise roi_matrix.RecordReceiptError("a scores line is ranked")
+
+    monkeypatch.setattr(roi_matrix, "validate_pagerank_popt_coverage", departed)
+    out = tmp_path / "pr"
+    out.mkdir()
+    args = roi_matrix.parse_args([
+        "--suite", "cache-sim", "--benchmark", "pr", "--current-pr-baselines",
+        "--options", f"-f {_graph(tmp_path, 'spmv')} -o 0 -n 1 -i 2 -t 0", "--policies", policy, *CHARGE,
+        *GEOMETRY, "--l3-sizes", "2048B", "--out-dir", str(out), "--no-build"])
+    rows = roi_matrix.run_cache_sim(args, out, roi_matrix.parse_policy_spec(policy), "2048B")
+    assert len(rows) == 1
+    if refused:
+        assert rows[0]["status"] == "error"
+        assert "PageRank P-OPT coverage receipt failed: a scores line is ranked" in rows[0]["error"]
+    else:
+        assert rows[0]["status"] == "ok", rows[0].get("error")
+
+
+def test_the_algorithms_receipt_names_the_popt_coverage(tmp_path):
+    if not ALGORITHMS.is_file():
+        pytest.skip("current algorithm executable is not built")
+    for policy, name in (("POPT", "c"), ("POPT_UNCHARGED", "u")):
+        receipt = _run(tmp_path, "spmv", policy, name=name)
+        assert _coverage(receipt["metrics"]["property_registration"]) == {"x": True, "y": False}
+
+
 _NATIVE_MAIN = """
 #include "ecg_algorithm_main.h"
 int main(int argc, char** argv) {

@@ -5146,7 +5146,8 @@ public:
                     << ",\"hits\":" << l3_->propertyRegionHits(region)
                     << ",\"misses\":" << l3_->propertyRegionMisses(region)
                     << ",\"kernel_hits\":" << l3_->propertyRegionKernelHits(region)
-                    << ",\"kernel_misses\":" << l3_->propertyRegionKernelMisses(region) << '}';
+                    << ",\"kernel_misses\":" << l3_->propertyRegionKernelMisses(region)
+                    << ",\"popt\":" << (context.poptCoversRegion(region) ? "true" : "false") << '}';
         receipt << "]}";
         registration_receipt_ = receipt.str();
     }

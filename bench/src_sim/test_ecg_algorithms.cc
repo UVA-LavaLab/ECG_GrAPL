@@ -2298,6 +2298,72 @@ void testChargedPoptStream() {
     }
 }
 
+// NEXT.md §bw: P-OPT ranks only the data its kernel designates irregular, as
+// the authors' applications register IRREGDATA (PageRank: the contributions,
+// never the scores); every other line is regular data and goes first.
+void testPoptIrregularDesignation() {
+    alignas(64) static float scores[64], contribution[64], unregistered[16];
+    static uint8_t matrix[256 * 4];
+    // Four lines per region; line 0's next use is one epoch on, every other line's nine.
+    std::fill(std::begin(matrix), std::end(matrix), uint8_t{0x80 | 9});
+    for (uint32_t epoch = 0; epoch < 256; ++epoch)
+        matrix[epoch * 4] = 0x80 | 1;
+    const uint64_t s = reinterpret_cast<uint64_t>(scores), c = reinterpret_cast<uint64_t>(contribution);
+    const auto build = [&](cache_sim::GraphCacheContext& context) {
+        context.registerPropertyArray(scores, 64, 4, 4096, -1.0, true, "scores");
+        context.registerPropertyArray(contribution, 64, 4, 4096, -1.0, true, "contribution");
+        context.initRereference(matrix, 4, 256, 64, 64);
+        context.setCurrentVertices(0, 0);
+    };
+    std::vector<cache_sim::CacheLine> ways(2);
+    for (std::size_t way = 0; way < ways.size(); ++way) {
+        ways[way].valid = true;
+        ways[way].rrpv = 7;
+        ways[way].last_access = 10 + way;
+    }
+    ways[0].line_addr = s;
+    ways[1].line_addr = c + 64;
+    const uint32_t far = popt_reref::maxRank(popt_reref::Encoding::Full);
+    {
+        cache_sim::GraphCacheContext historical;
+        build(historical);
+        cache_sim::CacheLevel cache("L3", 128, 64, 2, cache_sim::EvictionPolicy::POPT);
+        cache.initGraphContext(&historical);
+        check(historical.isPoptData(s) && historical.findNextRef(s) == 1 && cache.selectVictimForTest(ways) == 1,
+              "a kernel that designates nothing keeps the historical reading: every property region is P-OPT data");
+    }
+    {
+        cache_sim::GraphCacheContext designated;
+        build(designated);
+        designated.designatePoptRegion(contribution);
+        cache_sim::CacheLevel cache("L3", 128, 64, 2, cache_sim::EvictionPolicy::POPT);
+        cache.initGraphContext(&designated);
+        check(!designated.isPoptData(s) && designated.isPoptData(c) && designated.findNextRef(s) == far &&
+              designated.findNextRef(c + 64) == 9, "only the designated irregular region is P-OPT data");
+        check(cache.selectVictimForTest(ways) == 0, "a regular line goes before any irregular one");
+        check(!designated.poptCoversRegion(0) && designated.poptCoversRegion(1),
+              "the receipt's coverage is the designation");
+        check(refusesWith([&] { designated.designatePoptRegion(scores); }, "popt-irregular-region-already-designated"),
+              "a kernel designates one irregular region for its one matrix");
+    }
+    {
+        cache_sim::GraphCacheContext other;
+        build(other);
+        check(refusesWith([&] { other.designatePoptRegion(unregistered); }, "popt-irregular-region-is-not-registered"),
+              "only a registered property region can be designated");
+        check(refusesWith([&] { other.designatePoptRegion(contribution + 16); },
+                          "popt-irregular-region-is-not-registered"),
+              "a designation names a region by its base, never an address inside it");
+        cache_sim::GraphCacheContext bare;
+        bare.registerPropertyArray(scores, 64, 4, 4096, -1.0, true, "scores");
+        check(!bare.poptCoversRegion(0), "without a matrix P-OPT covers nothing");
+        bare.initRereference(matrix, 4, 256, 64, 64);
+        bare.compound_popt = true;
+        check(refusesWith([&] { bare.designatePoptRegion(scores); }, "popt-irregular-region-needs-the-single-matrix"),
+              "a compound matrix covers its banks, never a designation");
+    }
+}
+
 int main(int argc, char** argv) {
     using namespace ecg_algorithm;
     if (argc == 4 && std::strcmp(argv[1], kCensusRunFlag) == 0)
@@ -2327,6 +2393,7 @@ int main(int argc, char** argv) {
     testPropertyRegionAttribution();
     testPropertyRegionCounters();
     testChargedPoptStream();
+    testPoptIrregularDesignation();
     const Fixture diamond(8, true, {
         {0,1,2}, {0,2,5}, {0,5,20}, {1,2,1}, {1,3,2},
         {2,3,1}, {2,4,4}, {3,4,1}, {4,5,3}, {6,7,1}});
