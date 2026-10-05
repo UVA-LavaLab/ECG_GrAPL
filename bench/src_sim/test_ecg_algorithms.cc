@@ -289,9 +289,11 @@ void testPoptConstantRanksPreserveOtherMechanics() {
         check(cache.selectVictimForTest(ways) == 2 && context.popt_lookup_count == lookups,
               "constant ranks preserve P-OPT non-property victim precedence");
         ways[2].line_addr = 0x1080;
+        ways[2].rrpv = 7;
+        ways[0].rrpv = 0;
         context.setCurrentVertices(UINT32_MAX, UINT32_MAX);
-        check(cache.selectVictimForTest(ways) == 0 && context.popt_lookup_count == lookups,
-              "both modes retain the current P-OPT outside-pass LRU fallback");
+        check(cache.selectVictimForTest(ways) == (constant ? 2 : 1) && context.popt_lookup_count == lookups,
+              "both modes take the DRRIP base outside P-OPT's active region, never the least recent way");
         context.setCurrentVertices(0, 0);
         cache.insert(0x1000, true);
         cache_sim::CacheLine snapshot;
@@ -2364,6 +2366,166 @@ void testPoptIrregularDesignation() {
     }
 }
 
+// NEXT.md §bw: P-OPT's base policy is three-bit DRRIP, adapted from the
+// authors' artifact (CMUAbstract/POPT-CacheSim-HPCA21 @53b5021,
+// simulators/popt-8b/llc.cpp): one selector trained by every last-level
+// request to a leader set, BRRIP inserting long once per 32 allocating
+// misses, and DRRIP victims outside P-OPT's active region.
+void testPoptDrrip() {
+    using Type = cache_sim::CacheLevel::PoptSetType;
+    const auto level = [](std::size_t sets, std::size_t ways) {
+        return std::make_unique<cache_sim::CacheLevel>("L3", sets * ways * 64, 64, ways,
+                                                       cache_sim::EvictionPolicy::POPT);
+    };
+    const auto count = [](const cache_sim::CacheLevel& cache, std::size_t sets, Type type) {
+        std::size_t n = 0;
+        for (std::size_t set = 0; set < sets; ++set)
+            n += cache.poptSetTypeForTest(set) == type;
+        return n;
+    };
+    {
+        const auto one = level(1, 4);
+        one->access(0x000, false);
+        check(one->poptSetTypeForTest(0) == Type::FIXED_SRRIP && one->poptSelector() == 512,
+              "one set duels nothing");
+        const auto two = level(2, 4), thirty_two = level(32, 1), sixty_four = level(64, 1);
+        check(two->poptSetTypeForTest(0) == Type::SRRIP_LEADER && two->poptSetTypeForTest(1) == Type::BRRIP_LEADER &&
+              thirty_two->poptSetTypeForTest(0) == Type::SRRIP_LEADER &&
+              thirty_two->poptSetTypeForTest(1) == Type::BRRIP_LEADER &&
+              count(*thirty_two, 32, Type::FOLLOWER) == 30,
+              "below 64 sets set 0 leads SRRIP, set 1 leads BRRIP and the rest follow");
+        check(sixty_four->poptSetTypeForTest(0) == Type::SRRIP_LEADER &&
+              sixty_four->poptSetTypeForTest(3) == Type::SRRIP_LEADER &&
+              sixty_four->poptSetTypeForTest(1) == Type::BRRIP_LEADER &&
+              sixty_four->poptSetTypeForTest(2) == Type::BRRIP_LEADER &&
+              count(*sixty_four, 64, Type::FOLLOWER) == 60, "64 sets take the artifact's leader formula");
+        const auto five_twelve = level(512, 1), large = level(24576, 1);
+        check(count(*five_twelve, 512, Type::SRRIP_LEADER) == 16 && count(*five_twelve, 512, Type::BRRIP_LEADER) == 16 &&
+              five_twelve->poptSetTypeForTest(17) == Type::SRRIP_LEADER &&
+              five_twelve->poptSetTypeForTest(15) == Type::BRRIP_LEADER &&
+              count(*large, 24576, Type::SRRIP_LEADER) == 32 && count(*large, 24576, Type::BRRIP_LEADER) == 32 &&
+              large->poptSetTypeForTest(255) == Type::BRRIP_LEADER,
+              "the artifact's leaders: one of each per constituency, by 32-bit complement");
+        check(refusesWith([&] { level(80, 1); }, "popt-drrip-needs-sets-in-multiples-of-32"),
+              "a production geometry the artifact's formula cannot divide is refused");
+    }
+    {
+        const auto cache = level(2, 4);
+        check(cache->poptSelector() == 512, "the selector starts at 512");
+        check(!cache->access(0x000, false) && cache->poptSelector() == 513, "a leader miss trains once");
+        cache->insert(0x000, false);
+        check(cache->poptSelector() == 513, "its fill does not train again");
+        check(cache->access(0x000, false) && cache->poptSelector() == 514, "a leader hit trains too");
+        cache->access(0x040, false);
+        check(cache->poptSelector() == 513, "a BRRIP leader trains the other way");
+        const auto other = level(2, 4);
+        check(other->poptSelector() == 512, "each last level has its own selector");
+        for (int request = 0; request < 600; ++request)
+            cache->access(0x000, false);
+        check(cache->poptSelector() == 1024, "the selector saturates at 1024");
+        for (int request = 0; request < 1200; ++request)
+            cache->access(0x040, false);
+        check(cache->poptSelector() == 0, "and at 0");
+        const auto followers = level(32, 4);
+        followers->access(0x080, false);
+        check(followers->poptSelector() == 512, "a follower trains nothing");
+    }
+    {
+        // The policy counter counts allocating misses in every set, sampled before
+        // each miss counts: BRRIP inserts long (RRPV 6) at misses 1, 33, 65, ...
+        const auto cache = level(2, 4);
+        cache_sim::CacheLine line;
+        uint64_t next = 0;
+        const auto miss = [&](std::size_t set) {
+            const uint64_t address = (2 * next++ + set) * 64;
+            cache->access(address, false);
+            cache->insert(address, false);
+            cache->lineSnapshotForTest(address, line);
+            return line.rrpv;
+        };
+        check(miss(1) == 6 && miss(1) == 7, "BRRIP inserts long at miss 1, distant at miss 2");
+        bool srrip = true;
+        for (int index = 3; index <= 32; ++index)
+            srrip = srrip && miss(0) == 6;
+        check(srrip && cache->poptPolicyMisses() == 32, "SRRIP always inserts long; every miss counts");
+        check(miss(1) == 6 && miss(1) == 7, "BRRIP inserts long again at miss 33");
+        const uint64_t address = (2 * (next - 1) + 1) * 64;
+        check(cache->access(address, false) && cache->lineSnapshotForTest(address, line) && line.rrpv == 0,
+              "a hit promotes to 0");
+        const auto followers = level(32, 4);
+        // Miss 1 takes RRPV 6 under either policy (BRRIP's epsilon slot), so
+        // the threshold is read at miss 2.
+        followers->access(0x080, false);
+        followers->insert(0x080, false);
+        followers->access(0x100, false);
+        followers->insert(0x100, false);
+        followers->lineSnapshotForTest(0x100, line);
+        const uint8_t srrip_follower = line.rrpv;
+        followers->access(0x000, false);
+        followers->access(0x0C0, false);
+        followers->insert(0x0C0, false);
+        followers->lineSnapshotForTest(0x0C0, line);
+        check(srrip_follower == 6 && followers->poptSelector() == 513 && line.rrpv == 7,
+              "followers insert SRRIP at 512 and BRRIP above it");
+    }
+    {
+        // Outside P-OPT's active region the base policy decides: the first way at
+        // RRPV 7, ageing every way until one is.
+        const auto cache = level(1, 4);
+        std::vector<cache_sim::CacheLine> ways(4);
+        const uint8_t rrpvs[4] = {5, 7, 6, 7};
+        for (std::size_t way = 0; way < 4; ++way) {
+            ways[way].valid = true;
+            ways[way].line_addr = 0x1000 + way * 64;
+            ways[way].last_access = 10 + way;
+            ways[way].rrpv = rrpvs[way];
+        }
+        check(cache->selectVictimForTest(ways) == 1, "the first way at RRPV 7, not the least recent");
+        const uint8_t aged[4] = {5, 6, 4, 3};
+        for (std::size_t way = 0; way < 4; ++way)
+            ways[way].rrpv = aged[way];
+        check(cache->selectVictimForTest(ways) == 1 && ways[0].rrpv == 6 && ways[1].rrpv == 7 &&
+              ways[2].rrpv == 5 && ways[3].rrpv == 4, "with none at 7 every way ages by one until one is");
+        ways[2].valid = false;
+        check(cache->selectVictimForTest(ways) == 2, "an invalid way fills first");
+    }
+    {
+        // L3: four sets of four ways; set 0 leads SRRIP, set 1 BRRIP, sets 2 and 3 follow.
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 1024, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::POPT);
+        cache.access(0x000, false);
+        cache.access(0x080, false);
+        cache.access(0x0C0, false);
+        const uint32_t selector = cache.L3()->poptSelector();
+        const uint64_t misses = cache.L3()->poptPolicyMisses();
+        check(selector == 513 && misses == 3, "demand requests train once and every allocating miss counts");
+        cache.resetStats();
+        check(cache.L3()->poptSelector() == selector && cache.L3()->poptPolicyMisses() == misses,
+              "replacement state outlives a statistics reset");
+        cache.initPoptMatrixStream(128, 4, 8, 2);
+        cache.setCurrentVertex(0);
+        cache.setCurrentVertex(20);
+        check(cache.L3()->poptSelector() == selector && cache.L3()->poptPolicyMisses() == misses,
+              "the column engine is no last-level request");
+        cache.prefetch(0x100);
+        check(cache.L3()->poptSelector() == selector + 1 && cache.L3()->poptPolicyMisses() == misses + 1,
+              "a prefetch that reaches the last level trains once and its fill counts");
+        cache.L3()->insert(0x1C0, false);
+        cache.prefetch(0x1C0);
+        check(cache.L3()->poptSelector() == selector + 1 &&
+              cache.L3()->poptPolicyMisses() == misses + 2, "a prefetch that hits a follower trains nothing");
+        cache.L3()->insert(0x200, false);
+        cache.prefetch(0x200);
+        check(cache.L3()->poptSelector() == selector + 2, "a prefetch hit in a leader set trains once");
+        cache.prefetchStream(0x400);
+        check(cache.L3()->poptSelector() == selector + 3 && cache.L3()->poptPolicyMisses() == misses + 3,
+              "a stream prefetch that reaches the last level trains once and, not allocating, counts no miss");
+        cache.coldKernelEntry();
+        check(cache.L3()->poptSelector() == 512 && cache.L3()->poptPolicyMisses() == 0,
+              "a cold kernel entry resets the selector and the epsilon phase with the tags");
+    }
+}
+
 int main(int argc, char** argv) {
     using namespace ecg_algorithm;
     if (argc == 4 && std::strcmp(argv[1], kCensusRunFlag) == 0)
@@ -2394,6 +2556,7 @@ int main(int argc, char** argv) {
     testPropertyRegionCounters();
     testChargedPoptStream();
     testPoptIrregularDesignation();
+    testPoptDrrip();
     const Fixture diamond(8, true, {
         {0,1,2}, {0,2,5}, {0,5,20}, {1,2,1}, {1,3,2},
         {2,3,1}, {2,4,4}, {3,4,1}, {4,5,3}, {6,7,1}});

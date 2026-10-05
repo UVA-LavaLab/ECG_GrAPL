@@ -636,9 +636,11 @@ def estimate_num_iterations(options: str) -> int | None:
     return None
 
 
-def validate_pagerank_popt_coverage(data: dict[str, Any]) -> None:
-    """NEXT.md §bw: P-OPT ranks only PageRank's contributions, which the authors register as IRREGDATA; the scores
-    are regular data."""
+def validate_pagerank_popt(data: dict[str, Any]) -> None:
+    """NEXT.md §bw: P-OPT ranks only PageRank's contributions, which the authors register as IRREGDATA (the scores
+    are regular data), over the artifact's DRRIP base."""
+    if data.get("popt_base_policy") != algorithm_matrix.POPT_BASE_POLICY:
+        raise RecordReceiptError("P-OPT's receipt does not name the artifact's DRRIP base")
     registration = data.get("property_registration")
     if not isinstance(registration, dict) or not isinstance(registration.get("property_regions"), list):
         raise RecordReceiptError("missing property region receipt")
@@ -3926,9 +3928,9 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
             mark_row_error(row, f"PageRank contract receipt failed: {error}")
     if args.benchmark == "pr" and row.get("status") == "ok" and spec.policy == "POPT":
         try:
-            validate_pagerank_popt_coverage(data)
+            validate_pagerank_popt(data)
         except RecordReceiptError as error:
-            mark_row_error(row, f"PageRank P-OPT coverage receipt failed: {error}")
+            mark_row_error(row, f"PageRank P-OPT receipt failed: {error}")
     apply_popt_se_receipt(row, log_text, spec)
     apply_next_use_record_receipt(
         row, log_text, required=spec.label == "ECG_NEXT_USE_LRU")
@@ -4123,6 +4125,9 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         "popt_matrix_stream_lines_simulated",
         "popt_matrix_stream_columns_simulated",
         "popt_matrix_stream_model",
+        "popt_base_policy",
+        "popt_drrip_selector",
+        "popt_drrip_policy_misses",
     ):
         row[key] = data.get(key)
     if spec.ecg_online_admission:

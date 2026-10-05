@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 ALGORITHMS = ROOT / "bench/bin_sim/algorithms"
 PAGERANK = ROOT / "bench/bin_sim/pr"
 KERNELS = ("spmv", "bfs", "sssp", "bc")
+BASE_POLICY = "artifact-drrip-53b5021"
 CHARGE = ("--popt-reserve-model", "size_correct", "--popt-matrix-stream", "simulated")
 GEOMETRY = ("--l1d-size", "128B", "--l1d-ways", "2", "--l2-size", "256B", "--l2-ways", "2", "--l3-ways", "4")
 
@@ -126,6 +127,8 @@ def test_charged_popt_streams_its_columns_and_says_so(tmp_path, algorithm):
     assert stream["columns"] > 0
     assert stream == {"model": "dedicated-current-next", "active_columns": 2, "column_bytes": column,
                       "columns": stream["columns"], "lines": stream["columns"] * -(-column // 64)}
+    # Charged and uncharged P-OPT share the artifact's DRRIP base (NEXT.md §bw).
+    assert paid["popt"]["base_policy"] == free["popt"]["base_policy"] == BASE_POLICY
     # The engine streams beside the processor: setup, every processor access, every cache decision and the answer
     # are P-OPT's as before, and the kernel pays each column line once, as a memory read that is no cache miss.
     assert paid["traffic_phases"]["setup"] == free["traffic_phases"]["setup"]
@@ -234,6 +237,7 @@ def test_the_validator_refuses_a_charge_that_departs(tmp_path):
         ("full_data_capacity", True), ("runtime_matrix_traffic_charged", False), ("stream", None),
         ("stream.model", "analytic"), ("stream.model", "simulated-residency"), ("stream.active_columns", 1),
         ("stream.column_bytes", column + 1), ("stream.columns", 0), ("stream.lines", lines + 1),
+        ("base_policy", "lru"), ("base_policy", None),
     ]
     for key, value in departures:
         changed = copy.deepcopy(paid)
@@ -255,7 +259,7 @@ def test_the_validator_refuses_a_charge_that_departs(tmp_path):
                 algorithm_matrix.validate_popt_charge(changed, policy=policy, matrix_lines=column)
                 pytest.fail(f"accepted {policy} memory reads off by {delta}")
     for key, value in (("full_data_capacity", False), ("runtime_matrix_traffic_charged", True),
-                       ("stream", paid["popt"]["stream"])):
+                       ("stream", paid["popt"]["stream"]), ("base_policy", "lru")):
         changed = copy.deepcopy(free)
         changed["popt"][key] = value
         with pytest.raises(RecordReceiptError):
@@ -319,10 +323,12 @@ def test_pagerank_popt_ranks_only_the_contributions(tmp_path, settings):
     from scripts.experiments.ecg import roi_matrix
     receipt = _pagerank_receipt(tmp_path, "popt", CACHE_POLICY="POPT", CACHE_L3_POLICY="POPT", **settings)
     assert _coverage(receipt["property_registration"]) == {"scores": False, "contribution": True}
-    roi_matrix.validate_pagerank_popt_coverage(receipt)
+    assert receipt["popt_base_policy"] == BASE_POLICY
+    roi_matrix.validate_pagerank_popt(receipt)
     grasp = _pagerank_receipt(tmp_path, "grasp", CACHE_POLICY="GRASP", CACHE_L3_POLICY="GRASP",
                               GRASP_BOUNDARY_MODE="capacity", GRASP_HOT_FRACTION="0.50")
     assert _coverage(grasp["property_registration"]) == {"scores": False, "contribution": False}
+    assert grasp["popt_base_policy"] == "none"
     for name in ("scores", "contribution"):
         changed = copy.deepcopy(receipt)
         for region in changed["property_registration"]["property_regions"]:
@@ -330,8 +336,14 @@ def test_pagerank_popt_ranks_only_the_contributions(tmp_path, settings):
                 region["popt"] = not region["popt"]
         # roi_matrix imports record_receipts by module name: catch the class it raises.
         with pytest.raises(roi_matrix.RecordReceiptError):
-            roi_matrix.validate_pagerank_popt_coverage(changed)
+            roi_matrix.validate_pagerank_popt(changed)
             pytest.fail(f"accepted P-OPT coverage with {name} flipped")
+    for base in ("lru", None):
+        changed = copy.deepcopy(receipt)
+        changed["popt_base_policy"] = base
+        with pytest.raises(roi_matrix.RecordReceiptError):
+            roi_matrix.validate_pagerank_popt(changed)
+            pytest.fail(f"accepted a P-OPT base policy of {base}")
 
 
 @pytest.mark.parametrize("policy,refused", [("POPT_CHARGED", True), ("GRASP_PAPER", False)])
@@ -344,7 +356,7 @@ def test_the_runner_checks_pagerank_popt_coverage(tmp_path, monkeypatch, policy,
     def departed(data):
         raise roi_matrix.RecordReceiptError("a scores line is ranked")
 
-    monkeypatch.setattr(roi_matrix, "validate_pagerank_popt_coverage", departed)
+    monkeypatch.setattr(roi_matrix, "validate_pagerank_popt", departed)
     out = tmp_path / "pr"
     out.mkdir()
     args = roi_matrix.parse_args([
@@ -355,7 +367,7 @@ def test_the_runner_checks_pagerank_popt_coverage(tmp_path, monkeypatch, policy,
     assert len(rows) == 1
     if refused:
         assert rows[0]["status"] == "error"
-        assert "PageRank P-OPT coverage receipt failed: a scores line is ranked" in rows[0]["error"]
+        assert "PageRank P-OPT receipt failed: a scores line is ranked" in rows[0]["error"]
     else:
         assert rows[0]["status"] == "ok", rows[0].get("error")
 

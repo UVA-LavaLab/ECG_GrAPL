@@ -267,6 +267,8 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
 # The one stream model a current charged P-OPT row may name (NEXT.md §bw): the reserved ways hold the current epoch's
 # column and the next one's, and a dedicated engine reads each streamed column line from memory beside the caches.
 POPT_STREAM_MODEL = "dedicated-current-next"
+# P-OPT's base policy: three-bit DRRIP adapted from the authors' artifact at 53b5021 (cache_sim.h CacheLevel).
+POPT_BASE_POLICY = "artifact-drrip-53b5021"
 
 
 def validate_popt_charge(payload: dict[str, Any], *, policy: str, matrix_lines: int) -> dict[str, int]:
@@ -280,6 +282,8 @@ def validate_popt_charge(payload: dict[str, Any], *, policy: str, matrix_lines: 
     require(popt.get("full_data_capacity") is (not charged) and
             popt.get("runtime_matrix_traffic_charged") is charged,
             "P-OPT's receipt does not declare the charge its policy names")
+    require(popt.get("base_policy") == (POPT_BASE_POLICY if policy in ("POPT", "POPT_UNCHARGED") else "none"),
+            "P-OPT's receipt does not name the artifact's DRRIP base")
     stream = popt.get("stream")
     lines = 0
     if charged:

@@ -127,10 +127,10 @@ column_bytes = ceil(vertices * property_bytes / line_bytes)
 reserved_ways = ceil(active_columns * column_bytes / bytes_per_way)
 ```
 
-Charged P-OPT pays this reservation; current-algorithm `POPT` is size-correct, and
-its engine streams the current/next column pair beside the caches, one memory read
-per line (a 256-epoch sweep reads 4x the property bytes). `POPT:UNCHARGED` keeps full
-capacity as a P-OPT-favorable control, not equal-area; simulated and analytic never pool.
+Charged P-OPT pays this reservation; current-algorithm `POPT` is size-correct, its engine
+streams the current/next column pair beside the caches (a 256-epoch sweep reads 4x the property
+bytes), and every P-OPT row's base is the authors' artifact DRRIP (`artifact-drrip-53b5021`).
+`POPT:UNCHARGED` keeps full capacity, not equal-area; simulated and analytic never pool.
 
 Any detailed row with `popt_target_time_charged=0` omits native matrix
 lookup/stream latency and is an optimistic P-OPT bound, not a fully costed

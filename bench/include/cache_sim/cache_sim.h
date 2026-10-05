@@ -1038,6 +1038,11 @@ public:
         // Calculate bit widths
         offset_bits_ = log2i(line_size);
         index_bits_ = log2i(num_sets_);
+        // P-OPT's DRRIP leaders follow the artifact's formula, which needs the
+        // sets in 32 constituencies (NEXT.md §bw); smaller fixtures use set 0
+        // and set 1 as the leaders.
+        if (policy_ == EvictionPolicy::POPT && num_sets_ >= 64 && num_sets_ % 32 != 0)
+            throw std::invalid_argument("popt-drrip-needs-sets-in-multiples-of-32");
         
         // Initialize cache structure
         cache_.resize(num_sets_);
@@ -1089,6 +1094,8 @@ public:
         uint64_t tag = getTag(address);
         size_t set_idx = getSetIndex(address);
         auto& set = cache_[set_idx];
+        if (policy_ == EvictionPolicy::POPT)
+            trainPoptSelector(set_idx);
         
         // Check for hit
         for (size_t i = 0; i < associativity_; i++) {
@@ -1444,9 +1451,11 @@ public:
             applyGraspInsertion(set[victim_idx], address);
         }
 
-        // P-OPT: insert with SRRIP-style RRPV (long re-reference = M-1)
+        // P-OPT: DRRIP insertion for its set (NEXT.md §bw), and every
+        // allocating miss advances BRRIP's epsilon phase.
         if (policy_ == EvictionPolicy::POPT) {
-            set[victim_idx].rrpv = 6;  // M_RRPV - 1 = long re-reference (SRRIP default)
+            set[victim_idx].rrpv = poptInsertionRrpv(set_idx);
+            ++popt_policy_misses_;
         }
 
         // PIN: set pin bit when newly inserted line falls in the high-reuse
@@ -1895,6 +1904,37 @@ public:
     // unit test can assert the EXACT victim per policy / ECG_VARIANT against an
     // independently hand-computed answer. See bench/src_sim/test_ecg_victim.cc.
     size_t selectVictimForTest(std::vector<CacheLine>& set) { return findVictim(set); }
+
+    // P-OPT's base policy (NEXT.md §bw): three-bit DRRIP adapted from the
+    // authors' artifact, CMUAbstract/POPT-CacheSim-HPCA21 at
+    // 53b5021846690d0f3445428c6380e877ecf7a10e (simulators/popt-8b/llc.cpp):
+    // - one selector for this level, in [0, 1024] from 512, trained once by
+    //   every request to a leader set, hit or miss, as the artifact's
+    //   determineSetType runs on every LLC access (standard DRRIP trains on
+    //   leader misses only); followers take BRRIP above 512;
+    // - leaders by the artifact's 32 constituencies (64 or more sets, a
+    //   multiple of 32); fixtures below 64 sets lead with sets 0 and 1, and a
+    //   single set is SRRIP alone;
+    // - SRRIP inserts at 6; BRRIP at 6 on allocating misses 1, 33, 65, ...
+    //   (the artifact samples its miss count before counting the miss), else 7;
+    //   a hit sets 0;
+    // - the column engine is no request; a full cold entry resets the
+    //   selector and the miss count with the tags, nothing else does.
+    // One single-bank selector replaces the artifact's eight per-bank ones,
+    // and its hashed set mapping is the model's modulo mapping.
+    enum class PoptSetType : uint8_t { FOLLOWER, SRRIP_LEADER, BRRIP_LEADER, FIXED_SRRIP };
+    static constexpr const char* kPoptBasePolicy = "artifact-drrip-53b5021";
+    static constexpr uint32_t kPoptSelectorMax = 1024, kPoptSelectorInitial = 512;
+    PoptSetType poptSetTypeForTest(size_t set) const { return poptSetType(set); }
+    uint32_t poptSelector() const { return popt_selector_; }
+    uint64_t poptPolicyMisses() const { return popt_policy_misses_; }
+    // A prefetch that reaches this level is one request; its fill trains nothing more.
+    void notePoptRequest(uint64_t address) {
+        if (policy_ != EvictionPolicy::POPT)
+            return;
+        std::lock_guard<std::mutex> lock(mutex_);
+        trainPoptSelector(getSetIndex(address));
+    }
     size_t setIndexForAddress(uint64_t address) const {
         return getSetIndex(address);
     }
@@ -2347,6 +2387,9 @@ public:
                     dirty_lines.insert(line.line_addr);
                 line = CacheLine();
             }
+        // A full cold entry resets P-OPT's DRRIP state with the tags.
+        popt_selector_ = kPoptSelectorInitial;
+        popt_policy_misses_ = 0;
     }
 
     void chargeMaintenanceWritebacks(uint64_t lines) { stats_.writebacks.fetch_add(lines); }
@@ -3169,14 +3212,67 @@ private:
     // Requires: initPOPT() called before simulation with a precomputed
     // rereference matrix from makeOffsetMatrix() in popt.h.
     // ================================================================
+    PoptSetType poptSetType(size_t set) const {
+        if (num_sets_ == 1)
+            return PoptSetType::FIXED_SRRIP;
+        if (num_sets_ < 64)
+            return set == 0 ? PoptSetType::SRRIP_LEADER :
+                   set == 1 ? PoptSetType::BRRIP_LEADER : PoptSetType::FOLLOWER;
+        const uint32_t size = static_cast<uint32_t>(num_sets_ / 32);
+        const uint32_t constituency = static_cast<uint32_t>(set) / size;
+        const uint32_t offset = static_cast<uint32_t>(set) % size;
+        if (constituency == offset)
+            return PoptSetType::SRRIP_LEADER;
+        if (constituency == (~offset) % size)
+            return PoptSetType::BRRIP_LEADER;
+        return PoptSetType::FOLLOWER;
+    }
+
+    void trainPoptSelector(size_t set) {
+        switch (poptSetType(set)) {
+          case PoptSetType::SRRIP_LEADER:
+            if (popt_selector_ < kPoptSelectorMax)
+                ++popt_selector_;
+            break;
+          case PoptSetType::BRRIP_LEADER:
+            if (popt_selector_ > 0)
+                --popt_selector_;
+            break;
+          default:
+            break;
+        }
+    }
+
+    uint8_t poptInsertionRrpv(size_t set) const {
+        const PoptSetType type = poptSetType(set);
+        const bool brrip = type == PoptSetType::BRRIP_LEADER ||
+            (type == PoptSetType::FOLLOWER && popt_selector_ > kPoptSelectorInitial);
+        return brrip && popt_policy_misses_ % 32 != 0 ? 7 : 6;
+    }
+
+    // Three-bit DRRIP victim: the first way at RRPV 7, ageing every way by one
+    // until one is.
+    size_t findVictimPoptBase(std::vector<CacheLine>& set) {
+        while (true) {
+            for (size_t way = 0; way < associativity_; ++way)
+                if (set[way].rrpv >= 7)
+                    return way;
+            for (size_t way = 0; way < associativity_; ++way)
+                ++set[way].rrpv;
+        }
+    }
+
+    uint32_t popt_selector_ = kPoptSelectorInitial;
+    uint64_t popt_policy_misses_ = 0;
+
     size_t findVictimPOPT(std::vector<CacheLine>& set) {
         // Check if either unified context or legacy state is available
         bool has_popt = (graph_ctx_ && graph_ctx_->rereference.matrix &&
             (!graph_ctx_->compound_popt || graph_ctx_->hints_for_thread().current_src != UINT32_MAX)) ||
             popt_state_.enabled;
-        if (!has_popt) {
-            return findVictimLRU(set);  // Fallback if not initialized
-        }
+        // Outside P-OPT's active region its DRRIP base decides (NEXT.md §bw).
+        if (!has_popt)
+            return findVictimPoptBase(set);
 
         // Phase 1: Evict non-graph data first (streaming/CSR metadata)
         for (size_t i = 0; i < associativity_; i++) {
@@ -3209,7 +3305,9 @@ private:
         }
 
         // Phase 3: RRIP tiebreaker among lines with max rereference distance
-        // (matching reference llc.cpp: age RRPV only for tied lines)
+        // (matching reference llc.cpp: age RRPV only for tied lines). A
+        // declared correction: the artifact preselects the first farthest way,
+        // so its ties age only when every rank is 0; here they always age.
         constexpr uint8_t M_RRPV = 7;
         while (true) {
             for (size_t i = 0; i < associativity_; i++) {
@@ -4930,6 +5028,7 @@ public:
             l1_->insert(address, false, true);
             return;
         }
+        l3_->notePoptRequest(address);
         if (l3_->contains(address)) {
             prefetch_cache_hits_++;
             l3_->updatePrefetchHit(address);
@@ -4980,6 +5079,7 @@ public:
             l1_->insert(address, false, true);
             return;
         }
+        l3_->notePoptRequest(address);
         if (l3_->contains(address)) {
             prefetch_cache_hits_++;
             l3_->updatePrefetchHit(address);
@@ -5401,6 +5501,10 @@ public:
 
     static constexpr const char* kPoptStreamModel = "dedicated-current-next";
     const char* poptMatrixStreamModel() const { return popt_stream_enabled_ ? kPoptStreamModel : "none"; }
+    // P-OPT's base policy, named in every receipt (NEXT.md §bw).
+    const char* poptBasePolicy() const {
+        return l3_->getPolicy() == EvictionPolicy::POPT ? CacheLevel::kPoptBasePolicy : "none";
+    }
 
     uint64_t getPoptMatrixStreamLines() const { return popt_stream_lines_; }
     uint64_t getPoptMatrixStreamColumns() const { return popt_stream_columns_; }
@@ -5889,6 +5993,9 @@ public:
         ss << "  \"popt_matrix_stream_columns_simulated\": "
            << popt_stream_columns_ << ",\n";
         ss << "  \"popt_matrix_stream_model\": \"" << poptMatrixStreamModel() << "\",\n";
+        ss << "  \"popt_base_policy\": \"" << poptBasePolicy() << "\",\n";
+        ss << "  \"popt_drrip_selector\": " << l3_->poptSelector() << ",\n";
+        ss << "  \"popt_drrip_policy_misses\": " << l3_->poptPolicyMisses() << ",\n";
         ss << "  \"stream_prefetch_model\": \""
            << (streamPrefetchOracle() ? "oracle" : "stride") << "\",\n";
         ss << "  \"stream_prefetch_issued\": " << stride_pf_issued_ << ",\n";

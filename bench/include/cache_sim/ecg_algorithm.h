@@ -490,7 +490,8 @@ class AlgorithmBackend {
                << "\",\"role\":\"" << (referenceConsumer() ? "reference-consumer-diagnostic" :
                     options_.popt_constant_rank ? "policy-ablation" :
                     popt_charged_ ? "charged-baseline" : "favorable-quality-control")
-               << "\",\"constant_rank\":0,\"matrix_digest\":" << popt_matrix_.digest()
+               << "\",\"constant_rank\":0,\"base_policy\":\"" << cache_.poptBasePolicy()
+               << "\",\"matrix_digest\":" << popt_matrix_.digest()
                << ",\"original_rank_sum\":" << context_.popt_original_rank_sum
                << ",\"constant_rank_lookups\":" << context_.popt_constant_rank_lookups << ','
                << "\"matrix_bytes\":" << popt_matrix_.bytes()
