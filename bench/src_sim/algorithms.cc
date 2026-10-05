@@ -65,6 +65,7 @@ int main(int argc, char** argv) {
                             ecg_record::mechanismName(command.options.mechanism) : "csr")
                        << "\",\"policy\":\"" << command.policy
                        << "\",\"grasp_scope\":\"" << (command.options.grasp_graph_passes ? "graph-passes" : "all")
+                       << "\",\"pass_scope\":\"" << ecg_algorithm::passScopeName(command.options.pass_scope)
                        << "\",\"grasp_registration\":\"" << (command.options.grasp_declared ? "declared" : "all")
                        << "\",\"kernel_entry\":\"" << (command.options.cold_kernel_entry ? "cold" : "as-built")
                        << "\",\"record_base_policy\":\""
@@ -99,6 +100,8 @@ int main(int argc, char** argv) {
                 backend.writeBfsTraffic(output);
                 output << ",\"grasp_phase_control\":";
                 backend.writeGraspPhaseControl(output);
+                output << ",\"pass_scope_control\":";
+                backend.writePassScope(output);
                 output << "}\n";
             };
             if (command.output_path.empty()) {
@@ -111,5 +114,5 @@ int main(int argc, char** argv) {
                 output.close();
             }
             return 0;
-        }, true, true, true, true, true, true, true, true, true, true);
+        }, true, true, true, true, true, true, true, true, true, true, true);
 }

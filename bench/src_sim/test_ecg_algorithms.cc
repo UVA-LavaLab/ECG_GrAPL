@@ -2638,6 +2638,102 @@ void testPoptDrrip() {
     }
 }
 
+// Pass-scoped priority (NEXT.md §by) through the algorithms. The last level's
+// pass bit follows the Engine's graph-pass markers: one open and one close per
+// pass, every managed record pass inside one. The scope changes no result,
+// work or pass, setup and the kernel count apart, and it serves only the
+// declared GRASP base on BFS, SSSP and BC without prefetch.
+void testPassScope() {
+    using namespace ecg_algorithm;
+    const Fixture graph = declaredGraspGraph();
+    struct Row { bool records; ecg_record::Mechanism mechanism; bool carrier_first; };
+    const Row rows[] = {{false, ecg_record::Mechanism::TRANSPORT, false},
+                        {true, ecg_record::Mechanism::TRANSPORT, false},
+                        {true, ecg_record::Mechanism::REPLACEMENT, true}};
+    const auto options_for = [](Algorithm algorithm, const Row& row, bool scoped) {
+        Options options;
+        options.algorithm = algorithm;
+        options.delta = 2;
+        options.grasp_declared = true;
+        options.evidence = options.capture_values = true;
+        options.records = row.records;
+        if (row.records) {
+            options.mechanism = row.mechanism;
+            options.record_base_policy = RecordBasePolicy::GRASP_PAPER;
+            options.record_carrier_first = options.record_rrpv_order = row.carrier_first;
+        }
+        options.pass_scope = scoped ? PassScope::SRRIP : PassScope::OFF;
+        return options;
+    };
+    uint64_t kernel_victims = 0;
+    for (Algorithm algorithm : {Algorithm::BFS, Algorithm::SSSP, Algorithm::BC}) {
+        const bool weighted = algorithm == Algorithm::SSSP;
+        for (const Row& row : rows) {
+            Result results[2];
+            cache_sim::PassScopeReceipt receipt;
+            for (bool scoped : {false, true}) {
+                const Options options = options_for(algorithm, row, scoped);
+                cache_sim::CacheHierarchy cache(128, 2, 256, 2, 512, 4, 64,
+                    cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU,
+                    cache_sim::EvictionPolicy::GRASP);
+                cache_sim::AlgorithmBackend backend(cache, options, 512, true, false);
+                results[scoped] = ecg_algorithm::run(graph.view(weighted), options, backend);
+                if (scoped)
+                    receipt = backend.passScope();
+                else
+                    check(!backend.passScope().enabled, "an unscoped row reports no scope");
+            }
+            check(results[1].result_digest == results[0].result_digest &&
+                  results[1].work_digest == results[0].work_digest &&
+                  results[1].position_digest == results[0].position_digest &&
+                  results[1].passes == results[0].passes,
+                  "the scope changes no result, work or pass");
+            check(receipt.enabled && receipt.passes == results[1].passes &&
+                  receipt.transitions == 2 * receipt.passes,
+                  "the scope opens and closes once per graph pass");
+            check(receipt.setup.fills > 0 && receipt.kernel.fills > 0,
+                  "setup and the kernel's closed phases fill under the scope");
+            kernel_victims += receipt.kernel.victims;
+        }
+    }
+    check(kernel_victims > 0, "the pressure fixture evicts while no pass is open");
+    const std::string refusal = "pass-scope-requires-declared-GRASP-on-BFS-SSSP-or-BC-without-prefetch";
+    const auto refused = [&](Options options, bool grasp_paper, bool popt) {
+        options.pass_scope = PassScope::SRRIP;
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 512, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU,
+            popt ? cache_sim::EvictionPolicy::POPT :
+            grasp_paper ? cache_sim::EvictionPolicy::GRASP : cache_sim::EvictionPolicy::LRU);
+        try {
+            cache_sim::AlgorithmBackend backend(cache, options, 512, grasp_paper, popt);
+            ecg_algorithm::run(graph.view(options.algorithm == Algorithm::SSSP), options, backend);
+        } catch (const std::invalid_argument& error) {
+            return error.what() == refusal;
+        }
+        return false;
+    };
+    const Row csr = rows[0], record = rows[2];
+    Options undeclared = options_for(Algorithm::BFS, csr, true);
+    undeclared.grasp_declared = false;
+    Options lru_base = options_for(Algorithm::BFS, record, true);
+    lru_base.record_base_policy = RecordBasePolicy::LRU;
+    lru_base.record_carrier_first = lru_base.record_rrpv_order = false;
+    Options prefetching = options_for(Algorithm::BFS, record, true);
+    prefetching.mechanism = ecg_record::Mechanism::REPLACEMENT_PREFETCH;
+    prefetching.record_carrier_first = prefetching.record_rrpv_order = false;
+    Options phased = options_for(Algorithm::BFS, csr, true);
+    phased.grasp_graph_passes = true;
+    check(refused(options_for(Algorithm::SPMV, csr, true), true, false) && refused(undeclared, true, false) &&
+          refused(lru_base, false, false) && refused(prefetching, true, false) && refused(phased, true, false) &&
+          refused(options_for(Algorithm::BFS, csr, true), false, true) &&
+          refused(options_for(Algorithm::BFS, csr, true), false, false),
+          "only the declared GRASP base on BFS, SSSP and BC without prefetch takes the scope");
+    // A caller that names the GRASP base beside P-OPT, or beside an LRU record
+    // base, contradicts itself; the scope refuses before either is configured.
+    check(refused(options_for(Algorithm::BFS, csr, true), true, true) && refused(lru_base, true, false),
+          "the scope refuses a GRASP flag beside P-OPT or an LRU record base");
+}
+
 int main(int argc, char** argv) {
     using namespace ecg_algorithm;
     if (argc == 4 && std::strcmp(argv[1], kCensusRunFlag) == 0)
@@ -2670,6 +2766,7 @@ int main(int argc, char** argv) {
     testChargedPoptStream();
     testPoptIrregularDesignation();
     testPoptDrrip();
+    testPassScope();
     const Fixture diamond(8, true, {
         {0,1,2}, {0,2,5}, {0,5,20}, {1,2,1}, {1,3,2},
         {2,3,1}, {2,4,4}, {3,4,1}, {4,5,3}, {6,7,1}});

@@ -26,6 +26,15 @@ class PreparedSpmvMatrix {
     bool ready_ = false, borrowed_ = false, poisoned_ = false;
 };
 
+// The pass scope's receipt (ecg.pass-scope.v1): its graph passes and
+// transitions, and the last level's closed fills, hits and victims in setup and
+// in the kernel.
+struct PassScopeReceipt {
+    bool enabled = false;
+    uint64_t passes = 0, transitions = 0;
+    CacheLevel::PassScopeStats setup, kernel;
+};
+
 class AlgorithmBackend {
   public:
     static constexpr bool models_memory = true;
@@ -52,6 +61,23 @@ class AlgorithmBackend {
     void start(const ecg_algorithm::GraphView& graph) {
         if (graph.vertices == 0 || graph.vertices > INT32_MAX)
             throw std::invalid_argument("invalid-algorithm-cache-domain");
+        // NEXT.md §by: the scope gates the declared GRASP base's tiers and the
+        // record rule, so it needs that base, managed passes and no prefetch.
+        if (options_.pass_scope != ecg_algorithm::PassScope::OFF &&
+            ((options_.algorithm != ecg_algorithm::Algorithm::BFS &&
+              options_.algorithm != ecg_algorithm::Algorithm::SSSP &&
+              options_.algorithm != ecg_algorithm::Algorithm::BC) ||
+             !options_.grasp_declared || !grasp_paper_ || popt_full_capacity_ || shared_popt_ ||
+             referenceConsumer() || options_.popt_constant_rank || options_.grasp_graph_passes ||
+             options_.bfs_traffic_phases || options_.bfs_direction_optimizing ||
+             options_.window_observer != ecg_algorithm::WindowObserverMode::OFF ||
+             options_.record_model != ecg_algorithm::RecordModel::NEXT ||
+             options_.record_pressure_gate != ecg_algorithm::RecordPressureGate::NO ||
+             (options_.records &&
+              (options_.record_base_policy != ecg_algorithm::RecordBasePolicy::GRASP_PAPER ||
+               (options_.mechanism != ecg_record::Mechanism::TRANSPORT &&
+                options_.mechanism != ecg_record::Mechanism::REPLACEMENT)))))
+            throw std::invalid_argument("pass-scope-requires-declared-GRASP-on-BFS-SSSP-or-BC-without-prefetch");
         if (shared_popt_) {
             if (!popt_full_capacity_ || options_.algorithm != ecg_algorithm::Algorithm::SPMV ||
                 options_.records || graph.weights || graph.encoded_id_bits || referenceConsumer() ||
@@ -134,6 +160,10 @@ class AlgorithmBackend {
         cache_.initGraphContext(&context_);
         if (options_.records)
             cache_.prepareRecord(recordBasePolicy());
+        if (options_.pass_scope != ecg_algorithm::PassScope::OFF) {
+            cache_.configurePassScope();
+            pass_scope_configured_ = true;
+        }
     }
 
     void memory(const void* pointer, uint64_t bytes, bool write) {
@@ -241,6 +271,10 @@ class AlgorithmBackend {
     }
 
     void beginGraphPass() {
+        if (pass_scope_configured_) {
+            cache_.passScopeTransition(true);
+            ++pass_scope_passes_;
+        }
         cache_.markKernelPass(true);
         if (options_.bfs_traffic_phases)
             transitionBfsPhase(BfsPhase::BETWEEN, BfsPhase::PROBE);
@@ -303,6 +337,8 @@ class AlgorithmBackend {
             window_observer_->associateStore(index, destination, reinterpret_cast<uint64_t>(base), bytes);
     }
     void endGraphPass() {
+        if (pass_scope_configured_)
+            cache_.passScopeTransition(false);
         cache_.markKernelPass(false);
         if (options_.bfs_traffic_phases)
             transitionBfsPhase(BfsPhase::PROBE, BfsPhase::BETWEEN);
@@ -426,6 +462,9 @@ class AlgorithmBackend {
         if (options_.grasp_graph_passes && !window_runtime_ && !frontier_runtime_ && (!grasp_phase_configured_ || grasp_pass_open_ ||
             grasp_transitions_ != 2 * grasp_passes_))
             throw std::logic_error("scoped GRASP did not close its control stream");
+        if (pass_scope_configured_ && (cache_.passOpen() || !kernel_started_ ||
+            cache_.passScopeTransitions() != 2 * pass_scope_passes_))
+            throw std::logic_error("pass scope did not close its control stream");
         if (frontier_runtime_)
             frontier_runtime_->finish(actual_records);
         if (window_runtime_)
@@ -574,6 +613,41 @@ class AlgorithmBackend {
             output << "}}";
         }
         output << "]}";
+    }
+
+    PassScopeReceipt passScope() const {
+        PassScopeReceipt receipt;
+        if (!pass_scope_configured_)
+            return receipt;
+        const auto total = cache_.passScopeStats();
+        receipt.enabled = true;
+        receipt.passes = pass_scope_passes_;
+        receipt.transitions = cache_.passScopeTransitions();
+        receipt.setup = pass_scope_setup_;
+        receipt.kernel.fills = total.fills - pass_scope_setup_.fills;
+        receipt.kernel.hits = total.hits - pass_scope_setup_.hits;
+        receipt.kernel.victims = total.victims - pass_scope_setup_.victims;
+        return receipt;
+    }
+
+    void writePassScope(std::ostream& output) const {
+        if (!pass_scope_configured_) {
+            output << "null";
+            return;
+        }
+        const auto receipt = passScope();
+        const auto counts = [&output](const char* name, const CacheLevel::PassScopeStats& stats) {
+            output << ",\"" << name << "\":{\"fills\":" << stats.fills << ",\"hits\":" << stats.hits
+                   << ",\"victims\":" << stats.victims << '}';
+        };
+        output << "{\"schema\":\"ecg.pass-scope.v1\",\"enabled\":true,"
+               << "\"signal\":\"graph-pass-markers\",\"outside_policy\":\"srrip-3bit-insert6-hit0\","
+               << "\"inside_policy\":\"unchanged\",\"cache_reset\":false,\"rrpv_history_maintained\":true,"
+               << "\"per_line_bits\":0,\"passes\":" << receipt.passes
+               << ",\"transitions\":" << receipt.transitions;
+        counts("setup", receipt.setup);
+        counts("kernel", receipt.kernel);
+        output << '}';
     }
 
     void writeGraspPhaseControl(std::ostream& output) const {
@@ -742,6 +816,7 @@ class AlgorithmBackend {
             if (options_.cold_kernel_entry)
                 cache_.coldKernelEntry();
             setup_traffic_ = traffic();
+            pass_scope_setup_ = cache_.passScopeStats();
             cache_.markKernelEntry();
             kernel_started_ = true;
             if (options_.bfs_traffic_phases)
@@ -765,6 +840,9 @@ class AlgorithmBackend {
     std::array<std::array<AlgorithmTraffic, 6>, 5> bfs_traffic_{};
     bool grasp_phase_configured_ = false, grasp_pass_open_ = false;
     uint64_t grasp_transitions_ = 0, grasp_passes_ = 0;
+    bool pass_scope_configured_ = false;
+    uint64_t pass_scope_passes_ = 0;
+    CacheLevel::PassScopeStats pass_scope_setup_;
     std::unique_ptr<window_observation::Observer> window_observer_;
     std::unique_ptr<WindowRuntime> window_runtime_;
     std::unique_ptr<FrontierRuntime> frontier_runtime_;

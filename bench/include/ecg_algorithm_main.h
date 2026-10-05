@@ -153,6 +153,10 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
             if (value != "as-built" && value != "cold")
                 throw std::invalid_argument("kernel-entry-must-be-as-built-or-cold");
             command.options.cold_kernel_entry = value == "cold";
+        } else if (argument == "--pass-scope") {
+            if (value == "off") command.options.pass_scope = PassScope::OFF;
+            else if (value == "srrip") command.options.pass_scope = PassScope::SRRIP;
+            else throw std::invalid_argument("pass-scope-must-be-off-or-srrip");
         } else if (argument == "--grasp-scope") {
             if (value != "all" && value != "graph-passes")
                 throw std::invalid_argument("grasp-scope-must-be-all-or-graph-passes");
@@ -225,7 +229,10 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
         throw std::invalid_argument("required: --algorithm spmv|bfs|sssp|cc|bc|tc --graph path.sg|path.wsg");
     if (!command.queries || command.queries > 64)
         throw std::invalid_argument("queries-must-be-1-through-64");
+    // The batch path runs beside the algorithms backend, which owns the pass
+    // scope's admission, so the scope is refused here.
     if (command.queries > 1 && (command.options.algorithm != Algorithm::SPMV || command.options.records ||
+        command.options.pass_scope != PassScope::OFF ||
         command.options.record_model != RecordModel::NEXT || command.options.traversal_preprocessing ||
         command.options.grasp_reference != GraspReferenceMode::OFF || command.options.popt_constant_rank ||
         command.options.grasp_graph_passes || command.options.bfs_traffic_phases ||
@@ -489,9 +496,13 @@ int applicationMain(
         bool allow_grasp_record_base = false, bool allow_window_observer = false,
         bool allow_window_model = false, bool allow_bfs_phases = false, bool allow_frontier_model = false,
         bool allow_grasp_reference = false, bool allow_spmv_queries = false,
-        bool allow_victim_controls = false, bool allow_fair_comparison = false) {
+        bool allow_victim_controls = false, bool allow_fair_comparison = false,
+        bool allow_pass_scope = false) {
     try {
         const CommandLine command = parseCommandLine(argc, argv);
+        // NEXT.md §by: the native backends take the pass scope in a later step.
+        if (command.options.pass_scope != PassScope::OFF && !allow_pass_scope)
+            throw std::invalid_argument("pass scope is cache_sim-only");
         // NEXT.md §bv C1, C2: the native backends take both with their region
         // sideband and kernel-boundary marker in a later step.
         if ((command.options.grasp_declared || command.options.cold_kernel_entry) && !allow_fair_comparison)

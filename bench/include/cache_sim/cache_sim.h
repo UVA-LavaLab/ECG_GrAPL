@@ -2219,12 +2219,40 @@ public:
 
     void configureGraspPhases() {
         std::lock_guard<std::mutex> lock(mutex_);
-        if (policy_ != EvictionPolicy::GRASP || grasp_phase_scoped_ || record_prepared_ ||
+        if (policy_ != EvictionPolicy::GRASP || grasp_phase_scoped_ || pass_scoped_ || record_prepared_ ||
             record_configured_ || window_used_ || observation_sink_ || !graph_ctx_)
             throw std::invalid_argument("invalid-phased-GRASP-configuration");
         grasp_phase_scoped_ = true;
         grasp_graph_pass_ = false;
     }
+
+    // Pass-scoped priority (NEXT.md §by). While no graph pass is open this level
+    // is a plain three-bit SRRIP: a fill inserts at 6, a hit sets 0 and the
+    // victim is the GRASP scan over every way, with no tier and no record rule.
+    // Configured once on a GRASP level, never beside the LRU-scoped GRASP
+    // diagnostic or a potential model; it starts closed and touches no line.
+    struct PassScopeStats {
+        uint64_t fills = 0, hits = 0, victims = 0;
+    };
+
+    void configurePassScope() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (policy_ != EvictionPolicy::GRASP || pass_scoped_ || grasp_phase_scoped_ ||
+            window_profile_ || frontier_profile_ || window_used_ || observation_sink_ || !graph_ctx_)
+            throw std::invalid_argument("invalid-pass-scope-configuration");
+        pass_scoped_ = true;
+        pass_open_ = false;
+    }
+
+    void setPassOpen(bool open) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!pass_scoped_ || open == pass_open_)
+            throw std::logic_error("invalid-pass-scope-transition");
+        pass_open_ = open;
+    }
+
+    bool passOpen() const { return pass_open_; }
+    PassScopeStats passScopeStats() const { return pass_scope_stats_; }
 
     void graspGraphPass(bool active) {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -2464,6 +2492,8 @@ private:
     uint8_t window_floor_ = 7;
     ecg_window::PolicyStats window_stats_;
     bool grasp_phase_scoped_ = false, grasp_graph_pass_ = false;
+    bool pass_scoped_ = false, pass_open_ = false;
+    PassScopeStats pass_scope_stats_;
     bool record_prepared_ = false;
     bool record_replacement_ = false;
     ecg_record::VictimOptions record_victim_options_;
@@ -2507,12 +2537,22 @@ private:
         return 3;
     }
 
-    void applyGraspInsertion(CacheLine& line, uint64_t address) const {
+    void applyGraspInsertion(CacheLine& line, uint64_t address) {
+        if (pass_scoped_ && !pass_open_) {
+            line.rrpv = 6;
+            ++pass_scope_stats_.fills;
+            return;
+        }
         const uint8_t tier = graspTier(address);
         line.rrpv = tier == 1 ? 1 : tier == 2 ? 6 : 7;
     }
 
-    void applyGraspHit(CacheLine& line) const {
+    void applyGraspHit(CacheLine& line) {
+        if (pass_scoped_ && !pass_open_) {
+            line.rrpv = 0;
+            ++pass_scope_stats_.hits;
+            return;
+        }
         if (graspTier(line.line_addr) == 1)
             line.rrpv = 0;
         else if (line.rrpv)
@@ -2832,6 +2872,12 @@ private:
             throw std::logic_error("governed-first and carrier-first are two victim orders, never one");
         if (grasp_phase_scoped_ && !grasp_graph_pass_)
             return findVictimLRU(set);
+        // Pass-scoped priority: outside a graph pass the three-bit GRASP scan over
+        // every way decides, never the record rule, a tier or recency.
+        if (pass_scoped_ && !pass_open_) {
+            ++pass_scope_stats_.victims;
+            return findVictimGRASP(set);
+        }
         if (window_profile_ || frontier_profile_) {
             const std::size_t base = window_lru_outside_ && !window_open_ ?
                 findVictimLRU(set) : findVictimGRASP(set);
@@ -4638,6 +4684,11 @@ public:
             uint64_t update_latency = 8, uint64_t prefetch_latency = 8,
             std::size_t prefetch_capacity = 16,
             EvictionPolicy base_policy = EvictionPolicy::LRU) {
+        // The pass scope has no prefetch model, and its passes are managed ones.
+        if (pass_scoped_ && (mechanism == ecg_record::Mechanism::PREFETCH ||
+                mechanism == ecg_record::Mechanism::REPLACEMENT_PREFETCH ||
+                !(configuration.control & ecg_record::kNativeManagedPasses)))
+            throw std::invalid_argument("pass-scope-requires-managed-transport-or-replacement");
         if (record_model_ || record_loads_ != 0 || line_size_ != 64 || !graph_ctx_ ||
             l1_->getPolicy() != EvictionPolicy::LRU || l2_->getPolicy() != EvictionPolicy::LRU ||
             ref32_commit_channel_ || ref32_prefetch_enabled_ || refresh_exact_stamp_ ||
@@ -4704,6 +4755,8 @@ public:
     }
 
     void recordBeginPass(bool has_next = false) {
+        if (pass_scoped_ && !l3_->passOpen())
+            throw std::logic_error("record-pass-outside-the-scoped-graph-pass");
         if (!record_model_ || !record_managed_ || record_pending_ ||
             record_cursor_.begin() != ecg_record::Status::OK)
             throw std::logic_error("Invalid functional ECG pass begin");
@@ -5015,6 +5068,8 @@ public:
     // one-touch record in LLC. Existing L3 data may still be promoted downward.
     void prefetchStream(
             uint64_t address, bool adaptive_placement = true) {
+        if (pass_scoped_)
+            throw std::logic_error("pass-scope-has-no-prefetch-model");
         if (!enabled_) return;
         const uint64_t line_addr = lineAddress(address);
         prefetch_requests_++;
@@ -5059,6 +5114,8 @@ public:
     // Prefetch misses: fill cache from memory but do NOT increment
     //   total_accesses_ or memory_accesses_.
     void prefetch(uint64_t address) {
+        if (pass_scoped_)
+            throw std::logic_error("pass-scope-has-no-prefetch-model");
         if (!enabled_) return;
 
         const uint64_t line_addr = lineAddress(address);
@@ -5699,6 +5756,26 @@ public:
     const ecg_window::PolicyStats& windowStats() const { return l3_->windowStats(); }
     void configureGraspPhases() { l3_->configureGraspPhases(); }
     void graspGraphPass(bool active) { l3_->graspGraphPass(active); }
+    // Pass-scoped priority (NEXT.md §by) on the last level, configured before any
+    // record binding and never with a legacy prefetcher. The algorithms backend
+    // opens it at each graph pass and closes it after; a managed record pass
+    // sits inside one, so the scope never closes while a record pass is open.
+    void configurePassScope() {
+        if (pass_scoped_ || record_model_ || ref32_prefetch_enabled_ || adaptive_flowthrough_)
+            throw std::invalid_argument("invalid-pass-scope-configuration");
+        l3_->configurePassScope();
+        pass_scoped_ = true;
+    }
+    void passScopeTransition(bool open) {
+        if (!pass_scoped_ || (!open && record_model_ && record_managed_ && record_cursor_.open()))
+            throw std::logic_error("invalid-pass-scope-transition");
+        l3_->setPassOpen(open);
+        ++pass_scope_transitions_;
+    }
+    bool passScoped() const { return pass_scoped_; }
+    bool passOpen() const { return l3_->passOpen(); }
+    uint64_t passScopeTransitions() const { return pass_scope_transitions_; }
+    CacheLevel::PassScopeStats passScopeStats() const { return l3_->passScopeStats(); }
     uint64_t getStructuralFlowThroughAccesses() const {
         return structural_flowthrough_accesses_;
     }
@@ -6132,6 +6209,8 @@ private:
     bool record_model_ = false;
     bool record_replacement_ = false;
     bool record_prefetch_ = false;
+    bool pass_scoped_ = false;
+    uint64_t pass_scope_transitions_ = 0;
     EvictionPolicy record_base_policy_ = EvictionPolicy::LRU;
     bool record_pending_ = false;
     bool record_managed_ = false;

@@ -66,6 +66,18 @@ inline const char* recordPressureGateName(RecordPressureGate gate) {
     throw std::invalid_argument("invalid-record-pressure-gate");
 }
 
+// Pass-scoped priority (ecg.pass-scope.v1). While no graph pass is open, the
+// last level is a plain three-bit SRRIP: no GRASP tier and no record rule.
+enum class PassScope : uint8_t { OFF, SRRIP };
+
+inline const char* passScopeName(PassScope scope) {
+    switch (scope) {
+      case PassScope::OFF: return "off";
+      case PassScope::SRRIP: return "srrip";
+    }
+    throw std::invalid_argument("invalid-pass-scope");
+}
+
 inline const char* name(Algorithm algorithm) {
     switch (algorithm) {
       case Algorithm::SPMV: return "spmv";
@@ -120,6 +132,9 @@ struct Options {
     // level invalidated before the kernel's first access; off, the kernel
     // starts in whatever state setup left.
     bool cold_kernel_entry = false;
+    // Opt-in pass-scoped priority over the declared GRASP base: outside the
+    // graph passes the last level is a plain SRRIP.
+    PassScope pass_scope = PassScope::OFF;
     // Opt-in: an ordinary STORE to a governed line keeps its FINITE bound,
     // because a store does not change when that line is next READ.
     bool record_store_keeps_bound = false;

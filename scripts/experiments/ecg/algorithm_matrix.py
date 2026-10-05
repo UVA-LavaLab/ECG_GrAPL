@@ -66,6 +66,7 @@ def parse_options(text: str) -> argparse.Namespace:
     parser.add_argument("--record-store-bound", choices=("drop", "keep"), default="drop")
     parser.add_argument("--record-expiry-clock", choices=("progress", "delivery"), default="progress")
     parser.add_argument("--grasp-scope", choices=("all", "graph-passes"), default="all")
+    parser.add_argument("--pass-scope", choices=("off", "srrip"), default="off")
     parser.add_argument("--grasp-registration", choices=("all", "declared"), default="all")
     parser.add_argument("--kernel-entry", choices=("as-built", "cold"), default="as-built")
     parser.add_argument("--bfs-traffic-phases", choices=("on", "off"), default="off")
@@ -96,6 +97,15 @@ def parse_options(text: str) -> argparse.Namespace:
         raise RecordResourceError("record victim controls require the NEXT model")
     if parsed.record_governed_first != "no" and parsed.record_carrier_first != "no":
         raise RecordResourceError("governed-first and carrier-first are two victim orders, never one")
+    # NEXT.md §by: the pass scope gates the declared GRASP base's tiers and the
+    # record rule; it has no model beside another scope or a potential model.
+    if parsed.pass_scope != "off" and (
+            parsed.grasp_registration != "declared" or parsed.grasp_scope != "all" or
+            parsed.record_model != "next" or parsed.bfs_traffic_phases != "off" or
+            parsed.window_observer != "off" or parsed.grasp_reference != "off" or parsed.queries != 1 or
+            parsed.bfs_direction != "td" or parsed.record_pressure_gate != "no" or
+            parsed.popt_rank_mode != "future"):
+        raise RecordResourceError("pass scope requires the declared GRASP registration and no other scope or model")
     parsed.source_list = []
     if parsed.sources:
         if not re.fullmatch(r"[0-9]+(?:,[0-9]+)*", parsed.sources):
@@ -135,6 +145,21 @@ def grasp_registration_label(label: str, registration: str) -> str:
 
 def kernel_entry_label(label: str, entry: str) -> str:
     return label if entry == "as-built" else f"{label}_COLD_ENTRY"
+
+
+# NEXT.md §by: outermost, so every unscoped label is unchanged. The scope serves
+# the declared GRASP base only: the CSR baseline or the record transport and
+# replacement rows over it, without prefetch, another scope or a potential model.
+def pass_scope_label(label: str, scope: str) -> str:
+    if scope == "off":
+        return label
+    grasp_base = label.startswith("GRASP_PAPER") or (
+        label.startswith(("ECG_TRANSPORT_BASE_GRASP_PAPER", "ECG_REPLACEMENT_BASE_GRASP_PAPER")))
+    require(scope == "srrip" and grasp_base and "_GRASP_DECLARED" in label and "PREFETCH" not in label and
+            "_MODEL_" not in label and "_GRAPH_PASSES" not in label and "_OBS_" not in label,
+            "pass scope requires the declared GRASP base without prefetch")
+    return label + "_PASS_SCOPED"
+
 
 
 def popt_rank_label(label: str, rank_mode: str) -> str:
@@ -254,13 +279,14 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
                   pressure_gate: str = "no", rrpv_order: str = "no",
                   written_in_place: str = "no", uninformed_base: str = "no",
                   bound_compare: str = "on", carrier_first: str = "no",
-                  grasp_registration: str = "all", kernel_entry: str = "as-built") -> list[str]:
+                  grasp_registration: str = "all", kernel_entry: str = "as-built",
+                  pass_scope: str = "off") -> list[str]:
     require(governed_first == "no" or carrier_first == "no",
             "governed-first and carrier-first are two victim orders, never one")
-    return [kernel_entry_label(grasp_registration_label(bound_compare_label(uninformed_base_label(pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(written_in_place_label(rrpv_order_label(carrier_first_label(governed_first_label(record_policy_label(
+    return [pass_scope_label(kernel_entry_label(grasp_registration_label(bound_compare_label(uninformed_base_label(pressure_gate_label(query_policy_label(grasp_reference_label(popt_rank_label(grasp_scope_label(observer_policy_label(expiry_clock_label(store_bound_label(written_in_place_label(rrpv_order_label(carrier_first_label(governed_first_label(record_policy_label(
                 spec.label, spec.record_mechanism or "csr", base_policy, record_model, candidate_rrpv, frontier_gating), governed_first), carrier_first), rrpv_order), written_in_place), store_bound), expiry_clock), observer),
                 grasp_scope), popt_rank_mode), grasp_reference), queries), pressure_gate), uninformed_base), bound_compare),
-                grasp_registration), kernel_entry)
+                grasp_registration), kernel_entry), pass_scope)
             for spec in policies]
 
 
@@ -306,6 +332,42 @@ def validate_popt_geometry(l3: dict[str, Any], *, llc_bytes: int, llc_ways: int)
             "P-OPT ran on another last level than its charge allows")
 
 
+PASS_SCOPE_SCHEMA = "ecg.pass-scope.v1"
+PASS_SCOPE_CONTRACT = {
+    "schema": PASS_SCOPE_SCHEMA, "enabled": True, "signal": "graph-pass-markers",
+    "outside_policy": "srrip-3bit-insert6-hit0", "inside_policy": "unchanged",
+    "cache_reset": False, "rrpv_history_maintained": True, "per_line_bits": 0,
+}
+
+
+def validate_pass_scope(payload: dict[str, Any], scope: str) -> None:
+    """NEXT.md §by: the scope a row ran under is the one it requested. A scoped receipt declares its contract,
+    opens and closes once per graph pass and counts the last level's closed fills, hits and victims in setup and
+    the kernel; an unscoped row reports none."""
+    control = payload.get("pass_scope_control")
+    require(payload.get("pass_scope", "off") == scope, "pass scope receipt does not match the request")
+    if scope == "off":
+        require(control is None, "an unscoped row reports a pass scope")
+        return
+
+    def count(fields: Any, name: str) -> int:
+        value = fields.get(name) if isinstance(fields, dict) else None
+        require(type(value) is int and 0 <= value <= (1 << 64) - 1, f"invalid pass scope count {name}")
+        return value
+
+    require(isinstance(control, dict) and
+            all(control.get(key) == value and type(control.get(key)) is type(value)
+                for key, value in PASS_SCOPE_CONTRACT.items()),
+            "pass scope receipt does not declare its contract")
+    work = payload.get("workload")
+    passes = count(control, "passes")
+    require(isinstance(work, dict) and passes == work.get("passes") and count(control, "transitions") == 2 * passes,
+            "pass scope does not open and close once per graph pass")
+    for phase in ("setup", "kernel"):
+        for name in ("fills", "hits", "victims"):
+            count(control.get(phase), name)
+
+
 def validate_payload(
     payload: dict[str, Any], log: str, *, algorithm: str, mode: str, policy: str,
     graph: GraphInfo, graph_path: Path, options: argparse.Namespace, requested_bytes: int,
@@ -318,6 +380,7 @@ def validate_payload(
             payload.get("policy") == policy and payload.get("timing_valid_for_speedup") is False,
             "algorithm backend/mode/policy receipt mismatch")
     require(payload.get("grasp_scope", "all") == options.grasp_scope, "GRASP phase-scope receipt mismatch")
+    validate_pass_scope(payload, options.pass_scope)
     validate_fair_comparison(payload, algorithm, options.grasp_registration, options.kernel_entry,
                              sources=len(options.source_list) or 1)
     constant_ranks = options.popt_rank_mode == "constant"
@@ -1166,6 +1229,11 @@ def run_cache_cell(
         require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED", "POPT")),
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
+        scoped = options.pass_scope != "off"
+        require(not scoped or args.benchmark in ("bfs", "sssp", "bc") and (
+            policy == "GRASP_PAPER" if mode == "csr" else
+            mode in ("transport", "replacement") and options.record_base_policy == "GRASP_PAPER"),
+            "pass scope requires the declared GRASP base on BFS, SSSP or BC without prefetch")
         batch = options.queries > 1
         require(not batch or args.benchmark == "spmv" and mode == "csr" and
                 options.record_model == "next" and options.record_preprocess == "csr" and
@@ -1206,6 +1274,8 @@ def run_cache_cell(
                 "record base policy requires a current record mode")
         row["record_base_policy"] = options.record_base_policy
         row["grasp_scope"] = options.grasp_scope
+        if scoped:
+            row["pass_scope"] = options.pass_scope
         row["policy_ablation"] = "1" if options.popt_rank_mode == "constant" or options.grasp_reference == "flat" or (
             options.record_model == "frontier" and options.frontier_gating == "ignored") else "0"
         row["frontier_gating"] = options.frontier_gating
@@ -1217,7 +1287,8 @@ def run_cache_cell(
             options.record_expiry_clock, options.record_pressure_gate,
             options.record_rrpv_order, uninformed_base=options.record_uninformed_base,
             bound_compare=options.record_bound_compare, carrier_first=options.record_carrier_first,
-            grasp_registration=options.grasp_registration, kernel_entry=options.kernel_entry)[0]
+            grasp_registration=options.grasp_registration, kernel_entry=options.kernel_entry,
+            pass_scope=options.pass_scope)[0]
         if reference:
             row.update(diagnostic_only="1", measurement_scope="ideal-availability-reference-consumer")
         if observing:
@@ -1269,6 +1340,7 @@ def run_cache_cell(
         phase_suffix = "" if options.grasp_scope == "all" else "_GRAPH_PASSES"
         phase_suffix += "" if options.grasp_registration == "all" else "_GRASP_DECLARED"
         phase_suffix += "" if options.kernel_entry == "as-built" else "_COLD_ENTRY"
+        phase_suffix += "_PASS_SCOPED" if scoped else ""
         rank_suffix = "" if options.popt_rank_mode == "future" else "_CONST_RANK"
         label = (f"cache_sim_{args.benchmark}_{spec.safe_label}{base_suffix}{model_suffix}{observer_suffix}{phase_suffix}"
                  f"{rank_suffix}_L3{parse_size_bytes(l3_size)}")
@@ -1328,6 +1400,8 @@ def run_cache_cell(
             command.extend(("--grasp-registration", options.grasp_registration))
         if options.kernel_entry != "as-built":
             command.extend(("--kernel-entry", options.kernel_entry))
+        if scoped:
+            command.extend(("--pass-scope", options.pass_scope))
         if options.record_model == "window":
             command.extend(("--record-model", "window", "--window-candidate-rrpv", str(options.window_candidate_rrpv)))
         if options.record_model == "frontier":

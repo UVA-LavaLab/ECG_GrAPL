@@ -1496,6 +1496,205 @@ int exerciseWeightedRecordInspection() {
     return 0;
 }
 
+// Pass-scoped priority (NEXT.md §by). While no graph pass is open the last
+// level is a plain three-bit SRRIP: a fill inserts at 6, a hit sets 0 and the
+// victim is the GRASP scan over every way, whatever the line's GRASP tier, its
+// recency or the record rule. Inside a pass nothing changes, and a transition
+// re-tiers or resets no resident line.
+int exercisePassScope() {
+    using namespace cache_sim;
+    using namespace ecg_record;
+    constexpr uint64_t vertices = 512;
+    alignas(64) static std::array<float, vertices> properties{};
+    alignas(64) static std::array<float, vertices> others{};
+    alignas(64) static std::array<uint32_t, 64> carrier{};
+    std::vector<uint32_t> degrees(vertices, 1);
+    GraphCacheContext context;
+    context.initTopology(degrees.data(), vertices, 8, true);
+    context.registerPropertyArray(properties.data(), vertices, 4, 256, 0.50, true);
+    const uint64_t hot = reinterpret_cast<uint64_t>(properties.data());
+    const uint64_t plain = reinterpret_cast<uint64_t>(others.data());
+    if (context.classifyGRASP(hot, 256) != 1 || context.classifyGRASP(plain, 256) != 3)
+        return 1;
+    const auto rrpv_of = [](CacheLevel& level, uint64_t address) {
+        CacheLine line;
+        return level.lineSnapshotForTest(address, line) ? int(line.rrpv) : -1;
+    };
+    // A demand read as the hierarchy makes it: a hit updates the line, a miss
+    // fills it.
+    const auto touch = [](CacheLevel& level, uint64_t address) {
+        if (!level.access(address, false))
+            level.insert(address, false);
+    };
+    const auto level_with = [&](bool scoped) {
+        auto level = std::make_unique<CacheLevel>("L3", 256, 64, 4, EvictionPolicy::GRASP);
+        level->initGraphContext(&context);
+        if (scoped)
+            level->configurePassScope();
+        return level;
+    };
+    const auto refuses = [](auto&& action) {
+        try {
+            action();
+        } catch (const std::exception&) {
+            return true;
+        }
+        return false;
+    };
+    // Unscoped, GRASP's tiers: a hot fill at 1, a cold one at 7, a cold hit decrements.
+    auto tiered = level_with(false);
+    touch(*tiered, hot);
+    touch(*tiered, plain);
+    touch(*tiered, plain);
+    if (rrpv_of(*tiered, hot) != 1 || rrpv_of(*tiered, plain) != 6)
+        return 2;
+    // Scoped, it starts closed: plain SRRIP whatever the tier.
+    auto scoped = level_with(true);
+    touch(*scoped, hot);
+    touch(*scoped, plain);
+    if (rrpv_of(*scoped, hot) != 6 || rrpv_of(*scoped, plain) != 6)
+        return 3;
+    touch(*scoped, plain);
+    if (rrpv_of(*scoped, plain) != 0)
+        return 4;
+    // Opening and closing re-tier nothing already resident.
+    scoped->setPassOpen(true);
+    scoped->setPassOpen(false);
+    scoped->setPassOpen(true);
+    if (rrpv_of(*scoped, hot) != 6 || rrpv_of(*scoped, plain) != 0)
+        return 5;
+    // Open, GRASP's tiers again for new fills and hits.
+    auto opened = level_with(true);
+    opened->setPassOpen(true);
+    touch(*opened, hot);
+    touch(*opened, plain);
+    touch(*opened, plain);
+    if (rrpv_of(*opened, hot) != 1 || rrpv_of(*opened, plain) != 6)
+        return 6;
+    // Closed fills and hits are counted apart, open ones never.
+    const auto closed = scoped->passScopeStats();
+    const auto open = opened->passScopeStats();
+    if (closed.fills != 2 || closed.hits != 1 || closed.victims != 0 ||
+        open.fills != 0 || open.hits != 0 || open.victims != 0)
+        return 7;
+    const auto line_at = [](uint64_t address, uint8_t rrpv, uint64_t touched) {
+        CacheLine line;
+        line.valid = true;
+        line.line_addr = address / 64 * 64;
+        line.rrpv = rrpv;
+        line.last_access = touched;
+        return line;
+    };
+    // No way at 7: the scan ages every way by two and takes the first at 7,
+    // way 1. LRU would take way 0, and GRASP's tiers do not enter.
+    const std::vector<CacheLine> shape = {line_at(hot, 2, 1), line_at(plain, 5, 4),
+        line_at(plain + 64, 5, 3), line_at(hot + 64, 1, 2)};
+    auto victim_level = level_with(true);
+    auto decided = shape;
+    if (victim_level->selectVictimForTest(decided) != 1 || decided[0].rrpv != 4 || decided[1].rrpv != 7 ||
+        decided[2].rrpv != 7 || decided[3].rrpv != 3 || victim_level->passScopeStats().victims != 1)
+        return 8;
+    // A configured record rule (carrier-first, RRPV order) is never consulted
+    // while closed: the scan takes way 0 at 7 and no record path counts. Open,
+    // the rule decides and evicts the carrier way first.
+    Requirements requirements;
+    requirements.vertex_count = vertices;
+    requirements.record_count = 8;
+    Layout layout;
+    if (selectLayout(requirements, layout) != Status::OK)
+        return 9;
+    const uint64_t stream = reinterpret_cast<uint64_t>(carrier.data());
+    NativeConfiguration configuration;
+    packLayout(layout, configuration.layout_descriptor);
+    packProperty({PropertyKind::F32, 4, TraversalMode::ORDERED_FILTERED}, configuration.property_descriptor);
+    configuration.record_base = stream;
+    configuration.property_base = hot;
+    configuration.record_count = 8;
+    configuration.vertex_count = vertices;
+    configuration.context = configuration.generation = 1;
+    configuration.control = kNativeEnable | kNativeManagedPasses;
+    auto ruled = level_with(true);
+    ruled->prepareRecord(EvictionPolicy::GRASP);
+    ruled->configureRecord(configuration, true, EvictionPolicy::GRASP);
+    ruled->advanceRecordProgress(1);
+    ruled->setRecordCarrierFirst(true);
+    ruled->setRecordRrpvOrder(true);
+    const std::vector<CacheLine> mixed = {line_at(plain, 7, 4), line_at(stream, 0, 3),
+        line_at(hot, 2, 2), line_at(plain + 64, 1, 1)};
+    decided = mixed;
+    if (ruled->selectVictimForTest(decided) != 0 || ruled->getRecordVictimAttribution().decisions != 0 ||
+        ruled->passScopeStats().victims != 1)
+        return 10;
+    ruled->setPassOpen(true);
+    decided = mixed;
+    if (ruled->selectVictimForTest(decided) != 1 || ruled->getRecordVictimAttribution().decisions != 1 ||
+        ruled->getRecordVictimAttribution().carrier_first != 1 || ruled->passScopeStats().victims != 1)
+        return 11;
+    // The scope belongs to a GRASP last level, once, and is exclusive with the
+    // LRU-scoped GRASP diagnostic; transitions alternate.
+    auto lru = std::make_unique<CacheLevel>("L3", 256, 64, 4, EvictionPolicy::LRU);
+    lru->initGraphContext(&context);
+    auto popt = std::make_unique<CacheLevel>("L3", 256, 64, 4, EvictionPolicy::POPT);
+    popt->initGraphContext(&context);
+    auto twice = level_with(true);
+    auto unscoped = level_with(false);
+    auto phased = level_with(false);
+    phased->configureGraspPhases();
+    auto then_phased = level_with(true);
+    auto closed_level = level_with(true);
+    if (!refuses([&] { lru->configurePassScope(); }) || !refuses([&] { popt->configurePassScope(); }) ||
+        !refuses([&] { twice->configurePassScope(); }) || !refuses([&] { unscoped->setPassOpen(true); }) ||
+        !refuses([&] { phased->configurePassScope(); }) || !refuses([&] { then_phased->configureGraspPhases(); }) ||
+        !refuses([&] { scoped->setPassOpen(true); }) || !refuses([&] { closed_level->setPassOpen(false); }))
+        return 12;
+    // The hierarchy: the bit follows the graph-pass markers, a managed record
+    // pass sits inside one, and prefetch has no model under the scope.
+    constexpr uint64_t records = 32;
+    alignas(64) static std::array<float, vertices> values{};
+    std::vector<uint32_t> ones(vertices, 1);
+    GraphCacheContext hierarchy_context;
+    hierarchy_context.initTopology(ones.data(), vertices, records, true);
+    hierarchy_context.registerPropertyArray(values.data(), vertices, 4, 128, 0.15, true);
+    Requirements stream_requirements;
+    stream_requirements.vertex_count = vertices;
+    stream_requirements.record_count = records;
+    Layout stream_layout;
+    RecordStream record_stream;
+    if (selectLayout(stream_requirements, stream_layout) != Status::OK ||
+        buildRecords(stream_requirements, stream_layout, 16,
+            [](std::size_t index) { return uint64_t(index * 16); }, record_stream) != Status::OK)
+        return 13;
+    NativeConfiguration managed;
+    packLayout(stream_layout, managed.layout_descriptor);
+    packProperty({PropertyKind::F32, 4, TraversalMode::ORDERED_FILTERED}, managed.property_descriptor);
+    managed.record_base = reinterpret_cast<uint64_t>(record_stream.data());
+    managed.property_base = reinterpret_cast<uint64_t>(values.data());
+    managed.record_count = records;
+    managed.vertex_count = vertices;
+    managed.context = managed.generation = 1;
+    managed.control = kNativeEnable | kNativeManagedPasses;
+    CacheHierarchy hierarchy(64, 1, 128, 1, 128, 2, 64,
+        EvictionPolicy::LRU, EvictionPolicy::LRU, EvictionPolicy::GRASP);
+    hierarchy.initGraphContext(&hierarchy_context);
+    hierarchy.configurePassScope();
+    if (!refuses([&] { hierarchy.configureRecord(managed, record_stream, Mechanism::PREFETCH, EvictionPolicy::GRASP); }) ||
+        !refuses([&] { hierarchy.configureRecord(managed, record_stream, Mechanism::REPLACEMENT_PREFETCH, EvictionPolicy::GRASP); }))
+        return 14;
+    hierarchy.configureRecord(managed, record_stream, Mechanism::REPLACEMENT, EvictionPolicy::GRASP);
+    if (!refuses([&] { hierarchy.recordBeginPass(true); }))
+        return 15;
+    hierarchy.passScopeTransition(true);
+    hierarchy.recordBeginPass(true);
+    if (!refuses([&] { hierarchy.passScopeTransition(false); }) || !refuses([&] { hierarchy.passScopeTransition(true); }))
+        return 16;
+    hierarchy.recordClosePass();
+    hierarchy.passScopeTransition(false);
+    if (!refuses([&] { hierarchy.prefetch(reinterpret_cast<uint64_t>(values.data())); }) ||
+        !refuses([&] { hierarchy.recordClosePass(); }))
+        return 17;
+    return 0;
+}
+
 // The uninformed fallback and the bound-comparison switch inside the record
 // replacement rule, with the arm's governed-first and RRPV order, and their
 // refusals on paths without that rule (steps 6b and 6c).
@@ -1901,6 +2100,10 @@ int main() {
     if (const int check = exerciseWeightedRecordInspection()) {
         std::printf("weighted record inspection check %d failed [FAIL]\n", check);
         return 24;
+    }
+    if (const int check = exercisePassScope()) {
+        std::printf("pass scope check %d failed [FAIL]\n", check);
+        return 25;
     }
     std::puts("[SUMMARY] failures=0");
     return 0;
