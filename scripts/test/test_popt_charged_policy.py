@@ -733,7 +733,12 @@ def test_gem5_sideband_paths_are_per_output_directory(tmp_path):
 
 
 def test_simulated_stream_is_not_double_charged():
-    """When cache_sim streams the columns, the flat charge must not be added."""
+    """When cache_sim streamed the columns through the caches, the flat charge was not added.
+
+    Rows written before the dedicated engine carry no stream model: their columns
+    took the processor's non-temporal path, inside l3_misses and the memory
+    traffic, and keep that reading.
+    """
     row = {
         "options": "-i 1",
         "popt_overhead_charged": 1,
@@ -747,6 +752,47 @@ def test_simulated_stream_is_not_double_charged():
     # Already inside the simulated totals.
     assert row["l3_misses_with_overhead"] == 1000000
     assert row["total_memory_traffic_with_overhead"] == 1000000
+
+
+def test_dedicated_engine_stream_is_charged_once_beside_the_cache():
+    """P-OPT's engine reads each column line from memory once and misses in no cache (NEXT.md §bw).
+
+    Its lines are inside the memory and off-chip traffic already and outside
+    l3_misses, so only the miss total takes them on.
+    """
+    row = {
+        "options": "-i 1",
+        "popt_overhead_charged": 1,
+        "popt_matrix_stream_cache_lines": 229108,
+        "popt_matrix_stream_lines_simulated": 229120,
+        "popt_matrix_stream_model": "dedicated-current-next",
+        "l3_misses": 1000000,
+        "total_memory_traffic": 1229120,
+        "total_offchip_traffic": 1300000,
+    }
+    roi_matrix.apply_overhead_metrics(row)
+    assert row.get("status", "ok") == "ok"
+    assert row["popt_matrix_stream_mode"] == "simulated"
+    assert row["popt_matrix_stream_model"] == "dedicated-current-next"
+    assert row["l3_misses_with_overhead"] == 1229120
+    assert row["popt_charged_l3_misses_plus_matrix_stream"] == 1229120
+    assert row["total_memory_traffic_with_overhead"] == 1229120
+    assert row["total_offchip_traffic_with_overhead"] == 1300000
+
+
+def test_an_unknown_stream_model_is_refused():
+    row = {
+        "options": "-i 1",
+        "popt_overhead_charged": 1,
+        "popt_matrix_stream_cache_lines": 10,
+        "popt_matrix_stream_lines_simulated": 10,
+        "popt_matrix_stream_model": "simulated-residency",
+        "l3_misses": 100,
+        "total_memory_traffic": 110,
+    }
+    roi_matrix.apply_overhead_metrics(row)
+    assert row["status"] == "error"
+    assert "stream model" in row["error"]
 
 
 def test_simulated_stream_supports_single_pass_kernels_without_i_option():

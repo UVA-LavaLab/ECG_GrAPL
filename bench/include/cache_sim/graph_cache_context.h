@@ -1017,6 +1017,11 @@ struct GraphCacheContext {
     mutable uint64_t grasp_reference_rank_ties = 0, grasp_reference_basefirst_divergence = 0;
     mutable uint64_t popt_lookup_count = 0;
     mutable uint64_t popt_original_rank_sum = 0, popt_constant_rank_lookups = 0;
+    // Charged P-OPT (NEXT.md §bw): the hierarchy's column engine publishes the
+    // epoch whose column pair its reserved ways hold, and every rank read must
+    // address that pair.
+    mutable bool popt_stream_charged = false;
+    mutable uint32_t popt_resident_epoch = UINT32_MAX;
 
     // --- Exact position-indexed next-reference (ECG per-edge idea) ---
     // The per-edge mask is traversed in order, so the CURRENT vertex (src) is
@@ -2117,6 +2122,11 @@ struct GraphCacheContext {
             cline_id += r->popt_line_offset;
             ++popt_lookup_count;
         }
+        // The read below takes the current epoch's column and may take the
+        // next one's: a charged P-OPT holds only the pair its engine streamed.
+        if (popt_stream_charged && (rereference.epoch_size == 0 ||
+                hints_for_thread().current_src / rereference.epoch_size != popt_resident_epoch))
+            throw std::logic_error("charged-popt-rank-reads-an-unstreamed-column");
         return rereference.findNextRef(cline_id, hints_for_thread().current_src);
     }
 

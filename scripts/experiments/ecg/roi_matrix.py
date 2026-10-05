@@ -641,9 +641,14 @@ def apply_overhead_metrics(row: dict[str, Any]) -> None:
 
     Two accounting modes exist and must never both apply:
 
-    * ``simulated`` -- cache_sim issued the column stream as real accesses
-      (``POPT_MATRIX_STREAM_SIM=1``), so it is already inside ``l3_misses`` and
-      ``total_memory_traffic``. Adding the flat charge here would double-count.
+    * ``simulated`` -- cache_sim streamed the columns (``POPT_MATRIX_STREAM_SIM=1``),
+      so they are already inside ``total_memory_traffic`` and adding the flat
+      charge here would double-count. The row's ``popt_matrix_stream_model``
+      says where else: the dedicated current/next engine (NEXT.md §bw) reads
+      each column line from memory beside the caches, so its lines are no
+      last-level miss and the miss total takes them on here; a row without a
+      model predates the engine, its columns took the processor's non-temporal
+      path, and they are already inside ``l3_misses``.
     * ``analytic`` -- the stream was not simulated, so each PageRank iteration
       is charged post hoc while target-time stream latency remains omitted.
     * ``analytic_prefetch_upper_bound`` -- the same byte charge under a common
@@ -661,6 +666,12 @@ def apply_overhead_metrics(row: dict[str, Any]) -> None:
     simulated = int(row.get("popt_matrix_stream_lines_simulated") or 0)
     charged = row.get("popt_overhead_charged") in (1, "1", True, "true")
     requested = row.get("popt_matrix_stream_requested") or "analytic"
+    model = row.get("popt_matrix_stream_model") or None
+    if simulated > 0 and (model is not None or requested == "simulated") and \
+            model != algorithm_matrix.POPT_STREAM_MODEL:
+        mark_row_error(row, f"unknown P-OPT matrix stream model: {model}")
+        return
+    engine_lines = simulated if model == algorithm_matrix.POPT_STREAM_MODEL else 0
     if charged and requested == "simulated" and simulated <= 0:
         # Fail closed. Silently falling back to the analytic charge here would
         # reintroduce exactly the asymmetry this mode exists to remove, and the
@@ -721,10 +732,10 @@ def apply_overhead_metrics(row: dict[str, Any]) -> None:
             pass
     l3_misses = row.get("l3_misses")
     if l3_misses not in (None, ""):
-        row["l3_misses_with_overhead"] = int(l3_misses) + stream_lines
+        row["l3_misses_with_overhead"] = int(l3_misses) + stream_lines + engine_lines
         if charged:
             row["popt_charged_l3_misses_plus_matrix_stream"] = (
-                int(l3_misses) + stream_lines)
+                int(l3_misses) + stream_lines + engine_lines)
     traffic = row.get("total_memory_traffic")
     if traffic not in (None, ""):
         row["total_memory_traffic_with_overhead"] = (
@@ -4094,6 +4105,7 @@ def run_cache_sim(args: argparse.Namespace, out_dir: Path, spec: PolicySpec, l3_
         # P-OPT matrix-stream provenance.
         "popt_matrix_stream_lines_simulated",
         "popt_matrix_stream_columns_simulated",
+        "popt_matrix_stream_model",
     ):
         row[key] = data.get(key)
     if spec.ecg_online_admission:

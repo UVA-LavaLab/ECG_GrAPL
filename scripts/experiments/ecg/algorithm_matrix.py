@@ -264,23 +264,36 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
             for spec in policies]
 
 
-def validate_popt_charge(popt: dict[str, Any], *, policy: str, matrix_lines: int) -> dict[str, int]:
+# The one stream model a current charged P-OPT row may name (NEXT.md §bw): the reserved ways hold the current epoch's
+# column and the next one's, and a dedicated engine reads each streamed column line from memory beside the caches.
+POPT_STREAM_MODEL = "dedicated-current-next"
+
+
+def validate_popt_charge(payload: dict[str, Any], *, policy: str, matrix_lines: int) -> dict[str, int]:
     """NEXT.md §bw: an uncharged P-OPT row keeps the full last level and streams nothing; the charged row, the bar,
-    streams whole columns of one byte per property line, two of them resident at a time."""
+    streams whole columns of one byte per property line through its engine, and pays each column line once: its memory
+    reads are its last-level misses plus its stream lines, exactly."""
+    popt, metrics = payload.get("popt"), payload.get("metrics")
+    require(isinstance(popt, dict) and isinstance(metrics, dict) and isinstance(metrics.get("L3"), dict),
+            "missing P-OPT receipt or cache metrics")
     charged = policy == "POPT"
     require(popt.get("full_data_capacity") is (not charged) and
             popt.get("runtime_matrix_traffic_charged") is charged,
             "P-OPT's receipt does not declare the charge its policy names")
     stream = popt.get("stream")
-    if not charged:
+    lines = 0
+    if charged:
+        require(isinstance(stream, dict) and stream.get("model") == POPT_STREAM_MODEL and
+                _integer(stream, "active_columns") == 2 and _integer(stream, "column_bytes") == matrix_lines and
+                _integer(stream, "columns") > 0 and
+                _integer(stream, "lines") == _integer(stream, "columns") * ((matrix_lines + 63) // 64),
+                "charged P-OPT's column stream does not match its matrix")
+        lines = stream["lines"]
+    else:
         require(stream is None, "unrequested P-OPT matrix stream")
-        return {}
-    require(isinstance(stream, dict) and stream.get("model") == "simulated-residency" and
-            _integer(stream, "active_columns") == 2 and _integer(stream, "column_bytes") == matrix_lines and
-            _integer(stream, "columns") > 0 and
-            _integer(stream, "lines") == _integer(stream, "columns") * ((matrix_lines + 63) // 64),
-            "charged P-OPT's column stream does not match its matrix")
-    return {"popt_stream_columns": stream["columns"], "popt_stream_lines": stream["lines"]}
+    require(_integer(metrics, "memory_accesses") == _integer(metrics["L3"], "misses") + lines,
+            "P-OPT's memory reads are not its last-level misses plus its column stream")
+    return {"popt_stream_columns": stream["columns"], "popt_stream_lines": lines} if charged else {}
 
 
 def validate_popt_geometry(l3: dict[str, Any], *, llc_bytes: int, llc_ways: int) -> None:
@@ -514,7 +527,7 @@ def validate_payload(
                 isinstance(popt, dict) and popt.get("encoding") == "full" and
                 popt.get("scope") == "graph-pass-irregular-regions",
                 "P-OPT must declare its graph-pass scope")
-        validate_popt_charge(popt, policy=policy, matrix_lines=popt_matrix_lines(algorithm, graph.vertices))
+        validate_popt_charge(payload, policy=policy, matrix_lines=popt_matrix_lines(algorithm, graph.vertices))
         reused = popt.get("reused", False)
         require(type(reused) is bool and (not reused or allow_reused_popt),
                 "unrequested P-OPT matrix reuse")
@@ -1337,7 +1350,7 @@ def run_cache_cell(
         if policy in ("POPT_UNCHARGED", "POPT") or reference:
             validate_popt_geometry(metrics["L3"], llc_bytes=llc_bytes, llc_ways=llc_ways)
             row.update({"popt_" + key: value for key, value in payload["popt"].items() if key != "stream"})
-            row.update(validate_popt_charge(payload["popt"], policy=policy,
+            row.update(validate_popt_charge(payload, policy=policy,
                                             matrix_lines=popt_matrix_lines(args.benchmark, graph.vertices)))
         if reference:
             row.update({"grasp_reference_" + key: value for key, value in payload["grasp_reference"].items()})

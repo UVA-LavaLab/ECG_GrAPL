@@ -7,9 +7,13 @@ the first was silently free: the stream cost was identical at -i 1, -i 2 and
 -i 4. That reproduced the same undercharge as the flat analytic count, which is
 also a single sweep, and it undercharged P-OPT by the iteration count.
 
-The residency model replaces it: an epoch whose column is still one of the two
-resident columns costs nothing, anything else streams a fresh column. These
-tests pin that behaviour against the real binary.
+A residency model replaced it, and the published design replaced that
+(NEXT.md §bw): P-OPT ranks from the current epoch's column and the next one's,
+so its reserved ways hold exactly that pair (one column for P-OPT-SE), and a
+dedicated engine streams a column whenever the pair needs one it does not hold.
+The engine bypasses the private caches and the data ways, so each column line
+is one memory read and no cache miss. These tests pin that behaviour against
+the real binary.
 """
 from __future__ import annotations
 
@@ -87,16 +91,18 @@ def test_stream_is_off_by_default():
 
 @pytest.mark.parametrize("postfinal", [None, "later_lower_bound", "distant"])
 def test_stream_adds_traffic_without_a_prefetcher(postfinal):
-    """A cold sequential stream must cost real memory traffic."""
+    """Each column line is one memory read, and the engine changes no cache decision."""
     env = {"POPT_SE_POSTFINAL": postfinal} if postfinal else {}
     off = run_pr(1, {**env, "POPT_MATRIX_STREAM_SIM": "0"})
     on = run_pr(1, env)
-    added = on["total_memory_traffic"] - off["total_memory_traffic"]
     lines = on["popt_matrix_stream_lines_simulated"]
-    # Nearly every line of a cold stream misses; allow slack for the few served
-    # by the private caches.
-    assert added >= 0.9 * lines, (
-        f"stream of {lines} lines added only {added} traffic")
+    assert lines > 0
+    assert on["popt_matrix_stream_model"] == "dedicated-current-next"
+    assert off["popt_matrix_stream_model"] == "none"
+    assert on["total_memory_traffic"] - off["total_memory_traffic"] == lines
+    assert on["total_accesses"] == off["total_accesses"]
+    for key in ("hits", "misses", "writebacks"):
+        assert on["L3"][key] == off["L3"][key], key
 
 
 def test_gem5_popt_matrix_stream_is_disclosed_as_analytic():

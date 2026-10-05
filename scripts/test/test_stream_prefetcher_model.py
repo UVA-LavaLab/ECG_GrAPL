@@ -94,20 +94,38 @@ def test_prefetcher_is_off_by_default():
 
 
 def test_non_temporal_path_uses_the_same_detector():
-    """ReusePlan records and P-OPT matrix columns must not keep oracle coverage.
+    """Non-temporal streams must not keep oracle coverage.
 
-    accessNonTemporal() carries both metadata streams. It previously issued
-    prefetches unconditionally regardless of the selected model, so the honest
-    detector never reached the streams the ReusePlan-versus-P-OPT comparison turns on.
+    accessNonTemporal() carries ReusePlan's records and, under FLOWTHROUGH=1,
+    every policy's CSR edge stream. It previously issued prefetches
+    unconditionally regardless of the selected model, so the honest detector
+    never reached the streams the ReusePlan-versus-P-OPT comparison turns on.
     With a 1-entry in-flight budget the detector must throttle that path too.
+    (P-OPT's matrix columns once took this path; they now stream through
+    P-OPT's own engine, which the next test pins.)
     """
-    stats = run(POPT_MATRIX_STREAM_SIM=1, CACHE_POLICY="POPT",
-                CACHE_STREAM_PREFETCH_MAX_INFLIGHT="1")
-    assert stats["popt_matrix_stream_lines_simulated"] > 0, (
-        "matrix stream did not run; this test would be vacuous")
+    stats = run(FLOWTHROUGH=1, CACHE_STREAM_PREFETCH_MAX_INFLIGHT="1")
+    assert stats["structural_flowthrough_accesses"] > 0, (
+        "no access took the non-temporal path; this test would be vacuous")
     assert stats["stream_prefetch_throttled"] > 0, (
-        "the matrix-stream path issued without consulting the in-flight budget, "
+        "the non-temporal path issued without consulting the in-flight budget, "
         "so it is still on an unconditional issue loop")
+
+
+def test_popt_matrix_stream_bypasses_the_processor_prefetcher():
+    """P-OPT's engine writes columns into its reserved ways, beside the processor.
+
+    Its reads are paid in full, one memory read per column line, and neither the
+    processor's prefetcher nor any cache sees them (NEXT.md §bw).
+    """
+    on = run(POPT_MATRIX_STREAM_SIM=1, CACHE_POLICY="POPT")
+    off = run(POPT_MATRIX_STREAM_SIM=0, CACHE_POLICY="POPT")
+    lines = on["popt_matrix_stream_lines_simulated"]
+    assert lines > 0, "matrix stream did not run; this test would be vacuous"
+    for key in ("stream_prefetch_issued", "stream_prefetch_throttled", "stream_prefetch_untrained",
+                "prefetch_fills", "total_accesses"):
+        assert on[key] == off[key], key
+    assert on["memory_accesses"] - off["memory_accesses"] == lines
 
 
 def test_counters_are_roi_scoped():

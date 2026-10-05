@@ -108,8 +108,10 @@ void testOneColumnStream() {
     cache.initPoptMatrixStream(64, 16, 4);
     for (const uint32_t vertex : {0, 16, 0})
         cache.setCurrentVertex(vertex);
-    check(cache.getPoptMatrixStreamLines() == 2,
-          "ordinary P-OPT retains its two-column residency");
+    // Published P-OPT ranks from the current column and the next one's, so its
+    // reserved ways hold that pair (NEXT.md §bw): {0,1}, then {1,2}, then {0,1}.
+    check(cache.getPoptMatrixStreamLines() == 4,
+          "ordinary P-OPT holds the current and next columns");
 }
 
 }  // namespace

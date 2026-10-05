@@ -5116,9 +5116,8 @@ public:
         l3_->chargeMaintenanceWritebacks(dirty_lines.size());
         cold_entry_residual_lines_ = {l1_->validLines(), l2_->validLines(), l3_->validLines()};
         // Charged P-OPT's reserved ways are emptied too (NEXT.md §bw): the
-        // kernel's first epoch streams its column.
-        popt_stream_resident_[0] = popt_stream_resident_[1] = UINT32_MAX;
-        popt_stream_next_slot_ = 0;
+        // kernel's first epoch streams its pair.
+        clearPoptResidency();
         ++cold_kernel_entries_;
         kernel_entry_maintenance_writebacks_ += dirty_lines.size();
         return dirty_lines.size();
@@ -5329,6 +5328,10 @@ public:
         l1_->initGraphContext(ctx);
         l2_->initGraphContext(ctx);
         l3_->initGraphContext(ctx);
+        if (ctx && popt_stream_enabled_) {
+            ctx->popt_stream_charged = true;
+            ctx->popt_resident_epoch = popt_stream_epoch_;
+        }
     }
 
     // P-OPT: Initialize rereference matrix on LLC (L3) — legacy API
@@ -5349,62 +5352,54 @@ public:
 
     // P-OPT: Update current vertex (call at each outer-loop iteration)
     void setCurrentVertex(uint32_t vertex_id) {
-        streamPoptMatrixIfEpochAdvanced(vertex_id);
+        streamPoptColumnsForVertex(vertex_id);
         l3_->setCurrentVertex(vertex_id);
     }
 
     // ------------------------------------------------------------------
-    // P-OPT rereference-matrix column stream
+    // P-OPT rereference-matrix column engine (NEXT.md §bw)
     // ------------------------------------------------------------------
-    // Balaji and Lucia keep the current and next rereference-matrix
-    // columns resident in reserved LLC ways and stream in a fresh column at
-    // every epoch boundary. cache_sim consults the matrix host-side, so that
-    // stream previously existed only as a flat analytic charge added to the
-    // miss count after the run. ReusePlan's per-edge records, by contrast, are real
-    // simulated accesses, so a structure prefetcher covered ReusePlan's sequential
-    // stream while no prefetcher could ever cover P-OPT's. Both are sequential
-    // streams; pricing only one of them through the hierarchy systematically
-    // favours ReusePlan. This issues the column stream as real accesses so the two are
-    // accounted symmetrically.
+    // P-OPT (Balaji et al., HPCA 2021) ranks a line from the current epoch's
+    // rereference-matrix column and the next one's (Algorithm 2), so its
+    // reserved LLC ways hold exactly that pair, and a dedicated engine streams
+    // a column from memory whenever the pair needs one it does not hold.
+    // P-OPT-SE ranks from the current column alone and holds only that one.
     //
-    // The stream is non-temporal because the resident columns live in the
-    // reserved ways, and those ways are already deducted from the simulated
-    // cache geometry. Allocating them again in the modelled cache would charge
-    // P-OPT for the same capacity twice.
+    // The reserved ways are already deducted from the simulated geometry, and
+    // the engine writes into them beside the processor, so a column line is
+    // charged once, as a memory read, and is never a cache access, a fill or a
+    // prefetch: it takes no data way, passes through no private cache and
+    // trains no prefetcher. A pass over all 256 epochs reads four times the
+    // covered property bytes.
     //
-    // The synthetic column buffer sits outside every registered property
-    // region. Note the mechanism: accessNonTemporal() issues stream prefetches
-    // unconditionally rather than consulting findRegion(), because both callers
-    // are structural streams by construction. The effect is the intended one --
-    // the column stream is prefetch-covered exactly as ReusePlan's records are -- but
-    // it is not the region classifier that makes it so.
+    // History: the stream was first a flat analytic charge after the run, then
+    // a non-temporal demand stream of the last two entered columns. That
+    // stream filled the private caches, let a reloaded column hit there, and
+    // ranked from a next column it never loaded; rows written before the
+    // engine carry no stream model and keep that reading.
     //
-    // Fidelity boundary: published P-OPT streams columns with a dedicated
-    // engine that writes into the reserved ways, and is evaluated with
-    // conventional prefetching disabled. Modelling the stream on the ordinary
-    // demand path is what lets a CPU prefetcher cover it here, so results about
-    // that coverage describe our accounting, not P-OPT hardware.
+    // Every charged rank read checks that it addresses the resident pair
+    // (GraphCacheContext::findNextRef).
     void initPoptMatrixStream(uint32_t column_bytes, uint32_t epoch_size,
                               uint32_t num_epochs, unsigned active_columns = 2) {
         if (active_columns < 1 || active_columns > 2)
             throw std::invalid_argument("P-OPT stream needs one or two resident columns");
         if (column_bytes == 0 || epoch_size == 0 || num_epochs == 0) return;
         popt_stream_column_bytes_ = column_bytes;
-        // Round the per-epoch backing stride up to a line so distinct epochs
-        // never share a cache line.
-        popt_stream_column_stride_ =
-            ((column_bytes + line_size_ - 1) / line_size_) * line_size_;
         popt_stream_epoch_size_ = epoch_size;
         popt_stream_num_epochs_ = num_epochs;
         popt_stream_active_columns_ = active_columns;
-        popt_stream_resident_[0] = UINT32_MAX;
-        popt_stream_resident_[1] = UINT32_MAX;
-        popt_stream_next_slot_ = 0;
         popt_stream_enabled_ = true;
-        std::cerr << "[POPT-MATRIX-STREAM sim=cache_sim active=1 column_bytes="
-                  << column_bytes << " epoch_size=" << epoch_size
-                  << " epochs=" << num_epochs << "]\n";
+        clearPoptResidency();
+        if (graph_ctx_)
+            graph_ctx_->popt_stream_charged = true;
+        std::cerr << "[POPT-MATRIX-STREAM sim=cache_sim active=1 model=" << kPoptStreamModel
+                  << " resident_columns=" << active_columns << " column_bytes=" << column_bytes
+                  << " epoch_size=" << epoch_size << " epochs=" << num_epochs << "]\n";
     }
+
+    static constexpr const char* kPoptStreamModel = "dedicated-current-next";
+    const char* poptMatrixStreamModel() const { return popt_stream_enabled_ ? kPoptStreamModel : "none"; }
 
     uint64_t getPoptMatrixStreamLines() const { return popt_stream_lines_; }
     uint64_t getPoptMatrixStreamColumns() const { return popt_stream_columns_; }
@@ -5527,47 +5522,45 @@ private:
             r.encoding == popt_reref::Encoding::SingleEpoch ? 1 : 2);
     }
 
-    void streamPoptMatrixIfEpochAdvanced(uint32_t vertex_id) {
+    void streamPoptColumnsForVertex(uint32_t vertex_id) {
         if (!popt_stream_checked_) initPoptMatrixStreamFromContext();
-        if (!popt_stream_enabled_ || popt_stream_epoch_size_ == 0) return;
+        if (!popt_stream_enabled_) return;
         const uint32_t epoch = vertex_id / popt_stream_epoch_size_;
-        if (epoch >= popt_stream_num_epochs_) return;
-        // Full P-OPT has two resident columns; P-OPT-SE has only one.
-        // Charging on "the epoch advanced" is wrong: a multi-iteration kernel
-        // sweeps epochs 0..N-1 once per iteration and must pay for every sweep,
-        // while a frontier kernel that oscillates across one boundary must not
-        // pay twice for a column the hardware still holds. Residency answers
-        // both. An earlier forward-progress-only rule silently charged
-        // PageRank for a single sweep no matter how many iterations it ran.
-        for (unsigned slot = 0; slot < popt_stream_active_columns_; ++slot)
-            if (popt_stream_resident_[slot] == epoch) return;
-        popt_stream_resident_[popt_stream_next_slot_] = epoch;
-        popt_stream_next_slot_ =
-            (popt_stream_next_slot_ + 1) % popt_stream_active_columns_;
-        popt_stream_columns_++;
-        // Distinct backing address per epoch, so a column can never hit on a
-        // stale line left by a different column that happened to share a slot.
-        const uint64_t base = kPoptStreamBase +
-            static_cast<uint64_t>(epoch) * popt_stream_column_stride_;
-        for (uint64_t off = 0; off < popt_stream_column_bytes_;
-             off += line_size_) {
-            popt_stream_lines_++;
-            accessNonTemporal(base + off, false);
+        if (epoch >= popt_stream_num_epochs_ || epoch == popt_stream_epoch_) return;
+        // The pair the reserved ways must now hold; the final epoch has no
+        // next column, and P-OPT-SE holds the current one alone.
+        const uint32_t next = popt_stream_active_columns_ == 2 && epoch + 1 < popt_stream_num_epochs_
+            ? epoch + 1 : UINT32_MAX;
+        const uint64_t lines = (uint64_t(popt_stream_column_bytes_) + line_size_ - 1) / line_size_;
+        for (const uint32_t column : {epoch, next}) {
+            if (column == UINT32_MAX || column == popt_stream_resident_[0] || column == popt_stream_resident_[1])
+                continue;
+            ++popt_stream_columns_;
+            popt_stream_lines_ += lines;
+            memory_accesses_ += lines;
         }
+        popt_stream_resident_[0] = epoch;
+        popt_stream_resident_[1] = next;
+        popt_stream_epoch_ = epoch;
+        if (graph_ctx_)
+            graph_ctx_->popt_resident_epoch = epoch;
     }
 
-    // Well outside any graph allocation, so it can never alias a registered
-    // property region.
-    static constexpr uint64_t kPoptStreamBase = 0x7000000000000ULL;
+    void clearPoptResidency() {
+        popt_stream_resident_[0] = popt_stream_resident_[1] = UINT32_MAX;
+        popt_stream_epoch_ = UINT32_MAX;
+        if (graph_ctx_)
+            graph_ctx_->popt_resident_epoch = UINT32_MAX;
+    }
+
     bool popt_stream_enabled_ = false;
     bool popt_stream_checked_ = false;
     uint32_t popt_stream_column_bytes_ = 0;
-    uint64_t popt_stream_column_stride_ = 0;
     uint32_t popt_stream_epoch_size_ = 0;
     uint32_t popt_stream_num_epochs_ = 0;
     unsigned popt_stream_active_columns_ = 2;
     uint32_t popt_stream_resident_[2] = {UINT32_MAX, UINT32_MAX};
-    unsigned popt_stream_next_slot_ = 0;
+    uint32_t popt_stream_epoch_ = UINT32_MAX;
     uint64_t popt_stream_lines_ = 0;
     uint64_t popt_stream_columns_ = 0;
 
@@ -5894,6 +5887,7 @@ public:
            << popt_stream_lines_ << ",\n";
         ss << "  \"popt_matrix_stream_columns_simulated\": "
            << popt_stream_columns_ << ",\n";
+        ss << "  \"popt_matrix_stream_model\": \"" << poptMatrixStreamModel() << "\",\n";
         ss << "  \"stream_prefetch_model\": \""
            << (streamPrefetchOracle() ? "oracle" : "stride") << "\",\n";
         ss << "  \"stream_prefetch_issued\": " << stride_pf_issued_ << ",\n";

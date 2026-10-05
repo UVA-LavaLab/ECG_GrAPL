@@ -510,17 +510,18 @@ class AlgorithmBackend {
                    << ",\"construction_count\":" << shared_popt_->constructions_
                    << ",\"owner_reservation_bytes\":" << PreparedSpmvMatrix::kOwnerReservation;
         if (popt_charged_)
-            output << ",\"stream\":{\"model\":\"simulated-residency\",\"active_columns\":"
+            output << ",\"stream\":{\"model\":\"" << cache_.poptMatrixStreamModel() << "\",\"active_columns\":"
                    << cache_.getPoptMatrixStreamActiveColumns() << ",\"column_bytes\":"
                    << cache_.getPoptMatrixStreamColumnBytes() << ",\"columns\":" << cache_.getPoptMatrixStreamColumns()
                    << ",\"lines\":" << cache_.getPoptMatrixStreamLines() << '}';
         output << '}';
     }
 
-    // Charged P-OPT, the bar (NEXT.md §bw): its two resident columns, one byte
-    // per property line each, stream from memory whenever the outer loop
-    // enters an epoch whose column is not resident. The reserved ways are the
-    // caller's: it builds the hierarchy with the data ways they leave.
+    // Charged P-OPT, the bar (NEXT.md §bw): its reserved ways hold the
+    // current epoch's column and the next one's, one byte per property line
+    // each, and its engine streams a column from memory whenever that pair
+    // needs one. The reserved ways are the caller's: it builds the hierarchy
+    // with the data ways they leave.
     void chargePoptMatrix() {
         if (!popt_full_capacity_ || referenceConsumer() || shared_popt_ || popt_ready_)
             throw std::invalid_argument("charged-popt-requires-the-popt-matrix");

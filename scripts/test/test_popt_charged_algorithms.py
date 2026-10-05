@@ -1,9 +1,11 @@
 """NEXT.md §bw: charged P-OPT, the bar ECG must tie or beat, on the current algorithms.
 
-The bar is P-OPT as published: its two resident rereference-matrix columns hold size-correct reserved last-level
-ways, and a column streams from memory whenever the outer loop enters an epoch whose column is not resident. The
-stream is modelled by residency, so a multi-pass kernel pays for every sweep and a frontier that returns to a
-resident epoch pays nothing. POPT_UNCHARGED stays P-OPT's full-capacity upper bound.
+The bar is P-OPT as published (Balaji et al., HPCA 2021): it ranks a line from the current epoch's
+rereference-matrix column and the next one's, so its reserved last-level ways hold exactly that pair, sized
+size-correct, and a dedicated engine streams a column from memory whenever the pair needs one it does not hold. The
+engine never passes through the private caches or the data ways, so the kernel pays each column line once, as a
+memory read that is no cache miss. A multi-pass kernel pays for every sweep, and a frontier that moves between
+epochs pays for every pair it needs. POPT_UNCHARGED stays P-OPT's full-capacity upper bound.
 
 The C++ fixture in bench/src_sim/test_ecg_algorithms.cc holds the stream mechanism; these hold the reservation's
 one owner, what the binary writes and what the runner sends and accepts.
@@ -122,12 +124,18 @@ def test_charged_popt_streams_its_columns_and_says_so(tmp_path, algorithm):
     column = _lines(algorithm, _graph(tmp_path, algorithm))
     stream = paid["popt"]["stream"]
     assert stream["columns"] > 0
-    assert stream == {"model": "simulated-residency", "active_columns": 2, "column_bytes": column,
+    assert stream == {"model": "dedicated-current-next", "active_columns": 2, "column_bytes": column,
                       "columns": stream["columns"], "lines": stream["columns"] * -(-column // 64)}
-    # The stream is the kernel's and adds only its own lines; setup and the answer are P-OPT's as before.
+    # The engine streams beside the processor: setup, every processor access, every cache decision and the answer
+    # are P-OPT's as before, and the kernel pays each column line once, as a memory read that is no cache miss.
     assert paid["traffic_phases"]["setup"] == free["traffic_phases"]["setup"]
-    assert paid["traffic_phases"]["kernel"]["total_accesses"] == \
-        free["traffic_phases"]["kernel"]["total_accesses"] + stream["lines"]
+    kernel, before = paid["traffic_phases"]["kernel"], free["traffic_phases"]["kernel"]
+    assert kernel["total_accesses"] == before["total_accesses"]
+    assert {key: kernel[key] for key in ("llc_hits", "llc_misses", "llc_writebacks")} == \
+        {key: before[key] for key in ("llc_hits", "llc_misses", "llc_writebacks")}
+    assert kernel["memory_accesses"] == before["memory_accesses"] + stream["lines"]
+    for receipt, lines in ((free, 0), (paid, stream["lines"])):
+        assert receipt["metrics"]["memory_accesses"] == receipt["metrics"]["L3"]["misses"] + lines
     assert paid["workload"]["result_digest"] == free["workload"]["result_digest"]
 
 
@@ -215,28 +223,41 @@ def test_the_validator_refuses_a_charge_that_departs(tmp_path):
     from scripts.experiments.ecg import algorithm_matrix
     from scripts.experiments.ecg.record_receipts import RecordReceiptError
     column = _lines("spmv", _graph(tmp_path, "spmv"))
-    paid = _run(tmp_path, "spmv", "POPT", name="c")["popt"]
-    free = _run(tmp_path, "spmv", "POPT_UNCHARGED", name="u")["popt"]
+    paid = _run(tmp_path, "spmv", "POPT", name="c")
+    free = _run(tmp_path, "spmv", "POPT_UNCHARGED", name="u")
     assert algorithm_matrix.validate_popt_charge(paid, policy="POPT", matrix_lines=column) == {
-        "popt_stream_columns": paid["stream"]["columns"], "popt_stream_lines": paid["stream"]["lines"]}
+        "popt_stream_columns": paid["popt"]["stream"]["columns"],
+        "popt_stream_lines": paid["popt"]["stream"]["lines"]}
     assert algorithm_matrix.validate_popt_charge(free, policy="POPT_UNCHARGED", matrix_lines=column) == {}
+    lines = paid["popt"]["stream"]["lines"]
     departures = [
         ("full_data_capacity", True), ("runtime_matrix_traffic_charged", False), ("stream", None),
-        ("stream.model", "analytic"), ("stream.active_columns", 1), ("stream.column_bytes", column + 1),
-        ("stream.columns", 0), ("stream.lines", paid["stream"]["lines"] + 1),
+        ("stream.model", "analytic"), ("stream.model", "simulated-residency"), ("stream.active_columns", 1),
+        ("stream.column_bytes", column + 1), ("stream.columns", 0), ("stream.lines", lines + 1),
     ]
     for key, value in departures:
         changed = copy.deepcopy(paid)
-        holder, name = (changed["stream"], key.split(".")[1]) if key.startswith("stream.") else (changed, key)
+        holder = changed["popt"]["stream"] if key.startswith("stream.") else changed["popt"]
+        name = key.split(".")[-1]
         if value is None:
             del holder[name]
         else:
             holder[name] = value
         with pytest.raises(RecordReceiptError):
             algorithm_matrix.validate_popt_charge(changed, policy="POPT", matrix_lines=column)
+            pytest.fail(f"accepted {key}={value}")
+    # The stream is paid once, as memory reads beside the last level's own misses.
+    for receipt, policy in ((paid, "POPT"), (free, "POPT_UNCHARGED")):
+        for delta in (-1, 1):
+            changed = copy.deepcopy(receipt)
+            changed["metrics"]["memory_accesses"] += delta
+            with pytest.raises(RecordReceiptError):
+                algorithm_matrix.validate_popt_charge(changed, policy=policy, matrix_lines=column)
+                pytest.fail(f"accepted {policy} memory reads off by {delta}")
     for key, value in (("full_data_capacity", False), ("runtime_matrix_traffic_charged", True),
-                       ("stream", paid["stream"])):
-        changed = dict(free, **{key: value})
+                       ("stream", paid["popt"]["stream"])):
+        changed = copy.deepcopy(free)
+        changed["popt"][key] = value
         with pytest.raises(RecordReceiptError):
             algorithm_matrix.validate_popt_charge(changed, policy="POPT_UNCHARGED", matrix_lines=column)
     l3 = {"size_bytes": 1536, "ways": 3}
@@ -264,8 +285,14 @@ def test_pagerank_runs_the_bar_under_the_fair_contracts(tmp_path):
     row = rows[0]
     charge = popt_reservation(-(-512 * 4 // 64), l3_bytes=2048, l3_ways=4)
     assert row["popt_reserve_model"] == "size_correct" and row["popt_matrix_stream_mode"] == "simulated"
+    assert row["popt_matrix_stream_model"] == "dedicated-current-next"
     assert int(row["popt_effective_l3_ways"]) == charge["effective_ways"]
-    assert int(row["popt_matrix_stream_lines_simulated"]) > 0
+    lines = int(row["popt_matrix_stream_lines_simulated"])
+    assert lines > 0
+    # The engine's reads are in the memory traffic once and in no last-level count.
+    assert int(row["total_memory_traffic"]) == int(row["l3_misses"]) + lines
+    assert int(row["l3_misses_with_overhead"]) == int(row["l3_misses"]) + lines
+    assert int(row["total_memory_traffic_with_overhead"]) == int(row["total_memory_traffic"])
     assert row["policy_label"] == "POPT_GRASP_DECLARED_COLD_ENTRY"
 
 
