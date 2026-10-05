@@ -15,10 +15,10 @@ from typing import Any, Callable
 
 if __package__:
     from .record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned, validate_kernel_census, validate_kernel_census_passes
-    from .record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, window_layout
+    from .record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, popt_reservation, window_layout
 else:
     from record_receipts import RecordReceiptError, receipt, require, resolve_layout, unsigned, validate_kernel_census, validate_kernel_census_passes
-    from record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, window_layout
+    from record_resources import GraphInfo, RecordResourceError, graph_info, plan_algorithm_resources, popt_matrix_lines, popt_reservation, window_layout
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -264,6 +264,31 @@ def policy_labels(policies, base_policy: str = "LRU", observer: str = "off",
             for spec in policies]
 
 
+def validate_popt_charge(popt: dict[str, Any], *, policy: str, matrix_lines: int) -> dict[str, int]:
+    """NEXT.md §bw: an uncharged P-OPT row keeps the full last level and streams nothing; the charged row, the bar,
+    streams whole columns of one byte per property line, two of them resident at a time."""
+    charged = policy == "POPT"
+    require(popt.get("full_data_capacity") is (not charged) and
+            popt.get("runtime_matrix_traffic_charged") is charged,
+            "P-OPT's receipt does not declare the charge its policy names")
+    stream = popt.get("stream")
+    if not charged:
+        require(stream is None, "unrequested P-OPT matrix stream")
+        return {}
+    require(isinstance(stream, dict) and stream.get("model") == "simulated-residency" and
+            _integer(stream, "active_columns") == 2 and _integer(stream, "column_bytes") == matrix_lines and
+            _integer(stream, "columns") > 0 and
+            _integer(stream, "lines") == _integer(stream, "columns") * ((matrix_lines + 63) // 64),
+            "charged P-OPT's column stream does not match its matrix")
+    return {"popt_stream_columns": stream["columns"], "popt_stream_lines": stream["lines"]}
+
+
+def validate_popt_geometry(l3: dict[str, Any], *, llc_bytes: int, llc_ways: int) -> None:
+    """The last level P-OPT ran on: all of it uncharged, the ways left after the reservation charged."""
+    require(_integer(l3, "size_bytes") == llc_bytes and _integer(l3, "ways") == llc_ways,
+            "P-OPT ran on another last level than its charge allows")
+
+
 def validate_payload(
     payload: dict[str, Any], log: str, *, algorithm: str, mode: str, policy: str,
     graph: GraphInfo, graph_path: Path, options: argparse.Namespace, requested_bytes: int,
@@ -483,14 +508,13 @@ def validate_payload(
         require(payload.get("window_runtime") is None, "unrequested window runtime")
     if not frontier:
         require(payload.get("frontier_runtime") is None, "unrequested frontier runtime")
-    if policy == "POPT_UNCHARGED" or reference:
+    if policy in ("POPT_UNCHARGED", "POPT") or reference:
         popt = payload.get("popt")
         require(backend == "cache_sim" and mode == "csr" and not direction_optimizing and
                 isinstance(popt, dict) and popt.get("encoding") == "full" and
-                popt.get("scope") == "graph-pass-irregular-regions" and
-                popt.get("full_data_capacity") is True and
-                popt.get("runtime_matrix_traffic_charged") is False,
-                "P-OPT must declare its favorable full-capacity graph-pass scope")
+                popt.get("scope") == "graph-pass-irregular-regions",
+                "P-OPT must declare its graph-pass scope")
+        validate_popt_charge(popt, policy=policy, matrix_lines=popt_matrix_lines(algorithm, graph.vertices))
         reused = popt.get("reused", False)
         require(type(reused) is bool and (not reused or allow_reused_popt),
                 "unrequested P-OPT matrix reuse")
@@ -508,7 +532,8 @@ def validate_payload(
         if "rank_mode" in popt or rank_constant or reference:
             require(popt.get("rank_mode") == ("constant" if rank_constant else "future") and popt.get("role") == (
                         "reference-consumer-diagnostic" if reference else
-                        "policy-ablation" if rank_constant else "favorable-quality-control") and
+                        "policy-ablation" if rank_constant else
+                        "charged-baseline" if policy == "POPT" else "favorable-quality-control") and
                     popt.get("consumer", "POPT") == ("GRASP-reference" if reference else "POPT") and
                     _integer(popt, "constant_rank") == 0 and
                     _integer(popt, "constant_rank_lookups") == (
@@ -1089,7 +1114,7 @@ def run_cache_cell(
                 "current algorithms require serial real-record execution without legacy mechanisms")
         mode = spec.record_mechanism or "csr"
         policy = "LRU" if mode != "csr" else spec.label
-        require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED")),
+        require(mode in MODES or (mode == "csr" and policy in ("LRU", "SRRIP", "GRASP_PAPER", "POPT_UNCHARGED", "POPT")),
                 "unsupported current algorithm policy or P-OPT accounting mode")
         options = parse_options(args.options)
         batch = options.queries > 1
@@ -1162,11 +1187,29 @@ def run_cache_cell(
             workspace_limit=args.algorithm_workspace_bytes,
             carrier_limit=args.ecg_record_max_carrier_bytes, auxiliary_limit=args.ecg_record_max_auxiliary_bytes,
             rss_mib=args.cache_record_rss_mib, bfs_direction_optimizing=options.bfs_direction == "do",
-            preprocessing=options.record_preprocess, popt_full_capacity=policy == "POPT_UNCHARGED" or reference,
+            preprocessing=options.record_preprocess,
+            popt_full_capacity=policy in ("POPT_UNCHARGED", "POPT") or reference,
             record_model=options.record_model, queries=options.queries)
         if observing:
             require(not graph.weighted and plan["array_bytes"] + options.window_observer_bytes <=
                     args.algorithm_workspace_bytes, "window observer exceeds its workspace or target scope")
+        # NEXT.md §bw: charged P-OPT, the bar, runs on the ways its resident columns leave.
+        charge = None
+        if policy == "POPT":
+            require(args.popt_reserve_model == "size_correct" and args.popt_matrix_stream == "simulated" and
+                    int(args.popt_active_columns) == 2 and int(args.popt_num_epochs) == 256,
+                    "charged P-OPT on the current algorithms is size-correct, with two resident columns of 256 "
+                    "epochs and a simulated stream")
+            charge = popt_reservation(popt_matrix_lines(args.benchmark, graph.vertices),
+                                      l3_bytes=parse_size_bytes(l3_size), l3_ways=int(args.l3_ways),
+                                      min_data_ways=int(args.popt_min_data_ways))
+            require(charge["fits"], "charged P-OPT cannot hold its two resident columns in this last level")
+            row.update(popt_overhead_charged=1, popt_reserve_model="size_correct",
+                       popt_matrix_stream_mode="simulated", popt_reserved_ways=charge["reserved_ways"],
+                       popt_effective_l3_ways=charge["effective_ways"],
+                       popt_effective_l3_bytes=charge["effective_bytes"])
+        llc_bytes = charge["effective_bytes"] if charge else parse_size_bytes(l3_size)
+        llc_ways = charge["effective_ways"] if charge else int(args.l3_ways)
         binary = ROOT / "bench/bin_sim/algorithms"
         base_suffix = "" if options.record_base_policy == "LRU" else (
             "_BASE_" + options.record_base_policy)
@@ -1201,7 +1244,7 @@ def run_cache_cell(
             "--auxiliary-bytes", str(args.ecg_record_max_auxiliary_bytes),
             "--l1-bytes", str(parse_size_bytes(str(args.l1d_size))), "--l1-ways", str(args.l1d_ways),
             "--l2-bytes", str(parse_size_bytes(str(args.l2_size))), "--l2-ways", str(args.l2_ways),
-            "--llc-bytes", str(parse_size_bytes(l3_size)), "--llc-ways", str(args.l3_ways),
+            "--llc-bytes", str(llc_bytes), "--llc-ways", str(llc_ways),
             "--output", str(data_path),
         ]
         if options.sources:
@@ -1282,7 +1325,7 @@ def run_cache_cell(
             return [row]
         require(payload.get("setup_cache_policy") == (
                     options.record_base_policy if mode != "csr"
-                    else "LRU" if policy == "POPT_UNCHARGED" else policy),
+                    else "LRU" if policy in ("POPT_UNCHARGED", "POPT") else policy),
                 "current algorithm preparation did not use its declared unbound cache policy")
         work = validate_payload(payload, log_path.read_text(), algorithm=args.benchmark, mode=mode, policy=policy,
             graph=graph, graph_path=options.graph, options=options, requested_bytes=args.ecg_record_bytes,
@@ -1291,11 +1334,11 @@ def run_cache_cell(
         metrics = payload.get("metrics")
         require(isinstance(metrics, dict) and isinstance(metrics.get("L3"), dict),
                 "algorithm cache metrics are missing")
-        if policy == "POPT_UNCHARGED" or reference:
-            require(_integer(metrics["L3"], "size_bytes") == parse_size_bytes(l3_size) and
-                    _integer(metrics["L3"], "ways") == int(args.l3_ways),
-                    "P-OPT full-capacity control lost data capacity")
-            row.update({"popt_" + key: value for key, value in payload["popt"].items()})
+        if policy in ("POPT_UNCHARGED", "POPT") or reference:
+            validate_popt_geometry(metrics["L3"], llc_bytes=llc_bytes, llc_ways=llc_ways)
+            row.update({"popt_" + key: value for key, value in payload["popt"].items() if key != "stream"})
+            row.update(validate_popt_charge(payload["popt"], policy=policy,
+                                            matrix_lines=popt_matrix_lines(args.benchmark, graph.vertices)))
         if reference:
             row.update({"grasp_reference_" + key: value for key, value in payload["grasp_reference"].items()})
         traffic = _integer(metrics, "total_offchip_traffic")

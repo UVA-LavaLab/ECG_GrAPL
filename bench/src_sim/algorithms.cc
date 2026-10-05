@@ -5,7 +5,8 @@
 int main(int argc, char** argv) {
     return ecg_algorithm::applicationMain(argc, argv,
         [](const ecg_algorithm::GraphView& graph, const ecg_algorithm::CommandLine& command) {
-            const bool popt = command.policy == "POPT_UNCHARGED";
+            const bool popt_charged = command.policy == "POPT";
+            const bool popt = command.policy == "POPT_UNCHARGED" || popt_charged;
             const bool reference = command.options.grasp_reference != ecg_algorithm::GraspReferenceMode::OFF;
             const bool observing = command.options.window_observer != ecg_algorithm::WindowObserverMode::OFF;
             const bool replacement = command.options.records &&
@@ -43,6 +44,8 @@ int main(int argc, char** argv) {
             }
             cache_sim::AlgorithmBackend backend(cache, command.options, command.llc_bytes,
                 grasp_paper, popt);
+            if (popt_charged)
+                backend.chargePoptMatrix();
             const auto start = std::chrono::steady_clock::now();
             const auto result = ecg_algorithm::run(graph, command.options, backend);
             const double seconds = std::chrono::duration<double>(

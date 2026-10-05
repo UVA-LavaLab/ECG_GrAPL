@@ -78,7 +78,7 @@ from record_receipts import (  # noqa: E402
     validate_sniper_record, validate_equivalence, validate_kernel_census, validate_kernel_census_passes,
     validate_pr_workload,
 )
-from record_resources import RecordResourceError, graph_info, plan_resources  # noqa: E402
+from record_resources import RecordResourceError, graph_info, plan_resources, popt_reservation  # noqa: E402
 import algorithm_matrix  # noqa: E402
 import algorithm_detailed  # noqa: E402
 
@@ -889,17 +889,16 @@ def popt_charge_metadata(args: argparse.Namespace, spec: PolicySpec, l3_size: st
         # 2 * numLines * 1B"; "P-OPT never evicts Rereference Matrix data". The
         # reserved-way count therefore scales with the graph (|V|/elemsPerLine),
         # NOT a fixed one. matrix_bytes = active_columns * numLines (1B/entry).
-        needed_ways = (matrix_bytes + bytes_per_way - 1) // bytes_per_way
-        max_reservable = max(assoc - min_data_ways, 0)
-        if needed_ways > max_reservable:
-            # The two resident columns cannot fit while leaving min_data_ways of
-            # data: the configured design point is infeasible at this graph/LLC.
-            # We still emit a clamped number (data = min_data_ways) as a labeled
-            # P-OPT-favorable sensitivity, but flag the cell as infeasible.
-            matrix_fits = False
-            reserved_ways = max_reservable
-        else:
-            reserved_ways = needed_ways
+        # When the columns cannot fit while leaving min_data_ways of data, the
+        # design point is infeasible: the clamped number is emitted as a labeled
+        # P-OPT-favorable sensitivity and the cell is flagged. One owner serves
+        # every runner (record_resources.popt_reservation).
+        reservation = popt_reservation(
+            column_bytes, l3_bytes=requested_bytes, l3_ways=assoc,
+            line_size=line_size, active_columns=active_columns,
+            min_data_ways=min_data_ways)
+        matrix_fits = bool(reservation["fits"])
+        reserved_ways = int(reservation["reserved_ways"])
     else:
         # LEGACY / P-OPT-FAVORABLE sensitivity ("fixed_one", the historical
         # default): charge a single reserved streaming-buffer way regardless of

@@ -178,6 +178,28 @@ def popt_matrix_lines(algorithm: str, vertices: int) -> int:
     return sum((vertices * width + 63) // 64 for width in widths[algorithm])
 
 
+def popt_reservation(column_bytes: int, *, l3_bytes: int, l3_ways: int, line_size: int = 64,
+                     active_columns: int = 2, min_data_ways: int = 1) -> dict[str, int | bool]:
+    """P-OPT's size-correct reservation, for every runner (NEXT.md §bw).
+
+    Its resident rereference-matrix columns, one byte per property line each, occupy whole last-level ways, and at
+    least ``min_data_ways`` stay for data. Columns that need more make the cell infeasible: the clamped geometry is
+    then only a P-OPT-favourable sensitivity.
+    """
+    if min(column_bytes, l3_bytes, l3_ways, line_size, active_columns, min_data_ways) <= 0:
+        raise RecordResourceError("invalid P-OPT reservation geometry")
+    min_data_ways = min(min_data_ways, l3_ways)
+    sets = max(l3_bytes // (l3_ways * line_size), 1)
+    bytes_per_way = sets * line_size
+    matrix_bytes = active_columns * column_bytes
+    needed_ways = (matrix_bytes + bytes_per_way - 1) // bytes_per_way
+    reservable = l3_ways - min_data_ways
+    reserved_ways = min(needed_ways, reservable)
+    return {"matrix_bytes": matrix_bytes, "bytes_per_way": bytes_per_way, "needed_ways": needed_ways,
+            "reserved_ways": reserved_ways, "effective_ways": l3_ways - reserved_ways,
+            "effective_bytes": sets * (l3_ways - reserved_ways) * line_size, "fits": needed_ways <= reservable}
+
+
 def window_layout(maximum_id: int, requested_bytes: int) -> dict[str, int]:
     if not 0 <= maximum_id <= (1 << 32) - 1 or requested_bytes not in (0, 4, 8):
         raise RecordResourceError("invalid window record layout")

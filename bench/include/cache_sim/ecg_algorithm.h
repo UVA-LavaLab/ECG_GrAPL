@@ -483,11 +483,13 @@ class AlgorithmBackend {
             return;
         }
         output << "{\"encoding\":\"full\",\"scope\":\"graph-pass-irregular-regions\","
-               << "\"full_data_capacity\":true,\"runtime_matrix_traffic_charged\":false,"
+               << "\"full_data_capacity\":" << (popt_charged_ ? "false" : "true")
+               << ",\"runtime_matrix_traffic_charged\":" << (popt_charged_ ? "true" : "false") << ','
                << "\"rank_mode\":\"" << (context_.popt_constant_rank ? "constant" : "future")
                << "\",\"consumer\":\"" << (referenceConsumer() ? "GRASP-reference" : "POPT")
                << "\",\"role\":\"" << (referenceConsumer() ? "reference-consumer-diagnostic" :
-                    options_.popt_constant_rank ? "policy-ablation" : "favorable-quality-control")
+                    options_.popt_constant_rank ? "policy-ablation" :
+                    popt_charged_ ? "charged-baseline" : "favorable-quality-control")
                << "\",\"constant_rank\":0,\"matrix_digest\":" << popt_matrix_.digest()
                << ",\"original_rank_sum\":" << context_.popt_original_rank_sum
                << ",\"constant_rank_lookups\":" << context_.popt_constant_rank_lookups << ','
@@ -507,7 +509,22 @@ class AlgorithmBackend {
             output << ",\"reused\":" << (popt_reused_ ? "true" : "false")
                    << ",\"construction_count\":" << shared_popt_->constructions_
                    << ",\"owner_reservation_bytes\":" << PreparedSpmvMatrix::kOwnerReservation;
+        if (popt_charged_)
+            output << ",\"stream\":{\"model\":\"simulated-residency\",\"active_columns\":"
+                   << cache_.getPoptMatrixStreamActiveColumns() << ",\"column_bytes\":"
+                   << cache_.getPoptMatrixStreamColumnBytes() << ",\"columns\":" << cache_.getPoptMatrixStreamColumns()
+                   << ",\"lines\":" << cache_.getPoptMatrixStreamLines() << '}';
         output << '}';
+    }
+
+    // Charged P-OPT, the bar (NEXT.md §bw): its two resident columns, one byte
+    // per property line each, stream from memory whenever the outer loop
+    // enters an epoch whose column is not resident. The reserved ways are the
+    // caller's: it builds the hierarchy with the data ways they leave.
+    void chargePoptMatrix() {
+        if (!popt_full_capacity_ || referenceConsumer() || shared_popt_ || popt_ready_)
+            throw std::invalid_argument("charged-popt-requires-the-popt-matrix");
+        popt_charged_ = true;
     }
 
     void writeGraspReference(std::ostream& output) const {
@@ -687,6 +704,9 @@ class AlgorithmBackend {
         context_.initRereference(popt_matrix_.data(), popt_matrix_.lines(), 256,
             static_cast<uint32_t>(graph.vertices), 64, popt_reref::Encoding::Full);
         context_.rereference.matrix = nullptr;
+        if (popt_charged_)
+            cache_.initPoptMatrixStream(static_cast<uint32_t>(popt_matrix_.lines()),
+                context_.rereference.epoch_size, context_.rereference.num_epochs, 2);
         popt_graph_ = graph;
         popt_ready_ = true;
     }
@@ -756,7 +776,7 @@ class AlgorithmBackend {
     uint64_t array_bytes_ = 0, popt_reads_ = 0, popt_writes_ = 0;
     uint64_t popt_passes_ = 0, popt_vertices_ = 0, popt_governed_ = 0;
     uint32_t popt_regions_ = 0;
-    bool popt_ready_ = false, popt_live_ = false;
+    bool popt_ready_ = false, popt_live_ = false, popt_charged_ = false;
 };
 
 } // namespace cache_sim

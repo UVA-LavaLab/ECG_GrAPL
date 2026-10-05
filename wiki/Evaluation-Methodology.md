@@ -127,10 +127,10 @@ column_bytes = ceil(vertices * property_bytes / line_bytes)
 reserved_ways = ceil(active_columns * column_bytes / bytes_per_way)
 ```
 
-Charged P-OPT pays this reservation. `POPT:UNCHARGED` retains full data
-capacity as a P-OPT-favorable replacement-quality control; it is not an
-equal-area comparison. Simulated and analytic matrix streams are separate
-modeling choices and are not pooled as the same experiment.
+Charged P-OPT pays this reservation; current-algorithm `POPT` is size-correct, with
+a simulated residency stream that bypasses the LLC (a 256-epoch sweep reads 4x the
+property bytes). `POPT:UNCHARGED` keeps full data capacity as a P-OPT-favorable
+control, not an equal-area comparison. Simulated and analytic streams never pool.
 
 Any detailed row with `popt_target_time_charged=0` omits native matrix
 lookup/stream latency and is an optimistic P-OPT bound, not a fully costed

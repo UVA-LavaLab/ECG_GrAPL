@@ -5115,6 +5115,10 @@ public:
         l3_->invalidateForColdEntry(dirty_lines);
         l3_->chargeMaintenanceWritebacks(dirty_lines.size());
         cold_entry_residual_lines_ = {l1_->validLines(), l2_->validLines(), l3_->validLines()};
+        // Charged P-OPT's reserved ways are emptied too (NEXT.md §bw): the
+        // kernel's first epoch streams its column.
+        popt_stream_resident_[0] = popt_stream_resident_[1] = UINT32_MAX;
+        popt_stream_next_slot_ = 0;
         ++cold_kernel_entries_;
         kernel_entry_maintenance_writebacks_ += dirty_lines.size();
         return dirty_lines.size();
@@ -5403,6 +5407,9 @@ public:
     }
 
     uint64_t getPoptMatrixStreamLines() const { return popt_stream_lines_; }
+    uint64_t getPoptMatrixStreamColumns() const { return popt_stream_columns_; }
+    unsigned getPoptMatrixStreamActiveColumns() const { return popt_stream_enabled_ ? popt_stream_active_columns_ : 0; }
+    uint32_t getPoptMatrixStreamColumnBytes() const { return popt_stream_enabled_ ? popt_stream_column_bytes_ : 0; }
 
     // ------------------------------------------------------------------
     // Address-only structure-stream prefetcher

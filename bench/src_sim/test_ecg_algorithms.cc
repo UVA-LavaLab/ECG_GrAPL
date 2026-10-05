@@ -2168,6 +2168,84 @@ void testPropertyRegionCounters() {
     }
 }
 
+// NEXT.md §bw: charged P-OPT, the bar. A rereference-matrix column streams from memory whenever the outer loop
+// enters an epoch whose column is not one of the two resident; the stream never allocates in the last level.
+void testChargedPoptStream() {
+    using namespace ecg_algorithm;
+    {
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 1024, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU);
+        // Two-line columns, four vertices per epoch, four epochs and two resident columns.
+        cache.initPoptMatrixStream(128, 4, 4, 2);
+        const uint64_t memory = cache.getMemoryAccesses();
+        cache.setCurrentVertex(0);
+        cache.setCurrentVertex(3);
+        check(cache.getPoptMatrixStreamColumns() == 1 && cache.getPoptMatrixStreamLines() == 2,
+              "entering an epoch streams its column once");
+        cache.setCurrentVertex(4);
+        cache.setCurrentVertex(1);
+        check(cache.getPoptMatrixStreamColumns() == 2, "a frontier that returns to a resident epoch pays nothing");
+        cache.setCurrentVertex(8);
+        cache.setCurrentVertex(2);
+        check(cache.getPoptMatrixStreamColumns() == 4 && cache.getPoptMatrixStreamLines() == 8,
+              "a column that has left residency streams again");
+        check(cache.getMemoryAccesses() == memory + 8 && cache.L3()->validLines() == 0,
+              "every column line is read from memory and none allocates in the last level");
+        cache.coldKernelEntry();
+        cache.setCurrentVertex(9);
+        check(cache.getPoptMatrixStreamColumns() == 5, "a cold boundary leaves no resident column");
+    }
+    std::mt19937 random(20261004);
+    std::uniform_int_distribution<uint32_t> vertex(0, 511);
+    std::vector<std::tuple<uint32_t, uint32_t, int32_t>> edges;
+    while (edges.size() < 2048) {
+        const uint32_t from = vertex(random), to = vertex(random);
+        if (from != to)
+            edges.emplace_back(from, to, 1);
+    }
+    std::sort(edges.begin(), edges.end());
+    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+    const Fixture graph(512, true, edges);
+    const auto paid = [&](bool charged, uint64_t passes) {
+        Options options;
+        options.algorithm = Algorithm::SPMV;
+        options.repetitions = passes;
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 2048, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::POPT);
+        cache_sim::AlgorithmBackend backend(cache, options, 2048, false, true);
+        if (charged)
+            backend.chargePoptMatrix();
+        ecg_algorithm::run(graph.view(), options, backend);
+        std::ostringstream receipt;
+        backend.writePopt(receipt);
+        return std::make_pair(cache.getPoptMatrixStreamColumns(), receipt.str());
+    };
+    const auto [free_columns, free_receipt] = paid(false, 1);
+    const auto [one, one_receipt] = paid(true, 1);
+    const auto [two, two_receipt] = paid(true, 2);
+    check(free_columns == 0 && free_receipt.find("\"stream\"") == std::string::npos &&
+          free_receipt.find("\"full_data_capacity\":true,\"runtime_matrix_traffic_charged\":false") !=
+              std::string::npos && free_receipt.find("\"role\":\"favorable-quality-control\"") != std::string::npos,
+          "uncharged P-OPT streams nothing and keeps the full last level");
+    // 512 vertices make 256 epochs of two, and SpMV visits every row.
+    check(one == 256 && two == 2 * one, "each dense pass sweeps every epoch's column again");
+    check(one_receipt.find("\"full_data_capacity\":false,\"runtime_matrix_traffic_charged\":true") !=
+              std::string::npos && one_receipt.find("\"role\":\"charged-baseline\"") != std::string::npos &&
+          one_receipt.find("\"stream\":{\"model\":\"simulated-residency\",\"active_columns\":2,\"column_bytes\":32,"
+                           "\"columns\":" + std::to_string(one) + ",\"lines\":" + std::to_string(one) + "}") !=
+              std::string::npos,
+          "the charged receipt states the reservation it lives in and the stream it paid");
+    {
+        Options options;
+        options.algorithm = Algorithm::SPMV;
+        cache_sim::CacheHierarchy cache(128, 2, 256, 2, 2048, 4, 64,
+            cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU, cache_sim::EvictionPolicy::LRU);
+        cache_sim::AlgorithmBackend ordinary(cache, options, 2048, false, false);
+        check(refusesWith([&] { ordinary.chargePoptMatrix(); }, "charged-popt-requires-the-popt-matrix"),
+              "only a P-OPT row can charge the P-OPT matrix");
+    }
+}
+
 int main(int argc, char** argv) {
     using namespace ecg_algorithm;
     if (argc == 4 && std::strcmp(argv[1], kCensusRunFlag) == 0)
@@ -2196,6 +2274,7 @@ int main(int argc, char** argv) {
     testColdKernelEntry();
     testPropertyRegionAttribution();
     testPropertyRegionCounters();
+    testChargedPoptStream();
     const Fixture diamond(8, true, {
         {0,1,2}, {0,2,5}, {0,5,20}, {1,2,1}, {1,3,2},
         {2,3,1}, {2,4,4}, {3,4,1}, {4,5,3}, {6,7,1}});

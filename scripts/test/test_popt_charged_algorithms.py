@@ -1,0 +1,294 @@
+"""NEXT.md §bw: charged P-OPT, the bar ECG must tie or beat, on the current algorithms.
+
+The bar is P-OPT as published: its two resident rereference-matrix columns hold size-correct reserved last-level
+ways, and a column streams from memory whenever the outer loop enters an epoch whose column is not resident. The
+stream is modelled by residency, so a multi-pass kernel pays for every sweep and a frontier that returns to a
+resident epoch pays nothing. POPT_UNCHARGED stays P-OPT's full-capacity upper bound.
+
+The C++ fixture in bench/src_sim/test_ecg_algorithms.cc holds the stream mechanism; these hold the reservation's
+one owner, what the binary writes and what the runner sends and accepts.
+"""
+from argparse import Namespace
+from pathlib import Path
+import copy
+import json
+import os
+import platform
+import subprocess
+import sys
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+ALGORITHMS = ROOT / "bench/bin_sim/algorithms"
+PAGERANK = ROOT / "bench/bin_sim/pr"
+KERNELS = ("spmv", "bfs", "sssp", "bc")
+CHARGE = ("--popt-reserve-model", "size_correct", "--popt-matrix-stream", "simulated")
+GEOMETRY = ("--l1d-size", "128B", "--l1d-ways", "2", "--l2-size", "256B", "--l2-ways", "2", "--l3-ways", "4")
+
+
+def _clean_env():
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(("CACHE_", "ECG_", "GEM5_", "SNIPER_", "GRASP_", "POPT_"))}
+    env.update(OMP_NUM_THREADS="1", GRAPHBREW_SIDEBAND_LOG="0")
+    return env
+
+
+def _graph(tmp_path, algorithm):
+    from scripts.experiments.ecg.flows.prepare_record_equivalence_graphs import algorithm_outputs
+    name = "pressure512.wsg" if algorithm == "sssp" else "pressure512.sg"
+    path = tmp_path / name
+    if not path.exists():
+        path.write_bytes(algorithm_outputs()[name][0])
+    return path
+
+
+def _lines(algorithm, graph):
+    from scripts.experiments.ecg.record_resources import graph_info, popt_matrix_lines
+    return popt_matrix_lines(algorithm, graph_info(graph, allow_weighted=True, traversal="out").vertices)
+
+
+def _run(tmp_path, algorithm, policy, *extra, name):
+    """One binary run, its layout held as two compared runs need (NEXT.md §bg): address randomisation off,
+    equal-length output names, and the policy's length padded in the environment, since argv and the environment
+    sit above the stack and setup's per-line accounting follows its alignment."""
+    output = tmp_path / f"{algorithm}-{name}.json"
+    env = dict(_clean_env(), LAYOUT_PAD="x" * (len("POPT_UNCHARGED") - len(policy)))
+    ran = subprocess.run([
+        "setarch", platform.machine(), "-R", str(ALGORITHMS), "--algorithm", algorithm,
+        "--graph", str(_graph(tmp_path, algorithm)), "--delta", "2",
+        "--l1-bytes", "128", "--l1-ways", "2", "--l2-bytes", "256", "--l2-ways", "2",
+        "--llc-bytes", "2048", "--llc-ways", "4", "--output", str(output), "--mode", "csr", "--policy", policy, *extra,
+    ], env=env, capture_output=True, text=True, timeout=120, check=False)
+    assert ran.returncode == 0, ran.stderr[-2000:]
+    return json.loads(output.read_text())
+
+
+def _cell(tmp_path, algorithm, *extra, policy="POPT_CHARGED", l3="2048B", options=""):
+    from scripts.experiments.ecg import algorithm_matrix, roi_matrix
+    out = tmp_path / f"{algorithm}-{policy}-{l3}"
+    out.mkdir(exist_ok=True)
+    args = roi_matrix.parse_args([
+        "--suite", "cache-sim", "--benchmark", algorithm, "--current-algorithms",
+        "--options", f"--graph {_graph(tmp_path, algorithm)} --delta 2 {options}".strip(),
+        "--policies", policy, *GEOMETRY, "--l3-sizes", l3, *extra, "--out-dir", str(out), "--no-build"])
+    return algorithm_matrix.run_cache_cell(args, out, roi_matrix.parse_policy_spec(policy), l3,
+                                           roi_matrix.run_command, roi_matrix.parse_size_bytes)
+
+
+@pytest.mark.parametrize("lines,llc,ways,reserved,fits", [
+    (16_384, 512 << 10, 16, 1, True),      # the 2^18-vertex fixture at 512 kB
+    (235_923, 8 << 20, 16, 1, True),       # cit-Patents at 8 MiB
+    (3_848_651, 8 << 20, 16, 15, True),    # 61.6M vertices at 8 MiB: one data way remains
+    (3_848_651, 32 << 20, 16, 4, True),    # ... and at 32 MiB
+    (4_194_304, 8 << 20, 16, 15, False),   # the columns need sixteen ways: infeasible, clamped
+])
+def test_the_size_correct_reservation(lines, llc, ways, reserved, fits):
+    from scripts.experiments.ecg.record_resources import popt_reservation
+    charge = popt_reservation(lines, l3_bytes=llc, l3_ways=ways)
+    assert (charge["reserved_ways"], charge["fits"]) == (reserved, fits)
+    assert charge["matrix_bytes"] == 2 * lines
+    assert charge["effective_ways"] == ways - reserved
+    assert charge["effective_bytes"] == llc // ways * (ways - reserved)
+
+
+@pytest.mark.parametrize("scale,llc", [(18, "512kB"), (26, "8MB"), (26, "32MB")])
+def test_pagerank_reserves_through_the_same_owner(scale, llc):
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.record_resources import popt_reservation
+    args = Namespace(options=f"-g {scale} -k 16 -o 5 -n 1 -i 2", line_size="64", l3_ways="16",
+                     popt_property_bytes="4", popt_active_columns="2", popt_num_epochs="256",
+                     popt_min_data_ways="1", popt_reserve_model="size_correct")
+    charge = roi_matrix.popt_charge_metadata(args, roi_matrix.parse_policy_spec("POPT_CHARGED"), llc)
+    shared = popt_reservation(charge["popt_matrix_column_bytes"], l3_bytes=roi_matrix.parse_size_bytes(llc),
+                              l3_ways=16)
+    assert charge["popt_reserved_ways"] == shared["reserved_ways"]
+    assert int(charge["popt_effective_l3_ways"]) == shared["effective_ways"]
+    assert charge["popt_matrix_fits"] == int(shared["fits"])
+    assert charge["popt_reserved_bytes"] == shared["reserved_ways"] * shared["bytes_per_way"]
+
+
+@pytest.mark.parametrize("algorithm", KERNELS)
+def test_charged_popt_streams_its_columns_and_says_so(tmp_path, algorithm):
+    if not ALGORITHMS.is_file():
+        pytest.skip("current algorithm executable is not built")
+    free = _run(tmp_path, algorithm, "POPT_UNCHARGED", name="u")
+    paid = _run(tmp_path, algorithm, "POPT", name="c")
+    assert free["popt"]["full_data_capacity"] is True and free["popt"]["runtime_matrix_traffic_charged"] is False
+    assert "stream" not in free["popt"]
+    assert paid["policy"] == "POPT" and paid["setup_cache_policy"] == "LRU"
+    assert paid["popt"]["full_data_capacity"] is False and paid["popt"]["runtime_matrix_traffic_charged"] is True
+    column = _lines(algorithm, _graph(tmp_path, algorithm))
+    stream = paid["popt"]["stream"]
+    assert stream["columns"] > 0
+    assert stream == {"model": "simulated-residency", "active_columns": 2, "column_bytes": column,
+                      "columns": stream["columns"], "lines": stream["columns"] * -(-column // 64)}
+    # The stream is the kernel's and adds only its own lines; setup and the answer are P-OPT's as before.
+    assert paid["traffic_phases"]["setup"] == free["traffic_phases"]["setup"]
+    assert paid["traffic_phases"]["kernel"]["total_accesses"] == \
+        free["traffic_phases"]["kernel"]["total_accesses"] + stream["lines"]
+    assert paid["workload"]["result_digest"] == free["workload"]["result_digest"]
+
+
+def test_a_multi_pass_kernel_pays_for_every_sweep(tmp_path):
+    if not ALGORITHMS.is_file():
+        pytest.skip("current algorithm executable is not built")
+    one = _run(tmp_path, "spmv", "POPT", "--repeat", "1", name="1")
+    two = _run(tmp_path, "spmv", "POPT", "--repeat", "2", name="2")
+    assert two["popt"]["stream"]["columns"] == 2 * one["popt"]["stream"]["columns"] > 0
+
+
+@pytest.mark.parametrize("extra,message", [
+    (("--queries", "2"), "independent queries require unweighted CSR SpMV baselines"),
+    (("--popt-rank-mode", "constant"), "constant P-OPT ranks require CSR SpMV or TD BFS with POPT_UNCHARGED"),
+    (("--mode", "replacement"), "current-record-modes-own-their-replacement-policy"),
+])
+def test_charged_popt_is_refused_where_it_has_no_model(tmp_path, extra, message):
+    if not ALGORITHMS.is_file():
+        pytest.skip("current algorithm executable is not built")
+    ran = subprocess.run([
+        str(ALGORITHMS), "--algorithm", "spmv", "--graph", str(_graph(tmp_path, "spmv")),
+        "--output", str(tmp_path / "refused.json"), "--policy", "POPT", *extra,
+    ], env=_clean_env(), capture_output=True, text=True, timeout=60, check=False)
+    assert ran.returncode != 0 and message in ran.stderr, ran.stderr[-1500:]
+
+
+@pytest.mark.parametrize("algorithm", KERNELS)
+def test_the_runner_reserves_the_columns_and_sends_the_remaining_ways(tmp_path, algorithm):
+    if not ALGORITHMS.is_file():
+        pytest.skip("current algorithm executable is not built")
+    from scripts.experiments.ecg.record_resources import popt_reservation
+    rows = _cell(tmp_path, algorithm, *CHARGE)
+    assert len(rows) == 1 and rows[0]["status"] == "ok", rows[0].get("error")
+    row = rows[0]
+    column = _lines(algorithm, _graph(tmp_path, algorithm))
+    charge = popt_reservation(column, l3_bytes=2048, l3_ways=4)
+    assert charge["fits"] and charge["reserved_ways"] == 1
+    assert row["policy_label"] == "POPT"
+    assert (row["popt_overhead_charged"], row["popt_reserve_model"], row["popt_matrix_stream_mode"]) == (
+        1, "size_correct", "simulated")
+    assert (row["popt_reserved_ways"], row["popt_effective_l3_ways"], row["popt_effective_l3_bytes"]) == (
+        charge["reserved_ways"], charge["effective_ways"], charge["effective_bytes"])
+    payload = json.loads(Path(row["json_path"]).read_text())
+    assert payload["metrics"]["L3"]["ways"] == charge["effective_ways"]
+    assert payload["metrics"]["L3"]["size_bytes"] == charge["effective_bytes"]
+    assert row["popt_stream_lines"] == payload["popt"]["stream"]["lines"] > 0
+    assert row["popt_stream_columns"] == payload["popt"]["stream"]["columns"]
+
+
+def test_the_runner_runs_the_bar_under_the_fair_contracts(tmp_path):
+    if not ALGORITHMS.is_file():
+        pytest.skip("current algorithm executable is not built")
+    rows = _cell(tmp_path, "bc", *CHARGE, options="--grasp-registration declared --kernel-entry cold")
+    assert len(rows) == 1 and rows[0]["status"] == "ok", rows[0].get("error")
+    assert rows[0]["policy_label"] == "POPT_GRASP_DECLARED_COLD_ENTRY"
+    payload = json.loads(Path(rows[0]["json_path"]).read_text())
+    assert payload["kernel_entry"] == "cold" and payload["popt"]["stream"]["columns"] > 0
+
+
+@pytest.mark.parametrize("extra", [
+    (),
+    ("--popt-reserve-model", "size_correct"),
+    ("--popt-matrix-stream", "simulated"),
+    (*CHARGE, "--popt-active-columns", "1"),
+    (*CHARGE, "--popt-num-epochs", "128"),
+])
+def test_the_runner_admits_one_charge_model(tmp_path, extra):
+    rows = _cell(tmp_path, "spmv", *extra)
+    assert rows[0]["status"] == "error"
+    assert "charged P-OPT on the current algorithms is size-correct" in rows[0]["error"]
+
+
+def test_the_runner_refuses_columns_the_last_level_cannot_hold(tmp_path):
+    from scripts.experiments.ecg.record_resources import popt_reservation
+    column = _lines("bc", _graph(tmp_path, "bc"))
+    assert not popt_reservation(column, l3_bytes=256, l3_ways=4)["fits"]
+    rows = _cell(tmp_path, "bc", *CHARGE, l3="256B")
+    assert rows[0]["status"] == "error"
+    assert "cannot hold its two resident columns" in rows[0]["error"]
+
+
+def test_the_validator_refuses_a_charge_that_departs(tmp_path):
+    if not ALGORITHMS.is_file():
+        pytest.skip("current algorithm executable is not built")
+    from scripts.experiments.ecg import algorithm_matrix
+    from scripts.experiments.ecg.record_receipts import RecordReceiptError
+    column = _lines("spmv", _graph(tmp_path, "spmv"))
+    paid = _run(tmp_path, "spmv", "POPT", name="c")["popt"]
+    free = _run(tmp_path, "spmv", "POPT_UNCHARGED", name="u")["popt"]
+    assert algorithm_matrix.validate_popt_charge(paid, policy="POPT", matrix_lines=column) == {
+        "popt_stream_columns": paid["stream"]["columns"], "popt_stream_lines": paid["stream"]["lines"]}
+    assert algorithm_matrix.validate_popt_charge(free, policy="POPT_UNCHARGED", matrix_lines=column) == {}
+    departures = [
+        ("full_data_capacity", True), ("runtime_matrix_traffic_charged", False), ("stream", None),
+        ("stream.model", "analytic"), ("stream.active_columns", 1), ("stream.column_bytes", column + 1),
+        ("stream.columns", 0), ("stream.lines", paid["stream"]["lines"] + 1),
+    ]
+    for key, value in departures:
+        changed = copy.deepcopy(paid)
+        holder, name = (changed["stream"], key.split(".")[1]) if key.startswith("stream.") else (changed, key)
+        if value is None:
+            del holder[name]
+        else:
+            holder[name] = value
+        with pytest.raises(RecordReceiptError):
+            algorithm_matrix.validate_popt_charge(changed, policy="POPT", matrix_lines=column)
+    for key, value in (("full_data_capacity", False), ("runtime_matrix_traffic_charged", True),
+                       ("stream", paid["stream"])):
+        changed = dict(free, **{key: value})
+        with pytest.raises(RecordReceiptError):
+            algorithm_matrix.validate_popt_charge(changed, policy="POPT_UNCHARGED", matrix_lines=column)
+    l3 = {"size_bytes": 1536, "ways": 3}
+    algorithm_matrix.validate_popt_geometry(l3, llc_bytes=1536, llc_ways=3)
+    for departed in ({"size_bytes": 2048, "ways": 3}, {"size_bytes": 1536, "ways": 4}):
+        with pytest.raises(RecordReceiptError):
+            algorithm_matrix.validate_popt_geometry(departed, llc_bytes=1536, llc_ways=3)
+
+
+def test_pagerank_runs_the_bar_under_the_fair_contracts(tmp_path):
+    if not PAGERANK.is_file():
+        pytest.skip("functional PageRank binary is not built")
+    from scripts.experiments.ecg import roi_matrix
+    from scripts.experiments.ecg.record_resources import popt_reservation
+    graph = _graph(tmp_path, "spmv")
+    out = tmp_path / "pr"
+    out.mkdir()
+    args = roi_matrix.parse_args([
+        "--suite", "cache-sim", "--benchmark", "pr", "--current-pr-baselines",
+        "--grasp-registration", "declared", "--kernel-entry", "cold",
+        "--options", f"-f {graph} -o 0 -n 1 -i 2 -t 0", "--policies", "POPT_CHARGED", *CHARGE,
+        *GEOMETRY, "--l3-sizes", "2048B", "--out-dir", str(out), "--no-build"])
+    rows = roi_matrix.run_cache_sim(args, out, roi_matrix.parse_policy_spec("POPT_CHARGED"), "2048B")
+    assert len(rows) == 1 and rows[0]["status"] == "ok", rows[0].get("error")
+    row = rows[0]
+    charge = popt_reservation(-(-512 * 4 // 64), l3_bytes=2048, l3_ways=4)
+    assert row["popt_reserve_model"] == "size_correct" and row["popt_matrix_stream_mode"] == "simulated"
+    assert int(row["popt_effective_l3_ways"]) == charge["effective_ways"]
+    assert int(row["popt_matrix_stream_lines_simulated"]) > 0
+    assert row["policy_label"] == "POPT_GRASP_DECLARED_COLD_ENTRY"
+
+
+_NATIVE_MAIN = """
+#include "ecg_algorithm_main.h"
+int main(int argc, char** argv) {
+    bool invoked = false;
+    const int status = ecg_algorithm::applicationMain(argc, argv,
+        [&](const auto&, const auto&) { invoked = true; return 0; });
+    return invoked ? 9 : status;
+}
+"""
+
+
+def test_a_native_main_refuses_charged_popt(tmp_path):
+    source = tmp_path / "native_main.cc"
+    source.write_text(_NATIVE_MAIN)
+    binary = tmp_path / "native_main"
+    built = subprocess.run([
+        "g++", "-std=c++17", "-O1", "-fopenmp", "-I", str(ROOT / "bench/include/external/gapbs"),
+        "-I", str(ROOT / "bench/include"), str(source), "-o", str(binary),
+    ], capture_output=True, text=True, timeout=300, check=False)
+    assert built.returncode == 0, built.stderr[-3000:]
+    ran = subprocess.run([str(binary), "--algorithm", "spmv", "--graph", str(tmp_path / "absent.sg"),
+                          "--policy", "POPT"], capture_output=True, text=True, timeout=60, check=False)
+    assert ran.returncode == 2 and "current P-OPT is cache_sim-only" in ran.stderr, (ran.returncode, ran.stderr)

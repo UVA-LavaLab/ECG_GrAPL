@@ -55,7 +55,8 @@ inline CommandLine parseCommandLine(int argc, char** argv) {
         if (argument == "--graph") command.graph_path = value;
         else if (argument == "--output") command.output_path = value;
         else if (argument == "--policy") {
-            if (value != "LRU" && value != "SRRIP" && value != "GRASP_PAPER" && value != "POPT_UNCHARGED")
+            if (value != "LRU" && value != "SRRIP" && value != "GRASP_PAPER" && value != "POPT_UNCHARGED" &&
+                value != "POPT")
                 throw std::invalid_argument("unsupported-current-algorithm-baseline");
             command.policy = value;
         } else if (argument == "--algorithm") {
@@ -509,7 +510,7 @@ int applicationMain(
             throw std::invalid_argument("window model is cache_sim-only");
         if (command.options.window_observer != WindowObserverMode::OFF && !allow_window_observer)
             throw std::invalid_argument("window observer is cache_sim-only");
-        if (command.policy == "POPT_UNCHARGED" && !allow_popt)
+        if ((command.policy == "POPT_UNCHARGED" || command.policy == "POPT") && !allow_popt)
             throw std::invalid_argument("current P-OPT is cache_sim-only");
         if (command.options.record_base_policy == RecordBasePolicy::GRASP_PAPER &&
             !allow_grasp_record_base)
